@@ -106,7 +106,7 @@ async fn start_oidc() -> Oidc {
     Oidc { issuer, key, other_key: EncodingKey::from_ed_pem(&other).unwrap(), _handle: handle }
 }
 
-fn token(oidc: &Oidc, key: &EncodingKey, claims: Value) -> String {
+fn token(_oidc: &Oidc, key: &EncodingKey, claims: Value) -> String {
     let mut h = Header::new(Algorithm::EdDSA);
     h.kid = Some("k1".into());
     encode(&h, &claims, key).unwrap()

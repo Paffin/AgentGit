@@ -20,15 +20,25 @@ export type DiffResponse = S['DiffResponse']
 export type Proposal = S['Proposal']
 export type Review = S['Review']
 export type ProposalDetail = S['ProposalDetail']
-export type Preparation = S['Preparation']
-export type Blocker = S['Blocker']
+/**
+ * The OpenAPI document describes free-form JSON objects (`type: object` with no properties), which the
+ * generator renders as `Record<string, never>`. They are open-ended on the wire, so say so.
+ */
+type OpenObject = Record<string, unknown>
+export type Blocker = Omit<S['Blocker'], 'detail'> & { detail?: OpenObject }
 export type Conflict = S['Conflict']
 export type ValidationStatus = S['ValidationStatus']
 export type Attestation = S['Attestation']
-export type IntegrationOutcome = S['IntegrationOutcome']
-export type IntegrationResult = S['IntegrationResult']
 export type QueueEntry = S['QueueEntry']
-export type Job = S['Job']
+export type Job = Omit<S['Job'], 'result'> & { result?: OpenObject | null }
+export type Preparation = Omit<S['Preparation'], 'blockers' | 'jobs'> & {
+  blockers: Blocker[]
+  jobs: Job[]
+}
+export type IntegrationOutcome = Omit<S['IntegrationOutcome'], 'blockers'> & { blockers: Blocker[] }
+export type IntegrationResult = Omit<S['IntegrationResult'], 'outcome'> & {
+  outcome: IntegrationOutcome | null
+}
 export type Agent = S['Agent']
 export type Run = S['Run']
 export type Task = S['Task']
@@ -36,10 +46,10 @@ export type Lease = S['Lease']
 export type ProvenanceEntry = S['ProvenanceEntry']
 export type ProvenanceRecord = S['ProvenanceRecord']
 export type Overlap = S['Overlap']
-export type ServerEvent = S['Event']
+export type ServerEvent = Omit<S['Event'], 'payload'> & { payload?: OpenObject }
 export type PolicyVersion = S['PolicyVersion']
 export type Pin = S['Pin']
-export type AuditEntry = S['AuditEntry']
+export type AuditEntry = Omit<S['AuditEntry'], 'details'> & { details?: OpenObject }
 export type GcResponse = S['GcResponse']
 export type FsckResponse = S['FsckResponse']
 export type Credential = S['Credential']

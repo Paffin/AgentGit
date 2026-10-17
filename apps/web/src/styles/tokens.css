@@ -1,0 +1,219 @@
+/*
+ * Design tokens. Every colour, space, radius and duration in the UI comes from here.
+ * Themes: light by default, dark when the system prefers it, or when the user picked one
+ * (the toggle sets data-theme="light" | "dark" on <html>; absence means "follow the system").
+ * Text pairs below are checked for WCAG AA (≥ 4.5:1); see apps/web/README.md.
+ */
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e6e9ee;
+  --overlay: rgb(15 20 30 / 0.45);
+
+  /* lines */
+  --border: #d9dde4;
+  --border-strong: #8b94a3;
+
+  /* text */
+  --text: #151a22;
+  --text-2: #4a5362;
+  --text-3: #5b6575;
+
+  /* accent */
+  --accent: #2f4ac2;
+  --accent-hover: #2740a8;
+  --accent-fg: #ffffff;
+  --accent-text: #2a43b0;
+  --accent-soft: #e8ecfb;
+  --focus: #2f4ac2;
+
+  /* semantic */
+  --ok: #17703f;
+  --ok-soft: #e4f4ea;
+  --ok-line: #b3dcc3;
+  --warn: #8a5a00;
+  --warn-soft: #fdf1d6;
+  --warn-line: #ecd48b;
+  --bad: #b42323;
+  --bad-soft: #fcebeb;
+  --bad-line: #efc0c0;
+  --info: #1b5fa8;
+  --info-soft: #e6f0fb;
+  --info-line: #b8d3f0;
+  --agent: #6a45c0;
+  --agent-soft: #efeafa;
+  --agent-line: #d3c6f0;
+  --service: #0d7480;
+  --service-soft: #e0f3f4;
+  --service-line: #a9d9dd;
+
+  /* code & diffs */
+  --code-bg: #f7f8fa;
+  --diff-add-bg: #e6f6ec;
+  --diff-add-gutter: #cdecd8;
+  --diff-add-text: #0f5a30;
+  --diff-del-bg: #fdecec;
+  --diff-del-gutter: #f8d3d3;
+  --diff-del-text: #8f1d1d;
+  --diff-hunk-bg: #eef2fb;
+
+  /* typography */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, 'Cascadia Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+  --lh: 1.45;
+  --lh-tight: 1.25;
+
+  /* space (4px base) */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+
+  /* shape */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 1px rgb(16 24 40 / 0.04);
+  --shadow-2: 0 4px 14px rgb(16 24 40 / 0.1), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-3: 0 18px 48px rgb(16 24 40 / 0.22), 0 4px 12px rgb(16 24 40 / 0.1);
+
+  /* layers */
+  --z-sticky: 20;
+  --z-dropdown: 40;
+  --z-dialog: 60;
+  --z-toast: 80;
+  --z-tooltip: 90;
+
+  /* motion */
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* layout */
+  --header-h: 52px;
+  --content-max: 1560px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0e1116;
+    --surface: #151a21;
+    --surface-2: #1b212a;
+    --surface-3: #232a35;
+    --overlay: rgb(0 0 0 / 0.6);
+    --border: #2a313c;
+    --border-strong: #6b7586;
+    --text: #e8ebf0;
+    --text-2: #b0b8c6;
+    --text-3: #8f99aa;
+    --accent: #8aa0f7;
+    --accent-hover: #a2b4fa;
+    --accent-fg: #0e1116;
+    --accent-text: #9db0ff;
+    --accent-soft: #1c2542;
+    --focus: #9db0ff;
+    --ok: #5ccb8b;
+    --ok-soft: #12291d;
+    --ok-line: #1f4a33;
+    --warn: #f0b84d;
+    --warn-soft: #2e2410;
+    --warn-line: #5a4519;
+    --bad: #ff8f8f;
+    --bad-soft: #341818;
+    --bad-line: #632a2a;
+    --info: #6db3f2;
+    --info-soft: #112437;
+    --info-line: #23496e;
+    --agent: #b79cff;
+    --agent-soft: #241b3d;
+    --agent-line: #46367a;
+    --service: #4fd1d9;
+    --service-soft: #0f2a2c;
+    --service-line: #1d5559;
+    --code-bg: #12171d;
+    --diff-add-bg: #112a1a;
+    --diff-add-gutter: #173823;
+    --diff-add-text: #8be0ad;
+    --diff-del-bg: #331719;
+    --diff-del-gutter: #44201f;
+    --diff-del-text: #ffadad;
+    --diff-hunk-bg: #18203a;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 6px 18px rgb(0 0 0 / 0.5);
+    --shadow-3: 0 18px 48px rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1116;
+  --surface: #151a21;
+  --surface-2: #1b212a;
+  --surface-3: #232a35;
+  --overlay: rgb(0 0 0 / 0.6);
+  --border: #2a313c;
+  --border-strong: #6b7586;
+  --text: #e8ebf0;
+  --text-2: #b0b8c6;
+  --text-3: #8f99aa;
+  --accent: #8aa0f7;
+  --accent-hover: #a2b4fa;
+  --accent-fg: #0e1116;
+  --accent-text: #9db0ff;
+  --accent-soft: #1c2542;
+  --focus: #9db0ff;
+  --ok: #5ccb8b;
+  --ok-soft: #12291d;
+  --ok-line: #1f4a33;
+  --warn: #f0b84d;
+  --warn-soft: #2e2410;
+  --warn-line: #5a4519;
+  --bad: #ff8f8f;
+  --bad-soft: #341818;
+  --bad-line: #632a2a;
+  --info: #6db3f2;
+  --info-soft: #112437;
+  --info-line: #23496e;
+  --agent: #b79cff;
+  --agent-soft: #241b3d;
+  --agent-line: #46367a;
+  --service: #4fd1d9;
+  --service-soft: #0f2a2c;
+  --service-line: #1d5559;
+  --code-bg: #12171d;
+  --diff-add-bg: #112a1a;
+  --diff-add-gutter: #173823;
+  --diff-add-text: #8be0ad;
+  --diff-del-bg: #331719;
+  --diff-del-gutter: #44201f;
+  --diff-del-text: #ffadad;
+  --diff-hunk-bg: #18203a;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 6px 18px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 18px 48px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+  }
+}

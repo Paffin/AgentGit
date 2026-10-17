@@ -64,6 +64,11 @@ pub trait ObjectStore: Send + Sync {
     fn verify(&self, id: &ObjectId) -> Result<ObjectStatus, StoreError>;
     /// Lists every stored object.
     fn list(&self) -> Result<Vec<ObjectInfo>, StoreError>;
+    /// Size of the object's payload in bytes, for listings; `None` if it is not stored. Unlike [`get`](Self::get)
+    /// it need not read or verify the object. The default reads it.
+    fn payload_len(&self, id: &ObjectId) -> Result<Option<u64>, StoreError> {
+        Ok(self.get(id)?.map(|o| o.payload.len() as u64))
+    }
     /// Deletes an object (garbage collection only). Returns whether it existed.
     fn delete(&self, id: &ObjectId) -> Result<bool, StoreError>;
     /// Deletes an object only if it was last written before `cutoff`, atomically
@@ -98,6 +103,9 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     }
     fn list(&self) -> Result<Vec<ObjectInfo>, StoreError> {
         (**self).list()
+    }
+    fn payload_len(&self, id: &ObjectId) -> Result<Option<u64>, StoreError> {
+        (**self).payload_len(id)
     }
     fn delete(&self, id: &ObjectId) -> Result<bool, StoreError> {
         (**self).delete(id)
@@ -181,6 +189,11 @@ impl ObjectStore for MemoryObjectStore {
             RawObject::decode_envelope(bytes).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         obj.verify(id).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         Ok(Some(obj))
+    }
+
+    fn payload_len(&self, id: &ObjectId) -> Result<Option<u64>, StoreError> {
+        let g = self.objects.read().expect("lock");
+        Ok(g.get(id).map(|(b, _)| b.len().saturating_sub(ag_object::ENVELOPE_HEADER_LEN) as u64))
     }
 
     fn contains(&self, id: &ObjectId) -> Result<bool, StoreError> {
@@ -315,6 +328,15 @@ impl ObjectStore for FsObjectStore {
 
     fn get(&self, id: &ObjectId) -> Result<Option<RawObject>, StoreError> {
         self.read_verified(id, &self.path_of(id))
+    }
+
+    fn payload_len(&self, id: &ObjectId) -> Result<Option<u64>, StoreError> {
+        match fs::metadata(self.path_of(id)) {
+            Ok(m) if m.is_file() => Ok(Some(m.len().saturating_sub(ag_object::ENVELOPE_HEADER_LEN as u64))),
+            Ok(_) => Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn contains(&self, id: &ObjectId) -> Result<bool, StoreError> {

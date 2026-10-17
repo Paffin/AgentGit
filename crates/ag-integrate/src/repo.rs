@@ -207,6 +207,11 @@ impl Repository {
         Ok(BlobId::new(self.objects.put(&RawObject::blob(data))?))
     }
 
+    /// Size of a stored blob in bytes without reading it (`None` if it is not stored).
+    pub fn blob_len(&self, id: &BlobId) -> Result<Option<u64>> {
+        Ok(self.objects.payload_len(&id.object_id())?)
+    }
+
     /// Reads (and verifies) a blob.
     pub fn blob(&self, id: &BlobId) -> Result<Vec<u8>> {
         let raw = self.objects.get(&id.object_id())?.ok_or_else(|| Error::NotFound(format!("blob {id}")))?;

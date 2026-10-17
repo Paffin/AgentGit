@@ -113,6 +113,7 @@ impl App {
         }
         let (proposal, policy_version, stream_hint) = (prep.proposal.clone(), prep.policy_version, repo.to_string());
         let name = repo.to_string();
+        let events = self.metrics.job_events.clone();
         let jobs = self
             .with_repo_mut(call, &stream_hint, Cap::IntegrateValidate, None, move |r, actor| {
                 let stream = r.find_proposal(&proposal)?.stream;
@@ -134,6 +135,7 @@ impl App {
                             return Ok(j);
                         }
                         let j = tx.job_enqueue(KIND_VALIDATE, &payload, Some(&key), Timestamp::from_millis(0))?;
+                        events.with_label_values(&["enqueued"]).inc();
                         tx.audit_append(
                             actor.as_str(),
                             "job.enqueue",
@@ -220,6 +222,16 @@ impl App {
         }
     }
 
+    /// Queued jobs across the repositories known to have work (blocking).
+    pub fn count_queued_jobs(&self) -> i64 {
+        let repos: Vec<String> = self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+        repos
+            .iter()
+            .filter_map(|name| self.repos.handle(name).ok())
+            .map(|h| h.meta().read(|tx| tx.job_list(Some(JobState::Queued), 1000)).map(|v| v.len() as i64).unwrap_or(0))
+            .sum()
+    }
+
     // ---- worker API ----------------------------------------------------------------------
 
     async fn try_claim(
@@ -231,11 +243,13 @@ impl App {
         lease_ms: i64,
     ) -> ApiResult<Option<v1::Job>> {
         let name = repo.to_string();
+        let events = self.metrics.job_events.clone();
         self.with_repo_mut(call, repo, Cap::JobsClaim, None, move |r, actor| {
             let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();
             let job = r.meta().write(|tx| {
                 let j = tx.job_claim(&kinds, &worker, lease_ms)?;
                 if let Some(j) = &j {
+                    events.with_label_values(&["claimed"]).inc();
                     tx.audit_append(
                         actor.as_str(),
                         "job.claim",
@@ -326,6 +340,7 @@ impl App {
         let repo = require(&req.repo, "repo")?.to_string();
         let issuer_ok = call.principal.identity.principal();
         let name = repo.clone();
+        let events = self.metrics.job_events.clone();
         let result_json = if req.result_json.is_empty() {
             json!({})
         } else {
@@ -385,6 +400,7 @@ impl App {
             }
             let done = r.meta().write(|tx| {
                 let j = tx.job_complete(&job.id, &worker, &result)?;
+                events.with_label_values(&["succeeded"]).inc();
                 tx.audit_append(actor.as_str(), "job.complete", &j.id, &json!({"result": result}))?;
                 Ok(j)
             })?;
@@ -398,12 +414,14 @@ impl App {
         let worker = worker_id(call, &req.worker)?;
         let repo = require(&req.repo, "repo")?.to_string();
         let name = repo.clone();
+        let events = self.metrics.job_events.clone();
         let out = self
             .with_repo_mut(call, &repo, Cap::JobsClaim, None, move |r, actor| {
                 let retry = (req.retry_after_ms > 0).then_some(req.retry_after_ms);
                 let j = r.meta().write(|tx| {
                     let j =
                         tx.job_fail(&req.job_id, &worker, &req.error.chars().take(2000).collect::<String>(), retry)?;
+                    events.with_label_values(&[if j.state == JobState::Queued { "retried" } else { "failed" }]).inc();
                     tx.audit_append(
                         actor.as_str(),
                         "job.fail",
@@ -474,7 +492,7 @@ impl App {
                     format!("the candidate is now tree {id}, not {}", req.expected_tree_id),
                 ));
             }
-            tree_page(&tree, size, &token)
+            tree_page(r, &tree, size, &token)
         })
         .await
     }

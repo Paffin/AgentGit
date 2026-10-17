@@ -21,6 +21,7 @@
 mod admin;
 mod api_support;
 mod backup;
+mod blame;
 mod derive;
 mod error;
 mod failpoints;
@@ -41,6 +42,7 @@ mod workspace;
 
 pub use api_support::{FileDiff, MAX_NEGOTIATED};
 pub use backup::BackupReport;
+pub use blame::{Blame, BlameLine, BlameOptions, DEFAULT_BLAME_COMMITS, MAX_BLAME_FILE_SIZE, MAX_BLAME_LINES};
 pub use derive::{DeriveReport, KEYFRAME_INTERVAL};
 pub use error::Error;
 pub use failpoints::Failpoints;

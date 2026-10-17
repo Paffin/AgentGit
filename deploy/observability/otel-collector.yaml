@@ -1,0 +1,28 @@
+# OpenTelemetry Collector for AgentGit traces (OTLP/HTTP on 4318).
+# The server sends one span per operation; see docs/operations/observability.md.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  batch: {}
+
+exporters:
+  # Prints a summary of what arrives. Replace or extend with a real backend, e.g.:
+  #   otlphttp/tempo:
+  #     endpoint: https://tempo.example.com
+  #     headers: {authorization: "Bearer ${env:TEMPO_TOKEN}"}
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

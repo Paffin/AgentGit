@@ -16,4 +16,4 @@
 pub mod canon;
 mod object;
 
-pub use object::{ObjectError, ObjectKind, RawObject, hash_blob, object_id};
+pub use object::{ENVELOPE_HEADER_LEN, ObjectError, ObjectKind, RawObject, hash_blob, object_id};

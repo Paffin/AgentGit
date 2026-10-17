@@ -1,0 +1,77 @@
+{
+  "$comment": "Hand-maintained facts about the AGWP v1 HTTP API that docs/protocol/openapi.json does not carry. Both SDK generators (sdk/typescript/scripts/generate.mjs and sdk/python/scripts/generate.py) read this file; their tests fail when it disagrees with the OpenAPI document. 'retry' classes: read = GET, or a POST that only reads; natural = repeating the call has the same effect as making it once; keyed = the server records the outcome under the Idempotency-Key header (verified for exactly these four operations against ag-server 0.1.0); unsafe = a repeat may apply twice, so the SDK never retries it on its own (pass an explicit override per call).",
+  "retry": {
+    "readPosts": ["history.ancestors", "tree.diff", "objects.missing", "objects.verify", "admin.fsck"],
+    "keyed": ["repo.create", "objects.publish", "proposal.create", "integration.integrate"],
+    "natural": [
+      "objects.put",
+      "repo.configure",
+      "admin.gc",
+      "admin.pin",
+      "admin.unpin",
+      "admin.roles.grant",
+      "admin.roles.revoke",
+      "admin.credentials.revoke",
+      "agent.heartbeat",
+      "agent.complete",
+      "integration.prepare",
+      "integration.validate",
+      "jobs.heartbeat",
+      "lease.extend",
+      "lease.release",
+      "proposal.update",
+      "proposal.close",
+      "queue.run",
+      "stream.cas",
+      "task.depend",
+      "task.finish",
+      "workspace.delete",
+      "workspace.sync"
+    ],
+    "naturalWhenFieldPresent": {
+      "workspace.modify": "expected_head"
+    }
+  },
+  "alwaysPresent": {
+    "$comment": "Message-typed fields that the protocol declares optional (so the OpenAPI document says '| null') but that ag-server 0.1.0 always fills in. The SDKs type them as present; a live test per field fails if the server ever answers null.",
+    "fields": [
+      "IntegrationResult.outcome",
+      "AcquireLeaseResponse.lease",
+      "ProposalDetail.proposal",
+      "Principal.scope",
+      "NegotiateResponse.limits",
+      "Repo.quota",
+      "MintCredentialResponse.credential",
+      "Credential.scope"
+    ]
+  },
+  "bodies": {
+    "$comment": "Operations whose HTTP body or response is not JSON. The OpenAPI document only says 'binary or event-stream body'.",
+    "objects.put": { "request": "bytes", "response": "json" },
+    "objects.get": { "response": "bytes" },
+    "tree.file": { "response": "bytes" },
+    "events.subscribe": { "response": "sse" }
+  },
+  "namespaces": {
+    "session": "session",
+    "repo": "repos",
+    "objects": "objects",
+    "operations": "operations",
+    "history": "history",
+    "tree": "tree",
+    "stream": "streams",
+    "workspace": "workspaces",
+    "proposal": "proposals",
+    "integration": "integration",
+    "queue": "queue",
+    "agent": "agents",
+    "task": "tasks",
+    "lease": "leases",
+    "provenance": "provenance",
+    "events": "events",
+    "jobs": "jobs",
+    "admin.credentials": "credentials",
+    "admin.roles": "roles",
+    "admin": "admin"
+  }
+}

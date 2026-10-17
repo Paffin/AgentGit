@@ -52,6 +52,12 @@ pub struct RouteMeta {
     pub public: bool,
     /// Body description.
     pub payload: Payload,
+    /// Extra query parameters of a raw route: `(name, JSON type, description)`.
+    pub query: Vec<(&'static str, &'static str, &'static str)>,
+    /// Media type of the request body of a raw route, if it has one.
+    pub request_media: Option<&'static str>,
+    /// Media type of the response body of a raw route.
+    pub response_media: &'static str,
 }
 
 impl RouteMeta {
@@ -75,6 +81,9 @@ impl RouteMeta {
                 response: Resp::name().to_string(),
                 collect: [collect_for::<Req>, collect_for::<Resp>],
             },
+            query: Vec::new(),
+            request_media: None,
+            response_media: "application/json",
         }
     }
 
@@ -86,7 +95,39 @@ impl RouteMeta {
         tag: &'static str,
         summary: &'static str,
     ) -> Self {
-        Self { method, path, operation, tag, summary, public: false, payload: Payload::Raw }
+        Self {
+            method,
+            path,
+            operation,
+            tag,
+            summary,
+            public: false,
+            payload: Payload::Raw,
+            query: Vec::new(),
+            request_media: None,
+            response_media: "application/octet-stream",
+        }
+    }
+
+    /// Declares a query parameter of a raw route.
+    #[must_use]
+    pub fn query(mut self, name: &'static str, json_type: &'static str, description: &'static str) -> Self {
+        self.query.push((name, json_type, description));
+        self
+    }
+
+    /// Declares the media type of the request body of a raw route.
+    #[must_use]
+    pub fn request_body(mut self, media: &'static str) -> Self {
+        self.request_media = Some(media);
+        self
+    }
+
+    /// Declares the media type of the response body of a raw route.
+    #[must_use]
+    pub fn response_body(mut self, media: &'static str) -> Self {
+        self.response_media = media;
+        self
     }
 
     /// Marks the route as needing no credentials.
@@ -181,7 +222,24 @@ pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
                 });
             }
             Payload::Raw => {
-                op["responses"]["200"] = json!({"description": "Success (binary or event-stream body)"});
+                for (name, ty, desc) in &r.query {
+                    params.push(json!({"name": name, "in": "query", "required": false, "description": desc, "schema": {"type": ty}}));
+                }
+                if let Some(media) = r.request_media {
+                    op["requestBody"] = json!({
+                        "required": true,
+                        "content": {media: {"schema": {"type": "string", "format": "binary"}}}
+                    });
+                }
+                let schema = if r.response_media == "text/event-stream" {
+                    json!({"type": "string"})
+                } else {
+                    json!({"type": "string", "format": "binary"})
+                };
+                op["responses"]["200"] = json!({
+                    "description": "Success",
+                    "content": {r.response_media: {"schema": schema}}
+                });
             }
         }
         if !params.is_empty() {
@@ -199,7 +257,7 @@ pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
             "title": "AgentGit AGWP HTTP/JSON API",
             "version": server_version,
             "description": "The HTTP/JSON gateway of AGWP v1. The same messages are served over gRPC; see proto/agwp/v1/agwp.proto. \
-                            Mutating requests accept an `Idempotency-Key` header. Free-form names (streams, revisions, paths) travel in the query string or body.",
+                            Mutating requests that create something (repositories, proposals, objects, tasks, runs, leases, integrations) accept an `Idempotency-Key` header; see docs/protocol/agwp-v1.md for exactly which. Free-form names (streams, revisions, paths) travel in the query string or body.",
             "license": {"name": "Apache-2.0", "url": "https://www.apache.org/licenses/LICENSE-2.0.html"}
         },
         "servers": [{"url": "/"}],

@@ -1,0 +1,23 @@
+# Configuration baked into the container image. Override it by mounting your own file at
+# /etc/agentgit/ag-server.toml (see deploy/compose and deploy/kubernetes).
+#
+# Credentials never go in this file: set AG_BOOTSTRAP_TOKEN (first administrator) and
+# AG_METRICS_TOKEN (protects /metrics) as environment variables or secrets.
+
+[server]
+listen = "0.0.0.0:8080"
+data_dir = "/data"
+# The container speaks plain HTTP/2 inside its network. Terminate TLS in front of it (ingress,
+# load balancer) — or set tls_cert/tls_key here and remove the next line.
+allow_insecure_remote = true
+
+[auth]
+bootstrap_token_env = "AG_BOOTSTRAP_TOKEN"
+
+[metrics]
+enabled = true
+token_env = "AG_METRICS_TOKEN"
+
+[telemetry]
+log_format = "json"
+log_filter = "info"

@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentgit-client"
+version = "0.1.0"
+description = "Python client for the AgentGit Wire Protocol (AGWP v1): repositories, proposals, agents, leases, signed provenance and events."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "The AgentGit Authors" }]
+keywords = ["agentgit", "agwp", "scm", "agents", "client"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.27,<1",
+  "cryptography>=42",
+]
+
+[project.urls]
+Homepage = "https://github.com/Paffin/AgentGit/tree/main/sdk/python"
+Repository = "https://github.com/Paffin/AgentGit"
+Issues = "https://github.com/Paffin/AgentGit/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.8",
+  "mypy>=1.13",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentgit"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/agentgit", "README.md", "LICENSE", "NOTICE", "pyproject.toml"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "tests", "examples", "scripts"]
+extend-exclude = ["src/agentgit/_generated"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "C4", "PT", "PIE", "RET"]
+ignore = ["E501", "RUF012", "SIM117", "RET504"]  # the formatter owns line length
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011", "B017", "PT011", "PT012", "PT015"]
+"examples/**" = ["E402"]
+"scripts/**" = ["RUF005", "SIM910", "RUF034"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src", "tests", "examples", "scripts"]
+warn_unused_ignores = true
+exclude = ["^src/agentgit/_generated/.*_unused"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]

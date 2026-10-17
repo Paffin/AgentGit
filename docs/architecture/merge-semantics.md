@@ -1,7 +1,7 @@
 # Merge semantics
 
 Merge is a **pure, deterministic function** of `(base, ours, theirs)` and an algorithm version
-(`ag-merge/1+ag-diff/1`, recorded in every merge changeset message). The same inputs always give the same
+(`ag-merge/2+ag-diff/1`, recorded in every merge changeset message). The same inputs always give the same
 result, so an integration decision can be reproduced and audited. Nothing here uses a model.
 
 > "Mergeable" means only that an unambiguous result tree exists. It says nothing about whether the result
@@ -32,9 +32,33 @@ otherwise (both changed it, differently):
 | both added the path with different content | `BothAdded` conflict |
 | symlink involved, or type changed | `TypeChange` conflict |
 | merged result would put a file where a directory is needed | `FileDirectory` conflict |
+| both sides moved the same file to different paths | `RenameRename` conflict (reported at the old path) |
+| one side moved a file, the other deleted it | `RenameDelete` conflict (reported at the new path) |
 
 The executable bit merges independently of content (if both changed it, ours wins; with two possible values
 one side always equals the base, so this never conflicts).
+
+## Renames
+
+Before the per-path rules, each side is compared with the base for **renames** (algorithm version
+`ag-merge/2`; [ADR-0005](../adr/0005-rename-aware-merge.md)): a path that exists only in the base is paired
+with a path that exists only in the side, if their contents are the same file.
+
+- *Exact* renames (identical bytes) always win over similar ones. A *similar* rename needs ≥ 60 % of the
+  bytes in common lines (`2 × common / (old + new)`, over the multiset of lines); binary files and files
+  over 256 KiB match exactly or not at all. Candidate pairs are chosen greedily by (similarity ↓, same file
+  name first, old path ↑, new path ↑), every path at most once, within a fixed work budget (more than 200
+  deleted or added files, or too many line comparisons, means exact matches only). The result depends only
+  on the trees and blob contents — never on iteration order, clocks or randomness.
+- Only regular files take part; directory renames show up as one rename per file, and a *new* file added
+  into a directory the other side moved stays where it was added.
+- When one side moved a file and the other **modified** it, the two are merged as one file at the **new
+  path** (`base[old]`, `ours[new]`, `theirs[old]` — or the mirror image), with the ordinary line-level rules.
+  A content conflict there is reported at the new path, and the conflict carries the three original paths so
+  `ag sync` can write the markers into the right file.
+- Both sides moving the file to the *same* path merge their contents against the base; to *different* paths
+  is a `RenameRename` conflict; a move against a delete is a `RenameDelete` conflict. If the other side also
+  created something at the destination, the ordinary rules (and `BothAdded`) apply.
 
 ## Line level
 
@@ -57,8 +81,8 @@ the result is deterministic.
 
 ## Not implemented
 
-- **Rename detection.** A rename is a delete plus an add, so a rename on one side and an edit on the other
-  is a `DeleteModify` conflict.
+- **Directory renames and copies.** Files added under a moved directory are not relocated; copies are not
+  tracked (a copy is just an add).
 - **Semantic merge.** Language-aware merging and API-signature analysis are advisory ideas for the agent
   layer, not part of the correctness core (ADR-0001 §6).
 

@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 
 use axum::Router;
 use axum::extract::{Request, State};
-use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use sha2::{Digest, Sha256};
@@ -73,19 +73,46 @@ pub fn build_router(app: App) -> (Router, Vec<RouteMeta>) {
                 async move {
                     let path = req.uri().path().to_string();
                     if path.starts_with("/v1/") || path.starts_with("/agwp.") {
-                        return Ok::<_, std::convert::Infallible>(not_found());
+                        return Ok::<_, std::convert::Infallible>(not_found(req.headers(), req.method(), &path));
                     }
                     tower::Service::call(&mut svc, req).await.map(IntoResponse::into_response)
                 }
             }))
         }
-        None => router.fallback(|| async { not_found() }),
+        None => router.fallback(|headers: HeaderMap, method: Method, uri: Uri| async move {
+            not_found(&headers, &method, uri.path())
+        }),
     };
+    // Whatever produced a bare 405 (the router itself) gets the same error envelope as everything else.
+    let router = router.layer(axum::middleware::from_fn(envelope_method_not_allowed));
     (cors(router, &app), routes)
 }
 
-fn not_found() -> Response {
-    ApiError::not_found("no such route").into_response()
+/// The error for a path nothing serves: the standard envelope, carrying the caller's request id.
+fn not_found(headers: &HeaderMap, method: &Method, path: &str) -> Response {
+    let id = crate::http::ingress_from_headers(headers, None).request_id;
+    ApiError::not_found(format!("no such route: {method} {path}")).with_request_id(&id).into_response()
+}
+
+/// Turns the router's empty 405 into an AGWP error envelope (keeping its `Allow` header).
+async fn envelope_method_not_allowed(req: Request, next: axum::middleware::Next) -> Response {
+    let id = crate::http::ingress_from_headers(req.headers(), None).request_id;
+    let (method, path) = (req.method().clone(), req.uri().path().to_string());
+    let resp = next.run(req).await;
+    if resp.status() != StatusCode::METHOD_NOT_ALLOWED || resp.headers().contains_key(header::CONTENT_TYPE) {
+        return resp;
+    }
+    let allow = resp.headers().get(header::ALLOW).cloned();
+    let message = match allow.as_ref().and_then(|v| v.to_str().ok()) {
+        Some(a) => format!("{method} is not allowed on {path} (allowed: {a})"),
+        None => format!("{method} is not allowed on {path}"),
+    };
+    let mut out = ApiError::invalid(message).with_request_id(&id).into_response();
+    *out.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
+    if let Some(a) = allow {
+        out.headers_mut().insert(header::ALLOW, a);
+    }
+    out
 }
 
 fn cors(router: Router, app: &App) -> Router {
@@ -135,6 +162,11 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
                 .into_response();
         }
     }
+    let queued = {
+        let a = app.clone();
+        tokio::task::spawn_blocking(move || a.count_queued_jobs()).await.unwrap_or(0)
+    };
+    app.metrics.jobs_queued.set(queued);
     app.metrics.open_repos.set(app.repos.open_count() as i64);
     app.metrics.uptime.set(app.started.elapsed().as_secs() as i64);
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
@@ -192,6 +224,12 @@ pub async fn serve(
 ) -> anyhow::Result<()> {
     let result = serve_inner(app.clone(), listener, shutdown).await;
     let a = app.clone();
-    let _ = tokio::task::spawn_blocking(move || a.repos.close_all()).await;
+    let _ = tokio::task::spawn_blocking(move || {
+        a.repos.close_all();
+        if let Some(t) = &a.tracer {
+            t.shutdown();
+        }
+    })
+    .await;
     result
 }

@@ -62,7 +62,7 @@ $ ag integrate prop_6eed… --fencing-token 1                              # as 
 Integrated (merge): stream is now at 793a03b6da69 (version 3, was 70e31c72a4d0), 1 file(s) changed.
 
 $ ag preview prop_2b19…                                                  # параллельная правка той же строки
-strategy: Merge   (algorithm ag-merge/1+ag-diff/1)
+strategy: Merge   (algorithm ag-merge/2+ag-diff/1)
 conflict: src/main.rs (content conflict (1 region(s)))                   # код выхода 4 — поток не тронут
 ```
 
@@ -186,7 +186,10 @@ flowchart LR
   Для принуждения между пользователями нужен запланированный сервер.
 - **Пока нет** сетевого сервера, протокола AGWP, бэкендов PostgreSQL/S3, Web UI и SDK — см. [roadmap](ROADMAP.md)
   и [ADR-0002](docs/adr/0002-embedded-engine-first.md) о том, почему сначала движок.
-- **`ag validate run` — не песочница.** Только для доверенного кода; изолированное исполнение запланировано.
+- **`ag validate run` — не песочница.** Только для доверенного кода. Недоверенный код запускается через
+  [`ag-worker`](docs/guides/workers.md) и его [песочницу](docs/architecture/sandbox.md): она делит ядро с хостом
+  (это не виртуальная машина), и часть её не проверена — прочитайте эту страницу (на английском) до того, как
+  на неё полагаться.
 - Плоские манифесты деревьев (тысячи файлов — нормально: репозиторий на 3 000 файлов и 1 500 коммитов
   интегрируется быстрее секунды; миллионы — пока нет), нет определения переименований, внешнего аудита
   безопасности не было.

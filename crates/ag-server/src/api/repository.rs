@@ -51,7 +51,6 @@ impl App {
                 e
             }
         })?;
-        self.rate_limit(call, None)?;
         let stream = if req.default_stream.is_empty() {
             self.cfg.repos.default_stream.clone()
         } else {
@@ -174,7 +173,6 @@ impl App {
     pub async fn configure_repo(&self, call: &Call, req: v1::ConfigureRepoRequest) -> ApiResult<v1::Repo> {
         let name = require(&req.repo, "repo")?.to_string();
         self.authorize(call, &name, Cap::RepoConfigure, None).await?;
-        self.rate_limit(call, None)?;
         let control = self.control.clone();
         let n = name.clone();
         let (description, quota) = (req.description.clone(), req.quota);

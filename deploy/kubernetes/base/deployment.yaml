@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ag-server
+  labels:
+    app.kubernetes.io/name: ag-server
+    app.kubernetes.io/part-of: agentgit
+spec:
+  # One replica: the control database (credentials, roles, repository registry) is a SQLite
+  # file on the volume, and the default repository storage is local too. See
+  # docs/operations/deployment.md#scaling.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ag-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ag-server
+        app.kubernetes.io/part-of: agentgit
+    spec:
+      serviceAccountName: ag-server
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ag-server
+          image: ghcr.io/paffin/agentgit-server:latest
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: AG_SERVER_CONFIG
+              value: /etc/agentgit/ag-server.toml
+          envFrom:
+            - secretRef:
+                name: agentgit
+          startupProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/agentgit, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ag-data
+        - name: config
+          configMap:
+            name: ag-server-config
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

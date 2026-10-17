@@ -1,0 +1,9 @@
+target
+.git
+.claude
+**/node_modules
+**/dist
+apps/web/test-results
+sdk/*/.venv
+services/*/bin
+*.log

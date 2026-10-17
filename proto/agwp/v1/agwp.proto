@@ -9,11 +9,16 @@
 //
 // Conventions
 //   * Every repository-scoped request carries `repo` ("owner/name").
-//   * Every mutating request carries `idempotency_key`. Repeating a request
-//     with the same key and the same content returns the recorded result;
-//     the same key with different content is rejected (`idempotency_key_reused`).
-//     After a lost response, ask for the outcome (GetOperation) instead of
-//     blindly retrying.
+//   * Requests that create something carry `idempotency_key` and honour it:
+//     CreateRepo, PublishObjects, CreateProposal, Integrate, CreateTask,
+//     StartRun, AcquireLease. Repeating such a request with the same key and
+//     the same content returns the recorded response; the same key with
+//     different content is rejected (`idempotency_key_reused`). Other
+//     mutating requests are naturally idempotent (SetPolicy, GrantRole, pins,
+//     FinishTask ...) or cannot replay their result (a minted credential's
+//     secret is shown once); where the field exists on them it is ignored.
+//     After a lost response, ask for the outcome (GetOperation) or the state
+//     instead of blindly retrying.
 //   * Identifiers are lowercase hex (ids) or the documented name syntax.
 //   * Times are Unix milliseconds in `*_ms` fields.
 //   * Enumerations are strings with a documented value set so that new values
@@ -302,6 +307,47 @@ message LogRequest {
 message LogResponse {
   repeated Changeset changesets = 1;
   string next_page_token = 2;
+}
+
+message BlameRequest {
+  string repo = 1;
+  // Revision expression (default: the repository's default stream).
+  string rev = 2;
+  string path = 3;
+  // Only lines first_line..=last_line (1-based); both 0 = the whole file.
+  uint32 first_line = 4;
+  uint32 last_line = 5;
+  // Visit at most this many changesets (0 = the server default).
+  uint32 max_commits = 6;
+}
+
+message BlameLine {
+  // Line number at the requested revision (1-based).
+  uint32 line = 1;
+  // The line's text without its terminator (lossy UTF-8).
+  string text = 2;
+  // The changeset that introduced it.
+  string changeset = 3;
+  // The path the file had in that changeset (differs after a rename).
+  string path = 4;
+  // The line's number in that changeset's version (1-based).
+  uint32 original_line = 5;
+  string author = 6;
+  int64 timestamp_ms = 7;
+  // First line of that changeset's message.
+  string summary = 8;
+  // True if the walk stopped before finding the real origin.
+  bool boundary = 9;
+}
+
+message BlameResponse {
+  // The revision, resolved to a changeset id.
+  string rev = 1;
+  string path = 2;
+  repeated BlameLine lines = 3;
+  uint32 visited = 4;
+  // True if max_commits was reached before every line found its origin.
+  bool truncated = 5;
 }
 
 message AncestorsRequest {
@@ -794,7 +840,9 @@ message QueueEntry {
   uint64 id = 1;
   string stream = 2;
   string proposal = 3;
-  // "queued", "integrated", "blocked", "conflict", "failed", "skipped".
+  // "queued", "done", "blocked", "rejected" (conflict or policy denial) or
+  // "failed". `outcome` explains: "integrated" for done, the blockers or the
+  // number of conflicting paths otherwise.
   string state = 4;
   string enqueued_by = 5;
   int64 enqueued_at_ms = 6;
@@ -1429,6 +1477,7 @@ service ObjectService {
 service HistoryService {
   rpc GetChangeset(GetChangesetRequest) returns (Changeset);
   rpc Log(LogRequest) returns (LogResponse);
+  rpc Blame(BlameRequest) returns (BlameResponse);
   rpc Ancestors(AncestorsRequest) returns (AncestorsResponse);
   rpc MergeBase(MergeBaseRequest) returns (MergeBaseResponse);
   rpc ResolveRev(ResolveRevRequest) returns (ResolveRevResponse);

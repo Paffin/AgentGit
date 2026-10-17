@@ -1,5 +1,6 @@
 //! Trees: paths, directories, whole-tree manifests, diffs and file content.
 
+use ag_integrate::Repository;
 use ag_protocol::v1;
 use ag_tree::{DirEntry, Entry, Tree};
 use ag_types::RepoPath;
@@ -9,20 +10,37 @@ use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
 
+/// The wire name of an entry's type, as documented on `FileOp.file_type`: `regular` or `symlink`.
+pub(crate) fn wire_file_type(t: ag_types::FileType) -> &'static str {
+    match t {
+        ag_types::FileType::Regular => "regular",
+        ag_types::FileType::Symlink => "symlink",
+    }
+}
+
 fn entry_to_wire(path: &RepoPath, e: &Entry, size: u64) -> v1::TreeEntry {
     v1::TreeEntry {
         path: path.to_string(),
         blob_id: e.content.to_string(),
         size,
-        file_type: e.file_type.to_string(),
+        file_type: wire_file_type(e.file_type).into(),
         executable: e.executable,
     }
 }
 
-pub(crate) fn tree_page(tree: &Tree, size: u32, token: &str) -> ApiResult<v1::GetTreeResponse> {
-    let entries: Vec<v1::TreeEntry> = tree.iter().map(|(p, e)| entry_to_wire(p, e, 0)).collect();
+/// One page of a tree manifest. Sizes are filled in for the entries of the page only (a metadata lookup per
+/// entry, never a read of the content).
+pub(crate) fn tree_page(repo: &Repository, tree: &Tree, size: u32, token: &str) -> ApiResult<v1::GetTreeResponse> {
+    let entries: Vec<(&RepoPath, &Entry)> = tree.iter().collect();
     let total = entries.len() as u64;
     let (page, next) = paginate("tree", entries, size, token)?;
+    let page = page
+        .into_iter()
+        .map(|(p, e)| {
+            let len = repo.blob_len(&e.content)?.unwrap_or(0);
+            Ok(entry_to_wire(p, e, len))
+        })
+        .collect::<ApiResult<Vec<_>>>()?;
     Ok(v1::GetTreeResponse {
         tree_id: tree.id().to_string(),
         entries: page,
@@ -89,7 +107,12 @@ impl App {
                     },
                 })
                 .collect();
-            let (page, next) = paginate("dir", wire, size, &token)?;
+            let (mut page, next) = paginate("dir", wire, size, &token)?;
+            for e in page.iter_mut().filter(|e| e.kind != "dir") {
+                if let Ok(id) = e.blob_id.parse::<ag_types::BlobId>() {
+                    e.size = repo.blob_len(&id)?.unwrap_or(0);
+                }
+            }
             Ok(v1::ListDirectoryResponse { entries: page, next_page_token: next, tree_id: tree.id().to_string() })
         })
         .await
@@ -101,7 +124,7 @@ impl App {
         let (size, token) = (req.page_size, req.page_token.clone());
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
             let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
-            tree_page(&tree, size, &token)
+            tree_page(repo, &tree, size, &token)
         })
         .await
     }

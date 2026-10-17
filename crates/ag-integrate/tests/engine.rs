@@ -144,7 +144,7 @@ fn independent_proposals_merge_with_the_head_as_first_parent() {
 
     let merge = f.repo.changeset(&new_head).unwrap();
     assert_eq!(merge.parents, vec![pa, pb], "first parent is the previous stream head");
-    assert!(merge.message.contains("Merge-Algorithm: ag-merge/1+ag-diff/1"));
+    assert!(merge.message.contains("Merge-Algorithm: ag-merge/2+ag-diff/1"));
     assert_eq!(f.read(&new_head, "a.txt").as_deref(), Some("A\n"));
     assert_eq!(f.read(&new_head, "b.txt").as_deref(), Some("B\n"));
 
@@ -449,4 +449,43 @@ fn the_backends_under_test_are_the_ones_the_environment_selects() {
     // the configuration names environment variables, never holds a secret
     let json = std::fs::read_to_string(dir.path().join(".ag/config.json")).unwrap();
     assert!(!json.contains("password") && !json.contains("secret_access_key\""), "{json}");
+}
+
+#[test]
+fn a_rename_and_a_concurrent_edit_integrate_as_one_merged_file() {
+    let f = fx();
+    let body: String = (0..12).map(|i| format!("line {i}\n")).collect();
+    let base = f.land(None, &[("src/old.rs", &body), ("README", "r\n")]);
+    // alice moves the file; bob (from the same base) edits its last line.
+    let moved = f.snap(Some(base), &[("src/new.rs", &body), ("README", "r\n")], "user:alice");
+    let edited_body = body.replace("line 11", "line 11 (bob)");
+    let edited = f.snap(Some(base), &[("src/old.rs", &edited_body), ("README", "r\n")], "user:bob");
+    let prop_moved = f.propose(moved, "move", "user:alice");
+    let prop_edited = f.propose(edited, "edit", "user:bob");
+    f.integrate(&prop_moved, "user:alice");
+
+    let r = f.integrate(&prop_edited, "user:alice");
+    let Outcome::Integrated { new_head, strategy, .. } = r.outcome else { panic!("{:?}", r.outcome) };
+    assert_eq!(strategy, Strategy::Merge);
+    assert_eq!(f.read(&new_head, "src/new.rs").as_deref(), Some(edited_body.as_str()));
+    assert_eq!(f.read(&new_head, "src/old.rs"), None, "the file moved");
+    assert!(f.repo.changeset(&new_head).unwrap().message.contains("Merge-Algorithm: ag-merge/2"));
+    assert!(f.repo.fsck().unwrap().is_ok());
+}
+
+#[test]
+fn a_rename_conflict_is_reported_at_the_new_path() {
+    let f = fx();
+    let base = f.land(None, &[("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\n")]);
+    let moved = f.snap(Some(base), &[("b.txt", "1\n2\nOURS\n4\n5\n6\n7\n8\n")], "user:alice");
+    let edited = f.snap(Some(base), &[("a.txt", "1\n2\nTHEIRS\n4\n5\n6\n7\n8\n")], "user:bob");
+    let prop_moved = f.propose(moved, "move+edit", "user:alice");
+    let prop_edited = f.propose(edited, "edit", "user:bob");
+    f.integrate(&prop_moved, "user:alice");
+    let before = (f.head(), f.version());
+    let r = f.integrate(&prop_edited, "user:alice");
+    let Outcome::Conflict { conflicts, .. } = r.outcome else { panic!("{:?}", r.outcome) };
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].path, "b.txt");
+    assert_eq!((f.head(), f.version()), before);
 }

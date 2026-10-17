@@ -34,14 +34,19 @@
 //! "Mergeable" never means "correct": a clean merge says only that an
 //! unambiguous result tree exists. Validation and approval are separate steps.
 
+mod rename;
 mod text;
 mod tree;
 
+pub use rename::{
+    MAX_SIMILARITY_CANDIDATES, MAX_SIMILARITY_FILE_SIZE, MAX_SIMILARITY_WORK, MIN_SIMILARITY, Rename, detect_renames,
+    detect_renames_in,
+};
 pub use text::{ConflictRegion, TextMerge, merge_text, render_conflict_markers};
-pub use tree::{BlobIo, Conflict, ConflictKind, IoError, MAX_TEXT_MERGE_SIZE, TreeMerge, merge_trees};
+pub use tree::{BlobIo, Conflict, ConflictKind, ConflictOrigin, IoError, MAX_TEXT_MERGE_SIZE, TreeMerge, merge_trees};
 
 /// Version tag of the merge semantics (includes the diff algorithm).
-pub const ALGORITHM_VERSION: &str = "ag-merge/1+ag-diff/1";
+pub const ALGORITHM_VERSION: &str = "ag-merge/2+ag-diff/1";
 
 #[cfg(test)]
 mod tests;

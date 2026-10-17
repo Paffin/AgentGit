@@ -58,7 +58,7 @@ $ ag integrate prop_6eed… --fencing-token 1                              # as 
 Integrated (merge): stream is now at 793a03b6da69 (version 3, was 70e31c72a4d0), 1 file(s) changed.
 
 $ ag preview prop_2b19…                                                  # a concurrent edit to the same line
-strategy: Merge   (algorithm ag-merge/1+ag-diff/1)
+strategy: Merge   (algorithm ag-merge/2+ag-diff/1)
 conflict: src/main.rs (content conflict (1 region(s)))                   # exit code 4 — the stream was not touched
 ```
 
@@ -170,6 +170,7 @@ executed in CI, test names and commands mentioned in docs are verified against t
 | `ag-storage` | object store + transactional metadata (SQLite) |
 | `ag-policy` · `ag-agent` | policy evaluation and signed attestations · agent coordination |
 | `ag-integrate` | the engine: publication, integration, workspaces, queue, GC, verify, backup |
+| `ag-sandbox` · `ag-worker` | isolated execution of untrusted checks · the execution-plane worker that runs them and signs the result |
 | `ag-git` · `ag-cli` | Git bridge · the `ag` binary |
 
 ## Status and honest limits
@@ -183,7 +184,9 @@ not built yet. Read this before relying on it:
 - **No network server, AGWP protocol, PostgreSQL/S3 backends, Web UI or SDKs yet** —
   see the [roadmap](ROADMAP.md) and [ADR-0002](docs/adr/0002-embedded-engine-first.md) for why the engine
   came first.
-- **`ag validate run` is not a sandbox.** Use it for trusted code; isolated execution is planned.
+- **`ag validate run` is not a sandbox.** Use it for trusted code. Untrusted code goes through an
+  [`ag-worker`](docs/guides/workers.md) and its [sandbox](docs/architecture/sandbox.md) — which shares the host
+  kernel (it is not a VM) and has parts that are not yet verified; read that page before trusting it.
 - Flat tree manifests (fine for thousands of files — a 3 000-file, 1 500-commit repository integrates in
   under a second — not yet for millions), no rename detection, no external security audit.
 

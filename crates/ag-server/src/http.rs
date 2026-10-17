@@ -163,7 +163,8 @@ async fn parse_request<Req: DeserializeOwned>(
             pairs.push((k.clone(), v.clone()));
         }
         let encoded = serde_urlencoded::to_string(&pairs).map_err(|e| ApiError::invalid(e.to_string()))?;
-        serde_urlencoded::from_str(&encoded).map_err(|e| ApiError::invalid(format!("invalid request: {e}")))
+        // `serde_html_form` (unlike `serde_urlencoded`) reads a repeated key into a list: `?features=a&features=b`.
+        serde_html_form::from_str(&encoded).map_err(|e| ApiError::invalid(format!("invalid request: {e}")))
     }
 }
 
@@ -370,13 +371,16 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::VerifyObjectsResponse,
         verify_objects
     );
-    meta.push(RouteMeta::raw(
-        "put",
-        "/v1/repos/{owner}/{rname}/objects/{object_id}",
-        "objects.put",
-        "Objects",
-        "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
-    ));
+    meta.push(
+        RouteMeta::raw(
+            "put",
+            "/v1/repos/{owner}/{rname}/objects/{object_id}",
+            "objects.put",
+            "Objects",
+            "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
+        )
+        .request_body("application/octet-stream"),
+    );
     meta.push(RouteMeta::raw(
         "get",
         "/v1/repos/{owner}/{rname}/objects/{object_id}",
@@ -499,6 +503,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/blame",
+        "history.blame",
+        "History",
+        "Which changeset introduced each line of a file (follows renames)",
+        v1::BlameRequest,
+        v1::BlameResponse,
+        blame
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/history/ancestors",
@@ -589,13 +606,16 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::DiffResponse,
         diff
     );
-    meta.push(RouteMeta::raw(
-        "get",
-        "/v1/repos/{owner}/{rname}/files/{*path}",
-        "tree.file",
-        "Tree",
-        "File content at a revision (query: rev); binary body",
-    ));
+    meta.push(
+        RouteMeta::raw(
+            "get",
+            "/v1/repos/{owner}/{rname}/files/{*path}",
+            "tree.file",
+            "Tree",
+            "File content at a revision (query: rev); binary body",
+        )
+        .query("rev", "string", "Revision expression; empty means the repository's default stream"),
+    );
     r = r.route(
         "/v1/repos/{owner}/{rname}/files/{*path}",
         get(
@@ -1233,13 +1253,23 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
             },
         ),
     );
-    meta.push(RouteMeta::raw(
-        "get",
-        "/v1/repos/{owner}/{rname}/events",
-        "events.subscribe",
-        "Events",
-        "Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live",
-    ));
+    meta.push(
+        RouteMeta::raw(
+            "get",
+            "/v1/repos/{owner}/{rname}/events",
+            "events.subscribe",
+            "Events",
+            "Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live",
+        )
+        .query(
+            "after_seq",
+            "integer",
+            "Replay events with a larger sequence number first; absent means follow from now",
+        )
+        .query("topics", "string", "Comma-separated topic prefixes, e.g. stream,proposal")
+        .query("heartbeat_ms", "integer", "Interval of keep-alive comments (0 = server default)")
+        .response_body("text/event-stream"),
+    );
     r = r.route(
         "/v1/repos/{owner}/{rname}/events",
         get(

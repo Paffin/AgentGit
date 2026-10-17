@@ -31,6 +31,7 @@ ag-git = { path = "crates/ag-git", version = "0.1.0" }
 ag-protocol = { path = "crates/ag-protocol", version = "0.1.0" }
 ag-client = { path = "crates/ag-client", version = "0.1.0" }
 ag-server = { path = "crates/ag-server", version = "0.1.0" }
+ag-sandbox = { path = "crates/ag-sandbox", version = "0.1.0" }
 
 # external crates
 anyhow = "1"
@@ -39,6 +40,7 @@ clap = { version = "4", features = ["derive", "env"] }
 ed25519-dalek = "3"
 globset = "0.4"
 hex = "0.4"
+libc = "0.2"
 proptest = "1"
 getrandom = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
@@ -66,6 +68,7 @@ http-body-util = "0.1"
 jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 prometheus = { version = "0.14", default-features = false }
 rcgen = "0.14"
+serde_html_form = "0.4"
 serde_urlencoded = "0.7"
 subtle = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "fs", "io-util"] }

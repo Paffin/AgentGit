@@ -101,6 +101,17 @@ impl DirEntry {
     }
 }
 
+/// One path that differs between two trees.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    /// The path.
+    pub path: RepoPath,
+    /// Its entry in the first tree, if any.
+    pub before: Option<Entry>,
+    /// Its entry in the second tree, if any.
+    pub after: Option<Entry>,
+}
+
 /// A repository state.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Tree {
@@ -142,10 +153,24 @@ impl Tree {
         if tree.entries.len() > limits.max_tree_entries {
             return Err(TreeError::TooManyEntries(tree.entries.len()));
         }
-        for path in tree.entries.keys() {
-            tree.check_path(path)?;
-        }
+        tree.check_structure()?;
         Ok(tree)
+    }
+
+    /// Verifies the file/directory rule for the whole tree in one pass: no path may lie beneath another
+    /// entry. (If a file `a` had anything beneath it, checking that thing's ancestors finds `a`, so looking
+    /// at ancestors alone is complete.) Linear in the number of entries, with no allocation per path.
+    fn check_structure(&self) -> Result<(), TreeError> {
+        let present: std::collections::HashSet<&str> = self.entries.keys().map(RepoPath::as_str).collect();
+        for path in self.entries.keys() {
+            for anc in path.ancestors() {
+                if present.contains(anc) {
+                    let file = RepoPath::new(anc).expect("ancestor of valid path");
+                    return Err(TreeError::FileDirectoryConflict { file, inside: path.clone() });
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Verifies that `path` neither sits under a file nor shadows a directory.
@@ -196,6 +221,44 @@ impl Tree {
             }
         }
         Ok(next)
+    }
+
+    /// Every path that differs between `self` and `target`, in path order. One linear walk over both trees;
+    /// only the differing paths are cloned.
+    pub fn changes(&self, target: &Tree) -> Vec<Change> {
+        let mut out = Vec::new();
+        let mut a = self.entries.iter().peekable();
+        let mut b = target.entries.iter().peekable();
+        loop {
+            match (a.peek(), b.peek()) {
+                (None, None) => break,
+                (Some(_), None) => {
+                    let (p, e) = a.next().expect("peeked");
+                    out.push(Change { path: p.clone(), before: Some(*e), after: None });
+                }
+                (None, Some(_)) => {
+                    let (p, e) = b.next().expect("peeked");
+                    out.push(Change { path: p.clone(), before: None, after: Some(*e) });
+                }
+                (Some((pa, _)), Some((pb, _))) => match pa.cmp(pb) {
+                    std::cmp::Ordering::Less => {
+                        let (p, e) = a.next().expect("peeked");
+                        out.push(Change { path: p.clone(), before: Some(*e), after: None });
+                    }
+                    std::cmp::Ordering::Greater => {
+                        let (p, e) = b.next().expect("peeked");
+                        out.push(Change { path: p.clone(), before: None, after: Some(*e) });
+                    }
+                    std::cmp::Ordering::Equal => {
+                        let ((p, ea), (_, eb)) = (a.next().expect("peeked"), b.next().expect("peeked"));
+                        if ea != eb {
+                            out.push(Change { path: p.clone(), before: Some(*ea), after: Some(*eb) });
+                        }
+                    }
+                },
+            }
+        }
+        out
     }
 
     /// The minimal canonical operation list that turns `self` into `target`.
@@ -276,12 +339,12 @@ impl Tree {
     pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Self, TreeError> {
         let mut r = Reader::new(bytes);
         let n = r.bounded_varint(limits.max_tree_entries as u64)? as usize;
-        let mut entries = BTreeMap::new();
-        let mut last: Option<RepoPath> = None;
+        // An entry takes at least 36 bytes, so a hostile count cannot make this allocation large.
+        let mut sorted: Vec<(RepoPath, Entry)> = Vec::with_capacity(n.min(bytes.len() / 36 + 1));
         for _ in 0..n {
             let path = RepoPath::new(r.str(ag_types::path_limits::MAX_PATH_LEN)?)
                 .map_err(|e| TreeError::Malformed(e.to_string()))?;
-            if last.as_ref().is_some_and(|prev| prev >= &path) {
+            if sorted.last().is_some_and(|(prev, _)| prev >= &path) {
                 return Err(TreeError::Malformed("entries not strictly ascending".into()));
             }
             let file_type =
@@ -292,11 +355,11 @@ impl Tree {
                 t => return Err(CanonError::InvalidTag(t).into()),
             };
             let content = BlobId::new(ObjectId::from_bytes(r.fixed32()?));
-            last = Some(path.clone());
-            entries.insert(path, Entry { content, file_type, executable });
+            sorted.push((path, Entry { content, file_type, executable }));
         }
         r.finish()?;
-        Self::from_entries(entries, limits)
+        // Already strictly ascending, so collecting builds the map in linear time.
+        Self::from_entries(sorted, limits)
     }
 
     /// The identifier of this exact state.

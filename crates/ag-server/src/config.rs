@@ -254,6 +254,12 @@ pub struct TelemetrySection {
     pub otlp_endpoint: String,
     /// Service name reported to the collector.
     pub service_name: String,
+    /// Fraction of new traces to record, 0.0 to 1.0. A trace that arrives with a
+    /// `traceparent` follows the caller's sampling decision instead.
+    pub otlp_sample_ratio: f64,
+    /// Environment variable with extra collector headers, `name=value,name2=value2`
+    /// (the standard `OTEL_EXPORTER_OTLP_HEADERS`). The value is a secret and is never logged.
+    pub otlp_headers_env: String,
 }
 
 impl Default for TelemetrySection {
@@ -263,6 +269,8 @@ impl Default for TelemetrySection {
             log_filter: "info".into(),
             otlp_endpoint: String::new(),
             service_name: "agentgit-server".into(),
+            otlp_sample_ratio: 1.0,
+            otlp_headers_env: "OTEL_EXPORTER_OTLP_HEADERS".into(),
         }
     }
 }
@@ -292,6 +300,22 @@ impl ServerConfig {
         }
         if self.limits.max_concurrent_requests == 0 {
             return bad("limits.max_concurrent_requests must be at least 1");
+        }
+        if !self.telemetry.otlp_endpoint.is_empty() {
+            let e = &self.telemetry.otlp_endpoint;
+            let rest = e.strip_prefix("http://").or_else(|| e.strip_prefix("https://"));
+            match rest {
+                None => return bad("telemetry.otlp_endpoint must be an http:// or https:// URL"),
+                Some(r) if r.is_empty() || r.contains('@') => {
+                    return bad(
+                        "telemetry.otlp_endpoint needs a host and must not contain credentials (use otlp_headers_env)",
+                    );
+                }
+                Some(_) => {}
+            }
+            if !(0.0..=1.0).contains(&self.telemetry.otlp_sample_ratio) {
+                return bad("telemetry.otlp_sample_ratio must be between 0 and 1");
+            }
         }
         for p in &self.auth.oidc {
             if p.issuer.is_empty() || p.audience.is_empty() {

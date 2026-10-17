@@ -1,38 +1,42 @@
-# Protocol (AGWP v1) — status and mapping
+# Protocol (AGWP v1)
 
-**Status: designed, not implemented.** ADR-0001 §9 specifies AGWP v1 (gRPC over HTTP/2 + TLS, an HTTPS API
-for browsers, SSE/WebSocket for events). Version 0.1 ships the *engine* as a Rust library plus the `ag`
-CLI; there is no network server yet. See [ADR-0002](../adr/0002-embedded-engine-first.md) for why, and the
-[roadmap](../../ROADMAP.md) for what comes next.
+**Status: implemented** in `ag-server` (crate `ag-server`; wire types in `ag-protocol`).
 
-The protocol will be a thin layer over operations that already exist and are tested. This table is the
-contract those operations will keep.
+| Document | What it is |
+|---|---|
+| [`agwp-v1.md`](agwp-v1.md) | the reference: connecting, conventions (JSON mapping, idempotency, pagination, deadlines, backpressure), errors, authentication, authorization, publication, signing formats, events |
+| [`openapi.json`](openapi.json) | the generated OpenAPI 3.1 document of the HTTP/JSON API. A test fails if it differs from what the server serves (`/openapi.json`); regenerate with `AG_UPDATE_GOLDEN=1 cargo test -p ag-server --test observability` |
+| [`proto/agwp/v1/agwp.proto`](../../proto/agwp/v1/agwp.proto) | the single source of truth for every message and gRPC service |
 
-| AGWP group | Operations | Today (library · CLI) |
+One implementation serves two transports on one port: **gRPC** (CLI, SDKs, agents, workers) and **HTTP/JSON +
+SSE** (browsers, scripts). The protocol is a thin layer over the engine's operations — a client can never
+move a stream head directly; changes travel as proposals and land only through `integrate`, under policy.
+
+## What follows the engine's rules
+
+- **Every mutating operation is idempotent** (`idempotency_key`); replays return the recorded result, and keys
+  are bound to the request they were first used with.
+- **Structured outcomes**, not strings: `integrate` answers `integrated | blocked | conflict | denied |
+  invalid` with stable blocker codes — see the [policy reference](../guides/policy.md#outcome-codes).
+- **Bounded inputs**: sizes are checked before allocation; the server advertises its limits in
+  `GET /v1/capabilities`.
+- **Versioned wire format**: capability negotiation first; unknown JSON fields are ignored, unknown enum
+  values must be tolerated by clients.
+
+## Mapping to the engine
+
+| AGWP group | Engine (library) | CLI |
 |---|---|---|
-| **Repository** | Create, Describe, Configure | `Repository::init/open/config` · `ag init`, `ag stream show`, `ag policy` |
-| **Objects** | Upload, Get, Verify | `put_blob`, `put_changeset`, `stage_object(op, obj)`, `blob`, `changeset`; `ObjectStore::verify` · `ag verify` |
-| **History** | GetChangeset, Ancestors, MergeBase | `changeset`, `log`, `ag_dag::{ancestors, merge_bases}` · `ag show`, `ag log`, `ag preview` |
-| **Tree** | ResolvePath, ListDirectory | `tree_of`, `Tree::get/list_dir` · `ag cat REV:PATH`, `ag ls` |
-| **Workspace** | Create, Modify, Snapshot | `workspace_create`, `snapshot`, `sync_workspace` · `ag workspace create`, `ag snapshot`, `ag sync` |
-| **Proposal** | Create, Update, Review | `propose`, `update_proposal`, `review` · `ag propose`, `ag proposal …` |
-| **Integration** | Prepare, Validate, Integrate, GetResult | `integrate` (prepare + integrate, resumable), `merge_preview` (validate input), `submit_attestation`, `operation`, `operation_by_key` · `ag integrate`, `ag preview`, `ag validate run`, `ag op show` |
-| **Stream** | ReadHead, CompareAndSwap | `meta.read(\|tx\| tx.stream(..))`; the CAS is internal to `integrate` by design — clients never move a head directly · `ag stream show/reflog` |
-| **Agent** | Register, Heartbeat, Complete | `ag_agent::registry::*` · `ag agent register/start/heartbeat/finish` |
-| **Events** | Subscribe, Replay | outbox (`changeset.published`, `stream.updated`) and the audit chain · `ag trace`, `ag audit --list`; subscription 🔜 |
+| **Repository** | `Repository::init/open/config` | `ag init`, `ag stream show`, `ag policy` |
+| **Objects** | `put_blob`, `put_changeset`, `stage_object`, `ObjectStore::verify` | `ag verify` |
+| **History / Tree** | `changeset`, `log`, `tree_of`, `Tree::get/list_dir`, `ag_dag::*` | `ag show`, `ag log`, `ag cat`, `ag ls` |
+| **Workspace** | `workspace_create`, `snapshot`, `sync_workspace` (virtual workspaces on the server) | `ag workspace …`, `ag snapshot`, `ag sync` |
+| **Proposal** | `propose`, `update_proposal`, `review` | `ag propose`, `ag proposal …`, `ag remote review` |
+| **Integration** | `integrate` (prepare + integrate, resumable), `merge_preview`, `submit_attestation` | `ag integrate`, `ag remote integrate/prepare` |
+| **Stream** | compare-and-swap is internal to `integrate` by design | `ag stream show/reflog` |
+| **Agent** | `ag_agent::registry::*`, leases, tasks, provenance, conflict prediction | `ag agent …`, `ag lease …`, `ag task …` |
+| **Events** | outbox and the hash-chained audit log (SSE and replay) | `ag trace`, `ag audit`, `ag remote events --follow` |
+| **Execution** | validation jobs for trusted workers: claim, heartbeat, complete (with a signed attestation), fail | — |
+| **Admin** | policy, roles, credentials, GC, fsck, pins | `ag policy`, `ag gc`, `ag remote policy` |
 
-## What already follows the protocol's rules
-
-- **Every mutating operation has an `operation_id` and an idempotency key**; replays return the recorded
-  result; keys bound to a request hash; lost responses are answered by `operation(…)` rather than retried.
-- **Structured outcomes**, not strings: `Outcome` (`integrated | blocked | conflict | denied | invalid`) and
-  stable `blockers[].code` values — see the [policy reference](../guides/policy.md#outcome-codes).
-- **Bounded inputs**: every decoder takes limits; sizes are checked before allocation.
-- **Versioned formats**: format version inside every hashed object; schema version in the database; a build
-  refuses a database written by a newer version.
-
-## Still to design for the network
-
-Capability negotiation, message versioning on the wire, pagination, backpressure and deadlines, quotas,
-authentication (OIDC for users, short-lived scoped credentials for agents) and authorization (RBAC/ABAC
-per repository, stream and operation). These belong with the server work.
+Clients: the `ag` CLI (`ag clone/fetch/pull/push/remote`) and the Rust crate `ag-client`.

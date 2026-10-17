@@ -653,6 +653,14 @@ pub enum RemoteCmd {
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: u32,
     },
+    /// Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`.
+    Blame {
+        /// `[REV:]PATH`
+        spec: String,
+        /// Only these lines, `START,END`.
+        #[arg(short = 'L', long, value_name = "START,END")]
+        lines: Option<String>,
+    },
     /// Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`.
     Cat {
         /// `REV:PATH`
@@ -1013,6 +1021,47 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .map(|x| format!("{}  {}  {}", &x.id[..12], x.author, x.message.lines().next().unwrap_or("")))
                         .collect::<Vec<_>>()
                         .join("\n")
+                })?;
+            }
+            RemoteCmd::Blame { spec, lines } => {
+                let (rev, path) = spec
+                    .split_once(':')
+                    .map(|(r, p)| (r.to_string(), p.to_string()))
+                    .unwrap_or((String::new(), spec.clone()));
+                let (first_line, last_line) = match lines {
+                    None => (0, 0),
+                    Some(l) => {
+                        let (a, b) = l.split_once(',').ok_or_else(|| anyhow!("--lines takes START,END, e.g. 10,20"))?;
+                        (
+                            a.trim().parse().map_err(|_| anyhow!("bad line number '{a}'"))?,
+                            b.trim().parse().map_err(|_| anyhow!("bad line number '{b}'"))?,
+                        )
+                    }
+                };
+                let b = c
+                    .history()
+                    .blame(c.req(v1::BlameRequest { repo, rev, path, first_line, last_line, max_commits: 0 }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &b, || {
+                    let width = b.lines.last().map(|l| l.line.to_string().len()).unwrap_or(1);
+                    let author_w = b.lines.iter().map(|l| l.author.len()).max().unwrap_or(0).min(28);
+                    let mut t = String::new();
+                    for l in &b.lines {
+                        let mark = if l.boundary { "^" } else { " " };
+                        t.push_str(&format!(
+                            "{mark}{} {:<author_w$} {:>width$}) {}\n",
+                            &l.changeset[..8],
+                            l.author,
+                            l.line,
+                            l.text
+                        ));
+                    }
+                    if b.truncated {
+                        t.push_str(&format!("(stopped after {} changesets; lines marked ^ may be older)\n", b.visited));
+                    }
+                    t
                 })?;
             }
             RemoteCmd::Cat { spec } => {

@@ -25,7 +25,7 @@ pub(crate) fn changeset_to_wire(
                     path: path.to_string(),
                     op: "put".into(),
                     blob_id: content.to_string(),
-                    file_type: file_type.to_string(),
+                    file_type: super::tree::wire_file_type(*file_type).into(),
                     executable: *executable,
                 },
                 Op::Delete { path } => v1::FileOp { path: path.to_string(), op: "delete".into(), ..Default::default() },
@@ -74,6 +74,51 @@ impl App {
                 out.push(changeset_to_wire(repo, &e.id, false)?);
             }
             Ok(v1::LogResponse { changesets: out, next_page_token: next })
+        })
+        .await
+    }
+
+    /// Line-level blame of a file at a revision.
+    pub async fn blame(&self, call: &Call, req: v1::BlameRequest) -> ApiResult<v1::BlameResponse> {
+        let path = require(&req.path, "path")?.to_string();
+        let rev = req.rev.clone();
+        let range = match (req.first_line, req.last_line) {
+            (0, 0) => None,
+            (a, b) if a >= 1 && b >= a => Some((a as usize, b as usize)),
+            _ => {
+                return Err(crate::error::ApiError::invalid(
+                    "first_line and last_line must both be 0, or 1 <= first_line <= last_line",
+                ));
+            }
+        };
+        let max_commits = match req.max_commits {
+            0 => ag_integrate::DEFAULT_BLAME_COMMITS,
+            n => (n as usize).min(ag_integrate::DEFAULT_BLAME_COMMITS),
+        };
+        self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
+            let id = super::resolve(repo, &rev)?;
+            let b = repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits, range })?;
+            Ok(v1::BlameResponse {
+                rev: b.rev.to_string(),
+                path: b.path,
+                visited: b.visited as u32,
+                truncated: b.truncated,
+                lines: b
+                    .lines
+                    .into_iter()
+                    .map(|l| v1::BlameLine {
+                        line: l.line as u32,
+                        text: l.text,
+                        changeset: l.changeset.to_string(),
+                        path: l.path,
+                        original_line: l.original_line as u32,
+                        author: l.author,
+                        timestamp_ms: l.timestamp.as_millis(),
+                        summary: l.summary,
+                        boundary: l.boundary,
+                    })
+                    .collect(),
+            })
         })
         .await
     }

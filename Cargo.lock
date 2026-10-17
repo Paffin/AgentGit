@@ -153,6 +153,7 @@ dependencies = [
 name = "ag-merge"
 version = "0.1.0"
 dependencies = [
+ "ag-changeset",
  "ag-diff",
  "ag-object",
  "ag-tree",
@@ -203,6 +204,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-sandbox"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "ag-server"
 version = "0.1.0"
 dependencies = [
@@ -235,6 +248,7 @@ dependencies = [
  "rusqlite",
  "rustls",
  "serde",
+ "serde_html_form",
  "serde_json",
  "serde_urlencoded",
  "sha2",
@@ -300,6 +314,34 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "ag-worker"
+version = "0.1.0"
+dependencies = [
+ "ag-changeset",
+ "ag-client",
+ "ag-crypto",
+ "ag-integrate",
+ "ag-object",
+ "ag-policy",
+ "ag-protocol",
+ "ag-sandbox",
+ "ag-server",
+ "ag-storage",
+ "ag-tree",
+ "ag-types",
+ "anyhow",
+ "clap",
+ "futures-util",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2446,6 +2488,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "serde_html_form"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f0346d7a342ab90f405cfc08f25d15075f944f42fcabbc5eac923829fa6d228"
+dependencies = [
+ "form_urlencoded",
+ "indexmap",
+ "itoa",
+ "serde_core",
+ "zmij",
 ]
 
 [[package]]

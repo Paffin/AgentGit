@@ -79,6 +79,8 @@ pub struct AppState {
     pub auth: Authenticator,
     /// Hosted repositories.
     pub repos: RepoManager,
+    /// Trace exporter, when `telemetry.otlp_endpoint` is set.
+    pub tracer: Option<Arc<crate::trace::Tracer>>,
     /// Request rate limiting.
     pub limiter: RateLimiter,
     /// Prometheus metrics.
@@ -110,6 +112,18 @@ impl std::ops::Deref for App {
     }
 }
 
+/// Parses `name=value,name2=value2` (the `OTEL_EXPORTER_OTLP_HEADERS` format).
+fn parse_headers(s: &str) -> Vec<(String, String)> {
+    s.split(',')
+        .filter_map(|kv| {
+            let (k, v) = kv.split_once('=')?;
+            let (k, v) = (k.trim(), v.trim());
+            (!k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') && !v.is_empty())
+                .then(|| (k.to_ascii_lowercase(), v.to_string()))
+        })
+        .collect()
+}
+
 impl App {
     /// Builds the state: opens the control database, prepares authentication.
     pub fn new(cfg: ServerConfig) -> ApiResult<Self> {
@@ -135,6 +149,25 @@ impl App {
             cfg.repos.max_open,
             cfg.repos.storage.clone(),
         );
+        let metrics = Metrics::new();
+        let tracer = (!cfg.telemetry.otlp_endpoint.is_empty()).then(|| {
+            let headers =
+                std::env::var(&cfg.telemetry.otlp_headers_env).ok().map(|v| parse_headers(&v)).unwrap_or_default();
+            crate::trace::Tracer::start(
+                crate::trace::TracerConfig {
+                    endpoint: cfg.telemetry.otlp_endpoint.clone(),
+                    service_name: cfg.telemetry.service_name.clone(),
+                    service_version: env!("CARGO_PKG_VERSION").into(),
+                    sample_ratio: cfg.telemetry.otlp_sample_ratio,
+                    headers,
+                },
+                crate::trace::TraceCounters {
+                    exported: metrics.trace_exported.clone(),
+                    dropped: metrics.trace_dropped.clone(),
+                    failures: metrics.trace_failures.clone(),
+                },
+            )
+        });
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
         Ok(Self(Arc::new(AppState {
@@ -143,8 +176,9 @@ impl App {
             control,
             auth,
             repos,
+            tracer,
             limiter,
-            metrics: Metrics::new(),
+            metrics,
             concurrency,
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,
@@ -166,11 +200,26 @@ impl App {
         Fut: Future<Output = ApiResult<T>>,
     {
         let started = Instant::now();
+        let span = self.tracer.as_ref().and_then(|t| t.begin(ing.traceparent.as_deref()));
         let result = self.dispatch_inner(&ing, op, f).await.map_err(|e| e.with_request_id(&ing.request_id));
         let code = match &result {
             Ok(_) => "ok",
             Err(e) => e.code().as_str(),
         };
+        if let (Some(tracer), Some(span)) = (&self.tracer, span) {
+            let mut attrs = vec![
+                ("agwp.operation", crate::trace::Attr::Str(op.into())),
+                ("agwp.transport", crate::trace::Attr::Str(ing.transport.into())),
+                ("agwp.result", crate::trace::Attr::Str(code.into())),
+                ("agwp.request_id", crate::trace::Attr::Str(ing.request_id.clone())),
+            ];
+            if let Some(d) = ing.deadline_ms {
+                attrs.push(("agwp.deadline_ms", crate::trace::Attr::Int(d.min(i64::MAX as u64) as i64)));
+            }
+            // Only server faults mark the span as failed; a caller's 404 or 409 is a normal answer.
+            let server_fault = matches!(code, "internal" | "unavailable" | "deadline_exceeded" | "unimplemented");
+            tracer.finish(span, op, attrs, server_fault.then(|| code.to_string()));
+        }
         self.metrics.requests.with_label_values(&[ing.transport, op, code]).inc();
         self.metrics.latency.with_label_values(&[ing.transport, op]).observe(started.elapsed().as_secs_f64());
         if let Err(e) = &result {
@@ -210,6 +259,8 @@ impl App {
             transport: ing.transport,
             deadline,
         };
+        // One token per request from the caller's bucket, for every operation — repository-scoped or not.
+        self.rate_limit(&call)?;
         let fut = f(call);
         match deadline_ms {
             Some(ms) => tokio::time::timeout(Duration::from_millis(ms), fut).await.map_err(|_| {
@@ -258,11 +309,20 @@ impl App {
         Authorizer::check_global(&call.principal, &bindings, cap)
     }
 
-    /// Rate limits the caller (and the repository's own quota).
-    pub fn rate_limit(&self, call: &Call, quota: Option<&ag_protocol::v1::Quota>) -> ApiResult<()> {
+    /// Takes one token from the caller's bucket (`limits.requests_per_second`). Runs once per request, before
+    /// the operation, so every operation is covered.
+    pub fn rate_limit(&self, call: &Call) -> ApiResult<()> {
         let key = format!("cred:{}", call.principal.credential_id);
-        let over = quota.filter(|q| q.requests_per_second > 0).map(|q| (q.requests_per_second, q.burst));
-        self.limiter.check(&key, over).inspect_err(|_| self.metrics.rate_limited.inc())
+        self.limiter.check(&key, None).inspect_err(|_| self.metrics.rate_limited.inc())
+    }
+
+    /// A repository's own request quota, if it has one: a separate bucket per (caller, repository).
+    pub fn repo_rate_limit(&self, call: &Call, repo: &str, quota: Option<&ag_protocol::v1::Quota>) -> ApiResult<()> {
+        let Some(q) = quota.filter(|q| q.requests_per_second > 0) else { return Ok(()) };
+        let key = format!("cred:{}|repo:{repo}", call.principal.credential_id);
+        self.limiter
+            .check(&key, Some((q.requests_per_second, q.burst)))
+            .inspect_err(|_| self.metrics.rate_limited.inc())
     }
 
     // ---- repository access --------------------------------------------------------
@@ -281,7 +341,7 @@ impl App {
             tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)??
         };
         let quota = row.as_ref().map(|r| r.quota);
-        self.rate_limit(call, quota.as_ref())?;
+        self.repo_rate_limit(call, repo, quota.as_ref())?;
         let repos = self.0.clone();
         let name = repo.to_string();
         let call2 = call.clone();

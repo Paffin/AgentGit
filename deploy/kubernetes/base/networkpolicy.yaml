@@ -1,0 +1,21 @@
+# Only pods in this namespace may reach the server. Add a rule for your ingress controller
+# (and for Prometheus, if it runs elsewhere) — examples below. Egress is not restricted:
+# the server may need PostgreSQL, an object store, an OIDC provider and a trace collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ag-server
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ag-server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - {protocol: TCP, port: 8080}
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+    #   ports: [{protocol: TCP, port: 8080}]

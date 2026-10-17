@@ -1,0 +1,21 @@
+# Requires the Prometheus Operator CRDs. The metrics token is read from the same Secret
+# the server uses (the Secret must be readable by the Prometheus that selects this monitor).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ag-server
+  labels:
+    app.kubernetes.io/part-of: agentgit
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ag-server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      authorization:
+        type: Bearer
+        credentials:
+          name: agentgit
+          key: AG_METRICS_TOKEN

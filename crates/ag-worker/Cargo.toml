@@ -1,0 +1,45 @@
+[package]
+name = "ag-worker"
+description = "AgentGit: the execution-plane worker (claims validation jobs, runs checks in a sandbox, signs attestations)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "ag_worker"
+
+[[bin]]
+name = "ag-worker"
+path = "src/main.rs"
+
+[dependencies]
+ag-sandbox.workspace = true
+ag-client.workspace = true
+ag-protocol.workspace = true
+ag-crypto.workspace = true
+ag-object.workspace = true
+ag-policy.workspace = true
+ag-tree.workspace = true
+ag-types.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+ag-server.workspace = true
+ag-storage.workspace = true
+ag-changeset.workspace = true
+ag-integrate.workspace = true
+tempfile.workspace = true

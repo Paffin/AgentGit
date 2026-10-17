@@ -13,7 +13,7 @@ impl App {
     pub async fn create_proposal(&self, call: &Call, req: v1::CreateProposalRequest) -> ApiResult<v1::Proposal> {
         let stream = StreamName::new(&req.stream).map_err(|e| ApiError::invalid(e.to_string()))?;
         require(&req.head, "head")?;
-        let max_open = self.control.repo(&req.repo)?.map(|r| r.quota.max_open_proposals).unwrap_or(0);
+        let max_open = self.repo_row(&req.repo).await?.map(|r| r.quota.max_open_proposals).unwrap_or(0);
         let (head_rev, title, desc) = (req.head.clone(), req.title.clone(), req.description.clone());
         let task = (!req.task_id.is_empty()).then(|| req.task_id.clone());
         let key = req.idempotency_key.clone();

@@ -58,7 +58,7 @@ pub use changesets::ChangesetInfo;
 pub use db::{Dialect, Param, Row, Value};
 pub use intents::{IntentRow, IntentState, NewIntent};
 pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
-pub use migrate::SCHEMA_VERSION;
+pub use migrate::{Migration, SCHEMA_VERSION};
 pub use outbox::{AuditEntry, AuditReport, OutboxRow};
 pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_schema_name};
 pub use records::{AttestationRow, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, WorkspaceRow};

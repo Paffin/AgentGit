@@ -16,6 +16,7 @@ pub mod api;
 pub mod app;
 pub mod auth;
 pub mod authz;
+pub mod cluster;
 pub mod config;
 pub mod control;
 pub mod error;

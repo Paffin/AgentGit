@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AgentGit: the Web UI is not built into this server</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1b1f24; --muted: #57606a; --code: #f2f4f7; --accent: #0b5cd5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #14171c; --fg: #e8eaee; --muted: #a2a9b4; --code: #232830; --accent: #7fb2ff; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 3rem 1rem; }
+  h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 1rem; }
+  p, li { color: var(--fg); }
+  .note { color: var(--muted); }
+  code, pre { background: var(--code); border-radius: 4px; font: 0.9em ui-monospace, monospace; }
+  code { padding: 0.1em 0.35em; }
+  pre { padding: 0.75rem 1rem; overflow-x: auto; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Web UI is not built into this server</h1>
+  <p>This <code>ag-server</code> is running, and its API works (<code>/v1/…</code>, <code>/healthz</code>, <code>/metrics</code>).
+  What is missing is the browser interface: this binary was built without a build of the UI, and no UI directory is configured.</p>
+  <p>Pick one:</p>
+  <ol>
+    <li>Build the UI into the binary (needs Node 22), then rebuild the server:
+      <pre>scripts/build_ui.sh
+cargo build --release -p ag-server</pre>
+    </li>
+    <li>Build <code>apps/web</code> (<code>npm ci &amp;&amp; npm run build</code>) and point the server at the result, in the server configuration:
+      <pre>[ui]
+dir = "/path/to/apps/web/dist"</pre>
+    </li>
+    <li>Run without a UI and silence this page:
+      <pre>[ui]
+enabled = false</pre>
+    </li>
+  </ol>
+  <p class="note">Everything else about the server is unaffected. See <code>docs/guides/web-ui.md</code> in the repository.</p>
+</main>
+</body>
+</html>

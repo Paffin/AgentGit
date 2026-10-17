@@ -28,3 +28,4 @@ pub mod repos;
 pub mod routes;
 pub mod server;
 pub mod trace;
+pub mod ui;

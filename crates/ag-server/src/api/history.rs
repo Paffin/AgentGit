@@ -65,6 +65,13 @@ impl App {
         let offset = super::decode_offset("log", &token)?;
         let want = super::page_size(size);
         self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
+            // A stream that exists but has no changeset yet has an empty history (like its empty tree), not an error.
+            let stream = if rev.is_empty() { repo.default_stream().to_string() } else { rev.clone() };
+            if let Some(s) = repo.meta().read(|tx| tx.stream(&stream))?
+                && s.state.head.is_none()
+            {
+                return Ok(v1::LogResponse { changesets: Vec::new(), next_page_token: String::new() });
+            }
             let head = super::resolve(repo, &rev)?;
             let entries =
                 repo.log(&head, offset + want + 1, if path.is_empty() { None } else { Some(path.as_str()) })?;

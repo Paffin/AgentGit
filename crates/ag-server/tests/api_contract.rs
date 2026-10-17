@@ -232,6 +232,13 @@ async fn defaults_and_edges_found_by_the_web_ui_work() {
         assert_eq!(r.status, 200, "{path}: {}", r.json);
         assert!(r.json["entries"].as_array().unwrap().is_empty(), "{path}");
     }
+    // Its history is empty too.
+    for path in ["/v1/repos/acme/web/log?rev=main", "/v1/repos/acme/web/log"] {
+        let r = admin.get(path).await;
+        assert_eq!(r.status, 200, "{path}: {}", r.json);
+        assert!(r.json["changesets"].as_array().is_none_or(Vec::is_empty), "{path}: {}", r.json);
+    }
+    assert_eq!(admin.get("/v1/repos/acme/web/log?rev=nope").await.status, 404);
     // ... while a revision that does not exist, and a file in an empty tree, are still not found.
     assert_eq!(admin.get("/v1/repos/acme/web/tree/list?rev=nope").await.status, 404);
     assert_eq!(admin.get("/v1/repos/acme/web/files/a.txt?rev=main").await.status, 404);

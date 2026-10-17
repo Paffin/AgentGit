@@ -276,6 +276,25 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
             finish(result, &id)
         }),
     );
+    meta.push(
+        RouteMeta::json::<crate::ui::AuthConfigRequest, crate::ui::AuthConfig>(
+            "get",
+            "/v1/auth/config",
+            "session.auth_config",
+            "Session",
+            "How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed)",
+        )
+        .public(),
+    );
+    r = r.route(
+        "/v1/auth/config",
+        get(|State(app): State<App>, headers: HeaderMap| async move {
+            let id = ingress_from_headers(&headers, None).request_id;
+            let mut resp = finish(Ok(crate::ui::auth_config(&app.cfg)), &id);
+            resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+            resp
+        }),
+    );
     route!(
         r,
         meta,

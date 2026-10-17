@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  '/v1/auth/config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed) */
+    get: operations['session.auth_config']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/capabilities': {
     parameters: {
       query?: never
@@ -1359,6 +1376,37 @@ export interface components {
        */
       timestamp_ms: number
     }
+    /** @description How a browser can sign in to this server. Public: it needs no credentials. */
+    AuthConfig: {
+      /**
+       * @description `token` when the only way in is a pasted credential, `oidc` when at least one identity provider is offered
+       *     for redirect sign-in (pasting a credential keeps working in both modes).
+       */
+      mode: string
+      /** @description The providers to offer, in configuration order (`oidc` mode only). */
+      providers?: components['schemas']['AuthProvider'][]
+    }
+    /** @description Request of `GET /v1/auth/config` (it takes no parameters). */
+    AuthConfigRequest: Record<string, never>
+    /** @description One identity provider for redirect sign-in (OpenID Connect authorization code with PKCE). */
+    AuthProvider: {
+      /** @description Authorization endpoint, when configured (otherwise read it from discovery). */
+      authorization_endpoint?: string | null
+      /** @description The OAuth client id of the Web UI. */
+      client_id: string
+      /** @description Logout endpoint, when configured (otherwise read it from discovery). */
+      end_session_endpoint?: string | null
+      /** @description Issuer; discovery is at `<issuer>/.well-known/openid-configuration`. */
+      issuer: string
+      /** @description Text for the sign-in button. */
+      name: string
+      /** @description Scopes to request. */
+      scopes: string[]
+      /** @description Which token to present to this server: `id_token` or `access_token`. */
+      token: components['schemas']['LoginToken']
+      /** @description Token endpoint, when configured (otherwise read it from discovery). */
+      token_endpoint?: string | null
+    }
     BlameLine: {
       /** @default  */
       author: string
@@ -2625,6 +2673,11 @@ export interface components {
       /** @default  */
       next_page_token: string
     }
+    /**
+     * @description Which token of the authorization-code response is the bearer credential.
+     * @enum {string}
+     */
+    LoginToken: 'id_token' | 'access_token'
     MergeBaseRequest: {
       /** @default  */
       a: string
@@ -3792,6 +3845,35 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  'session.auth_config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AuthConfig']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
   'session.negotiate': {
     parameters: {
       query?: {

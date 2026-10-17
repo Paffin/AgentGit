@@ -240,6 +240,87 @@
         },
         "type": "object"
       },
+      "AuthConfig": {
+        "description": "How a browser can sign in to this server. Public: it needs no credentials.",
+        "properties": {
+          "mode": {
+            "description": "`token` when the only way in is a pasted credential, `oidc` when at least one identity provider is offered\nfor redirect sign-in (pasting a credential keeps working in both modes).",
+            "type": "string"
+          },
+          "providers": {
+            "description": "The providers to offer, in configuration order (`oidc` mode only).",
+            "items": {
+              "$ref": "#/components/schemas/AuthProvider"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "AuthConfigRequest": {
+        "description": "Request of `GET /v1/auth/config` (it takes no parameters).",
+        "type": "object"
+      },
+      "AuthProvider": {
+        "description": "One identity provider for redirect sign-in (OpenID Connect authorization code with PKCE).",
+        "properties": {
+          "authorization_endpoint": {
+            "description": "Authorization endpoint, when configured (otherwise read it from discovery).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "client_id": {
+            "description": "The OAuth client id of the Web UI.",
+            "type": "string"
+          },
+          "end_session_endpoint": {
+            "description": "Logout endpoint, when configured (otherwise read it from discovery).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issuer": {
+            "description": "Issuer; discovery is at `<issuer>/.well-known/openid-configuration`.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Text for the sign-in button.",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Scopes to request.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token": {
+            "$ref": "#/components/schemas/LoginToken",
+            "description": "Which token to present to this server: `id_token` or `access_token`."
+          },
+          "token_endpoint": {
+            "description": "Token endpoint, when configured (otherwise read it from discovery).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "issuer",
+          "client_id",
+          "scopes",
+          "token"
+        ],
+        "type": "object"
+      },
       "BlameLine": {
         "properties": {
           "author": {
@@ -2433,6 +2514,14 @@
         },
         "type": "object"
       },
+      "LoginToken": {
+        "description": "Which token of the authorization-code response is the bearer credential.",
+        "enum": [
+          "id_token",
+          "access_token"
+        ],
+        "type": "string"
+      },
       "MergeBaseRequest": {
         "properties": {
           "a": {
@@ -4440,6 +4529,38 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/auth/config": {
+      "get": {
+        "operationId": "session.auth_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "summary": "How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed)",
+        "tags": [
+          "Session"
+        ]
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "operationId": "session.negotiate",

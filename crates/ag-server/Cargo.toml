@@ -7,6 +7,13 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+build = "build.rs"
+
+[features]
+default = ["ui"]
+# Embeds the built Web UI (apps/web/dist, see scripts/build_ui.sh) in the binary. Without a build the server
+# still compiles and serves a page that says how to build the UI.
+ui = []
 
 [lints]
 workspace = true

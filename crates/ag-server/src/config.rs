@@ -39,6 +39,8 @@ pub struct ServerConfig {
     pub repos: ReposSection,
     /// Prometheus metrics.
     pub metrics: MetricsSection,
+    /// The Web UI.
+    pub ui: crate::ui::UiSection,
     /// Logging and tracing.
     pub telemetry: TelemetrySection,
 }
@@ -58,7 +60,7 @@ pub struct ServerSection {
     /// Allow plaintext on a non-loopback address. Off by default: credentials
     /// would cross the network in the clear.
     pub allow_insecure_remote: bool,
-    /// Directory with the built Web UI, served at `/` when set.
+    /// Deprecated spelling of `ui.dir`: directory with the built Web UI, served at `/` when set.
     pub web_dir: Option<PathBuf>,
     /// Origins allowed by CORS for browser clients served from elsewhere.
     pub cors_origins: Vec<String>,
@@ -317,6 +319,7 @@ impl ServerConfig {
                 return bad("telemetry.otlp_sample_ratio must be between 0 and 1");
             }
         }
+        crate::ui::validate(self)?;
         for p in &self.auth.oidc {
             if p.issuer.is_empty() || p.audience.is_empty() {
                 return bad("every [[auth.oidc]] needs issuer and audience");

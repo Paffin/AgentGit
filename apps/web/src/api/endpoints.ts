@@ -6,6 +6,7 @@ import type { ApiClient, RequestOptions } from './client'
 import type {
   Agent,
   AuditEntry,
+  AuthConfig,
   Capabilities,
   Changeset,
   Credential,
@@ -53,6 +54,9 @@ export function createApi(c: ApiClient) {
     // ---- session --------------------------------------------------------------------------------
     capabilities: (o?: Opts) =>
       c.get<Capabilities>('/v1/capabilities', undefined, { ...o, token: null }),
+    /** How a browser can sign in (public): `token`, or the identity providers to redirect to. */
+    authConfig: (o?: Opts) =>
+      c.get<AuthConfig>('/v1/auth/config', undefined, { ...o, token: null }),
     /** Checks a pasted token. A 401 here means "wrong token", not "your session ended". */
     whoami: (token?: string | null, o?: Opts) =>
       c.get<Principal>('/v1/whoami', undefined, {

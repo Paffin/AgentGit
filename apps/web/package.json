@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build",
+    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build && node scripts/precompress.mjs",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && vue-tsc --noEmit -p tsconfig.test.json && vue-tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . && prettier --check .",
@@ -20,8 +20,8 @@
     "test:e2e": "playwright test",
     "gen:api": "openapi-typescript ../../docs/protocol/openapi.json -o src/api/schema.gen.ts && prettier --write src/api/schema.gen.ts",
     "check:api": "node scripts/check-api.mjs",
-    "pretest:e2e": "vite build",
-    "demo:server": "vite build && node e2e/demo.ts"
+    "pretest:e2e": "npm run build",
+    "demo:server": "npm run build && node e2e/demo.ts"
   },
   "dependencies": {
     "pinia": "3.0.4",

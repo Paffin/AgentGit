@@ -5,14 +5,12 @@ use std::net::SocketAddr;
 
 use axum::Router;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
-use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::app::App;
 use crate::error::ApiError;
@@ -48,48 +46,15 @@ pub fn build_router(app: App) -> (Router, Vec<RouteMeta>) {
     }
     let router = api.merge(crate::grpc::router(app.clone())).merge(extras.with_state(app.clone()));
 
-    let router = match &app.cfg.server.web_dir {
-        Some(dir) => {
-            let index = dir.join("index.html");
-            let files = ServeDir::new(dir).fallback(ServeFile::new(index));
-            let hardened = tower::ServiceBuilder::new()
-                .layer(SetResponseHeaderLayer::overriding(
-                    HeaderName::from_static("x-content-type-options"),
-                    HeaderValue::from_static("nosniff"),
-                ))
-                .layer(SetResponseHeaderLayer::overriding(
-                    HeaderName::from_static("referrer-policy"),
-                    HeaderValue::from_static("no-referrer"),
-                ))
-                .layer(SetResponseHeaderLayer::overriding(
-                    HeaderName::from_static("content-security-policy"),
-                    HeaderValue::from_static(
-                        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
-                    ),
-                ))
-                .service(files);
-            router.fallback_service(tower::service_fn(move |req: Request| {
-                let mut svc = hardened.clone();
-                async move {
-                    let path = req.uri().path().to_string();
-                    if path.starts_with("/v1/") || path.starts_with("/agwp.") {
-                        return Ok::<_, std::convert::Infallible>(not_found(req.headers(), req.method(), &path));
-                    }
-                    tower::Service::call(&mut svc, req).await.map(IntoResponse::into_response)
-                }
-            }))
-        }
-        None => router.fallback(|headers: HeaderMap, method: Method, uri: Uri| async move {
-            not_found(&headers, &method, uri.path())
-        }),
-    };
+    // The Web UI (or the plain 404 envelope) answers whatever no route matched; see `ui`.
+    let router = crate::ui::install(router, &app);
     // Whatever produced a bare 405 (the router itself) gets the same error envelope as everything else.
     let router = router.layer(axum::middleware::from_fn(envelope_method_not_allowed));
     (cors(router, &app), routes)
 }
 
 /// The error for a path nothing serves: the standard envelope, carrying the caller's request id.
-fn not_found(headers: &HeaderMap, method: &Method, path: &str) -> Response {
+pub(crate) fn not_found(headers: &HeaderMap, method: &Method, path: &str) -> Response {
     let id = crate::http::ingress_from_headers(headers, None).request_id;
     ApiError::not_found(format!("no such route: {method} {path}")).with_request_id(&id).into_response()
 }

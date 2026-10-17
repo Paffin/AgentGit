@@ -53,7 +53,10 @@ If you change a command or flag, regenerate the reference with `python3 scripts/
 2. **Docs with the change.** User-visible behaviour belongs in `docs/` and, if notable, in
    [`CHANGELOG.md`](CHANGELOG.md). Doc claims should be checkable: link to the test that proves a
    guarantee, don't just assert it.
-3. **No new `unsafe`.** The workspace forbids it.
+3. **No new `unsafe`.** The workspace forbids it. The single exception is `ag-sandbox`, which needs raw
+   system calls to run a process in fresh namespaces: there `unsafe` is denied crate-wide, allowed in three
+   modules, and every block needs a `// SAFETY:` comment (clippy enforces it). Code that runs between `clone`
+   and `exec` may use only the async-signal-safe wrappers in `spawn.rs`.
 4. **Determinism.** Anything that feeds a hash or a merge must be deterministic and versioned.
    Iterating a `HashMap` into a hash is a bug.
 5. **Small, reviewable commits** with imperative subject lines (`fix(merge): ...`, `feat(cli): ...`).

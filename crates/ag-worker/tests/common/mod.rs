@@ -241,7 +241,11 @@ impl World {
 }
 
 pub fn namespace_works() -> bool {
-    ag_sandbox::NamespaceSandbox::new().availability().is_available()
+    let works = ag_sandbox::NamespaceSandbox::new().availability().is_available();
+    // CI sets AG_REQUIRE_SANDBOX on Linux: a runner that silently lost its isolation must not go green.
+    let required = std::env::var("AG_REQUIRE_SANDBOX").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"));
+    assert!(works || !required, "AG_REQUIRE_SANDBOX is set, but the namespace sandbox is unavailable on this host");
+    works
 }
 
 /// The namespace sandbox if the machine can run it, else the process sandbox (opted into).

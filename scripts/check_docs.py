@@ -60,6 +60,9 @@ for pattern in ("crates/**/*.rs", "examples/*", "scripts/*", "tests/**/*.py", "t
         if f.is_file():
             for w in WORD.findall(f.read_text(errors="ignore")):
                 corpus.add(w)
+                if w.startswith("SYS_"):
+                    # system call names reach the docs without the libc prefix (`SYS_io_uring_enter`)
+                    corpus.add(w[4:])
                 if w != w.lower() and w != w.upper() and not w.startswith("_"):
                     # CamelCase variants reach users as snake_case through serde's rename_all
                     corpus.add(re.sub(r"(?<!^)(?=[A-Z])", "_", w).lower())

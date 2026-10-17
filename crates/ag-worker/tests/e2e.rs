@@ -242,9 +242,9 @@ async fn a_worker_with_a_key_the_policy_does_not_trust_runs_checks_that_count_fo
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn several_lanes_run_several_checks_at_once() {
     let checks = vec![
-        json!({"check": "lint", "run": sh("sleep 1; test -f lib.rs", 30)}),
-        json!({"check": "tests", "run": sh("sleep 1; grep -q main lib.rs", 30)}),
-        json!({"check": "docs", "run": sh("sleep 1; test -d sub", 30)}),
+        json!({"check": "lint", "run": sh("sleep 2; test -f lib.rs", 30)}),
+        json!({"check": "tests", "run": sh("sleep 2; grep -q main lib.rs", 30)}),
+        json!({"check": "docs", "run": sh("sleep 2; test -d sub", 30)}),
     ];
     let w = World::with_checks(checks, None).await;
     let (pid, _) = w.propose(&[("lib.rs", b"fn main() {}\n"), ("sub/x.txt", b"x\n")]);
@@ -261,7 +261,7 @@ async fn several_lanes_run_several_checks_at_once() {
     let mut checks: Vec<_> = reports.iter().map(|r| r.check.as_str()).collect();
     checks.sort_unstable();
     assert_eq!(checks, ["docs", "lint", "tests"]);
-    assert!(started.elapsed() < Duration::from_millis(2800), "three one-second checks ran in parallel, not in turn");
+    assert!(started.elapsed() < Duration::from_secs(5), "three two-second checks ran in parallel, not in turn");
     // Each lane has its own name on the server, so one cannot finish another's job.
     let mut who: Vec<String> = Vec::new();
     for j in &jobs {

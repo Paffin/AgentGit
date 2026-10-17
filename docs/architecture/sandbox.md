@@ -293,16 +293,22 @@ check what they can (the root-only ones: the set-user-ID demonstration, the samp
 | `tests/oci.rs` | the OCI argument list, supervision and cleanup — **against a fake runtime** |
 
 Tests that need a capability the host does not have (user namespaces, root) report `SKIP <name>: <reason>`
-and pass, so a CI machine that cannot run the namespace sandbox does not turn red — but also does not
-silently count as having verified it. The CI log is the place to check that they ran.
+and pass, so a developer machine that cannot run the namespace sandbox does not turn red — but also does not
+silently count as having verified it. Setting `AG_REQUIRE_SANDBOX=1` turns every skip into a failure; the
+Linux CI job sets it (after lifting Ubuntu's AppArmor restriction on user namespaces), so a runner that
+silently lost its isolation cannot go green. **That CI configuration was written without being able to run
+GitHub Actions: its first run is its test.**
 
 **Not tested, and why you should not assume it works:**
 
 * a real Docker or Podman (none available);
 * cgroup v2 limits against a real delegated hierarchy;
-* macOS and other non-Linux Unix (the crate compiles the namespace sandbox out; `ProcessSandbox` is the
-  only implementation there and is covered only by being plain POSIX);
-* aarch64 (the filter is written for it but was never run on it);
+* macOS and other non-Linux Unix: the crate is `cargo check`ed for `x86_64-apple-darwin` (all targets,
+  warning-free), the namespace sandbox is compiled out, and `ProcessSandbox` is the only implementation
+  (macOS does not enforce `RLIMIT_DATA`, so it reports memory as unlimited). Three of its tests are meant to
+  run on macOS CI; they have **never been run on a Mac**, nor has `ag-worker`, whose dependencies cannot be
+  cross-compiled here;
+* aarch64: `cargo check`ed for `aarch64-unknown-linux-gnu`, but the seccomp filter was never run on it;
 * a non-root caller on a kernel with `kernel.apparmor_restrict_unprivileged_userns=1` or similar policies,
   which make `clone(CLONE_NEWUSER)` fail — the sandbox reports `Unavailable`, and there is nothing to run.
 

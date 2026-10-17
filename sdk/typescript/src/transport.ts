@@ -43,10 +43,17 @@ export function randomToken(length: number): string {
   return out;
 }
 
+function abortReason(signal: AbortSignal | undefined): Error {
+  const reason: unknown = signal?.reason;
+  return reason instanceof Error
+    ? reason
+    : new DOMException(typeof reason === 'string' ? reason : 'aborted', 'AbortError');
+}
+
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
-      reject(signal.reason);
+      reject(abortReason(signal));
       return;
     }
     const timer = setTimeout(() => {
@@ -55,7 +62,7 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
     }, ms);
     const onAbort = (): void => {
       clearTimeout(timer);
-      reject(signal?.reason);
+      reject(abortReason(signal));
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
@@ -76,7 +83,14 @@ function encodeSegment(value: unknown, name: string, op: OperationInfo): string 
   if (value === undefined || value === null || value === '') {
     throw new TypeError(`${op.namespace}.${op.name}: missing required field "${name}"`);
   }
-  return encodeURIComponent(String(value));
+  return encodeURIComponent(scalar(value, `${op.namespace}.${op.name}: field "${name}"`));
+}
+
+/** Text of a primitive value; anything else cannot be a path segment or a query value. */
+function scalar(value: unknown, what: string): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  throw new TypeError(`${what} must be a string, number or boolean`);
 }
 
 /** Maps a flat request object onto the route: path placeholders, query string or JSON body. */
@@ -122,12 +136,12 @@ export function buildRequest(op: OperationInfo, request: Record<string, unknown>
     for (const [key, value] of rest) {
       if (value === null) continue;
       if (Array.isArray(value)) {
-        if (QUERY_CSV.has(key)) query.set(key, value.map(String).join(','));
-        else for (const item of value) query.append(key, String(item));
+        if (QUERY_CSV.has(key)) query.set(key, value.map((v) => scalar(v, `field "${key}"`)).join(','));
+        else for (const item of value) query.append(key, scalar(item, `field "${key}"`));
       } else if (typeof value === 'object') {
         throw new TypeError(`${op.namespace}.${op.name}: field "${key}" cannot be sent in a query string`);
       } else {
-        query.append(key, String(value));
+        query.append(key, scalar(value, `field "${key}"`));
       }
     }
     const qs = query.toString();
@@ -249,12 +263,15 @@ export class Transport {
 
   private delayFor(err: AgentGitError, attempt: number, retry: Required<RetryOptions>): number | undefined {
     const { random } = this.config;
+    // Full jitter over an exponentially growing window. A server-supplied delay is a floor, never
+    // shortened: many callers that were told the same delay would otherwise all return at once.
+    const ceiling = Math.min(retry.maxDelayMs, retry.baseDelayMs * 2 ** (attempt - 1));
+    const jitter = random() * ceiling;
     if (err.retryAfterMs > 0) {
       if (err.retryAfterMs > retry.maxRetryAfterMs) return undefined;
-      return Math.round(err.retryAfterMs + random() * Math.min(100, err.retryAfterMs * 0.1));
+      return Math.round(err.retryAfterMs + jitter);
     }
-    const ceiling = Math.min(retry.maxDelayMs, retry.baseDelayMs * 2 ** (attempt - 1));
-    return Math.round(random() * ceiling);
+    return Math.round(jitter);
   }
 
   private wrapNetworkError(e: unknown, op: OperationInfo): AgentGitError {

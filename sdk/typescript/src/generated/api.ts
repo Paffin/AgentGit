@@ -252,7 +252,7 @@ export interface Api {
     missing(request: Req<'objects.missing'>, options?: CallOptions): Promise<Res<'objects.missing'>>;
     /** Publish a head and its unpublished ancestors (`POST /v1/repos/{owner}/{rname}/publish`, operation `objects.publish`) */
     publish(request: Req<'objects.publish'>, options?: CallOptions): Promise<Res<'objects.publish'>>;
-    /** Upload one object envelope (binary body); the server verifies that it hashes to object_id (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`) */
+    /** Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored} (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`) */
     put(request: { repo: string; object_id: string; data: Uint8Array }, options?: CallOptions): Promise<PutObjectResult>;
     /** Re-read and hash objects (`POST /v1/repos/{owner}/{rname}/objects/verify`, operation `objects.verify`) */
     verify(request: Req<'objects.verify'>, options?: CallOptions): Promise<Res<'objects.verify'>>;

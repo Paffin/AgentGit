@@ -144,6 +144,24 @@ def test_file_type_is_regular_on_reads_and_writes_and_file_is_still_accepted(adm
     assert admin.tree.resolve(repo=REPO, rev="@q", path="t-regular").kind == "file"
 
 
+def test_objects_put_openapi_entry_lists_the_json_it_answers(server: RunningServer) -> None:
+    spec = json.loads((REPO_ROOT / "docs/protocol/openapi.json").read_text())
+    put = next(
+        op for item in spec["paths"].values() for op in item.values() if op["operationId"] == "objects.put"
+    )
+    assert list(put["responses"]["200"]["content"]) == ["application/json"]
+
+    blob = blob_object("gap\n")
+    res = httpx.put(
+        f"{server.base_url}/v1/repos/{REPO}/objects/{blob.id}",
+        headers={**auth(server), "content-type": "application/octet-stream"},
+        content=blob.envelope,
+    )
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/json")
+    assert res.json()["object_id"] == blob.id
+
+
 # --------------------------------------------------------------------------- remaining
 
 
@@ -158,24 +176,6 @@ def test_stream_create_and_credentials_mint_ignore_idempotency_key_by_design(
     c1 = admin.credentials.mint(subject="user:x", ttl_secs=60, options=KEY)
     c2 = admin.credentials.mint(subject="user:x", ttl_secs=60, options=KEY)
     assert c1.credential.id != c2.credential.id
-
-
-def test_objects_put_answers_json_although_openapi_lists_octet_stream(server: RunningServer) -> None:
-    spec = json.loads((REPO_ROOT / "docs/protocol/openapi.json").read_text())
-    put = next(
-        op for item in spec["paths"].values() for op in item.values() if op["operationId"] == "objects.put"
-    )
-    assert list(put["responses"]["200"]["content"]) == ["application/octet-stream"]
-
-    blob = blob_object("gap\n")
-    res = httpx.put(
-        f"{server.base_url}/v1/repos/{REPO}/objects/{blob.id}",
-        headers={**auth(server), "content-type": "application/octet-stream"},
-        content=blob.envelope,
-    )
-    assert res.status_code == 200
-    assert res.headers["content-type"].startswith("application/json")
-    assert res.json()["object_id"] == blob.id
 
 
 def test_retry_after_is_whole_seconds_and_at_least_one_while_retry_after_ms_can_be_shorter() -> None:

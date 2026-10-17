@@ -165,6 +165,7 @@ message ConfigureRepoRequest {
   optional string description = 2;
   // Replaces the repository quota when set.
   optional Quota quota = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -497,6 +498,7 @@ message CreateStreamRequest {
   string name = 2;
   // Start the stream at this revision (default: empty stream).
   string from_rev = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -517,6 +519,7 @@ message CompareAndSwapRequest {
   string reason = 6;
   // Allow non-fast-forward moves. Administrators only.
   bool force = 7;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 8;
 }
 
@@ -559,6 +562,7 @@ message CreateWorkspaceRequest {
   string stream = 3;
   // Start from this revision instead of the stream head.
   string from_rev = 4;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
 }
 
@@ -594,12 +598,14 @@ message ModifyWorkspaceRequest {
   string message = 4;
   // Reject if the workspace head moved (optimistic concurrency); empty = skip.
   string expected_head = 5;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 6;
 }
 
 message SyncWorkspaceRequest {
   string repo = 1;
   string name = 2;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 3;
   // Resolved files for every conflicting path. Without them a conflicting
   // sync changes nothing and reports the conflicts; with them the clean
@@ -685,6 +691,7 @@ message UpdateProposalRequest {
   string repo = 1;
   string id = 2;
   string new_head = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -693,12 +700,14 @@ message ReviewProposalRequest {
   string id = 2;
   string decision = 3;
   string body = 4;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
 }
 
 message CloseProposalRequest {
   string repo = 1;
   string id = 2;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 3;
 }
 
@@ -758,6 +767,7 @@ message PrepareRequest {
   // Also enqueue validation jobs for required checks that have a runner
   // configuration and no passing attestation yet.
   bool enqueue_validations = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -794,6 +804,7 @@ message RequestValidationRequest {
   string proposal = 2;
   // Checks to validate (default: all required checks that have a runner).
   repeated string checks = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -853,6 +864,7 @@ message QueueEntry {
 message EnqueueRequest {
   string repo = 1;
   string proposal = 2;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 3;
 }
 
@@ -866,6 +878,7 @@ message ListQueueResponse { repeated QueueEntry entries = 1; }
 message RunQueueRequest {
   string repo = 1;
   string stream = 2;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 3;
 }
 
@@ -894,6 +907,7 @@ message RegisterAgentRequest {
   // Hex Ed25519 public key. The private key never leaves the agent.
   string public_key = 3;
   string role = 4;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
 }
 
@@ -933,6 +947,7 @@ message CompleteRunRequest {
   string run_id = 2;
   string status = 3;
   string summary = 4;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
 }
 
@@ -994,6 +1009,7 @@ message FinishTaskRequest {
   string id = 2;
   // "done" or "cancelled".
   string state = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -1066,6 +1082,7 @@ message SubmitProvenanceRequest {
   // Ed25519 signature (hex) over the canonical record bytes, made with the
   // agent's own key.
   string signature = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -1164,6 +1181,7 @@ message SetPolicyRequest {
   string repo = 1;
   string stream = 2;
   string document = 3;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
 }
 
@@ -1290,6 +1308,7 @@ message MintCredentialRequest {
   CredentialScope scope = 3;
   // Lifetime in seconds; capped by server policy (agents: short).
   uint32 ttl_secs = 4;
+  // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
 }
 

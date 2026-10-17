@@ -489,6 +489,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -517,6 +518,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "new_head": {
@@ -580,6 +582,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -612,6 +615,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "quota": {
@@ -711,6 +715,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "name": {
@@ -768,6 +773,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "name": {
@@ -965,6 +971,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "proposal": {
@@ -1205,6 +1212,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -2462,6 +2470,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "scope": {
@@ -2556,6 +2565,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "message": {
@@ -2960,6 +2970,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "proposal": {
@@ -3438,6 +3449,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "name": {
@@ -3588,6 +3600,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "proposal": {
@@ -3727,6 +3740,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -3850,6 +3864,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -3946,6 +3961,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "repo": {
@@ -4047,6 +4063,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "record": {
@@ -4076,6 +4093,7 @@
         "properties": {
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "name": {
@@ -4225,6 +4243,7 @@
           },
           "idempotency_key": {
             "default": "",
+            "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
             "type": "string"
           },
           "new_head": {
@@ -6921,7 +6940,7 @@
         "responses": {
           "200": {
             "content": {
-              "application/octet-stream": {
+              "application/json": {
                 "schema": {
                   "format": "binary",
                   "type": "string"
@@ -6941,7 +6960,7 @@
             "description": "Error"
           }
         },
-        "summary": "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
+        "summary": "Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored}",
         "tags": [
           "Objects"
         ]

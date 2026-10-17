@@ -1,7 +1,13 @@
 {
   "$comment": "Hand-maintained facts about the AGWP v1 HTTP API that docs/protocol/openapi.json does not carry. Both SDK generators (sdk/typescript/scripts/generate.mjs and sdk/python/scripts/generate.py) read this file; their tests fail when it disagrees with the OpenAPI document. 'retry' classes: read = GET, or a POST that only reads; natural = repeating the call has the same effect as making it once; keyed = the server records the outcome under the Idempotency-Key header (documented in docs/protocol/agwp-v1.md and verified by the retry tests for exactly these seven operations; stream.create and credentials.mint ignore the key by design); unsafe = a repeat may apply twice, so the SDK never retries it on its own (pass an explicit override per call).",
   "retry": {
-    "readPosts": ["history.ancestors", "tree.diff", "objects.missing", "objects.verify", "admin.fsck"],
+    "readPosts": [
+      "history.ancestors",
+      "tree.diff",
+      "objects.missing",
+      "objects.verify",
+      "admin.fsck"
+    ],
     "keyed": [
       "repo.create",
       "objects.publish",
@@ -54,8 +60,7 @@
     ]
   },
   "bodies": {
-    "$comment": "Body kinds come from the OpenAPI media types (application/json, application/octet-stream, text/event-stream). This is the one place where the document disagrees with the server: it lists application/octet-stream for the 200 response of objects.put, which answers JSON.",
-    "objects.put": { "response": "json" }
+    "$comment": "Overrides of the body kind that OpenAPI declares for an operation (none today: the document lists the media types the server really uses)."
   },
   "namespaces": {
     "session": "session",

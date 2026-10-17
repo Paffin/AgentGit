@@ -377,9 +377,10 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
             "/v1/repos/{owner}/{rname}/objects/{object_id}",
             "objects.put",
             "Objects",
-            "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
+            "Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored}",
         )
-        .request_body("application/octet-stream"),
+        .request_body("application/octet-stream")
+        .response_body("application/json"),
     );
     meta.push(RouteMeta::raw(
         "get",

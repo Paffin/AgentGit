@@ -136,6 +136,26 @@ describe('fixed on the server', () => {
     // the `kind` of an entry is a different vocabulary: file | symlink | dir
     expect((await admin.tree.resolve({ repo, rev: '@q', path: 't-regular' })).kind).toBe('file');
   });
+
+  it("objects.put's OpenAPI entry lists the JSON it answers", async () => {
+    const spec = JSON.parse(readFileSync(path.join(REPO_ROOT, 'docs/protocol/openapi.json'), 'utf8')) as {
+      paths: Record<string, Record<string, { operationId: string; responses: Record<string, { content?: object }> }>>;
+    };
+    const put = Object.values(spec.paths)
+      .flatMap((p) => Object.values(p))
+      .find((o) => o.operationId === 'objects.put')!;
+    expect(Object.keys(put.responses['200']!.content!)).toEqual(['application/json']);
+
+    const blob = blobObject('gap\n');
+    const res = await fetch(`${server.baseUrl}/v1/repos/${repo}/objects/${blob.id}`, {
+      method: 'PUT',
+      headers: { ...auth(), 'content-type': 'application/octet-stream' },
+      body: blob.envelope as BodyInit,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(await res.json()).toMatchObject({ object_id: blob.id });
+  });
 });
 
 describe('remaining', () => {
@@ -147,26 +167,6 @@ describe('remaining', () => {
     const c1 = await admin.credentials.mint({ subject: 'user:x', ttl_secs: 60 }, key);
     const c2 = await admin.credentials.mint({ subject: 'user:x', ttl_secs: 60 }, key);
     expect(c2.credential.id).not.toBe(c1.credential.id);
-  });
-
-  it('objects.put answers JSON, although OpenAPI lists application/octet-stream for its 200', async () => {
-    const spec = JSON.parse(readFileSync(path.join(REPO_ROOT, 'docs/protocol/openapi.json'), 'utf8')) as {
-      paths: Record<string, Record<string, { operationId: string; responses: Record<string, { content?: object }> }>>;
-    };
-    const put = Object.values(spec.paths)
-      .flatMap((p) => Object.values(p))
-      .find((o) => o.operationId === 'objects.put')!;
-    expect(Object.keys(put.responses['200']!.content!)).toEqual(['application/octet-stream']);
-
-    const blob = blobObject('gap\n');
-    const res = await fetch(`${server.baseUrl}/v1/repos/${repo}/objects/${blob.id}`, {
-      method: 'PUT',
-      headers: { ...auth(), 'content-type': 'application/octet-stream' },
-      body: blob.envelope as BodyInit,
-    });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
-    expect(await res.json()).toMatchObject({ object_id: blob.id });
   });
 
   it('Retry-After is whole seconds and at least 1, while retry_after_ms can be shorter', async () => {

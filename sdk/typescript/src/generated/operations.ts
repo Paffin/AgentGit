@@ -761,7 +761,7 @@ export const OPERATIONS = {
     route: '/v1/repos/{owner}/{rname}/objects/{object_id}',
     namespace: 'objects',
     name: 'put',
-    summary: 'Upload one object envelope (binary body); the server verifies that it hashes to object_id',
+    summary: 'Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored}',
     pathParams: ['owner', 'rname', 'object_id'],
     queryParams: [],
     body: 'bytes',

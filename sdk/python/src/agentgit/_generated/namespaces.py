@@ -827,7 +827,7 @@ class ObjectsApi:
         data: bytes,
         options: CallOptions | None = None,
     ) -> PutObjectResult:
-        """Upload one object envelope (binary body); the server verifies that it hashes to object_id (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`)."""
+        """Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored} (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`)."""
         return self._c._call_put(repo=repo, object_id=object_id, data=data, options=options)
 
     def verify(
@@ -2069,7 +2069,7 @@ class AsyncObjectsApi:
         data: bytes,
         options: CallOptions | None = None,
     ) -> PutObjectResult:
-        """Upload one object envelope (binary body); the server verifies that it hashes to object_id (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`)."""
+        """Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored} (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`)."""
         return await self._c._call_put(repo=repo, object_id=object_id, data=data, options=options)
 
     async def verify(

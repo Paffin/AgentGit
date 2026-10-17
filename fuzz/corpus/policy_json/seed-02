@@ -1,0 +1,1 @@
+{"integrators":["user:*"],"allowed_authors":["user:*","agent:*"],"max_changed_files":50}

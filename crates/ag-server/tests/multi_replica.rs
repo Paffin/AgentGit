@@ -47,6 +47,7 @@ struct Replica {
     name: String,
     pg_url: String,
     port: u16,
+    #[allow(dead_code)]
     dir: PathBuf,
     cfg: PathBuf,
     log: PathBuf,
@@ -84,6 +85,7 @@ impl Replica {
     }
 
     /// SIGTERM, then wait for the exit status.
+    #[allow(dead_code)]
     fn term(&mut self, within: Duration) -> Option<std::process::ExitStatus> {
         let c = self.child.as_mut()?;
         let _ = Command::new("kill").args(["-TERM", &c.id().to_string()]).status();

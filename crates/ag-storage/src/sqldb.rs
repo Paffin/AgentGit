@@ -387,7 +387,7 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        let n = db.read(|tx| Ok(tx.query("SELECT COUNT(*) FROM t", &[])?[0].i64(0)?)).unwrap();
+        let n = db.read(|tx| tx.query("SELECT COUNT(*) FROM t", &[])?[0].i64(0)).unwrap();
         assert_eq!(n, 2);
         db.ping().unwrap();
     }

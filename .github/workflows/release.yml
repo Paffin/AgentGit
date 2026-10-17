@@ -35,7 +35,8 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}-${{ inputs.version }}
-  cancel-in-progress: false
+  # A rehearsal is superseded by the next one; a build of a tag never is.
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 env:
   CARGO_TERM_COLOR: always

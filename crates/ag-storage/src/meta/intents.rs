@@ -280,6 +280,16 @@ impl Tx<'_> {
         rows.map(|r| cook(r?)).collect()
     }
 
+    /// Intents whose idempotency key starts with `prefix`, oldest first.
+    pub fn intents_with_key_prefix(&self, prefix: &str) -> Result<Vec<IntentRow>, MetaError> {
+        let like = format!("{}%", prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {INTENT_COLS} FROM intents WHERE idempotency_key LIKE ?1 ESCAPE '\\' ORDER BY created_at, operation_id"
+        ))?;
+        let rows = stmt.query_map([like], raw)?;
+        rows.map(|r| cook(r?)).collect()
+    }
+
     /// The most recent intents, newest first.
     pub fn intents_recent(&self, limit: usize) -> Result<Vec<IntentRow>, MetaError> {
         let mut stmt = self.conn.prepare(&format!(

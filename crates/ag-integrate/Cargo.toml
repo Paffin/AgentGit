@@ -12,3 +12,25 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ag-types.workspace = true
+ag-crypto.workspace = true
+ag-object.workspace = true
+ag-changeset.workspace = true
+ag-diff.workspace = true
+ag-tree.workspace = true
+ag-dag.workspace = true
+ag-merge.workspace = true
+ag-storage.workspace = true
+ag-policy.workspace = true
+ag-agent.workspace = true
+globset.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+proptest.workspace = true
+rusqlite.workspace = true

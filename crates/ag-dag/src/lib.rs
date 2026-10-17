@@ -83,6 +83,35 @@ impl<S: ChangesetSource> Graph for SourceGraph<S> {
     }
 }
 
+/// Visits the ancestors of `heads` (including the heads), newest generation
+/// first, ties broken by identifier, until `visit` returns `Ok(false)`.
+/// Parents are only fetched for nodes that are actually visited, so taking the
+/// first few entries of a huge history stays cheap.
+pub fn walk_ancestors<G, F>(g: &G, heads: &[ChangesetId], mut visit: F) -> Result<(), DagError>
+where
+    G: Graph + ?Sized,
+    F: FnMut(&ChangesetId) -> Result<bool, DagError>,
+{
+    let mut heap = BinaryHeap::new();
+    let mut seen = HashSet::new();
+    for h in heads {
+        if seen.insert(*h) {
+            heap.push((g.generation(h)?, *h));
+        }
+    }
+    while let Some((_, id)) = heap.pop() {
+        if !visit(&id)? {
+            return Ok(());
+        }
+        for p in g.parents(&id)? {
+            if seen.insert(p) {
+                heap.push((g.generation(&p)?, p));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// All ancestors of `heads` (including the heads), newest generation first,
 /// ties broken by identifier. Stops with [`DagError::LimitExceeded`] after
 /// `limit` changesets.
@@ -91,25 +120,14 @@ pub fn ancestors<G: Graph + ?Sized>(
     heads: &[ChangesetId],
     limit: usize,
 ) -> Result<Vec<ChangesetId>, DagError> {
-    let mut heap = BinaryHeap::new();
-    let mut seen = HashSet::new();
-    for h in heads {
-        if seen.insert(*h) {
-            heap.push((g.generation(h)?, *h));
-        }
-    }
     let mut out = Vec::new();
-    while let Some((_, id)) = heap.pop() {
+    walk_ancestors(g, heads, |id| {
         if out.len() >= limit {
             return Err(DagError::LimitExceeded(limit));
         }
-        out.push(id);
-        for p in g.parents(&id)? {
-            if seen.insert(p) {
-                heap.push((g.generation(&p)?, p));
-            }
-        }
-    }
+        out.push(*id);
+        Ok(true)
+    })?;
     Ok(out)
 }
 

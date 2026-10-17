@@ -71,6 +71,28 @@ dependencies = [
 [[package]]
 name = "ag-integrate"
 version = "0.1.0"
+dependencies = [
+ "ag-agent",
+ "ag-changeset",
+ "ag-crypto",
+ "ag-dag",
+ "ag-diff",
+ "ag-merge",
+ "ag-object",
+ "ag-policy",
+ "ag-storage",
+ "ag-tree",
+ "ag-types",
+ "globset",
+ "hex",
+ "proptest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "ag-merge"

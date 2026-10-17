@@ -106,7 +106,9 @@ jobs:
           case "$v" in "ag-server 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
           v=$(docker run --rm agentgit-cli:ci --version); echo "$v"
           case "$v" in "ag 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
-          docker history --no-trunc --format '{{.CreatedBy}}' agentgit-server:ci | grep -iE 'token|secret|password' && { echo "::error::a secret-looking string is in the image history"; exit 1; } || true
+          if docker history --no-trunc --format '{{.CreatedBy}}' agentgit-server:ci | grep -iqE 'token|secret|password'; then
+            echo "::error::a secret-looking string is in the image history"; exit 1
+          fi
 
       - name: Run the server hardened (read-only root, no capabilities) and wait for its health check
         run: |

@@ -12,3 +12,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # Base images of the shipped containers (deploy/docker/Dockerfile) and the Compose stack's service images.
+  # A Rust image bump moves the toolchain the release images are built with; the Containers workflow tests it.
+  - package-ecosystem: docker
+    directory: /deploy/docker
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker-compose
+    directory: /deploy/compose
+    schedule:
+      interval: weekly

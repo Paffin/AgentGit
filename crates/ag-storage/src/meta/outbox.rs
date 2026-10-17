@@ -1,11 +1,11 @@
 use ag_object::canon::Writer;
 use ag_types::Timestamp;
-use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use super::{MetaError, Tx, ts};
+use super::db::{Row, params};
+use super::{MetaError, Tx, escape_like, ts};
 
 /// A pending or dispatched outbox event.
 #[derive(Clone, Debug, Serialize)]
@@ -60,60 +60,67 @@ pub struct AuditReport {
 
 const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
+const OUTBOX_COLS: &str = "id, topic, payload, created_at, dispatched_at, attempts, last_error";
+const AUDIT_COLS: &str = "seq, ts, actor, action, target, details, prev_hash, hash";
+
 fn audit_hash(prev: &str, t: i64, actor: &str, action: &str, target: &str, details: &str) -> String {
     let mut w = Writer::new();
     w.str("agentgit.audit.v1").str(prev).i64(t).str(actor).str(action).str(target).str(details);
     hex::encode(Sha256::digest(w.finish()))
 }
 
+fn outbox_row(r: &Row) -> Result<OutboxRow, MetaError> {
+    Ok(OutboxRow {
+        id: r.i64(0)? as u64,
+        topic: r.string(1)?,
+        payload: serde_json::from_str(r.str(2)?)?,
+        created_at: ts(r.i64(3)?),
+        dispatched_at: r.opt_i64(4)?.map(ts),
+        attempts: r.i64(5)? as u32,
+        last_error: r.opt_string(6)?,
+    })
+}
+
+fn audit_entry(r: &Row) -> Result<AuditEntry, MetaError> {
+    Ok(AuditEntry {
+        seq: r.i64(0)? as u64,
+        timestamp: ts(r.i64(1)?),
+        actor: r.string(2)?,
+        action: r.string(3)?,
+        target: r.string(4)?,
+        details: r.string(5)?,
+        prev_hash: r.string(6)?,
+        hash: r.string(7)?,
+    })
+}
+
 impl Tx<'_> {
     /// Appends an event to the transactional outbox.
     pub fn outbox_push(&self, topic: &str, payload: &Value) -> Result<u64, MetaError> {
-        self.conn.execute(
-            "INSERT INTO outbox (topic, payload, created_at) VALUES (?1, ?2, ?3)",
-            params![topic, serde_json::to_string(payload)?, self.now().as_millis()],
-        )?;
-        Ok(self.conn.last_insert_rowid() as u64)
+        let id = self
+            .conn
+            .query_one(
+                "INSERT INTO outbox (topic, payload, created_at) VALUES (?1, ?2, ?3) RETURNING id",
+                &params![topic, serde_json::to_string(payload)?, self.now().as_millis()],
+            )?
+            .i64(0)?;
+        Ok(id as u64)
     }
 
     /// Undelivered events, oldest first.
     pub fn outbox_pending(&self, limit: usize) -> Result<Vec<OutboxRow>, MetaError> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT id, topic, payload, created_at, dispatched_at, attempts, last_error
-             FROM outbox WHERE dispatched_at IS NULL ORDER BY id LIMIT ?1",
+        let rows = self.conn.query(
+            &format!("SELECT {OUTBOX_COLS} FROM outbox WHERE dispatched_at IS NULL ORDER BY id LIMIT ?1"),
+            &params![limit as i64],
         )?;
-        let rows = stmt.query_map([limit as i64], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, i64>(3)?,
-                r.get::<_, Option<i64>>(4)?,
-                r.get::<_, i64>(5)?,
-                r.get::<_, Option<String>>(6)?,
-            ))
-        })?;
-        let mut out = Vec::new();
-        for r in rows {
-            let (id, topic, payload, c, d, attempts, err) = r?;
-            out.push(OutboxRow {
-                id: id as u64,
-                topic,
-                payload: serde_json::from_str(&payload)?,
-                created_at: ts(c),
-                dispatched_at: d.map(ts),
-                attempts: attempts as u32,
-                last_error: err,
-            });
-        }
-        Ok(out)
+        rows.iter().map(outbox_row).collect()
     }
 
     /// Marks an event delivered.
     pub fn outbox_ack(&self, id: u64) -> Result<(), MetaError> {
         self.conn.execute(
             "UPDATE outbox SET dispatched_at = ?1, attempts = attempts + 1, last_error = NULL WHERE id = ?2",
-            params![self.now().as_millis(), id as i64],
+            &params![self.now().as_millis(), id as i64],
         )?;
         Ok(())
     }
@@ -122,47 +129,22 @@ impl Tx<'_> {
     pub fn outbox_fail(&self, id: u64, error: &str) -> Result<(), MetaError> {
         self.conn.execute(
             "UPDATE outbox SET attempts = attempts + 1, last_error = ?1 WHERE id = ?2",
-            params![error, id as i64],
+            &params![error, id as i64],
         )?;
         Ok(())
     }
 
     /// Number of undelivered events.
     pub fn outbox_pending_count(&self) -> Result<u64, MetaError> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM outbox WHERE dispatched_at IS NULL", [], |r| r.get::<_, i64>(0))?
-            as u64)
+        Ok(self.conn.query_one("SELECT COUNT(*) FROM outbox WHERE dispatched_at IS NULL", &[])?.i64(0)? as u64)
     }
 
     /// Delivered events, newest first (replay support).
     pub fn outbox_history(&self, limit: usize) -> Result<Vec<OutboxRow>, MetaError> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT id, topic, payload, created_at, dispatched_at, attempts, last_error FROM outbox ORDER BY id DESC LIMIT ?1",
-        )?;
-        let rows = stmt.query_map([limit as i64], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, i64>(3)?,
-                r.get::<_, Option<i64>>(4)?,
-                r.get::<_, i64>(5)?,
-                r.get::<_, Option<String>>(6)?,
-            ))
-        })?;
-        let mut out = Vec::new();
-        for r in rows {
-            let (id, topic, payload, c, d, attempts, err) = r?;
-            out.push(OutboxRow {
-                id: id as u64,
-                topic,
-                payload: serde_json::from_str(&payload)?,
-                created_at: ts(c),
-                dispatched_at: d.map(ts),
-                attempts: attempts as u32,
-                last_error: err,
-            });
-        }
-        Ok(out)
+        let rows = self
+            .conn
+            .query(&format!("SELECT {OUTBOX_COLS} FROM outbox ORDER BY id DESC LIMIT ?1"), &params![limit as i64])?;
+        rows.iter().map(outbox_row).collect()
     }
 
     /// Appends an audit event, chained to the previous one.
@@ -173,20 +155,23 @@ impl Tx<'_> {
         target: &str,
         details: &Value,
     ) -> Result<AuditEntry, MetaError> {
-        let prev: String = self
-            .conn
-            .query_row("SELECT hash FROM audit ORDER BY seq DESC LIMIT 1", [], |r| r.get(0))
-            .optional()?
-            .unwrap_or_else(|| GENESIS.to_string());
+        let prev = match self.conn.query_opt("SELECT hash FROM audit ORDER BY seq DESC LIMIT 1", &[])? {
+            Some(r) => r.string(0)?,
+            None => GENESIS.to_string(),
+        };
         let details = serde_json::to_string(details)?;
         let t = self.now().as_millis();
         let hash = audit_hash(&prev, t, actor, action, target, &details);
-        self.conn.execute(
-            "INSERT INTO audit (ts, actor, action, target, details, prev_hash, hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![t, actor, action, target, details, prev, hash],
-        )?;
+        let seq = self
+            .conn
+            .query_one(
+                "INSERT INTO audit (ts, actor, action, target, details, prev_hash, hash)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING seq",
+                &params![t, actor, action, target, &details, &prev, &hash],
+            )?
+            .i64(0)?;
         Ok(AuditEntry {
-            seq: self.conn.last_insert_rowid() as u64,
+            seq: seq as u64,
             timestamp: ts(t),
             actor: actor.into(),
             action: action.into(),
@@ -201,55 +186,47 @@ impl Tx<'_> {
     /// target, actor or details contain it (a run id, proposal id, identity,
     /// changeset id, ...).
     pub fn audit_list(&self, target_contains: Option<&str>, limit: usize) -> Result<Vec<AuditEntry>, MetaError> {
-        let pattern = format!("%{}%", target_contains.unwrap_or("").replace('%', "\\%").replace('_', "\\_"));
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT seq, ts, actor, action, target, details, prev_hash, hash FROM audit
-             WHERE target LIKE ?1 ESCAPE '\\' OR actor LIKE ?1 ESCAPE '\\' OR details LIKE ?1 ESCAPE '\\'
-             ORDER BY seq DESC LIMIT ?2",
+        let pattern = format!("%{}%", escape_like(target_contains.unwrap_or("")));
+        // lower() on both sides: SQLite's LIKE is ASCII case-insensitive, PostgreSQL's is not
+        let rows = self.conn.query(
+            &format!(
+                "SELECT {AUDIT_COLS} FROM audit
+                 WHERE lower(target) LIKE lower(?1) ESCAPE '\\' OR lower(actor) LIKE lower(?1) ESCAPE '\\'
+                    OR lower(details) LIKE lower(?1) ESCAPE '\\'
+                 ORDER BY seq DESC LIMIT ?2"
+            ),
+            &params![pattern, limit as i64],
         )?;
-        let rows = stmt.query_map(params![pattern, limit as i64], |r| {
-            Ok(AuditEntry {
-                seq: r.get::<_, i64>(0)? as u64,
-                timestamp: ts(r.get(1)?),
-                actor: r.get(2)?,
-                action: r.get(3)?,
-                target: r.get(4)?,
-                details: r.get(5)?,
-                prev_hash: r.get(6)?,
-                hash: r.get(7)?,
-            })
-        })?;
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        rows.iter().map(audit_entry).collect()
     }
 
     /// Recomputes the whole chain and reports the first inconsistent entry.
     pub fn audit_verify(&self) -> Result<AuditReport, MetaError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT seq, ts, actor, action, target, details, prev_hash, hash FROM audit ORDER BY seq")?;
-        let rows = stmt.query_map([], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, String>(5)?,
-                r.get::<_, String>(6)?,
-                r.get::<_, String>(7)?,
-            ))
-        })?;
+        const PAGE: i64 = 2000;
         let mut prev = GENESIS.to_string();
         let mut n = 0u64;
         let mut first_bad = None;
-        for row in rows {
-            let (seq, t, actor, action, target, details, prev_hash, hash) = row?;
-            n += 1;
-            let expect = audit_hash(&prev_hash, t, &actor, &action, &target, &details);
-            if first_bad.is_none() && (prev_hash != prev || expect != hash) {
-                first_bad = Some(seq as u64);
+        let mut after = i64::MIN;
+        loop {
+            // paged so memory stays flat however long the log is
+            let rows = self.conn.query(
+                &format!("SELECT {AUDIT_COLS} FROM audit WHERE seq > ?1 ORDER BY seq LIMIT ?2"),
+                &params![after, PAGE],
+            )?;
+            for row in &rows {
+                let e = audit_entry(row)?;
+                n += 1;
+                let expect =
+                    audit_hash(&e.prev_hash, e.timestamp.as_millis(), &e.actor, &e.action, &e.target, &e.details);
+                if first_bad.is_none() && (e.prev_hash != prev || expect != e.hash) {
+                    first_bad = Some(e.seq);
+                }
+                after = e.seq as i64;
+                prev = e.hash;
             }
-            prev = hash;
+            if (rows.len() as i64) < PAGE {
+                break;
+            }
         }
         Ok(AuditReport { entries: n, head: prev, first_bad })
     }

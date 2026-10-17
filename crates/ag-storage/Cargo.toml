@@ -11,6 +11,13 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["tls", "s3"]
+# TLS for PostgreSQL connections (rustls); without it only sslmode=disable works.
+tls = ["dep:rustls", "dep:tokio-postgres-rustls", "dep:webpki-roots"]
+# S3-compatible object store (SigV4 over a blocking rustls HTTP client).
+s3 = ["dep:ureq"]
+
 [dependencies]
 ag-types.workspace = true
 ag-object.workspace = true
@@ -20,6 +27,11 @@ ag-dag.workspace = true
 ag-crypto.workspace = true
 hex.workspace = true
 rusqlite.workspace = true
+postgres.workspace = true
+rustls = { workspace = true, optional = true }
+tokio-postgres-rustls = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Ubuntu 24.04 runners restrict unprivileged user namespaces with AppArmor, which is what the namespace
@@ -45,7 +45,7 @@ jobs:
     name: fmt + clippy + rustdoc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -60,7 +60,7 @@ jobs:
     name: MSRV (1.89)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Select the toolchain with the `toolchain` input rather than an `@1.89.0` ref:
       # Dependabot would "update" such a ref and silently move the MSRV.
       - uses: dtolnay/rust-toolchain@stable
@@ -73,7 +73,7 @@ jobs:
     name: generated docs + demo
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build release binary
@@ -89,7 +89,7 @@ jobs:
     name: PostgreSQL + S3 backends
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # scripts/pg-test.sh finds the server binaries under /usr/lib/postgresql/*/bin
@@ -109,7 +109,7 @@ jobs:
       KUBECONFORM_VERSION: v0.6.7
       PROMETHEUS_VERSION: 3.2.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install kustomize, kubeconform, promtool
         run: |
           set -euo pipefail
@@ -130,7 +130,7 @@ jobs:
     name: container images build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - name: Build the server image
         uses: docker/build-push-action@v6

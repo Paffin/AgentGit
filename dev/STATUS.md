@@ -29,7 +29,7 @@ e2e, Go suite green.
 | 17 | MCP server `ag-mcp` | crates/ag-mcp, docs/guides/mcp.md | in progress (binary builds) |
 | 18 | security & quality gates (deny/audit/CodeQL/fuzz/coverage/mutation/compat fixtures) | fuzz/, deny.toml, security workflows | in progress; first fuzz fixes landed (`2f918df`) |
 | 19 | CLI UX + docs site | ag-cli, docs/ | in progress |
-| 20 | Windows & portability | cfg-gating, windows.yml | in progress; first slice landed (`4c30244`) |
+| 20 | Windows & portability | cfg-gating, windows.yml | **code+docs landed on main** (`4c30244`…`b3eb6b1`, also `wip/windows-track`); handoff `dev/handoff/windows.md`. Windows CI **not yet green**: first run built the whole workspace, only 10 test targets failed (fixed in `ef20d10`, unconfirmed); console (Ctrl+C), ACL tests and `quickstart.ps1` never ran on a Windows runner. Do not make it a required check until green twice in a row. Open: NASM / VC++ redistributable (`+crt-static`) question for the release binary |
 Each agent was told (at snapshot time) to commit, land what passes the gates on `main`, push the rest to
 `wip/<track>-track`, and write `dev/handoff/<track>.md`. **Check those files and branches first** — they are the
 authoritative per-track state.

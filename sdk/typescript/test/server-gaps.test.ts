@@ -172,20 +172,21 @@ describe('remaining', () => {
   it('Retry-After is whole seconds and at least 1, while retry_after_ms can be shorter', async () => {
     const limited = await startServer({ config: '[limits]\nrequests_per_second = 20\nburst = 2\n' });
     try {
-      let seen: { header: string | null; ms: number } | undefined;
-      for (let i = 0; i < 40 && !seen; i++) {
-        const res = await fetch(`${limited.baseUrl}/v1/whoami`, {
-          headers: { authorization: `Bearer ${limited.bootstrapToken}` },
-        });
-        if (res.status === 429) {
-          const body = (await res.json()) as { error: { retry_after_ms: number } };
-          seen = { header: res.headers.get('retry-after'), ms: body.error.retry_after_ms };
-        }
-      }
-      expect(seen).toBeDefined();
-      expect(seen!.header).toBe('1');
-      expect(seen!.ms).toBeGreaterThan(0);
-      expect(seen!.ms).toBeLessThan(1000); // the SDK waits for this, not for the rounded header
+      // a concurrent burst, so that a slow machine cannot let the bucket refill between requests
+      const replies = await Promise.all(
+        Array.from({ length: 40 }, async () => {
+          const res = await fetch(`${limited.baseUrl}/v1/whoami`, {
+            headers: { authorization: `Bearer ${limited.bootstrapToken}` },
+          });
+          return { status: res.status, header: res.headers.get('retry-after'), body: (await res.json()) as unknown };
+        }),
+      );
+      const throttled = replies.find((r) => r.status === 429);
+      expect(throttled).toBeDefined();
+      const ms = (throttled!.body as { error: { retry_after_ms: number } }).error.retry_after_ms;
+      expect(throttled!.header).toBe('1');
+      expect(ms).toBeGreaterThan(0);
+      expect(ms).toBeLessThan(1000); // the SDK waits for this, not for the rounded header
     } finally {
       await limited.stop();
     }

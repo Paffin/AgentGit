@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import httpx
 import pytest
@@ -29,15 +29,23 @@ def limited() -> Iterator[RunningServer]:
         s.stop()
 
 
+def first_rate_limited(call: Callable[[], object]) -> RateLimitedError | None:
+    """Runs the call 30 times concurrently, so that a slow machine cannot let the bucket refill in between."""
+
+    def attempt(_: int) -> RateLimitedError | None:
+        try:
+            call()
+        except RateLimitedError as e:
+            return e
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(10) as pool:
+        return next((e for e in pool.map(attempt, range(30)) if e is not None), None)
+
+
 def test_without_retries_a_burst_surfaces_rate_limited_with_a_retry_hint(limited: RunningServer) -> None:
     with limited.actor("user:burst", REPO, "reader", retry=False) as reader:
-        error: RateLimitedError | None = None
-        for _ in range(30):
-            try:
-                reader.repos.describe(repo=REPO)
-            except RateLimitedError as e:
-                error = e
-                break
+        error = first_rate_limited(lambda: reader.repos.describe(repo=REPO))
     assert error is not None
     assert (error.code, error.status, error.retryable) == ("rate_limited", 429, True)
     assert 0 < error.retry_after_ms <= 1000
@@ -47,13 +55,7 @@ def test_the_limit_applies_to_operations_that_are_not_tied_to_a_repository_too(
     limited: RunningServer,
 ) -> None:
     with limited.actor("user:global-burst", REPO, "reader", retry=False) as caller:
-        error: RateLimitedError | None = None
-        for _ in range(30):
-            try:
-                caller.session.whoami()
-            except RateLimitedError as e:
-                error = e
-                break
+        error = first_rate_limited(caller.session.whoami)
     assert error is not None
     assert (error.code, error.status, error.retryable) == ("rate_limited", 429, True)
 

@@ -21,11 +21,11 @@ afterAll(async () => {
 describe('429 rate_limited', () => {
   it('without retries a burst surfaces rate_limited with a retry hint', async () => {
     const reader = await server.actor('user:burst', repo, 'reader', { retry: false });
-    let limited: AgentGitError | undefined;
-    for (let i = 0; i < 30 && !limited; i++) {
-      limited = (await reader.repos.describe({ repo }).catch((e: unknown) => e)) as AgentGitError | undefined;
-      if (!(limited instanceof AgentGitError)) limited = undefined;
-    }
+    // a concurrent burst, so that a slow machine cannot let the bucket refill between requests
+    const outcomes = await Promise.all(
+      Array.from({ length: 30 }, () => reader.repos.describe({ repo }).catch((e: unknown) => e)),
+    );
+    const limited = outcomes.find((o): o is AgentGitError => o instanceof AgentGitError);
     expect(limited).toBeDefined();
     expect(limited).toMatchObject({ code: 'rate_limited', status: 429, retryable: true });
     expect(limited!.retryAfterMs).toBeGreaterThan(0);
@@ -34,14 +34,14 @@ describe('429 rate_limited', () => {
 
   it('the limit applies to operations that are not tied to a repository, too', async () => {
     const caller = await server.actor('user:global-burst', repo, 'reader', { retry: false });
-    let limited: unknown;
-    for (let i = 0; i < 30 && !limited; i++) {
-      limited = await caller.session.whoami().then(
-        () => undefined,
-        (e: unknown) => e,
-      );
-    }
-    expect(limited).toMatchObject({ code: 'rate_limited', status: 429, retryable: true });
+    const outcomes = await Promise.all(
+      Array.from({ length: 30 }, () => caller.session.whoami().catch((e: unknown) => e)),
+    );
+    expect(outcomes.find((o) => o instanceof AgentGitError)).toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+      retryable: true,
+    });
   });
 
   it('with the default retry policy the client waits as told and every request succeeds', async () => {

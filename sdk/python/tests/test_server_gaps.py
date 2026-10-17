@@ -8,6 +8,7 @@ SDK workaround, if any.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 
 import httpx
@@ -180,14 +181,16 @@ def test_objects_put_answers_json_although_openapi_lists_octet_stream(server: Ru
 def test_retry_after_is_whole_seconds_and_at_least_one_while_retry_after_ms_can_be_shorter() -> None:
     limited = start_server(config="[limits]\nrequests_per_second = 20\nburst = 2\n")
     try:
-        seen: tuple[str | None, int] | None = None
-        for _ in range(40):
-            res = httpx.get(f"{limited.base_url}/v1/whoami", headers=auth(limited))
-            if res.status_code == 429:
-                seen = (res.headers.get("retry-after"), res.json()["error"]["retry_after_ms"])
-                break
-        assert seen is not None
-        header, ms = seen
+        # a concurrent burst, so that a slow machine cannot let the bucket refill between requests
+        with concurrent.futures.ThreadPoolExecutor(20) as pool:
+            replies = list(
+                pool.map(
+                    lambda _: httpx.get(f"{limited.base_url}/v1/whoami", headers=auth(limited)), range(40)
+                )
+            )
+        throttled = [r for r in replies if r.status_code == 429]
+        assert throttled
+        header, ms = throttled[0].headers.get("retry-after"), throttled[0].json()["error"]["retry_after_ms"]
         assert header == "1"
         assert 0 < ms < 1000  # the SDK waits for this, not for the rounded header
     finally:

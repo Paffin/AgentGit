@@ -6,40 +6,22 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use ag_integrate::{GcOptions, InitOptions, IntegrateRequest, Outcome, Repository, SyncOutcome};
-use ag_storage::meta::IntentState;
-use ag_types::{Identity, Namespace, StreamName};
+use ag_integrate::{GcOptions, IntegrateRequest, Outcome, Repository, SyncOutcome};
+use ag_storage::meta::{IntentState, Param};
+use ag_types::{Identity, StreamName};
 use common::*;
 
 const HOUR: i64 = 3_600_000;
 
-fn disk_repo(dir: &Path) -> Repository {
-    Repository::init(
-        dir,
-        &InitOptions {
-            namespace: Namespace::new("acme/app").unwrap(),
-            default_stream: StreamName::new("main").unwrap(),
-            actor: id("user:alice"),
-        },
-    )
-    .unwrap()
+/// A repository on disk (`.ag/config.json` and keys) over the backends the environment selects.
+fn disk_repo(dir: &TestDir) -> Repository {
+    init_repo(dir)
 }
 
 fn write(root: &Path, rel: &str, data: &str) {
     let p = root.join(rel);
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, data).unwrap();
-}
-
-fn object_path(repo: &Repository, hex: &str) -> std::path::PathBuf {
-    repo.layout().objects_dir().join("objects").join(&hex[..2]).join(&hex[2..])
-}
-
-fn make_writable(p: &Path) {
-    let mut perms = fs::metadata(p).unwrap().permissions();
-    #[allow(clippy::permissions_set_readonly_false)]
-    perms.set_readonly(false);
-    fs::set_permissions(p, perms).unwrap();
 }
 
 // ---- garbage collection ----------------------------------------------------
@@ -120,6 +102,12 @@ fn gc_protects_objects_staged_by_an_in_flight_publication() {
 #[test]
 fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc() {
     let f = fx();
+    if f.wallclock_objects() {
+        // S3 objects age on the server's clock, which a test cannot move forward; the same
+        // guarantee is tested against S3 with real time in
+        // `rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3`.
+        return;
+    }
     let blob = f.repo.put_blob(b"old but suddenly wanted".to_vec()).unwrap();
     f.clock.advance_ms(48 * HOUR);
     // A writer is about to reference the blob: putting it again refreshes its age.
@@ -131,9 +119,36 @@ fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc() {
 }
 
 #[test]
+fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3() {
+    // The S3 counterpart, in real time: objects age on the server's clock. The collector's
+    // delete is serialized with writers by the repository's object lock (see
+    // `s3_gc_cannot_delete_an_object_a_writer_just_reput` in ag-storage for the interleaving).
+    if ag_storage::testing::s3_endpoint().is_none() {
+        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
+        return;
+    }
+    let dir = tempdir();
+    let mut storage = storage_for_tests(&dir).expect("S3 is configured");
+    storage.meta = ag_integrate::MetaConfig::Sqlite; // metadata is not what is tested here
+    let repo = init_repo_with(&dir, Some(storage));
+    assert!(objects_are_s3(&repo));
+    let wanted = repo.put_blob(b"old but suddenly wanted".to_vec()).unwrap();
+    let abandoned = repo.put_blob(b"abandoned".to_vec()).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(2300));
+
+    // A writer is about to reference the first blob: putting it again refreshes its age.
+    assert_eq!(repo.put_blob(b"old but suddenly wanted".to_vec()).unwrap(), wanted);
+    let rep = repo.gc(&GcOptions { grace_ms: 1000, ..GcOptions::default() }, "user:alice").unwrap();
+    assert_eq!(rep.deleted, vec![abandoned.object_id().to_hex()], "only the object nobody touched is collected");
+    assert!(repo.objects().contains(&wanted.object_id()).unwrap());
+    assert!(!repo.objects().contains(&abandoned.object_id()).unwrap());
+    assert!(repo.fsck().unwrap().is_ok());
+}
+
+#[test]
 fn gc_fails_closed_when_a_reachable_object_is_damaged() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
     let c = snap_in(&repo, None, &[("a", "precious")], "user:alice");
     let p = repo.propose("main", &c, "t", "", &id("user:alice"), None).unwrap();
     repo.integrate(&IntegrateRequest {
@@ -147,9 +162,7 @@ fn gc_fails_closed_when_a_reachable_object_is_damaged() {
 
     // damage the reachable blob
     let blob = repo.changeset(&c).unwrap().blobs().next().unwrap();
-    let path = object_path(&repo, &blob.to_hex());
-    make_writable(&path);
-    fs::write(&path, b"AGOB\x01\x00\x01garbage").unwrap();
+    damage_object(&repo, &blob.to_hex(), b"AGOB\x01\x00\x01garbage");
 
     let err = repo.gc(&GcOptions { grace_ms: 0, ..GcOptions::default() }, "user:alice").unwrap_err();
     assert!(err.to_string().contains("aborted"), "{err}");
@@ -160,8 +173,8 @@ fn gc_fails_closed_when_a_reachable_object_is_damaged() {
 
 #[test]
 fn fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
     let c1 = snap_in(&repo, None, &[("a", "1"), ("b", "2")], "user:alice");
     let p1 = repo.propose("main", &c1, "t", "", &id("user:alice"), None).unwrap();
     repo.integrate(&IntegrateRequest {
@@ -175,13 +188,9 @@ fn fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage() {
     assert!(ok.is_ok(), "{:?}", ok.issues);
     assert!(ok.objects_checked >= 3 && ok.audit_entries > 3);
 
-    // 1. a flipped byte in a blob
+    // 1. a damaged blob
     let blob = repo.changeset(&c1).unwrap().blobs().next().unwrap();
-    let path = object_path(&repo, &blob.to_hex());
-    make_writable(&path);
-    let mut bytes = fs::read(&path).unwrap();
-    *bytes.last_mut().unwrap() ^= 0xff;
-    fs::write(&path, &bytes).unwrap();
+    damage_object(&repo, &blob.to_hex(), b"AGOB\x01\x00\x01garbage");
     let rep = repo.fsck().unwrap();
     assert!(rep.issues.iter().any(|i| i.kind == "corrupt_object"), "{:?}", rep.issues);
     assert!(rep.issues.iter().any(|i| i.kind == "bad_blob"));
@@ -193,10 +202,8 @@ fn fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage() {
     assert!(repo.fsck().unwrap().is_ok());
 
     // 3. someone edits the audit log directly in the database
+    repo.meta().write(|tx| tx.raw_execute("UPDATE audit SET actor = 'user:mallory' WHERE seq = 2", &[])).unwrap();
     drop(repo);
-    let conn = rusqlite::Connection::open(dir.path().join(".ag/meta.db")).unwrap();
-    conn.execute("UPDATE audit SET actor = 'user:mallory' WHERE seq = 2", []).unwrap();
-    drop(conn);
     let repo = Repository::open(dir.path()).unwrap();
     let rep = repo.fsck().unwrap();
     assert!(rep.issues.iter().any(|i| i.kind == "audit_chain_broken"), "{:?}", rep.issues);
@@ -215,8 +222,8 @@ fn bytes_of(a: &str, b: &str, blob: &ag_types::BlobId, repo: &Repository) -> Vec
 
 #[test]
 fn tampering_with_stored_attestations_or_streams_is_detected_or_harmless() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
     let c = snap_in(&repo, None, &[("a", "1")], "user:alice");
     let p = repo.propose("main", &c, "t", "", &id("user:alice"), None).unwrap();
     repo.integrate(&IntegrateRequest {
@@ -229,10 +236,10 @@ fn tampering_with_stored_attestations_or_streams_is_detected_or_harmless() {
 
     // Point the stream at a changeset that was never published.
     let ghost = snap_in(&repo, Some(c), &[("a", "1"), ("ghost", "g")], "user:alice");
+    repo.meta()
+        .write(|tx| tx.raw_execute("UPDATE streams SET head = ?1 WHERE name = 'main'", &[Param::from(ghost.to_hex())]))
+        .unwrap();
     drop(repo);
-    let conn = rusqlite::Connection::open(dir.path().join(".ag/meta.db")).unwrap();
-    conn.execute("UPDATE streams SET head = ?1 WHERE name = 'main'", [ghost.to_hex()]).unwrap();
-    drop(conn);
     let repo = Repository::open(dir.path()).unwrap();
     let rep = repo.fsck().unwrap();
     assert!(rep.issues.iter().any(|i| i.kind == "stream_head_unpublished"), "{:?}", rep.issues);
@@ -241,8 +248,8 @@ fn tampering_with_stored_attestations_or_streams_is_detected_or_harmless() {
 
 #[test]
 fn derived_trees_are_disposable_and_reindex_rebuilds_them() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
     let c1 = snap_in(&repo, None, &[("a", "1")], "user:alice");
     let c2 = snap_in(&repo, Some(c1), &[("a", "1"), ("b", "2")], "user:alice");
     let p = repo.propose("main", &c2, "t", "", &id("user:alice"), None).unwrap();
@@ -264,10 +271,8 @@ fn derived_trees_are_disposable_and_reindex_rebuilds_them() {
 
     // corrupt a cached manifest: ignored, never returned
     assert_eq!(repo.reindex().unwrap(), 2);
+    repo.meta().write(|tx| tx.raw_execute("UPDATE trees SET data = ?1", &[Param::from(vec![1u8])])).unwrap();
     drop(repo);
-    let conn = rusqlite::Connection::open(dir.path().join(".ag/meta.db")).unwrap();
-    conn.execute("UPDATE trees SET data = x'01'", []).unwrap();
-    drop(conn);
     let repo = Repository::open(dir.path()).unwrap();
     assert_eq!(repo.tree_of(&c2).unwrap().id(), expected, "bad cache is bypassed");
     assert_eq!(repo.reindex().unwrap(), 2);
@@ -297,8 +302,8 @@ fn land_dir(repo: &Repository, dir: &Path, msg: &str) -> ag_types::ChangesetId {
 
 #[test]
 fn workspace_snapshot_propose_integrate_cycle() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
     write(dir.path(), "README.md", "# hi\n");
     write(dir.path(), "src/main.rs", "fn main() {}\n");
     assert_eq!(repo.workspace_status("default", dir.path()).unwrap().len(), 2);
@@ -329,8 +334,8 @@ fn workspace_snapshot_propose_integrate_cycle() {
 
 #[test]
 fn sync_fast_forwards_merges_and_resolves_conflicts() {
-    let main_dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(main_dir.path());
+    let main_dir = tempdir();
+    let repo = disk_repo(&main_dir);
     write(main_dir.path(), "a.txt", "line1\nline2\nline3\nline4\nline5\n");
     write(main_dir.path(), "b.txt", "b\n");
     let base = land_dir(&repo, main_dir.path(), "base");
@@ -469,12 +474,11 @@ fn derived_tree_cache_is_sparse_but_every_tree_is_still_readable() {
     assert!(f.repo.fsck().unwrap().is_ok());
 }
 
-#[test]
-fn backup_is_consistent_verified_and_independent_of_later_changes() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = disk_repo(dir.path());
+/// Backs `repo` (a repository rooted in `dir`) up, lets the original move on, and checks that
+/// the backup is a frozen, verified, self-contained and usable *local* repository.
+fn check_backup(repo: &Repository, dir: &TestDir) {
     write(dir.path(), "a.txt", "one\n");
-    let first = land_dir(&repo, dir.path(), "first");
+    let first = land_dir(repo, dir.path(), "first");
     repo.pin("keep", &first, "release", &alice()).unwrap();
 
     let out = tempfile::tempdir().unwrap();
@@ -487,8 +491,9 @@ fn backup_is_consistent_verified_and_independent_of_later_changes() {
 
     // The original moves on; the backup is a frozen, self-contained repository.
     write(dir.path(), "a.txt", "two\n");
-    land_dir(&repo, dir.path(), "second");
+    land_dir(repo, dir.path(), "second");
     let restored = Repository::open(&dest).unwrap();
+    assert!(restored.config().storage.is_none(), "a backup is a plain local repository");
     assert_eq!(restored.resolve_rev("main").unwrap(), first);
     assert_eq!(restored.pins().unwrap().len(), 1);
     assert!(restored.fsck().unwrap().is_ok());
@@ -499,4 +504,38 @@ fn backup_is_consistent_verified_and_independent_of_later_changes() {
     write(&dest, "b.txt", "from the restored copy\n");
     let head = restored.snapshot("default", &dest, "continue", &alice(), false).unwrap().unwrap();
     assert_eq!(restored.changeset(&head).unwrap().parents, vec![first]);
+}
+
+#[test]
+fn backup_is_consistent_verified_and_independent_of_later_changes() {
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
+    if meta_is_postgres(&repo) {
+        // `ag backup` does not half-work on PostgreSQL metadata: it refuses, says what to do
+        // instead, and writes nothing.
+        write(dir.path(), "a.txt", "one\n");
+        land_dir(&repo, dir.path(), "first");
+        let out = tempfile::tempdir().unwrap();
+        let dest = out.path().join("backup");
+        let err = repo.backup(&dest, false).unwrap_err().to_string();
+        assert!(err.contains("pg_dump") && err.contains("ag verify") && err.contains("PostgreSQL"), "{err}");
+        assert!(!dest.exists(), "nothing was written");
+        return;
+    }
+    check_backup(&repo, &dir);
+}
+
+#[test]
+fn backup_downloads_s3_objects_into_a_self_contained_local_repository() {
+    if ag_storage::testing::s3_endpoint().is_none() {
+        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
+        return;
+    }
+    let dir = tempdir();
+    let mut storage = storage_for_tests(&dir).expect("S3 is configured");
+    storage.meta = ag_integrate::MetaConfig::Sqlite; // PostgreSQL metadata cannot be backed up this way
+    let repo = init_repo_with(&dir, Some(storage));
+    assert!(objects_are_s3(&repo));
+    assert!(!repo.layout().objects_dir().join("objects").exists(), "no objects are kept locally");
+    check_backup(&repo, &dir);
 }

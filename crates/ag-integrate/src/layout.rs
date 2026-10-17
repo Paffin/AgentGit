@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use ag_types::{Identity, Namespace, StreamName};
 use serde::{Deserialize, Serialize};
 
+use crate::storage::StorageConfig;
+
 /// Name of the repository metadata directory.
 pub const DIR_NAME: &str = ".ag";
 
@@ -74,6 +76,17 @@ pub struct RepoConfig {
     pub namespace: Namespace,
     /// The stream created at init and used by default.
     pub default_stream: StreamName,
+    /// Where metadata and objects live. Absent: a SQLite file and a directory under
+    /// `.ag/`, as in every earlier version. Additive: `format` stays 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<StorageConfig>,
+}
+
+impl RepoConfig {
+    /// The effective storage layout (the default one when the section is absent).
+    pub fn storage(&self) -> StorageConfig {
+        self.storage.clone().unwrap_or_default()
+    }
 }
 
 /// Options for [`crate::Repository::init`].
@@ -85,4 +98,19 @@ pub struct InitOptions {
     pub default_stream: StreamName,
     /// Who initializes the repository.
     pub actor: Identity,
+    /// Where metadata and objects live; `None` is the local default (SQLite + files).
+    pub storage: Option<StorageConfig>,
+}
+
+impl InitOptions {
+    /// Options for a repository with the default (local) storage.
+    pub fn new(namespace: Namespace, default_stream: StreamName, actor: Identity) -> Self {
+        Self { namespace, default_stream, actor, storage: None }
+    }
+
+    /// Uses the given storage layout.
+    pub fn with_storage(mut self, storage: StorageConfig) -> Self {
+        self.storage = Some(storage);
+        self
+    }
 }

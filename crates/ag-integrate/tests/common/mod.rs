@@ -1,31 +1,161 @@
 //! Shared fixtures for the engine tests.
+//!
+//! The same tests run on every backend. By default that is SQLite and the
+//! filesystem (or memory); with `AG_TEST_POSTGRES_URL` the metadata moves to a
+//! fresh PostgreSQL schema per test, with `AG_TEST_S3_ENDPOINT` the objects move
+//! to a fresh S3 key prefix per test (see `ag_storage::testing`, and
+//! `scripts/pg-test.sh` / `scripts/s3-test.sh`). With `AG_REQUIRE_BACKENDS=1` a
+//! missing server fails the test instead of silently falling back.
 #![allow(dead_code, missing_docs)]
 
-use std::sync::Arc;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
-use ag_integrate::{IntegrateRequest, IntegrationResult, Outcome, Repository};
+use ag_integrate::{
+    InitOptions, IntegrateRequest, IntegrationResult, MetaConfig, ObjectLockKind, ObjectsConfig, Outcome, Repository,
+    StorageConfig,
+};
 use ag_storage::ManualClock;
+use ag_storage::testing::{TempSchema, TestMeta, TestObjects, postgres_url, s3_endpoint, unique};
 use ag_tree::Tree;
 use ag_types::{ChangesetId, FileType, Identity, Namespace, RepoPath, StreamName, Timestamp};
 
 pub struct Fx {
     pub repo: Repository,
     pub clock: Arc<ManualClock>,
+    objects: TestObjects,
+    // dropped after the repository: removes the schema / key prefix
+    _meta_guard: Box<dyn Send>,
 }
 
 pub fn id(s: &str) -> Identity {
     Identity::new(s).unwrap()
 }
 
+/// A repository over in-memory stores — or over PostgreSQL and/or S3 when the
+/// environment asks for them.
 pub fn fx() -> Fx {
-    let clock = Arc::new(ManualClock::new(Timestamp::from_millis(1_700_000_000_000)));
-    let repo =
-        Repository::ephemeral(Namespace::new("acme/app").unwrap(), StreamName::new("main").unwrap(), clock.clone())
-            .unwrap();
-    Fx { repo, clock }
+    // Objects on S3 age on the server's clock, so the test clock must start at the real time:
+    // advancing it then moves objects past a grace period exactly as it does for memory.
+    let wallclock = s3_endpoint().is_some();
+    let start = if wallclock { Timestamp::now() } else { Timestamp::from_millis(1_700_000_000_000) };
+    let clock = Arc::new(ManualClock::new(start));
+    let (meta, guard) = TestMeta::new(clock.clone()).into_parts();
+    let objects = TestObjects::new(clock.clone());
+    let repo = Repository::with_stores(
+        Namespace::new("acme/app").unwrap(),
+        StreamName::new("main").unwrap(),
+        meta,
+        objects.store(),
+    )
+    .unwrap();
+    Fx { repo, clock, objects, _meta_guard: guard }
+}
+
+/// A temporary directory that also owns the PostgreSQL schema / S3 prefix its
+/// repository uses, so they are cleaned up with it.
+pub struct TestDir {
+    dir: tempfile::TempDir,
+    cleanup: Mutex<Vec<Box<dyn Send>>>,
+}
+
+pub fn tempdir() -> TestDir {
+    TestDir { dir: tempfile::tempdir().unwrap(), cleanup: Mutex::new(Vec::new()) }
+}
+
+impl TestDir {
+    pub fn path(&self) -> &Path {
+        self.dir.path()
+    }
+}
+
+/// The storage layout the environment selects, with fresh isolation names. The
+/// configuration only names environment variables, as a real one does.
+pub fn storage_for_tests(dir: &TestDir) -> Option<StorageConfig> {
+    let mut storage = StorageConfig::default();
+    if let Some(url) = postgres_url() {
+        let schema = TempSchema::new(&url);
+        storage.meta = MetaConfig::Postgres {
+            url_env: Some("AG_TEST_POSTGRES_URL".into()),
+            url: None,
+            schema: schema.name().to_string(),
+            pool_size: Some(4),
+        };
+        dir.cleanup.lock().unwrap().push(Box::new(schema));
+    }
+    if let Some(endpoint) = s3_endpoint() {
+        let prefix = unique("agtest");
+        let cfg = ag_storage::testing::s3_config(&prefix).unwrap();
+        storage.objects = ObjectsConfig::S3 {
+            endpoint,
+            region: cfg.region.clone(),
+            bucket: cfg.bucket.clone(),
+            prefix: Some(prefix),
+            path_style: Some(true),
+            access_key_id_env: Some("AG_TEST_S3_ACCESS_KEY_ID".into()),
+            secret_access_key_env: Some("AG_TEST_S3_SECRET_ACCESS_KEY".into()),
+            session_token_env: Some("AG_TEST_S3_SESSION_TOKEN".into()),
+            ca_bundle: None,
+            lock: ObjectLockKind::Auto,
+        };
+        dir.cleanup.lock().unwrap().push(Box::new(ag_storage::testing::PrefixGuard::new(cfg)));
+    }
+    (!storage.is_default()).then_some(storage)
+}
+
+/// `.ag/` in `dir`, on the backends the environment selects.
+pub fn init_repo(dir: &TestDir) -> Repository {
+    init_repo_with(dir, storage_for_tests(dir))
+}
+
+pub fn init_repo_with(dir: &TestDir, storage: Option<StorageConfig>) -> Repository {
+    Repository::init(
+        dir.path(),
+        &InitOptions {
+            namespace: Namespace::new("acme/app").unwrap(),
+            default_stream: StreamName::new("main").unwrap(),
+            actor: id("user:alice"),
+            storage,
+        },
+    )
+    .unwrap()
+}
+
+/// True if the repository's metadata is in PostgreSQL.
+pub fn meta_is_postgres(repo: &Repository) -> bool {
+    repo.meta().kind() == ag_storage::meta::MetaKind::Postgres
+}
+
+/// True if the repository's objects are in an S3 bucket.
+pub fn objects_are_s3(repo: &Repository) -> bool {
+    matches!(repo.config().storage().objects, ObjectsConfig::S3 { .. })
+}
+
+/// Replaces the stored bytes of an object (damage simulation), on whatever backend holds it.
+pub fn damage_object(repo: &Repository, hex: &str, bytes: &[u8]) {
+    match repo.config().storage().objects {
+        ObjectsConfig::Fs => {
+            let path = repo.layout().objects_dir().join("objects").join(&hex[..2]).join(&hex[2..]);
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            perms.set_readonly(false);
+            std::fs::set_permissions(&path, perms).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        ObjectsConfig::S3 { prefix, .. } => {
+            let cfg = ag_storage::testing::s3_config(prefix.as_deref().unwrap()).unwrap();
+            let store = ag_storage::S3ObjectStore::open(cfg, Arc::new(ag_storage::InProcessLock::new())).unwrap();
+            store.corrupt_for_test(&hex.parse().unwrap(), bytes).unwrap();
+        }
+    }
 }
 
 impl Fx {
+    /// True if object ages come from a server clock rather than the test clock.
+    pub fn wallclock_objects(&self) -> bool {
+        self.objects.is_s3()
+    }
+
     /// Creates (but does not publish) a changeset whose complete state is `files`.
     pub fn snap(&self, parent: Option<ChangesetId>, files: &[(&str, &str)], author: &str) -> ChangesetId {
         snap_in(&self.repo, parent, files, author)

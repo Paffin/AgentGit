@@ -4,22 +4,22 @@ use std::sync::Arc;
 use ag_changeset::{Changeset, ChangesetSource, Op};
 use ag_merge::{BlobIo, IoError};
 use ag_object::{ObjectKind, RawObject};
-use ag_storage::{
-    Clock, FsObjectStore, MemoryObjectStore, Meta, MetaTreeCache, ObjectStore, StoreHistory, SystemClock,
-};
+use ag_storage::{Clock, MemoryObjectStore, Meta, MetaTreeCache, ObjectStore, StoreHistory, SystemClock};
 use ag_tree::{Tree, resolve_tree};
 use ag_types::{BlobId, ChangesetId, Identity, Limits, Namespace, StreamName};
 use serde_json::json;
 
 use crate::failpoints::Failpoints;
 use crate::layout::{InitOptions, Layout, RepoConfig};
+use crate::storage::{self, StorageConfig};
 use crate::{Error, HybridGraph, Result};
 
 /// An open AgentGit repository.
 ///
 /// All state-changing methods are safe to call concurrently from several
-/// threads or processes: metadata changes go through SQLite transactions and
-/// the object store is content addressed and immutable.
+/// threads or processes: metadata changes go through database transactions
+/// (SQLite or PostgreSQL) and the object store is content addressed and
+/// immutable (local files or an S3-compatible bucket).
 pub struct Repository {
     pub(crate) layout: Layout,
     pub(crate) config: RepoConfig,
@@ -31,16 +31,35 @@ pub struct Repository {
 }
 
 impl Repository {
-    /// Creates a new repository in `root`.
+    /// Creates a new repository in `root`. `root` always holds `.ag/config.json`
+    /// (and the local keys); with [`InitOptions::storage`] the metadata and the
+    /// objects live in PostgreSQL and S3 instead of under `.ag/`.
     pub fn init(root: &Path, opts: &InitOptions) -> Result<Self> {
         let layout = Layout::new(root);
         if layout.config_path().exists() {
             return Err(Error::Conflict(format!("{} is already an AgentGit repository", root.display())));
         }
+        // `Some(default)` and `None` mean the same; keep the file free of a redundant section.
+        let storage = opts.storage.clone().filter(|s| !s.is_default());
+        if let Some(s) = &storage {
+            s.validate()?;
+        }
         std::fs::create_dir_all(layout.ag_dir())?;
-        let config =
-            RepoConfig { format: 1, namespace: opts.namespace.clone(), default_stream: opts.default_stream.clone() };
+        let config = RepoConfig {
+            format: 1,
+            namespace: opts.namespace.clone(),
+            default_stream: opts.default_stream.clone(),
+            storage,
+        };
         let repo = Self::assemble(layout.clone(), config.clone(), Arc::new(SystemClock))?;
+        // A PostgreSQL schema or an S3 prefix can already hold a repository (initialized from
+        // another directory): never initialize on top of it.
+        if repo.meta.read(|tx| tx.list_streams())?.iter().any(|_| true) {
+            return Err(Error::Conflict(match repo.meta.schema_name() {
+                Some(s) => format!("the PostgreSQL schema '{s}' already holds a repository"),
+                None => format!("{} already holds repository metadata", layout.db_path().display()),
+            }));
+        }
         repo.meta.write(|tx| {
             tx.create_stream(&config.default_stream, opts.actor.as_str())?;
             tx.workspace_create("default", config.default_stream.as_str(), None, opts.actor.as_str())?;
@@ -52,6 +71,7 @@ impl Repository {
             )?;
             Ok(())
         })?;
+        storage::place_guards(&layout, &config.storage())?;
         // Written last: its presence marks a fully initialized repository.
         std::fs::write(layout.config_path(), serde_json::to_vec_pretty(&config)?)?;
         Ok(repo)
@@ -77,23 +97,40 @@ impl Repository {
 
     /// A throwaway in-memory repository for tests and embedding.
     pub fn ephemeral(namespace: Namespace, default_stream: StreamName, clock: Arc<dyn Clock>) -> Result<Self> {
-        let config = RepoConfig { format: 1, namespace, default_stream };
         let objects: Arc<dyn ObjectStore> = Arc::new(MemoryObjectStore::with_clock(clock.clone()));
-        let meta = Arc::new(Meta::open_in_memory(clock)?);
-        let limits = Limits::default();
+        Self::with_stores(namespace, default_stream, Meta::open_in_memory(clock)?, objects)
+    }
+
+    /// A repository over stores the caller opened (a PostgreSQL [`Meta`], an S3 object
+    /// store, an in-memory pair for tests…). Nothing is read from or written to disk:
+    /// there is no `.ag/` directory, so [`Repository::reopen`] and [`Repository::backup`]
+    /// are unavailable. The default stream and workspace are created if they do not exist
+    /// yet, so calling this on an already initialized store is harmless.
+    pub fn with_stores(
+        namespace: Namespace,
+        default_stream: StreamName,
+        meta: Meta,
+        objects: Arc<dyn ObjectStore>,
+    ) -> Result<Self> {
+        let config = RepoConfig { format: 1, namespace, default_stream, storage: None };
+        let limits = meta.limits().clone();
         let repo = Self {
             layout: Layout::new(std::env::temp_dir().join("ag-ephemeral")),
             history: StoreHistory::new(objects.clone(), limits.clone()),
             config: config.clone(),
             objects,
-            meta,
+            meta: Arc::new(meta),
             limits,
             failpoints: Failpoints::default(),
         };
         let actor = Identity::new("system:init").expect("valid");
         repo.meta.write(|tx| {
-            tx.create_stream(&config.default_stream, actor.as_str())?;
-            tx.workspace_create("default", config.default_stream.as_str(), None, actor.as_str())?;
+            if tx.stream(config.default_stream.as_str())?.is_none() {
+                tx.create_stream(&config.default_stream, actor.as_str())?;
+            }
+            if tx.workspace("default")?.is_none() {
+                tx.workspace_create("default", config.default_stream.as_str(), None, actor.as_str())?;
+            }
             Ok(())
         })?;
         Ok(repo)
@@ -101,8 +138,10 @@ impl Repository {
 
     fn assemble(layout: Layout, config: RepoConfig, clock: Arc<dyn Clock>) -> Result<Self> {
         let limits = Limits::default();
-        let objects: Arc<dyn ObjectStore> = Arc::new(FsObjectStore::open(layout.objects_dir(), limits.clone())?);
-        let meta = Arc::new(Meta::open_with(&layout.db_path(), clock, limits.clone())?);
+        let storage: StorageConfig = config.storage();
+        let (meta, pg) = storage::open_meta(&storage, &layout, clock, &limits)?;
+        let objects = storage::open_objects(&storage, &layout, config.namespace.as_str(), &limits, pg.as_ref())?;
+        let meta = Arc::new(meta);
         Ok(Self {
             history: StoreHistory::new(objects.clone(), limits.clone()),
             layout,
@@ -114,8 +153,9 @@ impl Repository {
         })
     }
 
-    /// Opens a second handle on the same on-disk repository (own SQLite
-    /// connection), e.g. for a worker thread.
+    /// Opens a second handle on the same repository (own database connections, own
+    /// object-store client), e.g. for a worker thread. It re-reads the configuration,
+    /// so environment variables named there must still be set.
     pub fn reopen(&self) -> Result<Self> {
         Self::open_with_clock(self.layout.root(), self.meta.clock().clone())
     }

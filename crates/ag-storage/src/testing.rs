@@ -100,9 +100,18 @@ impl Drop for TempSchema {
     }
 }
 
+/// A directory removed when dropped.
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 enum Backing {
     Memory,
-    File(PathBuf),
+    File(TempDir),
     Postgres(TempSchema),
 }
 
@@ -148,7 +157,7 @@ impl TestMeta {
         let dir = std::env::temp_dir().join(unique("agtest-meta"));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let meta = Meta::open_with(&dir.join("meta.db"), clock.clone(), Limits::default()).expect("open SQLite");
-        Self { meta, backing: Backing::File(dir), clock }
+        Self { meta, backing: Backing::File(TempDir(dir)), clock }
     }
 
     /// PostgreSQL, or `None` when no server is configured (and `AG_REQUIRE_BACKENDS` is off).
@@ -175,7 +184,7 @@ impl TestMeta {
             Backing::Memory => {
                 Err(MetaError::Invalid("an in-memory database cannot be reopened; use TestMeta::shared".into()))
             }
-            Backing::File(dir) => Meta::open_with(&dir.join("meta.db"), self.clock.clone(), Limits::default()),
+            Backing::File(dir) => Meta::open_with(&dir.0.join("meta.db"), self.clock.clone(), Limits::default()),
             Backing::Postgres(s) => Meta::open_postgres(s.url(), s.name(), self.clock.clone(), Limits::default()),
         }
     }
@@ -191,17 +200,15 @@ impl TestMeta {
     /// Path of the SQLite file (`None` for memory and PostgreSQL).
     pub fn sqlite_path(&self) -> Option<PathBuf> {
         match &self.backing {
-            Backing::File(dir) => Some(dir.join("meta.db")),
+            Backing::File(dir) => Some(dir.0.join("meta.db")),
             _ => None,
         }
     }
-}
 
-impl Drop for TestMeta {
-    fn drop(&mut self) {
-        if let Backing::File(dir) = &self.backing {
-            let _ = std::fs::remove_dir_all(dir);
-        }
+    /// Splits into the [`Meta`] (to hand to something that owns it) and a guard that
+    /// cleans the database up when dropped. Drop the `Meta` first.
+    pub fn into_parts(self) -> (Meta, Box<dyn Send>) {
+        (self.meta, Box::new(self.backing))
     }
 }
 
@@ -224,6 +231,27 @@ pub fn s3_config(prefix: &str) -> Option<crate::S3Config> {
     );
     cfg.prefix = prefix.to_string();
     Some(cfg)
+}
+
+/// Empties an S3 key prefix when dropped (test clean-up).
+#[cfg(feature = "s3")]
+pub struct PrefixGuard(crate::S3Config);
+
+#[cfg(feature = "s3")]
+impl PrefixGuard {
+    /// Guards the prefix of `cfg`.
+    pub fn new(cfg: crate::S3Config) -> Self {
+        Self(cfg)
+    }
+}
+
+#[cfg(feature = "s3")]
+impl Drop for PrefixGuard {
+    fn drop(&mut self) {
+        if let Ok(store) = crate::S3ObjectStore::open(self.0.clone(), Arc::new(crate::InProcessLock::new())) {
+            let _ = store.purge_for_test();
+        }
+    }
 }
 
 /// An [`ObjectStore`](crate::ObjectStore) on whichever backend the environment selects:

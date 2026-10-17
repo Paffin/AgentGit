@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use ag_changeset::Op;
 use ag_integrate::workdir::{IgnoreRules, checkout_tree, scan};
-use ag_integrate::{InitOptions, Repository, SyncOutcome};
+use ag_integrate::{InitOptions, Repository, StorageConfig, SyncOutcome};
 use ag_tree::{DirEntry, Entry, Tree};
 use ag_types::{ChangesetId, FileType, Namespace, RepoPath, StreamName};
 use anyhow::{Context, Result, anyhow, bail};
@@ -23,6 +23,10 @@ pub struct InitArgs {
     /// Name of the first stream.
     #[arg(long, default_value = "main")]
     pub stream: String,
+    /// JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see
+    /// docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`.
+    #[arg(long, value_name = "FILE")]
+    pub storage: Option<PathBuf>,
 }
 
 pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
@@ -43,10 +47,20 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
             format!("local/{}", clean.trim_start_matches(['-', '.', '_']))
         }
     };
+    let storage = match &args.storage {
+        Some(file) => Some(
+            serde_json::from_slice::<StorageConfig>(
+                &std::fs::read(file).with_context(|| format!("cannot read {}", file.display()))?,
+            )
+            .with_context(|| format!("{} is not a valid storage section", file.display()))?,
+        ),
+        None => None,
+    };
     let opts = InitOptions {
         namespace: Namespace::new(ns.clone()).map_err(|e| anyhow!("{e}"))?,
         default_stream: StreamName::new(args.stream.clone()).map_err(|e| anyhow!("{e}"))?,
         actor: crate::ctx::identity(cli)?,
+        storage,
     };
     let repo = Repository::init(&root, &opts)?;
     if cli.json {

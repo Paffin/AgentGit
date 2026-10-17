@@ -23,7 +23,7 @@ ag-diff = { path = "crates/ag-diff", version = "0.1.0" }
 ag-tree = { path = "crates/ag-tree", version = "0.1.0" }
 ag-dag = { path = "crates/ag-dag", version = "0.1.0" }
 ag-merge = { path = "crates/ag-merge", version = "0.1.0" }
-ag-storage = { path = "crates/ag-storage", version = "0.1.0" }
+ag-storage = { path = "crates/ag-storage", version = "0.1.0", default-features = false }
 ag-policy = { path = "crates/ag-policy", version = "0.1.0" }
 ag-agent = { path = "crates/ag-agent", version = "0.1.0" }
 ag-integrate = { path = "crates/ag-integrate", version = "0.1.0" }

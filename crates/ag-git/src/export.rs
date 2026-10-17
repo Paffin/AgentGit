@@ -36,6 +36,15 @@ fn git_ident(identity: &str) -> (String, String) {
     (name, email)
 }
 
+/// A path as `git fast-import` wants it. Paths are written verbatim, except that one starting with a double
+/// quote would be read as a C-style quoted string (dropping the quotes, or failing the whole import), so those
+/// are quoted explicitly. A [`ag_types::RepoPath`] cannot contain a backslash, so `"` is the only character
+/// that needs escaping.
+#[doc(hidden)]
+pub fn fast_import_path(path: &str) -> String {
+    if path.starts_with('"') { format!("\"{}\"", path.replace('"', "\\\"")) } else { path.to_string() }
+}
+
 fn data(buf: &mut Vec<u8>, bytes: &[u8]) {
     buf.extend_from_slice(format!("data {}\n", bytes.len()).as_bytes());
     buf.extend_from_slice(bytes);
@@ -99,14 +108,18 @@ pub fn export(repo: &Repository, opts: &ExportOptions) -> Result<ExportReport, G
             }
             for op in &cs.ops {
                 match op {
-                    Op::Delete { path } => buf.extend_from_slice(format!("D {path}\n").as_bytes()),
+                    Op::Delete { path } => {
+                        buf.extend_from_slice(format!("D {}\n", fast_import_path(path.as_str())).as_bytes())
+                    }
                     Op::Put { path, content, file_type, executable } => {
                         let mode = match (file_type, executable) {
                             (FileType::Symlink, _) => "120000",
                             (FileType::Regular, true) => "100755",
                             (FileType::Regular, false) => "100644",
                         };
-                        buf.extend_from_slice(format!("M {mode} inline {path}\n").as_bytes());
+                        buf.extend_from_slice(
+                            format!("M {mode} inline {}\n", fast_import_path(path.as_str())).as_bytes(),
+                        );
                         data(&mut buf, &repo.blob(content)?);
                     }
                 }

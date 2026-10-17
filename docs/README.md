@@ -2,6 +2,7 @@
 
 | If you want to… | Read |
 |---|---|
+| install it (release archive, container image, from source) | [Install](getting-started.md#install) |
 | try it in five minutes | [Getting started](getting-started.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
@@ -16,8 +17,8 @@
 | understand how it works and why it is safe | [Architecture overview](architecture/overview.md) |
 | check a guarantee against the code and the test that proves it | [Publication & integration](architecture/publication-and-integration.md), [Security](architecture/security.md) |
 | implement a compatible reader/writer | [Object formats](architecture/object-format.md) |
-| operate a repository | [Durability & backup](operations/durability.md), [GC & retention](operations/gc-and-retention.md), [PostgreSQL & S3](operations/postgres-and-s3.md), [Troubleshooting](operations/troubleshooting.md) |
-| deploy and monitor the server | [Deployment](operations/deployment.md) (binary, Compose, Kubernetes), [Observability](operations/observability.md), [Releasing](operations/releasing.md) |
+| operate a repository | [Durability & backup](operations/durability.md), [GC & retention](operations/gc-and-retention.md), [PostgreSQL & S3](operations/postgres-and-s3.md), [Troubleshooting](operations/troubleshooting.md), [Windows](operations/windows.md) (support matrix, path and checkout rules) |
+| deploy and monitor the server | [Deployment](operations/deployment.md) (binary, Compose, Kubernetes), [Observability](operations/observability.md), [Releasing & distribution](operations/releasing.md) (release pipeline and its rehearsal, installers, SBOMs, what is not proven) |
 | talk to the server from your own code | [AGWP v1 reference](protocol/agwp-v1.md), [`openapi.json`](protocol/openapi.json) |
 | see what is built and what is planned | [Roadmap](../ROADMAP.md), [Protocol overview](protocol/README.md) |
 | learn why decisions were made | [ADRs](adr/) |

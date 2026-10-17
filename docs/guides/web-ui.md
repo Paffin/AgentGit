@@ -17,7 +17,7 @@ default), so one file is the whole product. Release and CI builds run `scripts/b
 `npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p ag-server`.
 A server built without the UI build still compiles and runs; a browser then sees a page that says how to get the
 UI (and API clients keep their JSON 404). If you built the UI by hand after a first cargo build, `touch
-crates/ag-server/build.rs` (Cargo cannot watch a directory that did not exist yet; `build_ui.sh` does it for you).
+crates/ag-ui-assets/build.rs` (Cargo cannot watch a directory that did not exist yet; `build_ui.sh` does it for you).
 
 ```toml
 # ag-server.toml
@@ -191,8 +191,10 @@ What is tested, and what is not (honestly):
   name on a phone, a tab-strip that hid its current tab.
 - **Layout** is asserted at 768 and 390 px in Chromium (no page-wide horizontal scroll on any route, header and menus fit,
   every repository tab reachable, dialogs fit and keep their action in reach, controls at least 40 px).
-- **Browsers:** the suite is wired to run in Chromium, Firefox and WebKit in CI (`web.yml`). See `dev/handoff/web.md` for
-  the state of the Firefox and WebKit jobs; a browser that is not green there is not claimed to work.
+- **Browsers:** CI runs the suite in Chromium (plus the tablet and phone layouts, also Chromium). Firefox and WebKit
+  projects exist in `playwright.config.ts`; their first CI runs found a WebKit CSP incompatibility (fixed) and a few
+  Firefox-only failures that are not yet fixed (`dev/handoff/web.md`), so those two engines are **not** claimed to work
+  and are not in the required matrix yet.
 - Automated checks find only part of the problems. Keyboard-only flows of the proposal page and the dialogs are tested
   (`keyboard.spec.ts`); a pass with a real screen reader (NVDA, VoiceOver, TalkBack) and on real phones has **not** been
   done. There is no command palette. Known minor issues: the tab strips of a repository have no scroll hint other than the

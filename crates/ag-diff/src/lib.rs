@@ -216,15 +216,15 @@ pub fn unified_diff(old_name: &str, new_name: &str, old: &[u8], new: &[u8], cont
     let mut i = 0;
     while i < hunks.len() {
         let mut j = i;
-        while j + 1 < hunks.len() && hunks[j + 1].a_start - hunks[j].a_end() <= 2 * context {
+        while j + 1 < hunks.len() && hunks[j + 1].a_start - hunks[j].a_end() <= context.saturating_mul(2) {
             j += 1;
         }
         let first = hunks[i];
         let last = hunks[j];
         let a_from = first.a_start.saturating_sub(context);
         let b_from = first.b_start.saturating_sub(context);
-        let a_to = (last.a_end() + context).min(a.len());
-        let b_to = (last.b_end() + context).min(b.len());
+        let a_to = last.a_end().saturating_add(context).min(a.len());
+        let b_to = last.b_end().saturating_add(context).min(b.len());
         let _ = writeln!(out, "@@ -{} +{} @@", range(a_from, a_to - a_from), range(b_from, b_to - b_from));
         let mut ai = a_from;
         for h in &hunks[i..=j] {

@@ -34,7 +34,7 @@ fn the_compose_configuration_uses_postgres_and_s3() {
     assert!(matches!(storage.meta, MetaConfig::Postgres { .. }));
     match storage.objects {
         ObjectsConfig::S3 { endpoint, bucket, path_style, .. } => {
-            assert_eq!(endpoint, "http://minio:9000");
+            assert_eq!(endpoint, "http://seaweedfs:8333");
             assert_eq!(bucket, "agentgit");
             assert_eq!(path_style, Some(true));
         }

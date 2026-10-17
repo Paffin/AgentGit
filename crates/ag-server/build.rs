@@ -1,82 +1,121 @@
-//! Embeds the built Web UI.
+//! Embeds the git commit and its date in `--version`: `ag 0.1.0 (a1b2c3d4e5f6 2026-10-17)`.
 //!
-//! With the default `ui` feature this script looks for the UI build (`apps/web/dist`, or the directory in the
-//! environment variable `AG_UI_DIST`) and generates a table of its files, each with its pre-compressed variants
-//! (`x.br`, `x.gz`, written by `npm run build`), as `include_bytes!` entries. When there is no build the table is
-//! empty: the server still compiles, and serves a page that says how to build the UI. See `scripts/build_ui.sh`.
+//! The same file is used, byte for byte, by `ag-cli`, `ag-server` and `ag-worker`
+//! (`crates/ag-cli/tests/version.rs` keeps them identical and exercises the fallbacks).
 //!
-//! One caveat of Cargo: a missing directory cannot be watched (Cargo would re-run this script on every build), so
-//! when there is no build yet, building the UI does not by itself trigger a rebuild of the server. `scripts/build_ui.sh`
-//! touches this file for that reason; touch it yourself if you built the UI by hand.
+//! Where the values come from, first match wins:
+//!
+//! * commit: `AG_BUILD_COMMIT` (container builds have no `.git`), else `git rev-parse HEAD`, else the
+//!   `sha1` that `cargo package` records in `.cargo_vcs_info.json`;
+//! * date: `AG_BUILD_DATE` (`YYYY-MM-DD`), else `SOURCE_DATE_EPOCH`, else the *commit* date
+//!   (`git show -s --format=%cs`).
+//!
+//! The date is deliberately not the wall clock: building the same commit twice gives the same binary.
+//! Without git (a crates.io tarball, a stripped container context) both fall back to `unknown`, and the
+//! version string is just `0.1.0 (no git metadata)`.
 
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::path::Path;
+use std::process::Command;
+
+fn git_unchecked(args: &[&str]) -> Option<String> {
+    let out = Command::new("git").args(args).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Whether the git repository around the build is this workspace (and not, say, a home directory under
+/// version control that happens to contain `~/.cargo/registry/src/…/ag-cli-0.1.0`).
+fn in_own_checkout() -> bool {
+    let name = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
+    let Some(top) = git_unchecked(&["rev-parse", "--show-toplevel"]) else { return false };
+    Path::new(&top).join("crates").join(name).join("build.rs").is_file()
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    static OWN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    OWN.get_or_init(in_own_checkout).then(|| git_unchecked(args)).flatten()
+}
+
+/// The commit `cargo package` recorded in the tarball, if this is a packaged crate.
+fn packaged_commit() -> Option<String> {
+    let dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+    let info = std::fs::read_to_string(Path::new(&dir).join(".cargo_vcs_info.json")).ok()?;
+    let rest = info.split("\"sha1\"").nth(1)?;
+    rest.split('"').nth(1).map(str::to_string)
+}
+
+/// A hex commit id shortened to 12 characters, or `None` for anything else.
+fn clean_commit(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    (raw.len() >= 7 && raw.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| raw[..raw.len().min(12)].to_ascii_lowercase())
+}
+
+/// `YYYY-MM-DD` for a count of days since 1970-01-01 (proleptic Gregorian; Howard Hinnant's algorithm).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    (y, m, d)
+}
+
+fn clean_date(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let b = raw.as_bytes();
+    let shaped = b.len() == 10
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit());
+    shaped.then(|| raw.to_string())
+}
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-env-changed=AG_UI_DIST");
-    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("ui_assets.rs");
+    println!("cargo:rerun-if-env-changed=AG_BUILD_COMMIT");
+    println!("cargo:rerun-if-env-changed=AG_BUILD_DATE");
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
 
-    let mut code = String::from("&[\n");
-    if env::var_os("CARGO_FEATURE_UI").is_some() {
-        let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-        let dist = env::var_os("AG_UI_DIST").map(PathBuf::from).unwrap_or_else(|| manifest.join("../../apps/web/dist"));
-        if dist.join("index.html").is_file() {
-            println!("cargo:rerun-if-changed={}", dist.display());
-            let mut files = BTreeMap::new();
-            walk(&dist, &dist, &mut files);
-            for (rel, entry) in &files {
-                if rel.ends_with(".br") || rel.ends_with(".gz") {
-                    // Pre-compressed variants are attached to their original below.
-                    if files.contains_key(rel.trim_end_matches(".br").trim_end_matches(".gz")) {
-                        continue;
-                    }
-                }
-                let _ = write!(code, "    Asset {{ path: {rel:?}, data: include_bytes!({:?})", entry.path);
-                for (field, ext) in [("br", "br"), ("gz", "gz")] {
-                    let sibling = format!("{rel}.{ext}");
-                    match files.get(&sibling) {
-                        Some(v) => {
-                            let _ = write!(code, ", {field}: Some(include_bytes!({:?}))", v.path);
-                        }
-                        None => {
-                            let _ = write!(code, ", {field}: None");
-                        }
-                    }
-                }
-                code.push_str(" },\n");
-            }
-        } else if env::var_os("AG_UI_DIST").is_some() {
-            println!("cargo:warning=AG_UI_DIST={} has no index.html; the UI is not embedded", dist.display());
+    // Re-run when the checked-out commit changes (works in worktrees too).
+    if let (Some(gitdir), Some(common)) =
+        (git(&["rev-parse", "--absolute-git-dir"]), git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]))
+    {
+        println!("cargo:rerun-if-changed={}", Path::new(&gitdir).join("HEAD").display());
+        println!("cargo:rerun-if-changed={}", Path::new(&common).join("packed-refs").display());
+        if let Some(head) = git(&["symbolic-ref", "-q", "HEAD"]) {
+            println!("cargo:rerun-if-changed={}", Path::new(&common).join(head).display());
         }
     }
-    code.push_str("]\n");
-    fs::write(&out, code).expect("write ui_assets.rs");
-}
 
-struct Entry {
-    path: String,
-}
+    let commit = std::env::var("AG_BUILD_COMMIT")
+        .ok()
+        .and_then(|c| clean_commit(&c))
+        .or_else(|| git(&["rev-parse", "HEAD"]).and_then(|c| clean_commit(&c)))
+        .or_else(|| packaged_commit().and_then(|c| clean_commit(&c)));
+    let date = std::env::var("AG_BUILD_DATE")
+        .ok()
+        .and_then(|d| clean_date(&d))
+        .or_else(|| {
+            let secs: i64 = std::env::var("SOURCE_DATE_EPOCH").ok()?.trim().parse().ok()?;
+            let (y, m, d) = civil_from_days(secs.div_euclid(86_400));
+            Some(format!("{y:04}-{m:02}-{d:02}"))
+        })
+        .or_else(|| git(&["show", "-s", "--format=%cs", "HEAD"]).and_then(|d| clean_date(&d)));
 
-/// Collects every regular file below `root`, keyed by its `/`-separated path relative to `root`.
-fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Entry>) {
-    let Ok(read) = fs::read_dir(dir) else { return };
-    for entry in read.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
-        let Ok(kind) = entry.file_type() else { continue };
-        if kind.is_dir() {
-            walk(root, &path, out);
-        } else if kind.is_file() {
-            let rel = path.strip_prefix(root).expect("below root");
-            let rel: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
-            let abs = path.canonicalize().unwrap_or(path);
-            out.insert(rel.join("/"), Entry { path: abs.to_string_lossy().into_owned() });
-        }
-    }
+    let pkg = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    let long = match (&commit, &date) {
+        (Some(c), Some(d)) => format!("{pkg} ({c} {d})"),
+        (Some(c), None) => format!("{pkg} ({c})"),
+        _ => format!("{pkg} (no git metadata)"),
+    };
+    println!("cargo:rustc-env=AG_GIT_COMMIT={}", commit.as_deref().unwrap_or("unknown"));
+    println!("cargo:rustc-env=AG_BUILD_DATE={}", date.as_deref().unwrap_or("unknown"));
+    println!("cargo:rustc-env=AG_LONG_VERSION={long}");
 }

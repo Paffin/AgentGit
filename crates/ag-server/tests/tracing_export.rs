@@ -137,6 +137,9 @@ async fn a_failing_collector_never_fails_requests_and_is_counted() {
 }
 
 /// The real binary: configuration file, headers from the environment, flush on SIGTERM.
+// Unix only: it delivers SIGTERM with `kill`. The Windows equivalent (a console Ctrl+Break to a child in its own
+// process group) is `tests/windows_console.rs`.
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_binary_exports_with_headers_from_the_environment_and_flushes_on_sigterm() {
     let (collector, url) = Collector::start(200).await;

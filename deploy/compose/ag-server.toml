@@ -1,5 +1,5 @@
 # ag-server for the Compose stack: repositories keep their metadata in PostgreSQL and
-# their objects in a MinIO bucket. Credentials arrive through the environment (compose.yaml).
+# their objects in an S3 bucket (SeaweedFS, see compose.yaml). Credentials arrive through the environment (compose.yaml).
 
 [server]
 listen = "0.0.0.0:8080"
@@ -30,6 +30,6 @@ schema = "ag"
 
 [repos.storage.objects]
 kind = "s3"
-endpoint = "http://minio:9000"
+endpoint = "http://seaweedfs:8333"
 bucket = "agentgit"
 path_style = true

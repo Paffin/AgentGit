@@ -12,6 +12,7 @@ homepage = "https://github.com/Paffin/AgentGit"
 authors = ["The AgentGit Authors"]
 keywords = ["scm", "vcs", "agents", "version-control"]
 categories = ["development-tools"]
+readme = "README.md"
 
 [workspace.dependencies]
 # internal crates
@@ -31,6 +32,7 @@ ag-git = { path = "crates/ag-git", version = "0.1.0" }
 ag-protocol = { path = "crates/ag-protocol", version = "0.1.0" }
 ag-client = { path = "crates/ag-client", version = "0.1.0" }
 ag-server = { path = "crates/ag-server", version = "0.1.0" }
+ag-ui-assets = { path = "crates/ag-ui-assets", version = "0.1.0" }
 ag-sandbox = { path = "crates/ag-sandbox", version = "0.1.0" }
 
 # external crates
@@ -54,6 +56,7 @@ serde_json = "1"
 sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
+unicode-normalization = { version = "0.1", default-features = false, features = ["std"] }
 prost = "0.14"
 protox = "0.10"
 tonic = { version = "0.14", features = ["tls-aws-lc", "tls-webpki-roots"] }
@@ -74,6 +77,7 @@ subtle = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "fs", "io-util"] }
 tokio-stream = "0.1"
 toml = "1"
+nu-ansi-term = "0.50"
 tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "set-header", "fs"] }
 tracing = "0.1"

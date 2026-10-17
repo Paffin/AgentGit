@@ -75,13 +75,6 @@ fn hash_object(dir: &Path, data: &[u8]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-/// Puts `data` in the index under `path` — for names a working tree on this platform cannot hold (a
-/// backslash is a separator on Windows).
-fn index_blob(dir: &Path, mode: &str, path: &str, data: &[u8]) {
-    let sha = hash_object(dir, data);
-    g(dir, &["update-index", "--add", "--cacheinfo", &format!("{mode},{sha},{path}")]);
-}
-
 fn commit(dir: &Path, msg: &str) -> String {
     g(dir, &["add", "-A"]);
     g(dir, &["commit", "-q", "--allow-empty", "-m", msg]);
@@ -222,12 +215,22 @@ fn import_reports_what_it_cannot_represent_and_skips_submodules() {
     let src = tempfile::tempdir().unwrap();
     let dir = src.path();
     g(dir, &["init", "-q", "-b", "main"]);
-    write(dir, "ok.txt", b"fine\n");
-    write(dir, "a/.git-notes/readme", b"component .git-notes is fine\n");
-    g(dir, &["add", "-A"]);
-    index_blob(dir, "100644", "weird\\name.txt", b"backslash\n");
-    g(dir, &["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,vendor/sub"]);
-    g(dir, &["commit", "-q", "-m", "tricky"]);
+    // Built with plumbing, not a working tree: a name with a backslash cannot exist as a file on Windows and
+    // Git for Windows refuses it in the index, but a tree object can hold it.
+    let ok = hash_object(dir, b"fine\n");
+    let notes_readme = hash_object(dir, b"component .git-notes is fine\n");
+    let weird = hash_object(dir, b"backslash\n");
+    let notes = mktree(dir, &format!("100644 blob {notes_readme}\treadme\n"));
+    let a = mktree(dir, &format!("040000 tree {notes}\t.git-notes\n"));
+    let sub = mktree(dir, "160000 commit 1111111111111111111111111111111111111111\tsub\n");
+    let root = mktree(
+        dir,
+        &format!(
+            "040000 tree {a}\ta\n040000 tree {sub}\tvendor\n100644 blob {ok}\tok.txt\n100644 blob {weird}\tweird\\name.txt\n"
+        ),
+    );
+    let commit = g(dir, &["commit-tree", &root, "-m", "tricky"]);
+    g(dir, &["update-ref", "refs/heads/main", &commit]);
 
     let ag_dir = tempfile::tempdir().unwrap();
     let repo = ag_repo(ag_dir.path());
@@ -253,14 +256,14 @@ fn mktree(dir: &Path, entries: &str) -> String {
     let mut child = Command::new("git")
         .arg("-C")
         .arg(dir)
-        .arg("mktree")
+        .args(["mktree", "--missing"]) // the submodule's commit does not exist here
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
         .unwrap();
     std::io::Write::write_all(child.stdin.as_mut().unwrap(), entries.as_bytes()).unwrap();
     let out = child.wait_with_output().unwrap();
-    assert!(out.status.success());
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
@@ -301,6 +304,75 @@ fn hostile_git_content_cannot_escape_or_plant_dot_git() {
     // and an attacker cannot smuggle such a path in through the engine either
     assert!(ag_types::RepoPath::new(".git/hooks/post-checkout").is_err());
     assert!(ag_types::RepoPath::new("sub/.GIT/config").is_err());
+}
+
+/// The Windows and macOS versions of the same attack: names that *are not* `.git` to Git on Linux but are to
+/// the file system that writes them (NTFS drops trailing dots and spaces, knows `GIT~1` and the
+/// `::$INDEX_ALLOCATION` stream; HFS+ ignores some Unicode). They must never reach a checkout; and paths that
+/// are merely unwritable on Windows (`aux.c`, `a:b`) or merge on a case-folding disk are real data that is
+/// imported, then refused whole — before a byte is written — where they cannot be held.
+#[test]
+fn hostile_windows_and_macos_content_cannot_plant_dot_git_or_overwrite_a_sibling() {
+    use ag_integrate::workdir::{Platform, checkout_tree_for};
+
+    let src = tempfile::tempdir().unwrap();
+    let dir = src.path();
+    g(dir, &["init", "-q", "-b", "main"]);
+    let evil = hash_object(dir, b"hook");
+    let dot_git_dir = mktree(dir, &format!("100644 blob {evil}\tconfig\n"));
+    let sub = mktree(dir, &format!("040000 tree {dot_git_dir}\t.git::$INDEX_ALLOCATION\n100644 blob {evil}\tok.txt\n"));
+    let root = mktree(
+        dir,
+        &format!(
+            "040000 tree {dot_git_dir}\t.git.\n\
+             040000 tree {dot_git_dir}\tgit~1\n\
+             040000 tree {dot_git_dir}\t.GIT \n\
+             040000 tree {dot_git_dir}\t.g\u{200c}it\n\
+             040000 tree {dot_git_dir}\t.ag.\n\
+             040000 tree {sub}\tsub\n\
+             100644 blob {evil}\taux.c\n\
+             100644 blob {evil}\tNUL\n\
+             100644 blob {evil}\ta:b\n\
+             100644 blob {evil}\tREADME\n\
+             100644 blob {evil}\treadme\n\
+             100644 blob {evil}\tsafe.txt\n"
+        ),
+    );
+    let commit = g(dir, &["commit-tree", &root, "-m", "hostile"]);
+    g(dir, &["update-ref", "refs/heads/main", &commit]);
+
+    let ag_dir = tempfile::tempdir().unwrap();
+    let repo = ag_repo(ag_dir.path());
+    let report = import(
+        &repo,
+        &ImportOptions {
+            git_dir: dir.to_path_buf(),
+            rev: "HEAD".into(),
+            stream: StreamName::new("imported").unwrap(),
+            actor: Identity::new("user:importer").unwrap(),
+        },
+    )
+    .unwrap();
+    // every alias of .git / .ag is skipped, not imported
+    let skipped: Vec<&str> = report.skipped_paths.iter().map(|(p, _)| p.as_str()).collect();
+    assert_eq!(report.skipped_paths.len(), 6, "{skipped:?}");
+    let tree = repo.tree_of(&report.head).unwrap();
+    let names: Vec<_> = tree.iter().map(|(p, _)| p.as_str().to_string()).collect();
+    assert_eq!(names, vec!["NUL", "README", "a:b", "aux.c", "readme", "safe.txt", "sub/ok.txt"]);
+
+    // Windows cannot hold aux.c, NUL, a:b and merges README/readme: the whole checkout is refused, untouched.
+    let dst = tempfile::tempdir().unwrap();
+    let err = checkout_tree_for(&repo, &tree, dst.path(), &Platform::WINDOWS).unwrap_err().to_string();
+    for needle in ["aux.c", "NUL", "a:b", "README and readme"] {
+        assert!(err.contains(needle), "{needle}: {err}");
+    }
+    assert!(fs::read_dir(dst.path()).unwrap().next().is_none(), "nothing written");
+    // macOS merges only the case pair
+    let err = checkout_tree_for(&repo, &tree, dst.path(), &Platform::MACOS).unwrap_err().to_string();
+    assert!(err.contains("README and readme") && !err.contains("aux.c"), "{err}");
+    assert!(fs::read_dir(dst.path()).unwrap().next().is_none(), "nothing written");
+    // and no spelling of .git was ever written anywhere
+    assert!(!dst.path().join(".git.").exists() && !dst.path().join("git~1").exists());
 }
 
 #[test]

@@ -165,16 +165,27 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
             let result = (|| -> Result<bool> {
                 ag_integrate::workdir::checkout_tree(&ctx.repo, &tree, &work)?;
                 eprintln!("running `{}` on tree {} (NOT sandboxed)", command.join(" "), tree_id.short());
-                let status = Command::new(&command[0])
-                    .args(&command[1..])
+                let mut cmd = Command::new(&command[0]);
+                cmd.args(&command[1..])
                     .current_dir(&work)
                     .env_clear()
                     .env("PATH", std::env::var_os("PATH").unwrap_or_default())
                     .env("HOME", &work)
                     .env("AG_TREE_ID", tree_id.to_hex())
-                    .env("AG_PROPOSAL", proposal)
-                    .status()
-                    .with_context(|| format!("failed to start `{}`", command[0]))?;
+                    .env("AG_PROPOSAL", proposal);
+                // A cleared environment is not enough to run anything on Windows: the system root, the command
+                // interpreter and the file-extension list are what `cmd`, PowerShell and most tools need.
+                // The user's profile and temp directories are replaced by the scratch directory.
+                #[cfg(windows)]
+                {
+                    for var in ["SystemRoot", "SystemDrive", "ComSpec", "PATHEXT", "windir"] {
+                        if let Some(v) = std::env::var_os(var) {
+                            cmd.env(var, v);
+                        }
+                    }
+                    cmd.env("USERPROFILE", &work).env("TEMP", &work).env("TMP", &work);
+                }
+                let status = cmd.status().with_context(|| format!("failed to start `{}`", command[0]))?;
                 Ok(status.success())
             })();
             let _ = std::fs::remove_dir_all(&work);

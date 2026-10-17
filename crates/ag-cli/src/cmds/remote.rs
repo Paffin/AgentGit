@@ -290,7 +290,14 @@ fn advance_local(ctx: &Ctx, stream: &str, head: &ChangesetId) -> Result<Option<S
                 .map_err(|e| anyhow!("the local stream '{stream}' cannot fast-forward to the remote head ({e}); it has local history the server lacks"))?;
         }
     }
-    Ok(Some(ctx.repo.sync_workspace("default", &ctx.root, &ctx.me)?))
+    let outcome = ctx.repo.sync_workspace("default", &ctx.root, &ctx.me)?;
+    if !matches!(outcome, SyncOutcome::UpToDate)
+        && let Ok(w) = ctx.repo.workspace_row("default")
+        && let Ok(tree) = ctx.repo.tree_or_empty(w.head.as_ref())
+    {
+        crate::ctx::note_adaptations(&tree);
+    }
+    Ok(Some(outcome))
 }
 
 // ---- clone -----------------------------------------------------------------------

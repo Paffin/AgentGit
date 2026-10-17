@@ -1,0 +1,83 @@
+# cargo-deny policy: what may be in AgentGit's Rust dependency graph.
+# Checked in CI by .github/workflows/security.yml (`cargo deny check`) on every pull request, on every push to
+# main and daily, because the RustSec database changes without any commit of ours.
+# Run it locally with:  cargo install cargo-deny --locked && cargo deny check
+# Policy and the accepted-exception process: docs/operations/supply-chain.md.
+
+[graph]
+# The platforms the release workflow builds for. Windows-only and wasm-only crates in Cargo.lock are
+# never compiled into a shipped binary, so they are not judged here.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+all-features = true
+
+[advisories]
+# Vulnerabilities always fail the check. Everything else the RustSec database knows about
+# (unmaintained, unsound, yanked) fails too, so nothing is ignored silently.
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+# An accepted advisory goes here AND into security/exceptions.toml with an owner, a reason and an expiry date;
+# scripts/security_exceptions.py (run by CI) fails when the two disagree or an entry has expired.
+ignore = []
+
+[licenses]
+# AgentGit is Apache-2.0; its dependencies must be usable under it without copyleft obligations on our code.
+# Anything not listed here (GPL, AGPL, LGPL used alone, SSPL, BUSL, "no license") fails.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+]
+unused-allowed-license = "allow"
+confidence-threshold = 0.9
+
+[bans]
+# Two copies of a crate double its attack surface and its build time. Every version split that exists today is
+# listed below with the reason; a new one fails the check until it is either removed or justified here.
+multiple-versions = "deny"
+# `foo = "*"` in a manifest means "whatever is newest", i.e. an unreviewed upgrade.
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+deny = [
+    # One TLS stack at a time: the server and clients use rustls. Linking OpenSSL as well would double the
+    # surface and break the static musl builds.
+    { crate = "openssl", reason = "the project uses rustls" },
+    { crate = "openssl-sys", reason = "the project uses rustls" },
+    { crate = "native-tls", reason = "the project uses rustls" },
+]
+# Version splits that exist today, and who causes each. They are all build- or parse-time helpers or the two
+# generations of one family (RustCrypto, rustls' ring/aws-lc, syn); none is ours to merge. Drop an entry when
+# its parent moves (cargo-deny warns about entries that no longer match).
+skip = [
+    { crate = "base64@0.22.1", reason = "jsonwebtoken, pem 3, postgres-protocol and tonic are still on 0.22; we use 0.23" },
+    { crate = "const-oid@0.9.6", reason = "der 0.7 / x509-cert 0.2 (rcgen, jsonwebtoken) vs digest 0.11 on 0.10" },
+    { crate = "fallible-iterator@0.2.0", reason = "the postgres crates; rusqlite uses 0.3" },
+    { crate = "foldhash@0.1.5", reason = "hashbrown 0.15, pulled in by petgraph (protobuf compiler, build time only)" },
+    { crate = "getrandom@0.2.17", reason = "ring and jsonwebtoken; our own code uses 0.4" },
+    { crate = "hashbrown@0.15.5", reason = "petgraph, used by the protobuf compiler at build time only" },
+    { crate = "signature@2.2.0", reason = "jsonwebtoken still builds on the 2.x trait crate; ed25519-dalek uses 3.x" },
+    { crate = "syn@2.0.119", reason = "proc-macro crates not yet on syn 3 (axum-macros, prost-derive, tracing-attributes, ...)" },
+    { crate = "untrusted@0.7.1", reason = "aws-lc-rs; ring and rustls-webpki use 0.9" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

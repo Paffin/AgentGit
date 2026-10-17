@@ -1,12 +1,16 @@
 [package]
 name = "ag-merge"
-description = "AgentGit: ag-merge"
+description = "AgentGit deterministic three-way merge of text and trees, with typed conflicts"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [lints]
 workspace = true

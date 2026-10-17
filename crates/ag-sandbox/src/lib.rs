@@ -15,6 +15,8 @@
 //! | [`ProcessSandbox`] | `None` | any Unix | local runs of trusted code; **not isolation** |
 //!
 //! ```no_run
+//! # #[cfg(unix)]
+//! # fn demo() -> Result<(), ag_sandbox::SandboxError> {
 //! use ag_sandbox::{best_available, Limits, Mount, SandboxSpec, standard_system_mounts};
 //!
 //! let sandbox = best_available();
@@ -25,7 +27,9 @@
 //!     .limits(Limits { wall_ms: 600_000, ..Limits::default() });
 //! let outcome = sandbox.run(&spec)?;
 //! println!("{:?} under {} ({:?})", outcome.status, outcome.environment_digest, sandbox.isolation());
-//! # Ok::<(), ag_sandbox::SandboxError>(())
+//! # Ok(())
+//! # }
+//! # fn main() {}
 //! ```
 //!
 //! # What this is not

@@ -1,0 +1,1 @@
+{"argv": ["x"], "env": {}, "workdir": "/tmp", "ro_mounts": [{"host": "/", "sandbox": "/work/x"}], "rw_tmp_bytes": 1, "limits": {}, "network": "host", "stdin": []}

@@ -1,0 +1,24 @@
+# The overlay CI applies (.github/workflows/containers.yml): the base, with the image that CI just built and
+# loaded into a kind cluster instead of the published one. Use it as a template for a local cluster too:
+#
+#   docker build -f deploy/docker/Dockerfile -t agentgit-server:ci .
+#   kind load docker-image agentgit-server:ci
+#   kubectl apply -f deploy/kubernetes/base/namespace.yaml
+#   kubectl -n agentgit create secret generic agentgit \
+#     --from-literal=AG_BOOTSTRAP_TOKEN="$(openssl rand -hex 32)" --from-literal=AG_METRICS_TOKEN="$(openssl rand -hex 32)"
+#   kubectl apply -k deploy/kubernetes/overlays/ci
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/paffin/agentgit-server
+    newName: agentgit-server
+    newTag: ci
+patches:
+  # The image only exists inside the cluster's nodes: never try to pull it.
+  - target: {kind: Deployment, name: ag-server}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

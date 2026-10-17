@@ -7,13 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-build = "build.rs"
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: depends on ag-storage and ag-protocol (docs/operations/releasing.md).
+publish = false
 
 [features]
 default = ["ui"]
-# Embeds the built Web UI (apps/web/dist, see scripts/build_ui.sh) in the binary. Without a build the server
-# still compiles and serves a page that says how to build the UI.
-ui = []
+# Embeds the built Web UI (apps/web/dist, see scripts/build_ui.sh) in the binary, through the ag-ui-assets crate.
+# Without a build the server still compiles and serves a page that says how to build the UI.
+ui = ["dep:ag-ui-assets"]
 
 [lints]
 workspace = true
@@ -38,6 +43,7 @@ ag-policy.workspace = true
 ag-agent.workspace = true
 ag-integrate.workspace = true
 ag-protocol.workspace = true
+ag-ui-assets = { workspace = true, optional = true }
 anyhow.workspace = true
 axum.workspace = true
 axum-server.workspace = true
@@ -70,6 +76,10 @@ tracing-subscriber.workspace = true
 ureq.workspace = true
 utoipa.workspace = true
 serde_html_form.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# `enable_ansi_support()`: switches a Windows console to virtual-terminal mode (safe wrapper, no `unsafe` here).
+nu-ansi-term.workspace = true
 
 [dev-dependencies]
 base64.workspace = true

@@ -1,12 +1,16 @@
 [package]
 name = "ag-types"
-description = "AgentGit: ag-types"
+description = "Core value types shared by every AgentGit crate: identifiers, repository paths and identities (no I/O)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [lints]
 workspace = true
@@ -15,6 +19,7 @@ workspace = true
 hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

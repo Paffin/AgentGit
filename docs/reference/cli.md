@@ -28,6 +28,7 @@ Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
 - [`ag blame`](#ag-blame)
 - [`ag ls`](#ag-ls)
 - [`ag checkout`](#ag-checkout)
+- [`ag portability`](#ag-portability)
 - [`ag stream`](#ag-stream)
 - [`ag stream list`](#ag-stream-list)
 - [`ag stream create`](#ag-stream-create)
@@ -132,49 +133,50 @@ AgentGit: the `ag` command-line interface
 Usage: ag [OPTIONS] <COMMAND>
 
 Commands:
-  init        Create a repository in the current directory
-  status      Show uncommitted changes in the working directory
-  snapshot    Record the working directory as a new snapshot
-  sync        Bring the stream's latest head into the workspace
-  log         Show history
-  show        Show one changeset and what it changed
-  diff        Show differences between two revisions, or the working directory and its snapshot
-  cat         Print a file as of a revision: `ag cat main:src/lib.rs`
-  blame       Show which changeset introduced each line of a file
-  ls          List a directory as of a revision
-  checkout    Write a revision's files into a new directory
-  stream      Manage streams
-  propose     Publish a snapshot and open a proposal to integrate it
-  proposal    List, review, update or close proposals
-  integrate   Integrate a proposal into its stream
-  preview     Show what integrating a proposal would do, without doing it
-  op          Inspect or resume operations
-  recover     Resume interrupted operations and expire stale ones
-  queue       The ordered integration queue
-  policy      Show or change stream policy
-  validate    Run checks and issue signed attestations
-  agent       Agent identities and runs
-  task        Tasks and their dependencies
-  lease       Soft and exclusive leases with fencing tokens
-  provenance  Signed provenance of agent-made changes
-  predict     Predict overlapping work
-  workspace   Create, list and remove workspaces (isolated lines of work in their own directories)
-  trace       Show the audit trail of an object, proposal, run or stream
-  audit       Verify the tamper-evident audit chain
-  verify      Check the integrity of the whole repository
-  gc          Delete unreachable objects (safe: fails closed, honours a grace period)
-  reindex     Rebuild derived indexes from the object store
-  backup      Write a verified, consistent copy of the repository to a new directory
-  git         Import from or export to Git (needs the `git` command)
-  clone       Clone a repository from an `ag-server`
-  fetch       Download new history from the server
-  pull        Fetch, then fast-forward the local stream and bring the workspace up to date
-  push        Upload your snapshot and open a proposal on the server
-  remote      Manage remotes and work with proposals, events and policy on a server
-  pin         Pin a revision so garbage collection keeps it
-  unpin       Remove a pin
-  pins        List pins
-  help        Print this message or the help of the given subcommand(s)
+  init         Create a repository in the current directory
+  status       Show uncommitted changes in the working directory
+  snapshot     Record the working directory as a new snapshot
+  sync         Bring the stream's latest head into the workspace
+  log          Show history
+  show         Show one changeset and what it changed
+  diff         Show differences between two revisions, or the working directory and its snapshot
+  cat          Print a file as of a revision: `ag cat main:src/lib.rs`
+  blame        Show which changeset introduced each line of a file
+  ls           List a directory as of a revision
+  checkout     Write a revision's files into a new directory
+  portability  List what a revision contains that Windows, macOS or Linux file systems cannot hold
+  stream       Manage streams
+  propose      Publish a snapshot and open a proposal to integrate it
+  proposal     List, review, update or close proposals
+  integrate    Integrate a proposal into its stream
+  preview      Show what integrating a proposal would do, without doing it
+  op           Inspect or resume operations
+  recover      Resume interrupted operations and expire stale ones
+  queue        The ordered integration queue
+  policy       Show or change stream policy
+  validate     Run checks and issue signed attestations
+  agent        Agent identities and runs
+  task         Tasks and their dependencies
+  lease        Soft and exclusive leases with fencing tokens
+  provenance   Signed provenance of agent-made changes
+  predict      Predict overlapping work
+  workspace    Create, list and remove workspaces (isolated lines of work in their own directories)
+  trace        Show the audit trail of an object, proposal, run or stream
+  audit        Verify the tamper-evident audit chain
+  verify       Check the integrity of the whole repository
+  gc           Delete unreachable objects (safe: fails closed, honours a grace period)
+  reindex      Rebuild derived indexes from the object store
+  backup       Write a verified, consistent copy of the repository to a new directory
+  git          Import from or export to Git (needs the `git` command)
+  clone        Clone a repository from an `ag-server`
+  fetch        Download new history from the server
+  pull         Fetch, then fast-forward the local stream and bring the workspace up to date
+  push         Upload your snapshot and open a proposal on the server
+  remote       Manage remotes and work with proposals, events and policy on a server
+  pin          Pin a revision so garbage collection keeps it
+  unpin        Remove a pin
+  pins         List pins
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -388,6 +390,25 @@ Options:
       --json           Machine-readable JSON output
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag portability
+
+```text
+List what a revision contains that Windows, macOS or Linux file systems cannot hold
+
+Usage: ag portability [OPTIONS] [REV]
+
+Arguments:
+  [REV]  Revision to inspect (default: the workspace head) [default: @]
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --target <PLATFORM>  File system to check against: `windows`, `macos` or `linux` (default: this machine)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json               Machine-readable JSON output
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## ag stream

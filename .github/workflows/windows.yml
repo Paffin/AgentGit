@@ -42,3 +42,15 @@ jobs:
       # binary that refuses to run (tests/unsupported.rs proves it). Everything else runs its whole suite.
       - name: Test
         run: cargo test --workspace --no-fail-fast
+      # The README demo, as PowerShell, in both shells a Windows user has: PowerShell 7 (preinstalled on the
+      # runner) and the Windows PowerShell 5.1 that ships with every Windows.
+      - name: README demo (PowerShell 7)
+        shell: pwsh
+        run: |
+          $env:AG = "$PWD\target\debug\ag.exe"
+          .\examples\quickstart.ps1
+      - name: README demo (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $env:AG = "$PWD\target\debug\ag.exe"
+          .\examples\quickstart.ps1

@@ -1,0 +1,610 @@
+{
+ "agents": {
+  "provenance": [
+   {
+    "agent": "docs-bot",
+    "error": null,
+    "id": 1,
+    "record": {
+     "agent": "agent:docs-bot",
+     "changeset": "ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce",
+     "checks_run": [
+      "make docs"
+     ],
+     "created_at": 1792275939190,
+     "inputs": [],
+     "model": "compat-model",
+     "parameters": {},
+     "prompt_digest": null,
+     "rationale": "the guide had no closing section",
+     "run_id": null,
+     "schema": "agentgit.provenance.v1",
+     "task_id": null
+    },
+    "verified": true
+   }
+  ],
+  "runs": [
+   {
+    "agent": "docs-bot",
+    "finished_at": 1792275939385,
+    "last_heartbeat": 1792275938574,
+    "run_id": "run_6a2dc8132249a8888565",
+    "started_at": 1792275938574,
+    "status": "completed",
+    "summary": null,
+    "task_id": null
+   }
+  ]
+ },
+ "attestations": [
+  {
+   "changeset": "ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_b869c8c5c464a330170b",
+   "issued_at": 1792275939285,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_b869c8c5c464a330170b",
+    "issued_at": 1792275939285,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "ff1ef2bee01b232b875577fbbe9896f94fef844f29d0d2729044ce915b0c5998a6e758da42aaad733272e5590b012ba00db16ed38f59f47410362b2cb725c403",
+    "tree_id": "5d4f7f19c35709aa0767a20cb9b67794d5596212873833b328b87a09ab1a20e8"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "ff1ef2bee01b232b875577fbbe9896f94fef844f29d0d2729044ce915b0c5998a6e758da42aaad733272e5590b012ba00db16ed38f59f47410362b2cb725c403",
+   "tree_id": "5d4f7f19c35709aa0767a20cb9b67794d5596212873833b328b87a09ab1a20e8"
+  },
+  {
+   "changeset": "7a9a16f23ee650eb618928203edf7d8fa8f0a31e357e76657a9307b686844bc5",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_5a2d0a9f610279dc9638",
+   "issued_at": 1792275940093,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_5a2d0a9f610279dc9638",
+    "issued_at": 1792275940093,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "1258248c4abe6fce56a76cb8a4af91fe3bf896c5189daac260e016420001073475f4f7c2a151c180559c43fceaf3a7f60975bf8545aa2f3adc63a76dd950e005",
+    "tree_id": "213986b36b4ad60446a29bc78724cb4e397911cbcc80a9a60f0966ee4fb0ff76"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "1258248c4abe6fce56a76cb8a4af91fe3bf896c5189daac260e016420001073475f4f7c2a151c180559c43fceaf3a7f60975bf8545aa2f3adc63a76dd950e005",
+   "tree_id": "213986b36b4ad60446a29bc78724cb4e397911cbcc80a9a60f0966ee4fb0ff76"
+  },
+  {
+   "changeset": "1592590ac941f1b668dbd04997616e915b3ebc0a7d8d159b8d55139f886959a5",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_24e2d40d94170ee22b94",
+   "issued_at": 1792275940269,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_24e2d40d94170ee22b94",
+    "issued_at": 1792275940269,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "76546042989a4c5770017fbd604c6b67217acf3b474aca4661e85fa46bab0e50f4a3fcf0a7ead87561e98ac4986b8f4688af9b79b1ca3e2e81363e5df5b74509",
+    "tree_id": "c1d50d4fda1f7cfae1dd5ed3eb2c958b8cf4495464e3c93cbdd8dfd172be4b0d"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "76546042989a4c5770017fbd604c6b67217acf3b474aca4661e85fa46bab0e50f4a3fcf0a7ead87561e98ac4986b8f4688af9b79b1ca3e2e81363e5df5b74509",
+   "tree_id": "c1d50d4fda1f7cfae1dd5ed3eb2c958b8cf4495464e3c93cbdd8dfd172be4b0d"
+  },
+  {
+   "changeset": "9d26edc65ccc273662aad8af79fd6442a7e3b88ecd7f403cc2a32d871ee196fc",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_519b4ef350cbd87e7dcb",
+   "issued_at": 1792275940777,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_519b4ef350cbd87e7dcb",
+    "issued_at": 1792275940777,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "473f8cfbd1fe9744ba5a7a96e69b47d988fbae3e2dd4e8ba6e222191586a51653fd799e92d09e984db6da47b0dae4eb07e36b8518ba9e77f7aff2eda9d74eb0c",
+    "tree_id": "0016ddfd90c8f8bde715e87021a7feb66831b5cbf34b8f0feed4b85b40c8d14d"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "473f8cfbd1fe9744ba5a7a96e69b47d988fbae3e2dd4e8ba6e222191586a51653fd799e92d09e984db6da47b0dae4eb07e36b8518ba9e77f7aff2eda9d74eb0c",
+   "tree_id": "0016ddfd90c8f8bde715e87021a7feb66831b5cbf34b8f0feed4b85b40c8d14d"
+  },
+  {
+   "changeset": "b98b1f2b3f4ffc1a69ad8e49dec738d35f8225be625661efbb26328383fc131d",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_0039ec1c377e718c10ee",
+   "issued_at": 1792275941096,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_0039ec1c377e718c10ee",
+    "issued_at": 1792275941096,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "b3dd407f3e420f72089111e8278ef2502b7dcc67418693942af13bc8d6d8fcccc5fd91ceca980bed35bcf59c6edc33dff79bd2c58e9d2d49ad5c0dc4c005ee07",
+    "tree_id": "40178bee3021a359a733951ee80b98c1775c4402fe8171f8a7f1227b48c20e2a"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "b3dd407f3e420f72089111e8278ef2502b7dcc67418693942af13bc8d6d8fcccc5fd91ceca980bed35bcf59c6edc33dff79bd2c58e9d2d49ad5c0dc4c005ee07",
+   "tree_id": "40178bee3021a359a733951ee80b98c1775c4402fe8171f8a7f1227b48c20e2a"
+  },
+  {
+   "changeset": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_89c7aa75604d0a154f66",
+   "issued_at": 1792275941597,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_89c7aa75604d0a154f66",
+    "issued_at": 1792275941597,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "eb47170bf380b961706df73cb21d5db06286435ee57752a86ffd0f7c6110575ceb7f9fe6140ad38a8221a41a63978e25d3df1e3469fc377a00adeb19b6e2cd0c",
+    "tree_id": "b2eb05f87209607cbcc5e8c8903c169d1045aaa81facc6be9996be31756d1b44"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "eb47170bf380b961706df73cb21d5db06286435ee57752a86ffd0f7c6110575ceb7f9fe6140ad38a8221a41a63978e25d3df1e3469fc377a00adeb19b6e2cd0c",
+   "tree_id": "b2eb05f87209607cbcc5e8c8903c169d1045aaa81facc6be9996be31756d1b44"
+  },
+  {
+   "changeset": "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68",
+   "check_name": "tests",
+   "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+   "id": "att_13b1222033a8777694d0",
+   "issued_at": 1792275941733,
+   "issuer": "service:ci",
+   "payload": {
+    "check": "tests",
+    "environment_digest": "sha256:868773842c60287b0b8d58516dcd42a0943154b3cf05ebc7168646cd5b29bb82",
+    "id": "att_13b1222033a8777694d0",
+    "issued_at": 1792275941733,
+    "issuer": "service:ci",
+    "policy_version": 1,
+    "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+    "result": "pass",
+    "signature": "e682de4b90fcbbc84160070c228ef9bd7ecf622f6517633cc5613007dbbfd83189771ce8d77d88c6e2172aa0b371775ff4d5e9a63c2fee89207b882f52d5cb08",
+    "tree_id": "7f1e58ade96fa88472a2d26bc3b5ff3fc118e2295898058b177491ea709adfba"
+   },
+   "policy_version": 1,
+   "public_key": "1fe4569dca53b05f27357b41d2903a48e419e225554f96b4f280daef85e14412",
+   "result": "pass",
+   "signature": "e682de4b90fcbbc84160070c228ef9bd7ecf622f6517633cc5613007dbbfd83189771ce8d77d88c6e2172aa0b371775ff4d5e9a63c2fee89207b882f52d5cb08",
+   "tree_id": "7f1e58ade96fa88472a2d26bc3b5ff3fc118e2295898058b177491ea709adfba"
+  }
+ ],
+ "audit": {
+  "entries": 65,
+  "first_actions": [
+   "repo.init",
+   "workspace.snapshot",
+   "changeset.publish",
+   "proposal.create",
+   "stream.integrate",
+   "policy.set"
+  ],
+  "head": "08968c5d152f68e3354b52f3ec4f850e1f0650c5f3c6046f4b21a495868c2ba7"
+ },
+ "blame": {
+  "helpers": [
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 1,
+    "path": "src/util.rs",
+    "text": "pub fn shout(s: &str) -> String {"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 2,
+    "path": "src/util.rs",
+    "text": "    s.to_uppercase()"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 3,
+    "path": "src/util.rs",
+    "text": "}"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 4,
+    "path": "src/util.rs",
+    "text": ""
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 5,
+    "path": "src/util.rs",
+    "text": "pub fn whisper(s: &str) -> String {"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 6,
+    "path": "src/util.rs",
+    "text": "    s.to_lowercase()"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 7,
+    "path": "src/util.rs",
+    "text": "}"
+   },
+   {
+    "changeset": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+    "line": 8,
+    "path": "src/util.rs",
+    "text": ""
+   },
+   {
+    "changeset": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+    "line": 9,
+    "path": "src/util.rs",
+    "text": "pub fn trim(s: &str) -> &str {"
+   },
+   {
+    "changeset": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+    "line": 10,
+    "path": "src/util.rs",
+    "text": "    s.trim()"
+   },
+   {
+    "changeset": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+    "line": 11,
+    "path": "src/util.rs",
+    "text": "}"
+   }
+  ],
+  "main": [
+   {
+    "changeset": "cb5546bf7c70a82ad77c01f4c9786fe8d44aace2b4ef3b7ad9f086917c53d4b4",
+    "line": 1,
+    "path": "src/main.rs",
+    "text": "mod helpers;"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 2,
+    "path": "src/main.rs",
+    "text": ""
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 3,
+    "path": "src/main.rs",
+    "text": "fn main() {"
+   },
+   {
+    "changeset": "739e28f45986afd1b4ea323bce1887559ecc6592b702fa086e053020f2e82634",
+    "line": 4,
+    "path": "src/main.rs",
+    "text": "    let name = \"bob\";"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 5,
+    "path": "src/main.rs",
+    "text": "    println!(\"hello, {name}\");"
+   },
+   {
+    "changeset": "cb5546bf7c70a82ad77c01f4c9786fe8d44aace2b4ef3b7ad9f086917c53d4b4",
+    "line": 6,
+    "path": "src/main.rs",
+    "text": "    println!(\"{}\", helpers::shout(\"finished\"));"
+   },
+   {
+    "changeset": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+    "line": 7,
+    "path": "src/main.rs",
+    "text": "}"
+   }
+  ]
+ },
+ "changesets": [
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 1,
+   "id": "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175",
+   "message": "Initial import: every kind of entry",
+   "parents": [],
+   "timestamp_ms": 1792275938121,
+   "tree_id": "e984e3765babb86ea7ca3ee5fa5cf90547984653bf46f62ab7809d1e80152e86"
+  },
+  {
+   "author": "agent:docs-bot#run_6a2dc8132249a8888565",
+   "files": 9,
+   "generation": 2,
+   "id": "ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce",
+   "message": "Document the guide",
+   "parents": [
+    "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175"
+   ],
+   "timestamp_ms": 1792275938929,
+   "tree_id": "5d4f7f19c35709aa0767a20cb9b67794d5596212873833b328b87a09ab1a20e8"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 2,
+   "id": "fbf766af35211fb41e86a73b74a457d13334eb4a307ccaf14a745a51c80d4958",
+   "message": "Alice changes the closing line",
+   "parents": [
+    "9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175"
+   ],
+   "timestamp_ms": 1792275939938,
+   "tree_id": "7f4cd6cf08bdb42e2a1f16d0504ae042517396bac9642a6c86217af8dd2b2c21"
+  },
+  {
+   "author": "user:bob",
+   "files": 9,
+   "generation": 3,
+   "id": "739e28f45986afd1b4ea323bce1887559ecc6592b702fa086e053020f2e82634",
+   "message": "Bob renames the greeting target",
+   "parents": [
+    "ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce"
+   ],
+   "timestamp_ms": 1792275939681,
+   "tree_id": "169b8dbac14110f1e14cf8d64ce3acc27ff6b035d079f5e20b5a5bc650813533"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 3,
+   "id": "7a9a16f23ee650eb618928203edf7d8fa8f0a31e357e76657a9307b686844bc5",
+   "message": "Integrate prop_a86c263f04abf92222f9: Alice changes the closing line\n\nProposal-Head: fbf766af35211fb41e86a73b74a457d13334eb4a307ccaf14a745a51c80d4958\nMerge-Base: 9ec6859f11739fb7e37de4b7206d62e62137100f2adac5a649be71fc7451f175\nMerge-Algorithm: ag-merge/2+ag-diff/1\nOperation: op_55e6a732bf1816d3638f\n",
+   "parents": [
+    "ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce",
+    "fbf766af35211fb41e86a73b74a457d13334eb4a307ccaf14a745a51c80d4958"
+   ],
+   "timestamp_ms": 1792275940125,
+   "tree_id": "213986b36b4ad60446a29bc78724cb4e397911cbcc80a9a60f0966ee4fb0ff76"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 4,
+   "id": "1592590ac941f1b668dbd04997616e915b3ebc0a7d8d159b8d55139f886959a5",
+   "message": "Integrate prop_f2d9060ce954dbdf6384: Bob renames the greeting target\n\nProposal-Head: 739e28f45986afd1b4ea323bce1887559ecc6592b702fa086e053020f2e82634\nMerge-Base: ab3307034ecb18691b499992ee573595968043288eb4601d992816b3d047c5ce\nMerge-Algorithm: ag-merge/2+ag-diff/1\nOperation: op_18fed4c4787ce6fd5b05\n",
+   "parents": [
+    "7a9a16f23ee650eb618928203edf7d8fa8f0a31e357e76657a9307b686844bc5",
+    "739e28f45986afd1b4ea323bce1887559ecc6592b702fa086e053020f2e82634"
+   ],
+   "timestamp_ms": 1792275940318,
+   "tree_id": "c1d50d4fda1f7cfae1dd5ed3eb2c958b8cf4495464e3c93cbdd8dfd172be4b0d"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 5,
+   "id": "9d26edc65ccc273662aad8af79fd6442a7e3b88ecd7f403cc2a32d871ee196fc",
+   "message": "Alice edits the README",
+   "parents": [
+    "1592590ac941f1b668dbd04997616e915b3ebc0a7d8d159b8d55139f886959a5"
+   ],
+   "timestamp_ms": 1792275940638,
+   "tree_id": "0016ddfd90c8f8bde715e87021a7feb66831b5cbf34b8f0feed4b85b40c8d14d"
+  },
+  {
+   "author": "user:carol",
+   "files": 9,
+   "generation": 5,
+   "id": "bf85d34ad0b15b2f80bd41f516750171342d33c13b7fdfc5edd693edbc001365",
+   "message": "Carol edits the README",
+   "parents": [
+    "1592590ac941f1b668dbd04997616e915b3ebc0a7d8d159b8d55139f886959a5"
+   ],
+   "timestamp_ms": 1792275940477,
+   "tree_id": "abe5a3824fe0d693225c9c6f568e5362ca149abbe3dea268575de64f58044f02"
+  },
+  {
+   "author": "user:carol",
+   "files": 9,
+   "generation": 6,
+   "id": "b98b1f2b3f4ffc1a69ad8e49dec738d35f8225be625661efbb26328383fc131d",
+   "message": "Carol resolves the README",
+   "parents": [
+    "bf85d34ad0b15b2f80bd41f516750171342d33c13b7fdfc5edd693edbc001365",
+    "9d26edc65ccc273662aad8af79fd6442a7e3b88ecd7f403cc2a32d871ee196fc"
+   ],
+   "timestamp_ms": 1792275940978,
+   "tree_id": "40178bee3021a359a733951ee80b98c1775c4402fe8171f8a7f1227b48c20e2a"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 7,
+   "id": "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+   "message": "Alice adds trim() to util.rs",
+   "parents": [
+    "b98b1f2b3f4ffc1a69ad8e49dec738d35f8225be625661efbb26328383fc131d"
+   ],
+   "timestamp_ms": 1792275941457,
+   "tree_id": "b2eb05f87209607cbcc5e8c8903c169d1045aaa81facc6be9996be31756d1b44"
+  },
+  {
+   "author": "user:dave",
+   "files": 9,
+   "generation": 7,
+   "id": "cb5546bf7c70a82ad77c01f4c9786fe8d44aace2b4ef3b7ad9f086917c53d4b4",
+   "message": "Dave renames util.rs to helpers.rs",
+   "parents": [
+    "b98b1f2b3f4ffc1a69ad8e49dec738d35f8225be625661efbb26328383fc131d"
+   ],
+   "timestamp_ms": 1792275941277,
+   "tree_id": "b89a9fbd53f5b0749c04bd34527f240dc8de76fff2b00207c791366b1958e193"
+  },
+  {
+   "author": "user:alice",
+   "files": 9,
+   "generation": 8,
+   "id": "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68",
+   "message": "Integrate prop_03bc0d9af205e230d333: Dave renames util.rs to helpers.rs\n\nProposal-Head: cb5546bf7c70a82ad77c01f4c9786fe8d44aace2b4ef3b7ad9f086917c53d4b4\nMerge-Base: b98b1f2b3f4ffc1a69ad8e49dec738d35f8225be625661efbb26328383fc131d\nMerge-Algorithm: ag-merge/2+ag-diff/1\nOperation: op_3136a0d6908af96a389b\n",
+   "parents": [
+    "96984ad94f5c11b21bdd1f26a18b870cb62ce5add86315f413aa9f06009e00ad",
+    "cb5546bf7c70a82ad77c01f4c9786fe8d44aace2b4ef3b7ad9f086917c53d4b4"
+   ],
+   "timestamp_ms": 1792275941779,
+   "tree_id": "7f1e58ade96fa88472a2d26bc3b5ff3fc118e2295898058b177491ea709adfba"
+  }
+ ],
+ "files_at_head": {
+  "README.md": {
+   "content": "8d7a68c0352379ed09c81b82a99919dab120022ba3862bbaedf31fe7eb9a04bc",
+   "executable": false,
+   "type": "file"
+  },
+  "bin/run.sh": {
+   "content": "e06beef7db7a153a75fefc787f3af439a88c691075d14c5a31cab20d1a33407a",
+   "executable": true,
+   "type": "file"
+  },
+  "data/blob.bin": {
+   "content": "92f25ac779a7161e39f17ab5ba385e0b0787b26dc2b40da8591dbfa9fbc8b692",
+   "executable": false,
+   "type": "file"
+  },
+  "docs/guide.md": {
+   "content": "97da9aedac9a88fcd5b4335f03b5063f08f03e5102f9fefdcde0e4e0c9db3d90",
+   "executable": false,
+   "type": "file"
+  },
+  "docs/with space/note.txt": {
+   "content": "8b282a0404d10c339f0512b4361dc1ab63401da71920b39433377c25c947890f",
+   "executable": false,
+   "type": "file"
+  },
+  "main-link": {
+   "content": "bf4aaa1a016bc98a52081682a01c787d0bc6ece44d81e5ba86fb751d45c9ed0d",
+   "executable": false,
+   "type": "symlink"
+  },
+  "src/helpers.rs": {
+   "content": "f4956f27423ac77a5a1b70cb6a7c6ec602d693d9083d8fcba5a8e07d18faf843",
+   "executable": false,
+   "type": "file"
+  },
+  "src/main.rs": {
+   "content": "391ab2f1b0f137088f444c9d40a7f0c5e91538b54650502f63baf34525bec687",
+   "executable": false,
+   "type": "file"
+  },
+  "unicode/\u65e5\u672c\u8a9e.txt": {
+   "content": "897ffb842089506ce8277e3248533cc7be8df0e7fc79550cb04feb4bed21b82c",
+   "executable": false,
+   "type": "file"
+  }
+ },
+ "format": "agentgit-compat-expected-v1",
+ "head": "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68",
+ "leases": [
+  {
+   "exclusive": true,
+   "id": "lease_5fb2190a0be796220b52",
+   "scope": "data/**",
+   "token": 1
+  },
+  {
+   "exclusive": false,
+   "id": "lease_57e5d9c5cbcf2a848aaf",
+   "scope": "docs/**",
+   "token": 2
+  }
+ ],
+ "merge_changesets": [
+  "7a9a16f23ee650eb618928203edf7d8fa8f0a31e357e76657a9307b686844bc5",
+  "1592590ac941f1b668dbd04997616e915b3ebc0a7d8d159b8d55139f886959a5",
+  "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68"
+ ],
+ "namespace": "acme/compat",
+ "pins": [
+  {
+   "changeset": "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68",
+   "created_at": 1792275942071,
+   "name": "v1-compat",
+   "reason": "the head the fixture was generated from"
+  }
+ ],
+ "policy_versions": [
+  {
+   "created_by": "user:alice",
+   "doc_sha256": "e705b8cfb1576d440e7fce18a0c3fa9d459343b64733f6e9d9df9fb4fdf53f0e",
+   "version": 1
+  },
+  {
+   "created_by": "user:alice",
+   "doc_sha256": "4c7f0a82b4fbe7db77179131d82020494fdeb5cf152e8fc713e72243321372fe",
+   "version": 2
+  }
+ ],
+ "renames_at_head": [
+  {
+   "from": "src/util.rs",
+   "op": "R",
+   "path": "src/helpers.rs",
+   "similarity": 100
+  }
+ ],
+ "streams": {
+  "feature": {
+   "head": null,
+   "version": 0
+  },
+  "main": {
+   "head": "ab7296a26162325c1f0a299f820a1b845d40c209b6e9771964c8eec9fcdc3a68",
+   "version": 8
+  }
+ },
+ "tasks": [
+  {
+   "id": "task_8886dbcb305b02278df0",
+   "state": "open",
+   "title": "write the changelog"
+  },
+  {
+   "id": "task_2f72e6069ce376125b2b",
+   "state": "open",
+   "title": "publish the release"
+  }
+ ]
+}

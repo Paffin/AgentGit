@@ -71,6 +71,20 @@ fn unified_marks_missing_newline() {
     assert!(d.contains("+z\n\\ No newline at end of file\n"), "{d}");
 }
 
+/// Found by the `diff_myers` fuzz target: `2 * context` and `end + context` overflowed (a panic in debug builds,
+/// a wrong hunk header in release) for a huge context such as `ag diff -U 18446744073709551615`.
+#[test]
+fn unified_diff_survives_an_absurd_context() {
+    let old = b"a\nb\nc\nd\ne\nf\ng\nh\n";
+    let new = b"a\nB\nc\nd\ne\nf\nG\nh\n";
+    for context in [usize::MAX, usize::MAX / 2, usize::MAX / 2 + 1, usize::MAX - 1] {
+        let huge = unified_diff("a", "b", old, new, context);
+        // Context larger than the file means: the whole file, as one hunk.
+        assert_eq!(huge, unified_diff("a", "b", old, new, 1000), "context {context}");
+        assert!(huge.contains("@@ -1,8 +1,8 @@"), "{huge}");
+    }
+}
+
 #[test]
 fn unified_binary() {
     let d = unified_diff("a", "b", b"\0\x01", b"\0\x02", 3);

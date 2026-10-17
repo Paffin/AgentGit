@@ -10,7 +10,7 @@
 # the tests exercise; the image-specific parts (base image names, the nonroot
 # user, ownership of the state directory) are standard but unverified.
 
-FROM golang:1.24 AS build
+FROM golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

@@ -7,6 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: depends on ag-protocol (docs/operations/releasing.md).
+publish = false
 
 [lints]
 workspace = true

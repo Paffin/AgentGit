@@ -1,0 +1,42 @@
+# Accepted security findings.
+#
+# A finding that the scanners in .github/workflows/security.yml report and that we have decided to live with,
+# for now, is listed here - nowhere else. Every entry has an owner, a reason, a date it was accepted and a date
+# it expires (at most 92 days later). scripts/security_exceptions.py runs in CI and fails when
+#
+#   * an entry has expired (decide again: fix it, or renew it with a new reason),
+#   * an entry is malformed or lives longer than 92 days,
+#   * deny.toml ignores an advisory that is not listed here, or lists one that deny.toml no longer ignores.
+#
+# The npm, pip and Go scanners are filtered through the same file (scripts/security_exceptions.py npm|pip|go).
+# Process and policy: docs/operations/supply-chain.md.
+#
+# Fields:
+#   id         advisory id as the scanner prints it (RUSTSEC-..., GHSA-..., PYSEC-..., GO-...)
+#   ecosystem  rust | npm | python | go
+#   package    the affected package
+#   scope      where it is present (runtime / dev tooling, which manifest)
+#   reason     why it is acceptable and what would change that
+#   owner      who decides when it expires
+#   added      YYYY-MM-DD
+#   expires    YYYY-MM-DD
+
+[[exception]]
+id = "GHSA-5gmw-xhrv-c9v3"
+ecosystem = "npm"
+package = "tinypool"
+scope = "dev dependency (vitest's worker pool) of apps/web and sdk/typescript; not part of any shipped bundle"
+reason = "Prototype pollution in the options of a worker pool only matters if an attacker controls those options; vitest passes its own configuration, and the test runners execute only our own tests. The fix is vitest 5, a breaking upgrade that belongs to the web and SDK owners."
+owner = "maintainers"
+added = "2026-10-17"
+expires = "2027-01-15"
+
+[[exception]]
+id = "GHSA-85c8-ppgw-ccpr"
+ecosystem = "npm"
+package = "tinypool"
+scope = "dev dependency (vitest's worker pool) of apps/web and sdk/typescript; not part of any shipped bundle"
+reason = "Same package and the same reasoning as GHSA-5gmw-xhrv-c9v3: options of run() are set by vitest, not by input. Resolved by the vitest 5 upgrade."
+owner = "maintainers"
+added = "2026-10-17"
+expires = "2027-01-15"

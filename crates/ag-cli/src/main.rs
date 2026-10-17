@@ -13,7 +13,7 @@ use crate::ctx::Ctx;
 
 /// AgentGit: an agent-native source control system.
 #[derive(Parser, Debug)]
-#[command(name = "ag", version, about, long_about = None, propagate_version = true)]
+#[command(name = "ag", version = env!("AG_LONG_VERSION"), about, long_about = None, propagate_version = true)]
 pub struct Cli {
     /// Operate on the repository at this path (default: discovered from the current directory).
     #[arg(short = 'C', long = "repo", global = true, value_name = "DIR")]
@@ -55,6 +55,8 @@ pub enum Command {
     Ls(cmds::repo::LsArgs),
     /// Write a revision's files into a new directory.
     Checkout(cmds::repo::CheckoutArgs),
+    /// List what a revision contains that Windows, macOS or Linux file systems cannot hold.
+    Portability(cmds::repo::PortabilityArgs),
     /// Manage streams.
     #[command(subcommand)]
     Stream(cmds::flow::StreamCmd),
@@ -184,6 +186,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Blame(a) => cmds::repo::blame(&ctx, a),
         Ls(a) => cmds::repo::ls(&ctx, a),
         Checkout(a) => cmds::repo::checkout(&ctx, a),
+        Portability(a) => cmds::repo::portability(&ctx, a),
         Stream(c) => cmds::flow::stream(&ctx, c),
         Propose(a) => cmds::flow::propose(&ctx, a),
         Proposal(c) => cmds::flow::proposal(&ctx, c),

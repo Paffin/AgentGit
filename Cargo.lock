@@ -150,6 +150,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-mcp"
+version = "0.1.0"
+dependencies = [
+ "ag-crypto",
+ "ag-server",
+ "ag-storage",
+ "ag-types",
+ "base64 0.23.1",
+ "clap",
+ "getrandom 0.4.3",
+ "globset",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ureq",
+]
+
+[[package]]
 name = "ag-merge"
 version = "0.1.0"
 dependencies = [
@@ -231,6 +249,7 @@ dependencies = [
  "ag-storage",
  "ag-tree",
  "ag-types",
+ "ag-ui-assets",
  "anyhow",
  "axum",
  "axum-server",
@@ -242,6 +261,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "jsonwebtoken",
+ "nu-ansi-term",
  "prometheus",
  "prost",
  "rcgen",
@@ -314,7 +334,12 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "unicode-normalization",
 ]
+
+[[package]]
+name = "ag-ui-assets"
+version = "0.1.0"
 
 [[package]]
 name = "ag-worker"

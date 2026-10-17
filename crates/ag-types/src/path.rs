@@ -7,14 +7,6 @@ pub const MAX_PATH_LEN: usize = 4096;
 /// Maximum length of one path component in bytes.
 pub const MAX_COMPONENT_LEN: usize = 255;
 
-/// Path components that may never appear in a repository tree.
-///
-/// `.ag` is the AgentGit metadata directory and `.git` is reserved because
-/// materializing an attacker-controlled `.git` directory is a well-known way
-/// to get code execution. The comparison is ASCII case-insensitive so the
-/// rule also holds on case-insensitive filesystems.
-const RESERVED_COMPONENTS: [&str; 2] = [".ag", ".git"];
-
 /// Reasons a string is not a valid [`RepoPath`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PathError {
@@ -55,7 +47,13 @@ pub enum PathError {
 /// * no leading or trailing `/`, no empty components;
 /// * no `.` or `..` components (no traversal);
 /// * no NUL, ASCII control characters or backslashes;
-/// * no `.git` / `.ag` components (case-insensitive).
+/// * no `.git` / `.ag` components under any spelling a file system folds into them: ASCII case-insensitive,
+///   and the NTFS / HFS+ aliases (`.git.`, `.git `, `.git::$INDEX_ALLOCATION`, `git~1`, ignorable Unicode).
+///   `.ag` is the AgentGit metadata directory and a planted `.git` is a well-known way to get code execution
+///   from a checkout (see [`crate::portable::is_reserved_component`]).
+///
+/// Names that are a problem only on some file systems (`aux.txt`, `a:b`, `README` next to `readme`) are valid
+/// here and are refused when a checkout is about to write them ([`crate::portable`]).
 ///
 /// Ordering is bytewise on the string, which is the canonical order used
 /// everywhere in the system.
@@ -96,7 +94,7 @@ impl RepoPath {
             if comp.len() > MAX_COMPONENT_LEN {
                 return Err(PathError::ComponentTooLong);
             }
-            if RESERVED_COMPONENTS.iter().any(|r| comp.eq_ignore_ascii_case(r)) {
+            if crate::portable::is_reserved_component(comp) {
                 return Err(PathError::Reserved(comp.to_string()));
             }
         }
@@ -203,6 +201,25 @@ mod tests {
         }
         for p in [".git/config", "a/.GIT/hooks", ".ag/db", "x/.Ag"] {
             assert!(matches!(RepoPath::new(p), Err(PathError::Reserved(_))), "{p}");
+        }
+    }
+
+    #[test]
+    fn rejects_file_system_aliases_of_the_reserved_directories() {
+        for p in [
+            ".git./config",
+            ".git /config",
+            "a/.git::$INDEX_ALLOCATION/hooks/post-checkout",
+            "GIT~1/hooks/post-checkout",
+            "x/git~1./config",
+            ".g\u{200c}it/config",
+            ".ag./db",
+            "AG~1/x",
+        ] {
+            assert!(matches!(RepoPath::new(p), Err(PathError::Reserved(_))), "{p}");
+        }
+        for p in [".gitignore", ".gitattributes", "a/.git-notes/x", ".agignore", "git~1x/y", "x/.git.d"] {
+            assert!(RepoPath::new(p).is_ok(), "{p}");
         }
     }
 

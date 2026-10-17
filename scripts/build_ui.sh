@@ -32,7 +32,7 @@ test -f dist/index.html || { echo "build_ui.sh: the build produced no dist/index
 
 # Cargo cannot watch a directory that did not exist when the server was last built; touching the build script
 # makes the next cargo build look at dist/ again.
-touch "$root/crates/ag-server/build.rs"
+touch "$root/crates/ag-ui-assets/build.rs"
 
 files="$(find dist -type f ! -name '*.br' ! -name '*.gz' | wc -l | tr -d ' ')"
 echo "Web UI built: apps/web/dist ($files files)."

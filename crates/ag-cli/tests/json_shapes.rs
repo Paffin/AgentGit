@@ -82,6 +82,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("diff", &a.ag(&["--json", "diff", "main~1", "main"]).ok());
     r.rec("blame", &a.ag(&["--json", "blame", "main:src/lib.rs"]).ok());
     r.rec("ls", &a.ag(&["--json", "ls", "main"]).ok());
+    r.rec("portability", &a.ag(&["--json", "portability", "main", "--target", "windows"]).ok());
     let out = tempfile::tempdir().unwrap();
     r.rec("checkout", &a.ag(&["--json", "checkout", "main", out.path().join("co").to_str().unwrap()]).ok());
 

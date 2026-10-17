@@ -12,7 +12,9 @@ Exit codes (stable, safe for scripts and agents to rely on):
 | 3 | **blocked**: something you can provide is missing (approval, validation, lease token) |
 | 4 | **refused**: conflict, policy denial or invalid request; the stream was not changed |
 
-Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
+Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`, `--color <auto|always|never>`
+(`NO_COLOR` is honoured; nothing is coloured in a pipe), `-q/--quiet`, `-v/--verbose`.
+Concept pages are available in the terminal: `ag help workflow|policy|leases|identities|revisions|exit-codes|json|config`.
 
 ## Commands
 
@@ -124,17 +126,27 @@ Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
 - [`ag pin`](#ag-pin)
 - [`ag unpin`](#ag-unpin)
 - [`ag pins`](#ag-pins)
+- [`ag doctor`](#ag-doctor)
+- [`ag config`](#ag-config)
+- [`ag config list`](#ag-config-list)
+- [`ag config get`](#ag-config-get)
+- [`ag config set`](#ag-config-set)
+- [`ag config unset`](#ag-config-unset)
+- [`ag config path`](#ag-config-path)
+- [`ag completions`](#ag-completions)
+- [`ag man`](#ag-man)
+- [`ag version`](#ag-version)
 
 ## ag
 
 ```text
-AgentGit: the `ag` command-line interface
+AgentGit: an agent-native source control system. People, agents and CI change one codebase at the same time; every change lands through a proposal, and a per-stream policy decides what must be true first (validation of the exact tree, approvals, leases, an autonomy envelope for agents).
 
 Usage: ag [OPTIONS] <COMMAND>
 
 Commands:
   init         Create a repository in the current directory
-  status       Show uncommitted changes in the working directory
+  status       Summarize the workspace, your proposals, leases, task and remote at a glance
   snapshot     Record the working directory as a new snapshot
   sync         Bring the stream's latest head into the workspace
   log          Show history
@@ -176,14 +188,54 @@ Commands:
   pin          Pin a revision so garbage collection keeps it
   unpin        Remove a pin
   pins         List pins
-  help         Print this message or the help of the given subcommand(s)
+  doctor       Check the installation, the repository, your identity and every remote's credential
+  config       Show, get, set and locate configuration (the user file; the repository's settings are shown read-only)
+  completions  Print a shell completion script: bash, zsh, fish, powershell or elvish
+  man          Print the man page, or write one page per command with --dir
+  version      Print the version, the protocol and the JSON schema version
+  help         Show help for a command, or a topic: workflow, policy, leases, identities, revisions, exit-codes, json, config
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+
+      --json
+          Machine-readable JSON output
+
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Common workflow:
+  ag init --namespace me/app     create a repository in this directory
+  ag snapshot -m "message"       record the working directory
+  ag propose -t "title"          publish it and open a proposal
+  ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+
+Where am I, is it healthy:
+  ag status                      workspace, your proposals, leases, task and remote at a glance
+  ag doctor                      check the installation, the repository, your identity and every remote
+
+Exit codes: 0 ok, 1 error, 2 usage, 3 blocked (provide what is missing and run it again),
+4 refused (conflict, policy denial; the stream was not changed). Add --json for machine-readable output.
+
+Help topics (ag help TOPIC): workflow, policy, leases, identities, revisions, exit-codes, json, config
+Shell completion: ag completions bash|zsh|fish|powershell|elvish     Man pages: ag man --dir DIR
+Documentation: https://github.com/Paffin/AgentGit/tree/main/docs
 ```
 
 ## ag init
@@ -200,6 +252,9 @@ Options:
       --stream <STREAM>        Name of the first stream [default: main]
       --json                   Machine-readable JSON output
       --storage <FILE>         JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -207,7 +262,7 @@ Options:
 ## ag status
 
 ```text
-Show uncommitted changes in the working directory
+Summarize the workspace, your proposals, leases, task and remote at a glance
 
 Usage: ag status [OPTIONS]
 
@@ -217,6 +272,10 @@ Options:
       --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --dir <DIR>              Working directory of the workspace (required for non-default workspaces)
       --json                   Machine-readable JSON output
+      --remote                 Also ask each remote's server for its current head (needs the network and a credential)
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -235,7 +294,10 @@ Options:
   -w, --workspace <WORKSPACE>  Workspace name [default: default]
       --dir <DIR>              Working directory of the workspace
       --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --force                  Snapshot even if conflict markers remain
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -253,6 +315,9 @@ Options:
       --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --dir <DIR>              Working directory of the workspace
       --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -273,6 +338,9 @@ Options:
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --path <PATH>    Only changesets that touched this path
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -291,6 +359,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -312,6 +383,9 @@ Options:
   -w, --workspace <WORKSPACE>  Workspace (for the no-argument form) [default: default]
       --dir <DIR>              Workspace directory (for the no-argument form)
       --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -330,6 +404,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -350,6 +427,9 @@ Options:
       --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --max-commits <MAX_COMMITS>  Visit at most this many changesets; older lines are marked as a boundary [default: 100000]
       --json                       Machine-readable JSON output
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version
 ```
@@ -369,6 +449,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -388,6 +471,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -407,6 +493,9 @@ Options:
       --target <PLATFORM>  File system to check against: `windows`, `macos` or `linux` (default: this machine)
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -423,12 +512,14 @@ Commands:
   create  Create a stream, optionally at an existing published revision
   show    Show one stream
   reflog  Show the append-only history of head movements
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -444,6 +535,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -463,6 +557,9 @@ Options:
       --from <FROM>    Start the stream at this published revision
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -481,6 +578,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -500,6 +600,9 @@ Options:
   -n, --limit <LIMIT>  Maximum entries [default: 20]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -521,9 +624,17 @@ Options:
   -d, --description <DESCRIPTION>  Longer description [default: ""]
       --json                       Machine-readable JSON output
       --stream <STREAM>            Target stream (default: the repository's default stream)
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --task <TASK>                Task this proposal belongs to
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version
+
+Examples:
+  ag propose -t "Fix the parser"            propose the workspace head
+  ag propose @docs -t "Document usage"      propose the head of workspace 'docs'
+  ag propose --task task_… -t "…"           attach the proposal to a task
 ```
 
 ## ag proposal
@@ -539,12 +650,14 @@ Commands:
   review  Review the proposal's current head
   update  Point the proposal at a new head (earlier approvals stop counting)
   close   Close without integrating
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -561,6 +674,9 @@ Options:
       --state <STATE>  Filter by state: open, integrated, closed
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -579,6 +695,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -600,7 +719,10 @@ Options:
       --request-changes    Request changes
       --comment            Comment only
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -m, --message <MESSAGE>  Review text [default: ""]
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -620,6 +742,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -638,6 +763,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -658,8 +786,17 @@ Options:
       --as <IDENTITY>                   Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --fencing-token <FENCING_TOKENS>  Fencing token(s) of exclusive leases the author holds
       --json                            Machine-readable JSON output
+      --color <WHEN>                    Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                           Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                         Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                            Print help
   -V, --version                         Print version
+
+Exit codes: 0 integrated, 3 blocked (provide what is missing and run it again), 4 conflict, denied or invalid.
+The stream is untouched unless the exit code is 0. Examples:
+  ag integrate prop_8f3a1c                        any unique id prefix works
+  ag integrate prop_8f3a1c --fencing-token 7      present the token of your exclusive lease
+  ag --json integrate prop_8f3a1c                 stable blocker codes for scripts and agents
 ```
 
 ## ag preview
@@ -676,6 +813,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -691,12 +831,14 @@ Commands:
   show    Show an operation's recorded state and result. Use this instead of blindly retrying when a response was lost
   resume  Resume an operation (for example one that was blocked)
   list    List recent operations
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -715,6 +857,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -734,6 +879,9 @@ Options:
       --fencing-token <FENCING_TOKENS>  Fencing token(s) to present
       --as <IDENTITY>                   Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json                            Machine-readable JSON output
+      --color <WHEN>                    Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                           Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                         Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                            Print help
   -V, --version                         Print version
 ```
@@ -750,6 +898,9 @@ Options:
   -n, --limit <LIMIT>  Maximum entries [default: 20]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -766,6 +917,9 @@ Options:
       --max-age <MAX_AGE>  Operations untouched for longer than this are aborted [default: 7d]
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -781,12 +935,14 @@ Commands:
   add   Add a proposal to its stream's queue
   list  Show the queue
   run   Integrate queued proposals in order
-  help  Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -805,6 +961,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -823,6 +982,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -841,6 +1003,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -857,14 +1022,18 @@ Commands:
   set      Replace the policy with the contents of a JSON file (needs an admin)
   history  List policy versions
   example  Print an example policy document
-  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+
+Concepts and fields: ag help policy
 ```
 
 ## ag policy show
@@ -881,6 +1050,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -900,6 +1072,9 @@ Options:
       --stream <STREAM>  Stream (default: the default stream)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -918,6 +1093,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -933,6 +1111,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -948,12 +1129,14 @@ Commands:
   keygen  Generate a signing key for an issuer and print its public key
   run     Check out the exact candidate tree of a proposal, run a command on it and record a signed attestation of the result
   list    List attestations recorded for a tree
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -972,6 +1155,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1011,8 +1197,17 @@ Options:
       --json
           Machine-readable JSON output
 
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+
       --env <ENV>
           Environment digest to record (default: derived from the command and platform)
+
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
 
   -h, --help
           Print help (see a summary with '-h')
@@ -1035,6 +1230,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1056,12 +1254,14 @@ Commands:
   reap       Abandon runs with no recent heartbeat and release their leases
   disable    Stop an agent from starting new runs
   enable     Allow a disabled agent to run again
-  help       Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1081,6 +1281,9 @@ Options:
       --role <ROLE>    `agent` or `reviewer` [default: agent]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1096,6 +1299,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1115,6 +1321,9 @@ Options:
       --task <TASK>    Task to work on (claims it; its dependencies must be done)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1135,6 +1344,9 @@ Options:
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
   -m, --message <MESSAGE>  Summary
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -1153,6 +1365,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1171,6 +1386,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1187,6 +1405,9 @@ Options:
       --timeout <TIMEOUT>  Heartbeat timeout [default: 10m]
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -1205,6 +1426,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1223,6 +1447,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1241,12 +1468,14 @@ Commands:
   ready   Open tasks whose dependencies are all done
   done    Mark a task done
   cancel  Cancel a task
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1267,6 +1496,9 @@ Options:
       --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --scope <SCOPE>              Path glob the task is expected to touch (repeatable)
       --json                       Machine-readable JSON output
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version
 ```
@@ -1283,6 +1515,9 @@ Options:
       --state <STATE>  Filter by state: open, in_progress, done, cancelled
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1302,6 +1537,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1317,6 +1555,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1335,6 +1576,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1353,6 +1597,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1369,14 +1616,18 @@ Commands:
   release  Release a lease early
   extend   Extend a lease; the fencing token stays the same
   list     List active leases
-  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+
+Concepts: ag help leases
 ```
 
 ## ag lease acquire
@@ -1396,6 +1647,9 @@ Options:
       --ttl <TTL>      How long the lease lasts [default: 1h]
       --json           Machine-readable JSON output
       --task <TASK>    Task the lease belongs to
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1414,6 +1668,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1433,6 +1690,9 @@ Options:
       --ttl <TTL>      New duration from now [default: 1h]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1449,6 +1709,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1463,12 +1726,14 @@ Usage: ag provenance [OPTIONS] <COMMAND>
 Commands:
   attach  Sign and attach a provenance record to a changeset
   show    Show and verify the provenance of a changeset
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1490,9 +1755,12 @@ Options:
       --run <RUN>                  Run id
       --json                       Machine-readable JSON output
       --task <TASK>                Task id
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --model <MODEL>              Model identifier
       --prompt-file <PROMPT_FILE>  File holding the prompt; only its SHA-256 is stored
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
       --rationale <RATIONALE>      Why the change was made
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
       --check <CHECKS>             A check the agent ran itself (repeatable)
       --input <INPUTS>             A source consulted (repeatable). Stored as untrusted text
   -h, --help                       Print help
@@ -1513,6 +1781,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1531,6 +1802,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1546,12 +1820,14 @@ Commands:
   create  Create a workspace starting at the stream head and check it out into DIR
   list    List workspaces
   remove  Forget a workspace (its directory is left alone)
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1572,6 +1848,9 @@ Options:
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --stream <STREAM>  Stream to track (default: the default stream)
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1587,6 +1866,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1605,6 +1887,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1624,6 +1909,9 @@ Options:
   -n, --limit <LIMIT>  Maximum entries [default: 50]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1641,6 +1929,9 @@ Options:
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
   -n, --limit <LIMIT>  Number of entries for `--list` [default: 20]
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1656,6 +1947,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1680,6 +1974,12 @@ Options:
           Report only; delete nothing
       --json
           Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help
           Print help
   -V, --version
@@ -1697,6 +1997,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1716,6 +2019,9 @@ Options:
       --include-keys   Also copy private keys (agent and issuer identities). Off by default
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1730,12 +2036,14 @@ Usage: ag git [OPTIONS] <COMMAND>
 Commands:
   import  Import a Git repository's history into a new stream
   export  Export a stream's history to a Git repository (created if missing)
-  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -1756,6 +2064,9 @@ Options:
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --stream <STREAM>  Stream to create for the imported history [default: imported]
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1776,6 +2087,9 @@ Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1798,8 +2112,11 @@ Options:
       --name <NAME>            Name for the remote [default: origin]
       --json                   Machine-readable JSON output
       --token-env <TOKEN_ENV>  Environment variable holding the credential (default: AG_TOKEN)
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --token-stdin            Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600)
       --ca-file <CA_FILE>      Extra CA certificate (PEM) to trust
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -1817,6 +2134,9 @@ Options:
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --stream <STREAM>  Stream (default: the repository's default stream)
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1834,6 +2154,9 @@ Options:
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --stream <STREAM>  Stream (default: the repository's default stream)
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1855,8 +2178,11 @@ Options:
   -t, --title <TITLE>              Proposal title
   -d, --description <DESCRIPTION>  Longer description [default: ""]
       --json                       Machine-readable JSON output
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --stream <STREAM>            Target stream (default: the repository's default stream)
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
       --task <TASK>                Task this proposal belongs to
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version
 ```
@@ -1885,13 +2211,15 @@ Commands:
   log        Show history of a revision on the server
   blame      Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
   cat        Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
-  help       Print this message or the help of the given subcommand(s)
 
 Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1915,6 +2243,9 @@ Options:
       --token-stdin            Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600)
       --ca-file <CA_FILE>      Extra CA certificate (PEM) to trust
       --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -1931,6 +2262,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1950,6 +2284,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1966,6 +2303,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -1983,6 +2323,9 @@ Options:
       --state <STATE>    Filter: open, integrated, closed
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2002,6 +2345,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2022,6 +2368,9 @@ Options:
       --validate         Also queue the validation jobs the policy knows how to run
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2044,7 +2393,10 @@ Options:
       --request-changes    Request changes
       --comment            Comment only
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -m, --message <MESSAGE>  Review text [default: ""]
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -2065,6 +2417,9 @@ Options:
       --remote <REMOTE>                 Remote to use (default: origin)
       --as <IDENTITY>                   Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json                            Machine-readable JSON output
+      --color <WHEN>                    Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                           Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                         Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                            Print help
   -V, --version                         Print version
 ```
@@ -2084,6 +2439,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2100,6 +2458,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2119,6 +2480,9 @@ Options:
       --topics <TOPICS>  Only these topics (prefix match), e.g. `stream,proposal`
       --follow           Keep following new events
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2139,6 +2503,9 @@ Options:
       --set <SET>        Replace the policy with the JSON document in this file
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2159,6 +2526,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2179,6 +2549,9 @@ Options:
       --remote <REMOTE>    Remote to use (default: origin)
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -2198,6 +2571,9 @@ Options:
       --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2218,6 +2594,9 @@ Options:
       --reason <REASON>  Why [default: ""]
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
 ```
@@ -2236,6 +2615,9 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -2251,6 +2633,220 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag doctor
+
+```text
+Check the installation, the repository, your identity and every remote's credential
+
+Usage: ag doctor [OPTIONS]
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --offline            Do not contact any server: check that credentials exist, not that they work
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --strict             Exit with 1 when a check warns, not only when one fails
+      --json               Machine-readable JSON output
+      --timeout <SECONDS>  How long to wait for each server before giving up [default: 10]
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## ag config
+
+```text
+Show, get, set and locate configuration (the user file; the repository's settings are shown read-only)
+
+Usage: ag config [OPTIONS] <COMMAND>
+
+Commands:
+  list   Show every setting with its effective value and where it comes from
+  get    Print one setting's effective value (see `list` for the keys)
+  set    Store a user-level setting: `identity` or `color`
+  unset  Remove a stored user-level setting
+  path   Print the locations of the configuration files
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+
+Files, environment variables and precedence: ag help config
+```
+
+## ag config list
+
+```text
+Show every setting with its effective value and where it comes from
+
+Usage: ag config list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag config get
+
+```text
+Print one setting's effective value (see `list` for the keys)
+
+Usage: ag config get [OPTIONS] <KEY>
+
+Arguments:
+  <KEY>  Setting name, for example `identity`
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag config set
+
+```text
+Store a user-level setting: `identity` or `color`
+
+Usage: ag config set [OPTIONS] <KEY> <VALUE>
+
+Arguments:
+  <KEY>    Setting name
+  <VALUE>  New value
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag config unset
+
+```text
+Remove a stored user-level setting
+
+Usage: ag config unset [OPTIONS] <KEY>
+
+Arguments:
+  <KEY>  Setting name
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag config path
+
+```text
+Print the locations of the configuration files
+
+Usage: ag config path [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag completions
+
+```text
+Print a shell completion script: bash, zsh, fish, powershell or elvish
+
+Usage: ag completions [OPTIONS] <SHELL>
+
+Arguments:
+  <SHELL>  The shell to generate the script for [possible values: bash, elvish, fish, powershell, zsh]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+
+Examples:
+  ag completions bash > ~/.local/share/bash-completion/completions/ag
+  ag completions zsh  > "${fpath[1]}/_ag"
+  ag completions fish > ~/.config/fish/completions/ag.fish
+```
+
+## ag man
+
+```text
+Print the man page, or write one page per command with --dir
+
+Usage: ag man [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --dir <DIR>      Write `ag.1` and one page per subcommand (`ag-stream-list.1`, …) into this directory instead of printing the top-level page
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag version
+
+```text
+Print the version, the protocol and the JSON schema version
+
+Usage: ag version [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
 ```

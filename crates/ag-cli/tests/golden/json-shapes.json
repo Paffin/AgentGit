@@ -402,6 +402,17 @@
       "stream": "string",
       "version": "number"
     },
+    "portability": {
+      "changeset": "string",
+      "collisions": [],
+      "executables_without_bit": [],
+      "hazards": [],
+      "ok": "bool",
+      "paths": "number",
+      "platform": "string",
+      "problems": [],
+      "symlinks_as_files": []
+    },
     "predict": {
       "overlaps": []
     },

@@ -35,10 +35,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p ag-cli && python3 scripts/gen_cli_docs.py --check   # CLI reference is generated
+python3 scripts/gen_readme_assets.py --check                         # the README's SVG artwork is generated
 ```
 
 If you change a command or flag, regenerate the reference with `python3 scripts/gen_cli_docs.py`
 (build the binary you want documented first; the script prefers `target/release/ag`, or set `AG=`).
+The README's banner and architecture diagram are generated too: edit `scripts/gen_readme_assets.py` and run it
+(the UI screenshots are refreshed by `npm run test:e2e` in `apps/web`).
 
 ## What a good change looks like
 

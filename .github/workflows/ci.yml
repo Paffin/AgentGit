@@ -80,6 +80,8 @@ jobs:
         run: cargo build --release -p ag-cli
       - name: CLI reference is up to date
         run: AG=target/release/ag python3 scripts/gen_cli_docs.py --check
+      - name: README artwork is up to date
+        run: python3 scripts/gen_readme_assets.py --check
       - name: README demo still behaves as documented
         run: AG=$PWD/target/release/ag ./examples/quickstart.sh
 

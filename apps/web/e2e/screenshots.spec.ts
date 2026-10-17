@@ -55,6 +55,11 @@ test.describe('documentation screenshots', () => {
     await expect(page.getByTestId('blockers')).toContainText('fencing token')
     await page.mouse.move(0, 0)
     await page.screenshot({ path: out('ui-proposal.png') })
+    // Just the "Where it stands" card (README): the four verdicts and what is in the way.
+    await page.screenshot({
+      path: out('ui-proposal-verdicts.png'),
+      clip: { x: 0, y: 345, width: 1440, height: 380 },
+    })
   })
 
   test('admin: policy with its version diff', async ({ page, state }) => {

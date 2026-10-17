@@ -104,6 +104,9 @@ func IsRetryable(err error) bool {
 // expired). Callers must look the state up before repeating the call.
 var ErrOutcomeUnknown = errors.New("agwp: outcome unknown")
 
+// ErrResponseTooLarge: a response body was larger than the caller allowed.
+var ErrResponseTooLarge = errors.New("agwp: response too large")
+
 // OutcomeUnknownError wraps the transport failure of a mutation whose result
 // the client cannot know.
 type OutcomeUnknownError struct {

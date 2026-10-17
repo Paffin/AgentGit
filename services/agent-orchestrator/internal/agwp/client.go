@@ -340,7 +340,7 @@ func (c *Client) once(ctx context.Context, cl *call, key string) error {
 		return &transportError{err: err}
 	}
 	if int64(len(data)) > limit {
-		return fmt.Errorf("agwp: %s response exceeds %d bytes", cl.op, limit)
+		return fmt.Errorf("%w: %s response exceeds %d bytes", ErrResponseTooLarge, cl.op, limit)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return parseError(resp, data)

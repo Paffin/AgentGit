@@ -252,12 +252,48 @@ type ValidationStatus struct {
 	JobID         string `json:"job_id"`
 }
 
-// Job is a queued unit of work for the trusted execution plane.
+// Job states.
+const (
+	JobQueued    = "queued"
+	JobClaimed   = "claimed"
+	JobSucceeded = "succeeded"
+	JobFailed    = "failed"
+)
+
+// Job is a queued unit of work for the trusted execution plane. The
+// orchestrator only ever reads jobs: claiming, running and attesting them is
+// the job of runner-role workers whose signing keys the policy trusts.
 type Job struct {
-	ID    string `json:"id"`
-	Kind  string `json:"kind"`
-	State string `json:"state"`
-	Repo  string `json:"repo"`
+	ID             string          `json:"id"`
+	Kind           string          `json:"kind"`
+	State          string          `json:"state"`
+	Repo           string          `json:"repo"`
+	Attempts       uint32          `json:"attempts"`
+	ClaimedBy      string          `json:"claimed_by"`
+	ClaimedUntilMs int64           `json:"claimed_until_ms"`
+	CreatedAtMs    int64           `json:"created_at_ms"`
+	UpdatedAtMs    int64           `json:"updated_at_ms"`
+	Error          string          `json:"error"`
+	Validation     *ValidationTask `json:"validation"`
+}
+
+// ValidationTask says which check to run on which exact tree.
+type ValidationTask struct {
+	Check                     string   `json:"check"`
+	Proposal                  string   `json:"proposal"`
+	Stream                    string   `json:"stream"`
+	TreeID                    string   `json:"tree_id"`
+	PolicyVersion             uint64   `json:"policy_version"`
+	RequiredEnvironmentDigest string   `json:"required_environment_digest"`
+	Run                       *RunSpec `json:"run"`
+}
+
+// RunSpec is how the policy says a check should be run.
+type RunSpec struct {
+	Argv        []string `json:"argv"`
+	TimeoutSecs uint32   `json:"timeout_secs"`
+	MemoryMB    uint32   `json:"memory_mb"`
+	Network     bool     `json:"network"`
 }
 
 // Preparation is the answer of integration.prepare.

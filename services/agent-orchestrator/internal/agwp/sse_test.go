@@ -118,13 +118,14 @@ func TestFollowerStartsLiveAndResumesAfterDrops(t *testing.T) {
 	reconnects := make(chan error, 8)
 	f := c.NewFollower(FollowOptions{Repo: "acme/web", Topics: []string{"task", "run"}, OnReconnect: func(err error) { reconnects <- err }})
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel) // runs before the test server closes, so no SSE handler is left waiting
 	go func() {
 		_ = f.Run(ctx, func(e Event) {
 			mu.Lock()
 			got = append(got, e)
 			n := len(got)
 			mu.Unlock()
-			if n == 4 {
+			if n == 3 {
 				close(done)
 			}
 		})
@@ -134,19 +135,16 @@ func TestFollowerStartsLiveAndResumesAfterDrops(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out; got %+v", got)
 	}
+	// The third connection is the reconnect after the error event.
+	deadline := time.Now().Add(5 * time.Second)
+	for len(srv.connections()) < 3 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	cancel()
 	mu.Lock()
 	defer mu.Unlock()
-	seqs := []uint64{}
-	for _, e := range got {
-		seqs = append(seqs, e.Seq)
-	}
-	if fmt.Sprint(seqs) != "[41 42 43 41]" && fmt.Sprint(seqs) != "[41 42 43]" {
-		// 4th event may come from the third (blocking) connection only if the script had more; we only expect 41,42,43.
-		t.Logf("seqs = %v", seqs)
-	}
-	if len(got) < 3 || got[0].Seq != 41 || got[1].Seq != 42 || got[2].Seq != 43 {
-		t.Fatalf("events = %+v", got)
+	if len(got) != 3 || got[0].Seq != 41 || got[1].Seq != 42 || got[2].Seq != 43 {
+		t.Fatalf("events = %+v (the overlapping replay of 42 must be dropped)", got)
 	}
 	if got[2].Topic != "run.finish" || got[0].Detail("k") != "v41" || got[0].Payload.Actor != "user:a" {
 		t.Fatalf("event decoding wrong: %+v", got[0])
@@ -196,6 +194,7 @@ func TestFollowerBackoffGrowsThenResetsAfterProgress(t *testing.T) {
 	c, ck, _ := newTestClient(t, srv.Handler())
 	f := c.NewFollower(FollowOptions{Repo: "acme/web", FromStart: true, BackoffBase: time.Second, BackoffMax: time.Minute})
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	got := make(chan struct{}, 1)
 	go func() { _ = f.Run(ctx, func(Event) { got <- struct{}{} }) }()
 	select {
@@ -203,7 +202,8 @@ func TestFollowerBackoffGrowsThenResetsAfterProgress(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no event")
 	}
-	for len(srv.connections()) < 6 {
+	deadline := time.Now().Add(5 * time.Second)
+	for len(srv.connections()) < 6 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
 	cancel()

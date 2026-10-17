@@ -429,6 +429,24 @@ func (c *Client) Prepare(ctx context.Context, repo, proposal string, enqueue boo
 	return &out, nil
 }
 
+// ListJobs lists execution-plane jobs of a repository, optionally by state.
+func (c *Client) ListJobs(ctx context.Context, repo, state string, limit int) ([]Job, error) {
+	q := url.Values{}
+	if state != "" {
+		q.Set("state", state)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var out struct {
+		Jobs []Job `json:"jobs"`
+	}
+	if err := c.repoCall(ctx, "jobs.list", http.MethodGet, repo, "/jobs", q, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Jobs, nil
+}
+
 // ListQueue lists the integration queue of a stream.
 func (c *Client) ListQueue(ctx context.Context, repo, stream string) ([]QueueEntry, error) {
 	var out struct {

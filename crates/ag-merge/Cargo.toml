@@ -12,6 +12,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ag-changeset.workspace = true
 ag-types.workspace = true
 ag-diff.workspace = true
 ag-tree.workspace = true

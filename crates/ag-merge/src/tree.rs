@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ag_tree::{Entry, Tree};
+use ag_tree::{Change, Entry, Tree};
 use ag_types::{BlobId, FileType, Limits, RepoPath};
 
-use crate::rename::detect_renames;
+use crate::rename::detect_renames_in;
 use crate::text::{TextMerge, merge_text};
 
 /// Largest blob (per side) that is text-merged; bigger files conflict.
@@ -131,30 +131,130 @@ pub fn merge_trees(
     io: &dyn BlobIo,
     limits: &Limits,
 ) -> Result<TreeMerge, IoError> {
-    let mut merged: BTreeMap<RepoPath, Entry> = BTreeMap::new();
-    let mut conflicts: Vec<Conflict> = Vec::new();
+    // Two linear walks find everything that differs; the merge then looks only at those paths.
+    let ours_changes = base.changes(ours);
+    let theirs_changes = base.changes(theirs);
+    let plan = plan_renames(base, ours, theirs, &ours_changes, &theirs_changes, io)?;
+    if let Some(merged) = merge_incremental(ours, &theirs_changes, &plan, io, limits)? {
+        return Ok(merged);
+    }
+    merge_full(base, ours, theirs, &plan, io, limits)
+}
 
-    // Renames first: a file moved on one side and edited on the other is one unit at its new path.
-    let plan = plan_renames(base, ours, theirs, io)?;
+/// Resolves the rename units and planned conflicts into `desired` (final entries of the paths they touch)
+/// and `conflicts`. Shared by both merge strategies so they cannot drift apart.
+fn resolve_plan(
+    plan: &RenamePlan,
+    io: &dyn BlobIo,
+    desired: &mut BTreeMap<RepoPath, Option<Entry>>,
+    conflicts: &mut Vec<Conflict>,
+) -> Result<(), IoError> {
+    // A consumed path is absent from the result unless a unit or a planned conflict puts something there.
+    for p in &plan.consumed {
+        desired.insert(p.clone(), None);
+    }
     for unit in &plan.units {
         match resolve_both_changed(Some(unit.base), Some(unit.ours), Some(unit.theirs), io)? {
             Resolution::Take(Some(e)) => {
-                merged.insert(unit.to.clone(), e);
+                desired.insert(unit.to.clone(), Some(e));
             }
             Resolution::Take(None) => {}
             Resolution::Conflict(kind) => {
                 // Best effort: our content at the merged location.
-                merged.insert(unit.to.clone(), unit.ours);
+                desired.insert(unit.to.clone(), Some(unit.ours));
                 conflicts.push(Conflict { path: unit.to.clone(), kind, origin: Some(unit.origin()) });
             }
         }
     }
-    for c in plan.conflicts {
-        for (path, entry) in c.keep {
-            merged.insert(path, entry);
+    for c in &plan.conflicts {
+        for (path, entry) in &c.keep {
+            desired.insert(path.clone(), Some(*entry));
         }
-        conflicts.push(c.conflict);
+        conflicts.push(c.conflict.clone());
     }
+    Ok(())
+}
+
+/// The ordinary per-path rule.
+fn resolve_path(
+    base: Option<Entry>,
+    ours: Option<Entry>,
+    theirs: Option<Entry>,
+    io: &dyn BlobIo,
+) -> Result<Resolution, IoError> {
+    Ok(if ours == theirs || theirs == base {
+        Resolution::Take(ours)
+    } else if ours == base {
+        Resolution::Take(theirs)
+    } else {
+        resolve_both_changed(base, ours, theirs, io)?
+    })
+}
+
+/// Merge by editing `ours`: only paths their side changed (or a rename touched) are examined, and the
+/// result is `ours` with those paths replaced. Linear walks and no per-path work for unchanged files.
+///
+/// Returns `None` when the edited tree would break the file/directory rule; the caller then runs
+/// [`merge_full`], which reports such cases as conflicts.
+pub(crate) fn merge_incremental(
+    ours: &Tree,
+    theirs_changes: &[Change],
+    plan: &RenamePlan,
+    io: &dyn BlobIo,
+    limits: &Limits,
+) -> Result<Option<TreeMerge>, IoError> {
+    let mut desired: BTreeMap<RepoPath, Option<Entry>> = BTreeMap::new();
+    let mut conflicts: Vec<Conflict> = Vec::new();
+    resolve_plan(plan, io, &mut desired, &mut conflicts)?;
+    for ch in theirs_changes {
+        if plan.consumed.contains(&ch.path) {
+            continue;
+        }
+        let o = ours.get(&ch.path).copied();
+        match resolve_path(ch.before, o, ch.after, io)? {
+            Resolution::Take(e) => {
+                desired.insert(ch.path.clone(), e);
+            }
+            Resolution::Conflict(kind) => {
+                desired.insert(ch.path.clone(), o);
+                conflicts.push(Conflict { path: ch.path.clone(), kind, origin: None });
+            }
+        }
+    }
+    let ops: Vec<ag_changeset::Op> = desired
+        .into_iter()
+        .filter_map(|(path, want)| match (want, ours.get(&path).copied()) {
+            (Some(w), Some(h)) if w == h => None,
+            (Some(w), _) => Some(ag_changeset::Op::Put {
+                path,
+                content: w.content,
+                file_type: w.file_type,
+                executable: w.executable,
+            }),
+            (None, Some(_)) => Some(ag_changeset::Op::Delete { path }),
+            (None, None) => None,
+        })
+        .collect();
+    let Ok(tree) = ours.apply(&ops, limits) else { return Ok(None) };
+    conflicts.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(Some(TreeMerge { tree, conflicts }))
+}
+
+/// The reference algorithm: visit every path of the three trees and build the merged map from scratch.
+/// Slower, but it also reports file/directory conflicts; [`merge_incremental`] must agree with it
+/// wherever it answers (property-tested).
+pub(crate) fn merge_full(
+    base: &Tree,
+    ours: &Tree,
+    theirs: &Tree,
+    plan: &RenamePlan,
+    io: &dyn BlobIo,
+    limits: &Limits,
+) -> Result<TreeMerge, IoError> {
+    let mut desired: BTreeMap<RepoPath, Option<Entry>> = BTreeMap::new();
+    let mut conflicts: Vec<Conflict> = Vec::new();
+    resolve_plan(plan, io, &mut desired, &mut conflicts)?;
+    let mut merged: BTreeMap<RepoPath, Entry> = desired.into_iter().filter_map(|(p, e)| e.map(|e| (p, e))).collect();
 
     let mut paths: BTreeSet<&RepoPath> = BTreeSet::new();
     paths.extend(base.iter().map(|(p, _)| p));
@@ -168,14 +268,7 @@ pub fn merge_trees(
         let b = base.get(path).copied();
         let o = ours.get(path).copied();
         let t = theirs.get(path).copied();
-        let resolved = if o == t || t == b {
-            Resolution::Take(o)
-        } else if o == b {
-            Resolution::Take(t)
-        } else {
-            resolve_both_changed(b, o, t, io)?
-        };
-        match resolved {
+        match resolve_path(b, o, t, io)? {
             Resolution::Take(e) => {
                 if let Some(e) = e {
                     merged.insert(path.clone(), e);
@@ -237,7 +330,7 @@ struct PlannedConflict {
 }
 
 #[derive(Default)]
-struct RenamePlan {
+pub(crate) struct RenamePlan {
     units: Vec<Unit>,
     conflicts: Vec<PlannedConflict>,
     /// Paths (in any of the three trees) the ordinary per-path rule must skip.
@@ -245,12 +338,19 @@ struct RenamePlan {
 }
 
 /// Decides, per renamed file, how the two sides combine. Fully determined by the three trees.
-fn plan_renames(base: &Tree, ours: &Tree, theirs: &Tree, io: &dyn BlobIo) -> Result<RenamePlan, IoError> {
+pub(crate) fn plan_renames(
+    base: &Tree,
+    ours: &Tree,
+    theirs: &Tree,
+    ours_changes: &[Change],
+    theirs_changes: &[Change],
+    io: &dyn BlobIo,
+) -> Result<RenamePlan, IoError> {
     let mut plan = RenamePlan::default();
     let ours_ren: BTreeMap<RepoPath, RepoPath> =
-        detect_renames(base, ours, io)?.into_iter().map(|r| (r.from, r.to)).collect();
+        detect_renames_in(ours_changes, io)?.into_iter().map(|r| (r.from, r.to)).collect();
     let theirs_ren: BTreeMap<RepoPath, RepoPath> =
-        detect_renames(base, theirs, io)?.into_iter().map(|r| (r.from, r.to)).collect();
+        detect_renames_in(theirs_changes, io)?.into_iter().map(|r| (r.from, r.to)).collect();
     let froms: BTreeSet<&RepoPath> = ours_ren.keys().chain(theirs_ren.keys()).collect();
 
     for from in froms {

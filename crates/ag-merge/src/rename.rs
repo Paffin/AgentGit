@@ -22,7 +22,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use ag_diff::{is_binary, split_lines};
-use ag_tree::{Entry, Tree};
+use ag_tree::{Change, Entry, Tree};
 use ag_types::{BlobId, FileType, RepoPath};
 
 use crate::tree::{BlobIo, IoError};
@@ -49,10 +49,27 @@ pub struct Rename {
 
 /// Finds the renames that turn `old` into `new`, ordered by `from`.
 pub fn detect_renames(old: &Tree, new: &Tree, io: &dyn BlobIo) -> Result<Vec<Rename>, IoError> {
-    let deleted: Vec<(&RepoPath, &Entry)> =
-        old.iter().filter(|(p, e)| e.file_type == FileType::Regular && new.get(p).is_none()).collect();
-    let added: Vec<(&RepoPath, &Entry)> =
-        new.iter().filter(|(p, e)| e.file_type == FileType::Regular && old.get(p).is_none()).collect();
+    detect_renames_in(&old.changes(new), io)
+}
+
+/// Like [`detect_renames`], from the list of paths that differ (see [`Tree::changes`]). Deleted paths are
+/// those with no `after`; added paths those with no `before`.
+pub fn detect_renames_in(changes: &[Change], io: &dyn BlobIo) -> Result<Vec<Rename>, IoError> {
+    let regular = |e: &Entry| e.file_type == FileType::Regular;
+    let deleted: Vec<(&RepoPath, &Entry)> = changes
+        .iter()
+        .filter_map(|c| match (&c.before, &c.after) {
+            (Some(e), None) if regular(e) => Some((&c.path, e)),
+            _ => None,
+        })
+        .collect();
+    let added: Vec<(&RepoPath, &Entry)> = changes
+        .iter()
+        .filter_map(|c| match (&c.before, &c.after) {
+            (None, Some(e)) if regular(e) => Some((&c.path, e)),
+            _ => None,
+        })
+        .collect();
     if deleted.is_empty() || added.is_empty() {
         return Ok(Vec::new());
     }

@@ -34,4 +34,4 @@ verified on read; a bad entry is treated as a miss.
 - Worst-case cost of reading an arbitrary historical tree is bounded by 31 delta applications.
 - `ag reindex` rebuilds the same sparse set, so the cache remains provably disposable.
 - Flat manifests are still O(files) per tree; hierarchical Merkle directories are a separate, larger change
-  listed in the roadmap.
+  listed in the roadmap. [ADR-0006](0006-flat-trees-measured.md) measures the cost and says when to do it.

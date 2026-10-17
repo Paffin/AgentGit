@@ -40,6 +40,7 @@ mod tree;
 
 pub use rename::{
     MAX_SIMILARITY_CANDIDATES, MAX_SIMILARITY_FILE_SIZE, MAX_SIMILARITY_WORK, MIN_SIMILARITY, Rename, detect_renames,
+    detect_renames_in,
 };
 pub use text::{ConflictRegion, TextMerge, merge_text, render_conflict_markers};
 pub use tree::{BlobIo, Conflict, ConflictKind, ConflictOrigin, IoError, MAX_TEXT_MERGE_SIZE, TreeMerge, merge_trees};

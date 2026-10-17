@@ -153,6 +153,7 @@ dependencies = [
 name = "ag-merge"
 version = "0.1.0"
 dependencies = [
+ "ag-changeset",
  "ag-diff",
  "ag-object",
  "ag-tree",

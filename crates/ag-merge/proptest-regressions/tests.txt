@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc ad9258d713ec80f3a368d6a76da0d04053e187914e37cf817344935c08527884 # shrinks to n_files = 1, victim = 0, size = 6
+cc b03f797fd251ba86b2c180154ae524bbebb4d65fffdc3d6f672ca2e2a8c7c6bb # shrinks to base = [None, None, None, None, None, None, None, None, None, Some(0), None], ours = [None, None, None, None, None, None, None, Some(1), None, None, None], theirs = [None, None, None, None, None, None, None, Some(0), None, None, None]
+cc 316f9b001a6ded89ccef057c30be22e23267fd40e24daa122927aaa5d83030eb # shrinks to base = [None, None, None, None, None, None, None, None, None, None, None], ours = [None, None, None, None, None, None, None, Some(0), None, None, None], theirs = [None, None, None, None, None, None, Some(0), None, None, None, None]

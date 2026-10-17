@@ -552,3 +552,57 @@ proptest! {
         prop_assert_eq!(r.tree.len(), n_files);
     }
 }
+
+// ---- the incremental merge agrees with the reference algorithm --------------------------------
+
+mod strategies_agree {
+    use super::*;
+    use crate::tree::{merge_full, merge_incremental, plan_renames};
+
+    const PATHS: &[&str] = &["a", "b", "a/x", "a/y", "b/x", "c", "d/e", "d/e/f", "d/g", "h/i/j", "h"];
+    const BODIES: &[&str] = &[
+        "1\n2\n3\n4\n5\n6\n7\n8\n",
+        "ONE\n2\n3\n4\n5\n6\n7\n8\n",
+        "1\n2\n3\n4\n5\n6\n7\nEIGHT\n",
+        "1\n2\n3\nFOUR\n5\n6\n7\n8\n",
+        "x\ny\nz\n",
+        "completely\ndifferent\ntext\n",
+    ];
+
+    /// Optional body index per path.
+    fn side() -> impl Strategy<Value = Vec<Option<usize>>> {
+        proptest::collection::vec(proptest::option::weighted(0.6, 0..BODIES.len()), PATHS.len())
+    }
+
+    fn build(io: &Mem, sel: &[Option<usize>]) -> Option<Tree> {
+        let entries = PATHS.iter().zip(sel).filter_map(|(p_, b)| b.map(|b| (p(p_), entry(io, BODIES[b]))));
+        Tree::from_entries(entries, &lim()).ok()
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(400))]
+
+        #[test]
+        fn merge_incremental_equals_merge_full(base in side(), ours in side(), theirs in side()) {
+            let io = Mem::default();
+            let (Some(b), Some(o), Some(t)) = (build(&io, &base), build(&io, &ours), build(&io, &theirs)) else { return Ok(()) };
+            let (oc, tc) = (b.changes(&o), b.changes(&t));
+            let plan = plan_renames(&b, &o, &t, &oc, &tc, &io).unwrap();
+            let full = merge_full(&b, &o, &t, &plan, &io, &lim()).unwrap();
+            let fast = merge_incremental(&o, &tc, &plan, &io, &lim()).unwrap();
+            let structural = full.conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. }));
+            match fast {
+                Some(f) => {
+                    prop_assert!(!structural, "the fast path must decline when the result breaks the file/directory rule");
+                    prop_assert_eq!(f.tree.id(), full.tree.id());
+                    prop_assert_eq!(&f.conflicts, &full.conflicts);
+                }
+                None => prop_assert!(structural, "the fast path declined although the reference found no structural conflict"),
+            }
+            // And the public entry point is the reference answer either way.
+            let public = merge_trees(&b, &o, &t, &io, &lim()).unwrap();
+            prop_assert_eq!(public.tree.id(), full.tree.id());
+            prop_assert_eq!(&public.conflicts, &full.conflicts);
+        }
+    }
+}

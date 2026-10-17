@@ -40,7 +40,7 @@ pub(crate) use self::pool::{Pool, Pooled};
 pub(crate) use self::tls::connector as tls_connector;
 pub(crate) use self::url::parse_target;
 use super::db::{Conn, Dialect, Param, Row, Value, pg_placeholders};
-use super::migrate::{POSTGRES_MIGRATIONS, SCHEMA_VERSION};
+use super::migrate::{Migration, POSTGRES_MIGRATIONS};
 use super::{MetaError, Tx};
 use crate::clock::Clock;
 
@@ -350,6 +350,9 @@ impl PgClient {
     }
 }
 
+/// A pooled connection idle for this long is probed before a single-statement call uses it.
+const STALE_AFTER: Duration = Duration::from_secs(1);
+
 /// How a transaction is opened.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TxKind {
@@ -418,6 +421,7 @@ pub(crate) struct PgBackend {
     schema: String,
     write_key: i64,
     opts: PgOptions,
+    migrations: &'static [Migration],
 }
 
 fn missing_repository(schema: &str) -> MetaError {
@@ -431,8 +435,20 @@ fn ms(d: Duration) -> u128 {
 }
 
 impl PgBackend {
-    /// Connects, creates the schema if needed and migrates it.
+    /// Connects, creates the schema if needed and migrates it (a repository schema).
     pub(crate) fn open(url: &str, schema: &str, opts: &PgOptions, now: Timestamp) -> Result<Self, MetaError> {
+        Self::open_with(url, schema, opts, now, POSTGRES_MIGRATIONS)
+    }
+
+    /// Like [`PgBackend::open`] with another migration list (a server's own tables). The first
+    /// migration must create a `meta (key, value)` table: the schema version is kept there.
+    pub(crate) fn open_with(
+        url: &str,
+        schema: &str,
+        opts: &PgOptions,
+        now: Timestamp,
+        migrations: &'static [Migration],
+    ) -> Result<Self, MetaError> {
         validate_schema_name(schema)?;
         if opts.pool_size == 0 {
             return Err(MetaError::Invalid("pool_size must be at least 1".into()));
@@ -445,6 +461,7 @@ impl PgBackend {
             schema: schema.to_string(),
             write_key: advisory_key("meta-write", schema),
             opts: opts.clone(),
+            migrations,
         };
         backend.migrate(now)?;
         Ok(backend)
@@ -489,13 +506,14 @@ impl PgBackend {
             } else {
                 0
             };
-            if current > SCHEMA_VERSION {
-                return Err(MetaError::UnsupportedSchema { found: current, supported: SCHEMA_VERSION });
+            let latest = self.migrations.last().map_or(0, |m| m.version);
+            if current > latest {
+                return Err(MetaError::UnsupportedSchema { found: current, supported: latest });
             }
             if current == 0 && !self.opts.create_schema {
                 return Err(missing_repository(&self.schema));
             }
-            for m in POSTGRES_MIGRATIONS.iter().filter(|m| m.version > current) {
+            for m in self.migrations.iter().filter(|m| m.version > current) {
                 c.batch(m.sql).map_err(|e| m.failed(e))?;
                 c.exec(
                     "INSERT INTO meta (key, value) VALUES ('created_at', ?1) ON CONFLICT (key) DO NOTHING",
@@ -531,7 +549,18 @@ impl PgBackend {
                     self.write_key
                 ),
                 TxKind::Read => "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY".to_string(),
-                TxKind::Single => return Ok(conn),
+                TxKind::Single => {
+                    // A connection that sat idle may have been cut (a failover, an administrator, a firewall):
+                    // find out now, while nothing has been sent, instead of failing the caller's statement.
+                    if conn.last_used.elapsed() >= STALE_AFTER
+                        && let Err(e) = conn.batch("SELECT 1")
+                    {
+                        conn.broken = true;
+                        last = Some(e);
+                        continue;
+                    }
+                    return Ok(conn);
+                }
             };
             conn.in_tx = true;
             match conn.batch(&sql) {
@@ -557,13 +586,20 @@ impl PgBackend {
         limits: &Limits,
         f: impl FnOnce(&Tx<'_>) -> Result<T, MetaError>,
     ) -> Result<T, MetaError> {
+        // `now` is captured after the write lock was granted, like SQLite's BEGIN IMMEDIATE.
+        self.run_conn(kind, |conn| f(&Tx::new(conn, clock.now(), limits)))
+    }
+
+    /// Like [`PgBackend::run`] for a closure that talks to the connection directly.
+    pub(crate) fn run_conn<T>(
+        &self,
+        kind: TxKind,
+        f: impl FnOnce(&dyn Conn) -> Result<T, MetaError>,
+    ) -> Result<T, MetaError> {
         let mut conn = self.begin(kind)?;
         let out = {
-            // Captured after the write lock was granted, like SQLite's BEGIN IMMEDIATE.
-            let now = clock.now();
             let session = PgSession::new(&mut conn, (kind == TxKind::Single).then_some(1));
-            let tx = Tx::new(&session, now, limits);
-            let r = f(&tx);
+            let r = f(&session);
             match r {
                 Ok(_) if session.failed.get() => Err(MetaError::Postgres(
                     "a statement failed inside the transaction but its error was ignored; the transaction was rolled back"
@@ -589,6 +625,11 @@ impl PgBackend {
     /// Number of connections currently open (for tests and diagnostics).
     pub(crate) fn open_connections(&self) -> usize {
         self.pool.total()
+    }
+
+    /// A connection of its own, outside the pool (for `LISTEN`).
+    pub(crate) fn connect_dedicated(&self) -> Result<postgres::Client, MetaError> {
+        self.pool.connect_dedicated()
     }
 }
 

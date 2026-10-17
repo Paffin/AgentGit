@@ -205,12 +205,11 @@ impl App {
     // ---- bookkeeping: which repositories may have queued work ----------------------
 
     pub(crate) fn note_jobs_queued(&self, repo: &str) {
-        self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.to_string());
-        self.job_notify.notify_waiters();
+        self.announce_jobs(repo);
     }
 
-    /// Finds repositories with queued jobs (called at startup; a job queued
-    /// by another server process is picked up by the periodic rescan).
+    /// Finds repositories with queued jobs (called at startup; a job queued by another replica is announced
+    /// to this one with a cluster notice, and the periodic rescan picks up whatever the notice missed).
     pub fn rebuild_job_index(&self) {
         let Ok(repos) = self.control.repos("", "", 100_000) else { return };
         for row in repos {
@@ -224,7 +223,7 @@ impl App {
 
     /// Queued jobs across the repositories known to have work (blocking).
     pub fn count_queued_jobs(&self) -> i64 {
-        let repos: Vec<String> = self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+        let repos: Vec<String> = self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
         repos
             .iter()
             .filter_map(|name| self.repos.handle(name).ok())
@@ -277,13 +276,13 @@ impl App {
         let wait = Duration::from_millis(u64::from(req.wait_ms.min(MAX_WAIT_MS)));
         let deadline = Instant::now() + wait;
         loop {
-            let notified = self.job_notify.notified();
+            let notified = self.local.job_notify.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
             let candidates: Vec<String> = if req.repo.is_empty() {
                 let bindings = self.bindings().await?;
                 let names: Vec<String> =
-                    self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+                    self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
                 names
                     .into_iter()
                     .filter(|n| Authorizer::check(&call.principal, &bindings, n, Cap::JobsClaim, None).is_ok())
@@ -296,16 +295,17 @@ impl App {
                     return Ok(v1::ClaimJobResponse { job: Some(job) });
                 }
                 if req.repo.is_empty() {
-                    self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).remove(&repo);
+                    self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).remove(&repo);
                 }
             }
-            if Instant::now() >= deadline {
+            // A draining replica hands its long-polls back at once; the worker reconnects to another one.
+            if Instant::now() >= deadline || self.is_shutting_down() {
                 return Ok(v1::ClaimJobResponse { job: None });
             }
             let remaining = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(1));
             let _ = tokio::time::timeout(remaining, notified).await;
-            if req.repo.is_empty() && self.job_repos.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
-                // Another server process may have queued work: look again now and then.
+            if req.repo.is_empty() {
+                // Another replica may have queued work whose cluster notice was missed: look again now and then.
                 self.rescan_jobs_if_due();
             }
         }
@@ -313,8 +313,9 @@ impl App {
 
     fn rescan_jobs_if_due(&self) {
         let now = Instant::now();
+        let forced = self.local.job_rescan_due.swap(false, std::sync::atomic::Ordering::AcqRel);
         let mut last = self.job_rescan.lock().unwrap_or_else(|e| e.into_inner());
-        if now.duration_since(*last) >= Duration::from_secs(5) {
+        if forced || now.duration_since(*last) >= Duration::from_secs(5) {
             *last = now;
             let app = self.clone();
             tokio::task::spawn_blocking(move || app.rebuild_job_index());

@@ -1,7 +1,8 @@
 //! Prometheus metrics.
 
 use prometheus::{
-    Encoder, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
+    Encoder, Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
+    TextEncoder,
 };
 
 /// All metrics exported at `/metrics`.
@@ -41,6 +42,20 @@ pub struct Metrics {
     pub trace_dropped: IntCounter,
     /// Failed trace export attempts.
     pub trace_failures: IntCounter,
+    /// Always 1; the labels say which replica this is, which build, and which control database it uses.
+    pub replica_info: IntGaugeVec,
+    /// Schema version of the control database as found at start-up.
+    pub control_schema_version: IntGauge,
+    /// 1 from SIGTERM until exit (the replica reports "not ready" and finishes its requests).
+    pub draining: IntGauge,
+    /// Seconds between an event being recorded and this replica delivering it to a subscriber.
+    pub event_lag: Histogram,
+    /// Cluster notices by direction (`sent`, `received`) and kind (`events`, `jobs`, `bindings`).
+    pub cluster_notices: IntCounterVec,
+    /// 1 while this replica's `LISTEN` connection to the control database is up (always 0 on SQLite).
+    pub cluster_listener_up: IntGauge,
+    /// Times the listener (re)connected and refreshed everything, as after a possible gap in notices.
+    pub cluster_resyncs: IntCounter,
 }
 
 impl Metrics {
@@ -80,6 +95,29 @@ impl Metrics {
             IntCounter::new("trace_spans_dropped_total", "Trace spans dropped before delivery").expect("metric");
         let trace_failures =
             IntCounter::new("trace_export_failures_total", "Failed trace export attempts").expect("metric");
+        let replica_info = IntGaugeVec::new(
+            Opts::new("replica_info", "Which replica, build and control database this is (value 1)"),
+            &["replica", "version", "control"],
+        )
+        .expect("metric");
+        let control_schema_version =
+            IntGauge::new("control_schema_version", "Control database schema version at start-up").expect("metric");
+        let draining = IntGauge::new("draining", "1 while the replica is draining before shutdown").expect("metric");
+        let event_lag = Histogram::with_opts(
+            HistogramOpts::new("event_delivery_lag_seconds", "Time from an event being recorded to its delivery to a subscriber")
+                .buckets(vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]),
+        )
+        .expect("metric");
+        let cluster_notices = IntCounterVec::new(
+            Opts::new("cluster_notices_total", "Notices exchanged between replicas through the control database"),
+            &["direction", "kind"],
+        )
+        .expect("metric");
+        let cluster_listener_up =
+            IntGauge::new("cluster_listener_up", "1 while the cluster notice connection is up").expect("metric");
+        let cluster_resyncs =
+            IntCounter::new("cluster_resyncs_total", "Full refreshes after the cluster notice connection (re)connected")
+                .expect("metric");
         for c in [
             Box::new(requests.clone()) as Box<dyn prometheus::core::Collector>,
             Box::new(latency.clone()),
@@ -98,6 +136,13 @@ impl Metrics {
             Box::new(trace_exported.clone()),
             Box::new(trace_dropped.clone()),
             Box::new(trace_failures.clone()),
+            Box::new(replica_info.clone()),
+            Box::new(control_schema_version.clone()),
+            Box::new(draining.clone()),
+            Box::new(event_lag.clone()),
+            Box::new(cluster_notices.clone()),
+            Box::new(cluster_listener_up.clone()),
+            Box::new(cluster_resyncs.clone()),
         ] {
             registry.register(c).expect("register metric");
         }
@@ -120,6 +165,13 @@ impl Metrics {
             trace_exported,
             trace_dropped,
             trace_failures,
+            replica_info,
+            control_schema_version,
+            draining,
+            event_lag,
+            cluster_notices,
+            cluster_listener_up,
+            cluster_resyncs,
         }
     }
 

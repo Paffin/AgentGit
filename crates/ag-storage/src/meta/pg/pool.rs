@@ -60,6 +60,11 @@ impl Pool {
         }
     }
 
+    /// A connection of its own, not part of the pool (session state such as `LISTEN` must not leak into it).
+    pub(crate) fn connect_dedicated(&self) -> Result<postgres::Client, MetaError> {
+        self.shared.connect_raw()
+    }
+
     pub(crate) fn total(&self) -> usize {
         self.shared.state.lock().unwrap_or_else(|e| e.into_inner()).total
     }
@@ -104,13 +109,17 @@ impl Pool {
 }
 
 impl Shared {
-    fn connect(&self) -> Result<PgClient, MetaError> {
-        let client = match &self.connector {
+    fn connect_raw(&self) -> Result<postgres::Client, MetaError> {
+        match &self.connector {
             Connector::Plain => self.config.connect(postgres::NoTls),
             #[cfg(feature = "tls")]
             Connector::Rustls(m) => self.config.connect(m.clone()),
         }
-        .map_err(|e| classify(&e, false))?;
+        .map_err(|e| classify(&e, false))
+    }
+
+    fn connect(&self) -> Result<PgClient, MetaError> {
+        let client = self.connect_raw()?;
         let mut c = PgClient { client, stmts: HashMap::new(), in_tx: false, broken: false, last_used: Instant::now() };
         let mut setup = format!(
             "SET search_path TO {}; SET idle_in_transaction_session_timeout = {}",

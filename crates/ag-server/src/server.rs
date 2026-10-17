@@ -139,11 +139,13 @@ fn cors(router: Router, app: &App) -> Router {
     )
 }
 
+/// Readiness: 200 while this replica should receive new requests; 503 while it drains for shutdown or when the
+/// control database does not answer. Liveness (`/healthz`) deliberately does not look at the database: restarting
+/// a replica does not repair a database outage.
 async fn readyz(State(app): State<App>) -> Response {
-    let control = app.control.clone();
-    match tokio::task::spawn_blocking(move || control.kv_get("ready-probe")).await {
-        Ok(Ok(_)) => "ready".into_response(),
-        _ => (StatusCode::SERVICE_UNAVAILABLE, "control database unavailable").into_response(),
+    match app.not_ready_reason().await {
+        None => "ready".into_response(),
+        Some(why) => (StatusCode::SERVICE_UNAVAILABLE, why).into_response(),
     }
 }
 
@@ -189,6 +191,13 @@ async fn serve_inner(
     let signal_app = app.clone();
     let shutdown = async move {
         shutdown.await;
+        // First stop being ready, so a balancer takes this replica out of rotation while it still serves.
+        signal_app.begin_drain();
+        let drain = std::time::Duration::from_secs(signal_app.cfg.server.drain_secs);
+        if !drain.is_zero() {
+            tracing::info!(seconds = drain.as_secs(), "draining: not ready, still serving");
+            tokio::time::sleep(drain).await;
+        }
         // Streams are long-lived; ask them to finish so graceful shutdown can complete.
         signal_app.begin_shutdown();
     };

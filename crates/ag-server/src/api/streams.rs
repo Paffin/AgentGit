@@ -33,7 +33,7 @@ impl App {
     /// Creates a stream, optionally at an existing revision.
     pub async fn create_stream(&self, call: &Call, req: v1::CreateStreamRequest) -> ApiResult<v1::Stream> {
         let name = StreamName::new(&req.name).map_err(|e| ApiError::invalid(e.to_string()))?;
-        let max_streams = self.control.repo(&req.repo)?.map(|r| r.quota.max_streams).unwrap_or(0);
+        let max_streams = self.repo_row(&req.repo).await?.map(|r| r.quota.max_streams).unwrap_or(0);
         let from_rev = req.from_rev.clone();
         let stream_name = name.to_string();
         self.with_repo_mut(

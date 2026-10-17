@@ -85,7 +85,7 @@ impl App {
     pub async fn store_object(&self, call: &Call, repo: &str, expected_id: &str, envelope: Vec<u8>) -> ApiResult<bool> {
         let expected: ObjectId = parse_id(expected_id, "object id")?;
         let size = envelope.len() as u64;
-        let quota = self.control.repo(repo)?.map(|r| (r.quota.max_total_object_bytes, r.object_bytes));
+        let quota = self.repo_row(repo).await?.map(|r| (r.quota.max_total_object_bytes, r.object_bytes));
         let control = self.control.clone();
         let name = repo.to_string();
         let newly = self

@@ -162,3 +162,51 @@ jobs:
           test "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy || { docker logs ag; exit 1; }
           curl -fsS http://127.0.0.1:18080/readyz
           docker run --rm agentgit-cli:ci --version
+
+  sdk:
+    name: client SDKs (TypeScript, Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p ag-server -p ag-cli
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: TypeScript SDK (generate:check, types, lint, tests against the real server, package)
+        working-directory: sdk/typescript
+        run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm run check
+      - uses: astral-sh/setup-uv@v5
+      - name: Python SDK (tests against the real server, ruff, mypy, generated code)
+        working-directory: sdk/python
+        run: |
+          uv sync
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+          uv run python scripts/generate.py --check
+      - name: Code samples in the docs are the code that is tested
+        run: python3 sdk/tools/sync_doc_samples.py --check
+
+  orchestrator:
+    name: agent orchestrator (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p ag-server
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      - name: vet, format, race tests (the integration suite runs a real ag-server)
+        working-directory: services/agent-orchestrator
+        run: |
+          go vet ./...
+          test -z "$(gofmt -l .)"
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race ./...

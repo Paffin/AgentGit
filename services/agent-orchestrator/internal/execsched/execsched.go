@@ -145,17 +145,18 @@ type Scheduler struct {
 	kick *loop.Kicker
 	run  *loop.Runner
 
-	mu        sync.Mutex
-	entries   map[string]*entry // open proposals by id
-	recent    []ProposalStatus  // integrated, newest first
-	dirty     map[string]bool   // proposals to re-prepare regardless of timers
-	dirtyAll  bool
-	head      agwp.Stream
-	jobs      []agwp.Job
-	queue     []agwp.QueueEntry
-	lastPass  time.Time
-	lastErr   string
-	listeners []func(Prepared)
+	mu         sync.Mutex
+	entries    map[string]*entry // open proposals by id
+	recent     []ProposalStatus  // integrated, newest first
+	dirty      map[string]bool   // proposals to re-prepare regardless of timers
+	dirtyAll   bool
+	head       agwp.Stream
+	jobs       []agwp.Job
+	queue      []agwp.QueueEntry
+	lastPass   time.Time
+	lastErr    string
+	listeners  []func(Prepared)
+	forgetters []func(string)
 }
 
 // New builds the scheduler.
@@ -466,7 +467,6 @@ func (s *Scheduler) forgetClosed(ctx context.Context, open map[string]bool) {
 		}
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for _, id := range gone {
 		e := s.entries[id]
 		delete(s.entries, id)
@@ -480,6 +480,21 @@ func (s *Scheduler) forgetClosed(ctx context.Context, open map[string]bool) {
 			}
 		}
 	}
+	listeners := append([]func(string){}, s.forgetters...)
+	s.mu.Unlock()
+	for _, id := range gone {
+		for _, fn := range listeners {
+			fn(id)
+		}
+	}
+}
+
+// SubscribeForget registers a listener called with the id of every proposal
+// that is no longer open (integrated or closed). Listeners must not block.
+func (s *Scheduler) SubscribeForget(fn func(proposal string)) {
+	s.mu.Lock()
+	s.forgetters = append(s.forgetters, fn)
+	s.mu.Unlock()
 }
 
 func orNA(v string) string {

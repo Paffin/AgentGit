@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -297,6 +298,27 @@ func TestClosedProposalsDisappearWithoutBeingCountedAsIntegrated(t *testing.T) {
 	st := h.s.Status()
 	if len(st.Open) != 0 || len(st.Integrated) != 0 {
 		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestForgetListenersHearOfClosedAndIntegratedProposals(t *testing.T) {
+	h := newHarness(t, true)
+	var gone []string
+	h.s.SubscribeForget(func(id string) { gone = append(gone, id) })
+	closed, landed, open := h.propose("closed"), h.propose("landed"), h.propose("open")
+	h.pass()
+	h.fake.CloseProposalFixture(repo, closed)
+	h.fake.IntegrateProposal(repo, landed)
+	h.pass()
+	sort.Strings(gone)
+	want := []string{closed, landed}
+	sort.Strings(want)
+	if len(gone) != 2 || gone[0] != want[0] || gone[1] != want[1] {
+		t.Fatalf("forgotten = %v, want %v (and not %s)", gone, want, open)
+	}
+	h.pass()
+	if len(gone) != 2 {
+		t.Fatalf("a proposal must be forgotten once: %v", gone)
 	}
 }
 

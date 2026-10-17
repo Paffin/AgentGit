@@ -309,6 +309,22 @@ func (c *Component) remember(rec *Record) {
 	}
 }
 
+// Forget drops everything remembered about a proposal that is no longer open
+// (integrated or closed): its advice is moot and must not pile up.
+func (c *Component) Forget(proposal string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.records, proposal)
+	delete(c.done, proposal)
+	delete(c.pending, proposal)
+	for i, id := range c.order {
+		if id == proposal {
+			c.order = append(c.order[:i], c.order[i+1:]...)
+			break
+		}
+	}
+}
+
 // Suggestions returns the full stored advice for a proposal (with the
 // suggested files), for the status API.
 func (c *Component) Suggestions(proposal string) (Record, bool) {

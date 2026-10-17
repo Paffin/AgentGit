@@ -223,6 +223,7 @@ func (a *App) build() error {
 		if config.On(rc.Advisor.Enabled) {
 			rt.advisor = advisor.New(advisor.Options{Repo: rc, API: a.advisorClient, Clock: a.clk, Metrics: a.metrics, Log: a.log})
 			rt.exec.Subscribe(rt.advisor.OnPrepared)
+			rt.exec.SubscribeForget(rt.advisor.Forget)
 		}
 		if config.On(rc.Review.Enabled) {
 			rt.review, err = review.New(review.Options{Repo: rc, API: a.reviewer, Reviewer: "service:reviewer", Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop})

@@ -180,6 +180,26 @@ func TestNoConflictsMeansNoAdviceAndForgetsOldRecords(t *testing.T) {
 	}
 }
 
+func TestForgetDropsEverythingAboutAProposal(t *testing.T) {
+	h := newHarness(t, nil)
+	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+		t.Fatal(err)
+	}
+	h.comp.OnPrepared(h.prepared(agwp.Conflict{Path: "a.txt"})) // queued again
+	h.comp.Forget(h.prop.ID)
+	if _, ok := h.comp.Suggestions(h.prop.ID); ok {
+		t.Fatal("advice kept for a proposal that is gone")
+	}
+	if st := h.comp.Status(); len(st.Records) != 0 {
+		t.Fatalf("status = %+v", st)
+	}
+	h.comp.Forget("nonexistent") // harmless
+	// If the same id came back (it cannot, but the memory must not suppress advice), advice would be given again.
+	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBinaryAndHugeFilesAreNotAnalysed(t *testing.T) {
 	h := newHarness(t, func(r *config.Repo) { r.Advisor.MaxFile = 2048 })
 	h.fake.Commit(repo, nil, nil, "x", "unused")

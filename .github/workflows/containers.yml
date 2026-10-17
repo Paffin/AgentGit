@@ -1,0 +1,398 @@
+name: Containers
+
+# Proves that "install it and run it" works, with the files in deploy/ and not just with their syntax:
+#
+#   image       builds deploy/docker/Dockerfile (buildx + the gha layer cache), checks size, user, health check and
+#               `--version`, runs it hardened (read-only root, no capabilities) and drives the end-to-end smoke
+#               (scripts/e2e_smoke.py) against it; its artifacts feed the next two jobs
+#   cache       a fresh runner rebuilds from the gha cache and must find the expensive layers CACHED
+#   compose     `docker compose up` of deploy/compose (server + PostgreSQL + MinIO), the same smoke against it
+#               (repository metadata in PostgreSQL, objects in MinIO), a restart, then the observability profile
+#   kubernetes  a kind cluster, deploy/kubernetes (base through the ci overlay), the same smoke through
+#               `kubectl port-forward`, a rollout restart
+#
+# The smoke is a real integration: create a repository, grant roles, mint credentials, `ag clone`, snapshot,
+# `ag push`, integrate through the server, read the result back over the HTTP API, and assert the metrics.
+
+on:
+  push:
+    branches: [main, "wip/**"]
+    paths:
+      - "deploy/**"
+      - "crates/**"
+      - "proto/**"
+      - "migrations/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".dockerignore"
+      - "scripts/e2e_*.py"
+      - "scripts/check_buildx_cache.py"
+      - ".github/workflows/containers.yml"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - "crates/**"
+      - "proto/**"
+      - "migrations/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".dockerignore"
+      - "scripts/e2e_*.py"
+      - "scripts/check_buildx_cache.py"
+      - ".github/workflows/containers.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: containers-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CACHE_SCOPE: agentgit-image
+
+jobs:
+  image:
+    name: image (build, run, smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Commit date (build argument)
+        id: meta
+        run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: server
+          load: true
+          tags: agentgit-server:ci
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ steps.meta.outputs.date }}
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+          cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+      - name: Build the CLI image (shares every layer but the last)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: cli
+          load: true
+          tags: agentgit-cli:ci
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ steps.meta.outputs.date }}
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+
+      - name: The images are small, non-root, shell-less, health-checked and know their commit
+        run: |
+          set -euo pipefail
+          for img in agentgit-server:ci agentgit-cli:ci; do
+            size=$(docker image inspect "$img" --format '{{.Size}}')
+            echo "$img: $((size / 1024 / 1024)) MiB"
+            test "$size" -lt $((100 * 1024 * 1024))
+            test "$(docker image inspect "$img" --format '{{.Config.User}}')" = "65532:65532"
+          done
+          docker image inspect agentgit-server:ci --format '{{json .Config.Healthcheck}}' | tee /dev/stderr | grep -q healthcheck
+          if docker run --rm --entrypoint /bin/sh agentgit-server:ci -c true 2>/dev/null; then
+            echo "::error::the server image contains a shell"; exit 1
+          fi
+          v=$(docker run --rm agentgit-server:ci --version); echo "$v"
+          case "$v" in "ag-server 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
+          v=$(docker run --rm agentgit-cli:ci --version); echo "$v"
+          case "$v" in "ag 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
+          docker history --no-trunc --format '{{.CreatedBy}}' agentgit-server:ci | grep -iE 'token|secret|password' && { echo "::error::a secret-looking string is in the image history"; exit 1; } || true
+
+      - name: Run the server hardened (read-only root, no capabilities) and wait for its health check
+        run: |
+          set -euo pipefail
+          { echo "AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)"; echo "AG_METRICS_TOKEN=$(openssl rand -hex 32)"; } > "$RUNNER_TEMP/ag.env"
+          docker volume create ag-data
+          docker run -d --name ag --env-file "$RUNNER_TEMP/ag.env" \
+            --read-only --cap-drop ALL --security-opt no-new-privileges --user 65532:65532 \
+            -v ag-data:/data -p 127.0.0.1:18080:8080 agentgit-server:ci
+          for _ in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy ] && break
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy || { docker logs ag; exit 1; }
+          curl -fsS http://127.0.0.1:18080/healthz; echo
+          curl -fsS http://127.0.0.1:18080/readyz; echo
+
+      - name: Extract the ag binary from the CLI image
+        run: |
+          mkdir -p artifacts
+          docker create --name agcp agentgit-cli:ci > /dev/null
+          docker cp agcp:/usr/local/bin/ag artifacts/ag
+          docker rm agcp > /dev/null
+          chmod +x artifacts/ag
+          artifacts/ag --version
+
+      - name: End-to-end smoke against the container, a restart, and the state afterwards
+        run: |
+          set -euo pipefail
+          set -a; . "$RUNNER_TEMP/ag.env"; set +a
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag artifacts/ag \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --expect-meta-backend sqlite --expect-object-backend fs \
+            --keep smoke-work --save-state "$RUNNER_TEMP/state.json"
+          docker restart ag
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag artifacts/ag \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --verify-state "$RUNNER_TEMP/state.json"
+      - name: The server logged JSON lines and no panics
+        run: |
+          set -euo pipefail
+          docker logs ag > ag.log 2>&1
+          wc -l ag.log
+          python3 - <<'PY'
+          import json
+          lines = [l for l in open("ag.log") if l.strip()]
+          bad = [l for l in lines if not l.lstrip().startswith("{")]
+          assert lines and not bad, f"non-JSON log lines: {bad[:3]}"
+          json.loads(lines[0])
+          assert not any("panicked" in l for l in lines), "a panic in the server log"
+          PY
+
+      - name: Save the images for the compose and kubernetes jobs
+        run: |
+          docker save agentgit-server:ci | gzip -1 > artifacts/server-image.tar.gz
+          ls -la artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: container-artifacts
+          path: artifacts
+          retention-days: 3
+          if-no-files-found: error
+      - name: Logs on failure
+        if: failure()
+        run: |
+          mkdir -p diag
+          docker ps -a > diag/docker-ps.txt || true
+          docker logs ag > diag/server.log 2>&1 || true
+          docker inspect ag > diag/inspect.json 2>&1 || true
+          cp -r smoke-work diag/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: image-diagnostics
+          path: diag
+          retention-days: 7
+
+  cache:
+    name: image layer cache
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Commit date (build argument)
+        id: meta
+        run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      # Makes ACTIONS_CACHE_URL / ACTIONS_RUNTIME_TOKEN visible to the plain `docker buildx` CLI below.
+      - uses: crazy-max/ghaction-github-runtime@v3
+      - name: Rebuild on a fresh runner from the gha cache only
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          docker buildx build --progress=plain -f deploy/docker/Dockerfile --target server \
+            --build-arg "AG_BUILD_COMMIT=${GITHUB_SHA}" --build-arg "AG_BUILD_DATE=${{ steps.meta.outputs.date }}" \
+            --cache-from "type=gha,scope=${CACHE_SCOPE}" --output type=cacheonly . 2>&1 | tee build.log
+          echo "rebuild took $(( $(date +%s) - start )) s"
+      - name: The cargo layers were restored, not rebuilt
+        run: python3 scripts/check_buildx_cache.py build.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cache-diagnostics
+          path: build.log
+          retention-days: 7
+
+  compose:
+    name: docker compose (server + PostgreSQL + MinIO + observability)
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: container-artifacts
+          path: artifacts
+      - name: Load the image CI built
+        run: |
+          docker load < artifacts/server-image.tar.gz
+          chmod +x artifacts/ag
+      - name: Configure the stack the way the README tells an operator to
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          for key in AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN POSTGRES_PASSWORD S3_SECRET_KEY GRAFANA_ADMIN_PASSWORD; do
+            sed -i "s|^${key}=.*|${key}=$(openssl rand -hex 32)|" .env
+          done
+          sed -i 's|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=agentgit|' .env
+          printf 'AG_IMAGE=agentgit-server\nAG_VERSION=ci\n' >> .env
+          # The observability profile reads the metrics token from a file, without a trailing newline.
+          grep '^AG_METRICS_TOKEN=' .env | cut -d= -f2- | tr -d '\n' > secrets/metrics_token
+          docker compose config --quiet
+          docker compose --profile observability config --quiet
+      - name: docker compose up
+        working-directory: deploy/compose
+        run: docker compose up -d --no-build --wait --wait-timeout 240
+      - name: Services
+        working-directory: deploy/compose
+        run: docker compose ps -a
+      - name: End-to-end smoke (grants and credentials through the offline admin tool in the container)
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          python3 "$GITHUB_WORKSPACE/scripts/e2e_smoke.py" --url http://127.0.0.1:8080 --ag "$GITHUB_WORKSPACE/artifacts/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --admin-exec "docker compose exec -T ag-server /usr/local/bin/ag-server admin --data-dir /data" \
+            --expect-meta-backend postgres --expect-object-backend s3 \
+            --keep "$RUNNER_TEMP/smoke-work" --save-state "$RUNNER_TEMP/state.json"
+      - name: The data really is in PostgreSQL and MinIO
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          schema=$(docker compose exec -T postgres psql -U ag -d agentgit -Atc "select table_schema from information_schema.tables where table_name = 'changesets' and table_schema like 'ag%' limit 1")
+          echo "repository schema in PostgreSQL: $schema"
+          test -n "$schema"
+          rows=$(docker compose exec -T postgres psql -U ag -d agentgit -Atc "select count(*) from \"$schema\".changesets")
+          echo "changesets in PostgreSQL: $rows"
+          test "$rows" -ge 3
+          docker compose run --rm --no-deps -T --entrypoint mc create-bucket ls --recursive local/agentgit | tee "$RUNNER_TEMP/minio-objects.txt"
+          objects=$(wc -l < "$RUNNER_TEMP/minio-objects.txt")
+          echo "objects in the MinIO bucket: $objects"
+          test "$objects" -ge 3
+      - name: Restart the stack's server, then check nothing was lost
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          docker compose restart ag-server
+          docker compose up -d --no-build --wait --wait-timeout 120
+          python3 "$GITHUB_WORKSPACE/scripts/e2e_smoke.py" --url http://127.0.0.1:8080 --ag "$GITHUB_WORKSPACE/artifacts/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --verify-state "$RUNNER_TEMP/state.json"
+      - name: Start the observability profile and check Prometheus, Grafana and the collector
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          docker compose --profile observability up -d --no-build --wait --wait-timeout 240
+          docker compose --profile observability ps
+          python3 "$GITHUB_WORKSPACE/scripts/e2e_observability.py" --grafana-password "$GRAFANA_ADMIN_PASSWORD"
+      - name: Logs and state on failure
+        if: failure()
+        working-directory: deploy/compose
+        run: |
+          mkdir -p "$RUNNER_TEMP/diag"
+          docker compose --profile observability ps -a > "$RUNNER_TEMP/diag/ps.txt" 2>&1 || true
+          docker compose --profile observability logs --no-color --timestamps > "$RUNNER_TEMP/diag/compose.log" 2>&1 || true
+          docker compose --profile observability config 2>/dev/null | sed -E 's/(PASSWORD|TOKEN|SECRET|KEY)([A-Z_]*): .*/\1\2: <redacted>/' > "$RUNNER_TEMP/diag/config.redacted.yaml" || true
+          cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: compose-diagnostics
+          path: ${{ runner.temp }}/diag
+          retention-days: 7
+      - name: Tear down
+        if: always()
+        working-directory: deploy/compose
+        run: docker compose --profile observability down --volumes --remove-orphans
+
+  kubernetes:
+    name: kubernetes (kind)
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KIND_CLUSTER: agentgit
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: container-artifacts
+          path: artifacts
+      - name: Load the image CI built
+        run: |
+          docker load < artifacts/server-image.tar.gz
+          chmod +x artifacts/ag
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.30.0
+          node_image: kindest/node:v1.33.4
+          cluster_name: ${{ env.KIND_CLUSTER }}
+      - name: Put the image into the cluster
+        run: kind load docker-image agentgit-server:ci --name "$KIND_CLUSTER"
+      - name: Apply deploy/kubernetes (namespace, secret, base through the ci overlay)
+        run: |
+          set -euo pipefail
+          kubectl apply -f deploy/kubernetes/base/namespace.yaml
+          AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32); AG_METRICS_TOKEN=$(openssl rand -hex 32)
+          echo "::add-mask::$AG_BOOTSTRAP_TOKEN"; echo "::add-mask::$AG_METRICS_TOKEN"
+          kubectl -n agentgit create secret generic agentgit \
+            --from-literal=AG_BOOTSTRAP_TOKEN="$AG_BOOTSTRAP_TOKEN" --from-literal=AG_METRICS_TOKEN="$AG_METRICS_TOKEN"
+          { echo "AG_BOOTSTRAP_TOKEN=$AG_BOOTSTRAP_TOKEN"; echo "AG_METRICS_TOKEN=$AG_METRICS_TOKEN"; } > "$RUNNER_TEMP/ag.env"
+          kubectl apply -k deploy/kubernetes/overlays/ci
+          kubectl -n agentgit rollout status deploy/ag-server --timeout=240s
+          kubectl -n agentgit get pods,svc,pvc,networkpolicy -o wide
+      - name: The pod runs the way the manifest says (non-root, read-only root, no capabilities, restricted)
+        run: |
+          set -euo pipefail
+          pod=$(kubectl -n agentgit get pod -l app.kubernetes.io/name=ag-server -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n agentgit get pod "$pod" -o jsonpath='{.status.containerStatuses[0].ready} {.status.containerStatuses[0].restartCount}{"\n"}'
+          test "$(kubectl -n agentgit get pod "$pod" -o jsonpath='{.status.containerStatuses[0].restartCount}')" = 0
+          test "$(kubectl -n agentgit get ns agentgit -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}')" = restricted
+          kubectl -n agentgit get events --field-selector type=Warning
+          test -z "$(kubectl -n agentgit get events --field-selector type=Warning,reason=FailedCreate -o name)"
+      - name: Port-forward the Service
+        run: |
+          nohup kubectl -n agentgit port-forward svc/ag-server 18080:8080 > "$RUNNER_TEMP/port-forward.log" 2>&1 &
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:18080/readyz && break; sleep 1; done
+      - name: End-to-end smoke through the port-forward
+        run: |
+          set -euo pipefail
+          set -a; . "$RUNNER_TEMP/ag.env"; set +a
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag artifacts/ag \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --expect-meta-backend sqlite --expect-object-backend fs \
+            --keep "$RUNNER_TEMP/smoke-work" --save-state "$RUNNER_TEMP/state.json"
+      - name: Roll the pod, then check nothing was lost (the volume survives)
+        run: |
+          set -euo pipefail
+          set -a; . "$RUNNER_TEMP/ag.env"; set +a
+          pkill -f 'kubectl.*port-forward' || true
+          kubectl -n agentgit rollout restart deploy/ag-server
+          kubectl -n agentgit rollout status deploy/ag-server --timeout=240s
+          nohup kubectl -n agentgit port-forward svc/ag-server 18080:8080 > "$RUNNER_TEMP/port-forward2.log" 2>&1 &
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag artifacts/ag \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" \
+            --verify-state "$RUNNER_TEMP/state.json"
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/diag"
+          kubectl -n agentgit get all,pvc,networkpolicy,configmap,events -o wide > "$RUNNER_TEMP/diag/objects.txt" 2>&1 || true
+          kubectl -n agentgit describe pods > "$RUNNER_TEMP/diag/describe-pods.txt" 2>&1 || true
+          kubectl -n agentgit logs deploy/ag-server --all-containers --tail=-1 > "$RUNNER_TEMP/diag/server.log" 2>&1 || true
+          kubectl -n agentgit logs deploy/ag-server --previous --tail=-1 > "$RUNNER_TEMP/diag/server-previous.log" 2>&1 || true
+          cp "$RUNNER_TEMP"/port-forward*.log "$RUNNER_TEMP/diag/" 2>/dev/null || true
+          cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: kubernetes-diagnostics
+          path: ${{ runner.temp }}/diag
+          retention-days: 7

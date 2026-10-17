@@ -28,6 +28,17 @@ type Service struct {
 	CredentialExpiry  *GaugeVec   // labels: identity (unix seconds at which the service token expires)
 }
 
+// ObserveRequest, ObserveError and ObserveRetry make *Service an agwp.Observer.
+func (s *Service) ObserveRequest(identity, operation string) {
+	s.APIRequests.With(identity, operation).Inc()
+}
+
+// ObserveError counts an AGWP error by code ("transport" for failures below HTTP).
+func (s *Service) ObserveError(code string) { s.APIErrors.With(code).Inc() }
+
+// ObserveRetry counts a retried request by the code that caused the retry.
+func (s *Service) ObserveRetry(code string) { s.APIRetries.With(code).Inc() }
+
 // NewService registers the catalogue on r.
 func NewService(r *Registry) *Service {
 	return &Service{

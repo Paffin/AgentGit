@@ -36,6 +36,8 @@ type FollowOptions struct {
 	HeartbeatMs int
 	// BackoffBase and BackoffMax shape the reconnect delay (defaults 500ms and 30s).
 	BackoffBase, BackoffMax time.Duration
+	// OnConnect is called each time the server accepts a connection.
+	OnConnect func()
 	// OnReconnect is called before every reconnection attempt.
 	OnReconnect func(err error)
 	// Logger receives connection-level logs.
@@ -172,6 +174,9 @@ func (f *Follower) stream(ctx context.Context, handle func(Event)) error {
 			f.c.obs.ObserveError(ae.Code)
 		}
 		return e
+	}
+	if f.opt.OnConnect != nil {
+		f.opt.OnConnect()
 	}
 	idle := time.AfterFunc(f.opt.IdleTimeout, cancel)
 	defer idle.Stop()

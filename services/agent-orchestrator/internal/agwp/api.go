@@ -506,6 +506,44 @@ func (c *Client) GetFile(ctx context.Context, repo, rev, path string, maxBytes i
 	return data, err
 }
 
+// FileDiff is the change to one file between two revisions.
+type FileDiff struct {
+	Path      string `json:"path"`
+	Status    string `json:"status"` // added | modified | deleted | renamed
+	Binary    bool   `json:"binary"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Patch     string `json:"patch"`
+}
+
+// DiffResult is the answer of tree.diff.
+type DiffResult struct {
+	Files     []FileDiff `json:"files"`
+	Truncated bool       `json:"truncated"`
+}
+
+// Diff returns per-file unified diffs between two revisions (a stream name or
+// a changeset id). contextLines is the number of context lines around hunks.
+func (c *Client) Diff(ctx context.Context, repo, from, to string, contextLines int) (*DiffResult, error) {
+	var out DiffResult
+	body := map[string]any{"from": from, "to": to, "context": contextLines, "paths": []string{}}
+	if err := c.repoCall(ctx, "tree.diff", http.MethodPost, repo, "/diff", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// MergeBases returns the merge bases of two revisions (usually one).
+func (c *Client) MergeBases(ctx context.Context, repo, a, b string) ([]string, error) {
+	var out struct {
+		Bases []string `json:"bases"`
+	}
+	if err := c.repoCall(ctx, "history.merge_base", http.MethodGet, repo, "/history/merge-base", url.Values{"a": {a}, "b": {b}}, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Bases, nil
+}
+
 // ResolveRev resolves a revision expression (a stream name, a changeset id) to a changeset id.
 func (c *Client) ResolveRev(ctx context.Context, repo, rev string) (string, error) {
 	var out struct {

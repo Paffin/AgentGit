@@ -551,6 +551,58 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 		}
 		return map[string]any{"changeset_id": cs.id}, 0, nil
 
+	case "history.merge_base":
+		a, b := s.resolveLocked(r, c.q.Get("a")), s.resolveLocked(r, c.q.Get("b"))
+		if a == nil || b == nil {
+			return nil, 0, errNotFound("revision")
+		}
+		bases := []string{}
+		anc := map[string]bool{}
+		var walk func(cs *csState)
+		walk = func(cs *csState) {
+			if cs == nil || anc[cs.id] {
+				return
+			}
+			anc[cs.id] = true
+			for _, p := range cs.parents {
+				walk(r.changesets[p])
+			}
+		}
+		walk(a)
+		queue, seen := []*csState{b}, map[string]bool{}
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			if cur == nil || seen[cur.id] {
+				continue
+			}
+			seen[cur.id] = true
+			if anc[cur.id] {
+				bases = append(bases, cur.id)
+				break
+			}
+			for _, p := range cur.parents {
+				queue = append(queue, r.changesets[p])
+			}
+		}
+		return map[string]any{"bases": bases}, 0, nil
+	case "tree.diff":
+		var in struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if e := c.decode(&in); e != nil {
+			return nil, 0, e
+		}
+		from, to := s.resolveLocked(r, in.From), s.resolveLocked(r, in.To)
+		if to == nil {
+			return nil, 0, errNotFound("revision '" + in.To + "'")
+		}
+		var oldFiles map[string][]byte
+		if from != nil {
+			oldFiles = from.files
+		}
+		return map[string]any{"files": diffFiles(oldFiles, to.files), "truncated": false}, 0, nil
 	case "provenance.submit":
 		var in struct {
 			Record    agwp.ProvenanceRecord `json:"record"`

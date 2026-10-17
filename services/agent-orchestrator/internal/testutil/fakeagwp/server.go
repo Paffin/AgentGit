@@ -661,6 +661,9 @@ func (s *Server) viewTaskLocked(r *repoState, t *taskState) agwp.Task {
 }
 
 func (s *Server) resolveLocked(r *repoState, rev string) *csState {
+	if rev == "" {
+		rev = "main" // like the real server: an empty revision means the default stream
+	}
 	if cs, ok := r.changesets[rev]; ok {
 		return cs
 	}
@@ -1058,6 +1061,10 @@ func route(method, p string) (op, repo string, rest []string) {
 		op = "tree.file"
 	case key == "history/resolve":
 		op = "history.resolve"
+	case key == "history/merge-base":
+		op = "history.merge_base"
+	case key == "diff" && m == "POST":
+		op = "tree.diff"
 	case key == "provenance" && m == "POST":
 		op = "provenance.submit"
 	case key == "provenance" && m == "GET":
@@ -1084,7 +1091,7 @@ func capOf(op string) string {
 		"proposal.create": "proposal.create", "proposal.get": "proposal.read", "proposal.review": "proposal.review",
 		"proposal.close": "proposal.close", "integration.prepare": "integrate.prepare", "integration.integrate": "integrate.run",
 		"admin.policy.set": "policy.write", "queue.list": "queue.read", "tree.get": "tree.read", "tree.file": "tree.read",
-		"history.resolve": "history.read", "provenance.submit": "provenance.write", "provenance.list": "provenance.read",
+		"history.resolve": "history.read", "history.merge_base": "history.read", "tree.diff": "tree.read", "provenance.submit": "provenance.write", "provenance.list": "provenance.read",
 		"events.replay": "events.read", "events.subscribe": "events.read", "jobs.list": "jobs.read",
 		"admin.credentials.mint": "credentials.mint", "admin.credentials.revoke": "credentials.revoke",
 		"repo.create": "repo.create", "admin.roles.grant": "roles.manage",

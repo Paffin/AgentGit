@@ -1,0 +1,15 @@
+//! `ag-server --version` prints semver, commit and date (the build script itself is exercised in
+//! `crates/ag-cli/tests/version.rs`).
+#![allow(missing_docs)]
+
+#[test]
+fn prints_semver_commit_and_date() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_ag-server")).arg("--version").output().unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(text.lines().count(), 1, "{text}");
+    let line = text.trim_end();
+    let rest = line.strip_prefix("ag-server ").unwrap_or_else(|| panic!("unexpected: {line}"));
+    assert!(rest.starts_with(env!("CARGO_PKG_VERSION")), "{line}");
+    assert!(rest.ends_with(')') && rest.contains(" ("), "no build metadata in: {line}");
+}

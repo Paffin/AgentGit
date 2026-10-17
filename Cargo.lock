@@ -150,6 +150,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-mcp"
+version = "0.1.0"
+dependencies = [
+ "ag-server",
+ "ag-storage",
+ "base64 0.23.1",
+ "clap",
+ "getrandom 0.4.3",
+ "globset",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "ureq",
+]
+
+[[package]]
 name = "ag-merge"
 version = "0.1.0"
 dependencies = [

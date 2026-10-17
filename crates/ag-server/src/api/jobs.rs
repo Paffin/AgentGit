@@ -223,7 +223,8 @@ impl App {
 
     /// Queued jobs across the repositories known to have work (blocking).
     pub fn count_queued_jobs(&self) -> i64 {
-        let repos: Vec<String> = self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+        let repos: Vec<String> =
+            self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
         repos
             .iter()
             .filter_map(|name| self.repos.handle(name).ok())

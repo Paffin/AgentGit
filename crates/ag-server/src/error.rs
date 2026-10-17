@@ -98,7 +98,8 @@ impl From<MetaError> for ApiError {
             // so the caller may simply try again — on this replica or another.
             MetaError::Retriable(m) => {
                 tracing::warn!(error = %m, "transient metadata failure");
-                Self::new(ErrorCode::Unavailable, "the metadata database is busy or restarting; retry").with_retry_after(250)
+                Self::new(ErrorCode::Unavailable, "the metadata database is busy or restarting; retry")
+                    .with_retry_after(250)
             }
             MetaError::ConnectionLost { during_commit: false, message } => {
                 tracing::warn!(error = %message, "lost the connection to the metadata database");

@@ -324,10 +324,15 @@ impl Fleet {
         loop {
             let r = send(method, &format!("{}{path}", self.urls[i % self.urls.len()]), &self.token, body(), &[]);
             match r {
-                Ok(rep) if rep.status < 500 && !matches!(rep.json["error"]["code"].as_str(), Some("aborted" | "rate_limited")) => {
+                Ok(rep)
+                    if rep.status < 500
+                        && !matches!(rep.json["error"]["code"].as_str(), Some("aborted" | "rate_limited")) =>
+                {
                     return rep;
                 }
-                Ok(rep) if started.elapsed() > Duration::from_secs(60) => panic!("{method} {path}: {} {}", rep.status, rep.json),
+                Ok(rep) if started.elapsed() > Duration::from_secs(60) => {
+                    panic!("{method} {path}: {} {}", rep.status, rep.json)
+                }
                 Err(e) if started.elapsed() > Duration::from_secs(60) => panic!("{method} {path}: {e}"),
                 _ => {}
             }
@@ -424,7 +429,12 @@ fn assert_one_chain(f: &Fleet, repo: &str, expected: usize) {
             .iter()
             .map(|e| (e["version"].as_u64().unwrap(), s(&e["old_head"]).to_string(), s(&e["new_head"]).to_string()))
             .collect();
-        assert_eq!(entries.len(), expected, "reflog via replica {i} has {} entries, expected {expected}", entries.len());
+        assert_eq!(
+            entries.len(),
+            expected,
+            "reflog via replica {i} has {} entries, expected {expected}",
+            entries.len()
+        );
         // Newest first: versions count down to 1, and every entry starts where the previous one ended.
         for (k, e) in entries.iter().enumerate() {
             assert_eq!(e.0, (expected - k) as u64, "versions are consecutive");
@@ -532,15 +542,20 @@ fn killing_a_replica_mid_flight_loses_nothing_and_applies_nothing_twice() {
     // The survivors served everything; clients that were talking to replica 1 retried elsewhere with the same
     // idempotency keys, so each change landed exactly once.
     assert_all_files(&users.alice, repo, &files);
-    let survivors = Fleet { urls: vec![cluster.replicas[0].url(), cluster.replicas[2].url()], token: ADMIN_TOKEN.into() };
-    let users = Users { alice: users.alice.with_token_urls(&survivors), carol: users.carol.with_token_urls(&survivors) };
+    let survivors =
+        Fleet { urls: vec![cluster.replicas[0].url(), cluster.replicas[2].url()], token: ADMIN_TOKEN.into() };
+    let users =
+        Users { alice: users.alice.with_token_urls(&survivors), carol: users.carol.with_token_urls(&survivors) };
     assert_one_chain(&users.alice, repo, 30);
 
     // The dead replica comes back and serves the same history.
     cluster.replicas[1].spawn();
     cluster.wait_ready(1, Duration::from_secs(60));
     let all = cluster.fleet();
-    let r = all.with_token(&users.alice.token).once(1, "GET", &format!("/v1/repos/{repo}/streams/head?stream=main"), Body::None).unwrap();
+    let r = all
+        .with_token(&users.alice.token)
+        .once(1, "GET", &format!("/v1/repos/{repo}/streams/head?stream=main"), Body::None)
+        .unwrap();
     assert_eq!(r.json["version"], 30, "{}", r.json);
 }
 
@@ -574,7 +589,10 @@ fn an_idempotency_key_used_on_one_replica_is_honoured_by_the_others() {
     let d = f.once(1, "POST", "/v1/repos", Body::Json(json!({"name": "acme/once"}))).unwrap();
     assert_eq!(d.status, 409, "{}", d.json);
     // The repository registered through replica 0 is readable and writable through all of them.
-    let users = Users { alice: mint(&f, "user:alice", "acme/once", "writer"), carol: mint(&f, "user:carol", "acme/once", "integrator") };
+    let users = Users {
+        alice: mint(&f, "user:alice", "acme/once", "writer"),
+        carol: mint(&f, "user:carol", "acme/once", "integrator"),
+    };
     for (i, via) in [2usize, 0, 1].into_iter().enumerate() {
         land_one(&users, via, "acme/once", &format!("x{i}"), &format!("f{i}.txt"), b"x\n");
     }
@@ -595,7 +613,9 @@ fn a_job_queued_through_one_replica_is_claimed_exactly_once_by_workers_on_the_ot
         "required_validations": [{"check": "tests", "run": {"argv": ["cargo", "test"], "timeout_secs": 120, "memory_mb": 512}}]
     })
     .to_string();
-    let r = admin.call(0, "PUT", &format!("/v1/repos/{repo}/policy"), || Body::Json(json!({"stream": "main", "document": policy})));
+    let r = admin.call(0, "PUT", &format!("/v1/repos/{repo}/policy"), || {
+        Body::Json(json!({"stream": "main", "document": policy}))
+    });
     assert_eq!(r.status, 200, "{}", r.json);
     let alice = mint(&admin, "user:alice", repo, "writer");
     let ci = mint(&admin, "service:ci-1", repo, "runner");
@@ -608,7 +628,8 @@ fn a_job_queued_through_one_replica_is_claimed_exactly_once_by_workers_on_the_ot
     let enqueued_at = std::sync::Mutex::new(None::<Instant>);
     std::thread::scope(|sc| {
         for w in 0..4usize {
-            let (ci, claimed, stop, key, first, enq) = (&ci, &claimed, &stop, &ci_key, &first_claim_latency, &enqueued_at);
+            let (ci, claimed, stop, key, first, enq) =
+                (&ci, &claimed, &stop, &ci_key, &first_claim_latency, &enqueued_at);
             sc.spawn(move || {
                 let me = format!("w{w}");
                 let via = 1 + (w % 2);
@@ -653,11 +674,25 @@ fn a_job_queued_through_one_replica_is_claimed_exactly_once_by_workers_on_the_ot
         *enqueued_at.lock().unwrap() = Some(Instant::now());
         let c = Client::new(repo);
         for n in 0..jobs {
-            let (id, objs) = c.commit(vec![], "user:alice", &format!("c{n}"), &[("f.txt", format!("job {n}\n").as_bytes())], next_ts());
+            let (id, objs) = c.commit(
+                vec![],
+                "user:alice",
+                &format!("c{n}"),
+                &[("f.txt", format!("job {n}\n").as_bytes())],
+                next_ts(),
+            );
             upload(&alice, 0, repo, &objs);
-            let p = alice.post(0, &format!("/v1/repos/{repo}/proposals"), json!({"stream": "main", "head": id.to_string(), "title": format!("c{n}")}));
+            let p = alice.post(
+                0,
+                &format!("/v1/repos/{repo}/proposals"),
+                json!({"stream": "main", "head": id.to_string(), "title": format!("c{n}")}),
+            );
             let pid = s(&p.json["id"]).to_string();
-            let prep = alice.post(0, &format!("/v1/repos/{repo}/proposals/{pid}/prepare"), json!({"enqueue_validations": true}));
+            let prep = alice.post(
+                0,
+                &format!("/v1/repos/{repo}/proposals/{pid}/prepare"),
+                json!({"enqueue_validations": true}),
+            );
             assert_eq!(prep.status, 200, "{}", prep.json);
             assert_eq!(prep.json["jobs"].as_array().map(Vec::len), Some(1), "{}", prep.json);
         }
@@ -704,7 +739,8 @@ fn sse(url: &str, token: &str, headers: &[(&str, &str)]) -> Sse {
             .timeout_global(Some(Duration::from_secs(120)))
             .build()
             .into();
-        let mut b = ureq::http::Request::builder().method("GET").uri(&url).header("authorization", format!("Bearer {token}"));
+        let mut b =
+            ureq::http::Request::builder().method("GET").uri(&url).header("authorization", format!("Bearer {token}"));
         for (k, v) in &headers {
             b = b.header(k.as_str(), v.as_str());
         }
@@ -735,7 +771,11 @@ fn sse(url: &str, token: &str, headers: &[(&str, &str)]) -> Sse {
 }
 
 impl Sse {
-    fn next_matching(&self, within: Duration, pred: impl Fn(&str, &Value) -> bool) -> Option<(Instant, String, String, Value)> {
+    fn next_matching(
+        &self,
+        within: Duration,
+        pred: impl Fn(&str, &Value) -> bool,
+    ) -> Option<(Instant, String, String, Value)> {
         let t = Instant::now();
         while let Some(left) = within.checked_sub(t.elapsed()) {
             match self.rx.recv_timeout(left) {
@@ -767,7 +807,9 @@ fn an_event_caused_through_one_replica_reaches_a_subscriber_on_another_and_repla
     let before = Instant::now();
     let head = land_one(&users, 1, repo, "ev1", "a.txt", b"one\n");
     let ev = on0
-        .next_matching(Duration::from_secs(10), |topic, d| topic == "stream.integrate" && s(&d["payload_json"]).contains(&head[..16]))
+        .next_matching(Duration::from_secs(10), |topic, d| {
+            topic == "stream.integrate" && s(&d["payload_json"]).contains(&head[..16])
+        })
         .expect("subscriber on replica 0 sees the integration made through replica 1");
     let latency = ev.0.duration_since(before);
     let ev2 = on2
@@ -779,11 +821,11 @@ fn an_event_caused_through_one_replica_reaches_a_subscriber_on_another_and_repla
 
     // The delivery latency of a single event is bounded by the poll interval (500 ms) even without notices.
     let t = Instant::now();
-    let r = users.alice.once(1, "POST", &format!("/v1/repos/{repo}/streams"), Body::Json(json!({"name": "side"}))).unwrap();
+    let r =
+        users.alice.once(1, "POST", &format!("/v1/repos/{repo}/streams"), Body::Json(json!({"name": "side"}))).unwrap();
     assert_eq!(r.status, 200, "{}", r.json);
-    let created = on0
-        .next_matching(Duration::from_secs(5), |topic, _| topic == "stream.create")
-        .expect("stream.create arrives");
+    let created =
+        on0.next_matching(Duration::from_secs(5), |topic, _| topic == "stream.create").expect("stream.create arrives");
     let lag = created.0.duration_since(t);
     println!("stream.create made through replica 1 reached the subscriber on replica 0 in {lag:?}");
     assert!(lag < Duration::from_secs(2), "event delivery across replicas took {lag:?}");
@@ -791,9 +833,17 @@ fn an_event_caused_through_one_replica_reaches_a_subscriber_on_another_and_repla
     // Replay by event id works against any replica and returns the same events.
     let mut replays = Vec::new();
     for i in 0..3 {
-        let r = users.alice.once(i, "GET", &format!("/v1/repos/{repo}/events/replay?after_seq={}&limit=100", seq - 1), Body::None).unwrap();
+        let r = users
+            .alice
+            .once(i, "GET", &format!("/v1/repos/{repo}/events/replay?after_seq={}&limit=100", seq - 1), Body::None)
+            .unwrap();
         assert_eq!(r.status, 200, "{}", r.json);
-        let evs: Vec<(u64, String)> = r.json["events"].as_array().unwrap().iter().map(|e| (e["seq"].as_u64().unwrap(), s(&e["topic"]).to_string())).collect();
+        let evs: Vec<(u64, String)> = r.json["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| (e["seq"].as_u64().unwrap(), s(&e["topic"]).to_string()))
+            .collect();
         assert_eq!(evs[0].0, seq);
         replays.push(evs);
     }
@@ -812,7 +862,11 @@ fn an_event_caused_through_one_replica_reaches_a_subscriber_on_another_and_repla
         .find_map(|l| l.strip_prefix("agwp_event_delivery_lag_seconds_count "))
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(0.0);
-    assert!(count >= 2.0, "replica 0 recorded {count} live deliveries:\n{}", text.lines().filter(|l| l.contains("lag") || l.contains("cluster")).collect::<Vec<_>>().join("\n"));
+    assert!(
+        count >= 2.0,
+        "replica 0 recorded {count} live deliveries:\n{}",
+        text.lines().filter(|l| l.contains("lag") || l.contains("cluster")).collect::<Vec<_>>().join("\n")
+    );
     assert!(text.contains("agwp_replica_info{") && text.contains("replica=\"replica-0\""), "replica id is exported");
     assert!(text.contains("agwp_cluster_listener_up 1"), "the notice listener is connected");
 }
@@ -851,11 +905,23 @@ fn a_revoked_credential_and_a_revoked_role_stop_working_on_every_replica() {
 
     // Roles: carol writes through replica 1; revoke her role through replica 0; the bound is bindings_ttl_ms.
     let carol = mint(&admin, "user:carol", repo, "writer");
-    let probe = |i: usize| carol.once(i, "POST", &format!("/v1/repos/{repo}/streams"), Body::Json(json!({"name": format!("s{}", rand_suffix())}))).unwrap().status;
+    let probe = |i: usize| {
+        carol
+            .once(
+                i,
+                "POST",
+                &format!("/v1/repos/{repo}/streams"),
+                Body::Json(json!({"name": format!("s{}", rand_suffix())})),
+            )
+            .unwrap()
+            .status
+    };
     assert_eq!(probe(1), 200);
     assert_eq!(probe(2), 200);
     let t = Instant::now();
-    let r = admin.call(0, "DELETE", "/v1/roles", || Body::Json(json!({"subject": "user:carol", "repo": repo, "role": "writer"})));
+    let r = admin.call(0, "DELETE", "/v1/roles", || {
+        Body::Json(json!({"subject": "user:carol", "repo": repo, "role": "writer"}))
+    });
     assert!(r.status == 200 || r.status == 204, "{}", r.json);
     let mut effective = [None; 3];
     while t.elapsed() < Duration::from_secs(8) && effective.iter().any(Option::is_none) {
@@ -869,7 +935,10 @@ fn a_revoked_credential_and_a_revoked_role_stop_working_on_every_replica() {
     println!("role revocation effective after {effective:?}");
     for (i, e) in effective.iter().enumerate() {
         let e = e.unwrap_or_else(|| panic!("replica {i} still honours a revoked role after 8 s"));
-        assert!(e < Duration::from_millis(3000 + 1000), "replica {i}: {e:?} exceeds the documented bound (bindings_ttl_ms + 1 s)");
+        assert!(
+            e < Duration::from_millis(3000 + 1000),
+            "replica {i}: {e:?} exceeds the documented bound (bindings_ttl_ms + 1 s)"
+        );
     }
 }
 
@@ -960,7 +1029,10 @@ fn a_rolling_restart_never_makes_the_service_unavailable_and_loses_no_write() {
         max_gap = reader.join().unwrap();
         files
     });
-    println!("{} reads served during the rolling restart; longest gap between successes {max_gap:?}", reads.load(Ordering::SeqCst));
+    println!(
+        "{} reads served during the rolling restart; longest gap between successes {max_gap:?}",
+        reads.load(Ordering::SeqCst)
+    );
     assert!(reads.load(Ordering::SeqCst) > 50);
     assert!(max_gap < Duration::from_secs(10), "reads stalled for {max_gap:?}");
     assert_eq!(files.len(), 24);
@@ -1039,7 +1111,10 @@ fn readiness_follows_the_control_database_and_liveness_does_not() {
         if r.status == 503 {
             break String::from_utf8_lossy(&r.body).to_string();
         }
-        assert!(t.elapsed() < Duration::from_secs(20), "readiness should fail when the control database is unreachable");
+        assert!(
+            t.elapsed() < Duration::from_secs(20),
+            "readiness should fail when the control database is unreachable"
+        );
         std::thread::sleep(Duration::from_millis(200));
     };
     println!("not ready after {:?}: {reason}", t.elapsed());

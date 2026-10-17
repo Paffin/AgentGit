@@ -261,7 +261,11 @@ async fn main() -> Result<()> {
             // The administration commands print their own diagnostics; keep the library's quiet unless asked.
             let filter = tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
-            let _ = tracing_subscriber::fmt().with_env_filter(filter).with_target(false).with_writer(std::io::stderr).try_init();
+            let _ = tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_target(false)
+                .with_writer(std::io::stderr)
+                .try_init();
             // Everything below talks to the control database (possibly PostgreSQL): not on an async thread.
             tokio::task::spawn_blocking(move || match action {
                 AdminAction::BackupControl { out } => backup_control(&cfg, &out),

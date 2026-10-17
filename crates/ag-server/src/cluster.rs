@@ -310,8 +310,12 @@ mod tests {
     fn a_notice_on_one_replica_wakes_the_other_through_postgres() {
         let Some(url) = ag_storage::testing::postgres_url() else { return };
         let schema = ag_storage::testing::unique("agbus");
-        let target =
-            PostgresTarget { url: url.clone(), schema: schema.clone(), pool_size: 4, startup_timeout: Duration::from_secs(5) };
+        let target = PostgresTarget {
+            url: url.clone(),
+            schema: schema.clone(),
+            pool_size: 4,
+            startup_timeout: Duration::from_secs(5),
+        };
         let control = Arc::new(Control::open_postgres(&target, Arc::new(SystemClock)).unwrap());
         let (la, lb) = (Arc::new(Local::default()), Arc::new(Local::default()));
         let (ma, mb) = (metrics(), metrics());

@@ -104,8 +104,11 @@ impl Metrics {
             IntGauge::new("control_schema_version", "Control database schema version at start-up").expect("metric");
         let draining = IntGauge::new("draining", "1 while the replica is draining before shutdown").expect("metric");
         let event_lag = Histogram::with_opts(
-            HistogramOpts::new("event_delivery_lag_seconds", "Time from an event being recorded to its delivery to a subscriber")
-                .buckets(vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]),
+            HistogramOpts::new(
+                "event_delivery_lag_seconds",
+                "Time from an event being recorded to its delivery to a subscriber",
+            )
+            .buckets(vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]),
         )
         .expect("metric");
         let cluster_notices = IntCounterVec::new(
@@ -115,9 +118,11 @@ impl Metrics {
         .expect("metric");
         let cluster_listener_up =
             IntGauge::new("cluster_listener_up", "1 while the cluster notice connection is up").expect("metric");
-        let cluster_resyncs =
-            IntCounter::new("cluster_resyncs_total", "Full refreshes after the cluster notice connection (re)connected")
-                .expect("metric");
+        let cluster_resyncs = IntCounter::new(
+            "cluster_resyncs_total",
+            "Full refreshes after the cluster notice connection (re)connected",
+        )
+        .expect("metric");
         for c in [
             Box::new(requests.clone()) as Box<dyn prometheus::core::Collector>,
             Box::new(latency.clone()),

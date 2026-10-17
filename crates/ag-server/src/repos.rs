@@ -216,7 +216,8 @@ impl RepoManager {
         };
         let config: RepoConfig = serde_json::from_str(&text).map_err(ApiError::internal)?;
         let storage = config.storage();
-        let shared = matches!(storage.meta, MetaConfig::Postgres { .. }) && matches!(storage.objects, ObjectsConfig::S3 { .. });
+        let shared =
+            matches!(storage.meta, MetaConfig::Postgres { .. }) && matches!(storage.objects, ObjectsConfig::S3 { .. });
         if !shared {
             return Err(missing_local_data(&row.name));
         }

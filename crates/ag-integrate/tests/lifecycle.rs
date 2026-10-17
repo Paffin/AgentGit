@@ -118,6 +118,7 @@ fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc() {
     assert!(f.repo.objects().contains(&blob.object_id()).unwrap());
 }
 
+#[cfg(feature = "s3")]
 #[test]
 fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3() {
     // The S3 counterpart, in real time: objects age on the server's clock. The collector's
@@ -525,6 +526,7 @@ fn backup_is_consistent_verified_and_independent_of_later_changes() {
     check_backup(&repo, &dir);
 }
 
+#[cfg(feature = "s3")]
 #[test]
 fn backup_downloads_s3_objects_into_a_self_contained_local_repository() {
     if ag_storage::testing::s3_endpoint().is_none() {

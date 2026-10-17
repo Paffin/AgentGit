@@ -12,11 +12,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ag_integrate::{
-    InitOptions, IntegrateRequest, IntegrationResult, MetaConfig, ObjectLockKind, ObjectsConfig, Outcome, Repository,
-    StorageConfig,
+    InitOptions, IntegrateRequest, IntegrationResult, MetaConfig, ObjectsConfig, Outcome, Repository, StorageConfig,
 };
 use ag_storage::ManualClock;
-use ag_storage::testing::{TempSchema, TestMeta, TestObjects, postgres_url, s3_endpoint, unique};
+use ag_storage::testing::{TempSchema, TestMeta, TestObjects, postgres_url, s3_endpoint};
 use ag_tree::Tree;
 use ag_types::{ChangesetId, FileType, Identity, Namespace, RepoPath, StreamName, Timestamp};
 
@@ -83,7 +82,10 @@ pub fn storage_for_tests(dir: &TestDir) -> Option<StorageConfig> {
         };
         dir.cleanup.lock().unwrap().push(Box::new(schema));
     }
+    #[cfg(feature = "s3")]
     if let Some(endpoint) = s3_endpoint() {
+        use ag_integrate::ObjectLockKind;
+        use ag_storage::testing::unique;
         let prefix = unique("agtest");
         let cfg = ag_storage::testing::s3_config(&prefix).unwrap();
         storage.objects = ObjectsConfig::S3 {
@@ -142,11 +144,14 @@ pub fn damage_object(repo: &Repository, hex: &str, bytes: &[u8]) {
             std::fs::set_permissions(&path, perms).unwrap();
             std::fs::write(path, bytes).unwrap();
         }
+        #[cfg(feature = "s3")]
         ObjectsConfig::S3 { prefix, .. } => {
             let cfg = ag_storage::testing::s3_config(prefix.as_deref().unwrap()).unwrap();
             let store = ag_storage::S3ObjectStore::open(cfg, Arc::new(ag_storage::InProcessLock::new())).unwrap();
             store.corrupt_for_test(&hex.parse().unwrap(), bytes).unwrap();
         }
+        #[cfg(not(feature = "s3"))]
+        ObjectsConfig::S3 { .. } => unreachable!("built without the s3 feature"),
     }
 }
 

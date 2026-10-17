@@ -8,7 +8,7 @@
 //! * `INSERT … RETURNING id` instead of `last_insert_rowid()`;
 //! * 64-bit integers only, text, and blobs.
 //!
-//! A connection is anything implementing [`Conn`]: it executes a statement
+//! A connection is anything implementing `Conn`: it executes a statement
 //! with typed [`Param`]s and returns [`Row`]s of typed [`Value`]s. The layer is
 //! deliberately thin, there is no query builder.
 
@@ -16,7 +16,7 @@ use std::borrow::Cow;
 
 use super::MetaError;
 
-/// The SQL dialect behind a [`Conn`]; only needed for the rare statement that
+/// The SQL dialect behind a `Conn`; only needed for the rare statement that
 /// cannot be written in the common subset (for example `FOR UPDATE SKIP LOCKED`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dialect {

@@ -10,7 +10,7 @@ mod common;
 use std::fs;
 
 use ag_integrate::{Error, InitOptions, MetaConfig, ObjectsConfig, Repository, StorageConfig};
-use ag_storage::testing::{TempSchema, postgres_url, unique};
+use ag_storage::testing::{TempSchema, postgres_url};
 use ag_types::{Namespace, StreamName};
 use common::*;
 
@@ -173,6 +173,7 @@ fn a_postgres_repository_is_created_reopened_and_cannot_be_initialized_twice() {
     drop((schema, second));
 }
 
+#[cfg(feature = "s3")]
 #[test]
 fn an_s3_repository_keeps_no_objects_locally_and_survives_reopen() {
     if ag_storage::testing::s3_endpoint().is_none() {
@@ -192,5 +193,4 @@ fn an_s3_repository_keeps_no_objects_locally_and_survives_reopen() {
     let again = Repository::open(dir.path()).unwrap();
     assert_eq!(again.blob(&blob).unwrap(), b"in the bucket");
     assert_eq!(again.objects().durability().name, "s3-compatible");
-    let _ = unique("x");
 }

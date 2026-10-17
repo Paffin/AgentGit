@@ -19,11 +19,10 @@
 //! hold the PostgreSQL URL (with its password) and the S3 credentials; a literal
 //! `url` is accepted only when it carries no password.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use ag_storage::meta::{PgOptions, url_has_password, validate_schema_name};
-use ag_storage::{Clock, FileLock, FsObjectStore, Meta, ObjectLock, ObjectStore, PostgresAdvisoryLock};
+use ag_storage::{Clock, FsObjectStore, Meta, ObjectStore};
 use ag_types::Limits;
 use serde::{Deserialize, Serialize};
 
@@ -202,6 +201,7 @@ fn env_value(var: &str, what: &str, key: &str) -> Result<String> {
 
 /// How to reach the PostgreSQL schema (resolved from the environment at open time).
 #[derive(Clone)]
+#[cfg_attr(not(feature = "s3"), allow(dead_code))] // only the S3 object lock needs the URL
 pub(crate) struct PgTarget {
     pub url: String,
     pub schema: String,
@@ -265,7 +265,9 @@ fn open_s3(
     limits: &Limits,
     pg: Option<&PgTarget>,
 ) -> Result<Arc<dyn ObjectStore>> {
-    use ag_storage::{Credentials, S3Config, S3ObjectStore};
+    use std::path::PathBuf;
+
+    use ag_storage::{Credentials, FileLock, ObjectLock, PostgresAdvisoryLock, S3Config, S3ObjectStore};
 
     let ObjectsConfig::S3 {
         endpoint,

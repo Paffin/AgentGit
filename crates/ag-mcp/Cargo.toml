@@ -23,13 +23,13 @@ base64.workspace = true
 clap.workspace = true
 getrandom.workspace = true
 globset.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 ureq.workspace = true
 
 [dev-dependencies]
+ag-crypto.workspace = true
 ag-server.workspace = true
 ag-storage.workspace = true
+ag-types.workspace = true
 tempfile.workspace = true
 tokio.workspace = true

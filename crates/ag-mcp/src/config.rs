@@ -223,6 +223,9 @@ impl Config {
         if !(1024..=8 * 1024 * 1024).contains(&self.max_output_bytes) {
             return Err("--max-output-bytes must be between 1024 and 8388608".into());
         }
+        if !(1024..=64 * 1024 * 1024).contains(&self.max_message_bytes) {
+            return Err("--max-message-bytes must be between 1024 and 67108864".into());
+        }
         if self.max_concurrent == 0 || self.max_concurrent > 64 {
             return Err("--max-concurrent must be between 1 and 64".into());
         }

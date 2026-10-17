@@ -65,7 +65,7 @@ endpoint and no decision of its own about what may land.
    stripped and counted in the result; output is bounded (`--max-output-bytes`, default 64 KiB) with an explicit
    truncation marker and `truncated: true`; server error messages are quoted, sanitized and bounded. This
    makes injected text inert as *markup* and clearly labelled as *data*; it cannot make a model ignore it, which
-   is why the allow-list, scope and policy exist (see the [guide](../guides/mcp.md#security)).
+   is why the allow-list, scope and policy exist (see the MCP guide, to be added).
 8. **Identity is explicit.** MCP 2026-07-28 has no sessions, so no tool relies on process state: a run started
    with `task_claim` returns `run_id`, and later calls pass it (`ag-run`) to act as `agent:name#run`.
 9. **Provenance signing is out of scope.** Signing needs the agent's private key, which must not live in a

@@ -16,6 +16,12 @@ fn arr<'a>(v: &'a Value, k: &str) -> &'a [Value] {
     v.get(k).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
+/// Refuses paths that cannot name a repository file (control characters, `..`), before they are sent anywhere.
+fn check_path(key: &str, p: &str) -> Result<(), ToolError> {
+    super::workspace::validate_repo_path(p)
+        .map_err(|e| ToolError::invalid(format!("`{key}`: {e}")).hint("Nothing was sent to AgentGit."))
+}
+
 fn page_query(args: &Value, default: u64, max: u64) -> Vec<(&'static str, String)> {
     let mut q = vec![("page_size", u64_arg(args, "limit").unwrap_or(default).clamp(1, max).to_string())];
     if let Some(t) = str_arg(args, "page_token").filter(|t| !t.is_empty()) {
@@ -137,6 +143,7 @@ fn log(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let mut q = page_query(args, 20, 100);
     q.push(("rev", rev.clone()));
     if let Some(p) = str_arg(args, "path").filter(|p| !p.is_empty()) {
+        check_path("path", p.trim_end_matches('/'))?;
         q.push(("path", p.to_string()));
     }
     let v = ctx.api.get(&format!("{}/log", repo_path(&repo)), &q, &ctx.opts(None))?;
@@ -213,6 +220,7 @@ fn blame(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let rev = ctx.rev_or_default(&repo, args, "rev")?;
     let path = str_arg(args, "path").unwrap_or_default();
+    check_path("path", path)?;
     let limit = u64_arg(args, "limit").unwrap_or(200).clamp(1, 1000) as usize;
     let mut q = vec![("rev", rev), ("path", path.to_string())];
     if let Some(f) = u64_arg(args, "start_line") {
@@ -281,6 +289,9 @@ fn tree(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let rev = ctx.rev_or_default(&repo, args, "rev")?;
     let path = str_arg(args, "path").unwrap_or("").trim_matches('/').to_string();
+    if !path.is_empty() {
+        check_path("path", &path)?;
+    }
     let limit = u64_arg(args, "limit").unwrap_or(100).clamp(1, 500) as usize;
     if bool_arg(args, "recursive", false) {
         let prefix = if path.is_empty() { String::new() } else { format!("{path}/") };
@@ -414,6 +425,7 @@ fn read_file(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let rev_in = ctx.rev_or_default(&repo, args, "rev")?;
     let path = str_arg(args, "path").unwrap_or_default().trim_start_matches('/').to_string();
+    check_path("path", &path)?;
     ctx.step(0, 2, "resolving the revision");
     // Pin the revision so that the metadata and the bytes come from the same changeset even if a stream moves.
     let rev = resolve_rev(ctx, &repo, &rev_in)?;
@@ -451,9 +463,8 @@ fn read_file(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     }
     let selected: String =
         if total_lines == 0 { String::new() } else { all_lines[start - 1..end.max(start - 1)].concat() };
-    let max_bytes = u64_arg(args, "max_bytes")
-        .map_or(ctx.cfg.max_output_bytes, |m| (m as usize).min(ctx.cfg.max_output_bytes))
-        .max(256);
+    let budget = crate::output::content_budget(ctx.cfg.max_output_bytes);
+    let max_bytes = u64_arg(args, "max_bytes").map_or(budget, |m| (m as usize).min(budget)).max(256);
     let (head_txt, omitted) = crate::sanitize::truncate_utf8(&selected, max_bytes);
     // end the excerpt on a line boundary so that next_start_line is exact
     let (content, truncated, next_start) = if omitted == 0 {
@@ -516,7 +527,7 @@ pub fn diff_files(
         Some(&json!({"from": from, "to": to, "paths": paths, "context": context})),
         &ctx.opts(None),
     )?;
-    let mut budget = ctx.cfg.max_output_bytes;
+    let mut budget = crate::output::content_budget(ctx.cfg.max_output_bytes);
     let mut omitted = 0usize;
     let files: Vec<Value> = arr(&v, "files")
         .iter()
@@ -590,6 +601,9 @@ fn diff(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     }
     ctx.check_cancelled()?;
     let paths: Vec<String> = arr(args, "paths").iter().filter_map(|p| p.as_str().map(str::to_string)).collect();
+    for p in &paths {
+        check_path("paths", p)?;
+    }
     let context = u64_arg(args, "context").unwrap_or(3) as u32;
     let d = diff_files(ctx, &repo, &from, &to, &paths, context)?;
     let n = d["files_changed"].as_u64().unwrap_or(0);

@@ -234,8 +234,20 @@ pub struct RenderStats {
     pub truncated: bool,
 }
 
-fn json_len(v: &Value) -> usize {
-    serde_json::to_string(v).map(|s| s.len()).unwrap_or(usize::MAX)
+/// The size that `--max-output-bytes` bounds: the bytes of all strings plus a small allowance per value. It does
+/// not count JSON escaping, so a file with many newlines or quotes is not cut shorter than the same size of prose.
+pub fn payload_len(v: &Value) -> usize {
+    match v {
+        Value::String(s) => s.len() + 2,
+        Value::Array(a) => 2 + a.iter().map(|x| payload_len(x) + 1).sum::<usize>(),
+        Value::Object(o) => 2 + o.iter().map(|(k, x)| k.len() + 4 + payload_len(x)).sum::<usize>(),
+        other => other.to_string().len(),
+    }
+}
+
+/// The part of `max_output_bytes` a handler may fill with raw text, leaving room for the fields around it.
+pub fn content_budget(max_output_bytes: usize) -> usize {
+    max_output_bytes.saturating_sub((max_output_bytes / 4).min(2048)).max(256)
 }
 
 #[derive(Clone)]
@@ -288,7 +300,7 @@ pub fn shrink_to(data: &mut Value, max: usize) -> bool {
     let mut cut = false;
     let mut omitted_items = 0usize;
     for _ in 0..200 {
-        let size = json_len(data);
+        let size = payload_len(data);
         if size <= max {
             break;
         }
@@ -521,7 +533,7 @@ mod tests {
         let items: Vec<Value> = (0..2000).map(|i| json!({"i": i, "m": "message number"})).collect();
         let mut v = json!({"items": items});
         assert!(shrink_to(&mut v, 8000));
-        assert!(json_len(&v) <= 8200);
+        assert!(payload_len(&v) <= 8200);
         assert!(v["items"].as_array().unwrap().len() < 2000);
         assert!(v["items_omitted_to_fit"].as_u64().unwrap() > 0);
     }

@@ -67,6 +67,10 @@ struct Cli {
     #[arg(long, default_value_t = 8)]
     max_concurrent: usize,
 
+    /// Longest JSON-RPC message accepted from the client, in bytes. Longer lines are discarded with an error.
+    #[arg(long, default_value_t = 8 * 1024 * 1024)]
+    max_message_bytes: usize,
+
     /// Allow http:// to a host that is not loopback (the credential travels in clear text).
     #[arg(long)]
     insecure_http: bool,
@@ -109,6 +113,7 @@ fn build_config(cli: Cli) -> Result<Config, String> {
     cfg.timeout = Duration::from_secs(cli.timeout_secs.max(1));
     cfg.max_lease_seconds = cli.max_lease_seconds;
     cfg.max_concurrent = cli.max_concurrent;
+    cfg.max_message_bytes = cli.max_message_bytes;
     cfg.insecure_http = cli.insecure_http;
     cfg.ca_file = cli.ca_file;
     cfg.log_level = cli.log_level;

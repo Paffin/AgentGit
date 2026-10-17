@@ -153,16 +153,16 @@ dependencies = [
 name = "ag-mcp"
 version = "0.1.0"
 dependencies = [
+ "ag-crypto",
  "ag-server",
  "ag-storage",
+ "ag-types",
  "base64 0.23.1",
  "clap",
  "getrandom 0.4.3",
  "globset",
- "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokio",
  "ureq",
 ]

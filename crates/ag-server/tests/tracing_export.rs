@@ -203,3 +203,21 @@ async fn tracing_is_off_by_default_and_configuration_is_validated() {
     cfg.telemetry.otlp_sample_ratio = 1.5;
     assert!(cfg.validate().is_err());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_healthcheck_subcommand_reports_readiness() {
+    let srv = TestServer::start().await;
+    let ok = tokio::task::spawn_blocking({
+        let base = srv.base.clone();
+        move || std::process::Command::new(env!("CARGO_BIN_EXE_ag-server")).args(["healthcheck", "--url", &base]).status().unwrap()
+    })
+    .await
+    .unwrap();
+    assert!(ok.success());
+    srv.stop().await;
+    let down = std::process::Command::new(env!("CARGO_BIN_EXE_ag-server"))
+        .args(["healthcheck", "--url", "http://127.0.0.1:1", "--timeout", "1"])
+        .status()
+        .unwrap();
+    assert_eq!(down.code(), Some(1));
+}

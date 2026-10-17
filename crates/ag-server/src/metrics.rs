@@ -1,7 +1,7 @@
 //! Prometheus metrics.
 
 use prometheus::{
-    Encoder, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+    Encoder, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
 
 /// All metrics exported at `/metrics`.
@@ -29,8 +29,10 @@ pub struct Metrics {
     pub open_repos: IntGauge,
     /// Open event subscriptions.
     pub subscriptions: IntGauge,
-    /// Execution-plane jobs by state (refreshed on scrape).
-    pub jobs: IntGaugeVec,
+    /// Execution-plane job events since start: enqueued, claimed, succeeded, retried, failed.
+    pub job_events: IntCounterVec,
+    /// Queued jobs in repositories known to have work (refreshed on scrape; at most 1000 per repository).
+    pub jobs_queued: IntGauge,
     /// Seconds since the server started.
     pub uptime: IntGauge,
     /// Trace spans delivered to the collector.
@@ -68,7 +70,9 @@ impl Metrics {
         let object_bytes_out = IntCounter::new("object_bytes_sent_total", "Object bytes sent").expect("metric");
         let open_repos = IntGauge::new("open_repositories", "Repositories currently open").expect("metric");
         let subscriptions = IntGauge::new("event_subscriptions", "Open event subscriptions").expect("metric");
-        let jobs = IntGaugeVec::new(Opts::new("jobs", "Execution-plane jobs by state"), &["state"]).expect("metric");
+        let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
+            .expect("metric");
+        let jobs_queued = IntGauge::new("jobs_queued", "Queued execution-plane jobs").expect("metric");
         let uptime = IntGauge::new("uptime_seconds", "Seconds since start").expect("metric");
         let trace_exported =
             IntCounter::new("trace_spans_exported_total", "Trace spans delivered to the collector").expect("metric");
@@ -88,7 +92,8 @@ impl Metrics {
             Box::new(object_bytes_out.clone()),
             Box::new(open_repos.clone()),
             Box::new(subscriptions.clone()),
-            Box::new(jobs.clone()),
+            Box::new(job_events.clone()),
+            Box::new(jobs_queued.clone()),
             Box::new(uptime.clone()),
             Box::new(trace_exported.clone()),
             Box::new(trace_dropped.clone()),
@@ -109,7 +114,8 @@ impl Metrics {
             object_bytes_out,
             open_repos,
             subscriptions,
-            jobs,
+            job_events,
+            jobs_queued,
             uptime,
             trace_exported,
             trace_dropped,

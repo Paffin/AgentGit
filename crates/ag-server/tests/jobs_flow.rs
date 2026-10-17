@@ -216,6 +216,12 @@ async fn expired_leases_requeue_and_failures_can_retry() {
     assert_eq!(r.json["state"], "failed");
     let jobs = alice.get("/v1/repos/acme/web/jobs?state=failed").await;
     assert_eq!(jobs.json["jobs"].as_array().unwrap().len(), 1);
+    // The same story as counters.
+    let m = String::from_utf8(srv.client("").get("/metrics").await.body).unwrap();
+    for (event, n) in [("enqueued", 1), ("claimed", 3), ("retried", 1), ("failed", 1)] {
+        assert!(m.contains(&format!("agwp_job_events_total{{event=\"{event}\"}} {n}")), "{event}: {m}");
+    }
+    assert!(m.contains("agwp_jobs_queued 0"), "{m}");
     // The job life cycle is part of the audited event feed.
     let ev = alice.get("/v1/repos/acme/web/events/replay?topics=job&limit=100").await;
     let topics: Vec<&str> =

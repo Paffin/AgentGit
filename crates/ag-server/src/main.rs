@@ -31,6 +31,16 @@ enum Command {
         #[arg(long)]
         data_dir: Option<PathBuf>,
     },
+    /// Probe a running server's /readyz and exit 0 (ready) or 1. For container health checks,
+    /// where the image has no curl.
+    Healthcheck {
+        /// Base URL to probe.
+        #[arg(long, env = "AG_HEALTHCHECK_URL", default_value = "http://127.0.0.1:8080")]
+        url: String,
+        /// Give up after this many seconds.
+        #[arg(long, default_value_t = 3)]
+        timeout: u64,
+    },
     /// Print the default configuration (TOML).
     DefaultConfig,
     /// Print the OpenAPI document of the HTTP/JSON API.
@@ -107,6 +117,21 @@ fn init_tracing(cfg: &ServerConfig) {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Healthcheck { url, timeout } => {
+            let agent: ureq::Agent = ureq::Agent::config_builder()
+                .http_status_as_error(false)
+                .timeout_global(Some(std::time::Duration::from_secs(timeout.max(1))))
+                .build()
+                .into();
+            let target = format!("{}/readyz", url.trim_end_matches('/'));
+            let probe = tokio::task::spawn_blocking(move || agent.get(&target).call().map(|r| r.status().as_u16()))
+                .await?;
+            match probe {
+                Ok(200) => Ok(()),
+                Ok(code) => bail!("not ready: HTTP {code}"),
+                Err(e) => bail!("unreachable: {e}"),
+            }
+        }
         Command::DefaultConfig => {
             println!("{}", toml::to_string_pretty(&ServerConfig::default())?);
             Ok(())
@@ -142,6 +167,16 @@ async fn main() -> Result<()> {
                     "no bootstrap token ({}) and no OIDC provider are configured: nobody can authenticate until you \
                      create a credential with `ag-server admin mint`",
                     cfg.auth.bootstrap_token_env
+                );
+            }
+            if cfg.metrics.enabled
+                && !cfg.server.listen.ip().is_loopback()
+                && std::env::var(&cfg.metrics.token_env).map(|t| t.is_empty()).unwrap_or(true)
+            {
+                tracing::warn!(
+                    "/metrics is served on {} without a token ({} is not set): anyone who can reach the port can read it",
+                    cfg.server.listen,
+                    cfg.metrics.token_env
                 );
             }
             let listener = tokio::net::TcpListener::bind(cfg.server.listen)

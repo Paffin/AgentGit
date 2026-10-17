@@ -135,6 +135,11 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
                 .into_response();
         }
     }
+    let queued = {
+        let a = app.clone();
+        tokio::task::spawn_blocking(move || a.count_queued_jobs()).await.unwrap_or(0)
+    };
+    app.metrics.jobs_queued.set(queued);
     app.metrics.open_repos.set(app.repos.open_count() as i64);
     app.metrics.uptime.set(app.started.elapsed().as_secs() as i64);
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()

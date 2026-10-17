@@ -4,17 +4,59 @@ This takes about five minutes and ends with a change landed through policy, revi
 
 ## Install
 
-AgentGit is a single Rust binary, `ag`. You need Rust **1.89+** and a C compiler (SQLite is compiled
-in). `git` and `python3` are optional (Git bridge, demo script).
+AgentGit ships three programs: `ag` (the command line, all you need to start), `ag-server` (the network
+server) and `ag-worker` (runs validation jobs). Pick the way that suits you:
+
+> **Status.** No release has been published yet: the first `v*` tag will publish everything below. Until then
+> the release pipeline has only been run as a *rehearsal* (it builds, checks and installs the real archives but
+> publishes nothing — see [Releasing](operations/releasing.md)), so the installer and the container images
+> have not been used against a real release. **Building from source always works.**
+
+**1. Release archive (Linux and macOS, x86_64 and aarch64)** — a script that checks what it downloads:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh
+ag --version                              # ag 0.1.0 (a1b2c3d4e5f6 2026-10-17): version, commit, commit date
+```
+
+It works out your platform, downloads `agentgit-<version>-<target>.tar.gz` and `SHA256SUMS`, refuses to install
+anything if the checksum differs, additionally verifies the build-provenance attestation when the GitHub CLI is
+installed and logged in, and installs `ag`, `ag-server` and `ag-worker` into `~/.local/bin` (no root). Options:
+`--version X.Y.Z`, `--prefix DIR`, `--dry-run` (print what it would do), `--require-attestation`. Read it first
+if you like: [`scripts/install.sh`](../scripts/install.sh) is short and `shellcheck`-clean. The Linux binaries
+need glibc (Alpine/musl is not supported; use the container image or build from source). Doing it by hand:
+
+```bash
+V=0.1.0; T=x86_64-unknown-linux-gnu          # or aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin
+curl -fsSLO https://github.com/Paffin/AgentGit/releases/download/v$V/agentgit-$V-$T.tar.gz
+curl -fsSLO https://github.com/Paffin/AgentGit/releases/download/v$V/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing     # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
+gh attestation verify agentgit-$V-$T.tar.gz --repo Paffin/AgentGit     # optional, needs gh
+tar xzf agentgit-$V-$T.tar.gz && install agentgit-$V-$T/ag* ~/.local/bin/
+```
+
+**2. Container images** (`linux/amd64` and `linux/arm64`, distroless, non-root):
+`docker run --rm ghcr.io/paffin/agentgit-cli:0.1.0 --version`, and
+`ghcr.io/paffin/agentgit-server` for the server — see [Deploying `ag-server`](operations/deployment.md).
+
+**3. Homebrew / Scoop.** The repository carries a formula and a manifest *template* under
+[`packaging/`](../packaging) and `scripts/render_packaging.py` fills them from a release's `SHA256SUMS` (every
+release attaches the rendered `agentgit.rb`). There is no tap and no Scoop bucket yet, and AgentGit has never
+been built on Windows, so treat both as unpublished.
+
+**4. From source.** You need Rust **1.89+** and a C compiler (SQLite is compiled in). `git` and `python3` are
+optional (Git bridge, demo script).
 
 ```bash
 git clone https://github.com/Paffin/AgentGit
 cd AgentGit
 cargo install --path crates/ag-cli      # installs `ag` into ~/.cargo/bin
+cargo install --path crates/ag-server   # optional: the server
 ag --version
 ```
 
-Or just build it: `cargo build --release -p ag-cli` → `target/release/ag`.
+Or just build it: `cargo build --release -p ag-cli` → `target/release/ag`. (The crates are not on crates.io
+yet; [Releasing](operations/releasing.md#crates-io) says why.)
 
 ## Your first repository
 

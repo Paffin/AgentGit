@@ -357,5 +357,39 @@ class Packaging(unittest.TestCase):
                       (self.dir / "o4" / "agentgit.rb").read_text())
 
 
+class BuildxCacheCheck(unittest.TestCase):
+    """scripts/check_buildx_cache.py must not pass a log that shows a rebuild, nor one with no cargo step at all."""
+
+    LOG = (
+        "#5 [chef 3/4] RUN --mount=type=cache,target=/r cargo install cargo-chef --locked --version 0.1.78\n"
+        "#5 CACHED\n"
+        "#9 [build 3/7] RUN --mount=type=cache,target=/r     cargo chef cook --release --locked -p ag-server\n"
+        "#9 CACHED\n"
+        "#11 [build 6/7] RUN --mount=type=cache,target=/r     cargo build --release --locked -p ag-server\n"
+        "#11 {state}\n"
+    )
+
+    def check(self, log: str) -> subprocess.CompletedProcess:
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as f:
+            f.write(log)
+        try:
+            return run(PY, SCRIPTS / "check_buildx_cache.py", f.name)
+        finally:
+            os.unlink(f.name)
+
+    def test_a_fully_cached_log_passes(self):
+        self.assertEqual(self.check(self.LOG.format(state="CACHED")).returncode, 0)
+
+    def test_a_rebuilt_step_fails(self):
+        p = self.check(self.LOG.format(state="DONE 241.3s"))
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("cargo build --release", p.stderr)
+
+    def test_a_log_without_the_steps_fails_instead_of_passing_vacuously(self):
+        p = self.check("#1 [internal] load build definition\n#1 DONE 0.1s\n")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("no RUN step containing", p.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

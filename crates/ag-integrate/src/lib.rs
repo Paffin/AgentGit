@@ -34,7 +34,7 @@ mod types;
 pub mod workdir;
 mod workspace;
 
-pub use derive::DeriveReport;
+pub use derive::{DeriveReport, KEYFRAME_INTERVAL};
 pub use error::Error;
 pub use failpoints::Failpoints;
 pub use fsck::{FsckIssue, FsckReport};
@@ -43,6 +43,9 @@ pub use history::{HybridGraph, LogEntry};
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};
 pub use publish::PublishResult;
+
+/// Lifecycle state of an operation (re-exported from the metadata store).
+pub use ag_storage::meta::IntentState as PublishState;
 pub use queue::QueueRunReport;
 pub use repo::Repository;
 pub use types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};

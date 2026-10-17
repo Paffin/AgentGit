@@ -29,7 +29,8 @@ pub fn identity(cli: &Cli) -> Result<Identity> {
         .or_else(|| std::env::var("AG_IDENTITY").ok().filter(|s| !s.is_empty()))
         .unwrap_or_else(|| {
             let user = std::env::var("USER").or_else(|_| std::env::var("LOGNAME")).unwrap_or_else(|_| "unknown".into());
-            let clean: String = user.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' }).collect();
+            let clean: String =
+                user.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' }).collect();
             format!("user:{clean}")
         });
     Identity::new(raw.clone()).map_err(|e| anyhow!("invalid identity '{raw}': {e}"))
@@ -42,8 +43,9 @@ impl Ctx {
             Some(p) => p.clone(),
             None => std::env::current_dir().context("cannot read the current directory")?,
         };
-        let layout = Layout::discover(&start)
-            .ok_or_else(|| anyhow!("not an AgentGit repository (or any parent of {}); run `ag init`", start.display()))?;
+        let layout = Layout::discover(&start).ok_or_else(|| {
+            anyhow!("not an AgentGit repository (or any parent of {}); run `ag init`", start.display())
+        })?;
         let root = layout.root().to_path_buf();
         let repo = Repository::open(&root)?;
         Ok(Self { repo, me: identity(cli)?, json: cli.json, root })
@@ -71,7 +73,8 @@ impl Ctx {
 /// Parses durations such as `500ms`, `90s`, `30m`, `12h`, `7d`.
 pub fn parse_duration_ms(s: &str) -> Result<i64> {
     let s = s.trim();
-    let split = s.find(|c: char| !c.is_ascii_digit()).ok_or_else(|| anyhow!("duration '{s}' needs a unit (ms, s, m, h, d)"))?;
+    let split =
+        s.find(|c: char| !c.is_ascii_digit()).ok_or_else(|| anyhow!("duration '{s}' needs a unit (ms, s, m, h, d)"))?;
     let (num, unit) = s.split_at(split);
     let n: i64 = num.parse().map_err(|_| anyhow!("bad duration '{s}'"))?;
     let mult = match unit {
@@ -87,7 +90,11 @@ pub fn parse_duration_ms(s: &str) -> Result<i64> {
 
 /// Shortens a path for display relative to the current directory.
 pub fn display_path(p: &Path) -> String {
-    std::env::current_dir().ok().and_then(|c| p.strip_prefix(&c).ok().map(|r| r.display().to_string())).filter(|s| !s.is_empty()).unwrap_or_else(|| p.display().to_string())
+    std::env::current_dir()
+        .ok()
+        .and_then(|c| p.strip_prefix(&c).ok().map(|r| r.display().to_string()))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| p.display().to_string())
 }
 
 #[cfg(test)]

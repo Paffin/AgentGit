@@ -105,7 +105,11 @@ impl Repository {
             let op = rest.as_bytes()[0];
             let digits_end = rest[1..].find(['~', '^']).map(|i| i + 1).unwrap_or(rest.len());
             let n_str = &rest[1..digits_end];
-            let n: usize = if n_str.is_empty() { 1 } else { n_str.parse().map_err(|_| Error::Invalid(format!("bad revision suffix in '{spec}'")))? };
+            let n: usize = if n_str.is_empty() {
+                1
+            } else {
+                n_str.parse().map_err(|_| Error::Invalid(format!("bad revision suffix in '{spec}'")))?
+            };
             if n > 100_000 {
                 return Err(Error::Invalid(format!("revision suffix too large in '{spec}'")));
             }
@@ -113,7 +117,10 @@ impl Repository {
             cur = if op == b'~' {
                 let mut c = cur;
                 for _ in 0..n {
-                    c = self.changeset(&c)?.first_parent().ok_or_else(|| Error::NotFound(format!("'{spec}' goes past the root")))?;
+                    c = self
+                        .changeset(&c)?
+                        .first_parent()
+                        .ok_or_else(|| Error::NotFound(format!("'{spec}' goes past the root")))?;
                 }
                 c
             } else if n == 0 {
@@ -144,13 +151,13 @@ impl Repository {
                 .and_then(|w| w.head)
                 .ok_or_else(|| Error::NotFound(format!("workspace '{name}' has no snapshots yet")));
         }
-        if base.len() == 64 {
-            if let Ok(id) = ChangesetId::from_str(base) {
-                if self.objects.contains(&ObjectId::from(id))? {
-                    return Ok(id);
-                }
-                return Err(Error::NotFound(format!("changeset {base}")));
+        if base.len() == 64
+            && let Ok(id) = ChangesetId::from_str(base)
+        {
+            if self.objects.contains(&ObjectId::from(id))? {
+                return Ok(id);
             }
+            return Err(Error::NotFound(format!("changeset {base}")));
         }
         if base.starts_with("prop_") {
             return Ok(self.find_proposal(base)?.head);

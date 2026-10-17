@@ -70,11 +70,16 @@ pub struct Change {
 impl Repository {
     /// Creates a workspace tracking `stream`, starting at the stream's head.
     pub fn workspace_create(&self, name: &str, stream: &StreamName, owner: &Identity) -> Result<WorkspaceRow> {
-        if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if name.is_empty()
+            || name.len() > 64
+            || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(Error::Invalid("workspace names use letters, digits, '_' and '-' (max 64)".into()));
         }
         Ok(self.meta.write(|tx| {
-            let s = tx.stream(stream.as_str())?.ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("stream '{stream}'")))?;
+            let s = tx
+                .stream(stream.as_str())?
+                .ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("stream '{stream}'")))?;
             let row = tx.workspace_create(name, stream.as_str(), s.state.head.as_ref(), owner.as_str())?;
             tx.audit_append(owner.as_str(), "workspace.create", name, &json!({"stream": stream}))?;
             Ok(row)
@@ -90,7 +95,11 @@ impl Repository {
 
     /// The directory recorded for a workspace, if any.
     pub fn workspace_dir(&self, name: &str) -> Result<Option<std::path::PathBuf>> {
-        Ok(self.meta.read(|tx| tx.meta_get(&format!("workspace.{name}.dir")))?.filter(|s| !s.is_empty()).map(Into::into))
+        Ok(self
+            .meta
+            .read(|tx| tx.meta_get(&format!("workspace.{name}.dir")))?
+            .filter(|s| !s.is_empty())
+            .map(Into::into))
     }
 
     /// All workspaces.
@@ -146,7 +155,9 @@ impl Repository {
             .into_iter()
             .map(|op| match &op {
                 ag_changeset::Op::Delete { path } => Change { kind: "deleted", path: path.to_string() },
-                ag_changeset::Op::Put { path, .. } => Change { kind: if head.get(path).is_some() { "modified" } else { "added" }, path: path.to_string() },
+                ag_changeset::Op::Put { path, .. } => {
+                    Change { kind: if head.get(path).is_some() { "modified" } else { "added" }, path: path.to_string() }
+                }
             })
             .collect())
     }
@@ -155,7 +166,14 @@ impl Repository {
     /// `None` if nothing changed. While a conflicted sync is pending, the
     /// snapshot becomes the merge changeset (parents: head + the stream head
     /// that was merged) and refuses to proceed if conflict markers remain.
-    pub fn snapshot(&self, name: &str, dir: &Path, message: &str, author: &Identity, force: bool) -> Result<Option<ChangesetId>> {
+    pub fn snapshot(
+        &self,
+        name: &str,
+        dir: &Path,
+        message: &str,
+        author: &Identity,
+        force: bool,
+    ) -> Result<Option<ChangesetId>> {
         let ws = self.workspace_row(name)?;
         let rules = IgnoreRules::load(dir)?;
         let (tree, _) = scan(self, dir, &rules, true)?;
@@ -164,19 +182,19 @@ impl Repository {
         if tree == head_tree && pending.is_none() {
             return Ok(None);
         }
-        if let Some(p) = &pending {
-            if !force {
-                let unresolved: Vec<&String> = p
-                    .paths
-                    .iter()
-                    .filter(|path| std::fs::read(dir.join(path)).map(|b| has_markers(&b)).unwrap_or(false))
-                    .collect();
-                if !unresolved.is_empty() {
-                    return Err(Error::Conflict(format!(
-                        "unresolved conflict markers in: {} (resolve them, or pass --force to snapshot anyway)",
-                        unresolved.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-                    )));
-                }
+        if let Some(p) = &pending
+            && !force
+        {
+            let unresolved: Vec<&String> = p
+                .paths
+                .iter()
+                .filter(|path| std::fs::read(dir.join(path)).map(|b| has_markers(&b)).unwrap_or(false))
+                .collect();
+            if !unresolved.is_empty() {
+                return Err(Error::Conflict(format!(
+                    "unresolved conflict markers in: {} (resolve them, or pass --force to snapshot anyway)",
+                    unresolved.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                )));
             }
         }
         let mut parents: Vec<ChangesetId> = ws.head.into_iter().collect();
@@ -212,7 +230,10 @@ impl Repository {
         let ws = self.workspace_row(name)?;
         let changes = self.workspace_status(name, dir)?;
         if !changes.is_empty() {
-            return Err(Error::Conflict(format!("the directory has {} uncommitted change(s); snapshot them first", changes.len())));
+            return Err(Error::Conflict(format!(
+                "the directory has {} uncommitted change(s); snapshot them first",
+                changes.len()
+            )));
         }
         let Some(stream_head) = self.meta.read(|tx| tx.stream(&ws.stream))?.and_then(|s| s.state.head) else {
             return Ok(SyncOutcome::UpToDate);
@@ -242,13 +263,18 @@ impl Repository {
             _ => return Err(Error::Invalid("criss-cross history: more than one merge base; resolve manually".into())),
         };
         let base_tree = self.tree_of(&base)?;
-        let merged = merge_trees(&base_tree, &ours_tree, &theirs_tree, &RepoBlobs(self), &self.limits).map_err(|e| Error::Invalid(e.to_string()))?;
+        let merged = merge_trees(&base_tree, &ours_tree, &theirs_tree, &RepoBlobs(self), &self.limits)
+            .map_err(|e| Error::Invalid(e.to_string()))?;
         if merged.is_clean() {
             let ops = ours_tree.diff(&merged.tree);
             let id = self.commit(
                 vec![ws_head, stream_head],
                 author,
-                &format!("Sync {} into workspace '{name}'\n\nMerge-Base: {base}\nMerge-Algorithm: {}\n", ws.stream, ag_merge::ALGORITHM_VERSION),
+                &format!(
+                    "Sync {} into workspace '{name}'\n\nMerge-Base: {base}\nMerge-Algorithm: {}\n",
+                    ws.stream,
+                    ag_merge::ALGORITHM_VERSION
+                ),
                 ops,
             )?;
             update_dir(self, &ours_tree, &merged.tree, dir)?;
@@ -269,12 +295,13 @@ impl Repository {
             paths.push(c.path.to_string());
             if let ConflictKind::Content { .. } = c.kind {
                 let (b, o, t) = (base_tree.get(&c.path), ours_tree.get(&c.path), theirs_tree.get(&c.path));
-                if let (Some(b), Some(o), Some(t)) = (b, o, t) {
-                    if let TextMerge::Conflicted { rendered, .. } = merge_text(&self.blob(&b.content)?, &self.blob(&o.content)?, &self.blob(&t.content)?) {
-                        let mut abs = dir.to_path_buf();
-                        abs.extend(c.path.components());
-                        std::fs::write(abs, rendered)?;
-                    }
+                if let (Some(b), Some(o), Some(t)) = (b, o, t)
+                    && let TextMerge::Conflicted { rendered, .. } =
+                        merge_text(&self.blob(&b.content)?, &self.blob(&o.content)?, &self.blob(&t.content)?)
+                {
+                    let mut abs = dir.to_path_buf();
+                    abs.extend(c.path.components());
+                    std::fs::write(abs, rendered)?;
                 }
             }
         }
@@ -293,7 +320,10 @@ impl Repository {
         let ws = self.workspace_row(name)?;
         let changes = self.workspace_status(name, dir)?;
         if !changes.is_empty() {
-            return Err(Error::Conflict(format!("the directory has {} uncommitted change(s); snapshot or discard them first", changes.len())));
+            return Err(Error::Conflict(format!(
+                "the directory has {} uncommitted change(s); snapshot or discard them first",
+                changes.len()
+            )));
         }
         let old = self.tree_or_empty(ws.head.as_ref())?;
         let new: Tree = self.tree_of(target)?;

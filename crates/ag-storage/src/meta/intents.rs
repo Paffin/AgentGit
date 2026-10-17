@@ -60,7 +60,11 @@ impl IntentState {
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
-            IntentState::Published | IntentState::Integrated | IntentState::Rejected | IntentState::Failed | IntentState::Aborted
+            IntentState::Published
+                | IntentState::Integrated
+                | IntentState::Rejected
+                | IntentState::Failed
+                | IntentState::Aborted
         )
     }
 }
@@ -138,12 +142,26 @@ pub struct IntentRow {
     pub updated_at: Timestamp,
 }
 
-type RawIntent = (String, String, String, String, String, String, Option<String>, String, Option<String>, Option<String>, i64, i64);
+type RawIntent =
+    (String, String, String, String, String, String, Option<String>, String, Option<String>, Option<String>, i64, i64);
 
 const INTENT_COLS: &str = "operation_id, idempotency_key, request_hash, kind, state, actor, stream, payload, result, error, created_at, updated_at";
 
 fn raw(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawIntent> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?))
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+        r.get(7)?,
+        r.get(8)?,
+        r.get(9)?,
+        r.get(10)?,
+        r.get(11)?,
+    ))
 }
 
 fn cook(r: RawIntent) -> Result<IntentRow, MetaError> {
@@ -213,7 +231,8 @@ impl Tx<'_> {
         result: Option<&Value>,
         error: Option<&str>,
     ) -> Result<IntentRow, MetaError> {
-        let cur = self.intent(operation_id)?.ok_or_else(|| MetaError::NotFound(format!("operation '{operation_id}'")))?;
+        let cur =
+            self.intent(operation_id)?.ok_or_else(|| MetaError::NotFound(format!("operation '{operation_id}'")))?;
         if !allowed.contains(&cur.state) {
             return Err(MetaError::InvalidTransition { from: cur.state.to_string(), to: to.to_string() });
         }
@@ -246,7 +265,9 @@ impl Tx<'_> {
 
     /// Objects staged by an intent.
     pub fn intent_objects(&self, operation_id: &str) -> Result<Vec<ObjectId>, MetaError> {
-        let mut stmt = self.conn.prepare_cached("SELECT object_id FROM intent_objects WHERE operation_id = ?1 ORDER BY object_id")?;
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT object_id FROM intent_objects WHERE operation_id = ?1 ORDER BY object_id")?;
         let rows = stmt.query_map([operation_id], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
         for r in rows {

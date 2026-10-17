@@ -10,7 +10,13 @@ use serde_json::json;
 use crate::AgentError;
 
 /// Creates a task. `scope` lists the path globs the task is expected to touch.
-pub fn create_task(meta: &Meta, title: &str, description: &str, scope: &[String], actor: &str) -> Result<TaskRow, AgentError> {
+pub fn create_task(
+    meta: &Meta,
+    title: &str,
+    description: &str,
+    scope: &[String],
+    actor: &str,
+) -> Result<TaskRow, AgentError> {
     if title.trim().is_empty() {
         return Err(AgentError::Invalid("task title is empty".into()));
     }
@@ -83,14 +89,15 @@ pub(crate) fn claim_in_tx(tx: &Tx<'_>, task: &str, owner: &str) -> Result<(), Me
     if t.state == "done" || t.state == "cancelled" {
         return Err(MetaError::Invalid(format!("task '{task}' is {}", t.state)));
     }
-    if let Some(o) = &t.owner {
-        if o != owner {
-            return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
-        }
+    if let Some(o) = t.owner.as_ref().filter(|o| *o != owner) {
+        return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
     }
     let waiting = unfinished_dependencies(tx, task)?;
     if !waiting.is_empty() {
-        return Err(MetaError::Invalid(format!("task '{task}' is blocked by unfinished tasks: {}", waiting.join(", "))));
+        return Err(MetaError::Invalid(format!(
+            "task '{task}' is blocked by unfinished tasks: {}",
+            waiting.join(", ")
+        )));
     }
     tx.task_update(task, Some(owner), Some("in_progress"))
 }
@@ -103,14 +110,11 @@ pub fn finish_task(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<
     let principal = actor.split('#').next().unwrap_or(actor).to_string();
     meta.write(|tx| {
         let t = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
-        if let Some(o) = &t.owner {
-            if *o != principal {
-                return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
-            }
+        if let Some(o) = t.owner.as_ref().filter(|o| **o != principal) {
+            return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
         }
         tx.task_update(task, None, Some(state))?;
-        tx.audit_append(actor, "task.finish", task, &json!({"state": state}))
-            .map(|_| ())
+        tx.audit_append(actor, "task.finish", task, &json!({"state": state})).map(|_| ())
     })
     .map_err(|e| match e {
         MetaError::Invalid(m) => AgentError::Conflict(m),

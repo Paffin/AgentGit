@@ -21,10 +21,7 @@ impl Timestamp {
 
     /// The current wall-clock time.
     pub fn now() -> Self {
-        let ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+        let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
         Self(ms)
     }
 
@@ -35,12 +32,7 @@ impl Timestamp {
         let days = secs.div_euclid(86_400);
         let rem = secs.rem_euclid(86_400);
         let (y, m, d) = civil_from_days(days);
-        format!(
-            "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{ms:03}Z",
-            rem / 3600,
-            (rem % 3600) / 60,
-            rem % 60
-        )
+        format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{ms:03}Z", rem / 3600, (rem % 3600) / 60, rem % 60)
     }
 }
 
@@ -78,13 +70,7 @@ mod tests {
     #[test]
     fn formats_epoch_and_known_dates() {
         assert_eq!(Timestamp::from_millis(0).to_rfc3339(), "1970-01-01T00:00:00.000Z");
-        assert_eq!(
-            Timestamp::from_millis(1_760_659_200_123).to_rfc3339(),
-            "2025-10-17T00:00:00.123Z"
-        );
-        assert_eq!(
-            Timestamp::from_millis(-1).to_rfc3339(),
-            "1969-12-31T23:59:59.999Z"
-        );
+        assert_eq!(Timestamp::from_millis(1_760_659_200_123).to_rfc3339(), "2025-10-17T00:00:00.123Z");
+        assert_eq!(Timestamp::from_millis(-1).to_rfc3339(), "1969-12-31T23:59:59.999Z");
     }
 }

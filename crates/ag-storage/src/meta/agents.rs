@@ -142,7 +142,13 @@ impl Tx<'_> {
     // ---- agents ----------------------------------------------------------
 
     /// Registers an agent.
-    pub fn agent_register(&self, name: &str, identity: &str, public_key: &str, role: &str) -> Result<AgentRow, MetaError> {
+    pub fn agent_register(
+        &self,
+        name: &str,
+        identity: &str,
+        public_key: &str,
+        role: &str,
+    ) -> Result<AgentRow, MetaError> {
         if self.agent(name)?.is_some() {
             return Err(MetaError::AlreadyExists(format!("agent '{name}'")));
         }
@@ -170,7 +176,9 @@ impl Tx<'_> {
     }
 
     fn agents_where(&self, clause: &str, p: impl rusqlite::Params) -> Result<Vec<AgentRow>, MetaError> {
-        let mut stmt = self.conn.prepare(&format!("SELECT name, identity, public_key, role, created_at, disabled FROM agents WHERE {clause}"))?;
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT name, identity, public_key, role, created_at, disabled FROM agents WHERE {clause}"
+        ))?;
         let rows = stmt.query_map(p, |r| {
             Ok(AgentRow {
                 name: r.get(0)?,
@@ -186,7 +194,8 @@ impl Tx<'_> {
 
     /// Disables or re-enables an agent.
     pub fn agent_set_disabled(&self, name: &str, disabled: bool) -> Result<(), MetaError> {
-        let n = self.conn.execute("UPDATE agents SET disabled = ?1 WHERE name = ?2", params![i64::from(disabled), name])?;
+        let n =
+            self.conn.execute("UPDATE agents SET disabled = ?1 WHERE name = ?2", params![i64::from(disabled), name])?;
         if n == 0 {
             return Err(MetaError::NotFound(format!("agent '{name}'")));
         }
@@ -213,8 +222,12 @@ impl Tx<'_> {
     /// Runs of an agent (or all), newest first.
     pub fn runs(&self, agent: Option<&str>, limit: usize) -> Result<Vec<RunRow>, MetaError> {
         match agent {
-            Some(a) => self.runs_where("agent = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2", params![a, limit as i64]),
-            None => self.runs_where("?1 = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2", params!["", limit as i64]),
+            Some(a) => {
+                self.runs_where("agent = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2", params![a, limit as i64])
+            }
+            None => {
+                self.runs_where("?1 = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2", params!["", limit as i64])
+            }
         }
     }
 
@@ -269,7 +282,14 @@ impl Tx<'_> {
     // ---- tasks -----------------------------------------------------------
 
     /// Creates a task.
-    pub fn task_create(&self, id: &str, title: &str, description: &str, scope: &[String], created_by: &str) -> Result<TaskRow, MetaError> {
+    pub fn task_create(
+        &self,
+        id: &str,
+        title: &str,
+        description: &str,
+        scope: &[String],
+        created_by: &str,
+    ) -> Result<TaskRow, MetaError> {
         let now = self.now().as_millis();
         self.conn.execute(
             "INSERT INTO tasks (id, title, description, state, scope, created_by, created_at, updated_at) VALUES (?1, ?2, ?3, 'open', ?4, ?5, ?6, ?6)",
@@ -296,12 +316,32 @@ impl Tx<'_> {
             "SELECT id, title, description, owner, state, scope, created_by, created_at, updated_at FROM tasks WHERE {clause}"
         ))?;
         let rows = stmt.query_map(p, |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, i64>(7)?,
+                r.get::<_, i64>(8)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
             let (id, title, description, owner, state, scope, created_by, c, u) = r?;
-            out.push(TaskRow { id, title, description, owner, state, scope: serde_json::from_str(&scope)?, created_by, created_at: ts(c), updated_at: ts(u) });
+            out.push(TaskRow {
+                id,
+                title,
+                description,
+                owner,
+                state,
+                scope: serde_json::from_str(&scope)?,
+                created_by,
+                created_at: ts(c),
+                updated_at: ts(u),
+            });
         }
         Ok(out)
     }
@@ -320,13 +360,15 @@ impl Tx<'_> {
 
     /// Adds a dependency edge `task -> depends_on` (cycle checking is the caller's job).
     pub fn task_dep_add(&self, task: &str, depends_on: &str) -> Result<(), MetaError> {
-        self.conn.execute("INSERT OR IGNORE INTO task_deps (task, depends_on) VALUES (?1, ?2)", params![task, depends_on])?;
+        self.conn
+            .execute("INSERT OR IGNORE INTO task_deps (task, depends_on) VALUES (?1, ?2)", params![task, depends_on])?;
         Ok(())
     }
 
     /// Direct dependencies of a task.
     pub fn task_deps(&self, task: &str) -> Result<Vec<String>, MetaError> {
-        let mut stmt = self.conn.prepare_cached("SELECT depends_on FROM task_deps WHERE task = ?1 ORDER BY depends_on")?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT depends_on FROM task_deps WHERE task = ?1 ORDER BY depends_on")?;
         let rows = stmt.query_map([task], |r| r.get::<_, String>(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
@@ -348,8 +390,15 @@ impl Tx<'_> {
             "INSERT INTO leases (id, scope, holder, exclusive, token, acquired_at, expires_at, released_at, task_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
-                l.id, l.scope, l.holder, i64::from(l.exclusive), l.token as i64, l.acquired_at.as_millis(),
-                l.expires_at.as_millis(), l.released_at.map(|t| t.as_millis()), l.task_id
+                l.id,
+                l.scope,
+                l.holder,
+                i64::from(l.exclusive),
+                l.token as i64,
+                l.acquired_at.as_millis(),
+                l.expires_at.as_millis(),
+                l.released_at.map(|t| t.as_millis()),
+                l.task_id
             ],
         )?;
         Ok(())
@@ -417,7 +466,15 @@ impl Tx<'_> {
     // ---- provenance ------------------------------------------------------
 
     /// Stores a signed provenance record.
-    pub fn provenance_insert(&self, changeset: &ChangesetId, agent: &str, run_id: Option<&str>, record: &Value, public_key: &str, signature: &str) -> Result<u64, MetaError> {
+    pub fn provenance_insert(
+        &self,
+        changeset: &ChangesetId,
+        agent: &str,
+        run_id: Option<&str>,
+        record: &Value,
+        public_key: &str,
+        signature: &str,
+    ) -> Result<u64, MetaError> {
         self.conn.execute(
             "INSERT INTO provenance (changeset, agent, run_id, record, public_key, signature, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![changeset.to_hex(), agent, run_id, serde_json::to_string(record)?, public_key, signature, self.now().as_millis()],
@@ -431,12 +488,30 @@ impl Tx<'_> {
             "SELECT id, changeset, agent, run_id, record, public_key, signature, created_at FROM provenance WHERE changeset = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([changeset.to_hex()], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, i64>(7)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, i64>(7)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
             let (id, cs, agent, run_id, record, pk, sig, t) = r?;
-            out.push(ProvenanceRow { id: id as u64, changeset: parse(&cs, "provenance changeset")?, agent, run_id, record: serde_json::from_str(&record)?, public_key: pk, signature: sig, created_at: ts(t) });
+            out.push(ProvenanceRow {
+                id: id as u64,
+                changeset: parse(&cs, "provenance changeset")?,
+                agent,
+                run_id,
+                record: serde_json::from_str(&record)?,
+                public_key: pk,
+                signature: sig,
+                created_at: ts(t),
+            });
         }
         Ok(out)
     }

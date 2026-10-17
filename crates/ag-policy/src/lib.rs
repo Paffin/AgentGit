@@ -27,7 +27,5 @@ pub use attestation::{Attestation, AttestationError, CheckResult};
 pub use document::{
     AgentAutonomy, ApprovalRules, Policy, PolicyError, ProtectedPath, RequiredValidation, TrustedIssuer,
 };
-pub use eval::{
-    ApprovalFact, ChangedPath, Decision, Evaluation, Facts, Unmet, evaluate,
-};
+pub use eval::{ApprovalFact, ChangedPath, Decision, Evaluation, Facts, Unmet, evaluate};
 pub use matcher::{IdentityMatcher, PathMatcher};

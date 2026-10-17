@@ -56,7 +56,14 @@ fn principal(identity: &str) -> &str {
 ///
 /// Exclusive leases are refused while another holder has an active
 /// *exclusive* lease on an overlapping scope.
-pub fn acquire(meta: &Meta, scope: &str, holder: &str, exclusive: bool, ttl_ms: i64, task_id: Option<&str>) -> Result<Acquired, AgentError> {
+pub fn acquire(
+    meta: &Meta,
+    scope: &str,
+    holder: &str,
+    exclusive: bool,
+    ttl_ms: i64,
+    task_id: Option<&str>,
+) -> Result<Acquired, AgentError> {
     PathMatcher::new(&[scope.to_string()]).map_err(AgentError::Invalid)?;
     if !(1..=MAX_TTL_MS).contains(&ttl_ms) {
         return Err(AgentError::Invalid(format!("ttl must be between 1 ms and {MAX_TTL_MS} ms")));
@@ -68,13 +75,11 @@ pub fn acquire(meta: &Meta, scope: &str, holder: &str, exclusive: bool, ttl_ms: 
             .into_iter()
             .filter(|l| principal(&l.holder) != principal(holder) && scopes_may_overlap(&l.scope, scope))
             .collect();
-        if exclusive {
-            if let Some(blocker) = overlaps.iter().find(|l| l.exclusive) {
-                return Err(MetaError::Invalid(format!(
-                    "scope '{}' overlaps an exclusive lease on '{}' held by {} until {}",
-                    scope, blocker.scope, blocker.holder, blocker.expires_at
-                )));
-            }
+        if let Some(blocker) = overlaps.iter().find(|l| exclusive && l.exclusive) {
+            return Err(MetaError::Invalid(format!(
+                "scope '{}' overlaps an exclusive lease on '{}' held by {} until {}",
+                scope, blocker.scope, blocker.holder, blocker.expires_at
+            )));
         }
         let token = tx.next_counter("fencing")?;
         let lease = LeaseRow {
@@ -89,7 +94,12 @@ pub fn acquire(meta: &Meta, scope: &str, holder: &str, exclusive: bool, ttl_ms: 
             task_id: task_id.map(str::to_string),
         };
         tx.lease_insert(&lease)?;
-        tx.audit_append(holder, "lease.acquire", &id, &json!({"scope": scope, "exclusive": exclusive, "token": token}))?;
+        tx.audit_append(
+            holder,
+            "lease.acquire",
+            &id,
+            &json!({"scope": scope, "exclusive": exclusive, "token": token}),
+        )?;
         Ok(Acquired { lease, overlaps })
     });
     result.map_err(|e| match e {
@@ -155,7 +165,12 @@ impl std::fmt::Display for LeaseBlocker {
 
 /// Checks the active exclusive leases against a change. `author` is the
 /// proposal author, `tokens` the fencing tokens the author presented.
-pub fn lease_blockers(tx: &Tx<'_>, changed_paths: &[String], author: &str, tokens: &[u64]) -> Result<Vec<LeaseBlocker>, MetaError> {
+pub fn lease_blockers(
+    tx: &Tx<'_>,
+    changed_paths: &[String],
+    author: &str,
+    tokens: &[u64],
+) -> Result<Vec<LeaseBlocker>, MetaError> {
     let mut out = Vec::new();
     for l in tx.leases_active()?.into_iter().filter(|l| l.exclusive) {
         let Ok(m) = PathMatcher::new(std::slice::from_ref(&l.scope)) else { continue };

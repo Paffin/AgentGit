@@ -53,7 +53,9 @@ impl std::fmt::Display for ConflictKind {
             ConflictKind::Content { regions } => write!(f, "content conflict ({regions} region(s))"),
             ConflictKind::BothAdded => f.write_str("both sides added different content"),
             ConflictKind::DeleteModify { ours_deleted: true } => f.write_str("deleted on our side, modified on theirs"),
-            ConflictKind::DeleteModify { ours_deleted: false } => f.write_str("modified on our side, deleted on theirs"),
+            ConflictKind::DeleteModify { ours_deleted: false } => {
+                f.write_str("modified on our side, deleted on theirs")
+            }
             ConflictKind::Binary => f.write_str("binary file changed on both sides"),
             ConflictKind::TypeChange => f.write_str("file type or symlink target changed on both sides"),
             ConflictKind::TooLarge => f.write_str("file too large to merge"),

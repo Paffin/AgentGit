@@ -35,7 +35,11 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
         Some(n) => n.clone(),
         None => {
             let name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
-            let clean: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
+            let clean: String = name
+                .to_lowercase()
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' })
+                .collect();
             format!("local/{}", clean.trim_start_matches(['-', '.', '_']))
         }
     };
@@ -46,13 +50,18 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
     };
     let repo = Repository::init(&root, &opts)?;
     if cli.json {
-        println!("{}", json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name}));
+        println!(
+            "{}",
+            json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name})
+        );
     } else {
         println!("Initialized AgentGit repository in {}", root.join(".ag").display());
         println!("  namespace: {ns}");
         println!("  stream:    {}", args.stream);
         println!("  storage:   {} (see `docs/operations/durability.md`)", repo.objects().durability().name);
-        println!("Next: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`.");
+        println!(
+            "Next: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`."
+        );
     }
     Ok(exit::OK)
 }
@@ -61,7 +70,10 @@ fn workspace_dir(ctx: &Ctx, workspace: &str, dir: &Option<PathBuf>) -> Result<Pa
     match (dir, workspace) {
         (Some(d), _) => Ok(d.clone()),
         (None, "default") => Ok(ctx.root.clone()),
-        (None, w) => ctx.repo.workspace_dir(w)?.ok_or_else(|| anyhow!("workspace '{w}' has no recorded directory; pass --dir <directory>")),
+        (None, w) => ctx
+            .repo
+            .workspace_dir(w)?
+            .ok_or_else(|| anyhow!("workspace '{w}' has no recorded directory; pass --dir <directory>")),
     }
 }
 
@@ -90,7 +102,8 @@ pub enum WorkspaceCmd {
 pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
     match cmd {
         WorkspaceCmd::Create { name, dir, stream } => {
-            let stream = StreamName::new(stream.clone().unwrap_or_else(|| ctx.default_stream())).map_err(|e| anyhow!("{e}"))?;
+            let stream =
+                StreamName::new(stream.clone().unwrap_or_else(|| ctx.default_stream())).map_err(|e| anyhow!("{e}"))?;
             std::fs::create_dir_all(dir)?;
             if std::fs::read_dir(dir)?.next().is_some() {
                 bail!("{} is not empty", display_path(dir));
@@ -105,8 +118,19 @@ pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for w in &rows {
-                    let dir = if w.name == "default" { Some(ctx.root.clone()) } else { ctx.repo.workspace_dir(&w.name).ok().flatten() };
-                    let _ = writeln!(s, "{:<16} stream {:<12} head {}  {}", w.name, w.stream, w.head.map_or("-".into(), |h| h.short()), dir.map(|d| d.display().to_string()).unwrap_or_default());
+                    let dir = if w.name == "default" {
+                        Some(ctx.root.clone())
+                    } else {
+                        ctx.repo.workspace_dir(&w.name).ok().flatten()
+                    };
+                    let _ = writeln!(
+                        s,
+                        "{:<16} stream {:<12} head {}  {}",
+                        w.name,
+                        w.stream,
+                        w.head.map_or("-".into(), |h| h.short()),
+                        dir.map(|d| d.display().to_string()).unwrap_or_default()
+                    );
                 }
                 s
             })?;
@@ -172,7 +196,9 @@ pub struct SnapshotArgs {
 pub fn snapshot(ctx: &Ctx, a: &SnapshotArgs) -> Result<u8> {
     let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
     match ctx.repo.snapshot(&a.workspace, &dir, &a.message, &ctx.me, a.force)? {
-        Some(id) => ctx.out(&json!({"changeset": id}), || format!("Snapshot {} in workspace '{}'", id.short(), a.workspace))?,
+        Some(id) => {
+            ctx.out(&json!({"changeset": id}), || format!("Snapshot {} in workspace '{}'", id.short(), a.workspace))?
+        }
         None => ctx.out(&json!({"changeset": null}), || "Nothing to snapshot.".to_string())?,
     }
     Ok(exit::OK)
@@ -196,7 +222,10 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
         SyncOutcome::FastForwarded { to } => format!("Fast-forwarded to {}.", to.short()),
         SyncOutcome::Merged { id } => format!("Merged the stream into the workspace: {}.", id.short()),
         SyncOutcome::Conflicted { conflicts } => {
-            let mut s = format!("{} conflict(s). Resolve the files below, then run `ag snapshot -m \"resolve\"`:\n", conflicts.len());
+            let mut s = format!(
+                "{} conflict(s). Resolve the files below, then run `ag snapshot -m \"resolve\"`:\n",
+                conflicts.len()
+            );
             for c in conflicts {
                 let _ = writeln!(s, "  {}  ({})", c.path, c.kind);
             }
@@ -237,7 +266,11 @@ pub fn log(ctx: &Ctx, a: &LogArgs) -> Result<u8> {
         let mut s = String::new();
         for e in &entries {
             let first = e.message.lines().next().unwrap_or("");
-            let merge = if e.parents.len() > 1 { format!("  (merge of {})", e.parents.iter().map(|p| p.short()).collect::<Vec<_>>().join(" + ")) } else { String::new() };
+            let merge = if e.parents.len() > 1 {
+                format!("  (merge of {})", e.parents.iter().map(|p| p.short()).collect::<Vec<_>>().join(" + "))
+            } else {
+                String::new()
+            };
             let _ = writeln!(s, "{}  {}  {}{merge}", e.id.short(), e.timestamp, e.author);
             let _ = writeln!(s, "    {first}");
         }
@@ -250,7 +283,11 @@ fn op_marker(parent: &Tree, op: &Op) -> &'static str {
     match op {
         Op::Delete { .. } => "D",
         Op::Put { path, .. } => {
-            if parent.get(path).is_some() { "M" } else { "A" }
+            if parent.get(path).is_some() {
+                "M"
+            } else {
+                "A"
+            }
         }
     }
 }
@@ -327,7 +364,8 @@ fn render_diff(
         match &op {
             Op::Delete { path } => {
                 let e = old.get(path).expect("deleted path existed");
-                let d = ag_diff::unified_diff(&format!("a/{path}"), "/dev/null", &entry_bytes(repo, e)?, b"", ctx_lines);
+                let d =
+                    ag_diff::unified_diff(&format!("a/{path}"), "/dev/null", &entry_bytes(repo, e)?, b"", ctx_lines);
                 let _ = write!(out, "diff --ag {path}\ndeleted file\n{d}");
             }
             Op::Put { path, .. } => {
@@ -336,7 +374,11 @@ fn render_diff(
                 match old.get(path) {
                     None => {
                         let d = ag_diff::unified_diff("/dev/null", &format!("b/{path}"), b"", &nb, ctx_lines);
-                        let _ = write!(out, "diff --ag {path}\nnew file{}\n{d}", if ne.executable { " (executable)" } else { "" });
+                        let _ = write!(
+                            out,
+                            "diff --ag {path}\nnew file{}\n{d}",
+                            if ne.executable { " (executable)" } else { "" }
+                        );
                     }
                     Some(oe) => {
                         let ob = entry_bytes(repo, oe)?;
@@ -436,7 +478,12 @@ pub fn ls(ctx: &Ctx, a: &LsArgs) -> Result<u8> {
                     let _ = writeln!(s, "dir      {name}/");
                 }
                 DirEntry::File { name, entry } => {
-                    let _ = writeln!(s, "{:<8} {name}{}", entry.file_type.to_string(), if entry.executable { "*" } else { "" });
+                    let _ = writeln!(
+                        s,
+                        "{:<8} {name}{}",
+                        entry.file_type.to_string(),
+                        if entry.executable { "*" } else { "" }
+                    );
                 }
             }
         }
@@ -461,6 +508,8 @@ pub fn checkout(ctx: &Ctx, a: &CheckoutArgs) -> Result<u8> {
     }
     let tree = ctx.repo.tree_of(&id)?;
     checkout_tree(&ctx.repo, &tree, &a.dir)?;
-    ctx.out(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || format!("Wrote {} file(s) of {} to {}", tree.len(), id.short(), display_path(&a.dir)))?;
+    ctx.out(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || {
+        format!("Wrote {} file(s) of {} to {}", tree.len(), id.short(), display_path(&a.dir))
+    })?;
     Ok(exit::OK)
 }

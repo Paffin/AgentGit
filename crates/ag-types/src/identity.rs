@@ -60,10 +60,7 @@ impl Identity {
         if name.is_empty() || name.len() > 128 {
             return Err(IdentityError::BadLength);
         }
-        if !name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "._@#+-".contains(c))
-        {
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || "._@#+-".contains(c)) {
             return Err(IdentityError::BadChar);
         }
         Ok(Self(s))
@@ -289,9 +286,7 @@ impl OperationId {
     /// Validates and wraps an operation id.
     pub fn new(s: impl Into<String>) -> Result<Self, OperationIdError> {
         let s: String = s.into();
-        if !(8..=64).contains(&s.len())
-            || !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
+        if !(8..=64).contains(&s.len()) || !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
             return Err(OperationIdError);
         }
         Ok(Self(s))

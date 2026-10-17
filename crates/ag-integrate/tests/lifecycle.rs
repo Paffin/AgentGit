@@ -136,7 +136,13 @@ fn gc_fails_closed_when_a_reachable_object_is_damaged() {
     let repo = disk_repo(dir.path());
     let c = snap_in(&repo, None, &[("a", "precious")], "user:alice");
     let p = repo.propose("main", &c, "t", "", &id("user:alice"), None).unwrap();
-    repo.integrate(&IntegrateRequest { proposal_id: p.id, actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    repo.integrate(&IntegrateRequest {
+        proposal_id: p.id,
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    })
+    .unwrap();
     let orphan = snap_in(&repo, None, &[("junk", "junk")], "user:alice");
 
     // damage the reachable blob
@@ -158,7 +164,13 @@ fn fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage() {
     let repo = disk_repo(dir.path());
     let c1 = snap_in(&repo, None, &[("a", "1"), ("b", "2")], "user:alice");
     let p1 = repo.propose("main", &c1, "t", "", &id("user:alice"), None).unwrap();
-    repo.integrate(&IntegrateRequest { proposal_id: p1.id, actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    repo.integrate(&IntegrateRequest {
+        proposal_id: p1.id,
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    })
+    .unwrap();
     let ok = repo.fsck().unwrap();
     assert!(ok.is_ok(), "{:?}", ok.issues);
     assert!(ok.objects_checked >= 3 && ok.audit_entries > 3);
@@ -207,7 +219,13 @@ fn tampering_with_stored_attestations_or_streams_is_detected_or_harmless() {
     let repo = disk_repo(dir.path());
     let c = snap_in(&repo, None, &[("a", "1")], "user:alice");
     let p = repo.propose("main", &c, "t", "", &id("user:alice"), None).unwrap();
-    repo.integrate(&IntegrateRequest { proposal_id: p.id, actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    repo.integrate(&IntegrateRequest {
+        proposal_id: p.id,
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    })
+    .unwrap();
 
     // Point the stream at a changeset that was never published.
     let ghost = snap_in(&repo, Some(c), &[("a", "1"), ("ghost", "g")], "user:alice");
@@ -228,7 +246,13 @@ fn derived_trees_are_disposable_and_reindex_rebuilds_them() {
     let c1 = snap_in(&repo, None, &[("a", "1")], "user:alice");
     let c2 = snap_in(&repo, Some(c1), &[("a", "1"), ("b", "2")], "user:alice");
     let p = repo.propose("main", &c2, "t", "", &id("user:alice"), None).unwrap();
-    repo.integrate(&IntegrateRequest { proposal_id: p.id, actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    repo.integrate(&IntegrateRequest {
+        proposal_id: p.id,
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    })
+    .unwrap();
     assert!(repo.meta().read(|tx| tx.derived_tree(&c2)).unwrap().is_some(), "worker derived the tree");
     assert_eq!(repo.meta().read(|tx| tx.outbox_pending_count()).unwrap(), 0);
 
@@ -259,7 +283,14 @@ fn alice() -> Identity {
 fn land_dir(repo: &Repository, dir: &Path, msg: &str) -> ag_types::ChangesetId {
     let head = repo.snapshot("default", dir, msg, &alice(), false).unwrap().expect("something changed");
     let prop = repo.propose("main", &head, msg, "", &alice(), None).unwrap();
-    let r = repo.integrate(&IntegrateRequest { proposal_id: prop.id, actor: alice(), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    let r = repo
+        .integrate(&IntegrateRequest {
+            proposal_id: prop.id,
+            actor: alice(),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        })
+        .unwrap();
     assert!(matches!(r.outcome, Outcome::Integrated { .. }), "{:?}", r.outcome);
     head
 }
@@ -274,12 +305,18 @@ fn workspace_snapshot_propose_integrate_cycle() {
 
     let first = land_dir(&repo, dir.path(), "initial");
     assert_eq!(repo.workspace_status("default", dir.path()).unwrap(), vec![]);
-    assert!(repo.snapshot("default", dir.path(), "again", &alice(), false).unwrap().is_none(), "no changes, no snapshot");
+    assert!(
+        repo.snapshot("default", dir.path(), "again", &alice(), false).unwrap().is_none(),
+        "no changes, no snapshot"
+    );
 
     write(dir.path(), "src/main.rs", "fn main() { println!(\"hi\"); }\n");
     fs::remove_file(dir.path().join("README.md")).unwrap();
     let st = repo.workspace_status("default", dir.path()).unwrap();
-    assert_eq!(st.iter().map(|c| (c.kind, c.path.as_str())).collect::<Vec<_>>(), [("deleted", "README.md"), ("modified", "src/main.rs")]);
+    assert_eq!(
+        st.iter().map(|c| (c.kind, c.path.as_str())).collect::<Vec<_>>(),
+        [("deleted", "README.md"), ("modified", "src/main.rs")]
+    );
     let second = land_dir(&repo, dir.path(), "edit");
     assert_eq!(repo.changeset(&second).unwrap().parents, vec![first]);
     assert_eq!(repo.resolve_rev("main").unwrap(), second);
@@ -309,7 +346,10 @@ fn sync_fast_forwards_merges_and_resolves_conflicts() {
     let c1 = land_dir(&repo, main_dir.path(), "edit top");
 
     // other has no local work: sync fast-forwards it.
-    assert_eq!(repo.sync_workspace("other", other.path(), &id("user:bob")).unwrap(), SyncOutcome::FastForwarded { to: c1 });
+    assert_eq!(
+        repo.sync_workspace("other", other.path(), &id("user:bob")).unwrap(),
+        SyncOutcome::FastForwarded { to: c1 }
+    );
     assert_eq!(fs::read_to_string(other.path().join("a.txt")).unwrap(), "LINE1\nline2\nline3\nline4\nline5\n");
 
     // other makes a non-conflicting local change; main moves again.
@@ -347,7 +387,14 @@ fn sync_fast_forwards_merges_and_resolves_conflicts() {
 
     // The resolved merge fast-forwards the stream.
     let prop = repo.propose("main", &resolved, "resolution", "", &id("user:bob"), None).unwrap();
-    let r = repo.integrate(&IntegrateRequest { proposal_id: prop.id, actor: alice(), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    let r = repo
+        .integrate(&IntegrateRequest {
+            proposal_id: prop.id,
+            actor: alice(),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        })
+        .unwrap();
     let Outcome::Integrated { strategy, .. } = r.outcome else { panic!("{:?}", r.outcome) };
     assert_eq!(strategy, ag_integrate::Strategy::FastForward);
     let _ = base;
@@ -384,4 +431,40 @@ fn queue_integrates_in_order_and_isolates_failures() {
     let states: Vec<_> = f.repo.queue("main").unwrap().iter().map(|q| q.state.clone()).collect();
     assert_eq!(states, ["done", "rejected", "done", "done"]);
     assert_eq!(f.repo.operation_by_key(&format!("integrate:{px}:{cconflict}:0")).unwrap().state, IntentState::Rejected);
+}
+
+#[test]
+fn derived_tree_cache_is_sparse_but_every_tree_is_still_readable() {
+    let f = fx();
+    // a linear history of 100 changesets, each adding one file
+    let mut prev = None;
+    let mut ids = Vec::new();
+    let mut files: Vec<(String, String)> = Vec::new();
+    for i in 0..100 {
+        files.push((format!("f{i:03}.txt"), format!("content {i}")));
+        let refs: Vec<(&str, &str)> = files.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        let c = f.snap(prev, &refs, "user:alice");
+        ids.push(c);
+        prev = Some(c);
+    }
+    f.repo.publish(&prev.unwrap(), &id("user:alice"), None).unwrap();
+    while f.repo.derive_pending(1000).unwrap().pending > 0 {}
+
+    let cached = f.repo.meta().read(|tx| tx.count_rows("changeset_trees")).unwrap();
+    let keyframes = 100 / ag_integrate::KEYFRAME_INTERVAL;
+    assert!(
+        cached <= keyframes + 1,
+        "cache holds ~one tree per {} changesets, got {cached}",
+        ag_integrate::KEYFRAME_INTERVAL
+    );
+    assert!(cached >= keyframes, "keyframes are cached: {cached}");
+
+    // every tree is still available, computed from the nearest keyframe
+    for (n, c) in ids.iter().enumerate() {
+        assert_eq!(f.repo.tree_of(c).unwrap().len(), n + 1);
+    }
+    // and rebuilding from scratch yields an equivalent, equally sparse cache
+    f.repo.reindex().unwrap();
+    assert!(f.repo.meta().read(|tx| tx.count_rows("changeset_trees")).unwrap() <= keyframes + 1);
+    assert!(f.repo.fsck().unwrap().is_ok());
 }

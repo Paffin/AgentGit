@@ -41,6 +41,7 @@ dependencies = [
  "ag-changeset",
  "ag-crypto",
  "ag-diff",
+ "ag-git",
  "ag-integrate",
  "ag-policy",
  "ag-storage",
@@ -84,6 +85,18 @@ name = "ag-diff"
 version = "0.1.0"
 dependencies = [
  "proptest",
+]
+
+[[package]]
+name = "ag-git"
+version = "0.1.0"
+dependencies = [
+ "ag-changeset",
+ "ag-dag",
+ "ag-integrate",
+ "ag-types",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

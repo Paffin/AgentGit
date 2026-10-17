@@ -2,7 +2,7 @@
 
 use ag_crypto::random_id;
 use ag_policy::{Attestation, IdentityMatcher, Policy};
-use ag_storage::meta::{AttestationRow, MetaError, PinRow, PolicyRow, ProposalRow, ReviewRow, StreamRow};
+use ag_storage::meta::{AttestationRow, MetaError, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, StreamRow};
 use ag_types::{ChangesetId, Identity, IdentityKind, StreamName, TreeId};
 use serde_json::json;
 
@@ -20,13 +20,45 @@ impl Repository {
             let row = tx.create_stream(name, actor.as_str())?;
             let row = match from {
                 Some(h) => {
-                    let st = tx.cas_stream(name.as_str(), &row.state, h, None, actor.as_str(), "stream created at a given changeset")?;
+                    let st = tx.cas_stream(
+                        name.as_str(),
+                        &row.state,
+                        h,
+                        None,
+                        actor.as_str(),
+                        "stream created at a given changeset",
+                    )?;
                     StreamRow { state: st, ..row }
                 }
                 None => row,
             };
             tx.audit_append(actor.as_str(), "stream.create", name.as_str(), &json!({"from": from}))?;
             Ok(row)
+        })?)
+    }
+
+    /// Points a stream at an already published history (used by importers).
+    /// Creates the stream if needed; refuses to move a stream that has a head.
+    pub fn adopt_history(
+        &self,
+        stream: &StreamName,
+        head: &ChangesetId,
+        actor: &Identity,
+        reason: &str,
+    ) -> Result<StreamRow> {
+        Ok(self.meta.write(|tx| {
+            let row = match tx.stream(stream.as_str())? {
+                Some(r) => r,
+                None => tx.create_stream(stream, actor.as_str())?,
+            };
+            if row.state.head.is_some() {
+                return Err(MetaError::Invalid(format!(
+                    "stream '{stream}' already has history; import into a new stream"
+                )));
+            }
+            let st = tx.cas_stream(stream.as_str(), &row.state, head, None, actor.as_str(), reason)?;
+            tx.audit_append(actor.as_str(), "stream.adopt", stream.as_str(), &json!({"head": head, "reason": reason}))?;
+            Ok(StreamRow { state: st, ..row })
         })?)
     }
 
@@ -50,7 +82,15 @@ impl Repository {
     }
 
     /// Publishes `head` and opens a proposal to integrate it into `stream`.
-    pub fn propose(&self, stream: &str, head: &ChangesetId, title: &str, description: &str, author: &Identity, task_id: Option<&str>) -> Result<ProposalRow> {
+    pub fn propose(
+        &self,
+        stream: &str,
+        head: &ChangesetId,
+        title: &str,
+        description: &str,
+        author: &Identity,
+        task_id: Option<&str>,
+    ) -> Result<ProposalRow> {
         if title.trim().is_empty() {
             return Err(Error::Invalid("a proposal needs a title".into()));
         }
@@ -66,7 +106,15 @@ impl Repository {
         }
         let id = random_id("prop")?;
         Ok(self.meta.write(|tx| {
-            let p = tx.proposal_create(&id, stream, head, title, description, author.as_str(), task_id)?;
+            let p = tx.proposal_create(&NewProposal {
+                id: &id,
+                stream,
+                head,
+                title,
+                description,
+                author: author.as_str(),
+                task_id,
+            })?;
             tx.audit_append(author.as_str(), "proposal.create", &id, &json!({"stream": stream, "head": head}))?;
             Ok(p)
         })?)
@@ -123,8 +171,16 @@ impl Repository {
                 return Err(MetaError::Invalid(format!("proposal '{proposal}' is {}", p.state)));
             }
             let id = tx.review_add(proposal, reviewer.as_str(), decision, body, &p.head)?;
-            tx.audit_append(reviewer.as_str(), "proposal.review", proposal, &json!({"decision": decision, "head": p.head}))?;
-            tx.reviews(proposal)?.into_iter().find(|r| r.id == id).ok_or_else(|| MetaError::Corrupt("review vanished".into()))
+            tx.audit_append(
+                reviewer.as_str(),
+                "proposal.review",
+                proposal,
+                &json!({"decision": decision, "head": p.head}),
+            )?;
+            tx.reviews(proposal)?
+                .into_iter()
+                .find(|r| r.id == id)
+                .ok_or_else(|| MetaError::Corrupt("review vanished".into()))
         })?)
     }
 
@@ -162,7 +218,12 @@ impl Repository {
         let canonical = policy.to_json();
         Ok(self.meta.write(|tx| {
             let row = tx.policy_put(stream, &canonical, actor.as_str())?;
-            tx.audit_append(actor.as_str(), "policy.set", stream, &json!({"version": row.version, "hash": row.doc_hash}))?;
+            tx.audit_append(
+                actor.as_str(),
+                "policy.set",
+                stream,
+                &json!({"version": row.version, "hash": row.doc_hash}),
+            )?;
             Ok(row)
         })?)
     }
@@ -188,10 +249,18 @@ impl Repository {
         };
         self.meta.write(|tx| {
             if tx.attestations_for_tree(&att.tree_id)?.len() >= MAX_ATTESTATIONS_PER_TREE {
-                return Err(MetaError::Invalid(format!("tree {} already has {MAX_ATTESTATIONS_PER_TREE} attestations", att.tree_id)));
+                return Err(MetaError::Invalid(format!(
+                    "tree {} already has {MAX_ATTESTATIONS_PER_TREE} attestations",
+                    att.tree_id
+                )));
             }
             tx.attestation_insert(&row)?;
-            tx.audit_append(att.issuer.as_str(), "attestation.submit", &att.tree_id.to_hex(), &json!({"check": att.check, "result": att.result.as_str(), "id": att.id}))?;
+            tx.audit_append(
+                att.issuer.as_str(),
+                "attestation.submit",
+                &att.tree_id.to_hex(),
+                &json!({"check": att.check, "result": att.result.as_str(), "id": att.id}),
+            )?;
             Ok(())
         })?;
         Ok(())

@@ -14,10 +14,7 @@ impl PathMatcher {
     pub fn new(patterns: &[String]) -> Result<Self, String> {
         let mut b = GlobSetBuilder::new();
         for p in patterns {
-            let g = GlobBuilder::new(p)
-                .literal_separator(true)
-                .build()
-                .map_err(|e| format!("bad glob '{p}': {e}"))?;
+            let g = GlobBuilder::new(p).literal_separator(true).build().map_err(|e| format!("bad glob '{p}': {e}"))?;
             b.add(g);
         }
         Ok(Self { set: b.build().map_err(|e| e.to_string())?, patterns: patterns.to_vec() })

@@ -9,7 +9,7 @@ use ag_agent::{AgentError, predict, tasks};
 use ag_changeset::{Changeset, Op};
 use ag_object::hash_blob;
 use ag_storage::meta::Meta;
-use ag_storage::{ManualClock, Clock};
+use ag_storage::{Clock, ManualClock};
 use ag_types::{ChangesetId, FileType, Identity, Limits, Namespace, RepoPath, StreamName, Timestamp};
 
 struct Env {
@@ -30,9 +30,23 @@ fn env() -> Env {
 fn cs(parents: Vec<ChangesetId>, files: &[&str]) -> (ChangesetId, Changeset) {
     let ops = files
         .iter()
-        .map(|f| Op::Put { path: RepoPath::new(*f).unwrap(), content: hash_blob(f.as_bytes()), file_type: FileType::Regular, executable: false })
+        .map(|f| Op::Put {
+            path: RepoPath::new(*f).unwrap(),
+            content: hash_blob(f.as_bytes()),
+            file_type: FileType::Regular,
+            executable: false,
+        })
         .collect();
-    let c = Changeset::build(Namespace::new("t/t").unwrap(), parents, Identity::new("user:t").unwrap(), Timestamp::from_millis(0), "m", ops, &Limits::default()).unwrap();
+    let c = Changeset::build(
+        Namespace::new("t/t").unwrap(),
+        parents,
+        Identity::new("user:t").unwrap(),
+        Timestamp::from_millis(0),
+        "m",
+        ops,
+        &Limits::default(),
+    )
+    .unwrap();
     (c.id(), c)
 }
 
@@ -43,7 +57,10 @@ fn agent_registration_creates_a_protected_key() {
     assert_eq!(row.identity, "agent:builder");
     let kp = e.keys.load("builder").unwrap();
     assert_eq!(kp.public().to_hex(), row.public_key);
-    assert!(matches!(registry::register_agent(&e.meta, &e.keys, "builder", "agent", "user:admin"), Err(AgentError::Conflict(_))));
+    assert!(matches!(
+        registry::register_agent(&e.meta, &e.keys, "builder", "agent", "user:admin"),
+        Err(AgentError::Conflict(_))
+    ));
     assert!(registry::register_agent(&e.meta, &e.keys, "Bad Name", "agent", "user:admin").is_err());
     assert!(registry::register_agent(&e.meta, &e.keys, "x", "root", "user:admin").is_err());
     // registration is audited
@@ -129,7 +146,10 @@ fn soft_leases_warn_exclusive_leases_exclude() {
     let x = leases::acquire(&e.meta, "src/**", "agent:c#run_3", true, 60_000, None).unwrap();
     assert!(x.lease.exclusive);
     // second exclusive on an overlapping scope by someone else: refused
-    assert!(matches!(leases::acquire(&e.meta, "src/lib/**", "agent:d#run_4", true, 60_000, None), Err(AgentError::Conflict(_))));
+    assert!(matches!(
+        leases::acquire(&e.meta, "src/lib/**", "agent:d#run_4", true, 60_000, None),
+        Err(AgentError::Conflict(_))
+    ));
     // disjoint scope is fine
     assert!(leases::acquire(&e.meta, "docs/**", "agent:d#run_4", true, 60_000, None).is_ok());
     // same principal may hold overlapping leases (another run of the same agent)
@@ -232,17 +252,50 @@ fn prediction_finds_overlapping_proposals_leases_and_tasks() {
             // the stream is at `moved`, which changed src/b.rs after p4 branched
             let st = tx.cas_stream("main", &s.state, &moved, None, "user:t", "init")?;
             let _ = st;
-            tx.proposal_create("prop_1", "main", &p1, "t1", "", "agent:a#run_1", None)?;
-            tx.proposal_create("prop_2", "main", &p2, "t2", "", "agent:b#run_1", None)?;
-            tx.proposal_create("prop_3", "main", &p3, "t3", "", "agent:c#run_1", None)?;
-            tx.proposal_create("prop_4", "main", &p4, "t4", "", "agent:d#run_1", None)?;
+            tx.proposal_create(&ag_storage::meta::NewProposal {
+                id: "prop_1",
+                stream: "main",
+                head: &p1,
+                title: "t1",
+                description: "",
+                author: "agent:a#run_1",
+                task_id: None,
+            })?;
+            tx.proposal_create(&ag_storage::meta::NewProposal {
+                id: "prop_2",
+                stream: "main",
+                head: &p2,
+                title: "t2",
+                description: "",
+                author: "agent:b#run_1",
+                task_id: None,
+            })?;
+            tx.proposal_create(&ag_storage::meta::NewProposal {
+                id: "prop_3",
+                stream: "main",
+                head: &p3,
+                title: "t3",
+                description: "",
+                author: "agent:c#run_1",
+                task_id: None,
+            })?;
+            tx.proposal_create(&ag_storage::meta::NewProposal {
+                id: "prop_4",
+                stream: "main",
+                head: &p4,
+                title: "t4",
+                description: "",
+                author: "agent:d#run_1",
+                task_id: None,
+            })?;
             Ok(())
         })
         .unwrap();
     leases::acquire(&e.meta, "docs/**", "agent:z#run_1", false, 60_000, None).unwrap();
 
     let pred = predict::predict(&e.meta, "main").unwrap();
-    let kinds: Vec<(&str, &str, &str)> = pred.overlaps.iter().map(|o| (o.a.as_str(), o.b.as_str(), o.kind.as_str())).collect();
+    let kinds: Vec<(&str, &str, &str)> =
+        pred.overlaps.iter().map(|o| (o.a.as_str(), o.b.as_str(), o.kind.as_str())).collect();
     assert!(kinds.contains(&("proposal:prop_1", "proposal:prop_2", "proposals_touch_same_paths")), "{kinds:?}");
     assert!(kinds.contains(&("proposal:prop_4", "stream:main", "stream_moved_under_proposal")), "{kinds:?}");
     assert!(kinds.iter().any(|k| k.2 == "proposal_inside_foreign_lease" && k.0 == "proposal:prop_3"), "{kinds:?}");

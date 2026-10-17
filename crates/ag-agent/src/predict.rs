@@ -59,13 +59,17 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
         let mut overlaps: BTreeSet<Overlap> = BTreeSet::new();
         let head = tx.stream(stream)?.and_then(|s| s.state.head);
         let head_ancestors: BTreeSet<_> = match head {
-            Some(h) => ancestors(tx as &dyn Graph, &[h], WALK_LIMIT).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?.into_iter().collect(),
+            Some(h) => ancestors(tx as &dyn Graph, &[h], WALK_LIMIT)
+                .map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?
+                .into_iter()
+                .collect(),
             None => BTreeSet::new(),
         };
 
         // Per-proposal touched paths (changes not yet in the stream) and the
         // stream's own changes since the proposal diverged.
-        let proposals: Vec<_> = tx.proposals_list(Some("open"), 1000)?.into_iter().filter(|p| p.stream == stream).collect();
+        let proposals: Vec<_> =
+            tx.proposals_list(Some("open"), 1000)?.into_iter().filter(|p| p.stream == stream).collect();
         let mut touched: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for p in &proposals {
             let anc: BTreeSet<_> = ancestors(tx as &dyn Graph, &[p.head], WALK_LIMIT)
@@ -75,10 +79,16 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
             let mine: Vec<_> = anc.difference(&head_ancestors).copied().collect();
             let theirs: Vec<_> = head_ancestors.difference(&anc).copied().collect();
             let my_paths = paths_of(tx, &mine).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?;
-            let stream_paths = paths_of(tx, &theirs).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?;
+            let stream_paths =
+                paths_of(tx, &theirs).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?;
             let shared: Vec<String> = my_paths.intersection(&stream_paths).cloned().collect();
             if !shared.is_empty() {
-                overlaps.insert(Overlap { a: format!("proposal:{}", p.id), b: format!("stream:{stream}"), kind: "stream_moved_under_proposal".into(), paths: clip(shared) });
+                overlaps.insert(Overlap {
+                    a: format!("proposal:{}", p.id),
+                    b: format!("stream:{stream}"),
+                    kind: "stream_moved_under_proposal".into(),
+                    paths: clip(shared),
+                });
             }
             touched.insert(p.id.clone(), my_paths);
         }
@@ -89,7 +99,12 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
             for b in &ids[i + 1..] {
                 let shared: Vec<String> = touched[a].intersection(&touched[b]).cloned().collect();
                 if !shared.is_empty() {
-                    overlaps.insert(Overlap { a: format!("proposal:{a}"), b: format!("proposal:{b}"), kind: "proposals_touch_same_paths".into(), paths: clip(shared) });
+                    overlaps.insert(Overlap {
+                        a: format!("proposal:{a}"),
+                        b: format!("proposal:{b}"),
+                        kind: "proposals_touch_same_paths".into(),
+                        paths: clip(shared),
+                    });
                 }
             }
         }
@@ -104,7 +119,12 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
                 }
                 let hits: Vec<String> = touched[&p.id].iter().filter(|x| m.is_match(x)).cloned().collect();
                 if !hits.is_empty() {
-                    overlaps.insert(Overlap { a: format!("proposal:{}", p.id), b: format!("lease:{}", l.id), kind: "proposal_inside_foreign_lease".into(), paths: clip(hits) });
+                    overlaps.insert(Overlap {
+                        a: format!("proposal:{}", p.id),
+                        b: format!("lease:{}", l.id),
+                        kind: "proposal_inside_foreign_lease".into(),
+                        paths: clip(hits),
+                    });
                 }
             }
         }
@@ -112,7 +132,12 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
         for (i, a) in leases.iter().enumerate() {
             for b in &leases[i + 1..] {
                 if a.holder.split('#').next() != b.holder.split('#').next() && scopes_may_overlap(&a.scope, &b.scope) {
-                    overlaps.insert(Overlap { a: format!("lease:{}", a.id), b: format!("lease:{}", b.id), kind: "leases_overlap".into(), paths: vec![a.scope.clone(), b.scope.clone()] });
+                    overlaps.insert(Overlap {
+                        a: format!("lease:{}", a.id),
+                        b: format!("lease:{}", b.id),
+                        kind: "leases_overlap".into(),
+                        paths: vec![a.scope.clone(), b.scope.clone()],
+                    });
                 }
             }
         }
@@ -124,10 +149,17 @@ pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
                 let shared: Vec<String> = a
                     .scope
                     .iter()
-                    .flat_map(|x| b.scope.iter().filter(move |y| scopes_may_overlap(x, y)).map(move |y| format!("{x} ~ {y}")))
+                    .flat_map(|x| {
+                        b.scope.iter().filter(move |y| scopes_may_overlap(x, y)).map(move |y| format!("{x} ~ {y}"))
+                    })
                     .collect();
                 if !shared.is_empty() {
-                    overlaps.insert(Overlap { a: format!("task:{}", a.id), b: format!("task:{}", b.id), kind: "task_scopes_overlap".into(), paths: clip(shared) });
+                    overlaps.insert(Overlap {
+                        a: format!("task:{}", a.id),
+                        b: format!("task:{}", b.id),
+                        kind: "task_scopes_overlap".into(),
+                        paths: clip(shared),
+                    });
                 }
             }
         }

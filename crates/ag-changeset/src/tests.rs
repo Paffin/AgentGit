@@ -137,10 +137,7 @@ fn decode_rejects_trailing_bytes_and_bad_version() {
     ));
     let mut bytes = sample().encode();
     bytes[1] = 9;
-    assert_eq!(
-        Changeset::decode(&bytes, &Limits::default()),
-        Err(ChangesetError::UnsupportedVersion(9))
-    );
+    assert_eq!(Changeset::decode(&bytes, &Limits::default()), Err(ChangesetError::UnsupportedVersion(9)));
 }
 
 #[test]

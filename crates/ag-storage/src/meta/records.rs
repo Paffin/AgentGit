@@ -6,6 +6,24 @@ use sha2::{Digest, Sha256};
 
 use super::{MetaError, Tx, parse, stream_name, ts};
 
+/// Parameters for creating a proposal.
+pub struct NewProposal<'a> {
+    /// Identifier, e.g. `prop_…`.
+    pub id: &'a str,
+    /// Target stream.
+    pub stream: &'a str,
+    /// Proposed head.
+    pub head: &'a ChangesetId,
+    /// Title.
+    pub title: &'a str,
+    /// Description.
+    pub description: &'a str,
+    /// Author identity.
+    pub author: &'a str,
+    /// Task the proposal belongs to.
+    pub task_id: Option<&'a str>,
+}
+
 /// A proposal: a request to integrate a changeset into a stream.
 #[derive(Clone, Debug, Serialize)]
 pub struct ProposalRow {
@@ -136,23 +154,14 @@ impl Tx<'_> {
     // ---- proposals -------------------------------------------------------
 
     /// Creates an open proposal.
-    pub fn proposal_create(
-        &self,
-        id: &str,
-        stream: &str,
-        head: &ChangesetId,
-        title: &str,
-        description: &str,
-        author: &str,
-        task_id: Option<&str>,
-    ) -> Result<ProposalRow, MetaError> {
+    pub fn proposal_create(&self, p: &NewProposal<'_>) -> Result<ProposalRow, MetaError> {
         let now = self.now().as_millis();
         self.conn.execute(
             "INSERT INTO proposals (id, stream, head, title, description, author, state, task_id, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?8)",
-            params![id, stream, head.to_hex(), title, description, author, task_id, now],
+            params![p.id, p.stream, p.head.to_hex(), p.title, p.description, p.author, p.task_id, now],
         )?;
-        self.proposal(id)?.ok_or_else(|| MetaError::Corrupt("proposal vanished".into()))
+        self.proposal(p.id)?.ok_or_else(|| MetaError::Corrupt("proposal vanished".into()))
     }
 
     /// Looks up a proposal.
@@ -169,8 +178,12 @@ impl Tx<'_> {
     /// Proposals in `state` (or all), newest first.
     pub fn proposals_list(&self, state: Option<&str>, limit: usize) -> Result<Vec<ProposalRow>, MetaError> {
         match state {
-            Some(s) => self.proposals_where("state = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2", params![s, limit as i64]),
-            None => self.proposals_where("?1 = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2", params!["", limit as i64]),
+            Some(s) => {
+                self.proposals_where("state = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2", params![s, limit as i64])
+            }
+            None => {
+                self.proposals_where("?1 = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2", params!["", limit as i64])
+            }
         }
     }
 
@@ -181,9 +194,17 @@ impl Tx<'_> {
         ))?;
         let rows = stmt.query_map(p, |r| {
             Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, Option<String>>(7)?,
-                r.get::<_, i64>(8)?, r.get::<_, i64>(9)?, r.get::<_, Option<String>>(10)?,
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, Option<String>>(7)?,
+                r.get::<_, i64>(8)?,
+                r.get::<_, i64>(9)?,
+                r.get::<_, Option<String>>(10)?,
             ))
         })?;
         let mut out = Vec::new();
@@ -219,7 +240,12 @@ impl Tx<'_> {
     }
 
     /// Sets the proposal state (`open`, `integrated`, `closed`).
-    pub fn proposal_set_state(&self, id: &str, state: &str, integrated_as: Option<&ChangesetId>) -> Result<(), MetaError> {
+    pub fn proposal_set_state(
+        &self,
+        id: &str,
+        state: &str,
+        integrated_as: Option<&ChangesetId>,
+    ) -> Result<(), MetaError> {
         let n = self.conn.execute(
             "UPDATE proposals SET state = ?1, integrated_as = COALESCE(?2, integrated_as), updated_at = ?3 WHERE id = ?4",
             params![state, integrated_as.map(|c| c.to_hex()), self.now().as_millis(), id],
@@ -233,7 +259,14 @@ impl Tx<'_> {
     // ---- reviews ---------------------------------------------------------
 
     /// Records a review of a specific proposal head.
-    pub fn review_add(&self, proposal: &str, reviewer: &str, decision: &str, body: &str, head: &ChangesetId) -> Result<u64, MetaError> {
+    pub fn review_add(
+        &self,
+        proposal: &str,
+        reviewer: &str,
+        decision: &str,
+        body: &str,
+        head: &ChangesetId,
+    ) -> Result<u64, MetaError> {
         self.conn.execute(
             "INSERT INTO reviews (proposal, reviewer, decision, body, head, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![proposal, reviewer, decision, body, head.to_hex(), self.now().as_millis()],
@@ -247,12 +280,28 @@ impl Tx<'_> {
             "SELECT id, proposal, reviewer, decision, body, head, ts FROM reviews WHERE proposal = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([proposal], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, i64>(6)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, i64>(6)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
             let (id, proposal, reviewer, decision, body, head, t) = r?;
-            out.push(ReviewRow { id: id as u64, proposal, reviewer, decision, body, head: parse(&head, "review head")?, timestamp: ts(t) });
+            out.push(ReviewRow {
+                id: id as u64,
+                proposal,
+                reviewer,
+                decision,
+                body,
+                head: parse(&head, "review head")?,
+                timestamp: ts(t),
+            });
         }
         Ok(out)
     }
@@ -280,9 +329,17 @@ impl Tx<'_> {
         )?;
         let rows = stmt.query_map([tree.to_hex()], |r| {
             Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?,
-                r.get::<_, i64>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, i64>(7)?,
-                r.get::<_, String>(8)?, r.get::<_, String>(9)?, r.get::<_, String>(10)?,
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, i64>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, i64>(7)?,
+                r.get::<_, String>(8)?,
+                r.get::<_, String>(9)?,
+                r.get::<_, String>(10)?,
             ))
         })?;
         let mut out = Vec::new();
@@ -319,7 +376,14 @@ impl Tx<'_> {
             "INSERT INTO policies (stream, version, doc, doc_hash, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![stream, version, doc, hash, self.now().as_millis(), actor],
         )?;
-        Ok(PolicyRow { stream: stream.into(), version: version as u64, doc: doc.into(), doc_hash: hash, created_at: self.now(), created_by: actor.into() })
+        Ok(PolicyRow {
+            stream: stream.into(),
+            version: version as u64,
+            doc: doc.into(),
+            doc_hash: hash,
+            created_at: self.now(),
+            created_by: actor.into(),
+        })
     }
 
     /// The newest policy of a stream.
@@ -373,8 +437,11 @@ impl Tx<'_> {
 
     /// All retention roots.
     pub fn pins(&self) -> Result<Vec<PinRow>, MetaError> {
-        let mut stmt = self.conn.prepare_cached("SELECT name, changeset, reason, created_at FROM pins ORDER BY name")?;
-        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?)))?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT name, changeset, reason, created_at FROM pins ORDER BY name")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?))
+        })?;
         let mut out = Vec::new();
         for r in rows {
             let (name, cs, reason, t) = r?;
@@ -386,7 +453,13 @@ impl Tx<'_> {
     // ---- workspaces ------------------------------------------------------
 
     /// Creates a workspace.
-    pub fn workspace_create(&self, name: &str, stream: &str, base: Option<&ChangesetId>, owner: &str) -> Result<WorkspaceRow, MetaError> {
+    pub fn workspace_create(
+        &self,
+        name: &str,
+        stream: &str,
+        base: Option<&ChangesetId>,
+        owner: &str,
+    ) -> Result<WorkspaceRow, MetaError> {
         if self.workspace(name)?.is_some() {
             return Err(MetaError::AlreadyExists(format!("workspace '{name}'")));
         }
@@ -413,19 +486,40 @@ impl Tx<'_> {
             "SELECT name, stream, base, head, owner, created_at, updated_at FROM workspaces WHERE {clause}"
         ))?;
         let rows = stmt.query_map(p, |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, r.get::<_, i64>(6)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, i64>(5)?,
+                r.get::<_, i64>(6)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
             let (name, stream, base, head, owner, c, u) = r?;
             let _ = stream_name(&stream)?;
-            out.push(WorkspaceRow { name, stream, base: opt_cs(base, "workspace base")?, head: opt_cs(head, "workspace head")?, owner, created_at: ts(c), updated_at: ts(u) });
+            out.push(WorkspaceRow {
+                name,
+                stream,
+                base: opt_cs(base, "workspace base")?,
+                head: opt_cs(head, "workspace head")?,
+                owner,
+                created_at: ts(c),
+                updated_at: ts(u),
+            });
         }
         Ok(out)
     }
 
     /// Updates a workspace's base and head.
-    pub fn workspace_update(&self, name: &str, base: Option<&ChangesetId>, head: Option<&ChangesetId>) -> Result<(), MetaError> {
+    pub fn workspace_update(
+        &self,
+        name: &str,
+        base: Option<&ChangesetId>,
+        head: Option<&ChangesetId>,
+    ) -> Result<(), MetaError> {
         let n = self.conn.execute(
             "UPDATE workspaces SET base = ?1, head = ?2, updated_at = ?3 WHERE name = ?4",
             params![base.map(|b| b.to_hex()), head.map(|h| h.to_hex()), self.now().as_millis(), name],
@@ -465,7 +559,26 @@ impl Tx<'_> {
     /// Looks up the provenance of one stored value by id; helper for tests.
     #[doc(hidden)]
     pub fn count_rows(&self, table: &str) -> Result<u64, MetaError> {
-        const TABLES: &[&str] = &["changesets", "streams", "reflog", "intents", "outbox", "audit", "proposals", "reviews", "attestations", "pins", "workspaces", "trees", "leases", "provenance", "queue", "agents", "tasks"];
+        const TABLES: &[&str] = &[
+            "changesets",
+            "streams",
+            "reflog",
+            "intents",
+            "outbox",
+            "audit",
+            "proposals",
+            "reviews",
+            "attestations",
+            "pins",
+            "workspaces",
+            "trees",
+            "leases",
+            "provenance",
+            "queue",
+            "agents",
+            "tasks",
+            "changeset_trees",
+        ];
         if !TABLES.contains(&table) {
             return Err(MetaError::Invalid(format!("unknown table '{table}'")));
         }

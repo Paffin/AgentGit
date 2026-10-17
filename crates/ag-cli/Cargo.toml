@@ -25,6 +25,7 @@ ag-storage.workspace = true
 ag-policy.workspace = true
 ag-agent.workspace = true
 ag-integrate.workspace = true
+ag-git.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 hex.workspace = true

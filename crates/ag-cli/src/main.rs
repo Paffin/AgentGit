@@ -106,6 +106,9 @@ pub enum Command {
     Gc(cmds::admin::GcArgs),
     /// Rebuild derived indexes from the object store.
     Reindex,
+    /// Import from or export to Git (needs the `git` command).
+    #[command(subcommand)]
+    Git(cmds::gitbridge::GitCmd),
     /// Pin a revision so garbage collection keeps it.
     Pin(cmds::admin::PinArgs),
     /// Remove a pin.
@@ -177,6 +180,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Verify => cmds::admin::verify(&ctx),
         Gc(a) => cmds::admin::gc(&ctx, a),
         Reindex => cmds::admin::reindex(&ctx),
+        Git(c) => cmds::gitbridge::git(&ctx, c),
         Pin(a) => cmds::admin::pin(&ctx, a),
         Unpin(a) => cmds::admin::unpin(&ctx, a),
         Pins => cmds::admin::pins(&ctx),

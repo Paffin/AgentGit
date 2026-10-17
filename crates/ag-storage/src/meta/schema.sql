@@ -11,6 +11,7 @@ CREATE TABLE meta (
 CREATE TABLE changesets (
     id           TEXT PRIMARY KEY,
     generation   INTEGER NOT NULL,
+    fp_depth     INTEGER NOT NULL,
     author       TEXT NOT NULL,
     ts           INTEGER NOT NULL,
     first_parent TEXT,

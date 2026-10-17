@@ -26,6 +26,4 @@ pub use clock::{Clock, ManualClock, SystemClock};
 pub use error::StoreError;
 pub use history::{MetaTreeCache, StoreHistory};
 pub use meta::Meta;
-pub use object_store::{
-    Durability, FsObjectStore, MemoryObjectStore, ObjectInfo, ObjectStatus, ObjectStore,
-};
+pub use object_store::{Durability, FsObjectStore, MemoryObjectStore, ObjectInfo, ObjectStatus, ObjectStore};

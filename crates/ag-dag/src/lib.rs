@@ -115,11 +115,7 @@ where
 /// All ancestors of `heads` (including the heads), newest generation first,
 /// ties broken by identifier. Stops with [`DagError::LimitExceeded`] after
 /// `limit` changesets.
-pub fn ancestors<G: Graph + ?Sized>(
-    g: &G,
-    heads: &[ChangesetId],
-    limit: usize,
-) -> Result<Vec<ChangesetId>, DagError> {
+pub fn ancestors<G: Graph + ?Sized>(g: &G, heads: &[ChangesetId], limit: usize) -> Result<Vec<ChangesetId>, DagError> {
     let mut out = Vec::new();
     walk_ancestors(g, heads, |id| {
         if out.len() >= limit {
@@ -186,11 +182,7 @@ const RESULT: u8 = 8;
 /// themselves ancestors of another common ancestor. Usually exactly one;
 /// several indicate a criss-cross history. Sorted newest generation first,
 /// ties by identifier. An empty result means the histories are unrelated.
-pub fn merge_bases<G: Graph + ?Sized>(
-    g: &G,
-    a: &ChangesetId,
-    b: &ChangesetId,
-) -> Result<Vec<ChangesetId>, DagError> {
+pub fn merge_bases<G: Graph + ?Sized>(g: &G, a: &ChangesetId, b: &ChangesetId) -> Result<Vec<ChangesetId>, DagError> {
     if a == b {
         return Ok(vec![*a]);
     }

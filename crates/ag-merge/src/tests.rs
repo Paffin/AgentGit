@@ -42,10 +42,7 @@ fn overlapping_edits_conflict() {
             assert_eq!(regions[0].base, b"b\n");
             assert_eq!(regions[0].ours, b"X\n");
             assert_eq!(regions[0].theirs, b"Y\n");
-            assert_eq!(
-                String::from_utf8(rendered).unwrap(),
-                "a\n<<<<<<< ours\nX\n=======\nY\n>>>>>>> theirs\nc\n"
-            );
+            assert_eq!(String::from_utf8(rendered).unwrap(), "a\n<<<<<<< ours\nX\n=======\nY\n>>>>>>> theirs\nc\n");
         }
         other => panic!("{other:?}"),
     }
@@ -54,10 +51,7 @@ fn overlapping_edits_conflict() {
 #[test]
 fn adjacent_edits_conflict_by_design() {
     // ours edits line 2, theirs edits line 3: touching hunks.
-    assert!(matches!(
-        m("a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nC\nd\n"),
-        TextMerge::Conflicted { .. }
-    ));
+    assert!(matches!(m("a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nC\nd\n"), TextMerge::Conflicted { .. }));
     // one unchanged line between them is enough to merge
     assert_eq!(clean(m("a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nc\nD\n")), "a\nB\nc\nD\n");
 }
@@ -131,15 +125,16 @@ impl BlobIo for Mem {
 }
 
 fn entry(io: &Mem, content: &str) -> Entry {
-    Entry { content: io.write_blob(content.as_bytes().to_vec()).unwrap(), file_type: FileType::Regular, executable: false }
+    Entry {
+        content: io.write_blob(content.as_bytes().to_vec()).unwrap(),
+        file_type: FileType::Regular,
+        executable: false,
+    }
 }
 
 fn tree(io: &Mem, files: &[(&str, &str)]) -> Tree {
-    Tree::from_entries(
-        files.iter().map(|(p, c)| (RepoPath::new(*p).unwrap(), entry(io, c))),
-        &Limits::default(),
-    )
-    .unwrap()
+    Tree::from_entries(files.iter().map(|(p, c)| (RepoPath::new(*p).unwrap(), entry(io, c))), &Limits::default())
+        .unwrap()
 }
 
 fn lim() -> Limits {
@@ -217,7 +212,14 @@ fn binary_conflict() {
     let io = Mem::default();
     let mk = |bytes: &[u8]| {
         Tree::from_entries(
-            [(p("img"), Entry { content: io.write_blob(bytes.to_vec()).unwrap(), file_type: FileType::Regular, executable: false })],
+            [(
+                p("img"),
+                Entry {
+                    content: io.write_blob(bytes.to_vec()).unwrap(),
+                    file_type: FileType::Regular,
+                    executable: false,
+                },
+            )],
             &lim(),
         )
         .unwrap()
@@ -247,7 +249,14 @@ fn symlink_changes_conflict() {
     let io = Mem::default();
     let link = |target: &str| {
         Tree::from_entries(
-            [(p("l"), Entry { content: io.write_blob(target.as_bytes().to_vec()).unwrap(), file_type: FileType::Symlink, executable: false })],
+            [(
+                p("l"),
+                Entry {
+                    content: io.write_blob(target.as_bytes().to_vec()).unwrap(),
+                    file_type: FileType::Symlink,
+                    executable: false,
+                },
+            )],
             &lim(),
         )
         .unwrap()
@@ -263,8 +272,12 @@ fn file_vs_directory_conflict() {
     let ours = tree(&io, &[("x", "file")]);
     let theirs = tree(&io, &[("x/y", "inside")]);
     let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
-    assert!(r.conflicts.iter().any(|c| c.path == p("x")
-        && matches!(&c.kind, ConflictKind::FileDirectory { inside } if inside == &p("x/y"))));
+    assert!(
+        r.conflicts
+            .iter()
+            .any(|c| c.path == p("x")
+                && matches!(&c.kind, ConflictKind::FileDirectory { inside } if inside == &p("x/y")))
+    );
 }
 
 #[test]

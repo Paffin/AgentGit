@@ -1,0 +1,22 @@
+[package]
+name = "ag-git"
+description = "AgentGit: Git bridge (import and export through the git command line)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ag-types.workspace = true
+ag-changeset.workspace = true
+ag-dag.workspace = true
+ag-integrate.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

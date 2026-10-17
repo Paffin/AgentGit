@@ -100,11 +100,7 @@ pub fn merge_text(base: &[u8], ours: &[u8], theirs: &[u8]) -> TextMerge {
     clean.extend_from_slice(&tail);
     rendered.extend_from_slice(&tail);
 
-    if regions.is_empty() {
-        TextMerge::Clean(clean)
-    } else {
-        TextMerge::Conflicted { regions, rendered }
-    }
+    if regions.is_empty() { TextMerge::Clean(clean) } else { TextMerge::Conflicted { regions, rendered } }
 }
 
 /// Renders one conflict block with git-style markers. Guarantees each marker

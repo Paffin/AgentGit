@@ -106,9 +106,21 @@ impl Attestation {
         issuer: Identity,
         issued_at: Timestamp,
     ) -> Result<Self, AttestationError> {
-        let bytes = Self::signing_bytes(&id, &tree_id, &check, result, policy_version, &environment_digest, &issuer, issued_at);
+        let bytes =
+            Self::signing_bytes(&id, &tree_id, &check, result, policy_version, &environment_digest, &issuer, issued_at);
         let signature = key.sign(DOMAIN, &bytes)?;
-        Ok(Self { id, tree_id, check, result, policy_version, environment_digest, issuer, issued_at, public_key: key.public(), signature })
+        Ok(Self {
+            id,
+            tree_id,
+            check,
+            result,
+            policy_version,
+            environment_digest,
+            issuer,
+            issued_at,
+            public_key: key.public(),
+            signature,
+        })
     }
 
     /// Verifies the signature against the embedded public key. This proves

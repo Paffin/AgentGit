@@ -57,7 +57,8 @@ fn opt_id(s: Option<String>, what: &str) -> Result<Option<ChangesetId>, MetaErro
 impl Tx<'_> {
     /// Creates a stream with no head.
     pub fn create_stream(&self, name: &StreamName, actor: &str) -> Result<StreamRow, MetaError> {
-        let exists: i64 = self.conn.query_row("SELECT COUNT(*) FROM streams WHERE name = ?1", [name.as_str()], |r| r.get(0))?;
+        let exists: i64 =
+            self.conn.query_row("SELECT COUNT(*) FROM streams WHERE name = ?1", [name.as_str()], |r| r.get(0))?;
         if exists > 0 {
             return Err(MetaError::AlreadyExists(format!("stream '{name}'")));
         }
@@ -77,11 +78,15 @@ impl Tx<'_> {
     pub fn stream(&self, name: &str) -> Result<Option<StreamRow>, MetaError> {
         let row = self
             .conn
-            .query_row(
-                "SELECT name, head, version, created_at, created_by FROM streams WHERE name = ?1",
-                [name],
-                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, i64>(2)?, r.get::<_, i64>(3)?, r.get::<_, String>(4)?)),
-            )
+            .query_row("SELECT name, head, version, created_at, created_by FROM streams WHERE name = ?1", [name], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, String>(4)?,
+                ))
+            })
             .optional()?;
         row.map(|(n, head, v, c, by)| {
             Ok(StreamRow {
@@ -130,7 +135,11 @@ impl Tx<'_> {
             params![new_head.to_hex(), version as i64, name, expected.version as i64],
         )?;
         if changed != 1 {
-            return Err(MetaError::CasMismatch { stream: name.to_string(), expected: expected.version, actual: expected.version });
+            return Err(MetaError::CasMismatch {
+                stream: name.to_string(),
+                expected: expected.version,
+                actual: expected.version,
+            });
         }
         self.conn.execute(
             "INSERT INTO reflog (stream, old_head, new_head, version, operation_id, actor, ts, reason)
@@ -188,9 +197,8 @@ impl Tx<'_> {
 
     /// Reflog entries of all streams newer than `since` (retention roots for GC).
     pub fn reflog_heads_since(&self, since: Timestamp) -> Result<Vec<ChangesetId>, MetaError> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT DISTINCT new_head FROM reflog WHERE new_head IS NOT NULL AND ts >= ?1",
-        )?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT DISTINCT new_head FROM reflog WHERE new_head IS NOT NULL AND ts >= ?1")?;
         let rows = stmt.query_map([since.as_millis()], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
         for r in rows {

@@ -83,7 +83,15 @@ impl Tx<'_> {
              FROM outbox WHERE dispatched_at IS NULL ORDER BY id LIMIT ?1",
         )?;
         let rows = stmt.query_map([limit as i64], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, Option<i64>>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, Option<i64>>(4)?,
+                r.get::<_, i64>(5)?,
+                r.get::<_, Option<String>>(6)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
@@ -121,7 +129,8 @@ impl Tx<'_> {
 
     /// Number of undelivered events.
     pub fn outbox_pending_count(&self) -> Result<u64, MetaError> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM outbox WHERE dispatched_at IS NULL", [], |r| r.get::<_, i64>(0))? as u64)
+        Ok(self.conn.query_row("SELECT COUNT(*) FROM outbox WHERE dispatched_at IS NULL", [], |r| r.get::<_, i64>(0))?
+            as u64)
     }
 
     /// Delivered events, newest first (replay support).
@@ -130,7 +139,15 @@ impl Tx<'_> {
             "SELECT id, topic, payload, created_at, dispatched_at, attempts, last_error FROM outbox ORDER BY id DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map([limit as i64], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, Option<i64>>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, Option<i64>>(4)?,
+                r.get::<_, i64>(5)?,
+                r.get::<_, Option<String>>(6)?,
+            ))
         })?;
         let mut out = Vec::new();
         for r in rows {
@@ -149,7 +166,13 @@ impl Tx<'_> {
     }
 
     /// Appends an audit event, chained to the previous one.
-    pub fn audit_append(&self, actor: &str, action: &str, target: &str, details: &Value) -> Result<AuditEntry, MetaError> {
+    pub fn audit_append(
+        &self,
+        actor: &str,
+        action: &str,
+        target: &str,
+        details: &Value,
+    ) -> Result<AuditEntry, MetaError> {
         let prev: String = self
             .conn
             .query_row("SELECT hash FROM audit ORDER BY seq DESC LIMIT 1", [], |r| r.get(0))
@@ -198,9 +221,20 @@ impl Tx<'_> {
 
     /// Recomputes the whole chain and reports the first inconsistent entry.
     pub fn audit_verify(&self) -> Result<AuditReport, MetaError> {
-        let mut stmt = self.conn.prepare("SELECT seq, ts, actor, action, target, details, prev_hash, hash FROM audit ORDER BY seq")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT seq, ts, actor, action, target, details, prev_hash, hash FROM audit ORDER BY seq")?;
         let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, String>(7)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, String>(7)?,
+            ))
         })?;
         let mut prev = GENESIS.to_string();
         let mut n = 0u64;

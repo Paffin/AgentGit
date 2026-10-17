@@ -125,12 +125,20 @@ impl std::fmt::Display for Unmet {
         match self {
             Unmet::ActorNotAllowed { reason } => write!(f, "actor not allowed to integrate: {reason}"),
             Unmet::AuthorNotAllowed { author } => write!(f, "author {author} is not allowed to propose to this stream"),
-            Unmet::FailedValidation { check, attestation } => write!(f, "check '{check}' FAILED on this exact tree (attestation {attestation})"),
-            Unmet::MissingValidation { check } => write!(f, "check '{check}' has no trusted passing attestation for this exact tree"),
-            Unmet::InsufficientApprovals { scope, required, have } => write!(f, "approvals ({scope}): {have} of {required} required"),
+            Unmet::FailedValidation { check, attestation } => {
+                write!(f, "check '{check}' FAILED on this exact tree (attestation {attestation})")
+            }
+            Unmet::MissingValidation { check } => {
+                write!(f, "check '{check}' has no trusted passing attestation for this exact tree")
+            }
+            Unmet::InsufficientApprovals { scope, required, have } => {
+                write!(f, "approvals ({scope}): {have} of {required} required")
+            }
             Unmet::ChangesRequested { reviewer } => write!(f, "{reviewer} requested changes"),
             Unmet::MissingProvenance => f.write_str("agent-authored change has no signed provenance"),
-            Unmet::TooManyChangedFiles { changed, max } => write!(f, "{changed} files changed, policy allows at most {max}"),
+            Unmet::TooManyChangedFiles { changed, max } => {
+                write!(f, "{changed} files changed, policy allows at most {max}")
+            }
         }
     }
 }
@@ -205,7 +213,8 @@ pub fn evaluate(policy: &Policy, facts: &Facts<'_>) -> Evaluation {
         satisfied.push(format!("actor {} may integrate", facts.actor));
     } else {
         let reason = if actor_is_agent {
-            "agents may not integrate unless agent_autonomy.auto_integrate is on and the change is within its limits".to_string()
+            "agents may not integrate unless agent_autonomy.auto_integrate is on and the change is within its limits"
+                .to_string()
         } else {
             format!("{} is not in the policy's integrators", facts.actor)
         };
@@ -223,7 +232,10 @@ pub fn evaluate(policy: &Policy, facts: &Facts<'_>) -> Evaluation {
     // --- validations -------------------------------------------------------
     for v in &policy.required_validations {
         if let Some(bad) = facts.attestations.iter().find(|a| {
-            a.result == CheckResult::Fail && a.check == v.check && trusted(policy, a, facts) && a.verify_signature().is_ok()
+            a.result == CheckResult::Fail
+                && a.check == v.check
+                && trusted(policy, a, facts)
+                && a.verify_signature().is_ok()
         }) {
             unmet.push(Unmet::FailedValidation { check: v.check.clone(), attestation: bad.id.clone() });
         } else if facts.attestations.iter().any(|a| passes(policy, v, a, facts)) {
@@ -276,11 +288,15 @@ pub fn evaluate(policy: &Policy, facts: &Facts<'_>) -> Evaluation {
             if have >= rule.min_approvals {
                 satisfied.push(format!("protected '{}': {have} approval(s) of {}", rule.glob, rule.min_approvals));
             } else {
-                unmet.push(Unmet::InsufficientApprovals { scope: rule.glob.clone(), required: rule.min_approvals, have });
+                unmet.push(Unmet::InsufficientApprovals {
+                    scope: rule.glob.clone(),
+                    required: rule.min_approvals,
+                    have,
+                });
             }
         }
     }
-    for (_, (id, ok)) in &latest {
+    for (id, ok) in latest.values() {
         if !*ok && eligible(id, &none, false) {
             unmet.push(Unmet::ChangesRequested { reviewer: id.to_string() });
         }
@@ -330,19 +346,15 @@ fn passes(policy: &Policy, v: &RequiredValidation, a: &Attestation, facts: &Fact
     if !v.issuers.is_empty() && !v.issuers.contains(&a.issuer) {
         return false;
     }
-    if let Some(d) = &v.environment_digest {
-        if d != &a.environment_digest {
-            return false;
-        }
+    if v.environment_digest.as_ref().is_some_and(|d| d != &a.environment_digest) {
+        return false;
     }
     let age_ms = facts.now.as_millis() - a.issued_at.as_millis();
     if age_ms < -MAX_FUTURE_SKEW_MS {
         return false;
     }
-    if let Some(max) = v.max_age_secs {
-        if age_ms > (max as i64).saturating_mul(1000) {
-            return false;
-        }
+    if v.max_age_secs.is_some_and(|max| age_ms > (max as i64).saturating_mul(1000)) {
+        return false;
     }
     a.verify_signature().is_ok()
 }

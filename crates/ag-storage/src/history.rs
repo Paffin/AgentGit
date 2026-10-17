@@ -41,7 +41,8 @@ impl<S: ObjectStore> ChangesetSource for StoreHistory<S> {
         if raw.kind != ObjectKind::Changeset {
             return Err(SourceError::Other(format!("object {id} is not a changeset")));
         }
-        let cs = Arc::new(Changeset::from_raw(&raw, &self.limits).map_err(|e| SourceError::Other(format!("{id}: {e}")))?);
+        let cs =
+            Arc::new(Changeset::from_raw(&raw, &self.limits).map_err(|e| SourceError::Other(format!("{id}: {e}")))?);
         let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= CACHE_CAP {
             cache.clear();

@@ -19,7 +19,9 @@ pub fn id(s: &str) -> Identity {
 
 pub fn fx() -> Fx {
     let clock = Arc::new(ManualClock::new(Timestamp::from_millis(1_700_000_000_000)));
-    let repo = Repository::ephemeral(Namespace::new("acme/app").unwrap(), StreamName::new("main").unwrap(), clock.clone()).unwrap();
+    let repo =
+        Repository::ephemeral(Namespace::new("acme/app").unwrap(), StreamName::new("main").unwrap(), clock.clone())
+            .unwrap();
     Fx { repo, clock }
 }
 
@@ -35,7 +37,12 @@ impl Fx {
 
     pub fn integrate(&self, prop: &str, actor: &str) -> IntegrationResult {
         self.repo
-            .integrate(&IntegrateRequest { proposal_id: prop.into(), actor: id(actor), idempotency_key: None, fencing_tokens: vec![] })
+            .integrate(&IntegrateRequest {
+                proposal_id: prop.into(),
+                actor: id(actor),
+                idempotency_key: None,
+                fencing_tokens: vec![],
+            })
             .unwrap()
     }
 
@@ -68,7 +75,11 @@ pub fn snap_in(repo: &Repository, parent: Option<ChangesetId>, files: &[(&str, &
         files.iter().map(|(p, c)| {
             (
                 RepoPath::new(*p).unwrap(),
-                ag_tree::Entry { content: repo.put_blob(c.as_bytes().to_vec()).unwrap(), file_type: FileType::Regular, executable: false },
+                ag_tree::Entry {
+                    content: repo.put_blob(c.as_bytes().to_vec()).unwrap(),
+                    file_type: FileType::Regular,
+                    executable: false,
+                },
             )
         }),
         repo.limits(),

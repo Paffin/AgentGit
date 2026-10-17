@@ -281,13 +281,11 @@ impl Tree {
         for _ in 0..n {
             let path = RepoPath::new(r.str(ag_types::path_limits::MAX_PATH_LEN)?)
                 .map_err(|e| TreeError::Malformed(e.to_string()))?;
-            if let Some(prev) = &last {
-                if prev >= &path {
-                    return Err(TreeError::Malformed("entries not strictly ascending".into()));
-                }
+            if last.as_ref().is_some_and(|prev| prev >= &path) {
+                return Err(TreeError::Malformed("entries not strictly ascending".into()));
             }
-            let file_type = FileType::from_tag(r.u8()?)
-                .ok_or_else(|| TreeError::Malformed("unknown file type".into()))?;
+            let file_type =
+                FileType::from_tag(r.u8()?).ok_or_else(|| TreeError::Malformed("unknown file type".into()))?;
             let executable = match r.u8()? {
                 0 => false,
                 1 => true,

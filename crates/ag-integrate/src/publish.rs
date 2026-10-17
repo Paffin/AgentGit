@@ -65,7 +65,12 @@ impl Repository {
     ///
     /// Idempotent: the default idempotency key is derived from the head, so
     /// repeating the call returns the recorded result.
-    pub fn publish(&self, head: &ChangesetId, actor: &Identity, idempotency_key: Option<&str>) -> Result<PublishResult> {
+    pub fn publish(
+        &self,
+        head: &ChangesetId,
+        actor: &Identity,
+        idempotency_key: Option<&str>,
+    ) -> Result<PublishResult> {
         let key = idempotency_key.map(str::to_string).unwrap_or_else(|| format!("publish:{head}"));
         let request_hash = hash_request(&["publish", &head.to_hex()]);
         let op = random_id("op")?;
@@ -137,7 +142,13 @@ impl Repository {
 
     fn reject_publish(&self, intent: &IntentRow, from: &[IntentState], reason: String) -> Result<()> {
         self.meta.write(|tx| {
-            tx.intent_transition(&intent.operation_id, from, IntentState::Rejected, Some(&json!({ "reason": reason })), None)?;
+            tx.intent_transition(
+                &intent.operation_id,
+                from,
+                IntentState::Rejected,
+                Some(&json!({ "reason": reason })),
+                None,
+            )?;
             tx.audit_append(&intent.actor, "publish.reject", &intent.operation_id, &json!({ "reason": reason }))?;
             Ok(())
         })?;
@@ -158,7 +169,10 @@ impl Repository {
                 order.push((id, cs));
                 done.insert(id);
                 if order.len() > self.limits.max_changesets_per_publication {
-                    return Ok(Err(format!("publication introduces more than {} changesets", self.limits.max_changesets_per_publication)));
+                    return Ok(Err(format!(
+                        "publication introduces more than {} changesets",
+                        self.limits.max_changesets_per_publication
+                    )));
                 }
                 continue;
             }
@@ -173,7 +187,10 @@ impl Repository {
                 Err(e) => return Err(e),
             };
             if cs.namespace != self.config.namespace {
-                return Ok(Err(format!("changeset {id} belongs to namespace '{}', not '{}'", cs.namespace, self.config.namespace)));
+                return Ok(Err(format!(
+                    "changeset {id} belongs to namespace '{}', not '{}'",
+                    cs.namespace, self.config.namespace
+                )));
             }
             stack.push((id, true));
             for p in cs.parents.iter().rev() {
@@ -195,14 +212,24 @@ impl Repository {
         if closure.order.is_empty() {
             // Already published: nothing to do.
             self.meta.write(|tx| {
-                tx.intent_transition(&intent.operation_id, &[IntentState::Prepared], IntentState::Published, Some(&json!({"changesets": 0, "blobs": 0})), None)?;
+                tx.intent_transition(
+                    &intent.operation_id,
+                    &[IntentState::Prepared],
+                    IntentState::Published,
+                    Some(&json!({"changesets": 0, "blobs": 0})),
+                    None,
+                )?;
                 Ok(())
             })?;
             return Ok(());
         }
         for b in &closure.blobs {
             if !self.objects.contains(&b.object_id())? {
-                return self.reject_publish(intent, &[IntentState::Prepared], format!("blob {b} is missing from the object store"));
+                return self.reject_publish(
+                    intent,
+                    &[IntentState::Prepared],
+                    format!("blob {b} is missing from the object store"),
+                );
             }
         }
         self.meta.write(|tx| {
@@ -263,24 +290,36 @@ impl Repository {
             };
             let tree = match base.apply(&cs.ops, &self.limits) {
                 Ok(t) => t,
-                Err(e) => return self.reject_publish(intent, &from, format!("changeset {id} does not apply to its parent: {e}")),
+                Err(e) => {
+                    return self.reject_publish(
+                        intent,
+                        &from,
+                        format!("changeset {id} does not apply to its parent: {e}"),
+                    );
+                }
             };
             // Every blob a symlink points to must be a valid, safe target string.
             for op in &cs.ops {
                 if let Op::Put { path, content, file_type: ag_types::FileType::Symlink, .. } = op {
                     let target = self.blob(content)?;
-                    let ok = std::str::from_utf8(&target).ok().is_some_and(|t| crate::workdir::check_link_target(path, t).is_ok());
+                    let ok = std::str::from_utf8(&target)
+                        .ok()
+                        .is_some_and(|t| crate::workdir::check_link_target(path, t).is_ok());
                     if !ok {
-                        return self.reject_publish(intent, &from, format!("changeset {id}: symlink '{path}' has an unsafe target"));
+                        return self.reject_publish(
+                            intent,
+                            &from,
+                            format!("changeset {id}: symlink '{path}' has an unsafe target"),
+                        );
                     }
                 }
             }
-            if let Some(p) = cs.first_parent() {
-                if let Some(n) = remaining.get_mut(&p) {
-                    *n -= 1;
-                    if *n == 0 {
-                        trees.remove(&p);
-                    }
+            if let Some(p) = cs.first_parent()
+                && let Some(n) = remaining.get_mut(&p)
+            {
+                *n -= 1;
+                if *n == 0 {
+                    trees.remove(&p);
                 }
             }
             if remaining.get(id).copied().unwrap_or(0) > 0 {

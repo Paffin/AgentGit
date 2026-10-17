@@ -174,7 +174,10 @@ impl Policy {
             }
             for i in &v.issuers {
                 if !self.trusted_issuers.iter().any(|t| &t.identity == i) {
-                    return Err(bad(format!("validation '{}' names issuer {i} which is not in trusted_issuers", v.check)));
+                    return Err(bad(format!(
+                        "validation '{}' names issuer {i} which is not in trusted_issuers",
+                        v.check
+                    )));
                 }
             }
         }

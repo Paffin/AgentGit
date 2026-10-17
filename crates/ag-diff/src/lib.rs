@@ -72,13 +72,7 @@ pub fn is_binary(data: &[u8]) -> bool {
 pub fn diff_hunks<T: Eq>(a: &[T], b: &[T]) -> Vec<Hunk> {
     let prefix = a.iter().zip(b).take_while(|(x, y)| x == y).count();
     let max_suffix = a.len().min(b.len()) - prefix;
-    let suffix = a
-        .iter()
-        .rev()
-        .zip(b.iter().rev())
-        .take(max_suffix)
-        .take_while(|(x, y)| x == y)
-        .count();
+    let suffix = a.iter().rev().zip(b.iter().rev()).take(max_suffix).take_while(|(x, y)| x == y).count();
     let am = &a[prefix..a.len() - suffix];
     let bm = &b[prefix..b.len() - suffix];
     if am.is_empty() && bm.is_empty() {

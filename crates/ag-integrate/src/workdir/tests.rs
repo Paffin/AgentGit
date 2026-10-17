@@ -6,7 +6,8 @@ use ag_types::{Namespace, StreamName};
 use super::*;
 
 fn repo() -> Repository {
-    Repository::ephemeral(Namespace::new("t/t").unwrap(), StreamName::new("main").unwrap(), Arc::new(SystemClock)).unwrap()
+    Repository::ephemeral(Namespace::new("t/t").unwrap(), StreamName::new("main").unwrap(), Arc::new(SystemClock))
+        .unwrap()
 }
 
 fn write(root: &Path, rel: &str, data: &[u8]) {
@@ -84,7 +85,10 @@ fn checkout_refuses_to_write_through_symlinked_directories() {
     std::os::unix::fs::symlink(outside.path(), dst.path().join("sub")).unwrap();
     let blob = r.put_blob(b"pwned".to_vec()).unwrap();
     let tree = Tree::from_entries(
-        [(RepoPath::new("sub/evil.txt").unwrap(), Entry { content: blob, file_type: FileType::Regular, executable: false })],
+        [(
+            RepoPath::new("sub/evil.txt").unwrap(),
+            Entry { content: blob, file_type: FileType::Regular, executable: false },
+        )],
         r.limits(),
     )
     .unwrap();
@@ -100,12 +104,17 @@ fn symlink_targets_must_stay_inside_the_root() {
     let blob = |t: &str| r.put_blob(t.as_bytes().to_vec()).unwrap();
     let mk = |path: &str, target: &str| {
         Tree::from_entries(
-            [(RepoPath::new(path).unwrap(), Entry { content: blob(target), file_type: FileType::Symlink, executable: false })],
+            [(
+                RepoPath::new(path).unwrap(),
+                Entry { content: blob(target), file_type: FileType::Symlink, executable: false },
+            )],
             r.limits(),
         )
         .unwrap()
     };
-    for (path, target) in [("l", "/etc/passwd"), ("l", "../outside"), ("a/l", "../../outside"), ("l", ""), ("a/l", "x/../../../y")] {
+    for (path, target) in
+        [("l", "/etc/passwd"), ("l", "../outside"), ("a/l", "../../outside"), ("l", ""), ("a/l", "x/../../../y")]
+    {
         let dst = tempfile::tempdir().unwrap();
         let err = checkout_tree(&r, &mk(path, target), dst.path()).unwrap_err();
         assert!(matches!(err, Error::UnsafePath(_)), "{path} -> {target}: {err}");

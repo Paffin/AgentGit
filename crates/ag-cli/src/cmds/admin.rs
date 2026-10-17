@@ -20,15 +20,16 @@ pub struct TraceArgs {
 }
 
 pub fn trace(ctx: &Ctx, a: &TraceArgs) -> Result<u8> {
-    let needle = match &a.target {
-        Some(t) => Some(ctx.repo.resolve_rev(t).map(|c| c.to_hex()).unwrap_or_else(|_| t.clone())),
-        None => None,
-    };
+    let needle = a.target.as_ref().map(|t| ctx.repo.resolve_rev(t).map(|c| c.to_hex()).unwrap_or_else(|_| t.clone()));
     let entries = ctx.repo.meta().read(|tx| tx.audit_list(needle.as_deref(), a.limit))?;
     ctx.out(&entries, || {
         let mut s = String::new();
         for e in entries.iter().rev() {
-            let _ = writeln!(s, "#{:<5} {}  {:<22} {:<28} {}  {}", e.seq, e.timestamp, e.action, e.actor, e.target, e.details);
+            let _ = writeln!(
+                s,
+                "#{:<5} {}  {:<22} {:<28} {}  {}",
+                e.seq, e.timestamp, e.action, e.actor, e.target, e.details
+            );
         }
         s
     })?;
@@ -92,7 +93,11 @@ pub struct GcArgs {
 
 pub fn gc(ctx: &Ctx, a: &GcArgs) -> Result<u8> {
     let rep = ctx.repo.gc(
-        &GcOptions { grace_ms: parse_duration_ms(&a.grace)?, reflog_retention_ms: parse_duration_ms(&a.reflog_retention)?, dry_run: a.dry_run },
+        &GcOptions {
+            grace_ms: parse_duration_ms(&a.grace)?,
+            reflog_retention_ms: parse_duration_ms(&a.reflog_retention)?,
+            dry_run: a.dry_run,
+        },
         ctx.me.as_str(),
     )?;
     ctx.out(&rep, || {

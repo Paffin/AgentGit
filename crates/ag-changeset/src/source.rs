@@ -60,11 +60,6 @@ impl MemoryHistory {
 
 impl ChangesetSource for MemoryHistory {
     fn changeset(&self, id: &ChangesetId) -> Result<Arc<Changeset>, SourceError> {
-        self.map
-            .read()
-            .expect("lock")
-            .get(id)
-            .cloned()
-            .ok_or(SourceError::NotFound(*id))
+        self.map.read().expect("lock").get(id).cloned().ok_or(SourceError::NotFound(*id))
     }
 }

@@ -83,7 +83,9 @@ impl Repository {
             if !seen.insert(id) {
                 continue;
             }
-            let cs = self.history.changeset(&id).map_err(|e| Error::Invalid(format!("garbage collection aborted: reachable changeset {id} is unreadable: {e}")))?;
+            let cs = self.history.changeset(&id).map_err(|e| {
+                Error::Invalid(format!("garbage collection aborted: reachable changeset {id} is unreadable: {e}"))
+            })?;
             reachable.insert(id.object_id());
             changesets += 1;
             for b in cs.blobs() {
@@ -93,7 +95,9 @@ impl Repository {
                 match self.objects.verify(&b.object_id())? {
                     ag_storage::ObjectStatus::Ok { .. } => {}
                     other => {
-                        return Err(Error::Invalid(format!("garbage collection aborted: reachable blob {b} is {other:?}")));
+                        return Err(Error::Invalid(format!(
+                            "garbage collection aborted: reachable blob {b} is {other:?}"
+                        )));
                     }
                 }
             }
@@ -101,8 +105,14 @@ impl Repository {
         }
 
         // 3. Sweep.
-        let staged: HashSet<ObjectId> = self.meta.read(|tx| tx.protected_intent_objects(grace_cutoff))?.into_iter().collect();
-        let mut report = GcReport { reachable_changesets: changesets, reachable_blobs: blobs, dry_run: opts.dry_run, ..GcReport::default() };
+        let staged: HashSet<ObjectId> =
+            self.meta.read(|tx| tx.protected_intent_objects(grace_cutoff))?.into_iter().collect();
+        let mut report = GcReport {
+            reachable_changesets: changesets,
+            reachable_blobs: blobs,
+            dry_run: opts.dry_run,
+            ..GcReport::default()
+        };
         let mut deleted_changesets: Vec<ChangesetId> = Vec::new();
         for info in self.objects.list()? {
             report.scanned += 1;
@@ -117,7 +127,8 @@ impl Repository {
                 report.kept_young += 1;
                 continue;
             }
-            let removed = if opts.dry_run { true } else { self.objects.delete_if_older_than(&info.id, grace_cutoff)? };
+            let removed =
+                if opts.dry_run { true } else { self.objects.delete_if_older_than(&info.id, grace_cutoff)? };
             if removed {
                 report.bytes += info.size;
                 report.deleted.push(info.id.to_hex());

@@ -87,9 +87,13 @@ pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &Provenanc
     if record.schema != SCHEMA {
         return Err(AgentError::Invalid(format!("unsupported schema '{}'", record.schema)));
     }
-    let agent = meta.read(|tx| tx.agent(agent_name))?.ok_or_else(|| AgentError::NotFound(format!("agent '{agent_name}'")))?;
+    let agent =
+        meta.read(|tx| tx.agent(agent_name))?.ok_or_else(|| AgentError::NotFound(format!("agent '{agent_name}'")))?;
     if record.agent.principal().as_str() != agent.identity {
-        return Err(AgentError::Invalid(format!("record agent {} does not match registered agent {}", record.agent, agent.identity)));
+        return Err(AgentError::Invalid(format!(
+            "record agent {} does not match registered agent {}",
+            record.agent, agent.identity
+        )));
     }
     let kp = keys.load(agent_name)?;
     if kp.public().to_hex() != agent.public_key {
@@ -99,8 +103,20 @@ pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &Provenanc
     let sig = kp.sign(DOMAIN, &bytes)?;
     let value = serde_json::to_value(record).map_err(|e| AgentError::Invalid(e.to_string()))?;
     Ok(meta.write(|tx| {
-        let id = tx.provenance_insert(&record.changeset, agent_name, record.run_id.as_deref(), &value, &agent.public_key, &sig.to_hex())?;
-        tx.audit_append(record.agent.as_str(), "provenance.attach", &record.changeset.to_hex(), &json!({"model": record.model, "task": record.task_id}))?;
+        let id = tx.provenance_insert(
+            &record.changeset,
+            agent_name,
+            record.run_id.as_deref(),
+            &value,
+            &agent.public_key,
+            &sig.to_hex(),
+        )?;
+        tx.audit_append(
+            record.agent.as_str(),
+            "provenance.attach",
+            &record.changeset.to_hex(),
+            &json!({"model": record.model, "task": record.task_id}),
+        )?;
         Ok(id)
     })?)
 }
@@ -108,7 +124,8 @@ pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &Provenanc
 /// Verifies a stored record: signature, signer key against the registry, and
 /// that the record describes the changeset it is filed under.
 pub fn verify(tx: &Tx<'_>, row: &ProvenanceRow) -> Result<ProvenanceRecord, AgentError> {
-    let record: ProvenanceRecord = serde_json::from_value(row.record.clone()).map_err(|e| AgentError::Verification(format!("malformed record: {e}")))?;
+    let record: ProvenanceRecord = serde_json::from_value(row.record.clone())
+        .map_err(|e| AgentError::Verification(format!("malformed record: {e}")))?;
     if record.changeset != row.changeset {
         return Err(AgentError::Verification("record is filed under a different changeset".into()));
     }
@@ -127,13 +144,16 @@ pub fn verify(tx: &Tx<'_>, row: &ProvenanceRow) -> Result<ProvenanceRecord, Agen
 
 /// Verified records for `changeset` written by `author`'s principal.
 /// Invalid or foreign records are ignored (they are untrusted input).
-pub fn verified_for(tx: &Tx<'_>, changeset: &ChangesetId, author: &Identity) -> Result<Vec<ProvenanceRecord>, MetaError> {
+pub fn verified_for(
+    tx: &Tx<'_>,
+    changeset: &ChangesetId,
+    author: &Identity,
+) -> Result<Vec<ProvenanceRecord>, MetaError> {
     let mut out = Vec::new();
     for row in tx.provenance_for(changeset)? {
-        if let Ok(rec) = verify(tx, &row) {
-            if rec.agent.principal() == author.principal() {
-                out.push(rec);
-            }
+        match verify(tx, &row) {
+            Ok(rec) if rec.agent.principal() == author.principal() => out.push(rec),
+            _ => {}
         }
     }
     Ok(out)

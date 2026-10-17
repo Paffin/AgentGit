@@ -15,6 +15,12 @@ use serde_json::json;
 
 use crate::{Error, Repository, Result};
 
+/// Trees are cached for every changeset whose first-parent depth is a multiple
+/// of this interval, plus the tree of every live head. Any other tree is
+/// rebuilt from the nearest cached ancestor by replaying fewer than this many
+/// operation lists.
+pub const KEYFRAME_INTERVAL: u64 = 32;
+
 /// Result of a derive pass.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct DeriveReport {
@@ -51,11 +57,25 @@ impl Repository {
                 }
             }
         }
+        self.meta.write(|tx| tx.prune_derived(KEYFRAME_INTERVAL))?;
         report.pending = self.meta.read(|tx| tx.outbox_pending_count())?;
         Ok(report)
     }
 
+    /// Caches the tree of `id` if it is a keyframe.
     fn derive_tree(&self, id: &ChangesetId) -> Result<()> {
+        let depth = self
+            .meta
+            .read(|tx| tx.fp_depth(id))?
+            .ok_or_else(|| Error::NotFound(format!("published changeset {id}")))?;
+        if depth % KEYFRAME_INTERVAL != 0 {
+            return Ok(());
+        }
+        self.cache_tree(id)
+    }
+
+    /// Unconditionally caches the tree of `id` (used for live heads).
+    pub(crate) fn cache_tree(&self, id: &ChangesetId) -> Result<()> {
         let tree = resolve_tree(&self.history, &MetaTreeCache(&self.meta), id, &self.limits)?;
         self.meta.write(|tx| tx.put_derived_tree(id, &tree).map(|_| ()))?;
         Ok(())
@@ -73,6 +93,12 @@ impl Repository {
         for id in &ids {
             self.derive_tree(id)?;
         }
+        for root in self.meta.read(|tx| tx.live_roots())? {
+            if self.meta.read(|tx| tx.is_ready(&root))? {
+                self.cache_tree(&root)?;
+            }
+        }
+        self.meta.write(|tx| tx.prune_derived(KEYFRAME_INTERVAL))?;
         self.meta.write(|tx| {
             tx.audit_append("system:reindex", "repo.reindex", "derived", &json!({"changesets": ids.len()}))?;
             Ok(())

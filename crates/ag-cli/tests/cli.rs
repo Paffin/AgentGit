@@ -183,13 +183,20 @@ fn conflicts_exit_with_code_4_and_leave_the_stream_alone() {
     // bob edits the same line and tries to integrate
     fs::write(bob.join("f.txt"), "1\nBOB\n3\n").unwrap();
     a.run_as("user:bob", &["snapshot", "-m", "bob edit", "--workspace", "bob"]).ok();
-    let pb = a.run_as("user:bob", &["--json", "propose", "-t", "bob edit", "@bob"]).ok().json()["id"].as_str().unwrap().to_string();
+    let pb = a.run_as("user:bob", &["--json", "propose", "-t", "bob edit", "@bob"]).ok().json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let pv = a.ag(&["preview", &pb]).code_is(4);
     assert!(pv.stdout().contains("conflict: f.txt"), "{}", pv.stdout());
     let r = a.ag(&["integrate", &pb]).code_is(4);
     assert!(r.stdout().contains("Conflict") && r.stdout().contains("f.txt"), "{}", r.stdout());
-    assert_eq!(a.ag(&["--json", "stream", "show", "main"]).ok().json()["stream"]["state"]["head"], head_after_a, "stream untouched");
+    assert_eq!(
+        a.ag(&["--json", "stream", "show", "main"]).ok().json()["stream"]["state"]["head"],
+        head_after_a,
+        "stream untouched"
+    );
 
     // bob syncs, sees markers, resolves, proposes the merge, and it lands
     a.run_as("user:bob", &["sync", "--workspace", "bob"]).code_is(4);
@@ -220,7 +227,11 @@ fn validation_gate_with_signed_attestations() {
     a.write("app.txt", "version 1\n");
     let p = a.propose_as("user:alice", "v1");
     let r = a.ag(&["integrate", &p]).code_is(3);
-    assert!(r.stdout().contains("no trusted passing attestation") && r.stdout().contains("ag validate run"), "{}", r.stdout());
+    assert!(
+        r.stdout().contains("no trusted passing attestation") && r.stdout().contains("ag validate run"),
+        "{}",
+        r.stdout()
+    );
 
     // a failing check is recorded and denies the exact tree
     a.ag(&["validate", "run", &p, "--check", "tests", "--key", "ci", "--", "false"]).code_is(4);
@@ -230,7 +241,21 @@ fn validation_gate_with_signed_attestations() {
     // a new proposal (new head, new tree) with a passing check lands
     a.write("app.txt", "version 2\n");
     let p2 = a.propose_as("user:alice", "v2");
-    let r = a.ag(&["validate", "run", &p2, "--check", "tests", "--key", "ci", "--", "sh", "-c", "grep -q 'version 2' app.txt"]).ok();
+    let r = a
+        .ag(&[
+            "validate",
+            "run",
+            &p2,
+            "--check",
+            "tests",
+            "--key",
+            "ci",
+            "--",
+            "sh",
+            "-c",
+            "grep -q 'version 2' app.txt",
+        ])
+        .ok();
     assert!(r.stdout().contains("PASSED"), "{}", r.stdout());
     a.ag(&["integrate", &p2]).ok();
 
@@ -268,7 +293,11 @@ fn agents_leases_and_provenance() {
     // a human integrator: blocked on provenance, then on approval, then lease token
     let r = a.ag(&["integrate", &prop]).code_is(3);
     assert!(r.stdout().contains("provenance"), "{}", r.stdout());
-    a.run_as(&who, &["provenance", "attach", "--agent", "coder", "--run", &run_id, "--model", "demo-model", "--rationale", "tidy"]).ok();
+    a.run_as(
+        &who,
+        &["provenance", "attach", "--agent", "coder", "--run", &run_id, "--model", "demo-model", "--rationale", "tidy"],
+    )
+    .ok();
     let r = a.ag(&["integrate", &prop]).code_is(3);
     assert!(r.stdout().contains("approval"), "{}", r.stdout());
     a.run_as("user:carol", &["proposal", "review", &prop, "--approve"]).ok();
@@ -290,7 +319,10 @@ fn agents_leases_and_provenance() {
 fn tasks_respect_dependencies() {
     let a = Ag::new();
     a.ag(&["agent", "register", "bot"]).ok();
-    let t1 = a.ag(&["--json", "task", "create", "design", "--scope", "api/**"]).ok().json()["id"].as_str().unwrap().to_string();
+    let t1 = a.ag(&["--json", "task", "create", "design", "--scope", "api/**"]).ok().json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let t2 = a.ag(&["--json", "task", "create", "build"]).ok().json()["id"].as_str().unwrap().to_string();
     a.ag(&["task", "depend", &t2, &t1]).ok();
     a.ag(&["task", "depend", &t1, &t2]).code_is(1); // cycle

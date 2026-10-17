@@ -45,7 +45,12 @@ fn publish_rejects_unusable_histories() {
             vec![],
             &alice,
             "refers to a blob that was never uploaded",
-            vec![ag_changeset::Op::Put { path: ag_types::RepoPath::new("x").unwrap(), content: ghost_blob, file_type: ag_types::FileType::Regular, executable: false }],
+            vec![ag_changeset::Op::Put {
+                path: ag_types::RepoPath::new("x").unwrap(),
+                content: ghost_blob,
+                file_type: ag_types::FileType::Regular,
+                executable: false,
+            }],
         )
         .unwrap();
     let r = f.repo.publish(&bad, &alice, None).unwrap();
@@ -55,7 +60,15 @@ fn publish_rejects_unusable_histories() {
 
     // 2. operations that do not apply to the parent (deleting a file that is not there)
     let good = f.snap(None, &[("a", "1")], "user:alice");
-    let broken = f.repo.commit(vec![good], &alice, "bad delete", vec![ag_changeset::Op::Delete { path: ag_types::RepoPath::new("nope").unwrap() }]).unwrap();
+    let broken = f
+        .repo
+        .commit(
+            vec![good],
+            &alice,
+            "bad delete",
+            vec![ag_changeset::Op::Delete { path: ag_types::RepoPath::new("nope").unwrap() }],
+        )
+        .unwrap();
     let r = f.repo.publish(&broken, &alice, None).unwrap();
     assert_eq!(r.state, IntentState::Rejected);
     assert!(r.reason.unwrap().contains("does not apply"));
@@ -68,7 +81,12 @@ fn publish_rejects_unusable_histories() {
             vec![good],
             &alice,
             "redundant put",
-            vec![ag_changeset::Op::Put { path: ag_types::RepoPath::new("a").unwrap(), content: blob, file_type: ag_types::FileType::Regular, executable: false }],
+            vec![ag_changeset::Op::Put {
+                path: ag_types::RepoPath::new("a").unwrap(),
+                content: blob,
+                file_type: ag_types::FileType::Regular,
+                executable: false,
+            }],
         )
         .unwrap();
     assert_eq!(f.repo.publish(&noop, &alice, None).unwrap().state, IntentState::Rejected);
@@ -116,7 +134,9 @@ fn independent_proposals_merge_with_the_head_as_first_parent() {
     let ra = f.integrate(&prop_a, "user:alice");
     assert!(matches!(ra.outcome, Outcome::Integrated { strategy: Strategy::FastForward, .. }));
     let rb = f.integrate(&prop_b, "user:alice");
-    let Outcome::Integrated { new_head, previous_head, strategy, version, changed_files, .. } = rb.outcome else { panic!("{:?}", rb.outcome) };
+    let Outcome::Integrated { new_head, previous_head, strategy, version, changed_files, .. } = rb.outcome else {
+        panic!("{:?}", rb.outcome)
+    };
     assert_eq!(strategy, Strategy::Merge);
     assert_eq!(previous_head, Some(pa));
     assert_eq!(version, 3);
@@ -214,7 +234,12 @@ fn idempotent_replay_and_unknown_outcome_recovery() {
     let f = fx();
     let c = f.snap(None, &[("a", "1")], "user:alice");
     let p = f.propose(c, "t", "user:alice");
-    let req = IntegrateRequest { proposal_id: p.clone(), actor: id("user:alice"), idempotency_key: Some("client-key-1".into()), fencing_tokens: vec![] };
+    let req = IntegrateRequest {
+        proposal_id: p.clone(),
+        actor: id("user:alice"),
+        idempotency_key: Some("client-key-1".into()),
+        fencing_tokens: vec![],
+    };
 
     // The server commits, but the client never sees the response.
     f.repo.failpoints().arm("integrate.after_commit");
@@ -242,7 +267,12 @@ fn reused_idempotency_key_for_a_different_request_is_refused() {
     let c2 = f.snap(None, &[("b", "1")], "user:alice");
     let p1 = f.propose(c1, "1", "user:alice");
     let p2 = f.propose(c2, "2", "user:alice");
-    let mk = |p: &str| IntegrateRequest { proposal_id: p.into(), actor: id("user:alice"), idempotency_key: Some("same-key".into()), fencing_tokens: vec![] };
+    let mk = |p: &str| IntegrateRequest {
+        proposal_id: p.into(),
+        actor: id("user:alice"),
+        idempotency_key: Some("same-key".into()),
+        fencing_tokens: vec![],
+    };
     f.repo.integrate(&mk(&p1)).unwrap();
     assert!(f.repo.integrate(&mk(&p2)).is_err());
 }
@@ -274,12 +304,22 @@ fn crash_at_every_step_recovers_to_exactly_one_integration() {
         } else {
             prop_id = f.propose(c, "t", "user:alice");
             f.repo.failpoints().arm(point);
-            let req = IntegrateRequest { proposal_id: prop_id.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] };
+            let req = IntegrateRequest {
+                proposal_id: prop_id.clone(),
+                actor: id("user:alice"),
+                idempotency_key: None,
+                fencing_tokens: vec![],
+            };
             assert!(f.repo.integrate(&req).is_err(), "{point}: integrate must fail");
             let rep = f.repo.recover(3_600_000).unwrap();
             assert!(rep.errors.is_empty(), "{point}: {rep:?}");
         }
-        let r = f.repo.integrate(&IntegrateRequest { proposal_id: prop_id.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] });
+        let r = f.repo.integrate(&IntegrateRequest {
+            proposal_id: prop_id.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        });
         // after recovery the proposal is either already integrated (replay) or integrates now
         match r {
             Ok(res) => assert!(matches!(res.outcome, Outcome::Integrated { .. }), "{point}: {:?}", res.outcome),
@@ -327,13 +367,24 @@ fn concurrent_integrations_never_lose_an_update() {
     .unwrap();
     let base = snap_in(&repo, None, &[("README", "base\n")], "user:alice");
     let p0 = repo.propose("main", &base, "base", "", &id("user:alice"), None).unwrap();
-    repo.integrate(&IntegrateRequest { proposal_id: p0.id, actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    repo.integrate(&IntegrateRequest {
+        proposal_id: p0.id,
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    })
+    .unwrap();
 
     // 12 agents each add their own file on top of the same base and integrate at once.
     const N: usize = 12;
     let proposals: Vec<String> = (0..N)
         .map(|i| {
-            let c = snap_in(&repo, Some(base), &[("README", "base\n"), (&format!("file{i}.txt"), &format!("content {i}\n"))], &format!("user:dev{i}"));
+            let c = snap_in(
+                &repo,
+                Some(base),
+                &[("README", "base\n"), (&format!("file{i}.txt"), &format!("content {i}\n"))],
+                &format!("user:dev{i}"),
+            );
             repo.propose("main", &c, &format!("add file{i}"), "", &id(&format!("user:dev{i}")), None).unwrap().id
         })
         .collect();
@@ -345,7 +396,12 @@ fn concurrent_integrations_never_lose_an_update() {
             let r = repo.reopen().unwrap();
             std::thread::spawn(move || {
                 for _ in 0..50 {
-                    match r.integrate(&IntegrateRequest { proposal_id: p.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }) {
+                    match r.integrate(&IntegrateRequest {
+                        proposal_id: p.clone(),
+                        actor: id("user:alice"),
+                        idempotency_key: None,
+                        fencing_tokens: vec![],
+                    }) {
                         Ok(res) => return (i, res),
                         Err(ag_integrate::Error::Contention(_)) => continue,
                         Err(e) => panic!("worker {i}: {e}"),

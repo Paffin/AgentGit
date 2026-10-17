@@ -38,12 +38,18 @@ impl Repository {
             return Err(Error::Conflict(format!("{} is already an AgentGit repository", root.display())));
         }
         std::fs::create_dir_all(layout.ag_dir())?;
-        let config = RepoConfig { format: 1, namespace: opts.namespace.clone(), default_stream: opts.default_stream.clone() };
+        let config =
+            RepoConfig { format: 1, namespace: opts.namespace.clone(), default_stream: opts.default_stream.clone() };
         let repo = Self::assemble(layout.clone(), config.clone(), Arc::new(SystemClock))?;
         repo.meta.write(|tx| {
             tx.create_stream(&config.default_stream, opts.actor.as_str())?;
             tx.workspace_create("default", config.default_stream.as_str(), None, opts.actor.as_str())?;
-            tx.audit_append(opts.actor.as_str(), "repo.init", config.namespace.as_str(), &json!({"default_stream": config.default_stream}))?;
+            tx.audit_append(
+                opts.actor.as_str(),
+                "repo.init",
+                config.namespace.as_str(),
+                &json!({"default_stream": config.default_stream}),
+            )?;
             Ok(())
         })?;
         // Written last: its presence marks a fully initialized repository.
@@ -59,8 +65,9 @@ impl Repository {
     /// Opens with an explicit clock (tests).
     pub fn open_with_clock(root: &Path, clock: Arc<dyn Clock>) -> Result<Self> {
         let layout = Layout::new(root);
-        let raw = std::fs::read(layout.config_path())
-            .map_err(|_| Error::Config(format!("{} is not an AgentGit repository (no .ag/config.json)", root.display())))?;
+        let raw = std::fs::read(layout.config_path()).map_err(|_| {
+            Error::Config(format!("{} is not an AgentGit repository (no .ag/config.json)", root.display()))
+        })?;
         let config: RepoConfig = serde_json::from_slice(&raw)?;
         if config.format != 1 {
             return Err(Error::Config(format!("unsupported repository format {}", config.format)));
@@ -191,7 +198,13 @@ impl Repository {
 
     /// Builds and stores a changeset on top of `parents` using the repository
     /// namespace and the current time.
-    pub fn commit(&self, parents: Vec<ChangesetId>, author: &Identity, message: &str, ops: Vec<Op>) -> Result<ChangesetId> {
+    pub fn commit(
+        &self,
+        parents: Vec<ChangesetId>,
+        author: &Identity,
+        message: &str,
+        ops: Vec<Op>,
+    ) -> Result<ChangesetId> {
         let cs = Changeset::build(
             self.config.namespace.clone(),
             parents,

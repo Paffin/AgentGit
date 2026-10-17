@@ -2,8 +2,8 @@
 
 use ag_changeset::ChangesetSource;
 use ag_storage::ObjectStatus;
-use ag_tree::resolve_tree;
 use ag_tree::NoCache;
+use ag_tree::resolve_tree;
 use serde::Serialize;
 
 use crate::{Repository, Result};
@@ -94,10 +94,13 @@ impl Repository {
                     match resolve_tree(&self.history, &NoCache, &head, &self.limits) {
                         Ok(fresh) => {
                             r.heads_recomputed += 1;
-                            if let Some(cached) = self.meta.read(|tx| tx.derived_tree(&head))? {
-                                if cached.id() != fresh.id() {
-                                    r.issue("stale_derived_tree", format!("cached tree of stream '{}' head differs from history", s.name));
-                                }
+                            if let Some(cached) = self.meta.read(|tx| tx.derived_tree(&head))?
+                                && cached.id() != fresh.id()
+                            {
+                                r.issue(
+                                    "stale_derived_tree",
+                                    format!("cached tree of stream '{}' head differs from history", s.name),
+                                );
                             }
                         }
                         Err(e) => r.issue("history_not_derivable", format!("stream '{}': {e}", s.name)),
@@ -108,7 +111,10 @@ impl Repository {
             let log = self.meta.read(|tx| tx.reflog(s.name.as_str(), 1))?;
             if let Some(last) = log.first() {
                 if last.new_head != s.state.head || last.version != s.state.version {
-                    r.issue("reflog_mismatch", format!("stream '{}': reflog does not end at the current head/version", s.name));
+                    r.issue(
+                        "reflog_mismatch",
+                        format!("stream '{}': reflog does not end at the current head/version", s.name),
+                    );
                 }
             } else if s.state.head.is_some() {
                 r.issue("reflog_mismatch", format!("stream '{}' has a head but an empty reflog", s.name));

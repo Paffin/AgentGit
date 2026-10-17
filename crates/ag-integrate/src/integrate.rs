@@ -149,7 +149,12 @@ impl Repository {
 
     /// Continues an integration by operation id (after a crash, or once the
     /// missing approval/validation exists).
-    pub fn resume_integrate(&self, operation_id: &str, actor: &Identity, fencing_tokens: Option<&[u64]>) -> Result<IntegrationResult> {
+    pub fn resume_integrate(
+        &self,
+        operation_id: &str,
+        actor: &Identity,
+        fencing_tokens: Option<&[u64]>,
+    ) -> Result<IntegrationResult> {
         self.advance_integrate(operation_id, actor, fencing_tokens)
     }
 
@@ -158,20 +163,27 @@ impl Repository {
     /// A client that lost the response to `integrate` calls this instead of
     /// blindly retrying.
     pub fn operation(&self, operation_id: &str) -> Result<IntegrationResult> {
-        let intent = self.meta.read(|tx| tx.intent(operation_id))?.ok_or_else(|| Error::NotFound(format!("operation '{operation_id}'")))?;
+        let intent = self
+            .meta
+            .read(|tx| tx.intent(operation_id))?
+            .ok_or_else(|| Error::NotFound(format!("operation '{operation_id}'")))?;
         self.integration_result(&intent)
     }
 
     /// Like [`Repository::operation`] but looks the operation up by the
     /// idempotency key it was created with.
     pub fn operation_by_key(&self, key: &str) -> Result<IntegrationResult> {
-        let intent = self.meta.read(|tx| tx.intent_by_key(key))?.ok_or_else(|| Error::NotFound(format!("no operation with idempotency key '{key}'")))?;
+        let intent = self
+            .meta
+            .read(|tx| tx.intent_by_key(key))?
+            .ok_or_else(|| Error::NotFound(format!("no operation with idempotency key '{key}'")))?;
         self.integration_result(&intent)
     }
 
     fn integration_result(&self, intent: &IntentRow) -> Result<IntegrationResult> {
         let outcome = match &intent.result {
-            Some(v) => serde_json::from_value(v.clone()).unwrap_or_else(|_| Outcome::Invalid { reason: "unreadable result".into() }),
+            Some(v) => serde_json::from_value(v.clone())
+                .unwrap_or_else(|_| Outcome::Invalid { reason: "unreadable result".into() }),
             None => Outcome::Invalid { reason: format!("operation is {} and has no result yet", intent.state) },
         };
         Ok(IntegrationResult { operation_id: intent.operation_id.clone(), state: intent.state, outcome })
@@ -181,27 +193,35 @@ impl Repository {
         let prefix = format!("integrate:{}:{}:", prop.id, prop.head);
         let existing = self.meta.read(|tx| tx.intents_with_key_prefix(&prefix))?;
         Ok(match existing.last() {
-            Some(last) if !matches!(last.state, IntentState::Rejected | IntentState::Failed | IntentState::Aborted) => last.idempotency_key.clone(),
+            Some(last) if !matches!(last.state, IntentState::Rejected | IntentState::Failed | IntentState::Aborted) => {
+                last.idempotency_key.clone()
+            }
             Some(_) => format!("{prefix}{}", existing.len()),
             None => format!("{prefix}0"),
         })
     }
 
-    pub(crate) fn advance_integrate(&self, op: &str, actor: &Identity, tokens: Option<&[u64]>) -> Result<IntegrationResult> {
+    pub(crate) fn advance_integrate(
+        &self,
+        op: &str,
+        actor: &Identity,
+        tokens: Option<&[u64]>,
+    ) -> Result<IntegrationResult> {
         if let Some(t) = tokens {
             self.meta.write(|tx| {
-                if let Some(i) = tx.intent(op)? {
-                    if !i.state.is_terminal() {
-                        let mut p = i.payload.clone();
-                        p["tokens"] = json!(t);
-                        tx.intent_set_payload(op, &p)?;
-                    }
+                if let Some(i) = tx.intent(op)?
+                    && !i.state.is_terminal()
+                {
+                    let mut p = i.payload.clone();
+                    p["tokens"] = json!(t);
+                    tx.intent_set_payload(op, &p)?;
                 }
                 Ok(())
             })?;
         }
         for _ in 0..MAX_CAS_ATTEMPTS {
-            let intent = self.meta.read(|tx| tx.intent(op))?.ok_or_else(|| Error::NotFound(format!("operation '{op}'")))?;
+            let intent =
+                self.meta.read(|tx| tx.intent(op))?.ok_or_else(|| Error::NotFound(format!("operation '{op}'")))?;
             if intent.kind != "integrate" {
                 return Err(Error::Invalid(format!("operation '{op}' is a {} operation", intent.kind)));
             }
@@ -220,7 +240,8 @@ impl Repository {
                 return self.abort_integrate(op, &format!("the proposal is {}", prop.state));
             }
             if prop.head != head {
-                return self.abort_integrate(op, "the proposal was updated after this integration started; start a new one");
+                return self
+                    .abort_integrate(op, "the proposal was updated after this integration started; start a new one");
             }
             if intent.state == IntentState::Prepared {
                 if !self.meta.read(|tx| tx.is_ready(&head))? {
@@ -233,8 +254,13 @@ impl Repository {
                 self.failpoints.hit("integrate.after_ready")?;
             }
 
-            let st = self.meta.read(|tx| tx.stream(&stream))?.ok_or_else(|| Error::NotFound(format!("stream '{stream}'")))?.state;
-            let meta_for_merge = MergeMeta { author: actor.clone(), timestamp: intent.created_at, operation_id: op.to_string() };
+            let st = self
+                .meta
+                .read(|tx| tx.stream(&stream))?
+                .ok_or_else(|| Error::NotFound(format!("stream '{stream}'")))?
+                .state;
+            let meta_for_merge =
+                MergeMeta { author: actor.clone(), timestamp: intent.created_at, operation_id: op.to_string() };
             let candidate = self.compute_candidate(&prop, &st, Some(&meta_for_merge))?;
             match &candidate {
                 Candidate::AlreadyIntegrated => return self.finish_already_integrated(op, actor, &prop, &st),
@@ -253,7 +279,10 @@ impl Repository {
                 Step::Retry => continue,
                 Step::Done(result) => {
                     self.failpoints.hit("integrate.after_commit")?;
-                    let _ = self.derive_pending(64);
+                    if let Outcome::Integrated { new_head, .. } = &result.outcome {
+                        let _ = self.cache_tree(new_head);
+                    }
+                    let _ = self.derive_pending(256);
                     return Ok(*result);
                 }
             }
@@ -292,7 +321,13 @@ impl Repository {
         self.integration_result(&intent)
     }
 
-    fn finish_already_integrated(&self, op: &str, actor: &Identity, prop: &ProposalRow, st: &StreamState) -> Result<IntegrationResult> {
+    fn finish_already_integrated(
+        &self,
+        op: &str,
+        actor: &Identity,
+        prop: &ProposalRow,
+        st: &StreamState,
+    ) -> Result<IntegrationResult> {
         let head = st.head.expect("already integrated implies a head");
         let tree = self.tree_of(&head)?;
         let outcome = Outcome::Integrated {
@@ -312,14 +347,24 @@ impl Repository {
                 Some(&outcome_json(&outcome)),
                 None,
             )?;
-            tx.audit_append(actor.as_str(), "stream.integrate", &prop.stream, &json!({"proposal": prop.id, "strategy": "already_integrated"}))?;
+            tx.audit_append(
+                actor.as_str(),
+                "stream.integrate",
+                &prop.stream,
+                &json!({"proposal": prop.id, "strategy": "already_integrated"}),
+            )?;
             Ok(i)
         })?;
         self.integration_result(&intent)
     }
 
     /// Computes what integration would produce against stream state `st`.
-    fn compute_candidate(&self, prop: &ProposalRow, st: &StreamState, merge_meta: Option<&MergeMeta>) -> Result<Candidate> {
+    fn compute_candidate(
+        &self,
+        prop: &ProposalRow,
+        st: &StreamState,
+        merge_meta: Option<&MergeMeta>,
+    ) -> Result<Candidate> {
         let p = prop.head;
         let Some(h) = st.head else {
             let new_tree = self.tree_of(&p)?;
@@ -363,7 +408,11 @@ impl Repository {
         let mm = match merge_meta {
             Some(m) => m,
             None => {
-                default_meta = MergeMeta { author: Identity::new("system:preview").expect("valid"), timestamp: Timestamp::from_millis(0), operation_id: "preview".into() };
+                default_meta = MergeMeta {
+                    author: Identity::new("system:preview").expect("valid"),
+                    timestamp: Timestamp::from_millis(0),
+                    operation_id: "preview".into(),
+                };
                 &default_meta
             }
         };
@@ -371,7 +420,15 @@ impl Repository {
             "Integrate {}: {}\n\nProposal-Head: {}\nMerge-Base: {}\nMerge-Algorithm: {}\nOperation: {}\n",
             prop.id, prop.title, p, base, ALGORITHM_VERSION, mm.operation_id
         );
-        let cs = Changeset::build(self.config.namespace.clone(), vec![h, p], mm.author.clone(), mm.timestamp, message, ops, &self.limits)?;
+        let cs = Changeset::build(
+            self.config.namespace.clone(),
+            vec![h, p],
+            mm.author.clone(),
+            mm.timestamp,
+            message,
+            ops,
+            &self.limits,
+        )?;
         let id = cs.id();
         if merge_meta.is_some() {
             self.put_changeset(&cs)?;
@@ -382,7 +439,11 @@ impl Repository {
     /// Dry run: reports what integrating `proposal_id` would do now.
     pub fn merge_preview(&self, proposal_id: &str) -> Result<MergePreview> {
         let prop = self.find_proposal(proposal_id)?;
-        let st = self.meta.read(|tx| tx.stream(&prop.stream))?.ok_or_else(|| Error::NotFound(format!("stream '{}'", prop.stream)))?.state;
+        let st = self
+            .meta
+            .read(|tx| tx.stream(&prop.stream))?
+            .ok_or_else(|| Error::NotFound(format!("stream '{}'", prop.stream)))?
+            .state;
         let mut preview = MergePreview {
             strategy: Strategy::FastForward,
             candidate_tree: None,
@@ -430,8 +491,12 @@ impl Repository {
     ) -> Result<Step> {
         let op = intent.operation_id.as_str();
         let (new_head, new_tree, head_tree, strategy, merge_cs) = match candidate {
-            Candidate::FastForward { new_head, new_tree, head_tree } => (new_head, new_tree, head_tree, Strategy::FastForward, None),
-            Candidate::Merge { id, cs, new_tree, head_tree, .. } => (id, new_tree, head_tree, Strategy::Merge, Some((id, cs))),
+            Candidate::FastForward { new_head, new_tree, head_tree } => {
+                (new_head, new_tree, head_tree, Strategy::FastForward, None)
+            }
+            Candidate::Merge { id, cs, new_tree, head_tree, .. } => {
+                (id, new_tree, head_tree, Strategy::Merge, Some((id, cs)))
+            }
             _ => unreachable!("only mergeable candidates reach the commit step"),
         };
         let tree_id = new_tree.id();
@@ -536,7 +601,13 @@ impl Repository {
         let now = self.clock().now();
         let pending = self.meta.read(|tx| {
             tx.intents_in_states(
-                &[IntentState::Prepared, IntentState::Uploaded, IntentState::Verified, IntentState::Ready, IntentState::Blocked],
+                &[
+                    IntentState::Prepared,
+                    IntentState::Uploaded,
+                    IntentState::Verified,
+                    IntentState::Ready,
+                    IntentState::Blocked,
+                ],
                 10_000,
             )
         })?;
@@ -546,7 +617,13 @@ impl Repository {
                 self.meta.write(|tx| {
                     tx.intent_transition(
                         &op,
-                        &[IntentState::Prepared, IntentState::Uploaded, IntentState::Verified, IntentState::Ready, IntentState::Blocked],
+                        &[
+                            IntentState::Prepared,
+                            IntentState::Uploaded,
+                            IntentState::Verified,
+                            IntentState::Ready,
+                            IntentState::Blocked,
+                        ],
                         IntentState::Aborted,
                         Some(&outcome_json(&Outcome::Invalid { reason: "expired".into() })),
                         None,
@@ -561,7 +638,8 @@ impl Repository {
                 report.waiting.push(op);
                 continue;
             }
-            let actor = Identity::new(intent.actor.clone()).unwrap_or_else(|_| Identity::new("system:recovery").expect("valid"));
+            let actor = Identity::new(intent.actor.clone())
+                .unwrap_or_else(|_| Identity::new("system:recovery").expect("valid"));
             let result: Result<String> = match intent.kind.as_str() {
                 "publish" => self.advance_publish(&op, &actor).map(|r| r.state.to_string()),
                 "integrate" => self.advance_integrate(&op, &actor, None).map(|r| r.state.to_string()),

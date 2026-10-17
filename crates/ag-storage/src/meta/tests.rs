@@ -20,7 +20,12 @@ fn cs(parents: Vec<ChangesetId>, file: &str) -> (ChangesetId, Changeset) {
         Identity::new("user:t").unwrap(),
         Timestamp::from_millis(0),
         format!("add {file}\n\nbody"),
-        vec![Op::Put { path: RepoPath::new(file).unwrap(), content: hash_blob(file.as_bytes()), file_type: FileType::Regular, executable: false }],
+        vec![Op::Put {
+            path: RepoPath::new(file).unwrap(),
+            content: hash_blob(file.as_bytes()),
+            file_type: FileType::Regular,
+            executable: false,
+        }],
         &Limits::default(),
     )
     .unwrap();
@@ -186,8 +191,18 @@ fn intents_are_idempotent_by_key() {
 fn intent_transitions_are_guarded() {
     let m = meta();
     let payload = json!({});
-    m.write(|tx| tx.intent_create(&NewIntent { operation_id: "op_00000001", idempotency_key: "k", request_hash: "h", kind: "publish", actor: "user:t", stream: None, payload: &payload }))
-        .unwrap();
+    m.write(|tx| {
+        tx.intent_create(&NewIntent {
+            operation_id: "op_00000001",
+            idempotency_key: "k",
+            request_hash: "h",
+            kind: "publish",
+            actor: "user:t",
+            stream: None,
+            payload: &payload,
+        })
+    })
+    .unwrap();
     let row = m
         .write(|tx| tx.intent_transition("op_00000001", &[IntentState::Prepared], IntentState::Uploaded, None, None))
         .unwrap();
@@ -198,7 +213,15 @@ fn intent_transitions_are_guarded() {
         Err(MetaError::InvalidTransition { .. })
     ));
     let done = m
-        .write(|tx| tx.intent_transition("op_00000001", &[IntentState::Uploaded], IntentState::Integrated, Some(&json!({"head": "h"})), None))
+        .write(|tx| {
+            tx.intent_transition(
+                "op_00000001",
+                &[IntentState::Uploaded],
+                IntentState::Integrated,
+                Some(&json!({"head": "h"})),
+                None,
+            )
+        })
         .unwrap();
     assert!(done.state.is_terminal());
     assert_eq!(done.result.unwrap()["head"], "h");
@@ -211,13 +234,22 @@ fn staged_objects_are_protected_until_intent_finishes_and_grace_passes() {
     let payload = json!({});
     let obj = hash_blob(b"staged").object_id();
     m.write(|tx| {
-        tx.intent_create(&NewIntent { operation_id: "op_00000001", idempotency_key: "k", request_hash: "h", kind: "publish", actor: "user:t", stream: None, payload: &payload })?;
+        tx.intent_create(&NewIntent {
+            operation_id: "op_00000001",
+            idempotency_key: "k",
+            request_hash: "h",
+            kind: "publish",
+            actor: "user:t",
+            stream: None,
+            payload: &payload,
+        })?;
         tx.intent_add_object("op_00000001", &obj)
     })
     .unwrap();
     let since = Timestamp::from_millis(9_999);
     assert_eq!(m.read(|tx| tx.protected_intent_objects(since)).unwrap(), vec![obj]);
-    m.write(|tx| tx.intent_transition("op_00000001", &[IntentState::Prepared], IntentState::Aborted, None, None)).unwrap();
+    m.write(|tx| tx.intent_transition("op_00000001", &[IntentState::Prepared], IntentState::Aborted, None, None))
+        .unwrap();
     // terminal but updated recently -> still protected
     assert_eq!(m.read(|tx| tx.protected_intent_objects(since)).unwrap(), vec![obj]);
     clock.advance_ms(100_000);
@@ -299,7 +331,15 @@ fn counters_are_monotonic_and_proposals_track_state() {
         tx.register_changeset(&a, &ca)?;
         tx.register_changeset(&b, &cb)?;
         tx.create_stream(&StreamName::new("main").unwrap(), "user:t")?;
-        tx.proposal_create("prop_1", "main", &a, "t", "d", "user:t", None)?;
+        tx.proposal_create(&NewProposal {
+            id: "prop_1",
+            stream: "main",
+            head: &a,
+            title: "t",
+            description: "d",
+            author: "user:t",
+            task_id: None,
+        })?;
         tx.review_add("prop_1", "user:r", "approve", "lgtm", &a)?;
         Ok(())
     })
@@ -409,8 +449,24 @@ fn leases_and_queue_basics() {
     m.write(|tx| {
         tx.register_changeset(&a, &ca)?;
         tx.create_stream(&StreamName::new("main").unwrap(), "user:t")?;
-        tx.proposal_create("prop_1", "main", &a, "t", "d", "user:t", None)?;
-        tx.proposal_create("prop_2", "main", &a, "t", "d", "user:t", None)?;
+        tx.proposal_create(&NewProposal {
+            id: "prop_1",
+            stream: "main",
+            head: &a,
+            title: "t",
+            description: "d",
+            author: "user:t",
+            task_id: None,
+        })?;
+        tx.proposal_create(&NewProposal {
+            id: "prop_2",
+            stream: "main",
+            head: &a,
+            title: "t",
+            description: "d",
+            author: "user:t",
+            task_id: None,
+        })?;
         Ok(())
     })
     .unwrap();

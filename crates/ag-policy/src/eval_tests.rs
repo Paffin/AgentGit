@@ -21,14 +21,29 @@ fn ci_key() -> KeyPair {
 }
 
 fn attest(key: &KeyPair, who: &str, t: u8, check: &str, result: CheckResult, pv: u64, at: i64) -> Attestation {
-    Attestation::sign(key, format!("att_{t}_{check}"), tree(t), check.into(), result, pv, "env1".into(), id(who), Timestamp::from_millis(at))
-        .unwrap()
+    Attestation::sign(
+        key,
+        format!("att_{t}_{check}"),
+        tree(t),
+        check.into(),
+        result,
+        pv,
+        "env1".into(),
+        id(who),
+        Timestamp::from_millis(at),
+    )
+    .unwrap()
 }
 
 fn policy_with_tests() -> Policy {
     Policy {
         trusted_issuers: vec![TrustedIssuer { identity: id("service:ci"), public_key: ci_key().public() }],
-        required_validations: vec![RequiredValidation { check: "tests".into(), issuers: vec![], environment_digest: None, max_age_secs: None }],
+        required_validations: vec![RequiredValidation {
+            check: "tests".into(),
+            issuers: vec![],
+            environment_digest: None,
+            max_age_secs: None,
+        }],
         ..Policy::default()
     }
 }
@@ -111,7 +126,18 @@ fn failed_validation_denies_even_if_a_pass_exists() {
     c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Fail, 3, 999_500));
     // distinct ids so both exist
     c.atts[1].id = "att_fail".into();
-    c.atts[1] = Attestation::sign(&ci_key(), "att_fail".into(), tree(1), "tests".into(), CheckResult::Fail, 3, "env1".into(), id("service:ci"), Timestamp::from_millis(999_500)).unwrap();
+    c.atts[1] = Attestation::sign(
+        &ci_key(),
+        "att_fail".into(),
+        tree(1),
+        "tests".into(),
+        CheckResult::Fail,
+        3,
+        "env1".into(),
+        id("service:ci"),
+        Timestamp::from_millis(999_500),
+    )
+    .unwrap();
     assert_eq!(c.eval(&p).decision, Decision::Denied);
 }
 
@@ -220,7 +246,8 @@ fn agents_are_not_default_approvers() {
 #[test]
 fn protected_paths_need_extra_approvals() {
     let mut p = approval_policy(1);
-    p.protected_paths = vec![ProtectedPath { glob: ".github/**".into(), min_approvals: 2, approvers: vec!["user:admin*".into()] }];
+    p.protected_paths =
+        vec![ProtectedPath { glob: ".github/**".into(), min_approvals: 2, approvers: vec!["user:admin*".into()] }];
     let mut c = Ctx::new();
     c.changed = vec![ChangedPath { path: ".github/workflows/ci.yml".into() }];
     c.approvals.push(approve("user:carol", 1));
@@ -308,7 +335,8 @@ fn provenance_and_size_limits() {
 
 #[test]
 fn integrator_and_author_allow_lists() {
-    let p = Policy { integrators: vec!["user:alice".into()], allowed_authors: vec!["user:*".into()], ..Policy::default() };
+    let p =
+        Policy { integrators: vec!["user:alice".into()], allowed_authors: vec!["user:*".into()], ..Policy::default() };
     let mut c = Ctx::new();
     assert!(c.eval(&p).is_allowed());
     c.actor = id("user:mallory");

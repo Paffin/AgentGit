@@ -23,7 +23,9 @@ impl Tx<'_> {
     /// The tree id recorded for a changeset, if it has been derived.
     pub fn derived_tree_id(&self, changeset: &ChangesetId) -> Result<Option<TreeId>, MetaError> {
         self.conn
-            .query_row("SELECT tree_id FROM changeset_trees WHERE changeset = ?1", [changeset.to_hex()], |r| r.get::<_, String>(0))
+            .query_row("SELECT tree_id FROM changeset_trees WHERE changeset = ?1", [changeset.to_hex()], |r| {
+                r.get::<_, String>(0)
+            })
             .optional()?
             .map(|s| parse::<TreeId>(&s, "tree id"))
             .transpose()
@@ -65,6 +67,26 @@ impl Tx<'_> {
         Ok(out)
     }
 
+    /// Drops cached trees that are neither keyframes (`fp_depth % interval == 0`)
+    /// nor the tree of a live head (stream, open proposal, workspace). Reading
+    /// any other tree replays at most `interval - 1` deltas from the nearest
+    /// keyframe, so the cache costs one manifest per `interval` changesets
+    /// instead of one per changeset. Returns the number of entries dropped.
+    pub fn prune_derived(&self, interval: u64) -> Result<u64, MetaError> {
+        let n = self.conn.execute(
+            "DELETE FROM changeset_trees WHERE changeset IN (
+                SELECT t.changeset FROM changeset_trees t JOIN changesets c ON c.id = t.changeset
+                WHERE c.fp_depth % ?1 != 0
+                  AND t.changeset NOT IN (SELECT head FROM streams WHERE head IS NOT NULL)
+                  AND t.changeset NOT IN (SELECT head FROM proposals WHERE state = 'open')
+                  AND t.changeset NOT IN (SELECT head FROM workspaces WHERE head IS NOT NULL)
+                  AND t.changeset NOT IN (SELECT base FROM workspaces WHERE base IS NOT NULL))",
+            [interval as i64],
+        )?;
+        self.prune_orphan_trees()?;
+        Ok(n as u64)
+    }
+
     /// Drops every derived tree (they can all be recomputed).
     pub fn clear_derived(&self) -> Result<(), MetaError> {
         self.conn.execute("DELETE FROM changeset_trees", [])?;
@@ -74,6 +96,7 @@ impl Tx<'_> {
 
     /// Removes manifests no longer referenced by any changeset.
     pub fn prune_orphan_trees(&self) -> Result<u64, MetaError> {
-        Ok(self.conn.execute("DELETE FROM trees WHERE tree_id NOT IN (SELECT tree_id FROM changeset_trees)", [])? as u64)
+        Ok(self.conn.execute("DELETE FROM trees WHERE tree_id NOT IN (SELECT tree_id FROM changeset_trees)", [])?
+            as u64)
     }
 }

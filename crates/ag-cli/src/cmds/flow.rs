@@ -49,7 +49,13 @@ pub fn stream(ctx: &Ctx, cmd: &StreamCmd) -> Result<u8> {
             ctx.out(&streams, || {
                 let mut s = String::new();
                 for st in &streams {
-                    let _ = writeln!(s, "{:<20} {}  (version {})", st.name, st.state.head.map_or("(empty)".into(), |h| h.short()), st.state.version);
+                    let _ = writeln!(
+                        s,
+                        "{:<20} {}  (version {})",
+                        st.name,
+                        st.state.head.map_or("(empty)".into(), |h| h.short()),
+                        st.state.version
+                    );
                 }
                 s
             })?;
@@ -57,10 +63,10 @@ pub fn stream(ctx: &Ctx, cmd: &StreamCmd) -> Result<u8> {
         StreamCmd::Create { name, from } => {
             let n = StreamName::new(name.clone()).map_err(|e| anyhow!("{e}"))?;
             let from = from.as_ref().map(|r| ctx.repo.resolve_rev(r)).transpose()?;
-            if let Some(f) = &from {
-                if !ctx.repo.meta().read(|tx| tx.is_ready(f))? {
-                    return Err(anyhow!("{} is not published; propose and integrate it first", f.short()));
-                }
+            if let Some(f) = &from
+                && !ctx.repo.meta().read(|tx| tx.is_ready(f))?
+            {
+                return Err(anyhow!("{} is not published; propose and integrate it first", f.short()));
             }
             let row = ctx.repo.create_stream(&n, from.as_ref(), &ctx.me)?;
             ctx.out(&row, || format!("Created stream '{}'", row.name))?;
@@ -69,7 +75,14 @@ pub fn stream(ctx: &Ctx, cmd: &StreamCmd) -> Result<u8> {
             let row = ctx.repo.meta().read(|tx| tx.stream(name))?.ok_or_else(|| anyhow!("no stream '{name}'"))?;
             let (_, pv) = ctx.repo.policy(name)?;
             ctx.out(&json!({"stream": row, "policy_version": pv}), || {
-                format!("{}\n  head:    {}\n  version: {}\n  policy:  v{pv}\n  created: {} by {}", row.name, row.state.head.map_or("(empty)".into(), |h| h.to_string()), row.state.version, row.created_at, row.created_by)
+                format!(
+                    "{}\n  head:    {}\n  version: {}\n  policy:  v{pv}\n  created: {} by {}",
+                    row.name,
+                    row.state.head.map_or("(empty)".into(), |h| h.to_string()),
+                    row.state.version,
+                    row.created_at,
+                    row.created_by
+                )
             })?;
         }
         StreamCmd::Reflog { name, limit } => {
@@ -80,7 +93,13 @@ pub fn stream(ctx: &Ctx, cmd: &StreamCmd) -> Result<u8> {
                     let _ = writeln!(
                         s,
                         "#{:<4} v{:<4} {} -> {}  {}  {}  [{}]",
-                        e.seq, e.version, e.old_head.map_or("(none)".into(), |h| h.short()), e.new_head.map_or("(none)".into(), |h| h.short()), e.timestamp, e.actor, e.reason
+                        e.seq,
+                        e.version,
+                        e.old_head.map_or("(none)".into(), |h| h.short()),
+                        e.new_head.map_or("(none)".into(), |h| h.short()),
+                        e.timestamp,
+                        e.actor,
+                        e.reason
                     );
                 }
                 s
@@ -114,7 +133,9 @@ pub fn propose(ctx: &Ctx, a: &ProposeArgs) -> Result<u8> {
     let head = rev_or_default(ctx, &a.rev)?;
     let stream = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
     let p = ctx.repo.propose(&stream, &head, &a.title, &a.description, &ctx.me, a.task.as_deref())?;
-    ctx.out(&p, || format!("Opened proposal {} -> '{stream}' ({}).\nNext: `ag integrate {}`", p.id, head.short(), p.id))?;
+    ctx.out(&p, || {
+        format!("Opened proposal {} -> '{stream}' ({}).\nNext: `ag integrate {}`", p.id, head.short(), p.id)
+    })?;
     Ok(exit::OK)
 }
 
@@ -169,7 +190,16 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
             ctx.out(&list, || {
                 let mut s = String::new();
                 for p in &list {
-                    let _ = writeln!(s, "{}  {:<10} {} -> {}  {}  by {}", p.id, p.state, p.head.short(), p.stream, p.title, p.author);
+                    let _ = writeln!(
+                        s,
+                        "{}  {:<10} {} -> {}  {}  by {}",
+                        p.id,
+                        p.state,
+                        p.head.short(),
+                        p.stream,
+                        p.title,
+                        p.author
+                    );
                 }
                 s
             })?;
@@ -178,13 +208,23 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
             let p = ctx.repo.find_proposal(id)?;
             let reviews = ctx.repo.meta().read(|tx| tx.reviews(&p.id))?;
             ctx.out(&json!({"proposal": p, "reviews": reviews}), || {
-                let mut s = format!("{}  [{}]\n  {}\n  head {} -> stream '{}'\n  author {}\n", p.id, p.state, p.title, p.head, p.stream, p.author);
+                let mut s = format!(
+                    "{}  [{}]\n  {}\n  head {} -> stream '{}'\n  author {}\n",
+                    p.id, p.state, p.title, p.head, p.stream, p.author
+                );
                 if !p.description.is_empty() {
                     let _ = writeln!(s, "\n{}\n", p.description);
                 }
                 for r in &reviews {
                     let current = if r.head == p.head { "" } else { "  (stale: older head)" };
-                    let _ = writeln!(s, "  review: {:<16} {} on {}{current}  {}", r.decision, r.reviewer, r.head.short(), r.body);
+                    let _ = writeln!(
+                        s,
+                        "  review: {:<16} {} on {}{current}  {}",
+                        r.decision,
+                        r.reviewer,
+                        r.head.short(),
+                        r.body
+                    );
                 }
                 s
             })?;
@@ -202,7 +242,9 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
         ProposalCmd::Update { id, rev } => {
             let head = rev_or_default(ctx, rev)?;
             let p = ctx.repo.update_proposal(id, &head, &ctx.me)?;
-            ctx.out(&p, || format!("Proposal {} now points at {} (earlier approvals no longer count)", p.id, p.head.short()))?;
+            ctx.out(&p, || {
+                format!("Proposal {} now points at {} (earlier approvals no longer count)", p.id, p.head.short())
+            })?;
         }
         ProposalCmd::Close { id } => {
             ctx.repo.close_proposal(id, &ctx.me)?;
@@ -249,9 +291,15 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>) ->
                 }
                 let _ = writeln!(s, "candidate tree: {candidate_tree}");
                 if let Some(p) = proposal {
-                    let _ = writeln!(s, "Provide what is missing, then run `ag integrate {p}` again (it resumes this operation).");
+                    let _ = writeln!(
+                        s,
+                        "Provide what is missing, then run `ag integrate {p}` again (it resumes this operation)."
+                    );
                     if blockers.iter().any(|b| b.code == "missing_validation") {
-                        let _ = writeln!(s, "  validate:  ag validate run {p} --check <name> --key <issuer-key> -- <command>");
+                        let _ = writeln!(
+                            s,
+                            "  validate:  ag validate run {p} --check <name> --key <issuer-key> -- <command>"
+                        );
                     }
                     if blockers.iter().any(|b| b.code == "insufficient_approvals") {
                         let _ = writeln!(s, "  approve:   ag proposal review {p} --approve");
@@ -260,14 +308,16 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>) ->
                 let _ = write!(s, "operation {}", r.operation_id);
             }
             Outcome::Conflict { conflicts, base } => {
-                let _ = writeln!(s, "Conflict: the proposal cannot be merged automatically; the stream was not changed.");
+                let _ =
+                    writeln!(s, "Conflict: the proposal cannot be merged automatically; the stream was not changed.");
                 for c in conflicts {
                     let _ = writeln!(s, "  {}  ({})", c.path, c.kind);
                 }
                 if let Some(b) = base {
                     let _ = writeln!(s, "merge base: {}", b.short());
                 }
-                let _ = write!(s, "Fix: `ag sync`, resolve the marked files, `ag snapshot`, `ag proposal update <id>`.");
+                let _ =
+                    write!(s, "Fix: `ag sync`, resolve the marked files, `ag snapshot`, `ag proposal update <id>`.");
             }
             Outcome::Denied { blockers } => {
                 let _ = writeln!(s, "Denied by policy; the stream was not changed:");
@@ -371,7 +421,8 @@ pub fn op(ctx: &Ctx, cmd: &OpCmd) -> Result<u8> {
             ctx.out(&list, || {
                 let mut s = String::new();
                 for i in &list {
-                    let _ = writeln!(s, "{}  {:<9} {:<10} {}  {}", i.operation_id, i.kind, i.state, i.updated_at, i.actor);
+                    let _ =
+                        writeln!(s, "{}  {:<9} {:<10} {}  {}", i.operation_id, i.kind, i.state, i.updated_at, i.actor);
                 }
                 s
             })?;
@@ -392,7 +443,10 @@ pub fn recover(ctx: &Ctx, a: &RecoverArgs) -> Result<u8> {
     ctx.out(&rep, || {
         format!(
             "resumed {}, aborted {}, still waiting {}, errors {}",
-            rep.resumed.len(), rep.aborted.len(), rep.waiting.len(), rep.errors.len()
+            rep.resumed.len(),
+            rep.aborted.len(),
+            rep.waiting.len(),
+            rep.errors.len()
         )
     })?;
     Ok(if rep.errors.is_empty() { exit::OK } else { exit::ERROR })
@@ -431,7 +485,14 @@ pub fn queue(ctx: &Ctx, cmd: &QueueCmd) -> Result<u8> {
             ctx.out(&rows, || {
                 let mut t = String::new();
                 for r in &rows {
-                    let _ = writeln!(t, "#{:<4} {:<10} {}  {}", r.id, r.state, r.proposal, r.outcome.clone().unwrap_or_default());
+                    let _ = writeln!(
+                        t,
+                        "#{:<4} {:<10} {}  {}",
+                        r.id,
+                        r.state,
+                        r.proposal,
+                        r.outcome.clone().unwrap_or_default()
+                    );
                 }
                 t
             })?;
@@ -440,9 +501,19 @@ pub fn queue(ctx: &Ctx, cmd: &QueueCmd) -> Result<u8> {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let rep = ctx.repo.run_queue(&s, &ctx.me)?;
             ctx.out(&rep, || {
-                format!("integrated {}, blocked {}, rejected {}, failed {}", rep.integrated.len(), rep.blocked.len(), rep.rejected.len(), rep.failed.len())
+                format!(
+                    "integrated {}, blocked {}, rejected {}, failed {}",
+                    rep.integrated.len(),
+                    rep.blocked.len(),
+                    rep.rejected.len(),
+                    rep.failed.len()
+                )
             })?;
-            return Ok(if rep.blocked.is_empty() && rep.rejected.is_empty() && rep.failed.is_empty() { exit::OK } else { exit::BLOCKED });
+            return Ok(if rep.blocked.is_empty() && rep.rejected.is_empty() && rep.failed.is_empty() {
+                exit::OK
+            } else {
+                exit::BLOCKED
+            });
         }
     }
     Ok(exit::OK)

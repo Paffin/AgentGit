@@ -36,15 +36,11 @@ use rusqlite::{Connection, TransactionBehavior};
 
 use crate::clock::{Clock, SystemClock};
 
-pub use agents::{
-    AgentRow, LeaseRow, ProvenanceRow, QueueRow, RunRow, TaskRow,
-};
+pub use agents::{AgentRow, LeaseRow, ProvenanceRow, QueueRow, RunRow, TaskRow};
 pub use changesets::ChangesetInfo;
 pub use intents::{IntentRow, IntentState, NewIntent};
 pub use outbox::{AuditEntry, AuditReport, OutboxRow};
-pub use records::{
-    AttestationRow, PinRow, PolicyRow, ProposalRow, ReviewRow, WorkspaceRow,
-};
+pub use records::{AttestationRow, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, WorkspaceRow};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 
 /// Schema version understood by this build.
@@ -233,10 +229,7 @@ impl Tx<'_> {
     /// Reads a key from the `meta` table.
     pub fn meta_get(&self, key: &str) -> Result<Option<String>, MetaError> {
         use rusqlite::OptionalExtension;
-        Ok(self
-            .conn
-            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
-            .optional()?)
+        Ok(self.conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0)).optional()?)
     }
 
     /// Writes a key in the `meta` table.
@@ -262,7 +255,7 @@ impl Graph for Meta {
     fn generation(&self, id: &ChangesetId) -> Result<u64, DagError> {
         self.read(|tx| tx.generation(id))
             .map_err(dag_err)?
-            .ok_or_else(|| DagError::Source(ag_changeset::SourceError::NotFound(*id)))
+            .ok_or(DagError::Source(ag_changeset::SourceError::NotFound(*id)))
     }
 }
 
@@ -272,9 +265,7 @@ impl Graph for Tx<'_> {
     }
 
     fn generation(&self, id: &ChangesetId) -> Result<u64, DagError> {
-        Tx::generation(self, id)
-            .map_err(dag_err)?
-            .ok_or_else(|| DagError::Source(ag_changeset::SourceError::NotFound(*id)))
+        Tx::generation(self, id).map_err(dag_err)?.ok_or(DagError::Source(ag_changeset::SourceError::NotFound(*id)))
     }
 }
 

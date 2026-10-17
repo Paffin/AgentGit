@@ -27,7 +27,8 @@ impl KeyStore {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(ag_crypto::CryptoError::from)?;
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+                .map_err(ag_crypto::CryptoError::from)?;
         }
         Ok(Self { dir })
     }
@@ -61,11 +62,21 @@ pub fn validate_name(name: &str) -> Result<(), AgentError> {
         && name.len() <= 64
         && name.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
-    if ok { Ok(()) } else { Err(AgentError::Invalid(format!("agent name '{name}' must match [a-z0-9][a-z0-9_-]{{0,63}}"))) }
+    if ok {
+        Ok(())
+    } else {
+        Err(AgentError::Invalid(format!("agent name '{name}' must match [a-z0-9][a-z0-9_-]{{0,63}}")))
+    }
 }
 
 /// Registers an agent: creates its key pair and stores the public key.
-pub fn register_agent(meta: &Meta, keys: &KeyStore, name: &str, role: &str, actor: &str) -> Result<AgentRow, AgentError> {
+pub fn register_agent(
+    meta: &Meta,
+    keys: &KeyStore,
+    name: &str,
+    role: &str,
+    actor: &str,
+) -> Result<AgentRow, AgentError> {
     validate_name(name)?;
     if !["agent", "reviewer"].contains(&role) {
         return Err(AgentError::Invalid(format!("unknown role '{role}' (expected agent or reviewer)")));
@@ -78,7 +89,12 @@ pub fn register_agent(meta: &Meta, keys: &KeyStore, name: &str, role: &str, acto
     let kp = keys.create(name)?;
     let row = meta.write(|tx| {
         let row = tx.agent_register(name, identity.as_str(), &kp.public().to_hex(), role)?;
-        tx.audit_append(actor, "agent.register", identity.as_str(), &json!({"role": role, "key_id": kp.public().key_id()}))?;
+        tx.audit_append(
+            actor,
+            "agent.register",
+            identity.as_str(),
+            &json!({"role": role, "key_id": kp.public().key_id()}),
+        )?;
         Ok(row)
     })?;
     Ok(row)
@@ -102,7 +118,8 @@ pub fn start_run(meta: &Meta, agent: &str, task_id: Option<&str>) -> Result<Run,
     if agent_row.disabled {
         return Err(AgentError::Conflict(format!("agent '{agent}' is disabled")));
     }
-    let identity = Identity::new(format!("{}#{}", agent_row.identity, run_id)).map_err(|e| AgentError::Invalid(e.to_string()))?;
+    let identity =
+        Identity::new(format!("{}#{}", agent_row.identity, run_id)).map_err(|e| AgentError::Invalid(e.to_string()))?;
     meta.write(|tx| {
         if let Some(t) = task_id {
             crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;

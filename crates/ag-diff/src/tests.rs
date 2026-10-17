@@ -31,22 +31,10 @@ fn equal_inputs_have_no_hunks() {
 
 #[test]
 fn simple_cases() {
-    assert_eq!(
-        diff_hunks(&[1, 2, 3], &[1, 9, 3]),
-        vec![Hunk { a_start: 1, a_len: 1, b_start: 1, b_len: 1 }]
-    );
-    assert_eq!(
-        diff_hunks(&[1, 2, 3], &[1, 2, 3, 4]),
-        vec![Hunk { a_start: 3, a_len: 0, b_start: 3, b_len: 1 }]
-    );
-    assert_eq!(
-        diff_hunks(&[], &[1, 2]),
-        vec![Hunk { a_start: 0, a_len: 0, b_start: 0, b_len: 2 }]
-    );
-    assert_eq!(
-        diff_hunks(&[1, 2], &[]),
-        vec![Hunk { a_start: 0, a_len: 2, b_start: 0, b_len: 0 }]
-    );
+    assert_eq!(diff_hunks(&[1, 2, 3], &[1, 9, 3]), vec![Hunk { a_start: 1, a_len: 1, b_start: 1, b_len: 1 }]);
+    assert_eq!(diff_hunks(&[1, 2, 3], &[1, 2, 3, 4]), vec![Hunk { a_start: 3, a_len: 0, b_start: 3, b_len: 1 }]);
+    assert_eq!(diff_hunks(&[], &[1, 2]), vec![Hunk { a_start: 0, a_len: 0, b_start: 0, b_len: 2 }]);
+    assert_eq!(diff_hunks(&[1, 2], &[]), vec![Hunk { a_start: 0, a_len: 2, b_start: 0, b_len: 0 }]);
 }
 
 #[test]

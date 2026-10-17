@@ -42,12 +42,17 @@ impl Tx<'_> {
             max_gen = max_gen.max(g);
         }
         let generation = max_gen + 1;
+        // Depth along first parents: the keyframe schedule of the derived-tree cache.
+        let fp_depth = match cs.first_parent() {
+            Some(p) => self.fp_depth(&p)?.ok_or(MetaError::ParentNotReady(p))? + 1,
+            None => 1,
+        };
         if generation > self.limits.max_dag_depth {
             return Err(MetaError::Invalid(format!("history deeper than {} changesets", self.limits.max_dag_depth)));
         }
         self.conn.execute(
-            "INSERT INTO changesets (id, generation, author, ts, first_parent, parent_count, ready_at, summary)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO changesets (id, generation, fp_depth, author, ts, first_parent, parent_count, ready_at, summary)
+             VALUES (?1, ?2, ?9, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 id.to_hex(),
                 generation as i64,
@@ -57,6 +62,7 @@ impl Tx<'_> {
                 cs.parents.len() as i64,
                 self.now().as_millis(),
                 summary_of(&cs.message),
+                fp_depth as i64,
             ],
         )?;
         for (i, p) in cs.parents.iter().enumerate() {
@@ -87,6 +93,15 @@ impl Tx<'_> {
             .map(|g| g as u64))
     }
 
+    /// Depth of the first-parent chain ending at a published changeset (1 for roots).
+    pub fn fp_depth(&self, id: &ChangesetId) -> Result<Option<u64>, MetaError> {
+        Ok(self
+            .conn
+            .query_row("SELECT fp_depth FROM changesets WHERE id = ?1", [id.to_hex()], |r| r.get::<_, i64>(0))
+            .optional()?
+            .map(|g| g as u64))
+    }
+
     /// True if the changeset is published.
     pub fn is_ready(&self, id: &ChangesetId) -> Result<bool, MetaError> {
         Ok(self.generation(id)?.is_some())
@@ -94,9 +109,8 @@ impl Tx<'_> {
 
     /// Ordered parents of a published changeset.
     pub fn parents(&self, id: &ChangesetId) -> Result<Vec<ChangesetId>, MetaError> {
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT parent FROM changeset_parents WHERE child = ?1 ORDER BY ord")?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT parent FROM changeset_parents WHERE child = ?1 ORDER BY ord")?;
         let rows = stmt.query_map([id.to_hex()], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
         for r in rows {
@@ -112,7 +126,15 @@ impl Tx<'_> {
             .query_row(
                 "SELECT generation, author, ts, ready_at, summary FROM changesets WHERE id = ?1",
                 [id.to_hex()],
-                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?, r.get::<_, i64>(3)?, r.get::<_, String>(4)?)),
+                |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                        r.get::<_, i64>(3)?,
+                        r.get::<_, String>(4)?,
+                    ))
+                },
             )
             .optional()?;
         let Some((generation, author, t, ready_at, summary)) = row else { return Ok(None) };
@@ -132,9 +154,8 @@ impl Tx<'_> {
         if prefix.is_empty() || !prefix.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
             return Err(MetaError::Invalid(format!("'{prefix}' is not a hex prefix")));
         }
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT id FROM changesets WHERE id >= ?1 AND id < ?2 ORDER BY id LIMIT ?3")?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT id FROM changesets WHERE id >= ?1 AND id < ?2 ORDER BY id LIMIT ?3")?;
         // id range scan: [prefix, prefix + 'g') since 'g' sorts after every hex digit
         let upper = format!("{prefix}g");
         let rows = stmt.query_map(params![prefix, upper, limit as i64], |r| r.get::<_, String>(0))?;
@@ -147,9 +168,8 @@ impl Tx<'_> {
 
     /// Paths touched by a changeset, with the operation kind.
     pub fn changeset_paths(&self, id: &ChangesetId) -> Result<Vec<(String, String)>, MetaError> {
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT path, op FROM changeset_paths WHERE changeset = ?1 ORDER BY path")?;
+        let mut stmt =
+            self.conn.prepare_cached("SELECT path, op FROM changeset_paths WHERE changeset = ?1 ORDER BY path")?;
         let rows = stmt.query_map([id.to_hex()], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }

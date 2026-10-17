@@ -235,8 +235,8 @@ impl KeyPair {
                 return Err(CryptoError::InsecurePermissions(path.display().to_string()));
             }
         }
-        let file: KeyFile = serde_json::from_slice(&std::fs::read(path)?)
-            .map_err(|e| CryptoError::InvalidKeyFile(e.to_string()))?;
+        let file: KeyFile =
+            serde_json::from_slice(&std::fs::read(path)?).map_err(|e| CryptoError::InvalidKeyFile(e.to_string()))?;
         if file.version != 1 || file.algorithm != "ed25519" {
             return Err(CryptoError::InvalidKeyFile("unsupported version or algorithm".into()));
         }

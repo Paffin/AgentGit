@@ -43,15 +43,9 @@ fn rejects_delete_missing_and_noop_put() {
 #[test]
 fn file_directory_conflicts() {
     let t = tree(vec![put("a", "1")]);
-    assert!(matches!(
-        t.apply(&[put("a/b", "2")], &lim()),
-        Err(TreeError::FileDirectoryConflict { .. })
-    ));
+    assert!(matches!(t.apply(&[put("a/b", "2")], &lim()), Err(TreeError::FileDirectoryConflict { .. })));
     let t = tree(vec![put("a/b", "1")]);
-    assert!(matches!(
-        t.apply(&[put("a", "2")], &lim()),
-        Err(TreeError::FileDirectoryConflict { .. })
-    ));
+    assert!(matches!(t.apply(&[put("a", "2")], &lim()), Err(TreeError::FileDirectoryConflict { .. })));
     // replacing a directory by a file in one changeset is fine
     let ok = t.apply(&[del("a/b"), put("a", "2")], &lim()).unwrap();
     assert_eq!(ok.len(), 1);
@@ -101,10 +95,7 @@ fn encode_decode_roundtrip_and_strictness() {
     for path in ["a", "a/b"] {
         w.str(path).u8(0).u8(0).fixed32(hash_blob(b"x").as_bytes());
     }
-    assert!(matches!(
-        Tree::decode(&w.finish(), &lim()),
-        Err(TreeError::FileDirectoryConflict { .. })
-    ));
+    assert!(matches!(Tree::decode(&w.finish(), &lim()), Err(TreeError::FileDirectoryConflict { .. })));
 
     // out-of-order manifest is rejected
     let mut w = Writer::new();
@@ -179,15 +170,9 @@ fn resolve_tree_reports_invalid_history() {
     let h = MemoryHistory::new();
     // changeset deleting something that never existed
     let bad = commit(&h, vec![], vec![del("ghost")]);
-    assert!(matches!(
-        resolve_tree(&h, &NoCache, &bad, &lim()),
-        Err(TreeError::DeleteMissing(_))
-    ));
+    assert!(matches!(resolve_tree(&h, &NoCache, &bad, &lim()), Err(TreeError::DeleteMissing(_))));
     let missing = ChangesetId::new(ObjectId::from_bytes([9; 32]));
-    assert!(matches!(
-        resolve_tree(&h, &NoCache, &missing, &lim()),
-        Err(TreeError::Source(SourceError::NotFound(_)))
-    ));
+    assert!(matches!(resolve_tree(&h, &NoCache, &missing, &lim()), Err(TreeError::Source(SourceError::NotFound(_)))));
 }
 
 #[test]

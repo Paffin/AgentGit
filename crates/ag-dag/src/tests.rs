@@ -49,13 +49,8 @@ fn naive_ancestors(g: &TestGraph, i: usize) -> BTreeSet<usize> {
 }
 
 fn naive_merge_bases(g: &TestGraph, a: usize, b: usize) -> BTreeSet<usize> {
-    let common: BTreeSet<usize> =
-        naive_ancestors(g, a).intersection(&naive_ancestors(g, b)).copied().collect();
-    common
-        .iter()
-        .filter(|c| !common.iter().any(|o| o != *c && naive_ancestors(g, *o).contains(c)))
-        .copied()
-        .collect()
+    let common: BTreeSet<usize> = naive_ancestors(g, a).intersection(&naive_ancestors(g, b)).copied().collect();
+    common.iter().filter(|c| !common.iter().any(|o| o != *c && naive_ancestors(g, *o).contains(c))).copied().collect()
 }
 
 #[test]
@@ -80,11 +75,11 @@ fn criss_cross_has_two_bases() {
     // a = merge(1,2), b = merge(1,2) differently
     let g = TestGraph {
         parents: vec![
-            vec![],        // 0 root
-            vec![0],       // 1
-            vec![0],       // 2
-            vec![1, 2],    // 3 = a
-            vec![2, 1],    // 4 = b
+            vec![],     // 0 root
+            vec![0],    // 1
+            vec![0],    // 2
+            vec![1, 2], // 3 = a
+            vec![2, 1], // 4 = b
         ],
     };
     let bases = merge_bases(&g, &nid(3), &nid(4)).unwrap();

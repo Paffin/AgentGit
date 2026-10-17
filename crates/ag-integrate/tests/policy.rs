@@ -227,13 +227,14 @@ fn agent_autonomy_envelope_and_provenance() {
     let dir = tempfile::tempdir().unwrap();
     let keys = KeyStore::open(dir.path().join("keys")).unwrap();
     registry::register_agent(f.repo.meta(), &keys, "docbot", "agent", "user:admin").unwrap();
-    f.repo.set_policy(
-        "main",
-        r#"{"agent_autonomy":{"auto_integrate":true,"allowed_paths":["docs/**"],"max_files":3},
+    f.repo
+        .set_policy(
+            "main",
+            r#"{"agent_autonomy":{"auto_integrate":true,"allowed_paths":["docs/**"],"max_files":3},
             "require_provenance_for_agents":true}"#,
-        &id("user:alice"),
-    )
-    .unwrap();
+            &id("user:alice"),
+        )
+        .unwrap();
     let base = f.land(None, &[("src/lib.rs", "fn main() {}"), ("docs/a.md", "a")]);
 
     let run = registry::start_run(f.repo.meta(), "docbot", None).unwrap();
@@ -251,7 +252,11 @@ fn agent_autonomy_envelope_and_provenance() {
     rec.task_id = None;
     provenance::attach(f.repo.meta(), &keys, "docbot", &rec).unwrap();
     let r = f.integrate(&p, who);
-    assert!(matches!(r.outcome, Outcome::Integrated { .. }), "autonomous docs change lands without approval: {:?}", r.outcome);
+    assert!(
+        matches!(r.outcome, Outcome::Integrated { .. }),
+        "autonomous docs change lands without approval: {:?}",
+        r.outcome
+    );
 
     // outside the envelope (touches src/): the agent may not integrate, and needs a human
     let head = f.head().unwrap();
@@ -261,7 +266,11 @@ fn agent_autonomy_envelope_and_provenance() {
     rec2.model = Some("example-model".into());
     provenance::attach(f.repo.meta(), &keys, "docbot", &rec2).unwrap();
     let r = f.integrate(&p2, who);
-    assert!(matches!(r.outcome, Outcome::Denied { .. }), "the agent itself may not integrate src/ changes: {:?}", r.outcome);
+    assert!(
+        matches!(r.outcome, Outcome::Denied { .. }),
+        "the agent itself may not integrate src/ changes: {:?}",
+        r.outcome
+    );
     let r = f.integrate(&p2, "user:alice");
     assert_eq!(r.state, IntentState::Blocked, "a human integrator still needs a human approval");
     f.repo.review(&p2, &id("user:carol"), "approve", "reviewed").unwrap();
@@ -286,11 +295,24 @@ fn exclusive_leases_gate_integration_with_fencing_tokens() {
     let ca = f.snap(Some(base), &[("src/a.rs", "a-was-here"), ("docs/x.md", "x")], "agent:a#run_1");
     let pa = f.propose(ca, "a", "agent:a#run_1");
     f.repo.review(&pa, &id("user:carol"), "approve", "").unwrap();
-    let no_token = f.repo.integrate(&IntegrateRequest { proposal_id: pa.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![] }).unwrap();
+    let no_token = f
+        .repo
+        .integrate(&IntegrateRequest {
+            proposal_id: pa.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        })
+        .unwrap();
     assert_eq!(no_token.state, IntentState::Blocked);
     let with = f
         .repo
-        .integrate(&IntegrateRequest { proposal_id: pa.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![l.token] })
+        .integrate(&IntegrateRequest {
+            proposal_id: pa.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![l.token],
+        })
         .unwrap();
     assert!(matches!(with.outcome, Outcome::Integrated { .. }), "{:?}", with.outcome);
 
@@ -300,10 +322,19 @@ fn exclusive_leases_gate_integration_with_fencing_tokens() {
     assert!(l2.token > l.token);
     let r = f
         .repo
-        .integrate(&IntegrateRequest { proposal_id: pb.clone(), actor: id("user:alice"), idempotency_key: None, fencing_tokens: vec![l2.token] })
+        .integrate(&IntegrateRequest {
+            proposal_id: pb.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![l2.token],
+        })
         .unwrap();
     // b's change conflicts textually with a's (both edit src/a.rs from the same base) — the lease gate passed
-    assert!(matches!(r.outcome, Outcome::Conflict { .. }), "lease satisfied; the merge itself conflicts: {:?}", r.outcome);
+    assert!(
+        matches!(r.outcome, Outcome::Conflict { .. }),
+        "lease satisfied; the merge itself conflicts: {:?}",
+        r.outcome
+    );
 }
 
 #[test]

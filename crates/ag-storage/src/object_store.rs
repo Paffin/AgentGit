@@ -166,8 +166,8 @@ impl ObjectStore for MemoryObjectStore {
     fn get(&self, id: &ObjectId) -> Result<Option<RawObject>, StoreError> {
         let g = self.objects.read().expect("lock");
         let Some((bytes, _)) = g.get(id) else { return Ok(None) };
-        let obj = RawObject::decode_envelope(bytes)
-            .map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
+        let obj =
+            RawObject::decode_envelope(bytes).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         obj.verify(id).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         Ok(Some(obj))
     }
@@ -244,8 +244,8 @@ impl FsObjectStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.into()),
         };
-        let obj = RawObject::decode_envelope(&bytes)
-            .map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
+        let obj =
+            RawObject::decode_envelope(&bytes).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         obj.verify(id).map_err(|e| StoreError::Corrupt { id: *id, reason: e.to_string() })?;
         Ok(Some(obj))
     }

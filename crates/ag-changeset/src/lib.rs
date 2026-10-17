@@ -31,9 +31,7 @@
 
 use ag_object::canon::{CanonError, Reader, Writer};
 use ag_object::{ObjectKind, RawObject};
-use ag_types::{
-    BlobId, ChangesetId, FileType, Identity, Limits, Namespace, RepoPath, Timestamp,
-};
+use ag_types::{BlobId, ChangesetId, FileType, Identity, Limits, Namespace, RepoPath, Timestamp};
 
 /// The changeset format version implemented by this crate.
 pub const FORMAT_VERSION: u16 = 1;
@@ -219,8 +217,7 @@ impl Changeset {
         if version != FORMAT_VERSION {
             return Err(ChangesetError::UnsupportedVersion(version));
         }
-        let namespace =
-            Namespace::new(r.str(MAX_NAMESPACE_LEN)?).map_err(|e| invalid("namespace", e))?;
+        let namespace = Namespace::new(r.str(MAX_NAMESPACE_LEN)?).map_err(|e| invalid("namespace", e))?;
         let n_parents = r.bounded_varint(limits.max_parents as u64)? as usize;
         let mut parents = Vec::with_capacity(n_parents);
         for _ in 0..n_parents {
@@ -233,12 +230,10 @@ impl Changeset {
         let mut ops = Vec::with_capacity(n_ops.min(4096));
         for _ in 0..n_ops {
             let tag = r.u8()?;
-            let path = RepoPath::new(r.str(ag_types::path_limits::MAX_PATH_LEN)?)
-                .map_err(|e| invalid("path", e))?;
+            let path = RepoPath::new(r.str(ag_types::path_limits::MAX_PATH_LEN)?).map_err(|e| invalid("path", e))?;
             match tag {
                 TAG_PUT => {
-                    let file_type = FileType::from_tag(r.u8()?)
-                        .ok_or_else(|| invalid("file_type", "unknown tag"))?;
+                    let file_type = FileType::from_tag(r.u8()?).ok_or_else(|| invalid("file_type", "unknown tag"))?;
                     let executable = match r.u8()? {
                         0 => false,
                         1 => true,

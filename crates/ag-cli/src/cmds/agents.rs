@@ -82,21 +82,37 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
         AgentCmd::Register { name, role } => {
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let row = registry::register_agent(meta, &keys, name, role, ctx.me.as_str())?;
-            ctx.out(&row, || format!("Registered {} (key {}). Its private key is {}.", row.identity, &row.public_key[..16], keys.path(name).display()))?;
+            ctx.out(&row, || {
+                format!(
+                    "Registered {} (key {}). Its private key is {}.",
+                    row.identity,
+                    &row.public_key[..16],
+                    keys.path(name).display()
+                )
+            })?;
         }
         AgentCmd::List => {
             let rows = meta.read(|tx| tx.agents())?;
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for r in &rows {
-                    let _ = writeln!(s, "{:<20} {:<8} key {}{}", r.identity, r.role, &r.public_key[..16], if r.disabled { "  [disabled]" } else { "" });
+                    let _ = writeln!(
+                        s,
+                        "{:<20} {:<8} key {}{}",
+                        r.identity,
+                        r.role,
+                        &r.public_key[..16],
+                        if r.disabled { "  [disabled]" } else { "" }
+                    );
                 }
                 s
             })?;
         }
         AgentCmd::Start { name, task } => {
             let run = registry::start_run(meta, name, task.as_deref())?;
-            ctx.out(&json!({"run_id": run.run_id, "identity": run.identity}), || format!("Run {}\nAct as: {}\n  export AG_IDENTITY={}", run.run_id, run.identity, run.identity))?;
+            ctx.out(&json!({"run_id": run.run_id, "identity": run.identity}), || {
+                format!("Run {}\nAct as: {}\n  export AG_IDENTITY={}", run.run_id, run.identity, run.identity)
+            })?;
         }
         AgentCmd::Finish { run, status, message } => {
             registry::finish_run(meta, run, status, message.as_deref())?;
@@ -111,14 +127,28 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for r in &rows {
-                    let _ = writeln!(s, "{}  {:<10} {:<12} task {}  heartbeat {}", r.run_id, r.status, r.agent, r.task_id.clone().unwrap_or_else(|| "-".into()), r.last_heartbeat);
+                    let _ = writeln!(
+                        s,
+                        "{}  {:<10} {:<12} task {}  heartbeat {}",
+                        r.run_id,
+                        r.status,
+                        r.agent,
+                        r.task_id.clone().unwrap_or_else(|| "-".into()),
+                        r.last_heartbeat
+                    );
                 }
                 s
             })?;
         }
         AgentCmd::Reap { timeout } => {
             let reaped = registry::reap_stale_runs(meta, parse_duration_ms(timeout)?, ctx.me.as_str())?;
-            ctx.out(&reaped, || format!("Abandoned {} run(s){}", reaped.len(), reaped.iter().map(|r| format!("\n  {r}")).collect::<String>()))?;
+            ctx.out(&reaped, || {
+                format!(
+                    "Abandoned {} run(s){}",
+                    reaped.len(),
+                    reaped.iter().map(|r| format!("\n  {r}")).collect::<String>()
+                )
+            })?;
         }
         AgentCmd::Disable { name } => {
             meta.write(|tx| {
@@ -187,7 +217,15 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
     let print = |rows: &Vec<ag_storage::meta::TaskRow>| {
         let mut s = String::new();
         for t in rows {
-            let _ = writeln!(s, "{}  {:<11} {}  owner {}  scope [{}]", t.id, t.state, t.title, t.owner.clone().unwrap_or_else(|| "-".into()), t.scope.join(", "));
+            let _ = writeln!(
+                s,
+                "{}  {:<11} {}  owner {}  scope [{}]",
+                t.id,
+                t.state,
+                t.title,
+                t.owner.clone().unwrap_or_else(|| "-".into()),
+                t.scope.join(", ")
+            );
         }
         s
     };
@@ -263,11 +301,17 @@ pub fn lease(ctx: &Ctx, cmd: &LeaseCmd) -> Result<u8> {
     let meta = ctx.repo.meta();
     match cmd {
         LeaseCmd::Acquire { scope, exclusive, ttl, task } => {
-            let got = leases::acquire(meta, scope, ctx.me.as_str(), *exclusive, parse_duration_ms(ttl)?, task.as_deref())?;
+            let got =
+                leases::acquire(meta, scope, ctx.me.as_str(), *exclusive, parse_duration_ms(ttl)?, task.as_deref())?;
             ctx.out(&got, || {
                 let mut s = format!(
                     "{} lease {} on '{}' until {}\nfencing token: {}   (pass `--fencing-token {}` to `ag integrate`)",
-                    if got.lease.exclusive { "Exclusive" } else { "Soft" }, got.lease.id, got.lease.scope, got.lease.expires_at, got.lease.token, got.lease.token
+                    if got.lease.exclusive { "Exclusive" } else { "Soft" },
+                    got.lease.id,
+                    got.lease.scope,
+                    got.lease.expires_at,
+                    got.lease.token,
+                    got.lease.token
                 );
                 for o in &got.overlaps {
                     let _ = write!(s, "\nwarning: overlaps {} on '{}' held by {}", o.id, o.scope, o.holder);
@@ -289,8 +333,24 @@ pub fn lease(ctx: &Ctx, cmd: &LeaseCmd) -> Result<u8> {
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for l in &rows {
-                    let status = if l.released_at.is_some() { "released" } else if l.is_active(now) { "active" } else { "expired" };
-                    let _ = writeln!(s, "{}  {:<8} {:<9} token {:<4} {}  {}  until {}", l.id, status, if l.exclusive { "exclusive" } else { "soft" }, l.token, l.scope, l.holder, l.expires_at);
+                    let status = if l.released_at.is_some() {
+                        "released"
+                    } else if l.is_active(now) {
+                        "active"
+                    } else {
+                        "expired"
+                    };
+                    let _ = writeln!(
+                        s,
+                        "{}  {:<8} {:<9} token {:<4} {}  {}  until {}",
+                        l.id,
+                        status,
+                        if l.exclusive { "exclusive" } else { "soft" },
+                        l.token,
+                        l.scope,
+                        l.holder,
+                        l.expires_at
+                    );
                 }
                 s
             })?;
@@ -361,7 +421,9 @@ pub fn provenance(ctx: &Ctx, cmd: &ProvCmd) -> Result<u8> {
             }
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let n = provenance::attach(ctx.repo.meta(), &keys, agent, &rec)?;
-            ctx.out(&json!({"record": n, "changeset": id}), || format!("Signed provenance record #{n} for {} by {}", id.short(), rec.agent))?;
+            ctx.out(&json!({"record": n, "changeset": id}), || {
+                format!("Signed provenance record #{n} for {} by {}", id.short(), rec.agent)
+            })?;
         }
         ProvCmd::Show { rev } => {
             let id = super::repo::rev_or_default(ctx, rev)?;
@@ -374,7 +436,17 @@ pub fn provenance(ctx: &Ctx, cmd: &ProvCmd) -> Result<u8> {
             ctx.out(&shown, || {
                 let mut s = String::new();
                 for r in &shown {
-                    let _ = writeln!(s, "#{} by {}  signature {}", r["id"], r["agent"].as_str().unwrap_or(""), if r["verified"] == true { "VALID".to_string() } else { format!("INVALID ({})", r["error"].as_str().unwrap_or("?")) });
+                    let _ = writeln!(
+                        s,
+                        "#{} by {}  signature {}",
+                        r["id"],
+                        r["agent"].as_str().unwrap_or(""),
+                        if r["verified"] == true {
+                            "VALID".to_string()
+                        } else {
+                            format!("INVALID ({})", r["error"].as_str().unwrap_or("?"))
+                        }
+                    );
                     let _ = writeln!(s, "{}", serde_json::to_string_pretty(&r["record"]).unwrap_or_default());
                 }
                 if s.is_empty() { "No provenance records.".into() } else { s }
@@ -399,7 +471,10 @@ pub fn predict(ctx: &Ctx, a: &PredictArgs) -> Result<u8> {
         if p.overlaps.is_empty() {
             return format!("No overlapping work detected on '{s}'.");
         }
-        let mut t = format!("{} overlap(s) on '{s}' (path-level signal; `ag preview` decides real conflicts):\n", p.overlaps.len());
+        let mut t = format!(
+            "{} overlap(s) on '{s}' (path-level signal; `ag preview` decides real conflicts):\n",
+            p.overlaps.len()
+        );
         for o in &p.overlaps {
             let _ = writeln!(t, "  {} <-> {}  [{}]  {}", o.a, o.b, o.kind, o.paths.join(", "));
         }

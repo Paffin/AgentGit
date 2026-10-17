@@ -101,7 +101,10 @@ pub fn scan(repo: &Repository, dir: &Path, rules: &IgnoreRules, store: bool) -> 
         children.sort_by_key(|c| c.file_name());
         for child in children {
             let name = child.file_name();
-            let name = name.to_str().ok_or_else(|| Error::Invalid(format!("non-UTF-8 file name in {}", abs.display())))?.to_string();
+            let name = name
+                .to_str()
+                .ok_or_else(|| Error::Invalid(format!("non-UTF-8 file name in {}", abs.display())))?
+                .to_string();
             let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
             if rules.is_ignored(&child_rel) {
                 continue;
@@ -112,13 +115,20 @@ pub fn scan(repo: &Repository, dir: &Path, rules: &IgnoreRules, store: bool) -> 
                 stack.push((child.path(), child_rel));
             } else if ft.is_symlink() {
                 let target = fs::read_link(child.path())?;
-                let target = target.to_str().ok_or_else(|| Error::Invalid(format!("non-UTF-8 symlink target at '{child_rel}'")))?;
+                let target = target
+                    .to_str()
+                    .ok_or_else(|| Error::Invalid(format!("non-UTF-8 symlink target at '{child_rel}'")))?;
                 let path = record_path(&child_rel)?;
-                let content = if store { repo.put_blob(target.as_bytes().to_vec())? } else { hash_blob(target.as_bytes()) };
+                let content =
+                    if store { repo.put_blob(target.as_bytes().to_vec())? } else { hash_blob(target.as_bytes()) };
                 entries.push((path, Entry { content, file_type: FileType::Symlink, executable: false }));
             } else if ft.is_file() {
                 if md.len() > repo.limits().max_blob_size {
-                    return Err(Error::Invalid(format!("'{child_rel}' is {} bytes, over the {} byte limit", md.len(), repo.limits().max_blob_size)));
+                    return Err(Error::Invalid(format!(
+                        "'{child_rel}' is {} bytes, over the {} byte limit",
+                        md.len(),
+                        repo.limits().max_blob_size
+                    )));
                 }
                 let path = record_path(&child_rel)?;
                 let data = fs::read(child.path())?;
@@ -134,7 +144,8 @@ pub fn scan(repo: &Repository, dir: &Path, rules: &IgnoreRules, store: bool) -> 
 }
 
 fn record_path(rel: &str) -> Result<RepoPath> {
-    RepoPath::new(rel).map_err(|e| Error::Invalid(format!("cannot record '{rel}': {e} (add it to .agignore to skip it)")))
+    RepoPath::new(rel)
+        .map_err(|e| Error::Invalid(format!("cannot record '{rel}': {e} (add it to .agignore to skip it)")))
 }
 
 #[cfg(unix)]
@@ -155,7 +166,9 @@ pub fn check_link_target(link_path: &RepoPath, target: &str) -> Result<()> {
         return Err(Error::UnsafePath(format!("symlink '{link_path}' has an empty or invalid target")));
     }
     if target.starts_with('/') || target.contains('\\') {
-        return Err(Error::UnsafePath(format!("symlink '{link_path}' has an absolute or non-portable target '{target}'")));
+        return Err(Error::UnsafePath(format!(
+            "symlink '{link_path}' has an absolute or non-portable target '{target}'"
+        )));
     }
     // Depth of the directory holding the link, relative to the root.
     let mut depth = link_path.components().count() as i64 - 1;
@@ -165,7 +178,9 @@ pub fn check_link_target(link_path: &RepoPath, target: &str) -> Result<()> {
             ".." => {
                 depth -= 1;
                 if depth < 0 {
-                    return Err(Error::UnsafePath(format!("symlink '{link_path}' -> '{target}' escapes the repository root")));
+                    return Err(Error::UnsafePath(format!(
+                        "symlink '{link_path}' -> '{target}' escapes the repository root"
+                    )));
                 }
             }
             _ => depth += 1,
@@ -186,7 +201,10 @@ fn safe_target(root: &Path, rel: &RepoPath) -> Result<PathBuf> {
             Ok(md) if md.file_type().is_dir() && !last => {}
             Ok(md) if last && !md.file_type().is_dir() => {}
             Ok(md) if md.file_type().is_symlink() && !last => {
-                return Err(Error::UnsafePath(format!("'{}' is a symlink; refusing to write through it", cur.display())));
+                return Err(Error::UnsafePath(format!(
+                    "'{}' is a symlink; refusing to write through it",
+                    cur.display()
+                )));
             }
             Ok(_) => {
                 return Err(Error::UnsafePath(format!("'{}' exists and has the wrong type", cur.display())));
@@ -207,7 +225,8 @@ fn write_entry(repo: &Repository, root: &Path, path: &RepoPath, entry: &Entry) -
     let data = repo.blob(&entry.content)?;
     match entry.file_type {
         FileType::Symlink => {
-            let t = std::str::from_utf8(&data).map_err(|_| Error::UnsafePath(format!("symlink '{path}' target is not UTF-8")))?;
+            let t = std::str::from_utf8(&data)
+                .map_err(|_| Error::UnsafePath(format!("symlink '{path}' target is not UTF-8")))?;
             check_link_target(path, t)?;
             match fs::symlink_metadata(&target) {
                 Ok(_) => fs::remove_file(&target)?,
@@ -277,7 +296,12 @@ pub fn update_dir(repo: &Repository, old: &Tree, new: &Tree, dest: &Path) -> Res
     }
     for op in &ops {
         if let Op::Put { path, content, file_type, executable } = op {
-            write_entry(repo, dest, path, &Entry { content: *content, file_type: *file_type, executable: *executable })?;
+            write_entry(
+                repo,
+                dest,
+                path,
+                &Entry { content: *content, file_type: *file_type, executable: *executable },
+            )?;
         }
     }
     Ok(())

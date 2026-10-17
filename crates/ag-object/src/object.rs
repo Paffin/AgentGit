@@ -139,11 +139,7 @@ impl RawObject {
     /// Checks that the object hashes to `expected`.
     pub fn verify(&self, expected: &ObjectId) -> Result<(), ObjectError> {
         let actual = self.id();
-        if &actual == expected {
-            Ok(())
-        } else {
-            Err(ObjectError::HashMismatch { expected: *expected, actual })
-        }
+        if &actual == expected { Ok(()) } else { Err(ObjectError::HashMismatch { expected: *expected, actual }) }
     }
 }
 
@@ -178,10 +174,7 @@ mod tests {
     fn rejects_malformed_envelopes() {
         assert_eq!(RawObject::decode_envelope(b"AG"), Err(ObjectError::Truncated));
         assert_eq!(RawObject::decode_envelope(b"XXXX\x01\x00\x01"), Err(ObjectError::BadMagic));
-        assert_eq!(
-            RawObject::decode_envelope(b"AGOB\x09\x00\x01"),
-            Err(ObjectError::UnknownKind(9))
-        );
+        assert_eq!(RawObject::decode_envelope(b"AGOB\x09\x00\x01"), Err(ObjectError::UnknownKind(9)));
     }
 
     #[test]
@@ -189,13 +182,7 @@ mod tests {
         // Golden values computed independently (Python hashlib) from the
         // preimage in the crate docs. Changing the hashing scheme is a
         // format break and must be a deliberate, versioned decision.
-        assert_eq!(
-            hash_blob(b"hello\n").to_hex(),
-            "6fdfa63ccd7aa33065dcfab8c0f7b1b605226c87833b50de3345f921122a4545"
-        );
-        assert_eq!(
-            hash_blob(b"").to_hex(),
-            "2a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b"
-        );
+        assert_eq!(hash_blob(b"hello\n").to_hex(), "6fdfa63ccd7aa33065dcfab8c0f7b1b605226c87833b50de3345f921122a4545");
+        assert_eq!(hash_blob(b"").to_hex(), "2a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b");
     }
 }

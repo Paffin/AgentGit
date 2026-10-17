@@ -62,7 +62,13 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
         PolicyCmd::Show { stream } => {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let (p, v) = ctx.repo.policy(&s)?;
-            ctx.out(&json!({"stream": s, "version": v, "policy": p}), || format!("# policy v{v} of stream '{s}'{}\n{}", if v == 0 { " (built-in default; nothing stored yet)" } else { "" }, p.to_json()))?;
+            ctx.out(&json!({"stream": s, "version": v, "policy": p}), || {
+                format!(
+                    "# policy v{v} of stream '{s}'{}\n{}",
+                    if v == 0 { " (built-in default; nothing stored yet)" } else { "" },
+                    p.to_json()
+                )
+            })?;
         }
         PolicyCmd::Set { file, stream } => {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
@@ -76,7 +82,8 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
             ctx.out(&h, || {
                 let mut t = String::new();
                 for r in &h {
-                    let _ = writeln!(t, "v{:<3} {}  {}  by {}", r.version, &r.doc_hash[..12], r.created_at, r.created_by);
+                    let _ =
+                        writeln!(t, "v{:<3} {}  {}  by {}", r.version, &r.doc_hash[..12], r.created_at, r.created_by);
                 }
                 t
             })?;
@@ -144,7 +151,10 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
             let proposal = &prop.id;
             let pv = ctx.repo.merge_preview(proposal)?;
             if !pv.conflicts.is_empty() || pv.problem.is_some() {
-                bail!("the proposal cannot be integrated as it stands ({}); fix that before validating", pv.problem.unwrap_or_else(|| format!("{} conflict(s)", pv.conflicts.len())));
+                bail!(
+                    "the proposal cannot be integrated as it stands ({}); fix that before validating",
+                    pv.problem.unwrap_or_else(|| format!("{} conflict(s)", pv.conflicts.len()))
+                );
             }
             let tree = pv.tree.ok_or_else(|| anyhow!("nothing to validate: the proposal is already integrated"))?;
             let tree_id = tree.id();
@@ -195,7 +205,15 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
                 ctx.repo.clock().now(),
             )?;
             ctx.repo.submit_attestation(&att)?;
-            ctx.out(&att, || format!("check '{check}' {} on tree {} (policy v{policy_version}); attestation {} signed by {}", if passed { "PASSED" } else { "FAILED" }, tree_id.short(), att.id, att.issuer))?;
+            ctx.out(&att, || {
+                format!(
+                    "check '{check}' {} on tree {} (policy v{policy_version}); attestation {} signed by {}",
+                    if passed { "PASSED" } else { "FAILED" },
+                    tree_id.short(),
+                    att.id,
+                    att.issuer
+                )
+            })?;
             return Ok(if passed { exit::OK } else { exit::REFUSED });
         }
         ValidateCmd::List { tree } => {
@@ -204,7 +222,11 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for r in &rows {
-                    let _ = writeln!(s, "{}  {:<6} {:<4} policy v{}  {}  {}", r.id, r.check_name, r.result, r.policy_version, r.issuer, r.issued_at);
+                    let _ = writeln!(
+                        s,
+                        "{}  {:<6} {:<4} policy v{}  {}  {}",
+                        r.id, r.check_name, r.result, r.policy_version, r.issuer, r.issued_at
+                    );
                 }
                 s
             })?;

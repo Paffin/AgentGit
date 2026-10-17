@@ -77,6 +77,12 @@ Every refusal says *what is missing*, and exit codes tell scripts and agents wha
 | **Trustworthy history** | Content-addressed immutable changesets, verified on every read; append-only reflog; hash-chained audit log; `ag verify` for the whole repository. |
 | **Safe operations** | GC that fails closed and cannot delete what a writer just referenced; consistent verified backups; disposable, rebuildable indexes. |
 | **Git as an adapter** | `ag git import` / `export` — trees round-trip with identical Git SHAs. |
+| **A network server** | `ag-server` serves one protocol (AGWP v1) over gRPC and HTTP/JSON on one port: OIDC or scoped, expiring credentials, per-repository RBAC, quotas and rate limits, live events (SSE), PostgreSQL + S3 storage, Prometheus metrics and OpenTelemetry traces. Policy is now enforced against clients you do not control. |
+| **Isolated execution** | `ag-worker` claims validation jobs, runs the policy's command in an `ag-sandbox` sandbox (rootless namespaces, or a container) and signs the result for the exact tree. |
+| **History that understands moves** | Rename-aware merge (a file moved on one side and edited on the other just merges), line-level `ag blame` that follows renames, `clone` / `fetch` / `pull` / `push`, and a fully local offline workflow. |
+| **Around the core** | A [Web UI](docs/guides/web-ui.md) built around live agent work, [TypeScript and Python SDKs](docs/guides/sdks.md), and a Go [agent platform](docs/guides/orchestrator.md) (scheduler, sessions, conflict advisor, reviewers, semantic index) that can propose but never integrate. |
+
+![The live board: runs, leases, tasks, the merge queue and four independent verdicts per proposal](docs/assets/ui-board.png)
 
 ## Install
 
@@ -101,6 +107,24 @@ ag log
 
 Then add a [policy](docs/guides/policy.md), start an [agent](docs/guides/agents.md), or run the whole story:
 `./examples/quickstart.sh`. Full walkthrough: [Getting started](docs/getting-started.md).
+
+## Run it as a server
+
+```bash
+cargo install --path crates/ag-server
+export AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)          # the first administrator's credential
+ag-server admin --data-dir ./ag-data create-repo acme/web
+ag-server admin --data-dir ./ag-data grant --subject user:alice --repo 'acme/*' --role admin
+export AG_TOKEN=$(ag-server admin --data-dir ./ag-data mint --subject user:alice --ttl 86400 | tail -n 1)
+ag-server serve --data-dir ./ag-data &                      # 127.0.0.1:8080, gRPC + HTTP/JSON
+ag clone http://127.0.0.1:8080/acme/web web && cd web      # then edit, `ag snapshot`, `ag push`
+```
+
+[Deployment](docs/operations/deployment.md) covers Docker, Compose (with PostgreSQL and MinIO), Kubernetes,
+TLS and secrets; [Observability](docs/operations/observability.md) the metrics, alerts, dashboards and traces;
+the [Remote guide](docs/guides/remote.md) the CLI workflow; the [AGWP reference](docs/protocol/agwp-v1.md) and
+[`openapi.json`](docs/protocol/openapi.json) the protocol. What has and has not been exercised in a real
+deployment is stated on the deployment page.
 
 ## How it works
 
@@ -145,17 +169,19 @@ Claims are only worth what proves them. Each links to a test in this repository.
 | A checkout cannot escape its directory or plant `.git` | `checkout_refuses_to_write_through_symlinked_directories`, `hostile_git_content_cannot_escape_or_plant_dot_git` |
 | Tampering with the audit log or objects is detected | `audit_chain_detects_tampering`, `fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage` |
 
-All of it: `cargo test --workspace` (more than 200 tests, a few seconds). The threat model, controls and
-known limits: [Security](docs/architecture/security.md).
+All of it: `cargo test --workspace` (about 550 tests, a few minutes), plus the SDK, Web UI and orchestrator
+suites, which run against a real `ag-server`. The threat model, controls and known limits:
+[Security](docs/architecture/security.md).
 
 ## Documentation
 
 | | |
 |---|---|
 | Start | [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) |
-| Guides | [Agents](docs/guides/agents.md) · [Policy](docs/guides/policy.md) · [Validation](docs/guides/validation.md) · [Git bridge](docs/guides/git-bridge.md) |
-| Reference | [CLI](docs/reference/cli.md) *(generated)* · [Object formats](docs/architecture/object-format.md) · [Protocol status](docs/protocol/README.md) |
-| Operations | [Durability & backup](docs/operations/durability.md) · [GC & retention](docs/operations/gc-and-retention.md) · [Troubleshooting](docs/operations/troubleshooting.md) |
+| Guides | [Agents](docs/guides/agents.md) · [Policy](docs/guides/policy.md) · [Validation](docs/guides/validation.md) · [Workers](docs/guides/workers.md) · [Remote](docs/guides/remote.md) · [History](docs/guides/history.md) · [Git bridge](docs/guides/git-bridge.md) |
+| Clients | [Web UI](docs/guides/web-ui.md) · [SDKs](docs/guides/sdks.md) · [Orchestrator](docs/guides/orchestrator.md) |
+| Reference | [CLI](docs/reference/cli.md) *(generated)* · [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [Object formats](docs/architecture/object-format.md) |
+| Operations | [Deployment](docs/operations/deployment.md) · [Observability](docs/operations/observability.md) · [Releasing](docs/operations/releasing.md) · [PostgreSQL & S3](docs/operations/postgres-and-s3.md) · [Durability & backup](docs/operations/durability.md) · [GC & retention](docs/operations/gc-and-retention.md) · [Troubleshooting](docs/operations/troubleshooting.md) |
 | Design | [Overview](docs/architecture/overview.md) · [ADRs](docs/adr/) · [ADR traceability](docs/architecture/adr-traceability.md) |
 
 The docs are checked, not just written: the CLI reference is generated from `--help`, the demo above is
@@ -166,33 +192,55 @@ executed in CI, test names and commands mentioned in docs are verified against t
 
 | Crate | Role |
 |---|---|
-| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` | the deterministic core: formats, content IDs, history, merge |
-| `ag-storage` | object store + transactional metadata (SQLite) |
+| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` | the deterministic core: formats, content IDs, history, rename-aware merge |
+| `ag-storage` | object store (files or S3) + transactional metadata (SQLite or PostgreSQL) |
 | `ag-policy` · `ag-agent` | policy evaluation and signed attestations · agent coordination |
-| `ag-integrate` | the engine: publication, integration, workspaces, queue, GC, verify, backup |
+| `ag-integrate` | the engine: publication, integration, workspaces, queue, GC, verify, backup, blame |
+| `ag-protocol` · `ag-server` · `ag-client` | AGWP v1 (protobuf + JSON mapping) · the network server · the Rust gRPC client |
 | `ag-sandbox` · `ag-worker` | isolated execution of untrusted checks · the execution-plane worker that runs them and signs the result |
-| `ag-git` · `ag-cli` | Git bridge · the `ag` binary |
+| `ag-git` · `ag-cli` | Git bridge · the `ag` binary (local and remote) |
+
+| Directory | What |
+|---|---|
+| `apps/web` | the Web UI (Vue 3 + TypeScript) |
+| `sdk/typescript` · `sdk/python` | client SDKs generated from the OpenAPI document and tested against a real server |
+| `services/agent-orchestrator` | the agent platform (Go) |
+| `deploy/` | Dockerfile, Compose, Kubernetes, Prometheus / Grafana / OpenTelemetry files |
 
 ## Status and honest limits
 
-**Alpha (0.1).** The core and the guarantees above are implemented and tested; the surrounding platform is
-not built yet. Read this before relying on it:
+**Alpha.** The core and the guarantees above are implemented and tested, and so is the platform around it
+(server, storage backends, workers, Web UI, SDKs, orchestrator). It has not been run in production by
+anyone but its authors. Read this before relying on it:
 
 - **Local mode trusts the local user.** Identities are labels, not authentication; anyone who can write
-  `.ag/` can bypass policy (tampering is *detectable* through `ag verify` and the audit chain). Enforcing
-  identities across users needs the planned server.
-- **No network server, AGWP protocol, PostgreSQL/S3 backends, Web UI or SDKs yet** —
-  see the [roadmap](ROADMAP.md) and [ADR-0002](docs/adr/0002-embedded-engine-first.md) for why the engine
-  came first.
+  `.ag/` can bypass policy (tampering is *detectable* through `ag verify` and the audit chain). Against
+  clients you do not control, run `ag-server`: it authenticates every request and policy is enforced there.
+- **One server process per deployment.** The control database (credentials, roles, repository registry) is a
+  SQLite file, so `ag-server` runs as a single replica; PostgreSQL and S3 give repositories durable,
+  independently scalable storage, not an active-active server. No high-availability story yet.
+- **Credentials are bound to an agent *name*, not to one run** — two concurrent runs of the same agent can
+  act for each other. The orchestrator warns about it; the fix is on the [roadmap](ROADMAP.md).
+- **Deployment files are validated, not battle-tested.** Manifests, rules and configs are checked by tools
+  and tests in CI; the container images, `docker compose up`, a real cluster and the release workflow had not
+  been run by the author when this was written. [The deployment page](docs/operations/deployment.md) lists
+  exactly what has and has not been verified.
 - **`ag validate run` is not a sandbox.** Use it for trusted code. Untrusted code goes through an
   [`ag-worker`](docs/guides/workers.md) and its [sandbox](docs/architecture/sandbox.md) — which shares the host
-  kernel (it is not a VM) and has parts that are not yet verified; read that page before trusting it.
-- Flat tree manifests (fine for thousands of files — a 3 000-file, 1 500-commit repository integrates in
-  under a second — not yet for millions), no rename detection, no external security audit.
+  kernel (it is not a VM) and has parts that are not yet verified (the container backend, cgroup v2 limits,
+  macOS); read that page before trusting it.
+- **Scale.** Flat tree manifests: measured at 100 000 files, an integration takes a few hundred
+  milliseconds; hierarchical trees are deferred with explicit triggers ([ADR-0006](docs/adr/0006-flat-trees-measured.md)).
+  Rename detection is per file (no directory renames, no copies).
+- **Clients.** The Web UI is tested in Chromium on Linux only, at desktop width; the SDKs are not published
+  to npm or PyPI yet; the orchestrator's advisor, reviewers and semantic index are deterministic heuristics,
+  not models.
+- No external security audit.
 
-Good for: a team and its agents on one machine or shared volume, CI-gated workflows, experimenting with
-policy-bound agent autonomy, and building on a small deterministic core. Not (yet) for: hosting many
-untrusting users, or as your only copy of irreplaceable data — keep `ag backup`s and a Git mirror.
+Good for: a team and its agents on one machine, one server or one shared volume, CI-gated workflows,
+experimenting with policy-bound agent autonomy, and building on a small deterministic core. Not (yet) for:
+hosting many mutually untrusting tenants, high availability, or as your only copy of irreplaceable data —
+keep `ag backup`s and a Git mirror.
 
 ## Contributing
 

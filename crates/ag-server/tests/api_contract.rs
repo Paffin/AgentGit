@@ -217,3 +217,51 @@ async fn the_openapi_document_describes_the_raw_routes() {
     assert!(sse["responses"]["200"]["content"]["text/event-stream"].is_object(), "{sse}");
     srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn defaults_and_edges_found_by_the_web_ui_work() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+
+    // A repository without a single changeset lists as empty instead of failing.
+    for path in
+        ["/v1/repos/acme/web/tree/list?rev=main", "/v1/repos/acme/web/tree/list", "/v1/repos/acme/web/tree?rev=main"]
+    {
+        let r = admin.get(path).await;
+        assert_eq!(r.status, 200, "{path}: {}", r.json);
+        assert!(r.json["entries"].as_array().unwrap().is_empty(), "{path}");
+    }
+    // ... while a revision that does not exist, and a file in an empty tree, are still not found.
+    assert_eq!(admin.get("/v1/repos/acme/web/tree/list?rev=nope").await.status, 404);
+    assert_eq!(admin.get("/v1/repos/acme/web/files/a.txt?rev=main").await.status, 404);
+
+    // Policy reads default to the repository's default stream.
+    let by_default = admin.get("/v1/repos/acme/web/policy").await;
+    assert_eq!(by_default.status, 200, "{}", by_default.json);
+    assert_eq!(by_default.json["stream"], "main");
+    assert_eq!(admin.get("/v1/repos/acme/web/policy/history").await.status, 200);
+    // Writing a policy still names its stream explicitly.
+    let missing = admin.call("PUT", "/v1/repos/acme/web/policy", Some(json!({"document": "{}"})), &[]).await;
+    assert_eq!(missing.status, 400, "{}", missing.json);
+
+    // The audit filter finds entries by their action name too.
+    assert_eq!(admin.post("/v1/repos/acme/web/streams", json!({"name": "dev"})).await.status, 200);
+    let by_action = admin.get("/v1/repos/acme/web/audit?contains=STREAM.Create").await;
+    assert_eq!(by_action.status, 200, "{}", by_action.json);
+    assert!(!by_action.json["entries"].as_array().unwrap().is_empty(), "{}", by_action.json);
+
+    // An integrator may request validation for the proposals it is about to land.
+    let alice = user_with_role(&srv, "user:alice", "acme/web", "writer").await;
+    let carol = user_with_role(&srv, "user:carol", "acme/web", "integrator").await;
+    let c = Client::new("acme/web");
+    let (head, objs) = c.commit(vec![], "user:alice", "first", &[("a.txt", b"a")], 1_700_000_000_000);
+    upload(&alice, "acme/web", &objs).await;
+    let p = alice
+        .post("/v1/repos/acme/web/proposals", json!({"stream": "main", "head": head.to_string(), "title": "t"}))
+        .await;
+    let id = p.json["id"].as_str().unwrap();
+    let v = carol.post(&format!("/v1/repos/acme/web/proposals/{id}/validate"), json!({})).await;
+    assert_eq!(v.status, 200, "{}", v.json);
+    srv.stop().await;
+}

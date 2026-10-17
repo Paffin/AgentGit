@@ -57,6 +57,7 @@ export type Action = keyof typeof ACTION_ROLE
 const ALSO_ALLOWED: Partial<Record<Action, readonly Role[]>> = {
   enqueue: ['writer'],
   closeProposal: ['writer'],
+  requestValidation: ['integrator'],
 }
 
 export function mayDo(have: ReadonlySet<Role>, action: Action): boolean {

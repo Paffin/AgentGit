@@ -191,7 +191,7 @@ impl Role {
             }
             Role::Integrator => {
                 set.extend(reader);
-                set.extend([IntegrateRun, QueueWrite, QueueRun, ProposalClose]);
+                set.extend([IntegrateRun, IntegrateValidate, QueueWrite, QueueRun, ProposalClose]);
             }
             Role::Runner => {
                 set.extend(reader);

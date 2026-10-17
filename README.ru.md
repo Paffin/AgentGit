@@ -81,6 +81,12 @@ conflict: src/main.rs (content conflict (1 region(s)))                   # ко�
 | **История, которой можно верить** | Неизменяемые content-addressed changesets, проверка хеша при каждом чтении; append-only reflog; аудит с хеш-цепочкой; `ag verify` для всего репозитория. |
 | **Безопасная эксплуатация** | GC, который не удаляет достижимое и не теряет только что упомянутый объект; согласованные проверенные бэкапы; одноразовые, пересобираемые индексы. |
 | **Git как адаптер** | `ag git import` / `export` — деревья проходят round-trip с идентичными Git SHA. |
+| **Сетевой сервер** | `ag-server` отдаёт один протокол (AGWP v1) по gRPC и HTTP/JSON на одном порту: OIDC или scoped-credentials с коротким сроком жизни, RBAC на репозиторий, квоты и rate limit, живые события (SSE), хранилища PostgreSQL + S3, метрики Prometheus и трейсы OpenTelemetry. Политика теперь действует и против клиентов, которых вы не контролируете. |
+| **Изолированное исполнение** | `ag-worker` забирает задания на валидацию, запускает команду из политики в песочнице `ag-sandbox` (rootless-namespaces или контейнер) и подписывает результат для точного дерева. |
+| **История, понимающая перемещения** | Merge с учётом переименований (файл перенесли на одной стороне и правили на другой — он просто сливается), построчный `ag blame` с переходом через переименования, `clone` / `fetch` / `pull` / `push` и полностью локальная офлайн-работа. |
+| **Вокруг ядра** | [Web UI](docs/guides/web-ui.md) вокруг живой работы агентов, SDK на [TypeScript и Python](docs/guides/sdks.md) и платформа агентов на Go ([оркестратор](docs/guides/orchestrator.md): планировщик, сессии, советник по конфликтам, ревьюеры, семантический индекс), которая может предлагать, но не интегрировать. |
+
+![Живая доска: запуски, lease, задачи, очередь слияния и четыре независимых вердикта по каждому предложению](docs/assets/ui-board.png)
 
 ## Установка
 
@@ -105,6 +111,23 @@ ag log
 
 Дальше: [политика](docs/guides/policy.md), [агенты](docs/guides/agents.md) или вся история целиком:
 `./examples/quickstart.sh`. Подробно: [Getting started](docs/getting-started.md).
+
+## Запуск как сервера
+
+```bash
+cargo install --path crates/ag-server
+export AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)          # учётные данные первого администратора
+ag-server admin --data-dir ./ag-data create-repo acme/web
+ag-server admin --data-dir ./ag-data grant --subject user:alice --repo 'acme/*' --role admin
+export AG_TOKEN=$(ag-server admin --data-dir ./ag-data mint --subject user:alice --ttl 86400 | tail -n 1)
+ag-server serve --data-dir ./ag-data &                      # 127.0.0.1:8080, gRPC + HTTP/JSON
+ag clone http://127.0.0.1:8080/acme/web web && cd web      # дальше: правки, `ag snapshot`, `ag push`
+```
+
+[Развёртывание](docs/operations/deployment.md) (Docker, Compose с PostgreSQL и MinIO, Kubernetes, TLS, секреты),
+[наблюдаемость](docs/operations/observability.md), [работа с сервером из CLI](docs/guides/remote.md),
+[справочник AGWP](docs/protocol/agwp-v1.md) и [`openapi.json`](docs/protocol/openapi.json). Что из этого
+проверено в реальном развёртывании, а что нет, сказано на странице про развёртывание (на английском).
 
 ## Как это работает
 
@@ -149,17 +172,19 @@ flowchart LR
 | Checkout не выходит за свой каталог и не подсаживает `.git` | `checkout_refuses_to_write_through_symlinked_directories`, `hostile_git_content_cannot_escape_or_plant_dot_git` |
 | Подмена аудита или объектов обнаруживается | `audit_chain_detects_tampering`, `fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage` |
 
-Всё вместе: `cargo test --workspace` (больше 200 тестов, несколько секунд). Модель угроз, меры защиты и
-известные ограничения: [Security](docs/architecture/security.md).
+Всё вместе: `cargo test --workspace` (около 550 тестов, несколько минут), плюс наборы SDK, Web UI и
+оркестратора, которые идут против настоящего `ag-server`. Модель угроз, меры защиты и известные ограничения:
+[Security](docs/architecture/security.md).
 
 ## Документация
 
 | | |
 |---|---|
 | Начало | [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) |
-| Руководства | [Агенты](docs/guides/agents.md) · [Политики](docs/guides/policy.md) · [Валидация](docs/guides/validation.md) · [Git-мост](docs/guides/git-bridge.md) |
-| Справочник | [CLI](docs/reference/cli.md) *(генерируется)* · [Форматы объектов](docs/architecture/object-format.md) · [Статус протокола](docs/protocol/README.md) |
-| Эксплуатация | [Надёжность и бэкап](docs/operations/durability.md) · [GC и хранение](docs/operations/gc-and-retention.md) · [Диагностика](docs/operations/troubleshooting.md) |
+| Руководства | [Агенты](docs/guides/agents.md) · [Политики](docs/guides/policy.md) · [Валидация](docs/guides/validation.md) · [Воркеры](docs/guides/workers.md) · [Сервер из CLI](docs/guides/remote.md) · [История](docs/guides/history.md) · [Git-мост](docs/guides/git-bridge.md) |
+| Клиенты | [Web UI](docs/guides/web-ui.md) · [SDK](docs/guides/sdks.md) · [Оркестратор](docs/guides/orchestrator.md) |
+| Справочник | [CLI](docs/reference/cli.md) *(генерируется)* · [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [Форматы объектов](docs/architecture/object-format.md) |
+| Эксплуатация | [Развёртывание](docs/operations/deployment.md) · [Наблюдаемость](docs/operations/observability.md) · [Релизы](docs/operations/releasing.md) · [PostgreSQL и S3](docs/operations/postgres-and-s3.md) · [Надёжность и бэкап](docs/operations/durability.md) · [GC и хранение](docs/operations/gc-and-retention.md) · [Диагностика](docs/operations/troubleshooting.md) |
 | Дизайн | [Обзор](docs/architecture/overview.md) · [ADR](docs/adr/) · [Соответствие ADR реализации](docs/architecture/adr-traceability.md) |
 
 Документацию не только пишут, но и проверяют: справочник CLI генерируется из `--help`, демо выше выполняется
@@ -170,34 +195,55 @@ flowchart LR
 
 | Крейт | Роль |
 |---|---|
-| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` | детерминированное ядро: форматы, content ID, история, merge |
-| `ag-storage` | хранилище объектов + транзакционные метаданные (SQLite) |
+| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` | детерминированное ядро: форматы, content ID, история, merge с учётом переименований |
+| `ag-storage` | хранилище объектов (файлы или S3) + транзакционные метаданные (SQLite или PostgreSQL) |
 | `ag-policy` · `ag-agent` | вычисление политик и подписанные аттестации · координация агентов |
-| `ag-integrate` | движок: публикация, интеграция, workspaces, очередь, GC, verify, backup |
-| `ag-git` · `ag-cli` | Git-мост · бинарник `ag` |
+| `ag-integrate` | движок: публикация, интеграция, workspaces, очередь, GC, verify, backup, blame |
+| `ag-protocol` · `ag-server` · `ag-client` | AGWP v1 (protobuf + JSON-отображение) · сетевой сервер · gRPC-клиент на Rust |
+| `ag-sandbox` · `ag-worker` | изолированное исполнение недоверенных проверок · воркер, который их запускает и подписывает результат |
+| `ag-git` · `ag-cli` | Git-мост · бинарник `ag` (локальный и удалённый режим) |
+
+| Каталог | Что |
+|---|---|
+| `apps/web` | Web UI (Vue 3 + TypeScript) |
+| `sdk/typescript` · `sdk/python` | SDK, сгенерированные из документа OpenAPI и проверенные против настоящего сервера |
+| `services/agent-orchestrator` | платформа агентов (Go) |
+| `deploy/` | Dockerfile, Compose, Kubernetes, файлы Prometheus / Grafana / OpenTelemetry |
 
 ## Статус и честные ограничения
 
-**Alpha (0.1).** Ядро и перечисленные гарантии реализованы и протестированы; окружающая платформа ещё не
-построена. Прочитайте это, прежде чем полагаться на проект:
+**Alpha.** Ядро и перечисленные гарантии реализованы и протестированы; так же — окружающая платформа
+(сервер, бэкенды хранилищ, воркеры, Web UI, SDK, оркестратор). В продакшене проект не использовал никто, кроме
+его авторов. Прочитайте это, прежде чем полагаться на проект:
 
 - **Локальный режим доверяет локальному пользователю.** Идентичности — метки, а не аутентификация; кто может
   писать в `.ag/`, тот может обойти политику (подмена *обнаруживается* через `ag verify` и цепочку аудита).
-  Для принуждения между пользователями нужен запланированный сервер.
-- **Пока нет** сетевого сервера, протокола AGWP, бэкендов PostgreSQL/S3, Web UI и SDK — см. [roadmap](ROADMAP.md)
-  и [ADR-0002](docs/adr/0002-embedded-engine-first.md) о том, почему сначала движок.
+  Против клиентов, которых вы не контролируете, запускайте `ag-server`: он аутентифицирует каждый запрос, и
+  политика действует там.
+- **Один процесс сервера на развёртывание.** Контрольная база (credentials, роли, реестр репозиториев) — один
+  файл SQLite, поэтому `ag-server` работает в одной реплике; PostgreSQL и S3 дают репозиториям надёжное,
+  независимо масштабируемое хранилище, но не active-active сервер. Высокой доступности пока нет.
+- **Credentials привязаны к *имени* агента, а не к одному запуску:** два параллельных запуска одного агента могут
+  действовать друг за друга. Оркестратор предупреждает об этом; исправление есть в [roadmap](ROADMAP.md).
+- **Файлы развёртывания проверены инструментами, но не боем.** Манифесты, правила и конфиги проверяются
+  инструментами и тестами в CI; образы контейнеров, `docker compose up`, настоящий кластер и релизный workflow
+  на момент написания автором не запускались. [Страница про развёртывание](docs/operations/deployment.md)
+  перечисляет, что именно проверено, а что нет.
 - **`ag validate run` — не песочница.** Только для доверенного кода. Недоверенный код запускается через
   [`ag-worker`](docs/guides/workers.md) и его [песочницу](docs/architecture/sandbox.md): она делит ядро с хостом
-  (это не виртуальная машина), и часть её не проверена — прочитайте эту страницу (на английском) до того, как
-  на неё полагаться.
-- Плоские манифесты деревьев (тысячи файлов — нормально: репозиторий на 3 000 файлов и 1 500 коммитов
-  интегрируется быстрее секунды; миллионы — пока нет), нет определения переименований, внешнего аудита
-  безопасности не было.
+  (это не виртуальная машина), и часть её не проверена (контейнерный бэкенд, лимиты cgroup v2, macOS) —
+  прочитайте эту страницу (на английском) до того, как на неё полагаться.
+- **Масштаб.** Плоские манифесты деревьев: на 100 000 файлов интеграция занимает несколько сотен миллисекунд;
+  иерархические деревья отложены с явными условиями ([ADR-0006](docs/adr/0006-flat-trees-measured.md)).
+  Определение переименований — по файлам (без переименований каталогов и копий).
+- **Клиенты.** Web UI проверен только в Chromium на Linux при десктопной ширине; SDK ещё не опубликованы в
+  npm и PyPI; советник, ревьюеры и семантический индекс оркестратора — детерминированные эвристики, а не модели.
+- Внешнего аудита безопасности не было.
 
-Подходит для: команды и её агентов на одной машине или общем томе, процессов с CI-гейтами, экспериментов с
-автономностью агентов под политикой, разработки на небольшом детерминированном ядре. Пока не подходит для:
-хостинга многих недоверяющих друг другу пользователей и как единственная копия незаменимых данных — делайте
-`ag backup` и держите Git-зеркало.
+Подходит для: команды и её агентов на одной машине, одном сервере или общем томе, процессов с CI-гейтами,
+экспериментов с автономностью агентов под политикой, разработки на небольшом детерминированном ядре. Пока не
+подходит для: хостинга многих недоверяющих друг другу арендаторов, высокой доступности и как единственная
+копия незаменимых данных — делайте `ag backup` и держите Git-зеркало.
 
 ## Участие
 

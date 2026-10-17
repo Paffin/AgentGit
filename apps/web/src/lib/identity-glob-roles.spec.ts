@@ -91,6 +91,8 @@ describe('roles', () => {
   it('maps UI actions to roles', () => {
     const writer = new Set(['writer' as const])
     expect(mayDo(writer, 'requestValidation')).toBe(true)
+    expect(mayDo(new Set(['integrator' as const]), 'requestValidation')).toBe(true)
+    expect(mayDo(new Set(['reviewer' as const]), 'requestValidation')).toBe(false)
     expect(mayDo(writer, 'review')).toBe(false)
     expect(mayDo(writer, 'integrate')).toBe(false)
     expect(mayDo(writer, 'enqueue')).toBe(true)

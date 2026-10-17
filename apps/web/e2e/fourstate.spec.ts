@@ -85,11 +85,9 @@ test.describe('the four states of a proposal change independently', () => {
     )
 
     // Validation: asked for from the UI, run by the (real) execution plane, answered with a signed attestation.
-    // carol is an integrator and may not request validation; alice (a writer) does, in her own session.
-    await expect(page.getByTestId('act-validate')).toBeDisabled()
-    const alicePage = await openAs('alice')
-    await alicePage.goto(`/repos/${repo}/proposals/${proposal}`)
-    await alicePage.getByTestId('act-validate').click()
+    // carol is an integrator; requesting validation is part of getting a proposal ready to land.
+    await expect(page.getByTestId('act-validate')).toBeEnabled()
+    await page.getByTestId('act-validate').click()
     await expect(pill(page, 'validated')).toHaveAttribute('data-tone', 'pending', {
       timeout: 15_000,
     })

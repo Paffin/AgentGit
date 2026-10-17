@@ -16,7 +16,7 @@ impl App {
 
     /// The policy in force for a stream.
     pub async fn get_policy(&self, call: &Call, req: v1::GetPolicyRequest) -> ApiResult<v1::PolicyVersion> {
-        let stream = require(&req.stream, "stream")?.to_string();
+        let stream = self.stream_or_default(require(&req.repo, "repo")?, &req.stream).await?;
         let s = stream.clone();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::PolicyRead, Some(&stream), move |repo, _| {
             if repo.meta().read(|tx| tx.stream(&s))?.is_none() {
@@ -53,7 +53,7 @@ impl App {
         call: &Call,
         req: v1::PolicyHistoryRequest,
     ) -> ApiResult<v1::PolicyHistoryResponse> {
-        let stream = require(&req.stream, "stream")?.to_string();
+        let stream = self.stream_or_default(require(&req.repo, "repo")?, &req.stream).await?;
         let s = stream.clone();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::PolicyRead, Some(&stream), move |repo, _| {
             Ok(v1::PolicyHistoryResponse { versions: repo.policy_history(&s)?.iter().map(convert::policy).collect() })

@@ -12,35 +12,49 @@ signed attestations, approvals, protected paths · agent identities, runs, tasks
 signed provenance, conflict prediction, integration queue · workspaces with conflict markers · GC, fsck,
 backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
-## Next — the network layer (0.2)
+## Built since 0.1 (on `main`, unreleased)
 
-- **Server** exposing the engine: HTTP/JSON and gRPC (AGWP v1; see the [protocol mapping](docs/protocol/README.md)).
-- **Authentication and authorization**: OIDC for users, short-lived scoped credentials for agents, RBAC/ABAC
-  per repository, stream and operation. This is what turns policy from "enforced by a cooperative engine"
-  into "enforced against an uncooperative client".
-- **PostgreSQL metadata backend** and **S3-compatible object store** behind the existing seams.
-- **Remote execution plane** — *first version built*: `ag-worker` claims validation jobs, verifies the exact
-  candidate tree, runs the policy's command in an `ag-sandbox` sandbox (rootless namespaces; OCI container
-  backend) and submits signed attestations ([guide](docs/guides/workers.md),
-  [sandbox](docs/architecture/sandbox.md)). Still to do: verify the OCI backend and cgroup v2 limits against a
-  real runtime and hierarchy, microVM isolation (Firecracker/gVisor) for hostile multi-tenant use, a sandbox
-  on macOS, worker pools and labels, per-job log storage. `ag validate run` stays explicitly unsandboxed.
-- Quotas and rate limits; OpenTelemetry traces and Prometheus metrics.
+- **The network layer.** `ag-server`: AGWP v1 over gRPC and HTTP/JSON on one port ([reference](docs/protocol/agwp-v1.md),
+  generated [OpenAPI](docs/protocol/openapi.json)); OIDC and scoped, expiring credentials; per-repository RBAC;
+  quotas and rate limits; live events (SSE) with replay; Prometheus metrics and OpenTelemetry traces.
+- **PostgreSQL metadata and S3-compatible objects**, per repository, behind the existing seams.
+- **Execution plane**: `ag-worker` claims validation jobs, runs the policy's command in an `ag-sandbox` sandbox
+  (rootless namespaces, or a container) and submits signed attestations.
+- **Remote workflow in the CLI**: `clone`, `fetch`, `pull`, `push`, `ag remote …`, offline use.
+- **History**: rename-aware merge ([ADR-0005](docs/adr/0005-rename-aware-merge.md)), line-level blame that follows
+  renames, rename display in `ag show`.
+- **Clients**: Web UI, TypeScript and Python SDKs, the Go agent platform (scheduler, sessions, execution
+  scheduler, conflict advisor, reviewers, semantic index).
+- **Operations**: Dockerfile, Compose, Kubernetes, Prometheus / Grafana / OpenTelemetry files, a release
+  workflow, scale measurements ([ADR-0006](docs/adr/0006-flat-trees-measured.md)).
 
-## Then
+## Next
 
-- **Web UI**, designed around live agent work rather than a branch list: who is working where (runs,
-  leases), what overlaps (prediction), what is blocked and on what, the audit timeline. Read-only first.
-- **Scale**: hierarchical Merkle trees (O(changed directories) instead of O(files)), packed objects, incremental
-  GC marking, streaming blobs instead of whole-file reads.
-- **Merge**: rename detection; optional language-aware advisors that *propose* resolutions (never part of
-  the correctness core).
-- **History tooling**: blame (derived index), path history views, event subscription/replay API.
-- **Agent platform**: orchestrator service (Go) with sessions, dependency scheduling, review agents and a
-  semantic index, built on the coordination primitives in `ag-agent`.
-- **SDKs**: TypeScript and Python clients for AGWP.
-- **Offline mode**: local object store, publication queue and reconciliation against a server.
-- **Operations**: Docker Compose, then Kubernetes manifests; signed releases; reproducible builds.
+Ordered by what unblocks the most.
+
+- **Prove the deployment story.** Build and run the images, `docker compose up`, apply the manifests to a real
+  cluster, cut a first `-rc` tag through the release workflow, and fix what that finds. Publish the SDKs to
+  npm / PyPI and the images to a registry.
+- **Server hardening that the integration work exposed.**
+  - Bind credentials to a *run* (today: to an agent name), so concurrent runs of one agent cannot act for each other.
+  - A *delegator* role that may mint credentials for `agent:*` only, so the orchestrator does not need `admin`.
+  - Server-side finish/reap of tasks and runs by an operator (the orchestrator currently mints short-lived
+    credentials to do it).
+  - `integration.prepare` read-consistent with a job completing at the same moment.
+  - Repository listings with real stream / changeset counts.
+- **High availability.** Move the control database off a single SQLite file so more than one `ag-server`
+  can serve; this is the main gap for multi-tenant hosting.
+- **Execution plane**: verify the container sandbox and cgroup v2 limits against real runtimes; microVM
+  isolation (Firecracker / gVisor) for hostile multi-tenant use; a sandbox on macOS; worker pools and labels;
+  per-job log storage.
+- **Scale** (when the triggers in ADR-0006 are met): hierarchical Merkle trees, an in-process cache of decoded
+  trees, packed objects, incremental GC marking, streaming blobs.
+- **Merge and history**: directory renames and copy detection; language-aware advisors that *propose*
+  resolutions (never part of the correctness core), e.g. a model-backed `Advisor` behind the interface the
+  orchestrator already has.
+- **Web UI**: tablet and phone layouts verified by tests, a redirect-based OIDC flow, Firefox and WebKit in the
+  end-to-end matrix.
+- **Reproducible builds**: demonstrate bit-for-bit reproducibility across machines.
 
 ## Ideas we are deliberately not doing
 

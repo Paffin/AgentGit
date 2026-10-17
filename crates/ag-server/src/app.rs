@@ -332,6 +332,17 @@ impl App {
 
     // ---- repository access --------------------------------------------------------
 
+    /// `stream` if given, otherwise the repository's default stream (for reads, where "the stream" is obvious).
+    pub async fn stream_or_default(&self, repo: &str, stream: &str) -> ApiResult<String> {
+        if !stream.is_empty() {
+            return Ok(stream.to_string());
+        }
+        let (control, name) = (self.control.clone(), repo.to_string());
+        let row = tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)??;
+        // An unknown repository is reported by the authorization that follows, without revealing anything.
+        Ok(row.map(|r| r.default_stream).unwrap_or_else(|| self.cfg.repos.default_stream.clone()))
+    }
+
     /// Authorizes, rate limits and runs `f` on a blocking thread with the
     /// repository and the effective acting identity.
     pub async fn with_repo<T, F>(&self, call: &Call, repo: &str, cap: Cap, stream: Option<&str>, f: F) -> ApiResult<T>

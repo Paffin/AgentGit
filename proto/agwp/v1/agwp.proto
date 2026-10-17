@@ -125,6 +125,8 @@ message Repo {
   string object_backend = 8;
   // Human-readable durability contract of the object backend.
   string durability = 9;
+  // Filled by Describe only; listings do not open every repository and leave
+  // both counts at 0.
   uint32 stream_count = 10;
   uint64 changeset_count = 11;
   Quota quota = 12;
@@ -1164,6 +1166,7 @@ message ReplayResponse {
 
 message GetPolicyRequest {
   string repo = 1;
+  // Empty = the repository's default stream.
   string stream = 2;
 }
 
@@ -1187,6 +1190,7 @@ message SetPolicyRequest {
 
 message PolicyHistoryRequest {
   string repo = 1;
+  // Empty = the repository's default stream.
   string stream = 2;
 }
 
@@ -1226,7 +1230,7 @@ message AuditEntry {
 
 message ListAuditRequest {
   string repo = 1;
-  // Substring match on target, actor and details.
+  // Case-insensitive substring match on action, target, actor and details.
   string contains = 2;
   uint32 limit = 3;
 }

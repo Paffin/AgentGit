@@ -563,7 +563,7 @@ export interface paths {
     }
     /** Download one object envelope (binary body) */
     get: operations['objects.get']
-    /** Upload one object envelope (binary body); the server verifies that it hashes to object_id */
+    /** Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored} */
     put: operations['objects.put']
     post?: never
     delete?: never
@@ -1520,7 +1520,10 @@ export interface components {
     CloseProposalRequest: {
       /** @default  */
       id: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -1538,7 +1541,10 @@ export interface components {
        * @default false
        */
       force: boolean
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       new_head: string
@@ -1567,7 +1573,10 @@ export interface components {
       worker: string
     }
     CompleteRunRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -1581,7 +1590,10 @@ export interface components {
     ConfigureRepoRequest: {
       /** @default null */
       description: string | null
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default null */
       quota: components['schemas']['Quota'] | null
@@ -1633,7 +1645,10 @@ export interface components {
        * @default
        */
       from_rev: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       name: string
@@ -1660,7 +1675,10 @@ export interface components {
        * @default
        */
       from_rev: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       name: string
@@ -1772,7 +1790,10 @@ export interface components {
     }
     Empty: Record<string, never>
     EnqueueRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       proposal: string
@@ -1936,7 +1957,10 @@ export interface components {
     FinishTaskRequest: {
       /** @default  */
       id: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -2075,7 +2099,10 @@ export interface components {
     GetPolicyRequest: {
       /** @default  */
       repo: string
-      /** @default  */
+      /**
+       * @description Empty = the repository's default stream.
+       * @default
+       */
       stream: string
     }
     GetProposalRequest: {
@@ -2377,7 +2404,7 @@ export interface components {
     }
     ListAuditRequest: {
       /**
-       * @description Substring match on target, actor and details.
+       * @description Case-insensitive substring match on action, target, actor and details.
        * @default
        */
       contains: string
@@ -2616,7 +2643,10 @@ export interface components {
     MintCredentialRequest: {
       /** @default  */
       description: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default null */
       scope: components['schemas']['CredentialScope'] | null
@@ -2663,7 +2693,10 @@ export interface components {
        * @default
        */
       expected_head: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       message: string
@@ -2788,7 +2821,10 @@ export interface components {
     PolicyHistoryRequest: {
       /** @default  */
       repo: string
-      /** @default  */
+      /**
+       * @description Empty = the repository's default stream.
+       * @default
+       */
       stream: string
     }
     PolicyHistoryResponse: {
@@ -2877,7 +2913,10 @@ export interface components {
        * @default false
        */
       enqueue_validations: boolean
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       proposal: string
@@ -3163,7 +3202,10 @@ export interface components {
       entries: components['schemas']['ReflogEntry'][]
     }
     RegisterAgentRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       name: string
@@ -3247,6 +3289,8 @@ export interface components {
       quota: components['schemas']['Quota'] | null
       /**
        * Format: int32
+       * @description Filled by Describe only; listings do not open every repository and leave
+       *     both counts at 0.
        * @default 0
        */
       stream_count: number
@@ -3257,7 +3301,10 @@ export interface components {
        * @default []
        */
       checks: string[]
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       proposal: string
@@ -3330,7 +3377,10 @@ export interface components {
       decision: string
       /** @default  */
       id: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -3411,7 +3461,10 @@ export interface components {
       task_id: string
     }
     RunQueueRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -3475,7 +3528,10 @@ export interface components {
     SetPolicyRequest: {
       /** @default  */
       document: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -3526,7 +3582,10 @@ export interface components {
       accepted: boolean
     }
     SubmitProvenanceRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default null */
       record: components['schemas']['ProvenanceRecord'] | null
@@ -3540,7 +3599,10 @@ export interface components {
       signature: string
     }
     SyncWorkspaceRequest: {
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       name: string
@@ -3625,7 +3687,10 @@ export interface components {
     UpdateProposalRequest: {
       /** @default  */
       id: string
-      /** @default  */
+      /**
+       * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
+       * @default
+       */
       idempotency_key: string
       /** @default  */
       new_head: string
@@ -5176,7 +5241,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/octet-stream': string
+          'application/json': string
         }
       }
       /** @description Error */

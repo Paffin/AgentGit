@@ -40,12 +40,12 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 |---|---|---|
 | SCM engine in Rust, deterministic | ✅ | |
 | Object store, changeset DAG, tree resolver, diff/merge, integration/CAS, integrity/GC | ✅ | |
-| PostgreSQL metadata | ↔ 🔜 | SQLite first; same transactional surface |
-| S3 / MinIO object storage | 🔜 | `ObjectStore` trait is the seam; filesystem backend ships |
-| Derived workers: trees ✅; path history ✅ (path index); blame 🔜 | 🟡 | |
+| PostgreSQL metadata | ✅ | per repository, same transactional surface as SQLite; the whole suite runs on both ([guide](../operations/postgres-and-s3.md), [ADR-0004](../adr/0004-postgres-and-s3-backends.md)). The server's own control database is still one SQLite file |
+| S3 / MinIO object storage | ✅ | `S3ObjectStore` behind the same trait; tested against a signature-checking S3 server (moto), not against AWS or MinIO |
+| Derived workers: trees ✅; path history ✅ (path index); blame ✅ (computed on demand, follows renames) | ✅ | [History guide](../guides/history.md); renames in merge: [ADR-0005](../adr/0005-rename-aware-merge.md) |
 | Outbox dispatcher | ✅ | at-least-once; in-process consumer (tree derivation) |
 | Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). Not yet: VM-level isolation, a verified OCI backend, worker pools/labels |
-| Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | 🔜 | the coordination primitives it needs exist in `ag-agent` |
+| Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Heuristic, not model-backed, advisors |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |
 | Crash recovery, object availability, unknown commit outcome | ✅ | tests above |
 | GC by generations | 🟡 | age-based grace period + roots; no separate generations |
@@ -80,22 +80,22 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 
 | Measure | Status |
 |---|---|
-| OIDC users; scoped short-lived agent credentials | 🔜 (server) |
-| RBAC/ABAC by repo/stream/operation | 🟡 policy lists for integrators/admins/authors/approvers; no authentication in local mode |
+| OIDC users; scoped short-lived agent credentials | ✅ `ag-server` (`security.rs`: OIDC, expiring/revocable/scoped credentials that can never exceed their minter). Credentials bind to an agent name, not a run — [roadmap](../../ROADMAP.md) |
+| RBAC/ABAC by repo/stream/operation | ✅ roles per repository pattern × credential scope (repos, streams, operations) on the server; policy lists inside the engine; no authentication in local mode |
 | Sandbox with CPU/RAM/network/FS limits | 🟡 `ag-sandbox`: all five enforced and tested from inside the namespace sandbox; memory/task limits are sampled (not kernel-exact) unless a cgroup is delegated; see [sandbox](sandbox.md) |
 | No standing secrets for untrusted code | 🟡 the worker's key and credential are never visible to the sandboxed check (tested); `validate run` only clears the environment |
 | Signed CI attestations | ✅ |
 | Prompt-injection hardening | ✅ data is never interpreted; terminal output sanitized |
-| Limits on blobs, ops, DAG depth, requests | ✅ (requests 🔜) |
+| Limits on blobs, ops, DAG depth, requests | ✅ request size, concurrency, per-credential rate limits and repository quotas on the server |
 | Independent, tamper-evident audit | ✅ hash chain (not yet externally anchored) |
 | Path traversal, symlink escape, zip bombs, object substitution | ✅ (no archive handling exists) |
 | Separate powers for agent, reviewer, admin | ✅ |
 
 ## §9 — AGWP v1
 
-🔜. See the [protocol status and mapping](../protocol/README.md).
+✅ gRPC and HTTP/JSON on one port, WebSocket not needed (SSE for events): [reference](../protocol/agwp-v1.md), [overview and mapping](../protocol/README.md), generated [OpenAPI](../protocol/openapi.json) checked against the router in CI.
 
 ## §10–§11 — stack and UI
 
-Rust core ✅ · CLI (clap) ✅ · Vue Web UI 🔜 · Go orchestrator 🔜 · SDKs 🔜 · OpenTelemetry/Prometheus 🔜 ·
-NATS 🔜 · Docker Compose/Kubernetes 🔜. The ADR's text is cut off at §11 (Web UI); the rest was never received.
+Rust core ✅ · CLI (clap) ✅ · Vue Web UI ✅ ([guide](../guides/web-ui.md)) · Go orchestrator ✅ · SDKs ✅ (TypeScript, Python; unpublished) · OpenTelemetry (traces) / Prometheus ✅ ·
+NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (files validated in CI; not run end to end — [deployment](../operations/deployment.md)). The ADR's text is cut off at §11 (Web UI); the rest was never received.

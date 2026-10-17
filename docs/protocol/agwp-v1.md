@@ -128,7 +128,7 @@ Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per reposito
 | `reader` | read everything in a repository: history, trees, streams, proposals, events, policy, audit pins |
 | `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent, tasks, leases, provenance |
 | `reviewer` | reader + review proposals |
-| `integrator` | reader + integrate proposals, run the queue, close proposals |
+| `integrator` | reader + integrate proposals, request validation, run the queue, close proposals |
 | `runner` | reader + claim execution jobs and submit attestations (execution-plane workers) |
 | `admin` | everything, including policy, credentials, roles, GC, fsck, stream compare-and-swap |
 

@@ -183,8 +183,8 @@ impl Tx<'_> {
     }
 
     /// Reads audit entries, newest first. With a needle, only entries whose
-    /// target, actor or details contain it (a run id, proposal id, identity,
-    /// changeset id, ...).
+    /// action, target, actor or details contain it (an action name, a run id,
+    /// a proposal id, an identity, a changeset id, ...). Case-insensitive.
     pub fn audit_list(&self, target_contains: Option<&str>, limit: usize) -> Result<Vec<AuditEntry>, MetaError> {
         let pattern = format!("%{}%", escape_like(target_contains.unwrap_or("")));
         // lower() on both sides: SQLite's LIKE is ASCII case-insensitive, PostgreSQL's is not
@@ -192,7 +192,7 @@ impl Tx<'_> {
             &format!(
                 "SELECT {AUDIT_COLS} FROM audit
                  WHERE lower(target) LIKE lower(?1) ESCAPE '\\' OR lower(actor) LIKE lower(?1) ESCAPE '\\'
-                    OR lower(details) LIKE lower(?1) ESCAPE '\\'
+                    OR lower(action) LIKE lower(?1) ESCAPE '\\' OR lower(details) LIKE lower(?1) ESCAPE '\\'
                  ORDER BY seq DESC LIMIT ?2"
             ),
             &params![pattern, limit as i64],

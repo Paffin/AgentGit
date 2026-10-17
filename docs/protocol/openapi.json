@@ -1436,6 +1436,7 @@
           },
           "stream": {
             "default": "",
+            "description": "Empty = the repository's default stream.",
             "type": "string"
           }
         },
@@ -1948,7 +1949,7 @@
         "properties": {
           "contains": {
             "default": "",
-            "description": "Substring match on target, actor and details.",
+            "description": "Case-insensitive substring match on action, target, actor and details.",
             "type": "string"
           },
           "limit": {
@@ -2811,6 +2812,7 @@
           },
           "stream": {
             "default": "",
+            "description": "Empty = the repository's default stream.",
             "type": "string"
           }
         },
@@ -3581,6 +3583,7 @@
           },
           "stream_count": {
             "default": 0,
+            "description": "Filled by Describe only; listings do not open every repository and leave\nboth counts at 0.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -5156,7 +5159,7 @@
             "required": false,
             "schema": {
               "default": "",
-              "description": "Substring match on target, actor and details.",
+              "description": "Case-insensitive substring match on action, target, actor and details.",
               "type": "string"
             }
           },
@@ -7232,6 +7235,7 @@
             "required": false,
             "schema": {
               "default": "",
+              "description": "Empty = the repository's default stream.",
               "type": "string"
             }
           }
@@ -7351,6 +7355,7 @@
             "required": false,
             "schema": {
               "default": "",
+              "description": "Empty = the repository's default stream.",
               "type": "string"
             }
           }

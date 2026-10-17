@@ -49,13 +49,25 @@ pub(crate) fn tree_page(repo: &Repository, tree: &Tree, size: u32, token: &str) 
     })
 }
 
+/// The tree at `rev`. An existing stream without any changeset yet has the empty tree (so a new repository
+/// lists as empty rather than as an error); every other unresolvable revision is `not_found`.
+fn tree_at(repo: &Repository, rev: &str) -> ApiResult<Tree> {
+    let stream = if rev.is_empty() { repo.default_stream().to_string() } else { rev.to_string() };
+    if let Some(s) = repo.meta().read(|tx| tx.stream(&stream))?
+        && s.state.head.is_none()
+    {
+        return Ok(Tree::empty());
+    }
+    Ok(repo.tree_of(&super::resolve(repo, rev)?)?)
+}
+
 impl App {
     /// What exists at a path.
     pub async fn resolve_path(&self, call: &Call, req: v1::ResolvePathRequest) -> ApiResult<v1::ResolvePathResponse> {
         let rev = req.rev.clone();
         let path = req.path.trim_matches('/').to_string();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
+            let tree = tree_at(repo, &rev)?;
             if path.is_empty() {
                 return Ok(v1::ResolvePathResponse { kind: "dir".into(), entry: None });
             }
@@ -84,7 +96,7 @@ impl App {
         let dir = req.path.trim_matches('/').to_string();
         let (size, token) = (req.page_size, req.page_token.clone());
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
+            let tree = tree_at(repo, &rev)?;
             let items = tree.list_dir(&dir);
             if items.is_empty() && !dir.is_empty() {
                 let prefix = format!("{dir}/");
@@ -123,7 +135,7 @@ impl App {
         let rev = req.rev.clone();
         let (size, token) = (req.page_size, req.page_token.clone());
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
+            let tree = tree_at(repo, &rev)?;
             tree_page(repo, &tree, size, &token)
         })
         .await
@@ -169,7 +181,7 @@ impl App {
         let path = require(&req.path, "path")?.trim_matches('/').to_string();
         let out = self
             .with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-                let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
+                let tree = tree_at(repo, &rev)?;
                 let rp = RepoPath::new(&path).map_err(|e| ApiError::invalid(e.to_string()))?;
                 let e =
                     tree.get(&rp).ok_or_else(|| ApiError::not_found(format!("'{path}' does not exist at {rev}")))?;

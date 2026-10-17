@@ -168,9 +168,7 @@ pub fn children_of_this_process() -> Vec<(u32, String)> {
     out
 }
 
-/// The effective user and group id of this process (the owner of `/proc/self`).
+/// The effective user and group id of this process.
 pub fn euid_egid() -> (u32, u32) {
-    use std::os::unix::fs::MetadataExt;
-    let m = std::fs::metadata("/proc/self").expect("/proc/self");
-    (m.uid(), m.gid())
+    ag_sandbox::effective_ids()
 }

@@ -51,11 +51,16 @@ impl Sandbox for ProcessSandbox {
         ];
         let mut rlimits = vec![
             (Res::Cpu, l.cpu_s, l.cpu_s.saturating_add(1)),
-            (Res::Data, l.memory_bytes, l.memory_bytes),
             (Res::Nofile, l.open_files, l.open_files),
             (Res::Fsize, l.file_size_bytes, l.file_size_bytes),
             (Res::Core, 0, 0),
         ];
+        // macOS accepts `RLIMIT_DATA` but does not enforce it (and `RLIMIT_AS` is refused), so there it is not
+        // applied and the report says that memory is unlimited.
+        let memory_limited = cfg!(target_os = "linux");
+        if memory_limited {
+            rlimits.push((Res::Data, l.memory_bytes, l.memory_bytes));
+        }
         let mut task_limited = false;
         match task_limit(l.pids) {
             Some(limit) => {
@@ -71,7 +76,11 @@ impl Sandbox for ProcessSandbox {
         if spec.network == Network::Host {
             notes.push("the network is not restricted".into());
         }
-        notes.push("memory: per-process RLIMIT_DATA only; no aggregate sampling, no OOM classification".into());
+        if memory_limited {
+            notes.push("memory: per-process RLIMIT_DATA only; no aggregate sampling, no OOM classification".into());
+        } else {
+            notes.push("memory is NOT limited on this platform".into());
+        }
 
         let plan = Plan {
             clone_flags: 0,
@@ -114,7 +123,7 @@ impl Sandbox for ProcessSandbox {
             no_new_privs: cfg!(target_os = "linux"),
             rlimits: true,
             host_root: sys::euid_egid().0 == 0,
-            memory: Enforcement::Rlimit,
+            memory: if memory_limited { Enforcement::Rlimit } else { Enforcement::None },
             tasks: if task_limited { Enforcement::Rlimit } else { Enforcement::None },
             network: spec.network,
             notes,

@@ -44,6 +44,7 @@
 //! (see the `spawn` module's documentation).
 #![cfg(unix)]
 
+#[cfg(target_os = "linux")]
 mod cgroup;
 mod detect;
 mod digest;
@@ -79,6 +80,14 @@ pub use oci::{OciConfig, OciSandbox};
 pub use outcome::{CgroupReport, Enforcement, ExitStatus, IsolationLevel, IsolationReport, Outcome};
 pub use process::ProcessSandbox;
 pub use spec::{Limits, Mount, Network, SandboxSpec, WORK_DIR, standard_system_mounts};
+
+/// The effective user and group id of the calling process.
+///
+/// A convenience for callers (which cannot use `unsafe`) that must adapt to running as root: see
+/// [`NamespaceSandbox::with_host_ids`].
+pub fn effective_ids() -> (u32, u32) {
+    sys::euid_egid()
+}
 
 /// Something that can run a command in an environment it controls.
 ///

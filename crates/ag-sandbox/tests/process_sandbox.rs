@@ -1,6 +1,8 @@
 //! The limits-only fallback: what it does enforce, and — as importantly — what it does not (it is not
 //! isolation, and these tests say so out loud).
 #![allow(unsafe_code)]
+// The tests that rely on Linux details (/proc, RLIMIT_DATA, setsid, ...) are Linux-only; the rest run anywhere.
+#![cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
 
 mod common;
 
@@ -30,6 +32,7 @@ fn it_reports_that_it_is_not_isolation() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn the_command_sees_the_host_exactly_as_the_calling_user_does() {
     // The honest part: nothing is hidden. A file outside any mount, the host's /proc, the network.
     let w = workdir();
@@ -57,12 +60,14 @@ fn the_environment_is_scrubbed_and_the_directory_is_the_work_tree() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn the_kernel_flag_that_blocks_privilege_escalation_is_set() {
     let w = workdir();
     assert_eq!(probe_status(&p(), w.path())["NoNewPrivs"], "1");
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn the_timeout_kills_the_process_group_but_a_session_leader_can_escape() {
     let w = workdir();
     let (a, b, c) = (
@@ -108,6 +113,7 @@ fn output_stdin_and_exit_codes_behave_like_the_namespace_sandbox() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn resource_limits_apply_per_process() {
     let w = workdir();
     let mut s = probe_spec_for(&p(), w.path(), &["openfiles"]);
@@ -130,6 +136,7 @@ fn resource_limits_apply_per_process() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn the_task_limit_works_for_unprivileged_users_only() {
     let w = workdir();
     let mut s = probe_spec_for(&p(), w.path(), &["forkbomb", "100000"]);
@@ -160,6 +167,7 @@ fn the_task_limit_works_for_unprivileged_users_only() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn a_set_user_id_file_cannot_raise_privileges() {
     // Needs root to build the file. Under no_new_privs a root process stays root; without it, it would become
     // the file's owner. (The namespace sandbox's variant of this test is in isolation.rs.)

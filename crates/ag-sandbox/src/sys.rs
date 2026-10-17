@@ -3,6 +3,8 @@
 //! Everything here runs in the caller's process, in normal (allocating) Rust. The code that runs in the
 //! forked child lives in `spawn.rs` and follows much stricter rules.
 #![allow(unsafe_code)]
+// Parts of this module serve only the Linux namespace sandbox.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
@@ -20,7 +22,32 @@ pub(crate) fn cvt(ret: c_int) -> io::Result<c_int> {
 pub(crate) fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     let mut fds = [0 as c_int; 2];
     // SAFETY: `fds` is a valid array of two ints, as pipe2 requires.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "dragonfly"
+    ))]
     cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) })?;
+    // No pipe2 (macOS): pipe, then close-on-exec. A fork+exec in another thread between the two calls could
+    // leak the descriptors into its child; that is a narrow window the platform leaves us with.
+    // SAFETY: `fds` is a valid array of two ints, as pipe requires; fcntl on descriptors just created.
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "dragonfly"
+    )))]
+    unsafe {
+        cvt(libc::pipe(fds.as_mut_ptr()))?;
+        for fd in fds {
+            cvt(libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC))?;
+        }
+    }
     // SAFETY: pipe2 just returned these two descriptors and nothing else owns them.
     let (r, w) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
     Ok((lift(r)?, lift(w)?))
@@ -232,14 +259,19 @@ impl SigpipeGuard {
 
 impl Drop for SigpipeGuard {
     fn drop(&mut self) {
-        // SAFETY: as in `new`; sigtimedwait with a zero timeout only consumes an already-pending SIGPIPE.
+        // SAFETY: as in `new`; SIGPIPE is blocked on this thread, so if it is pending `sigwait` returns at
+        // once and consumes it (it is only called after `sigpending` said so, so it can never block).
         unsafe {
             if !self.was_pending {
                 let mut set: libc::sigset_t = std::mem::zeroed();
                 libc::sigemptyset(&mut set);
                 libc::sigaddset(&mut set, libc::SIGPIPE);
-                let zero = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-                libc::sigtimedwait(&set, std::ptr::null_mut(), &zero);
+                let mut pending: libc::sigset_t = std::mem::zeroed();
+                libc::sigpending(&mut pending);
+                if libc::sigismember(&pending, libc::SIGPIPE) == 1 {
+                    let mut sig: c_int = 0;
+                    libc::sigwait(&set, &mut sig);
+                }
             }
             libc::pthread_sigmask(libc::SIG_SETMASK, &self.old, std::ptr::null_mut());
         }

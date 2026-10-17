@@ -1,6 +1,7 @@
 //! Resource limits and process control: timeouts that kill everything, contained fork bombs, memory and CPU
 //! limits, output caps, stdin delivery, exit-status mapping, and survival of the sandbox when its host dies.
 #![allow(unsafe_code)] // the host-death test kills a helper process
+#![cfg(target_os = "linux")] // the namespace and container sandboxes are exercised on Linux only
 
 mod common;
 

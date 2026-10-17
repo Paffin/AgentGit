@@ -4,6 +4,7 @@
 //!
 //! **No real Docker or Podman exists on the machine these tests were written on, so nothing here shows that
 //! a real runtime accepts these arguments or enforces what they request.**
+#![cfg(target_os = "linux")] // the namespace and container sandboxes are exercised on Linux only
 
 mod common;
 

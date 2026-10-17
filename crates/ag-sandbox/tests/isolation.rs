@@ -3,6 +3,7 @@
 //!
 //! See `tests/common/mod.rs` for how hosts without namespace support are handled (`AG_REQUIRE_SANDBOX`).
 #![allow(unsafe_code)] // a few tests create host-side kernel objects (inheritable descriptors, SysV shm) to prove they stay unreachable
+#![cfg(target_os = "linux")] // the namespace and container sandboxes are exercised on Linux only
 
 mod common;
 

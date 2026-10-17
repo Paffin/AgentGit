@@ -27,6 +27,8 @@
 //! stays alive as a tiny supervisor (reaping orphans, relaying the exit status of the real command);
 //! without them it simply becomes the command.
 #![allow(unsafe_code)]
+// Parts of this module serve only the Linux namespace sandbox.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 
 use std::ffi::{CStr, CString};
 use std::io;
@@ -92,6 +94,13 @@ impl CStrings {
     }
 }
 
+/// One classic-BPF instruction. Only Linux has seccomp; elsewhere the program is always empty.
+#[cfg(target_os = "linux")]
+pub(crate) type SockFilter = libc::sock_filter;
+/// Placeholder where there is no seccomp (never constructed).
+#[cfg(not(target_os = "linux"))]
+pub(crate) type SockFilter = u64;
+
 /// Everything the child does, decided by the parent before the `clone`.
 #[derive(Debug)]
 pub(crate) struct Plan {
@@ -105,7 +114,7 @@ pub(crate) struct Plan {
     pub cwd: CString,
     /// `(resource, soft, hard)` applied to the command's process.
     pub rlimits: Vec<(Res, u64, u64)>,
-    pub seccomp: Vec<libc::sock_filter>,
+    pub seccomp: Vec<SockFilter>,
     pub no_new_privs: bool,
     /// Stop right before `execve` and exit 0 (used to probe whether the sandbox can be set up at all).
     pub probe_only: bool,
@@ -416,6 +425,7 @@ macro_rules! check {
         }
     };
 }
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use check;
 
 /// Entry point of the cloned child. Never returns.

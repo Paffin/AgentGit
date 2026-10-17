@@ -30,6 +30,7 @@ const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
 // Classic BPF opcodes (linux/filter.h).
 const BPF_LD_W_ABS: u16 = 0x20;
 const BPF_JEQ_K: u16 = 0x15;
+#[cfg(any(target_arch = "x86_64", test))]
 const BPF_JGE_K: u16 = 0x35;
 const BPF_JSET_K: u16 = 0x45;
 const BPF_RET_K: u16 = 0x06;

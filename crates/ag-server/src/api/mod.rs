@@ -30,6 +30,45 @@ mod workspaces;
 pub use events::EventBatch;
 pub use objects::ObjectSink;
 
+/// Serializes keyed creations so two requests with the same key cannot both create.
+static KEYED_CREATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Runs `create` at most once per `(scope, key)` in a repository, recording the response.
+///
+/// A repeat of the same request returns the recorded response (what the first call answered, not a fresh
+/// view of the object); the same key with a different request is `idempotency_key_reused`. An empty key
+/// means "no idempotency": `create` simply runs. The record lives in the repository's own metadata.
+pub(crate) fn idempotent_create<T: serde::Serialize + serde::de::DeserializeOwned>(
+    repo: &ag_integrate::Repository,
+    scope: &str,
+    key: &str,
+    request: &str,
+    create: impl FnOnce() -> ApiResult<T>,
+) -> ApiResult<T> {
+    use sha2::{Digest, Sha256};
+    if key.is_empty() {
+        return create();
+    }
+    let _serial = KEYED_CREATE.lock().unwrap_or_else(|e| e.into_inner());
+    let slot = format!("idem:{scope}:{key}");
+    let hash = hex::encode(Sha256::digest(request.as_bytes()));
+    if let Some(stored) = repo.meta().read(|tx| tx.meta_get(&slot))?
+        && let Some((h, json)) = stored.split_once('\n')
+    {
+        if h != hash {
+            return Err(ApiError::new(
+                ag_protocol::ErrorCode::IdempotencyKeyReused,
+                format!("idempotency key '{key}' was already used for a different request"),
+            ));
+        }
+        return serde_json::from_str(json).map_err(ApiError::internal);
+    }
+    let out = create()?;
+    let json = serde_json::to_string(&out).map_err(ApiError::internal)?;
+    repo.meta().write(|tx| tx.meta_set(&slot, &format!("{hash}\n{json}")))?;
+    Ok(out)
+}
+
 /// Parses a typed identifier, naming what it was in the error.
 pub(crate) fn parse_id<T: FromStr>(s: &str, what: &str) -> ApiResult<T> {
     s.parse().map_err(|_| ApiError::invalid(format!("'{s}' is not a valid {what}")))

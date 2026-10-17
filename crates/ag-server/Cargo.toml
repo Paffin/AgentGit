@@ -62,6 +62,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 ureq.workspace = true
 utoipa.workspace = true
+serde_html_form.workspace = true
 
 [dev-dependencies]
 base64.workspace = true

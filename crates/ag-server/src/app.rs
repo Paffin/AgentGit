@@ -259,6 +259,8 @@ impl App {
             transport: ing.transport,
             deadline,
         };
+        // One token per request from the caller's bucket, for every operation — repository-scoped or not.
+        self.rate_limit(&call)?;
         let fut = f(call);
         match deadline_ms {
             Some(ms) => tokio::time::timeout(Duration::from_millis(ms), fut).await.map_err(|_| {
@@ -307,11 +309,20 @@ impl App {
         Authorizer::check_global(&call.principal, &bindings, cap)
     }
 
-    /// Rate limits the caller (and the repository's own quota).
-    pub fn rate_limit(&self, call: &Call, quota: Option<&ag_protocol::v1::Quota>) -> ApiResult<()> {
+    /// Takes one token from the caller's bucket (`limits.requests_per_second`). Runs once per request, before
+    /// the operation, so every operation is covered.
+    pub fn rate_limit(&self, call: &Call) -> ApiResult<()> {
         let key = format!("cred:{}", call.principal.credential_id);
-        let over = quota.filter(|q| q.requests_per_second > 0).map(|q| (q.requests_per_second, q.burst));
-        self.limiter.check(&key, over).inspect_err(|_| self.metrics.rate_limited.inc())
+        self.limiter.check(&key, None).inspect_err(|_| self.metrics.rate_limited.inc())
+    }
+
+    /// A repository's own request quota, if it has one: a separate bucket per (caller, repository).
+    pub fn repo_rate_limit(&self, call: &Call, repo: &str, quota: Option<&ag_protocol::v1::Quota>) -> ApiResult<()> {
+        let Some(q) = quota.filter(|q| q.requests_per_second > 0) else { return Ok(()) };
+        let key = format!("cred:{}|repo:{repo}", call.principal.credential_id);
+        self.limiter
+            .check(&key, Some((q.requests_per_second, q.burst)))
+            .inspect_err(|_| self.metrics.rate_limited.inc())
     }
 
     // ---- repository access --------------------------------------------------------
@@ -330,7 +341,7 @@ impl App {
             tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)??
         };
         let quota = row.as_ref().map(|r| r.quota);
-        self.rate_limit(call, quota.as_ref())?;
+        self.repo_rate_limit(call, repo, quota.as_ref())?;
         let repos = self.0.clone();
         let name = repo.to_string();
         let call2 = call.clone();

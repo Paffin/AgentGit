@@ -6,6 +6,9 @@ const DOMAIN: &[u8] = b"agentgit.object\0";
 /// Magic bytes at the start of a stored object envelope.
 const MAGIC: &[u8; 4] = b"AGOB";
 
+/// Bytes before the payload in a stored object: magic, kind, version.
+pub const ENVELOPE_HEADER_LEN: usize = 7;
+
 /// The type of a stored object.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ObjectKind {
@@ -114,7 +117,7 @@ impl RawObject {
 
     /// Serializes to the on-disk envelope: `AGOB | kind | version | payload`.
     pub fn encode_envelope(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(7 + self.payload.len());
+        let mut out = Vec::with_capacity(ENVELOPE_HEADER_LEN + self.payload.len());
         out.extend_from_slice(MAGIC);
         out.push(self.kind.tag());
         out.extend_from_slice(&self.version.to_be_bytes());
@@ -125,7 +128,7 @@ impl RawObject {
     /// Parses an on-disk envelope. Does not verify any hash; use
     /// [`RawObject::verify`] against the expected identifier.
     pub fn decode_envelope(bytes: &[u8]) -> Result<Self, ObjectError> {
-        if bytes.len() < 7 {
+        if bytes.len() < ENVELOPE_HEADER_LEN {
             return Err(ObjectError::Truncated);
         }
         if &bytes[..4] != MAGIC {

@@ -10,7 +10,7 @@ use ag_protocol::v1;
 use ag_storage::meta::TaskRow;
 use ag_types::{ChangesetId, Identity, IdentityKind, Timestamp};
 
-use super::{convert, parse_id, require};
+use super::{convert, idempotent_create, parse_id, require};
 use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
@@ -83,11 +83,16 @@ impl App {
     pub async fn start_run(&self, call: &Call, req: v1::StartRunRequest) -> ApiResult<v1::Run> {
         let agent = require(&req.agent, "agent")?.to_string();
         let task = (!req.task_id.is_empty()).then(|| req.task_id.clone());
+        let key = req.idempotency_key.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
             check_agent_scope(actor, &agent)?;
-            let run = start_run(repo.meta(), &agent, task.as_deref())?;
-            let row = repo.meta().read(|tx| tx.run(&run.run_id))?.ok_or_else(|| ApiError::internal("run vanished"))?;
-            Ok(convert::run(&row))
+            let request = format!("start_run\0{actor}\0{agent}\0{}", task.as_deref().unwrap_or(""));
+            idempotent_create(repo, "run.start", &key, &request, || {
+                let run = start_run(repo.meta(), &agent, task.as_deref())?;
+                let row =
+                    repo.meta().read(|tx| tx.run(&run.run_id))?.ok_or_else(|| ApiError::internal("run vanished"))?;
+                Ok(convert::run(&row))
+            })
         })
         .await
     }
@@ -145,16 +150,25 @@ impl App {
     /// Creates a task (with dependencies).
     pub async fn create_task(&self, call: &Call, req: v1::CreateTaskRequest) -> ApiResult<v1::Task> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
-            for d in &req.depends_on {
-                if repo.meta().read(|tx| tx.task(d))?.is_none() {
-                    return Err(ApiError::not_found(format!("dependency task '{d}' not found")));
+            let request = format!(
+                "create_task\0{actor}\0{}\0{}\0{}\0{}",
+                req.title,
+                req.description,
+                req.scope.join(","),
+                req.depends_on.join(",")
+            );
+            idempotent_create(repo, "task.create", &req.idempotency_key, &request, || {
+                for d in &req.depends_on {
+                    if repo.meta().read(|tx| tx.task(d))?.is_none() {
+                        return Err(ApiError::not_found(format!("dependency task '{d}' not found")));
+                    }
                 }
-            }
-            let t = create_task(repo.meta(), &req.title, &req.description, &req.scope, actor.as_str())?;
-            for d in &req.depends_on {
-                add_dependency(repo.meta(), &t.id, d, actor.as_str())?;
-            }
-            task_view(repo, &t)
+                let t = create_task(repo.meta(), &req.title, &req.description, &req.scope, actor.as_str())?;
+                for d in &req.depends_on {
+                    add_dependency(repo.meta(), &t.id, d, actor.as_str())?;
+                }
+                task_view(repo, &t)
+            })
         })
         .await
     }
@@ -216,15 +230,24 @@ impl App {
     ) -> ApiResult<v1::AcquireLeaseResponse> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::LeaseWrite, None, move |repo, actor| {
             let task = (!req.task_id.is_empty()).then_some(req.task_id.as_str());
-            let got = acquire(repo.meta(), &req.scope, actor.as_str(), req.exclusive, req.ttl_ms, task).map_err(
-                |e| match e {
-                    ag_agent::AgentError::Conflict(m) => ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m),
-                    other => other.into(),
-                },
-            )?;
-            Ok(v1::AcquireLeaseResponse {
-                lease: Some(convert::lease(&got.lease)),
-                overlapping: got.overlaps.iter().map(convert::lease).collect(),
+            let request = format!(
+                "acquire_lease\0{actor}\0{}\0{}\0{}\0{}",
+                req.scope,
+                req.exclusive,
+                req.ttl_ms,
+                task.unwrap_or("")
+            );
+            idempotent_create(repo, "lease.acquire", &req.idempotency_key, &request, || {
+                let got = acquire(repo.meta(), &req.scope, actor.as_str(), req.exclusive, req.ttl_ms, task).map_err(
+                    |e| match e {
+                        ag_agent::AgentError::Conflict(m) => ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m),
+                        other => other.into(),
+                    },
+                )?;
+                Ok(v1::AcquireLeaseResponse {
+                    lease: Some(convert::lease(&got.lease)),
+                    overlapping: got.overlaps.iter().map(convert::lease).collect(),
+                })
             })
         })
         .await

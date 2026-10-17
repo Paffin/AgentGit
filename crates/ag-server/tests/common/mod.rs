@@ -77,6 +77,8 @@ pub struct Reply {
     pub status: u16,
     pub json: Value,
     pub body: Vec<u8>,
+    /// Response headers, names lower-cased.
+    pub headers: std::collections::HashMap<String, String>,
 }
 
 impl Http {
@@ -98,10 +100,15 @@ impl Http {
             }
             .unwrap();
             let status = resp.status().as_u16();
+            let headers = resp
+                .headers()
+                .iter()
+                .filter_map(|(k, v)| Some((k.as_str().to_ascii_lowercase(), v.to_str().ok()?.to_string())))
+                .collect();
             let mut resp = resp;
             let body = resp.body_mut().read_to_vec().unwrap_or_default();
             let json = serde_json::from_slice(&body).unwrap_or(Value::Null);
-            Reply { status, json, body }
+            Reply { status, json, body, headers }
         })
         .await
         .unwrap()
@@ -131,9 +138,14 @@ impl Http {
                 )
                 .unwrap();
             let status = resp.status().as_u16();
+            let headers = resp
+                .headers()
+                .iter()
+                .filter_map(|(k, v)| Some((k.as_str().to_ascii_lowercase(), v.to_str().ok()?.to_string())))
+                .collect();
             let mut resp = resp;
             let body = resp.body_mut().read_to_vec().unwrap_or_default();
-            Reply { status, json: serde_json::from_slice(&body).unwrap_or(Value::Null), body }
+            Reply { status, json: serde_json::from_slice(&body).unwrap_or(Value::Null), body, headers }
         })
         .await
         .unwrap()

@@ -204,7 +204,7 @@ impl Tx<'_> {
     pub fn audit_after(&self, after_seq: u64, limit: usize) -> Result<Vec<AuditEntry>, MetaError> {
         let rows = self.conn.query(
             &format!("SELECT {AUDIT_COLS} FROM audit WHERE seq > ?1 ORDER BY seq LIMIT ?2"),
-            &params![after_seq as i64, limit as i64],
+            &params![after_seq.min(i64::MAX as u64) as i64, limit as i64],
         )?;
         rows.iter().map(audit_entry).collect()
     }

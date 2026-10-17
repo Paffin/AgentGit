@@ -25,7 +25,7 @@ pub(crate) fn changeset_to_wire(
                     path: path.to_string(),
                     op: "put".into(),
                     blob_id: content.to_string(),
-                    file_type: file_type.to_string(),
+                    file_type: super::tree::wire_file_type(*file_type).into(),
                     executable: *executable,
                 },
                 Op::Delete { path } => v1::FileOp { path: path.to_string(), op: "delete".into(), ..Default::default() },

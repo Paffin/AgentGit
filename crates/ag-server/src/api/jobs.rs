@@ -492,7 +492,7 @@ impl App {
                     format!("the candidate is now tree {id}, not {}", req.expected_tree_id),
                 ));
             }
-            tree_page(&tree, size, &token)
+            tree_page(r, &tree, size, &token)
         })
         .await
     }

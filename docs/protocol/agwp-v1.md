@@ -23,7 +23,10 @@ directory is checked by a test, so it cannot drift from the server.
 
 ## Conventions
 
-* **JSON mapping.** Field names are the proto field names (`snake_case`). `int64`/`uint64` are JSON numbers
+* **JSON mapping.** Field names are the proto field names (`snake_case`), with one family of exceptions: a
+  field that carries a JSON document inside a string in the proto (`Event.payload_json`,
+  `Blocker.detail_json`, `Job.result_json`, `AuditEntry.details_json`, `CompleteJobRequest.result_json`) is
+  exposed as real JSON under the name without the suffix (`payload`, `detail`, `result`, `details`). `int64`/`uint64` are JSON numbers
   (timestamps are Unix milliseconds in `*_ms`, sequence numbers and versions stay far below 2^53). `bytes`
   are standard base64. Enumerations are strings with a documented value set; clients must tolerate unknown
   values. Missing fields take their zero value; unknown fields are ignored (so old clients and new servers
@@ -32,17 +35,33 @@ directory is checked by a test, so it cannot drift from the server.
   object body (path placeholders are merged in and win). *Free-form names — streams, revisions, paths,
   pin names — travel in the query string or body, never inside the URL path*, so URL encoding cannot change
   which resource a request addresses. Repositories are `owner/name`: `/v1/repos/{owner}/{name}/…`.
-* **Idempotency.** Mutating requests accept `idempotency_key` (HTTP: also the `Idempotency-Key` header).
-  Repeating a request with the same key and content returns the recorded result; the same key with
-  different content is refused with `idempotency_key_reused`. After a lost response, ask for the outcome
-  (`GET …/operations?idempotency_key=…`) instead of blindly retrying a non-idempotent call.
+  List-valued fields of a `GET` are repeated keys (`?features=a&features=b`). Fields named `file_type` hold
+  `regular` or `symlink` (writes also accept `file` as an alias of `regular`); the `kind` of a directory
+  entry or of a resolved path is `file`, `symlink`, `dir` (or `missing`). Tree and directory listings carry
+  each file's size in bytes.
+* **Idempotency.** Operations that *create* something accept `idempotency_key` (HTTP: also the
+  `Idempotency-Key` header): `repo.create`, `objects.publish`, `proposal.create`, `integration.integrate`,
+  `task.create`, `run.start` and `lease.acquire`. Repeating a request with the same key and content returns the
+  recorded response (what the first call answered — not a fresh view of the object); the same key with
+  different content is refused with `idempotency_key_reused`. Every other operation either is naturally
+  idempotent (setting a policy, granting a role, pinning, finishing a task) or cannot replay its result — a
+  minted credential's secret is shown once, so `credentials.mint` ignores the key; a repeated
+  `stream.create` answers `already_exists`. After a lost response to a call without a key, ask for the outcome
+  (`GET …/operations?idempotency_key=…` where a key was used) instead of blindly retrying.
 * **Pagination.** `page_size` (0 = default 100, max 1000) and an opaque `page_token`; responses carry
   `next_page_token` (empty = last page). Tokens are only valid for the listing that produced them.
 * **Deadlines.** gRPC deadlines (`grpc-timeout`) or, over HTTP, `Request-Timeout: <milliseconds>`. When a
   deadline expires the operation *may still complete*: the error is `deadline_exceeded`; ask for the outcome.
   The server applies `limits.default_deadline_ms` when the client sets none.
 * **Backpressure.** `429 rate_limited`/`quota_exceeded` and `503 unavailable` carry `retry_after_ms`
-  (HTTP: `Retry-After`). Honour it; retry only errors with `retryable: true`.
+  (HTTP: `Retry-After`, whole seconds, at least 1; prefer `retry_after_ms`). Every authenticated operation
+  takes one token from the caller's bucket (`limits.requests_per_second`, per credential), including the ones
+  not tied to a repository; a repository may carry a quota of its own.
+* **`retryable`.** `retryable: true` means that doing the *logical operation* again may succeed — after
+  waiting (`rate_limited`, `unavailable`), after re-reading state and redoing the change (`stream_moved`,
+  `aborted`), or, for `deadline_exceeded`, after finding out whether the first attempt took effect. It does
+  **not** mean that sending the same bytes again is safe: do that only for reads, for naturally idempotent
+  operations, and for creations that carried an idempotency key. The SDKs implement exactly these rules.
 * **Correlation.** Send `X-Request-Id` (gRPC metadata `x-request-id`); the server echoes it in
   `X-Request-Id` and in every error. `traceparent` is propagated into logs and traces.
 
@@ -75,6 +94,9 @@ HTTP: status code + `{"error": ErrorInfo}`. gRPC: status + `ErrorInfo` in `grpc-
 | `lease_conflict` | 409 | ABORTED | an exclusive lease is held by someone else |
 | `stale_candidate` | 409 | ABORTED | the candidate tree changed since the job was created |
 | `unimplemented` / `internal` | 501 / 500 | UNIMPLEMENTED / INTERNAL | |
+
+Routes that do not exist answer `404 not_found` and methods a route does not have answer `405` (with an
+`Allow` header); both use this envelope and carry the request id like every other error.
 
 **Outcomes are not errors.** `integrate` returns `200` with `outcome.status` ∈ `integrated`, `blocked`
 (something can be provided: approvals, validation, a lease), `conflict`, `denied`, `invalid`. Each blocker

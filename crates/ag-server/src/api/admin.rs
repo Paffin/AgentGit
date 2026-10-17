@@ -184,7 +184,6 @@ impl App {
         call: &Call,
         req: v1::MintCredentialRequest,
     ) -> ApiResult<v1::MintCredentialResponse> {
-        self.rate_limit(call, None)?;
         let me = &call.principal;
         let subject =
             if req.subject.is_empty() { me.identity.principal() } else { Identity::new(req.subject.clone())? };

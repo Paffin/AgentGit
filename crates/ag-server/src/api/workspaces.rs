@@ -15,7 +15,8 @@ fn to_change(c: &v1::FileChange) -> ApiResult<VirtualChange> {
         "delete" => Ok(VirtualChange::Delete { path }),
         "put" | "" => {
             let file_type = match c.file_type.as_str() {
-                "" | "regular" => FileType::Regular,
+                // "file" is what listings used to say; keep accepting it.
+                "" | "regular" | "file" => FileType::Regular,
                 "symlink" => FileType::Symlink,
                 other => return Err(ApiError::invalid(format!("unknown file_type '{other}'"))),
             };

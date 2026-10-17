@@ -512,36 +512,8 @@ impl Repository {
             }
 
             // 2. Facts, read in the same transaction that will commit the change.
-            let (policy, policy_version) = match tx.policy_current(&prop.stream)? {
-                Some(row) => (Policy::parse(&row.doc).map_err(|e| ag_storage::meta::MetaError::Invalid(format!("stored policy v{} is invalid: {e}", row.version)))?, row.version),
-                None => (Policy::default(), 0),
-            };
-            let attestations: Vec<Attestation> = tx.attestations_for_tree(&tree_id)?.iter().filter_map(attestation_from_row).collect();
-            let approvals: Vec<ApprovalFact> = tx
-                .reviews(&prop.id)?
-                .into_iter()
-                .filter(|r| r.decision == "approve" || r.decision == "request_changes")
-                .filter_map(|r| Some(ApprovalFact { reviewer: Identity::new(r.reviewer).ok()?, head: r.head, approve: r.decision == "approve" }))
-                .collect();
-            let has_provenance = author.kind() == IdentityKind::Agent && !provenance::verified_for(tx, &prop.head, &author)?.is_empty();
-            let facts = Facts {
-                stream: &prop.stream,
-                actor,
-                author: &author,
-                proposal_head: prop.head,
-                candidate_tree: tree_id,
-                policy_version,
-                changed: &changed_paths,
-                attestations: &attestations,
-                approvals: &approvals,
-                has_provenance,
-                now: tx.now(),
-            };
-            let evaluation: Evaluation = evaluate(&policy, &facts);
-            let mut blockers: Vec<Blocker> = evaluation.unmet.iter().map(Blocker::from_unmet).collect();
-            for lb in lease_blockers(tx, &changed, author.as_str(), tokens)? {
-                blockers.push(Blocker { code: "lease".into(), message: lb.to_string(), detail: serde_json::to_value(&lb)? });
-            }
+            let Verdict { evaluation, blockers, policy_version, .. } =
+                verdict_in_tx(tx, prop, actor, &author, tree_id, &changed_paths, &changed, tokens)?;
 
             // 3. Decide.
             if evaluation.decision == Decision::Denied {
@@ -652,6 +624,73 @@ impl Repository {
         }
         Ok(report)
     }
+}
+
+/// Everything policy has to say about a candidate, evaluated against facts
+/// read through `tx`. Used by the committing transaction (so verdict and
+/// commit see one state) and by the read-only [`Repository::prepare`].
+pub(crate) struct Verdict {
+    pub(crate) evaluation: Evaluation,
+    pub(crate) blockers: Vec<Blocker>,
+    pub(crate) policy: Policy,
+    pub(crate) policy_version: u64,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn verdict_in_tx(
+    tx: &ag_storage::meta::Tx<'_>,
+    prop: &ProposalRow,
+    actor: &Identity,
+    author: &Identity,
+    tree_id: TreeId,
+    changed_paths: &[ChangedPath],
+    changed: &[String],
+    tokens: &[u64],
+) -> std::result::Result<Verdict, ag_storage::meta::MetaError> {
+    use ag_storage::meta::MetaError;
+    let (policy, policy_version) = match tx.policy_current(&prop.stream)? {
+        Some(row) => (
+            Policy::parse(&row.doc)
+                .map_err(|e| MetaError::Invalid(format!("stored policy v{} is invalid: {e}", row.version)))?,
+            row.version,
+        ),
+        None => (Policy::default(), 0),
+    };
+    let attestations: Vec<Attestation> =
+        tx.attestations_for_tree(&tree_id)?.iter().filter_map(attestation_from_row).collect();
+    let approvals: Vec<ApprovalFact> = tx
+        .reviews(&prop.id)?
+        .into_iter()
+        .filter(|r| r.decision == "approve" || r.decision == "request_changes")
+        .filter_map(|r| {
+            Some(ApprovalFact {
+                reviewer: Identity::new(r.reviewer).ok()?,
+                head: r.head,
+                approve: r.decision == "approve",
+            })
+        })
+        .collect();
+    let has_provenance =
+        author.kind() == IdentityKind::Agent && !provenance::verified_for(tx, &prop.head, author)?.is_empty();
+    let facts = Facts {
+        stream: &prop.stream,
+        actor,
+        author,
+        proposal_head: prop.head,
+        candidate_tree: tree_id,
+        policy_version,
+        changed: changed_paths,
+        attestations: &attestations,
+        approvals: &approvals,
+        has_provenance,
+        now: tx.now(),
+    };
+    let evaluation: Evaluation = evaluate(&policy, &facts);
+    let mut blockers: Vec<Blocker> = evaluation.unmet.iter().map(Blocker::from_unmet).collect();
+    for lb in lease_blockers(tx, changed, author.as_str(), tokens)? {
+        blockers.push(Blocker { code: "lease".into(), message: lb.to_string(), detail: serde_json::to_value(&lb)? });
+    }
+    Ok(Verdict { evaluation, blockers, policy, policy_version })
 }
 
 struct MergeMeta {

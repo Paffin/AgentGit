@@ -25,7 +25,7 @@ mod matcher;
 
 pub use attestation::{Attestation, AttestationError, CheckResult};
 pub use document::{
-    AgentAutonomy, ApprovalRules, Policy, PolicyError, ProtectedPath, RequiredValidation, TrustedIssuer,
+    AgentAutonomy, ApprovalRules, Policy, PolicyError, ProtectedPath, RequiredValidation, RunSpec, TrustedIssuer,
 };
 pub use eval::{ApprovalFact, ChangedPath, Decision, Evaluation, Facts, Unmet, evaluate};
 pub use matcher::{IdentityMatcher, PathMatcher};

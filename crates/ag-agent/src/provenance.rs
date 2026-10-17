@@ -121,6 +121,44 @@ pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &Provenanc
     })?)
 }
 
+/// Stores a record that the agent signed itself (remote agents keep their
+/// private key). The signature must verify under the agent's *registered*
+/// public key, so only the holder of that key can speak for the agent.
+pub fn attach_signed(meta: &Meta, record: &ProvenanceRecord, signature: &Signature) -> Result<u64, AgentError> {
+    if record.schema != SCHEMA {
+        return Err(AgentError::Invalid(format!("unsupported schema '{}'", record.schema)));
+    }
+    let principal = record.agent.principal();
+    let agent = meta
+        .read(|tx| tx.agent_by_identity(principal.as_str()))?
+        .ok_or_else(|| AgentError::NotFound(format!("agent {principal}")))?;
+    if agent.disabled {
+        return Err(AgentError::Conflict(format!("agent '{}' is disabled", agent.name)));
+    }
+    let pk = PublicKey::from_hex(&agent.public_key).map_err(|e| AgentError::Verification(e.to_string()))?;
+    pk.verify(DOMAIN, &record.canonical_bytes()?, signature).map_err(|_| {
+        AgentError::Verification("signature does not match the record and the agent's registered key".into())
+    })?;
+    let value = serde_json::to_value(record).map_err(|e| AgentError::Invalid(e.to_string()))?;
+    Ok(meta.write(|tx| {
+        let id = tx.provenance_insert(
+            &record.changeset,
+            &agent.name,
+            record.run_id.as_deref(),
+            &value,
+            &agent.public_key,
+            &signature.to_hex(),
+        )?;
+        tx.audit_append(
+            record.agent.as_str(),
+            "provenance.attach",
+            &record.changeset.to_hex(),
+            &json!({"model": record.model, "task": record.task_id}),
+        )?;
+        Ok(id)
+    })?)
+}
+
 /// Verifies a stored record: signature, signer key against the registry, and
 /// that the record describes the changeset it is filed under.
 pub fn verify(tx: &Tx<'_>, row: &ProvenanceRow) -> Result<ProvenanceRecord, AgentError> {

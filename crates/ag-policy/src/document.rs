@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use ag_crypto::PublicKey;
 use ag_types::Identity;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,67 @@ pub struct TrustedIssuer {
     pub public_key: PublicKey,
 }
 
+fn default_timeout_secs() -> u32 {
+    600
+}
+
+/// How a trusted execution-plane worker runs a check.
+///
+/// This lives in the **policy** (set by administrators, versioned, audited),
+/// never in the repository under test: the code being checked must not get to
+/// choose the command that checks it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunSpec {
+    /// Command and arguments, executed without a shell.
+    pub argv: Vec<String>,
+    /// Wall-clock limit.
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u32,
+    /// Memory limit in MiB (0 = worker default).
+    #[serde(default)]
+    pub memory_mb: u32,
+    /// CPU-time limit in seconds (0 = worker default).
+    #[serde(default)]
+    pub cpu_secs: u32,
+    /// Process-count limit (0 = worker default).
+    #[serde(default)]
+    pub max_pids: u32,
+    /// Whether the check may use the network. Off unless stated.
+    #[serde(default)]
+    pub network: bool,
+    /// Pinned container image for OCI workers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// Non-secret environment variables for the check.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+}
+
+impl RunSpec {
+    fn validate(&self, check: &str) -> Result<(), PolicyError> {
+        let bad = |m: String| PolicyError::Invalid(format!("validation '{check}': {m}"));
+        if self.argv.is_empty() || self.argv[0].is_empty() {
+            return Err(bad("run.argv must name a command".into()));
+        }
+        if self.argv.iter().any(|a| a.contains('\0')) {
+            return Err(bad("run.argv must not contain NUL bytes".into()));
+        }
+        if self.timeout_secs == 0 || self.timeout_secs > 24 * 3600 {
+            return Err(bad("run.timeout_secs must be between 1 and 86400".into()));
+        }
+        for (k, v) in &self.env {
+            let name_ok = !k.is_empty()
+                && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !k.chars().next().is_some_and(|c| c.is_ascii_digit());
+            if !name_ok || v.contains('\0') {
+                return Err(bad(format!("run.env has an invalid entry '{k}'")));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A check that must have passed on the exact candidate tree.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,6 +103,10 @@ pub struct RequiredValidation {
     /// If set, attestations older than this many seconds do not count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_age_secs: Option<u64>,
+    /// How a trusted worker runs this check. Without it the check can only be
+    /// satisfied by an attestation submitted by a trusted issuer on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<RunSpec>,
 }
 
 /// Rules about human (and agent) approvals.
@@ -172,6 +239,9 @@ impl Policy {
                     v.check
                 )));
             }
+            if let Some(run) = &v.run {
+                run.validate(&v.check)?;
+            }
             for i in &v.issuers {
                 if !self.trusted_issuers.iter().any(|t| &t.identity == i) {
                     return Err(bad(format!(
@@ -203,6 +273,25 @@ mod tests {
     fn unknown_fields_are_rejected() {
         assert!(matches!(Policy::parse(r#"{"approvals":{"mn":2}}"#), Err(PolicyError::Parse(_))));
         assert!(matches!(Policy::parse(r#"{"requird_validations":[]}"#), Err(PolicyError::Parse(_))));
+    }
+
+    #[test]
+    fn run_specs_are_validated_and_round_trip() {
+        let spec: super::RunSpec = serde_json::from_str(r#"{"argv":["cargo","test"],"env":{"CI":"1"}}"#).unwrap();
+        assert_eq!(spec.timeout_secs, 600, "default timeout");
+        assert!(!spec.network, "network is off unless stated");
+        assert!(spec.validate("t").is_ok());
+        assert!(serde_json::from_str::<super::RunSpec>(r#"{"argv":["x"],"shell":true}"#).is_err());
+        for bad in [
+            r#"{"argv":[]}"#,
+            r#"{"argv":[""]}"#,
+            r#"{"argv":["x"],"timeout_secs":0}"#,
+            r#"{"argv":["x"],"env":{"1BAD":"v"}}"#,
+            r#"{"argv":["x"],"env":{"A B":"v"}}"#,
+        ] {
+            let s: super::RunSpec = serde_json::from_str(bad).unwrap();
+            assert!(s.validate("t").is_err(), "{bad}");
+        }
     }
 
     #[test]

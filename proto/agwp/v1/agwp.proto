@@ -1,0 +1,1544 @@
+// AGWP v1 — the AgentGit Wire Protocol.
+//
+// This file is the single source of truth for the protocol. The same message
+// types are used on both transports:
+//
+//   * gRPC over HTTP/2 (+ TLS) — the services at the bottom of this file;
+//   * HTTP/JSON — the browser/SDK gateway documented in docs/protocol/ and
+//     served from the same Rust types (serde), described by openapi.json.
+//
+// Conventions
+//   * Every repository-scoped request carries `repo` ("owner/name").
+//   * Every mutating request carries `idempotency_key`. Repeating a request
+//     with the same key and the same content returns the recorded result;
+//     the same key with different content is rejected (`idempotency_key_reused`).
+//     After a lost response, ask for the outcome (GetOperation) instead of
+//     blindly retrying.
+//   * Identifiers are lowercase hex (ids) or the documented name syntax.
+//   * Times are Unix milliseconds in `*_ms` fields.
+//   * Enumerations are strings with a documented value set so that new values
+//     can be added without breaking old clients; unknown values must be
+//     tolerated.
+//   * Lists are paginated: `page_size` (0 = server default) and an opaque
+//     `page_token`; the response carries `next_page_token` (empty = end).
+//   * Errors: gRPC status + `ErrorInfo` (as the status detail), HTTP status +
+//     `{"error": ErrorInfo}`. `ErrorInfo.code` is stable and machine-readable.
+//   * Deadlines: the gRPC deadline, or `Request-Timeout: <ms>` over HTTP.
+//   * Backpressure: `resource_exhausted` / HTTP 429 with `retry_after_ms`;
+//     streams are bounded and resumable from a sequence number.
+//   * Versioning: this package is `agwp.v1`; additive changes only. Clients
+//     call `Negotiate` first and use the intersection of features.
+syntax = "proto3";
+
+package agwp.v1;
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+// Structured error detail. `code` values:
+//   unauthenticated, permission_denied, not_found, already_exists,
+//   invalid_argument, failed_precondition, stream_moved,
+//   idempotency_key_reused, object_missing, object_corrupt, too_large,
+//   rate_limited, quota_exceeded, unavailable, deadline_exceeded, aborted,
+//   lease_conflict, stale_candidate, unimplemented, internal.
+message ErrorInfo {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+  int64 retry_after_ms = 4;
+  string request_id = 5;
+  map<string, string> details = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Session: negotiation and identity
+// ---------------------------------------------------------------------------
+
+message NegotiateRequest {
+  string client_name = 1;
+  string client_version = 2;
+  // Protocol versions the client speaks, e.g. ["agwp.v1"].
+  repeated string supported_versions = 3;
+  // Optional features the client would like to use.
+  repeated string features = 4;
+}
+
+message Limits {
+  uint64 max_object_bytes = 1;
+  uint64 max_request_bytes = 2;
+  uint32 max_batch = 3;
+  uint32 max_page_size = 4;
+  uint32 max_changeset_ops = 5;
+  uint32 max_changesets_per_publication = 6;
+}
+
+message NegotiateResponse {
+  // The version selected for this session, e.g. "agwp.v1".
+  string protocol_version = 1;
+  string server_version = 2;
+  // Features supported by both sides (e.g. "events.replay", "workspaces.virtual",
+  // "execution.jobs", "objects.chunked").
+  repeated string features = 3;
+  Limits limits = 4;
+  // Accepted credential types: "bearer", "oidc".
+  repeated string auth_methods = 5;
+}
+
+message WhoamiRequest {}
+
+message Principal {
+  // Authenticated identity, e.g. "user:alice" or "agent:refactor-bot".
+  string identity = 1;
+  // "user", "agent" or "service".
+  string kind = 2;
+  // How the caller authenticated: "token", "oidc" or "bootstrap".
+  string method = 3;
+  string credential_id = 4;
+  int64 expires_at_ms = 5;
+  // Effective roles per repository pattern, e.g. "acme/*:writer".
+  repeated string roles = 6;
+  // Scope restrictions attached to the credential (empty = unrestricted by scope).
+  CredentialScope scope = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Repository
+// ---------------------------------------------------------------------------
+
+message Repo {
+  // "owner/name".
+  string name = 1;
+  // The namespace hashed into every changeset of this repository.
+  string namespace = 2;
+  string default_stream = 3;
+  string description = 4;
+  int64 created_at_ms = 5;
+  string created_by = 6;
+  // Storage in use: "sqlite"/"postgres" and "fs"/"s3".
+  string meta_backend = 7;
+  string object_backend = 8;
+  // Human-readable durability contract of the object backend.
+  string durability = 9;
+  uint32 stream_count = 10;
+  uint64 changeset_count = 11;
+  Quota quota = 12;
+}
+
+message Quota {
+  // 0 = unlimited.
+  uint64 max_total_object_bytes = 1;
+  uint64 max_object_bytes = 2;
+  uint32 max_streams = 3;
+  uint32 max_open_proposals = 4;
+  uint32 requests_per_second = 5;
+  uint32 burst = 6;
+}
+
+message CreateRepoRequest {
+  string name = 1;
+  string default_stream = 2;
+  string description = 3;
+  string idempotency_key = 4;
+}
+
+message GetRepoRequest { string repo = 1; }
+
+message ListReposRequest {
+  string prefix = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListReposResponse {
+  repeated Repo repos = 1;
+  string next_page_token = 2;
+}
+
+message ConfigureRepoRequest {
+  string repo = 1;
+  optional string description = 2;
+  // Replaces the repository quota when set.
+  optional Quota quota = 3;
+  string idempotency_key = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Objects
+// ---------------------------------------------------------------------------
+
+// One chunk of an object envelope ("AGOB" ‖ kind ‖ version ‖ payload).
+// A stream may carry several objects back to back; a new `object_id`
+// starts the next one. `last` ends the current object.
+message ObjectChunk {
+  string object_id = 1;
+  // Total envelope size when known (first chunk of an object), else 0.
+  uint64 total_size = 2;
+  bytes data = 3;
+  bool last = 4;
+}
+
+message UploadObjectsRequest {
+  // Only on the first message of the stream.
+  string repo = 1;
+  ObjectChunk chunk = 2;
+}
+
+message UploadObjectsResponse {
+  repeated string stored = 1;
+  repeated string already_present = 2;
+  uint64 bytes = 3;
+}
+
+message GetObjectRequest {
+  string repo = 1;
+  string object_id = 2;
+}
+
+message MissingObjectsRequest {
+  string repo = 1;
+  repeated string object_ids = 2;
+}
+
+message MissingObjectsResponse { repeated string missing = 1; }
+
+message VerifyObjectsRequest {
+  string repo = 1;
+  repeated string object_ids = 2;
+}
+
+message ObjectStatus {
+  string object_id = 1;
+  // "ok", "missing" or "corrupt".
+  string status = 2;
+  uint64 size = 3;
+  string detail = 4;
+}
+
+message VerifyObjectsResponse { repeated ObjectStatus objects = 1; }
+
+message PublishRequest {
+  string repo = 1;
+  // The head changeset; its unpublished ancestors are published with it.
+  string head = 2;
+  string idempotency_key = 3;
+}
+
+// State machine: prepared → uploaded → verified → published | rejected.
+message Publication {
+  string operation_id = 1;
+  string state = 2;
+  string head = 3;
+  uint32 new_changesets = 4;
+  uint32 new_blobs = 5;
+  string reason = 6;
+}
+
+message GetOperationRequest {
+  string repo = 1;
+  // Either id works; the idempotency key is the one a client always knows.
+  string operation_id = 2;
+  string idempotency_key = 3;
+}
+
+message Operation {
+  string operation_id = 1;
+  string kind = 2;
+  string state = 3;
+  string actor = 4;
+  string stream = 5;
+  int64 created_at_ms = 6;
+  int64 updated_at_ms = 7;
+  // Set for kind = "integrate".
+  IntegrationResult integration = 8;
+  // Set for kind = "publish".
+  Publication publication = 9;
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+message FileOp {
+  string path = 1;
+  // "put" or "delete".
+  string op = 2;
+  // Content blob (put only).
+  string blob_id = 3;
+  // "regular" or "symlink".
+  string file_type = 4;
+  bool executable = 5;
+}
+
+message Changeset {
+  string id = 1;
+  string namespace = 2;
+  repeated string parents = 3;
+  string author = 4;
+  int64 timestamp_ms = 5;
+  string message = 6;
+  repeated FileOp ops = 7;
+  uint64 generation = 8;
+  bool published = 9;
+}
+
+message GetChangesetRequest {
+  string repo = 1;
+  // Revision expression: id, id prefix, stream, proposal id, with ~N / ^N suffixes.
+  string rev = 2;
+  // Include the operations (can be large).
+  bool include_ops = 3;
+}
+
+message LogRequest {
+  string repo = 1;
+  string rev = 2;
+  // Restrict to changesets touching this path.
+  string path = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+message LogResponse {
+  repeated Changeset changesets = 1;
+  string next_page_token = 2;
+}
+
+message AncestorsRequest {
+  string repo = 1;
+  // Changesets wanted (and, transitively, their ancestors) ...
+  repeated string want = 2;
+  // ... excluding everything reachable from these.
+  repeated string have = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+message AncestorsResponse {
+  // Parents before children.
+  repeated string changeset_ids = 1;
+  string next_page_token = 2;
+}
+
+message MergeBaseRequest {
+  string repo = 1;
+  string a = 2;
+  string b = 3;
+}
+
+message MergeBaseResponse {
+  // Empty = unrelated histories; more than one = criss-cross (refused by merge).
+  repeated string bases = 1;
+}
+
+message ResolveRevRequest {
+  string repo = 1;
+  string rev = 2;
+}
+
+message ResolveRevResponse { string changeset_id = 1; }
+
+// ---------------------------------------------------------------------------
+// Tree
+// ---------------------------------------------------------------------------
+
+message TreeEntry {
+  string path = 1;
+  string blob_id = 2;
+  uint64 size = 3;
+  string file_type = 4;
+  bool executable = 5;
+}
+
+message ResolvePathRequest {
+  string repo = 1;
+  string rev = 2;
+  string path = 3;
+}
+
+message ResolvePathResponse {
+  // "file", "symlink", "dir" or "missing".
+  string kind = 1;
+  TreeEntry entry = 2;
+}
+
+message DirEntry {
+  string name = 1;
+  // "file", "symlink" or "dir".
+  string kind = 2;
+  uint64 size = 3;
+  string blob_id = 4;
+  bool executable = 5;
+}
+
+message ListDirectoryRequest {
+  string repo = 1;
+  string rev = 2;
+  string path = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListDirectoryResponse {
+  repeated DirEntry entries = 1;
+  string next_page_token = 2;
+  string tree_id = 3;
+}
+
+message GetTreeRequest {
+  string repo = 1;
+  // Revision whose resulting tree is wanted.
+  string rev = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+
+message GetTreeResponse {
+  string tree_id = 1;
+  repeated TreeEntry entries = 2;
+  string next_page_token = 3;
+  uint64 total_entries = 4;
+}
+
+message DiffRequest {
+  string repo = 1;
+  string from = 2;
+  string to = 3;
+  repeated string paths = 4;
+  uint32 context = 5;
+}
+
+message FileDiff {
+  string path = 1;
+  // "added", "modified", "deleted".
+  string status = 2;
+  bool binary = 3;
+  uint32 additions = 4;
+  uint32 deletions = 5;
+  // Unified diff text (empty for binary files).
+  string patch = 6;
+}
+
+message DiffResponse {
+  repeated FileDiff files = 1;
+  bool truncated = 2;
+}
+
+message GetFileRequest {
+  string repo = 1;
+  string rev = 2;
+  string path = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Streams
+// ---------------------------------------------------------------------------
+
+message Stream {
+  string name = 1;
+  string head = 2;
+  uint64 version = 3;
+  int64 created_at_ms = 4;
+  string created_by = 5;
+  uint64 policy_version = 6;
+}
+
+message ListStreamsRequest { string repo = 1; }
+message ListStreamsResponse { repeated Stream streams = 1; }
+
+message CreateStreamRequest {
+  string repo = 1;
+  string name = 2;
+  // Start the stream at this revision (default: empty stream).
+  string from_rev = 3;
+  string idempotency_key = 4;
+}
+
+message ReadHeadRequest {
+  string repo = 1;
+  string stream = 2;
+  // Long-poll: wait up to `wait_ms` for the stream version to exceed this value.
+  uint64 wait_version_gt = 3;
+  uint32 wait_ms = 4;
+}
+
+message CompareAndSwapRequest {
+  string repo = 1;
+  string stream = 2;
+  uint64 expected_version = 3;
+  string expected_head = 4;
+  string new_head = 5;
+  string reason = 6;
+  // Allow non-fast-forward moves. Administrators only.
+  bool force = 7;
+  string idempotency_key = 8;
+}
+
+message ReflogRequest {
+  string repo = 1;
+  string stream = 2;
+  uint32 limit = 3;
+}
+
+message ReflogEntry {
+  uint64 seq = 1;
+  string old_head = 2;
+  string new_head = 3;
+  uint64 version = 4;
+  string operation_id = 5;
+  string actor = 6;
+  int64 timestamp_ms = 7;
+  string reason = 8;
+}
+
+message ReflogResponse { repeated ReflogEntry entries = 1; }
+
+// ---------------------------------------------------------------------------
+// Workspaces (virtual, server-side; no checkout required)
+// ---------------------------------------------------------------------------
+
+message Workspace {
+  string name = 1;
+  string stream = 2;
+  string base = 3;
+  string head = 4;
+  string owner = 5;
+  int64 created_at_ms = 6;
+  int64 updated_at_ms = 7;
+}
+
+message CreateWorkspaceRequest {
+  string repo = 1;
+  string name = 2;
+  string stream = 3;
+  // Start from this revision instead of the stream head.
+  string from_rev = 4;
+  string idempotency_key = 5;
+}
+
+message GetWorkspaceRequest {
+  string repo = 1;
+  string name = 2;
+}
+
+message ListWorkspacesRequest { string repo = 1; }
+message ListWorkspacesResponse { repeated Workspace workspaces = 1; }
+message DeleteWorkspaceRequest {
+  string repo = 1;
+  string name = 2;
+}
+
+message FileChange {
+  string path = 1;
+  // "put" or "delete".
+  string op = 2;
+  // Inline content (put). Alternatively reference an uploaded blob.
+  bytes content = 3;
+  string blob_id = 4;
+  bool executable = 5;
+  // "regular" (default) or "symlink" (content = target path).
+  string file_type = 6;
+}
+
+message ModifyWorkspaceRequest {
+  string repo = 1;
+  string name = 2;
+  // Applied atomically as ONE new changeset on top of the workspace head.
+  repeated FileChange changes = 3;
+  string message = 4;
+  // Reject if the workspace head moved (optimistic concurrency); empty = skip.
+  string expected_head = 5;
+  string idempotency_key = 6;
+}
+
+message SyncWorkspaceRequest {
+  string repo = 1;
+  string name = 2;
+  string idempotency_key = 3;
+  // Resolved files for every conflicting path. Without them a conflicting
+  // sync changes nothing and reports the conflicts; with them the clean
+  // parts of the merge plus these files become a two-parent merge changeset.
+  repeated FileChange resolutions = 4;
+}
+
+message SyncWorkspaceResponse {
+  // "up_to_date", "fast_forwarded", "merged" or "conflicted".
+  string status = 1;
+  string head = 2;
+  repeated Conflict conflicts = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Proposals
+// ---------------------------------------------------------------------------
+
+message Proposal {
+  string id = 1;
+  string stream = 2;
+  string head = 3;
+  string title = 4;
+  string description = 5;
+  string author = 6;
+  // "open", "integrated" or "closed".
+  string state = 7;
+  string task_id = 8;
+  int64 created_at_ms = 9;
+  int64 updated_at_ms = 10;
+  string integrated_as = 11;
+}
+
+message Review {
+  uint64 id = 1;
+  string proposal = 2;
+  string reviewer = 3;
+  // "approve", "request_changes" or "comment".
+  string decision = 4;
+  string body = 5;
+  // The head the reviewer looked at; approvals of other heads do not count.
+  string head = 6;
+  int64 timestamp_ms = 7;
+}
+
+message CreateProposalRequest {
+  string repo = 1;
+  string stream = 2;
+  // Revision to propose; it is published first if needed.
+  string head = 3;
+  string title = 4;
+  string description = 5;
+  string task_id = 6;
+  string idempotency_key = 7;
+}
+
+message GetProposalRequest {
+  string repo = 1;
+  // Id or unique prefix.
+  string id = 2;
+}
+
+message ProposalDetail {
+  Proposal proposal = 1;
+  repeated Review reviews = 2;
+}
+
+message ListProposalsRequest {
+  string repo = 1;
+  string state = 2;
+  string stream = 3;
+  string author = 4;
+  uint32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListProposalsResponse {
+  repeated Proposal proposals = 1;
+  string next_page_token = 2;
+}
+
+message UpdateProposalRequest {
+  string repo = 1;
+  string id = 2;
+  string new_head = 3;
+  string idempotency_key = 4;
+}
+
+message ReviewProposalRequest {
+  string repo = 1;
+  string id = 2;
+  string decision = 3;
+  string body = 4;
+  string idempotency_key = 5;
+}
+
+message CloseProposalRequest {
+  string repo = 1;
+  string id = 2;
+  string idempotency_key = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Integration
+// ---------------------------------------------------------------------------
+
+message Conflict {
+  string path = 1;
+  // "content", "both_added", "delete_modify", "binary", "type_change",
+  // "too_large", "file_directory".
+  string kind = 2;
+}
+
+message Blocker {
+  // e.g. missing_validation, approvals, missing_provenance, lease, not_allowed.
+  string code = 1;
+  string message = 2;
+  // Structured details as a JSON object.
+  string detail_json = 3;
+}
+
+// The decided outcome of an integration. `status` selects which fields are set:
+//   integrated: new_head, previous_head, version, strategy, tree_id, changed_files
+//   blocked:    candidate_changeset, candidate_tree, policy_version, blockers
+//   conflict:   conflicts, base
+//   denied:     blockers
+//   invalid:    reason
+message IntegrationOutcome {
+  string status = 1;
+  string new_head = 2;
+  string previous_head = 3;
+  uint64 version = 4;
+  // "fast_forward", "merge" or "already_integrated".
+  string strategy = 5;
+  string tree_id = 6;
+  uint32 changed_files = 7;
+  string candidate_changeset = 8;
+  string candidate_tree = 9;
+  uint64 policy_version = 10;
+  repeated Blocker blockers = 11;
+  repeated Conflict conflicts = 12;
+  string base = 13;
+  string reason = 14;
+}
+
+message IntegrationResult {
+  string operation_id = 1;
+  // Intent state: prepared, ready, integrated, blocked, rejected, aborted, ...
+  string state = 2;
+  IntegrationOutcome outcome = 3;
+}
+
+message PrepareRequest {
+  string repo = 1;
+  string proposal = 2;
+  // Also enqueue validation jobs for required checks that have a runner
+  // configuration and no passing attestation yet.
+  bool enqueue_validations = 3;
+  string idempotency_key = 4;
+}
+
+// What integrating a proposal would do right now, without doing it.
+message Preparation {
+  string proposal = 1;
+  // "fast_forward", "merge", "already_integrated" or "" when there is no candidate.
+  string strategy = 2;
+  string candidate_tree = 3;
+  repeated Conflict conflicts = 4;
+  string base = 5;
+  repeated string changed_files = 6;
+  string problem = 7;
+  string algorithm = 8;
+  uint64 policy_version = 9;
+  // What policy would say right now (empty = it would allow the integration).
+  repeated Blocker blockers = 10;
+  // Required checks and where they stand.
+  repeated ValidationStatus validations = 11;
+  // Jobs enqueued by this call (or already queued for the same candidate).
+  repeated Job jobs = 12;
+}
+
+message ValidationStatus {
+  string check = 1;
+  // "passed", "failed", "pending" (job queued/running), "missing" (no runner configured).
+  string state = 2;
+  string attestation_id = 3;
+  string job_id = 4;
+}
+
+message RequestValidationRequest {
+  string repo = 1;
+  string proposal = 2;
+  // Checks to validate (default: all required checks that have a runner).
+  repeated string checks = 3;
+  string idempotency_key = 4;
+}
+
+message RequestValidationResponse { repeated Job jobs = 1; }
+
+message Attestation {
+  string id = 1;
+  string tree_id = 2;
+  string check = 3;
+  // "pass" or "fail".
+  string result = 4;
+  uint64 policy_version = 5;
+  string environment_digest = 6;
+  string issuer = 7;
+  int64 issued_at_ms = 8;
+  // Hex Ed25519 public key and signature (see docs/architecture/object-format.md).
+  string public_key = 9;
+  string signature = 10;
+}
+
+message SubmitAttestationRequest {
+  string repo = 1;
+  Attestation attestation = 2;
+}
+
+message SubmitAttestationResponse { bool accepted = 1; }
+
+message ListAttestationsRequest {
+  string repo = 1;
+  string tree_id = 2;
+}
+
+message ListAttestationsResponse { repeated Attestation attestations = 1; }
+
+message IntegrateRequest {
+  string repo = 1;
+  string proposal = 2;
+  string idempotency_key = 3;
+  // Fencing tokens of exclusive leases the author holds.
+  repeated uint64 fencing_tokens = 4;
+}
+
+message QueueEntry {
+  uint64 id = 1;
+  string stream = 2;
+  string proposal = 3;
+  // "queued", "integrated", "blocked", "conflict", "failed", "skipped".
+  string state = 4;
+  string enqueued_by = 5;
+  int64 enqueued_at_ms = 6;
+  int64 processed_at_ms = 7;
+  string outcome = 8;
+}
+
+message EnqueueRequest {
+  string repo = 1;
+  string proposal = 2;
+  string idempotency_key = 3;
+}
+
+message ListQueueRequest {
+  string repo = 1;
+  string stream = 2;
+}
+
+message ListQueueResponse { repeated QueueEntry entries = 1; }
+
+message RunQueueRequest {
+  string repo = 1;
+  string stream = 2;
+  string idempotency_key = 3;
+}
+
+message RunQueueResponse {
+  repeated QueueEntry processed = 1;
+  // Proposals that stopped the run (blocked / conflict), if any.
+  string stopped_at = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Agents: identities, runs, tasks, leases, provenance, prediction
+// ---------------------------------------------------------------------------
+
+message Agent {
+  string name = 1;
+  string identity = 2;
+  string public_key = 3;
+  string role = 4;
+  int64 created_at_ms = 5;
+  bool disabled = 6;
+}
+
+message RegisterAgentRequest {
+  string repo = 1;
+  string name = 2;
+  // Hex Ed25519 public key. The private key never leaves the agent.
+  string public_key = 3;
+  string role = 4;
+  string idempotency_key = 5;
+}
+
+message ListAgentsRequest { string repo = 1; }
+message ListAgentsResponse { repeated Agent agents = 1; }
+
+message Run {
+  string run_id = 1;
+  string agent = 2;
+  // e.g. "agent:bot#run_ab12…" — the identity to act as for this run.
+  string identity = 3;
+  string task_id = 4;
+  int64 started_at_ms = 5;
+  int64 finished_at_ms = 6;
+  // "running", "completed", "failed" or "stale" (abandoned: no heartbeat).
+  string status = 7;
+  int64 last_heartbeat_ms = 8;
+  string summary = 9;
+}
+
+message StartRunRequest {
+  string repo = 1;
+  string agent = 2;
+  string task_id = 3;
+  string idempotency_key = 4;
+}
+
+message HeartbeatRequest {
+  string repo = 1;
+  string run_id = 2;
+}
+
+message HeartbeatResponse { int64 server_time_ms = 1; }
+
+message CompleteRunRequest {
+  string repo = 1;
+  string run_id = 2;
+  string status = 3;
+  string summary = 4;
+  string idempotency_key = 5;
+}
+
+message ListRunsRequest {
+  string repo = 1;
+  string agent = 2;
+  bool active_only = 3;
+  uint32 limit = 4;
+}
+
+message ListRunsResponse { repeated Run runs = 1; }
+
+message Task {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string owner = 4;
+  // "open", "in_progress", "done", "cancelled".
+  string state = 5;
+  repeated string scope = 6;
+  string created_by = 7;
+  int64 created_at_ms = 8;
+  int64 updated_at_ms = 9;
+  repeated string depends_on = 10;
+  // True when every dependency is done.
+  bool ready = 11;
+}
+
+message CreateTaskRequest {
+  string repo = 1;
+  string title = 2;
+  string description = 3;
+  repeated string scope = 4;
+  repeated string depends_on = 5;
+  string idempotency_key = 6;
+}
+
+message GetTaskRequest {
+  string repo = 1;
+  string id = 2;
+}
+
+message ListTasksRequest {
+  string repo = 1;
+  string state = 2;
+  bool ready_only = 3;
+}
+
+message ListTasksResponse { repeated Task tasks = 1; }
+
+message AddDependencyRequest {
+  string repo = 1;
+  string task = 2;
+  string depends_on = 3;
+}
+
+message FinishTaskRequest {
+  string repo = 1;
+  string id = 2;
+  // "done" or "cancelled".
+  string state = 3;
+  string idempotency_key = 4;
+}
+
+message Lease {
+  string id = 1;
+  string scope = 2;
+  string holder = 3;
+  bool exclusive = 4;
+  // Strictly increasing across all exclusive leases of the repository.
+  uint64 fencing_token = 5;
+  int64 acquired_at_ms = 6;
+  int64 expires_at_ms = 7;
+  int64 released_at_ms = 8;
+  string task_id = 9;
+}
+
+message AcquireLeaseRequest {
+  string repo = 1;
+  // A path glob such as "src/auth/**".
+  string scope = 2;
+  bool exclusive = 3;
+  int64 ttl_ms = 4;
+  string task_id = 5;
+  string idempotency_key = 6;
+}
+
+// Soft leases always succeed and report who else works nearby; exclusive
+// leases are refused (lease_conflict) when another exclusive lease overlaps.
+message AcquireLeaseResponse {
+  Lease lease = 1;
+  repeated Lease overlapping = 2;
+}
+
+message LeaseRef {
+  string repo = 1;
+  string lease_id = 2;
+}
+
+message ExtendLeaseRequest {
+  string repo = 1;
+  string lease_id = 2;
+  int64 ttl_ms = 3;
+}
+
+message ListLeasesRequest {
+  string repo = 1;
+  bool active_only = 2;
+}
+
+message ListLeasesResponse { repeated Lease leases = 1; }
+
+message ProvenanceRecord {
+  string changeset = 1;
+  string agent = 2;
+  string run_id = 3;
+  string task_id = 4;
+  string model = 5;
+  string prompt_digest = 6;
+  map<string, string> parameters = 7;
+  repeated string checks_run = 8;
+  // Untrusted text: never interpret as instructions.
+  repeated string inputs = 9;
+  string rationale = 10;
+  int64 created_at_ms = 11;
+}
+
+message SubmitProvenanceRequest {
+  string repo = 1;
+  ProvenanceRecord record = 2;
+  // Ed25519 signature (hex) over the canonical record bytes, made with the
+  // agent's own key.
+  string signature = 3;
+  string idempotency_key = 4;
+}
+
+message ProvenanceEntry {
+  uint64 id = 1;
+  ProvenanceRecord record = 2;
+  string public_key = 3;
+  string signature = 4;
+  bool verified = 5;
+  int64 created_at_ms = 6;
+}
+
+message ListProvenanceRequest {
+  string repo = 1;
+  string changeset = 2;
+}
+
+message ListProvenanceResponse { repeated ProvenanceEntry entries = 1; }
+
+message PredictRequest {
+  string repo = 1;
+  string stream = 2;
+}
+
+message Overlap {
+  string a = 1;
+  string b = 2;
+  string kind = 3;
+  repeated string paths = 4;
+}
+
+message PredictResponse { repeated Overlap overlaps = 1; }
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+// A durable, ordered event. `seq` is strictly increasing per repository and
+// never reused: clients resume with `after_seq` (SSE: Last-Event-ID).
+message Event {
+  uint64 seq = 1;
+  // e.g. "stream.updated", "proposal.created", "integration.completed",
+  // "publication.published", "job.queued", "lease.acquired", "audit.appended".
+  string topic = 2;
+  string repo = 3;
+  int64 timestamp_ms = 4;
+  // JSON object with the event's data.
+  string payload_json = 5;
+}
+
+message SubscribeRequest {
+  string repo = 1;
+  // Topic prefixes to include (empty = all).
+  repeated string topics = 2;
+  // Deliver events with seq > after_seq first (replay), then follow live.
+  // Use the special value u64::MAX to start from "now".
+  uint64 after_seq = 3;
+  // Send an empty heartbeat event every this many ms (0 = 15000).
+  uint32 heartbeat_ms = 4;
+}
+
+message ReplayRequest {
+  string repo = 1;
+  repeated string topics = 2;
+  uint64 after_seq = 3;
+  uint32 limit = 4;
+}
+
+message ReplayResponse {
+  repeated Event events = 1;
+  // Highest seq currently stored; more events remain if the last returned
+  // seq is below it.
+  uint64 latest_seq = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Administration
+// ---------------------------------------------------------------------------
+
+message GetPolicyRequest {
+  string repo = 1;
+  string stream = 2;
+}
+
+message PolicyVersion {
+  string stream = 1;
+  uint64 version = 2;
+  // The policy document (JSON, see docs/guides/policy.md).
+  string document = 3;
+  string doc_hash = 4;
+  int64 created_at_ms = 5;
+  string created_by = 6;
+}
+
+message SetPolicyRequest {
+  string repo = 1;
+  string stream = 2;
+  string document = 3;
+  string idempotency_key = 4;
+}
+
+message PolicyHistoryRequest {
+  string repo = 1;
+  string stream = 2;
+}
+
+message PolicyHistoryResponse { repeated PolicyVersion versions = 1; }
+
+message Pin {
+  string name = 1;
+  string changeset = 2;
+  string reason = 3;
+  int64 created_at_ms = 4;
+}
+
+message PinRequest {
+  string repo = 1;
+  string name = 2;
+  string rev = 3;
+  string reason = 4;
+}
+
+message UnpinRequest {
+  string repo = 1;
+  string name = 2;
+}
+
+message ListPinsRequest { string repo = 1; }
+message ListPinsResponse { repeated Pin pins = 1; }
+
+message AuditEntry {
+  uint64 seq = 1;
+  int64 timestamp_ms = 2;
+  string actor = 3;
+  string action = 4;
+  string target = 5;
+  string details_json = 6;
+  string hash = 7;
+}
+
+message ListAuditRequest {
+  string repo = 1;
+  // Substring match on target, actor and details.
+  string contains = 2;
+  uint32 limit = 3;
+}
+
+message ListAuditResponse { repeated AuditEntry entries = 1; }
+
+message VerifyAuditRequest { string repo = 1; }
+
+message VerifyAuditResponse {
+  bool ok = 1;
+  uint64 entries = 2;
+  string detail = 3;
+}
+
+message GcRequest {
+  string repo = 1;
+  bool dry_run = 2;
+  // 0 = server default (24 h).
+  int64 grace_ms = 3;
+  // 0 = server default (90 days).
+  int64 reflog_retention_ms = 4;
+}
+
+message GcResponse {
+  uint64 reachable_changesets = 1;
+  uint64 reachable_blobs = 2;
+  uint64 scanned = 3;
+  uint64 deleted = 4;
+  uint64 bytes = 5;
+  uint64 kept_young = 6;
+  uint64 kept_staged = 7;
+  bool dry_run = 8;
+}
+
+message FsckRequest { string repo = 1; }
+
+message FsckIssue {
+  string kind = 1;
+  string object = 2;
+  string detail = 3;
+}
+
+message FsckResponse {
+  bool ok = 1;
+  repeated FsckIssue issues = 2;
+  uint64 objects_checked = 3;
+}
+
+// Restrictions attached to a credential. Every field narrows; empty = no
+// restriction on that dimension.
+message CredentialScope {
+  // Repository patterns, e.g. "acme/webapp" or "acme/*".
+  repeated string repos = 1;
+  // Stream patterns (glob), e.g. "main", "agents/*".
+  repeated string streams = 2;
+  // Operation capabilities, e.g. "objects.write", "proposal.create"
+  // (see docs/protocol/authorization.md).
+  repeated string operations = 3;
+}
+
+message Credential {
+  string id = 1;
+  string subject = 2;
+  string kind = 3;
+  string description = 4;
+  CredentialScope scope = 5;
+  int64 created_at_ms = 6;
+  int64 expires_at_ms = 7;
+  int64 revoked_at_ms = 8;
+  int64 last_used_ms = 9;
+  string created_by = 10;
+}
+
+message MintCredentialRequest {
+  // Identity the credential authenticates as. A caller may mint credentials
+  // for itself or, with `credentials.mint`, for agents and services.
+  string subject = 1;
+  string description = 2;
+  CredentialScope scope = 3;
+  // Lifetime in seconds; capped by server policy (agents: short).
+  uint32 ttl_secs = 4;
+  string idempotency_key = 5;
+}
+
+message MintCredentialResponse {
+  Credential credential = 1;
+  // The secret token. Shown exactly once; only its hash is stored.
+  string token = 2;
+}
+
+message ListCredentialsRequest {
+  string subject = 1;
+  bool include_revoked = 2;
+}
+
+message ListCredentialsResponse { repeated Credential credentials = 1; }
+
+message RevokeCredentialRequest { string credential_id = 1; }
+message RevokeCredentialResponse { bool revoked = 1; }
+
+message RoleBinding {
+  // Identity pattern, e.g. "user:alice", "agent:*", "group:platform".
+  string subject = 1;
+  // Repository pattern, e.g. "acme/webapp", "acme/*", "*".
+  string repo = 2;
+  // reader, writer, reviewer, integrator, runner, admin.
+  string role = 3;
+  string created_by = 4;
+  int64 created_at_ms = 5;
+}
+
+message GrantRoleRequest {
+  string subject = 1;
+  string repo = 2;
+  string role = 3;
+}
+
+message RevokeRoleRequest {
+  string subject = 1;
+  string repo = 2;
+  string role = 3;
+}
+
+message ListRolesRequest {
+  string subject = 1;
+  string repo = 2;
+}
+
+message ListRolesResponse { repeated RoleBinding bindings = 1; }
+
+message Empty {}
+
+// ---------------------------------------------------------------------------
+// Execution plane: jobs
+// ---------------------------------------------------------------------------
+
+// How a trusted worker runs a check. Configured by administrators in the
+// stream policy (never taken from repository contents).
+message RunSpec {
+  repeated string argv = 1;
+  uint32 timeout_secs = 2;
+  uint32 memory_mb = 3;
+  uint32 cpu_secs = 4;
+  uint32 max_pids = 5;
+  // Network access is off unless explicitly requested here.
+  bool network = 6;
+  // Pinned image reference for OCI workers (optional).
+  string image = 7;
+  // Non-secret environment variables.
+  map<string, string> env = 8;
+}
+
+message Job {
+  string id = 1;
+  string repo = 2;
+  // "validate".
+  string kind = 3;
+  // "queued", "claimed", "succeeded", "failed", "cancelled".
+  string state = 4;
+  // Set for kind = "validate".
+  ValidationTask validation = 5;
+  string result_json = 6;
+  string error = 7;
+  uint32 attempts = 8;
+  string claimed_by = 9;
+  int64 claimed_until_ms = 10;
+  int64 created_at_ms = 11;
+  int64 updated_at_ms = 12;
+}
+
+message ValidationTask {
+  string proposal = 1;
+  string check = 2;
+  // The exact tree to check. A worker must refuse a candidate with another id.
+  string tree_id = 3;
+  uint64 policy_version = 4;
+  string stream = 5;
+  RunSpec run = 6;
+  // If set, the attestation must carry exactly this environment digest.
+  string required_environment_digest = 7;
+}
+
+message ClaimJobRequest {
+  // Empty = any repository the caller has the `runner` role on.
+  string repo = 1;
+  repeated string kinds = 2;
+  string worker = 3;
+  int64 lease_ms = 4;
+  // Long-poll for up to this many ms when nothing is queued.
+  uint32 wait_ms = 5;
+}
+
+message ClaimJobResponse {
+  // Unset when nothing was available.
+  Job job = 1;
+}
+
+message JobRef {
+  string repo = 1;
+  string job_id = 2;
+  string worker = 3;
+}
+
+message HeartbeatJobRequest {
+  JobRef job = 1;
+  int64 lease_ms = 2;
+}
+
+message CompleteJobRequest {
+  JobRef job = 1;
+  // Free-form result (e.g. exit code, durations, log excerpt) as JSON.
+  string result_json = 2;
+  // The signed attestation produced for the job, submitted atomically with
+  // completion. Required for kind = "validate" unless `stale` is set.
+  Attestation attestation = 3;
+  // The candidate no longer matched the job's tree id: no attestation.
+  bool stale = 4;
+}
+
+message FailJobRequest {
+  JobRef job = 1;
+  string error = 2;
+  // Retry after this many ms (0 = fail permanently).
+  int64 retry_after_ms = 3;
+}
+
+message GetJobRequest {
+  string repo = 1;
+  string job_id = 2;
+}
+
+message ListJobsRequest {
+  string repo = 1;
+  string state = 2;
+  uint32 limit = 3;
+}
+
+message ListJobsResponse { repeated Job jobs = 1; }
+
+// ---------------------------------------------------------------------------
+// Services
+// ---------------------------------------------------------------------------
+
+service ProtocolService {
+  rpc Negotiate(NegotiateRequest) returns (NegotiateResponse);
+  rpc Whoami(WhoamiRequest) returns (Principal);
+}
+
+service RepositoryService {
+  rpc Create(CreateRepoRequest) returns (Repo);
+  rpc Describe(GetRepoRequest) returns (Repo);
+  rpc List(ListReposRequest) returns (ListReposResponse);
+  rpc Configure(ConfigureRepoRequest) returns (Repo);
+}
+
+service ObjectService {
+  rpc Upload(stream UploadObjectsRequest) returns (UploadObjectsResponse);
+  rpc Get(GetObjectRequest) returns (stream ObjectChunk);
+  rpc Missing(MissingObjectsRequest) returns (MissingObjectsResponse);
+  rpc Verify(VerifyObjectsRequest) returns (VerifyObjectsResponse);
+  rpc Publish(PublishRequest) returns (Publication);
+  rpc GetOperation(GetOperationRequest) returns (Operation);
+}
+
+service HistoryService {
+  rpc GetChangeset(GetChangesetRequest) returns (Changeset);
+  rpc Log(LogRequest) returns (LogResponse);
+  rpc Ancestors(AncestorsRequest) returns (AncestorsResponse);
+  rpc MergeBase(MergeBaseRequest) returns (MergeBaseResponse);
+  rpc ResolveRev(ResolveRevRequest) returns (ResolveRevResponse);
+}
+
+service TreeService {
+  rpc ResolvePath(ResolvePathRequest) returns (ResolvePathResponse);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+  rpc GetTree(GetTreeRequest) returns (GetTreeResponse);
+  rpc Diff(DiffRequest) returns (DiffResponse);
+  rpc GetFile(GetFileRequest) returns (stream ObjectChunk);
+}
+
+service StreamService {
+  rpc List(ListStreamsRequest) returns (ListStreamsResponse);
+  rpc Create(CreateStreamRequest) returns (Stream);
+  rpc ReadHead(ReadHeadRequest) returns (Stream);
+  rpc CompareAndSwap(CompareAndSwapRequest) returns (Stream);
+  rpc Reflog(ReflogRequest) returns (ReflogResponse);
+}
+
+service WorkspaceService {
+  rpc Create(CreateWorkspaceRequest) returns (Workspace);
+  rpc Get(GetWorkspaceRequest) returns (Workspace);
+  rpc List(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc Modify(ModifyWorkspaceRequest) returns (Workspace);
+  rpc Sync(SyncWorkspaceRequest) returns (SyncWorkspaceResponse);
+  rpc Delete(DeleteWorkspaceRequest) returns (Empty);
+}
+
+service ProposalService {
+  rpc Create(CreateProposalRequest) returns (Proposal);
+  rpc Get(GetProposalRequest) returns (ProposalDetail);
+  rpc List(ListProposalsRequest) returns (ListProposalsResponse);
+  rpc Update(UpdateProposalRequest) returns (Proposal);
+  rpc Review(ReviewProposalRequest) returns (Review);
+  rpc Close(CloseProposalRequest) returns (Proposal);
+}
+
+service IntegrationService {
+  rpc Prepare(PrepareRequest) returns (Preparation);
+  rpc RequestValidation(RequestValidationRequest) returns (RequestValidationResponse);
+  rpc SubmitAttestation(SubmitAttestationRequest) returns (SubmitAttestationResponse);
+  rpc ListAttestations(ListAttestationsRequest) returns (ListAttestationsResponse);
+  rpc Integrate(IntegrateRequest) returns (IntegrationResult);
+  rpc Enqueue(EnqueueRequest) returns (QueueEntry);
+  rpc ListQueue(ListQueueRequest) returns (ListQueueResponse);
+  rpc RunQueue(RunQueueRequest) returns (RunQueueResponse);
+}
+
+service AgentService {
+  rpc Register(RegisterAgentRequest) returns (Agent);
+  rpc List(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc StartRun(StartRunRequest) returns (Run);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc Complete(CompleteRunRequest) returns (Run);
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc CreateTask(CreateTaskRequest) returns (Task);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc AddDependency(AddDependencyRequest) returns (Task);
+  rpc FinishTask(FinishTaskRequest) returns (Task);
+  rpc AcquireLease(AcquireLeaseRequest) returns (AcquireLeaseResponse);
+  rpc ReleaseLease(LeaseRef) returns (Empty);
+  rpc ExtendLease(ExtendLeaseRequest) returns (Lease);
+  rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
+  rpc SubmitProvenance(SubmitProvenanceRequest) returns (ProvenanceEntry);
+  rpc ListProvenance(ListProvenanceRequest) returns (ListProvenanceResponse);
+  rpc Predict(PredictRequest) returns (PredictResponse);
+}
+
+service EventService {
+  rpc Subscribe(SubscribeRequest) returns (stream Event);
+  rpc Replay(ReplayRequest) returns (ReplayResponse);
+}
+
+service AdminService {
+  rpc GetPolicy(GetPolicyRequest) returns (PolicyVersion);
+  rpc SetPolicy(SetPolicyRequest) returns (PolicyVersion);
+  rpc PolicyHistory(PolicyHistoryRequest) returns (PolicyHistoryResponse);
+  rpc Pin(PinRequest) returns (Pin);
+  rpc Unpin(UnpinRequest) returns (Empty);
+  rpc ListPins(ListPinsRequest) returns (ListPinsResponse);
+  rpc ListAudit(ListAuditRequest) returns (ListAuditResponse);
+  rpc VerifyAudit(VerifyAuditRequest) returns (VerifyAuditResponse);
+  rpc Gc(GcRequest) returns (GcResponse);
+  rpc Fsck(FsckRequest) returns (FsckResponse);
+  rpc MintCredential(MintCredentialRequest) returns (MintCredentialResponse);
+  rpc ListCredentials(ListCredentialsRequest) returns (ListCredentialsResponse);
+  rpc RevokeCredential(RevokeCredentialRequest) returns (RevokeCredentialResponse);
+  rpc GrantRole(GrantRoleRequest) returns (RoleBinding);
+  rpc RevokeRole(RevokeRoleRequest) returns (Empty);
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+}
+
+service ExecutionService {
+  rpc ClaimJob(ClaimJobRequest) returns (ClaimJobResponse);
+  rpc HeartbeatJob(HeartbeatJobRequest) returns (Job);
+  rpc CompleteJob(CompleteJobRequest) returns (Job);
+  rpc FailJob(FailJobRequest) returns (Job);
+  rpc GetJob(GetJobRequest) returns (Job);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  // The candidate tree of a proposal, for the worker to check out.
+  // Fails with `stale_candidate` if its id differs from `expected_tree_id`.
+  rpc GetCandidate(GetCandidateRequest) returns (GetTreeResponse);
+}
+
+message GetCandidateRequest {
+  string repo = 1;
+  string proposal = 2;
+  string expected_tree_id = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}

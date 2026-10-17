@@ -19,6 +19,7 @@
 //!   derived indexes**.
 
 mod admin;
+mod api_support;
 mod backup;
 mod derive;
 mod error;
@@ -28,13 +29,16 @@ mod gc;
 mod history;
 mod integrate;
 mod layout;
+mod prepare;
 mod publish;
 mod queue;
 mod repo;
 mod types;
+mod virtual_ws;
 pub mod workdir;
 mod workspace;
 
+pub use api_support::{FileDiff, MAX_NEGOTIATED};
 pub use backup::BackupReport;
 pub use derive::{DeriveReport, KEYFRAME_INTERVAL};
 pub use error::Error;
@@ -44,6 +48,7 @@ pub use gc::{GcOptions, GcReport};
 pub use history::{HybridGraph, LogEntry};
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};
+pub use prepare::{Preparation, ValidationState};
 pub use publish::PublishResult;
 
 /// Lifecycle state of an operation (re-exported from the metadata store).
@@ -51,6 +56,7 @@ pub use ag_storage::meta::IntentState as PublishState;
 pub use queue::QueueRunReport;
 pub use repo::Repository;
 pub use types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
+pub use virtual_ws::{VirtualChange, VirtualContent};
 pub use workspace::{Change, SyncOutcome};
 
 /// Result alias used throughout the crate.

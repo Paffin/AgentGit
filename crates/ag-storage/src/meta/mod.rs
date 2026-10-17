@@ -19,6 +19,7 @@
 mod agents;
 mod changesets;
 mod derived;
+mod events;
 mod intents;
 mod outbox;
 mod records;

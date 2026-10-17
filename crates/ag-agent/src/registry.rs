@@ -2,9 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use ag_crypto::{KeyPair, random_id};
+use ag_crypto::{KeyPair, PublicKey, random_id};
 use ag_storage::Meta;
-use ag_storage::meta::{AgentRow, RunRow};
+use ag_storage::meta::{AgentRow, MetaError, RunRow};
 use ag_types::{Identity, IdentityKind};
 use serde_json::json;
 
@@ -94,6 +94,36 @@ pub fn register_agent(
             "agent.register",
             identity.as_str(),
             &json!({"role": role, "key_id": kp.public().key_id()}),
+        )?;
+        Ok(row)
+    })?;
+    Ok(row)
+}
+
+/// Registers an agent whose key pair lives elsewhere (a remote agent keeps
+/// its private key; only the public key is submitted).
+pub fn register_agent_with_key(
+    meta: &Meta,
+    name: &str,
+    public_key: &PublicKey,
+    role: &str,
+    actor: &str,
+) -> Result<AgentRow, AgentError> {
+    validate_name(name)?;
+    if !["agent", "reviewer"].contains(&role) {
+        return Err(AgentError::Invalid(format!("unknown role '{role}' (expected agent or reviewer)")));
+    }
+    let identity = Identity::of(IdentityKind::Agent, name).map_err(|e| AgentError::Invalid(e.to_string()))?;
+    let row = meta.write(|tx| {
+        if tx.agent(name)?.is_some() {
+            return Err(MetaError::AlreadyExists(format!("agent '{name}'")));
+        }
+        let row = tx.agent_register(name, identity.as_str(), &public_key.to_hex(), role)?;
+        tx.audit_append(
+            actor,
+            "agent.register",
+            identity.as_str(),
+            &json!({"role": role, "key_id": public_key.key_id()}),
         )?;
         Ok(row)
     })?;

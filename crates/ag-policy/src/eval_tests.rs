@@ -43,6 +43,7 @@ fn policy_with_tests() -> Policy {
             issuers: vec![],
             environment_digest: None,
             max_age_secs: None,
+            run: None,
         }],
         ..Policy::default()
     }

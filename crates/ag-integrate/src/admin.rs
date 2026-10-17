@@ -91,6 +91,24 @@ impl Repository {
         author: &Identity,
         task_id: Option<&str>,
     ) -> Result<ProposalRow> {
+        Ok(self.propose_idempotent(stream, head, title, description, author, task_id, None)?.0)
+    }
+
+    /// Like [`Repository::propose`], but safe to repeat: with an idempotency
+    /// key, the same request returns the proposal it created the first time
+    /// (second element `false`), and the same key with a different request is
+    /// refused. This is what makes a retried network request harmless.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propose_idempotent(
+        &self,
+        stream: &str,
+        head: &ChangesetId,
+        title: &str,
+        description: &str,
+        author: &Identity,
+        task_id: Option<&str>,
+        idempotency_key: Option<&str>,
+    ) -> Result<(ProposalRow, bool)> {
         if title.trim().is_empty() {
             return Err(Error::Invalid("a proposal needs a title".into()));
         }
@@ -100,12 +118,42 @@ impl Repository {
         if self.meta.read(|tx| tx.stream(stream))?.is_none() {
             return Err(Error::NotFound(format!("stream '{stream}'")));
         }
+        let request_hash = crate::publish::hash_request(&[
+            "propose",
+            stream,
+            &head.to_hex(),
+            title,
+            description,
+            task_id.unwrap_or(""),
+            author.as_str(),
+        ]);
+        if let Some(key) = idempotency_key
+            && let Some(existing) = self.meta.read(|tx| tx.intent_by_key(&format!("propose:{key}")))?
+        {
+            return self.replay_propose(&existing, &request_hash).map(|p| (p, false));
+        }
         let published = self.publish(head, author, None)?;
         if published.state != ag_storage::meta::IntentState::Published {
             return Err(Error::Invalid(format!("cannot publish {head}: {}", published.reason.unwrap_or_default())));
         }
         let id = random_id("prop")?;
-        Ok(self.meta.write(|tx| {
+        let op = random_id("op")?;
+        let outcome = self.meta.write(|tx| {
+            if let Some(key) = idempotency_key {
+                let payload = json!({"stream": stream, "head": head});
+                let (intent, created) = tx.intent_create(&ag_storage::meta::NewIntent {
+                    operation_id: &op,
+                    idempotency_key: &format!("propose:{key}"),
+                    request_hash: &request_hash,
+                    kind: "propose",
+                    actor: author.as_str(),
+                    stream: Some(stream),
+                    payload: &payload,
+                })?;
+                if !created {
+                    return Ok(Err(intent));
+                }
+            }
             let p = tx.proposal_create(&NewProposal {
                 id: &id,
                 stream,
@@ -116,8 +164,33 @@ impl Repository {
                 task_id,
             })?;
             tx.audit_append(author.as_str(), "proposal.create", &id, &json!({"stream": stream, "head": head}))?;
-            Ok(p)
-        })?)
+            if idempotency_key.is_some() {
+                tx.intent_transition(
+                    &op,
+                    &[ag_storage::meta::IntentState::Prepared],
+                    ag_storage::meta::IntentState::Published,
+                    Some(&json!({"proposal": id})),
+                    None,
+                )?;
+            }
+            Ok(Ok(p))
+        })?;
+        match outcome {
+            Ok(p) => Ok((p, true)),
+            Err(existing) => self.replay_propose(&existing, &request_hash).map(|p| (p, false)),
+        }
+    }
+
+    fn replay_propose(&self, intent: &ag_storage::meta::IntentRow, request_hash: &str) -> Result<ProposalRow> {
+        if intent.request_hash != request_hash {
+            return Err(Error::Meta(MetaError::IdempotencyKeyReused(intent.idempotency_key.clone())));
+        }
+        let id = intent
+            .result
+            .as_ref()
+            .and_then(|r| r["proposal"].as_str())
+            .ok_or_else(|| Error::Conflict("the original request is still in progress".into()))?;
+        self.meta.read(|tx| tx.proposal(id))?.ok_or_else(|| Error::NotFound(format!("proposal '{id}'")))
     }
 
     /// Moves an open proposal to a new head. Earlier approvals stay attached

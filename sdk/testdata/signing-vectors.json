@@ -1,0 +1,99 @@
+{
+  "format": "agentgit-sdk-signing-vectors-v1",
+  "seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "public_key_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+  "cases": [
+    {
+      "name": "minimal",
+      "record": {
+        "changeset": "abababababababababababababababababababababababababababababababab",
+        "agent": "agent:bot",
+        "created_at_ms": 1760659200000
+      },
+      "canonical_json": "{\"agent\":\"agent:bot\",\"changeset\":\"abababababababababababababababababababababababababababababababab\",\"checks_run\":[],\"created_at\":1760659200000,\"inputs\":[],\"model\":null,\"parameters\":{},\"prompt_digest\":null,\"rationale\":null,\"run_id\":null,\"schema\":\"agentgit.provenance.v1\",\"task_id\":null}",
+      "signed_message_hex": "6167656e746769742e7369672e7631000d70726f76656e616e63652e76317b226167656e74223a226167656e743a626f74222c226368616e6765736574223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c22636865636b735f72756e223a5b5d2c22637265617465645f6174223a313736303635393230303030302c22696e70757473223a5b5d2c226d6f64656c223a6e756c6c2c22706172616d6574657273223a7b7d2c2270726f6d70745f646967657374223a6e756c6c2c22726174696f6e616c65223a6e756c6c2c2272756e5f6964223a6e756c6c2c22736368656d61223a226167656e746769742e70726f76656e616e63652e7631222c227461736b5f6964223a6e756c6c7d",
+      "signature_hex": "8d5a689ee600eded5926850938783d7197f23d1d8150c28808bba9f73dabb857a6eb9e043c7122fe7094df5b139969a393aba33f2a0c145636aa3f3b9739b003"
+    },
+    {
+      "name": "full-with-unsorted-parameters",
+      "record": {
+        "changeset": "abababababababababababababababababababababababababababababababab",
+        "agent": "agent:refactor-bot#run_0123456789abcdef0123",
+        "run_id": "run_0123456789abcdef0123",
+        "task_id": "task_0123",
+        "model": "example-model-1",
+        "prompt_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "parameters": {
+          "temperature": "0.2",
+          "max_tokens": "4096",
+          "a-first": "x"
+        },
+        "checks_run": [
+          "lint",
+          "unit"
+        ],
+        "inputs": [
+          "https://example.org/issue/1",
+          "docs/guide.md"
+        ],
+        "rationale": "rename for clarity",
+        "created_at_ms": 1760659260123
+      },
+      "canonical_json": "{\"agent\":\"agent:refactor-bot#run_0123456789abcdef0123\",\"changeset\":\"abababababababababababababababababababababababababababababababab\",\"checks_run\":[\"lint\",\"unit\"],\"created_at\":1760659260123,\"inputs\":[\"https://example.org/issue/1\",\"docs/guide.md\"],\"model\":\"example-model-1\",\"parameters\":{\"a-first\":\"x\",\"max_tokens\":\"4096\",\"temperature\":\"0.2\"},\"prompt_digest\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"rationale\":\"rename for clarity\",\"run_id\":\"run_0123456789abcdef0123\",\"schema\":\"agentgit.provenance.v1\",\"task_id\":\"task_0123\"}",
+      "signed_message_hex": "6167656e746769742e7369672e7631000d70726f76656e616e63652e76317b226167656e74223a226167656e743a7265666163746f722d626f742372756e5f3031323334353637383961626364656630313233222c226368616e6765736574223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c22636865636b735f72756e223a5b226c696e74222c22756e6974225d2c22637265617465645f6174223a313736303635393236303132332c22696e70757473223a5b2268747470733a2f2f6578616d706c652e6f72672f69737375652f31222c22646f63732f67756964652e6d64225d2c226d6f64656c223a226578616d706c652d6d6f64656c2d31222c22706172616d6574657273223a7b22612d6669727374223a2278222c226d61785f746f6b656e73223a2234303936222c2274656d7065726174757265223a22302e32227d2c2270726f6d70745f646967657374223a2230303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303031222c22726174696f6e616c65223a2272656e616d6520666f7220636c6172697479222c2272756e5f6964223a2272756e5f3031323334353637383961626364656630313233222c22736368656d61223a226167656e746769742e70726f76656e616e63652e7631222c227461736b5f6964223a227461736b5f30313233227d",
+      "signature_hex": "02677e5541b009cbf4f8c3e3c64759ef2ea1d8072994b8f4c492602986212fe4ad33eb281a5fe62b385fb19bad0d81e5cd7c697102af8b8ddbe7c441fb3b0308"
+    },
+    {
+      "name": "escapes-and-unicode",
+      "record": {
+        "changeset": "abababababababababababababababababababababababababababababababab",
+        "agent": "agent:bot#run_1",
+        "rationale": "quote \" backslash \\ newline \n tab \t control \u0001 del  snowman ☃ crab 🦀",
+        "inputs": [
+          "Привет, мир",
+          "line\r\nbreak",
+          "  separator"
+        ],
+        "parameters": {
+          "ключ": "значение",
+          "kéy": "v"
+        },
+        "created_at_ms": -1
+      },
+      "canonical_json": "{\"agent\":\"agent:bot#run_1\",\"changeset\":\"abababababababababababababababababababababababababababababababab\",\"checks_run\":[],\"created_at\":-1,\"inputs\":[\"Привет, мир\",\"line\\r\\nbreak\",\"  separator\"],\"model\":null,\"parameters\":{\"kéy\":\"v\",\"ключ\":\"значение\"},\"prompt_digest\":null,\"rationale\":\"quote \\\" backslash \\\\ newline \\n tab \\t control \\u0001 del  snowman ☃ crab 🦀\",\"run_id\":null,\"schema\":\"agentgit.provenance.v1\",\"task_id\":null}",
+      "signed_message_hex": "6167656e746769742e7369672e7631000d70726f76656e616e63652e76317b226167656e74223a226167656e743a626f742372756e5f31222c226368616e6765736574223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c22636865636b735f72756e223a5b5d2c22637265617465645f6174223a2d312c22696e70757473223a5b22d09fd180d0b8d0b2d0b5d1822c20d0bcd0b8d180222c226c696e655c725c6e627265616b222c22e280a820736570617261746f72225d2c226d6f64656c223a6e756c6c2c22706172616d6574657273223a7b226bc3a979223a2276222c22d0bad0bbd18ed187223a22d0b7d0bdd0b0d187d0b5d0bdd0b8d0b5227d2c2270726f6d70745f646967657374223a6e756c6c2c22726174696f6e616c65223a2271756f7465205c22206261636b736c617368205c5c206e65776c696e65205c6e20746162205c7420636f6e74726f6c205c75303030312064656c207f20736e6f776d616e20e29883206372616220f09fa680222c2272756e5f6964223a6e756c6c2c22736368656d61223a226167656e746769742e70726f76656e616e63652e7631222c227461736b5f6964223a6e756c6c7d",
+      "signature_hex": "c58ab5fbf834c4d40c4d9b43c382fa1baa3684b8637ce632ce03ba181bf69c37fc06bddfbf73678d17332a1baff74b72bfd77f075a7e0fcf3c6afcb4c0d7c401"
+    },
+    {
+      "name": "key-order-is-by-code-point-not-utf16",
+      "record": {
+        "changeset": "abababababababababababababababababababababababababababababababab",
+        "agent": "agent:bot",
+        "parameters": {
+          "𐀀": "astral",
+          "￿": "bmp-last",
+          "z": "ascii",
+          "é": "latin"
+        },
+        "created_at_ms": 0
+      },
+      "canonical_json": "{\"agent\":\"agent:bot\",\"changeset\":\"abababababababababababababababababababababababababababababababab\",\"checks_run\":[],\"created_at\":0,\"inputs\":[],\"model\":null,\"parameters\":{\"z\":\"ascii\",\"é\":\"latin\",\"￿\":\"bmp-last\",\"𐀀\":\"astral\"},\"prompt_digest\":null,\"rationale\":null,\"run_id\":null,\"schema\":\"agentgit.provenance.v1\",\"task_id\":null}",
+      "signed_message_hex": "6167656e746769742e7369672e7631000d70726f76656e616e63652e76317b226167656e74223a226167656e743a626f74222c226368616e6765736574223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c22636865636b735f72756e223a5b5d2c22637265617465645f6174223a302c22696e70757473223a5b5d2c226d6f64656c223a6e756c6c2c22706172616d6574657273223a7b227a223a226173636969222c22c3a9223a226c6174696e222c22efbfbf223a22626d702d6c617374222c22f0908080223a2261737472616c227d2c2270726f6d70745f646967657374223a6e756c6c2c22726174696f6e616c65223a6e756c6c2c2272756e5f6964223a6e756c6c2c22736368656d61223a226167656e746769742e70726f76656e616e63652e7631222c227461736b5f6964223a6e756c6c7d",
+      "signature_hex": "b50c8dd0bce66c9fff0901d9698cbdcd9cf50d567340c73e05717c8859866cba6bae3a966a50dbb43baf706f7bf5133faf0113790b89407c7743eb4e7250d704"
+    },
+    {
+      "name": "empty-strings-are-unset",
+      "record": {
+        "changeset": "abababababababababababababababababababababababababababababababab",
+        "agent": "agent:bot",
+        "run_id": "",
+        "model": "",
+        "rationale": "",
+        "created_at_ms": 7
+      },
+      "canonical_json": "{\"agent\":\"agent:bot\",\"changeset\":\"abababababababababababababababababababababababababababababababab\",\"checks_run\":[],\"created_at\":7,\"inputs\":[],\"model\":null,\"parameters\":{},\"prompt_digest\":null,\"rationale\":null,\"run_id\":null,\"schema\":\"agentgit.provenance.v1\",\"task_id\":null}",
+      "signed_message_hex": "6167656e746769742e7369672e7631000d70726f76656e616e63652e76317b226167656e74223a226167656e743a626f74222c226368616e6765736574223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c22636865636b735f72756e223a5b5d2c22637265617465645f6174223a372c22696e70757473223a5b5d2c226d6f64656c223a6e756c6c2c22706172616d6574657273223a7b7d2c2270726f6d70745f646967657374223a6e756c6c2c22726174696f6e616c65223a6e756c6c2c2272756e5f6964223a6e756c6c2c22736368656d61223a226167656e746769742e70726f76656e616e63652e7631222c227461736b5f6964223a6e756c6c7d",
+      "signature_hex": "9c92fb672d2e54b05b1f875578c9899e4c73c6f16f1cbc65f187806a2add7e9286c097b0aa6adcc1a3595aa38e49f166efa95d109e05c1b77dee1ae474c8c50d"
+    }
+  ]
+}

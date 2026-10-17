@@ -5,6 +5,7 @@
 | try it in five minutes | [Getting started](getting-started.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
+| call the server from TypeScript or Python | [Client SDKs](guides/sdks.md) and the [AGWP v1 reference](protocol/agwp-v1.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
 | work against a server (clone, pull, push) and offline | [Remote guide](guides/remote.md) |
 | read history: blame, renames, path history | [History guide](guides/history.md) |

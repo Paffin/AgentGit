@@ -199,6 +199,11 @@ fn clone_push_review_integrate_and_pull() {
     // The server tells the same story.
     let cat = ok(ag(a.path(), "user:alice", &alice, &["remote", "cat", "main:src/lib.rs"]));
     assert_eq!(cat, expected);
+    let blame = ok(ag(a.path(), "user:alice", &alice, &["remote", "blame", "src/lib.rs"]));
+    let rows: Vec<&str> = blame.lines().collect();
+    assert_eq!(rows.len(), 4, "{blame}");
+    assert!(rows[0].contains("user:alice") && rows[0].ends_with("1) fn uno() {}"), "{blame}");
+    assert!(rows[3].contains("user:dave") && rows[3].ends_with("4) fn four() {}"), "{blame}");
     let log = ok(ag(a.path(), "user:alice", &alice, &["remote", "log"]));
     assert!(log.contains("Initial") || log.contains("initial"), "{log}");
     let who: Value =

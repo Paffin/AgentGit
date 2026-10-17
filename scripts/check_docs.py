@@ -63,6 +63,10 @@ for pattern in ("crates/**/*.rs", "examples/*", "scripts/*", "tests/**/*.py", "t
                 if w != w.lower() and w != w.upper() and not w.startswith("_"):
                     # CamelCase variants reach users as snake_case through serde's rename_all
                     corpus.add(re.sub(r"(?<!^)(?=[A-Z])", "_", w).lower())
+# Prometheus metric names are assembled at runtime as "agwp_" + the registered name.
+for m in re.finditer(r'(?:HistogramOpts|Opts|IntCounter|IntGauge)::new\(\s*"([a-z_]+)"',
+                     (ROOT / "crates/ag-server/src/metrics.rs").read_text()):
+    corpus.add(f"agwp_{m.group(1)}")
 IDENT = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+){2,}$")
 # words that appear in docs as JSON keys, env vars, CLI values etc. but are not Rust names
 ALLOW = {"max_age_secs", "environment_digest", "required_validations", "trusted_issuers", "protected_paths",

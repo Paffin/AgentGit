@@ -90,3 +90,67 @@ jobs:
       # instead of silently falling back to SQLite and files.
       - name: Test on PostgreSQL + S3
         run: AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
+
+  deploy:
+    name: deployment files
+    runs-on: ubuntu-latest
+    env:
+      KUSTOMIZE_VERSION: v5.6.0
+      KUBECONFORM_VERSION: v0.6.7
+      PROMETHEUS_VERSION: 3.2.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize, kubeconform, promtool
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz -C "$HOME/bin" kustomize
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" kubeconform
+          curl -sSL "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" | tar xz -C "$HOME/bin" --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - run: pip install pyyaml
+      - name: Manifests, alert rules, Compose file and dashboards
+        run: python3 scripts/check_deploy.py --strict
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Shipped server configurations load with this server
+        run: cargo test -p ag-server --test deploy_configs
+
+  images:
+    name: container images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: server
+          push: false
+          load: true
+          tags: agentgit-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build the CLI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: cli
+          push: false
+          load: true
+          tags: agentgit-cli:ci
+          cache-from: type=gha
+      - name: The server image starts, becomes ready and answers its health check
+        run: |
+          set -euo pipefail
+          docker run -d --name ag -p 18080:8080 -e AG_BOOTSTRAP_TOKEN="$(openssl rand -hex 32)" agentgit-server:ci
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy ] && break
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy || { docker logs ag; exit 1; }
+          curl -fsS http://127.0.0.1:18080/readyz
+          docker run --rm agentgit-cli:ci --version

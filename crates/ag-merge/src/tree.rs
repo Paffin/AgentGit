@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use ag_tree::{Entry, Tree};
 use ag_types::{BlobId, FileType, Limits, RepoPath};
 
+use crate::rename::detect_renames;
 use crate::text::{TextMerge, merge_text};
 
 /// Largest blob (per side) that is text-merged; bigger files conflict.
@@ -45,6 +46,18 @@ pub enum ConflictKind {
         /// A path that lies beneath this file in the merged result.
         inside: RepoPath,
     },
+    /// Both sides renamed the same file, to different paths. Reported at the original path.
+    RenameRename {
+        /// Where our side moved it.
+        ours: RepoPath,
+        /// Where their side moved it.
+        theirs: RepoPath,
+    },
+    /// One side renamed a file the other side deleted. Reported at the new path.
+    RenameDelete {
+        /// True if *our* side renamed it (and theirs deleted it).
+        ours_renamed: bool,
+    },
 }
 
 impl std::fmt::Display for ConflictKind {
@@ -60,17 +73,35 @@ impl std::fmt::Display for ConflictKind {
             ConflictKind::TypeChange => f.write_str("file type or symlink target changed on both sides"),
             ConflictKind::TooLarge => f.write_str("file too large to merge"),
             ConflictKind::FileDirectory { inside } => write!(f, "file/directory conflict with '{inside}'"),
+            ConflictKind::RenameRename { ours, theirs } => {
+                write!(f, "renamed to '{ours}' on our side and to '{theirs}' on theirs")
+            }
+            ConflictKind::RenameDelete { ours_renamed: true } => f.write_str("renamed on our side, deleted on theirs"),
+            ConflictKind::RenameDelete { ours_renamed: false } => f.write_str("deleted on our side, renamed on theirs"),
         }
     }
+}
+
+/// Where the three versions of a conflicting file live when a rename is involved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictOrigin {
+    /// Path in the merge base.
+    pub base: RepoPath,
+    /// Path in our tree.
+    pub ours: RepoPath,
+    /// Path in their tree.
+    pub theirs: RepoPath,
 }
 
 /// A conflict at one path.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Conflict {
-    /// The conflicting path.
+    /// The conflicting path (in the merged result).
     pub path: RepoPath,
     /// What kind of conflict.
     pub kind: ConflictKind,
+    /// Set when the three versions are not all stored at `path` because a side renamed the file.
+    pub origin: Option<ConflictOrigin>,
 }
 
 /// Outcome of [`merge_trees`].
@@ -100,15 +131,40 @@ pub fn merge_trees(
     io: &dyn BlobIo,
     limits: &Limits,
 ) -> Result<TreeMerge, IoError> {
+    let mut merged: BTreeMap<RepoPath, Entry> = BTreeMap::new();
+    let mut conflicts: Vec<Conflict> = Vec::new();
+
+    // Renames first: a file moved on one side and edited on the other is one unit at its new path.
+    let plan = plan_renames(base, ours, theirs, io)?;
+    for unit in &plan.units {
+        match resolve_both_changed(Some(unit.base), Some(unit.ours), Some(unit.theirs), io)? {
+            Resolution::Take(Some(e)) => {
+                merged.insert(unit.to.clone(), e);
+            }
+            Resolution::Take(None) => {}
+            Resolution::Conflict(kind) => {
+                // Best effort: our content at the merged location.
+                merged.insert(unit.to.clone(), unit.ours);
+                conflicts.push(Conflict { path: unit.to.clone(), kind, origin: Some(unit.origin()) });
+            }
+        }
+    }
+    for c in plan.conflicts {
+        for (path, entry) in c.keep {
+            merged.insert(path, entry);
+        }
+        conflicts.push(c.conflict);
+    }
+
     let mut paths: BTreeSet<&RepoPath> = BTreeSet::new();
     paths.extend(base.iter().map(|(p, _)| p));
     paths.extend(ours.iter().map(|(p, _)| p));
     paths.extend(theirs.iter().map(|(p, _)| p));
 
-    let mut merged: BTreeMap<RepoPath, Entry> = BTreeMap::new();
-    let mut conflicts: Vec<Conflict> = Vec::new();
-
     for path in paths {
+        if plan.consumed.contains(path) {
+            continue;
+        }
         let b = base.get(path).copied();
         let o = ours.get(path).copied();
         let t = theirs.get(path).copied();
@@ -129,7 +185,7 @@ pub fn merge_trees(
                 if let Some(e) = o {
                     merged.insert(path.clone(), e);
                 }
-                conflicts.push(Conflict { path: path.clone(), kind });
+                conflicts.push(Conflict { path: path.clone(), kind, origin: None });
             }
         }
     }
@@ -145,7 +201,7 @@ pub fn merge_trees(
         }
     }
     for (file, inside) in file_dir {
-        conflicts.push(Conflict { path: file, kind: ConflictKind::FileDirectory { inside } });
+        conflicts.push(Conflict { path: file, kind: ConflictKind::FileDirectory { inside }, origin: None });
     }
     conflicts.sort_by(|a, b| a.path.cmp(&b.path));
 
@@ -155,6 +211,153 @@ pub fn merge_trees(
         Err(_) => ours.clone(),
     };
     Ok(TreeMerge { tree, conflicts })
+}
+
+/// A file that moved on at least one side and is merged at its new path.
+struct Unit {
+    from: RepoPath,
+    to: RepoPath,
+    ours_path: RepoPath,
+    theirs_path: RepoPath,
+    base: Entry,
+    ours: Entry,
+    theirs: Entry,
+}
+
+impl Unit {
+    fn origin(&self) -> ConflictOrigin {
+        ConflictOrigin { base: self.from.clone(), ours: self.ours_path.clone(), theirs: self.theirs_path.clone() }
+    }
+}
+
+/// A conflict decided by the rename analysis, with the entries the best-effort tree keeps.
+struct PlannedConflict {
+    conflict: Conflict,
+    keep: Vec<(RepoPath, Entry)>,
+}
+
+#[derive(Default)]
+struct RenamePlan {
+    units: Vec<Unit>,
+    conflicts: Vec<PlannedConflict>,
+    /// Paths (in any of the three trees) the ordinary per-path rule must skip.
+    consumed: BTreeSet<RepoPath>,
+}
+
+/// Decides, per renamed file, how the two sides combine. Fully determined by the three trees.
+fn plan_renames(base: &Tree, ours: &Tree, theirs: &Tree, io: &dyn BlobIo) -> Result<RenamePlan, IoError> {
+    let mut plan = RenamePlan::default();
+    let ours_ren: BTreeMap<RepoPath, RepoPath> =
+        detect_renames(base, ours, io)?.into_iter().map(|r| (r.from, r.to)).collect();
+    let theirs_ren: BTreeMap<RepoPath, RepoPath> =
+        detect_renames(base, theirs, io)?.into_iter().map(|r| (r.from, r.to)).collect();
+    let froms: BTreeSet<&RepoPath> = ours_ren.keys().chain(theirs_ren.keys()).collect();
+
+    for from in froms {
+        let Some(b) = base.get(from).copied() else { continue };
+        match (ours_ren.get(from), theirs_ren.get(from)) {
+            (Some(o_to), Some(t_to)) if o_to == t_to => {
+                let (Some(o), Some(t)) = (ours.get(o_to).copied(), theirs.get(t_to).copied()) else { continue };
+                plan.consume(from, [o_to]);
+                plan.units.push(Unit {
+                    from: from.clone(),
+                    to: o_to.clone(),
+                    ours_path: o_to.clone(),
+                    theirs_path: t_to.clone(),
+                    base: b,
+                    ours: o,
+                    theirs: t,
+                });
+            }
+            (Some(o_to), Some(t_to)) => {
+                let (Some(o), Some(t)) = (ours.get(o_to).copied(), theirs.get(t_to).copied()) else { continue };
+                plan.consume(from, [o_to, t_to]);
+                plan.conflicts.push(PlannedConflict {
+                    conflict: Conflict {
+                        path: from.clone(),
+                        kind: ConflictKind::RenameRename { ours: o_to.clone(), theirs: t_to.clone() },
+                        origin: None,
+                    },
+                    keep: vec![(o_to.clone(), o), (t_to.clone(), t)],
+                });
+            }
+            (Some(o_to), None) => {
+                // Only we moved it. If they left it alone, the ordinary rule already does the right thing.
+                let Some(o) = ours.get(o_to).copied() else { continue };
+                if theirs.get(o_to).is_some() {
+                    continue; // they also have something at the new path: ordinary both-added logic
+                }
+                match theirs.get(from).copied() {
+                    Some(t) if t == b => {}
+                    Some(t) => {
+                        plan.consume(from, [o_to]);
+                        plan.units.push(Unit {
+                            from: from.clone(),
+                            to: o_to.clone(),
+                            ours_path: o_to.clone(),
+                            theirs_path: from.clone(),
+                            base: b,
+                            ours: o,
+                            theirs: t,
+                        });
+                    }
+                    None => {
+                        plan.consume(from, [o_to]);
+                        plan.conflicts.push(PlannedConflict {
+                            conflict: Conflict {
+                                path: o_to.clone(),
+                                kind: ConflictKind::RenameDelete { ours_renamed: true },
+                                origin: None,
+                            },
+                            keep: vec![(o_to.clone(), o)],
+                        });
+                    }
+                }
+            }
+            (None, Some(t_to)) => {
+                let Some(t) = theirs.get(t_to).copied() else { continue };
+                if ours.get(t_to).is_some() {
+                    continue;
+                }
+                match ours.get(from).copied() {
+                    Some(o) if o == b => {}
+                    Some(o) => {
+                        plan.consume(from, [t_to]);
+                        plan.units.push(Unit {
+                            from: from.clone(),
+                            to: t_to.clone(),
+                            ours_path: from.clone(),
+                            theirs_path: t_to.clone(),
+                            base: b,
+                            ours: o,
+                            theirs: t,
+                        });
+                    }
+                    None => {
+                        plan.consume(from, [t_to]);
+                        // Our side deleted it, theirs renamed it: keep their file in the best-effort tree.
+                        plan.conflicts.push(PlannedConflict {
+                            conflict: Conflict {
+                                path: t_to.clone(),
+                                kind: ConflictKind::RenameDelete { ours_renamed: false },
+                                origin: None,
+                            },
+                            keep: vec![(t_to.clone(), t)],
+                        });
+                    }
+                }
+            }
+            (None, None) => {}
+        }
+    }
+    Ok(plan)
+}
+
+impl RenamePlan {
+    fn consume<'a>(&mut self, from: &RepoPath, tos: impl IntoIterator<Item = &'a RepoPath>) {
+        self.consumed.insert(from.clone());
+        self.consumed.extend(tos.into_iter().cloned());
+    }
 }
 
 enum Resolution {

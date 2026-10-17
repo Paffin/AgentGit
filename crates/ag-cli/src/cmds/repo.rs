@@ -318,7 +318,18 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
     let parent = ctx.repo.tree_or_empty(cs.first_parent().as_ref())?;
     let published = ctx.repo.meta().read(|tx| tx.is_ready(&id))?;
     let prov = ctx.repo.meta().read(|tx| tx.provenance_for(&id))?;
-    let changes: Vec<_> = cs.ops.iter().map(|op| json!({"op": op_marker(&parent, op), "path": op.path()})).collect();
+    let renames = ctx.repo.changeset_renames(&cs)?;
+    let renamed_to: std::collections::BTreeMap<_, _> = renames.iter().map(|r| (r.to.clone(), r)).collect();
+    let renamed_from: std::collections::BTreeSet<_> = renames.iter().map(|r| r.from.clone()).collect();
+    let changes: Vec<_> = cs
+        .ops
+        .iter()
+        .filter(|op| !renamed_from.contains(op.path()))
+        .map(|op| match renamed_to.get(op.path()) {
+            Some(r) => json!({"op": "R", "path": op.path(), "from": r.from, "similarity": r.similarity}),
+            None => json!({"op": op_marker(&parent, op), "path": op.path()}),
+        })
+        .collect();
     ctx.out(
         &json!({"id": id, "parents": cs.parents, "author": cs.author, "timestamp": cs.timestamp, "message": cs.message, "published": published, "changes": changes, "provenance_records": prov.len()}),
         || {
@@ -337,8 +348,15 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
                 let _ = writeln!(s, "    {l}");
             }
             s.push('\n');
-            for op in &cs.ops {
-                let _ = writeln!(s, "  {} {}", op_marker(&parent, op), op.path());
+            for op in cs.ops.iter().filter(|op| !renamed_from.contains(op.path())) {
+                match renamed_to.get(op.path()) {
+                    Some(r) => {
+                        let _ = writeln!(s, "  R {} -> {}  ({}% similar)", r.from, r.to, r.similarity);
+                    }
+                    None => {
+                        let _ = writeln!(s, "  {} {}", op_marker(&parent, op), op.path());
+                    }
+                }
             }
             s
         },
@@ -461,6 +479,63 @@ pub fn cat(ctx: &Ctx, a: &CatArgs) -> Result<u8> {
     let bytes = ctx.repo.blob(&entry.content)?;
     use std::io::Write;
     std::io::stdout().write_all(&bytes)?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct BlameArgs {
+    /// `[REV:]PATH`, for example `src/lib.rs`, `main:src/lib.rs` or `@:README.md`. Without a revision, the
+    /// workspace head (or the default stream) is used.
+    pub spec: String,
+    /// Only these lines, `START,END` (1-based, inclusive).
+    #[arg(short = 'L', long, value_name = "START,END")]
+    pub lines: Option<String>,
+    /// Visit at most this many changesets; older lines are marked as a boundary.
+    #[arg(long, default_value_t = ag_integrate::DEFAULT_BLAME_COMMITS)]
+    pub max_commits: usize,
+}
+
+pub fn blame(ctx: &Ctx, a: &BlameArgs) -> Result<u8> {
+    let (rev, path) = match a.spec.split_once(':') {
+        Some((r, p)) => (Some(r.to_string()), p.to_string()),
+        None => (None, a.spec.clone()),
+    };
+    let id = rev_or_default(ctx, &rev)?;
+    let range = match &a.lines {
+        None => None,
+        Some(l) => {
+            let (s, e) = l.split_once(',').ok_or_else(|| anyhow!("--lines takes START,END, e.g. 10,20"))?;
+            let (s, e): (usize, usize) = (
+                s.trim().parse().map_err(|_| anyhow!("bad line number '{s}'"))?,
+                e.trim().parse().map_err(|_| anyhow!("bad line number '{e}'"))?,
+            );
+            Some((s, e))
+        }
+    };
+    let b = ctx.repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits: a.max_commits, range })?;
+    ctx.out(&b, || {
+        let width = b.lines.last().map(|l| l.line.to_string().len()).unwrap_or(1);
+        let author_w = b.lines.iter().map(|l| l.author.len()).max().unwrap_or(0).min(28);
+        let names_differ = b.lines.iter().any(|l| l.path != b.path);
+        let mut s = String::new();
+        for l in &b.lines {
+            let mark = if l.boundary { "^" } else { " " };
+            let file = if names_differ { format!(" {}", l.path) } else { String::new() };
+            let _ = writeln!(
+                s,
+                "{mark}{} {:<author_w$} {}{file} {:>width$}) {}",
+                l.changeset.short(),
+                l.author,
+                l.timestamp,
+                l.line,
+                l.text
+            );
+        }
+        if b.truncated {
+            let _ = writeln!(s, "(stopped after {} changesets; lines marked ^ may be older)", b.visited);
+        }
+        s
+    })?;
     Ok(exit::OK)
 }
 

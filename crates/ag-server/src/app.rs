@@ -79,6 +79,8 @@ pub struct AppState {
     pub auth: Authenticator,
     /// Hosted repositories.
     pub repos: RepoManager,
+    /// Trace exporter, when `telemetry.otlp_endpoint` is set.
+    pub tracer: Option<Arc<crate::trace::Tracer>>,
     /// Request rate limiting.
     pub limiter: RateLimiter,
     /// Prometheus metrics.
@@ -110,6 +112,18 @@ impl std::ops::Deref for App {
     }
 }
 
+/// Parses `name=value,name2=value2` (the `OTEL_EXPORTER_OTLP_HEADERS` format).
+fn parse_headers(s: &str) -> Vec<(String, String)> {
+    s.split(',')
+        .filter_map(|kv| {
+            let (k, v) = kv.split_once('=')?;
+            let (k, v) = (k.trim(), v.trim());
+            (!k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') && !v.is_empty())
+                .then(|| (k.to_ascii_lowercase(), v.to_string()))
+        })
+        .collect()
+}
+
 impl App {
     /// Builds the state: opens the control database, prepares authentication.
     pub fn new(cfg: ServerConfig) -> ApiResult<Self> {
@@ -135,6 +149,25 @@ impl App {
             cfg.repos.max_open,
             cfg.repos.storage.clone(),
         );
+        let metrics = Metrics::new();
+        let tracer = (!cfg.telemetry.otlp_endpoint.is_empty()).then(|| {
+            let headers =
+                std::env::var(&cfg.telemetry.otlp_headers_env).ok().map(|v| parse_headers(&v)).unwrap_or_default();
+            crate::trace::Tracer::start(
+                crate::trace::TracerConfig {
+                    endpoint: cfg.telemetry.otlp_endpoint.clone(),
+                    service_name: cfg.telemetry.service_name.clone(),
+                    service_version: env!("CARGO_PKG_VERSION").into(),
+                    sample_ratio: cfg.telemetry.otlp_sample_ratio,
+                    headers,
+                },
+                crate::trace::TraceCounters {
+                    exported: metrics.trace_exported.clone(),
+                    dropped: metrics.trace_dropped.clone(),
+                    failures: metrics.trace_failures.clone(),
+                },
+            )
+        });
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
         Ok(Self(Arc::new(AppState {
@@ -143,8 +176,9 @@ impl App {
             control,
             auth,
             repos,
+            tracer,
             limiter,
-            metrics: Metrics::new(),
+            metrics,
             concurrency,
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,
@@ -166,11 +200,26 @@ impl App {
         Fut: Future<Output = ApiResult<T>>,
     {
         let started = Instant::now();
+        let span = self.tracer.as_ref().and_then(|t| t.begin(ing.traceparent.as_deref()));
         let result = self.dispatch_inner(&ing, op, f).await.map_err(|e| e.with_request_id(&ing.request_id));
         let code = match &result {
             Ok(_) => "ok",
             Err(e) => e.code().as_str(),
         };
+        if let (Some(tracer), Some(span)) = (&self.tracer, span) {
+            let mut attrs = vec![
+                ("agwp.operation", crate::trace::Attr::Str(op.into())),
+                ("agwp.transport", crate::trace::Attr::Str(ing.transport.into())),
+                ("agwp.result", crate::trace::Attr::Str(code.into())),
+                ("agwp.request_id", crate::trace::Attr::Str(ing.request_id.clone())),
+            ];
+            if let Some(d) = ing.deadline_ms {
+                attrs.push(("agwp.deadline_ms", crate::trace::Attr::Int(d.min(i64::MAX as u64) as i64)));
+            }
+            // Only server faults mark the span as failed; a caller's 404 or 409 is a normal answer.
+            let server_fault = matches!(code, "internal" | "unavailable" | "deadline_exceeded" | "unimplemented");
+            tracer.finish(span, op, attrs, server_fault.then(|| code.to_string()));
+        }
         self.metrics.requests.with_label_values(&[ing.transport, op, code]).inc();
         self.metrics.latency.with_label_values(&[ing.transport, op]).observe(started.elapsed().as_secs_f64());
         if let Err(e) = &result {

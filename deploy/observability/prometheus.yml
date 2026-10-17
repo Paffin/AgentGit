@@ -1,0 +1,21 @@
+# Prometheus scrape configuration for AgentGit on Kubernetes or bare metal.
+# (With the Prometheus Operator use deploy/kubernetes/overlays/prometheus-operator instead.)
+#
+# /metrics is protected by a bearer token when AG_METRICS_TOKEN is set on the server —
+# always set it. Store the same value in the file below (mode 0400, no trailing newline).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: agentgit
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/agentgit-metrics-token
+    static_configs:
+      - targets: ["ag-server.agentgit.svc:8080"]

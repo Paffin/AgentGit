@@ -177,7 +177,7 @@ fn content_conflict_is_reported() {
     let ours = tree(&io, &[("f", "o\n")]);
     let theirs = tree(&io, &[("f", "t\n")]);
     let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
-    assert_eq!(r.conflicts, vec![Conflict { path: p("f"), kind: ConflictKind::Content { regions: 1 } }]);
+    assert_eq!(r.conflicts, vec![Conflict { path: p("f"), kind: ConflictKind::Content { regions: 1 }, origin: None }]);
     // best-effort tree keeps our version
     assert_eq!(r.tree.get(&p("f")), ours.get(&p("f")));
 }
@@ -290,4 +290,265 @@ fn tree_merge_is_deterministic() {
     let r2 = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
     assert_eq!(r1.tree.id(), r2.tree.id());
     assert!(r1.is_clean());
+}
+
+// ---- renames ------------------------------------------------------------------------------
+
+fn content(io: &Mem, t: &Tree, path: &str) -> String {
+    String::from_utf8(io.read_blob(&t.get(&p(path)).unwrap_or_else(|| panic!("{path} missing")).content).unwrap())
+        .unwrap()
+}
+
+fn lines(prefix: &str, n: usize) -> String {
+    (0..n).map(|i| format!("{prefix} line {i}\n")).collect()
+}
+
+fn pairs(r: &[Rename]) -> Vec<(String, String, u32)> {
+    r.iter().map(|r| (r.from.to_string(), r.to.to_string(), r.similarity)).collect()
+}
+
+#[test]
+fn exact_renames_are_found_and_everything_else_is_not() {
+    let io = Mem::default();
+    let old = tree(&io, &[("a.txt", "alpha\n"), ("keep", "k\n"), ("gone", "bye\n")]);
+    let new = tree(&io, &[("sub/a.txt", "alpha\n"), ("keep", "k\n"), ("fresh", "new\n")]);
+    assert_eq!(pairs(&detect_renames(&old, &new, &io).unwrap()), vec![("a.txt".into(), "sub/a.txt".into(), 100)]);
+    // Nothing deleted, or nothing added: nothing to pair.
+    assert!(detect_renames(&old, &old, &io).unwrap().is_empty());
+    let grown = tree(&io, &[("a.txt", "alpha\n"), ("keep", "k\n"), ("gone", "bye\n"), ("x", "x")]);
+    assert!(detect_renames(&old, &grown, &io).unwrap().is_empty());
+}
+
+#[test]
+fn similar_renames_need_enough_common_lines() {
+    let io = Mem::default();
+    let original = lines("orig", 20);
+    // 19 of 20 lines survive, plus one new line: ~95% similar.
+    let edited = format!("{}changed\n", lines("orig", 19));
+    let old = tree(&io, &[("old.rs", &original)]);
+    let new = tree(&io, &[("new.rs", &edited)]);
+    let r = detect_renames(&old, &new, &io).unwrap();
+    assert_eq!(r.len(), 1);
+    assert!(r[0].similarity >= 90 && r[0].similarity < 100, "{}", r[0].similarity);
+    // Rewritten beyond recognition: not a rename.
+    let rewritten = tree(&io, &[("new.rs", &format!("{}{}", lines("orig", 5), lines("other", 15)))]);
+    assert!(detect_renames(&old, &rewritten, &io).unwrap().is_empty());
+}
+
+#[test]
+fn binary_and_huge_files_only_match_exactly() {
+    let io = Mem::default();
+    let mut bin = vec![0u8; 100];
+    bin.extend(b"payload");
+    let mut bin2 = bin.clone();
+    bin2.push(b'!');
+    let mk = |data: &[u8]| Entry {
+        content: io.write_blob(data.to_vec()).unwrap(),
+        file_type: FileType::Regular,
+        executable: false,
+    };
+    let t = |name: &str, e: Entry| Tree::from_entries([(p(name), e)], &lim()).unwrap();
+    assert_eq!(detect_renames(&t("a.bin", mk(&bin)), &t("b.bin", mk(&bin)), &io).unwrap().len(), 1);
+    assert!(detect_renames(&t("a.bin", mk(&bin)), &t("b.bin", mk(&bin2)), &io).unwrap().is_empty());
+}
+
+#[test]
+fn copies_pair_by_file_name_then_path_and_never_twice() {
+    let io = Mem::default();
+    // Two deleted files and two added files with identical content.
+    let old = tree(&io, &[("x/util.rs", "same\n"), ("y/main.rs", "same\n")]);
+    let new = tree(&io, &[("p/main.rs", "same\n"), ("q/util.rs", "same\n")]);
+    let r = pairs(&detect_renames(&old, &new, &io).unwrap());
+    assert_eq!(r, vec![("x/util.rs".into(), "q/util.rs".into(), 100), ("y/main.rs".into(), "p/main.rs".into(), 100)]);
+    // The same answer however the inputs were built.
+    let r2 = pairs(&detect_renames(&old, &new, &io).unwrap());
+    assert_eq!(r, r2);
+}
+
+#[test]
+fn a_rename_on_one_side_and_an_edit_on_the_other_merge_at_the_new_path() {
+    let io = Mem::default();
+    let body = lines("fn", 12);
+    let base = tree(&io, &[("src/old.rs", &body), ("README", "r\n")]);
+    // ours moves the file; theirs edits the last line.
+    let ours = tree(&io, &[("src/new.rs", &body), ("README", "r\n")]);
+    let edited = body.replace("fn line 11", "fn line 11 EDITED");
+    let theirs = tree(&io, &[("src/old.rs", &edited), ("README", "r\n")]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    assert!(r.tree.get(&p("src/old.rs")).is_none());
+    assert_eq!(content(&io, &r.tree, "src/new.rs"), edited);
+    // And the mirror image: theirs moves, ours edits.
+    let r = merge_trees(&base, &theirs, &ours, &io, &lim()).unwrap();
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    assert_eq!(content(&io, &r.tree, "src/new.rs"), edited);
+    assert!(r.tree.get(&p("src/old.rs")).is_none());
+}
+
+#[test]
+fn rename_with_edits_on_both_sides_merges_when_the_edits_are_apart() {
+    let io = Mem::default();
+    let body = lines("l", 20);
+    let base = tree(&io, &[("a.txt", &body)]);
+    let ours = tree(&io, &[("moved/a.txt", &body.replacen("l line 1\n", "l line 1 ours\n", 1))]);
+    let theirs = tree(&io, &[("a.txt", &body.replacen("l line 18\n", "l line 18 theirs\n", 1))]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    let merged = content(&io, &r.tree, "moved/a.txt");
+    assert!(merged.contains("l line 1 ours\n") && merged.contains("l line 18 theirs\n"));
+    assert!(r.tree.get(&p("a.txt")).is_none());
+}
+
+#[test]
+fn conflicting_edits_after_a_rename_are_reported_at_the_new_path_with_their_origin() {
+    let io = Mem::default();
+    let base = tree(&io, &[("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\n9\n")]);
+    let ours = tree(&io, &[("b.txt", "1\n2\nOURS\n4\n5\n6\n7\n8\n9\n")]);
+    let theirs = tree(&io, &[("a.txt", "1\n2\nTHEIRS\n4\n5\n6\n7\n8\n9\n")]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert_eq!(r.conflicts.len(), 1, "{:?}", r.conflicts);
+    let c = &r.conflicts[0];
+    assert_eq!(c.path, p("b.txt"));
+    assert_eq!(c.kind, ConflictKind::Content { regions: 1 });
+    assert_eq!(c.origin, Some(ConflictOrigin { base: p("a.txt"), ours: p("b.txt"), theirs: p("a.txt") }));
+    // The best-effort tree has our file at the new location and nothing at the old one.
+    assert!(r.tree.get(&p("b.txt")).is_some() && r.tree.get(&p("a.txt")).is_none());
+}
+
+#[test]
+fn both_sides_renaming_to_different_places_conflicts_and_to_the_same_place_does_not() {
+    let io = Mem::default();
+    let body = lines("x", 10);
+    let base = tree(&io, &[("a.txt", &body)]);
+    let ours = tree(&io, &[("b.txt", &body)]);
+    let theirs = tree(&io, &[("c.txt", &body)]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert_eq!(r.conflicts.len(), 1, "{:?}", r.conflicts);
+    assert_eq!(r.conflicts[0].path, p("a.txt"));
+    assert_eq!(r.conflicts[0].kind, ConflictKind::RenameRename { ours: p("b.txt"), theirs: p("c.txt") });
+    assert!(
+        r.tree.get(&p("b.txt")).is_some() && r.tree.get(&p("c.txt")).is_some(),
+        "both files survive in the best-effort tree"
+    );
+
+    // Same destination, with an edit on each side far apart: one merged file.
+    let ours = tree(&io, &[("b.txt", &body.replacen("x line 0\n", "x line 0 o\n", 1))]);
+    let theirs = tree(&io, &[("b.txt", &body.replacen("x line 9\n", "x line 9 t\n", 1))]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    let merged = content(&io, &r.tree, "b.txt");
+    assert!(merged.contains("x line 0 o\n") && merged.contains("x line 9 t\n"));
+}
+
+#[test]
+fn renaming_a_file_the_other_side_deleted_conflicts() {
+    let io = Mem::default();
+    let body = lines("d", 8);
+    let base = tree(&io, &[("a.txt", &body), ("z", "z\n")]);
+    let ours = tree(&io, &[("b.txt", &body), ("z", "z\n")]);
+    let theirs = tree(&io, &[("z", "z\n")]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert_eq!(r.conflicts.len(), 1, "{:?}", r.conflicts);
+    assert_eq!(r.conflicts[0].path, p("b.txt"));
+    assert_eq!(r.conflicts[0].kind, ConflictKind::RenameDelete { ours_renamed: true });
+    let r = merge_trees(&base, &theirs, &ours, &io, &lim()).unwrap();
+    assert_eq!(r.conflicts[0].kind, ConflictKind::RenameDelete { ours_renamed: false });
+}
+
+#[test]
+fn a_rename_onto_a_path_the_other_side_also_created_is_an_ordinary_conflict() {
+    let io = Mem::default();
+    let body = lines("q", 8);
+    let base = tree(&io, &[("a.txt", &body)]);
+    let ours = tree(&io, &[("b.txt", &body)]);
+    let theirs = tree(&io, &[("a.txt", &format!("{body}more\n")), ("b.txt", "something else\n")]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(!r.is_clean());
+    assert!(r.conflicts.iter().any(|c| c.path == p("b.txt") && c.kind == ConflictKind::BothAdded), "{:?}", r.conflicts);
+}
+
+#[test]
+fn renames_do_not_disturb_merges_without_them() {
+    // The pre-rename test cases still hold; this one pins the "delete + unrelated add" case:
+    // dissimilar content is not a rename, so a delete/modify conflict stays a delete/modify conflict.
+    let io = Mem::default();
+    let base = tree(&io, &[("a", &lines("one", 6))]);
+    let ours = tree(&io, &[("b", &lines("zzz", 6))]);
+    let theirs = tree(&io, &[("a", &format!("{}x\n", lines("one", 6)))]);
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(
+        r.conflicts
+            .iter()
+            .any(|c| c.path == p("a") && matches!(c.kind, ConflictKind::DeleteModify { ours_deleted: true })),
+        "{:?}",
+        r.conflicts
+    );
+}
+
+#[test]
+fn rename_aware_merge_is_deterministic() {
+    let io = Mem::default();
+    let body = lines("det", 15);
+    let base = tree(&io, &[("a", &body), ("b", &body.replace("det", "other"))]);
+    let ours = tree(&io, &[("c", &body), ("d", &body.replace("det", "other"))]);
+    let theirs = tree(&io, &[("a", &format!("{body}t\n")), ("b", &format!("{}t\n", body.replace("det", "other")))]);
+    let ids: Vec<_> = (0..5).map(|_| merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap().tree.id()).collect();
+    assert!(ids.windows(2).all(|w| w[0] == w[1]));
+    let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    assert!(content(&io, &r.tree, "c").ends_with("t\n") && content(&io, &r.tree, "d").ends_with("t\n"));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn detected_renames_are_disjoint_and_come_from_the_difference(
+        files in proptest::collection::btree_map("[a-d]{1,2}(/[a-d]{1,2})?", "[a-c]{0,3}(\n[a-c]{0,3}){0,6}", 1..8),
+        moved in proptest::collection::vec(any::<bool>(), 8),
+    ) {
+        let io = Mem::default();
+        let entries: Vec<(&str, &str)> = files.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        // Skip inputs where a path is also a directory prefix of another (not a valid tree).
+        let Ok(old) = Tree::from_entries(entries.iter().map(|(p_, c)| (p(p_), entry(&io, c))), &lim()) else { return Ok(()) };
+        let moved_entries: Vec<(String, &str)> = entries
+            .iter()
+            .zip(moved.iter().cycle())
+            .map(|((k, c), m)| (if *m { format!("moved/{k}") } else { (*k).to_string() }, *c))
+            .collect();
+        let Ok(new) = Tree::from_entries(moved_entries.iter().map(|(p_, c)| (p(p_), entry(&io, c))), &lim()) else { return Ok(()) };
+        let r = detect_renames(&old, &new, &io).unwrap();
+        let mut froms = std::collections::BTreeSet::new();
+        let mut tos = std::collections::BTreeSet::new();
+        for rn in &r {
+            prop_assert!(old.get(&rn.from).is_some() && new.get(&rn.from).is_none());
+            prop_assert!(new.get(&rn.to).is_some() && old.get(&rn.to).is_none());
+            prop_assert!(froms.insert(rn.from.clone()) && tos.insert(rn.to.clone()), "a path was paired twice");
+            prop_assert!(rn.similarity >= MIN_SIMILARITY && rn.similarity <= 100);
+        }
+        // Same inputs, same answer.
+        prop_assert_eq!(r, detect_renames(&old, &new, &io).unwrap());
+    }
+
+    #[test]
+    fn rename_plus_append_always_merges_to_the_renamed_file_with_the_append(n_files in 1usize..6, victim in 0usize..6, size in 6usize..20) {
+        let io = Mem::default();
+        let victim = victim % n_files;
+        // Unique content per file, so only the intended pair can match.
+        let base_files: Vec<(String, String)> = (0..n_files).map(|i| (format!("dir/f{i}.txt"), lines(&format!("file{i}"), size))).collect();
+        let base = Tree::from_entries(base_files.iter().map(|(k, v)| (p(k), entry(&io, v))), &lim()).unwrap();
+        let ours = Tree::from_entries(
+            base_files.iter().enumerate().map(|(i, (k, v))| (p(&if i == victim { "renamed/target.txt".to_string() } else { k.clone() }), entry(&io, v))),
+            &lim(),
+        ).unwrap();
+        let theirs = Tree::from_entries(
+            base_files.iter().enumerate().map(|(i, (k, v))| (p(k), entry(&io, &if i == victim { format!("{v}appended\n") } else { v.clone() }))),
+            &lim(),
+        ).unwrap();
+        let r = merge_trees(&base, &ours, &theirs, &io, &lim()).unwrap();
+        prop_assert!(r.is_clean(), "{:?}", r.conflicts);
+        prop_assert_eq!(content(&io, &r.tree, "renamed/target.txt"), format!("{}appended\n", base_files[victim].1));
+        prop_assert!(r.tree.get(&p(&base_files[victim].0)).is_none());
+        prop_assert_eq!(r.tree.len(), n_files);
+    }
 }

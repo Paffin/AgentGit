@@ -240,6 +240,129 @@
         },
         "type": "object"
       },
+      "BlameLine": {
+        "properties": {
+          "author": {
+            "default": "",
+            "type": "string"
+          },
+          "boundary": {
+            "default": false,
+            "description": "True if the walk stopped before finding the real origin.",
+            "type": "boolean"
+          },
+          "changeset": {
+            "default": "",
+            "description": "The changeset that introduced it.",
+            "type": "string"
+          },
+          "line": {
+            "default": 0,
+            "description": "Line number at the requested revision (1-based).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "original_line": {
+            "default": 0,
+            "description": "The line's number in that changeset's version (1-based).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "description": "The path the file had in that changeset (differs after a rename).",
+            "type": "string"
+          },
+          "summary": {
+            "default": "",
+            "description": "First line of that changeset's message.",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "The line's text without its terminator (lossy UTF-8).",
+            "type": "string"
+          },
+          "timestamp_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "BlameRequest": {
+        "properties": {
+          "first_line": {
+            "default": 0,
+            "description": "Only lines first_line..=last_line (1-based); both 0 = the whole file.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "last_line": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_commits": {
+            "default": 0,
+            "description": "Visit at most this many changesets (0 = the server default).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "rev": {
+            "default": "",
+            "description": "Revision expression (default: the repository's default stream).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BlameResponse": {
+        "properties": {
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BlameLine"
+            },
+            "type": "array"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "rev": {
+            "default": "",
+            "description": "The revision, resolved to a changeset id.",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True if max_commits was reached before every line found its origin.",
+            "type": "boolean"
+          },
+          "visited": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "Blocker": {
         "properties": {
           "code": {
@@ -5106,6 +5229,111 @@
         "summary": "Verify the audit hash chain",
         "tags": [
           "Admin"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/blame": {
+      "get": {
+        "operationId": "history.blame",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "first_line",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Only lines first_line..=last_line (1-based); both 0 = the whole file.",
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "last_line",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_commits",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Visit at most this many changesets (0 = the server default).",
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rev",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Revision expression (default: the repository's default stream).",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlameResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Which changeset introduced each line of a file (follows renames)",
+        "tags": [
+          "History"
         ]
       }
     },

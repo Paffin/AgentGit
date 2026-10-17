@@ -7,13 +7,16 @@
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
 | call the server from TypeScript or Python | [Client SDKs](guides/sdks.md) and the [AGWP v1 reference](protocol/agwp-v1.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
+| read history: blame, renames, path history | [History guide](guides/history.md) |
 | move to or from Git | [Git bridge](guides/git-bridge.md) |
 | look up a command | [CLI reference](reference/cli.md) *(generated)* |
 | understand how it works and why it is safe | [Architecture overview](architecture/overview.md) |
 | check a guarantee against the code and the test that proves it | [Publication & integration](architecture/publication-and-integration.md), [Security](architecture/security.md) |
 | implement a compatible reader/writer | [Object formats](architecture/object-format.md) |
-| operate a repository | [Durability & backup](operations/durability.md), [GC & retention](operations/gc-and-retention.md), [Troubleshooting](operations/troubleshooting.md) |
-| see what is built and what is planned | [Roadmap](../ROADMAP.md), [Protocol status](protocol/README.md) |
+| operate a repository | [Durability & backup](operations/durability.md), [GC & retention](operations/gc-and-retention.md), [PostgreSQL & S3](operations/postgres-and-s3.md), [Troubleshooting](operations/troubleshooting.md) |
+| deploy and monitor the server | [Deployment](operations/deployment.md) (binary, Compose, Kubernetes), [Observability](operations/observability.md), [Releasing](operations/releasing.md) |
+| talk to the server from your own code | [AGWP v1 reference](protocol/agwp-v1.md), [`openapi.json`](protocol/openapi.json) |
+| see what is built and what is planned | [Roadmap](../ROADMAP.md), [Protocol overview](protocol/README.md) |
 | learn why decisions were made | [ADRs](adr/) |
 
 ## Keeping the docs true

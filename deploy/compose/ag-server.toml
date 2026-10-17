@@ -1,0 +1,35 @@
+# ag-server for the Compose stack: repositories keep their metadata in PostgreSQL and
+# their objects in a MinIO bucket. Credentials arrive through the environment (compose.yaml).
+
+[server]
+listen = "0.0.0.0:8080"
+data_dir = "/data"
+# Plain HTTP inside the Compose network; the port is published on 127.0.0.1 only.
+# Put a TLS-terminating proxy in front before exposing it.
+allow_insecure_remote = true
+
+[auth]
+bootstrap_token_env = "AG_BOOTSTRAP_TOKEN"
+
+[metrics]
+enabled = true
+token_env = "AG_METRICS_TOKEN"
+
+[telemetry]
+log_format = "json"
+log_filter = "info"
+# Uncomment together with `--profile observability` to export traces to the collector:
+# otlp_endpoint = "http://otel-collector:4318"
+
+# Every repository created on this server gets its own PostgreSQL schema
+# (`ag_<owner>_<name>`) and its own key prefix in the bucket (`<owner>/<name>`).
+[repos.storage.meta]
+kind = "postgres"
+url_env = "AG_PG_URL"
+schema = "ag"
+
+[repos.storage.objects]
+kind = "s3"
+endpoint = "http://minio:9000"
+bucket = "agentgit"
+path_style = true

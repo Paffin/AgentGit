@@ -49,6 +49,8 @@ pub enum Command {
     Diff(cmds::repo::DiffArgs),
     /// Print a file as of a revision: `ag cat main:src/lib.rs`.
     Cat(cmds::repo::CatArgs),
+    /// Show which changeset introduced each line of a file.
+    Blame(cmds::repo::BlameArgs),
     /// List a directory as of a revision.
     Ls(cmds::repo::LsArgs),
     /// Write a revision's files into a new directory.
@@ -179,6 +181,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Show(a) => cmds::repo::show(&ctx, a),
         Diff(a) => cmds::repo::diff(&ctx, a),
         Cat(a) => cmds::repo::cat(&ctx, a),
+        Blame(a) => cmds::repo::blame(&ctx, a),
         Ls(a) => cmds::repo::ls(&ctx, a),
         Checkout(a) => cmds::repo::checkout(&ctx, a),
         Stream(c) => cmds::flow::stream(&ctx, c),

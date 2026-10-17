@@ -27,3 +27,4 @@ pub mod metrics;
 pub mod repos;
 pub mod routes;
 pub mod server;
+pub mod trace;

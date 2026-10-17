@@ -18,7 +18,9 @@ test.describe('repositories', () => {
     await expect(empty.getByRole('cell').nth(3)).toHaveText('0')
   })
 
-  test('searches by name and by description, and says so when nothing matches', async ({ page }) => {
+  test('searches by name and by description, and says so when nothing matches', async ({
+    page,
+  }) => {
     await page.goto('/')
     const table = page.getByRole('table', { name: 'Repositories' })
     await expect(table.getByRole('link', { name: 'acme/webapp' })).toBeVisible()
@@ -37,10 +39,15 @@ test.describe('repositories', () => {
     await page.getByRole('link', { name: 'acme/webapp' }).click()
     await expect(page).toHaveURL(/\/repos\/acme\/webapp$/)
     await expect(page.getByTestId('board-summary')).toBeVisible()
-    await expect(page.getByRole('tab', { name: /Live board/ }).or(page.getByRole('link', { name: 'Live board' }))).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Live board' })).toBeVisible()
   })
 
-  test('creates a repository from the dialog and lands on its (empty) board', async ({ page, cast }) => {
+  test('creates a repository from the dialog and lands on its (empty) board', async ({
+    page,
+    cast,
+    allowConsole,
+  }) => {
+    allowConsole(/status of 400/)
     const name = `acme/made-in-ui-${suffix()}`
     await page.goto('/')
     await page.getByRole('button', { name: 'New repository' }).click()
@@ -60,10 +67,16 @@ test.describe('repositories', () => {
     const created = await cast.as('dana').get(`/v1/repos/${name}`)
     expect(created.status).toBe(200)
     expect(created.json.description).toBe('Created from the web UI by an end-to-end test')
-    await expect(page.getByRole('link', { name })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/repos/${name}$`))
+    await expect(page.getByTestId('board-summary')).toBeVisible()
+    await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
   })
 
-  test('a duplicate name is reported by the server and nothing changes', async ({ page }) => {
+  test('a duplicate name is reported by the server and nothing changes', async ({
+    page,
+    allowConsole,
+  }) => {
+    allowConsole(/status of 409/)
     await page.goto('/')
     await page.getByRole('button', { name: 'New repository' }).click()
     const dialog = page.getByRole('dialog', { name: 'New repository' })
@@ -81,8 +94,9 @@ test.describe('repositories for someone who may not create them', () => {
     await page.goto('/')
     const button = page.getByRole('button', { name: 'New repository' })
     await expect(button).toBeDisabled()
-    await button.hover({ force: true })
-    await expect(page.getByRole('tooltip')).toContainText('requires the admin role')
+    // Kept focusable, with the reason as its description (and as a hover title).
+    await expect(button).toHaveAccessibleDescription(/requires the admin role/)
+    await expect(button).toHaveAttribute('title', /requires the admin role/)
   })
 })
 

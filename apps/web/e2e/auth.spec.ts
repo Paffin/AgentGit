@@ -55,10 +55,10 @@ test.describe('signing in', () => {
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
 
-    const stores = await page.evaluate((k) => {
+    const stores = await page.evaluate(() => {
       const dump = (s: Storage) => Object.fromEntries(Object.entries(s))
       return { session: dump(sessionStorage), local: dump(localStorage), url: location.href }
-    }, TOKEN_KEY)
+    })
     expect(stores.session[TOKEN_KEY]).toBe(token)
     expect(JSON.stringify(stores.local)).not.toContain(token)
     expect(stores.url).not.toContain(token)
@@ -155,12 +155,17 @@ test.describe('signing in', () => {
     await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
 
     await admin.ok_(admin.del(`/v1/credentials/${minted.credential.id}`), 'revoke')
-    // Follow a link with the keyboard: the very next request the app makes is answered with 401.
-    await page.getByRole('link', { name: 'acme/webapp' }).first().focus()
-    await page.keyboard.press('Enter')
+    // The next request the app makes is answered with 401 (it may already have made one on its own).
+    await page
+      .getByRole('link', { name: 'acme/webapp' })
+      .first()
+      .click({ timeout: 3000 })
+      .catch(() => undefined)
 
     await expect(page).toHaveURL(/\/signin/)
-    await expect(page.getByText(/Your session ended: the credential expired or was revoked/)).toBeVisible()
+    await expect(
+      page.getByText(/Your session ended: the credential expired or was revoked/),
+    ).toBeVisible()
     expect(await page.evaluate((k) => sessionStorage.getItem(k), TOKEN_KEY)).toBeNull()
   })
 })
@@ -173,7 +178,10 @@ test('a saved token that stopped working sends you back to sign in', async ({
   allowConsole(/status of 401/)
   const ctx = await browser.newContext({ baseURL })
   const page = await ctx.newPage()
-  await page.addInitScript((k) => sessionStorage.setItem(k, 'agt_revoked_0000_0000_0000'), TOKEN_KEY)
+  await page.addInitScript(
+    (k) => sessionStorage.setItem(k, 'agt_revoked_0000_0000_0000'),
+    TOKEN_KEY,
+  )
   await page.goto('/')
   await expect(page).toHaveURL(/\/signin/)
   await expect(page.getByText(/no longer valid/)).toBeVisible()

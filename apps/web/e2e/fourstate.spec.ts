@@ -20,8 +20,17 @@ const pill = (page: Page, key: string) => strip(page).locator(`[data-state="${ke
 async function setup(cast: Parameters<typeof freshRepo>[0], title = 'Double the answer') {
   const { repo } = await freshRepo(cast, 'flow')
   const alice = cast.as('alice')
-  const c = await commitFiles(alice, repo, { 'src/app.ts': 'export const answer = 42\n' }, 'Fix the answer')
-  const p = await openProposal(alice, repo, { head: c.head, title, description: 'The answer is 42.' })
+  const c = await commitFiles(
+    alice,
+    repo,
+    { 'src/app.ts': 'export const answer = 42\n' },
+    'Fix the answer',
+  )
+  const p = await openProposal(alice, repo, {
+    head: c.head,
+    title,
+    description: 'The answer is 42.',
+  })
   return { repo, proposal: p.id, workspace: c.workspace, alice }
 }
 
@@ -61,7 +70,7 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'ok')
     const blockers = page.getByTestId('blockers')
     await expect(blockers).toContainText('Needs 1 more approval')
-    await expect(blockers).toContainText('Check “tests” has no trusted passing result')
+    await expect(blockers).toContainText('has not passed on this exact tree')
 
     // Integrating now is refused, in words, and the stream does not move.
     const headBefore = (await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head
@@ -70,8 +79,10 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(integrate).toContainText('Needs 1 more approval')
     await integrate.getByRole('button', { name: 'Integrate', exact: true }).click()
     await expect(integrate.getByText('Blocked: the stream was not changed')).toBeVisible()
-    await integrate.getByRole('button', { name: 'Close' }).click()
-    expect((await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head).toBe(headBefore)
+    await integrate.getByRole('button', { name: 'Cancel' }).click()
+    expect((await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head).toBe(
+      headBefore,
+    )
 
     // Validation: asked for from the UI, run by the (real) execution plane, answered with a signed attestation.
     // carol is an integrator and may not request validation; alice (a writer) does, in her own session.
@@ -79,7 +90,9 @@ test.describe('the four states of a proposal change independently', () => {
     const alicePage = await openAs('alice')
     await alicePage.goto(`/repos/${repo}/proposals/${proposal}`)
     await alicePage.getByTestId('act-validate').click()
-    await expect(pill(page, 'validated')).toHaveAttribute('data-tone', 'pending', { timeout: 15_000 })
+    await expect(pill(page, 'validated')).toHaveAttribute('data-tone', 'pending', {
+      timeout: 15_000,
+    })
     await expect(pill(page, 'validated')).toHaveAttribute('data-tone', 'ok', { timeout: 30_000 })
     await expect(pill(page, 'validated')).toContainText('1/1 passed')
     await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'blocked')
@@ -91,7 +104,7 @@ test.describe('the four states of a proposal change independently', () => {
     const dialog = bob.getByRole('dialog', { name: 'Write a review' })
     await expect(dialog).toContainText('recorded against head')
     await dialog.getByLabel('Approve').check()
-    await dialog.getByLabel('Comment').fill('Looks right to me.')
+    await dialog.getByRole('textbox', { name: 'Comment' }).fill('Looks right to me.')
     await dialog.getByRole('button', { name: 'Submit review' }).click()
     await expect(dialog).toHaveCount(0)
 
@@ -111,10 +124,10 @@ test.describe('the four states of a proposal change independently', () => {
     await integrate.getByRole('button', { name: 'Integrate', exact: true }).click()
     await expect(integrate.getByText('Integrated', { exact: true })).toBeVisible()
     await expect(integrate).toContainText(/version \d+, fast-forward/)
-    await integrate.getByRole('button', { name: 'Close' }).click()
+    await integrate.getByRole('button', { name: 'Close', exact: true }).click()
 
     await expect(pill(page, 'integrated')).toHaveAttribute('data-tone', 'ok')
-    await expect(pill(page, 'integrated')).toContainText('integrated')
+    await expect(pill(page, 'integrated')).toContainText('yes')
     await expect(page.getByTestId('proposal-state')).toHaveText('integrated')
     await expect(page.getByTestId('act-integrate')).toHaveCount(0)
     const headAfter = (await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head
@@ -140,10 +153,21 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'ok')
 
     // alice pushes another commit and moves the proposal head.
-    const next = await amend(alice, repo, workspace, { 'src/app.ts': 'export const answer = 43\n' }, 'Another thought')
-    await alice.ok_(alice.patch(`/v1/repos/${repo}/proposals/${proposal}`, { new_head: next.head }), 'update')
+    const next = await amend(
+      alice,
+      repo,
+      workspace,
+      { 'src/app.ts': 'export const answer = 43\n' },
+      'Another thought',
+    )
+    await alice.ok_(
+      alice.patch(`/v1/repos/${repo}/proposals/${proposal}`, { new_head: next.head }),
+      'update',
+    )
 
-    await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'blocked', { timeout: 15_000 })
+    await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'blocked', {
+      timeout: 15_000,
+    })
     await expect(pill(page, 'approved')).toContainText('0/1')
     await page.getByRole('tab', { name: /Reviews/ }).click()
     const reviews = page.getByTestId('reviews-tab')
@@ -166,7 +190,9 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'ok')
 
     await setPolicy(dana, repo, policyDocument({ approvals: { min: 2 }, requireTests: false }))
-    await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'blocked', { timeout: 15_000 })
+    await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'blocked', {
+      timeout: 15_000,
+    })
     await expect(pill(page, 'approved')).toContainText('1/2')
 
     await setPolicy(dana, repo, policyDocument({ requireTests: false }))

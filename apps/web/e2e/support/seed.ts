@@ -18,7 +18,19 @@ import {
   ROUNDING,
   WORKFLOW_BUMP,
 } from './files.ts'
-import { agentKey, amend, commitFiles, integrate, openProposal, policyDocument, prepare, review, setPolicy, validated, waitFor } from './world.ts'
+import {
+  agentKey,
+  amend,
+  commitFiles,
+  integrate,
+  openProposal,
+  policyDocument,
+  prepare,
+  review,
+  setPolicy,
+  validated,
+  waitFor,
+} from './world.ts'
 import type { AgentName, Cast, HeartbeatKeeper } from './world.ts'
 import { signProvenance } from './signing.ts'
 import { failChecksFor } from './state.ts'
@@ -46,7 +58,10 @@ export interface Demo {
     /** alice: the friendlier greeting that landed (the other side of the conflict). */
     greeting: string
   }
-  tasks: Record<'import' | 'extract' | 'docs' | 'flaky' | 'node' | 'redis' | 'metrics' | 'runbook', string>
+  tasks: Record<
+    'import' | 'extract' | 'docs' | 'flaky' | 'node' | 'redis' | 'metrics' | 'runbook',
+    string
+  >
   runs: Record<AgentName, string>
   leases: { auth: string; billing: string; docs: string; ci: string; exploring: string }
   fencing: { auth: number; billing: number }
@@ -58,7 +73,10 @@ const log = (msg: string) => {
   if (process.env.AG_E2E_VERBOSE) process.stdout.write(`seed: ${msg}\n`)
 }
 
-async function must<T>(p: Promise<{ ok: boolean; status: number; json: T }>, what: string): Promise<T> {
+async function must<T>(
+  p: Promise<{ ok: boolean; status: number; json: T }>,
+  what: string,
+): Promise<T> {
   const r = await p
   if (!r.ok) throw new Error(`${what}: HTTP ${r.status} ${JSON.stringify(r.json)}`)
   return r.json
@@ -141,13 +159,25 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
   await integrate(carol, DEMO_REPO, healthProposal.id)
   await integrate(carol, DEMO_REPO, readmeProposal.id)
 
-  const headBeforeStory = (await must(alice.get(`${R}/streams/head?stream=main`), 'head')).head as string
+  const headBeforeStory = (await must(alice.get(`${R}/streams/head?stream=main`), 'head'))
+    .head as string
   const pin = 'v2.3.0'
-  await must(admin.post(`${R}/pins`, { name: pin, rev: 'main', reason: 'Release 2.3.0 (sessions + billing)' }), 'pin')
+  await must(
+    admin.post(`${R}/pins`, {
+      name: pin,
+      rev: 'main',
+      reason: 'Release 2.3.0 (sessions + billing)',
+    }),
+    'pin',
+  )
 
   // ---- policy: two versions, so the editor has a history to diff -----------------------------------------
   log('policy')
-  await setPolicy(dana, DEMO_REPO, policyDocument({ approvals: { min: 1, forbid_self_approval: true } }))
+  await setPolicy(
+    dana,
+    DEMO_REPO,
+    policyDocument({ approvals: { min: 1, forbid_self_approval: true } }),
+  )
   await setPolicy(
     dana,
     DEMO_REPO,
@@ -161,9 +191,12 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
 
   // ---- the task graph -------------------------------------------------------------------------------
   log('tasks')
-  const task = async (
-    t: { title: string; description?: string; scope?: string[]; depends_on?: string[] },
-  ): Promise<string> => (await must(alice.post(`${R}/tasks`, t), `task ${t.title}`)).id
+  const task = async (t: {
+    title: string
+    description?: string
+    scope?: string[]
+    depends_on?: string[]
+  }): Promise<string> => (await must(alice.post(`${R}/tasks`, t), `task ${t.title}`)).id
   const tImport = await task({ title: 'Import the webapp skeleton', scope: ['**'] })
   await must(alice.post(`${R}/tasks/${tImport}/finish`, { state: 'done' }), 'finish import task')
   const tExtract = await task({
@@ -194,7 +227,10 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
   const tMetrics = await task({ title: 'Add session expiry metrics', depends_on: [tExtract] })
   const tRunbook = await task({ title: 'Write the Redis runbook', depends_on: [tRedis] })
   // A dependency added after the fact (the runbook also waits for the metrics).
-  await must(alice.post(`${R}/tasks/${tRunbook}/dependencies`, { depends_on: tMetrics }), 'add dependency')
+  await must(
+    alice.post(`${R}/tasks/${tRunbook}/dependencies`, { depends_on: tMetrics }),
+    'add dependency',
+  )
 
   // ---- runs, leases ---------------------------------------------------------------------------------------
   log('runs and leases')
@@ -205,7 +241,10 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
     'dep-updater': cast.as('dep-updater'),
   } as const
   // Earlier runs that are over, so the history of runs is not just the four active ones.
-  const past1 = await must(bots['refactor-bot'].post(`${R}/runs`, { agent: 'refactor-bot' }), 'past run')
+  const past1 = await must(
+    bots['refactor-bot'].post(`${R}/runs`, { agent: 'refactor-bot' }),
+    'past run',
+  )
   await must(
     bots['refactor-bot'].post(`${R}/runs/${past1.run_id}/complete`, {
       status: 'completed',
@@ -213,7 +252,10 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
     }),
     'complete past run',
   )
-  const past2 = await must(bots['dep-updater'].post(`${R}/runs`, { agent: 'dep-updater' }), 'past run')
+  const past2 = await must(
+    bots['dep-updater'].post(`${R}/runs`, { agent: 'dep-updater' }),
+    'past run',
+  )
   await must(
     bots['dep-updater'].post(`${R}/runs/${past2.run_id}/complete`, {
       status: 'failed',
@@ -224,7 +266,10 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
 
   const runs = {} as Demo['runs']
   const start = async (name: AgentName, taskId: string) => {
-    const run = await must(bots[name].post(`${R}/runs`, { agent: name, task_id: taskId }), `start ${name}`)
+    const run = await must(
+      bots[name].post(`${R}/runs`, { agent: name, task_id: taskId }),
+      `start ${name}`,
+    )
     runs[name] = run.run_id
     return run.run_id as string
   }
@@ -261,24 +306,46 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
       ),
       `lease ${scope}`,
     )
-  const lAuth = await lease(bots['refactor-bot'], rBot, 'src/auth/**', { exclusive: true, taskId: tExtract })
+  const lAuth = await lease(bots['refactor-bot'], rBot, 'src/auth/**', {
+    exclusive: true,
+    taskId: tExtract,
+  })
   const lBilling = await lease(bots['test-fixer'], rTest, 'src/billing/**', {
     exclusive: true,
     taskId: tFlaky,
   })
   const lDocs = await lease(bots['docs-writer'], rDocs, 'docs/api/**', { taskId: tDocs })
-  const lCi = await lease(bots['dep-updater'], rDeps, '.github/**', { exclusive: true, taskId: tNode })
+  const lCi = await lease(bots['dep-updater'], rDeps, '.github/**', {
+    exclusive: true,
+    taskId: tNode,
+  })
   // Alice is "just looking around" in all of src/: a soft lease that overlaps two exclusive ones.
   const lLook = await lease(alice, undefined, 'src/**', { minutes: 30 })
 
   // ---- the five proposals -----------------------------------------------------------------------------------
   log('commits')
   // Everything below branches from the same head, so what lands first decides what conflicts.
-  const wsGreeting = await commitFiles(alice, DEMO_REPO, GREETING_FRIENDLY, 'Friendlier startup message')
-  const wsFormal = await commitFiles(dana, DEMO_REPO, GREETING_FORMAL, 'Print a formal startup line')
-  const wsExtract = await commitFiles(bots['refactor-bot'], DEMO_REPO, EXTRACT_STORE, 'Extract the session store', {
-    runId: rBot,
-  })
+  const wsGreeting = await commitFiles(
+    alice,
+    DEMO_REPO,
+    GREETING_FRIENDLY,
+    'Friendlier startup message',
+  )
+  const wsFormal = await commitFiles(
+    dana,
+    DEMO_REPO,
+    GREETING_FORMAL,
+    'Print a formal startup line',
+  )
+  const wsExtract = await commitFiles(
+    bots['refactor-bot'],
+    DEMO_REPO,
+    EXTRACT_STORE,
+    'Extract the session store',
+    {
+      runId: rBot,
+    },
+  )
   const wsDocs = await commitFiles(
     bots['docs-writer'],
     DEMO_REPO,
@@ -286,10 +353,21 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
     'Document how sessions are created and how long they live',
     { runId: rDocs },
   )
-  const wsRounding = await commitFiles(alice, DEMO_REPO, { 'src/billing/invoice.ts': ROUNDING['src/billing/invoice.ts']! }, 'Round each invoice line before VAT')
-  const wsFlaky = await commitFiles(bots['test-fixer'], DEMO_REPO, FLAKY_TEST, 'Make the invoice test deterministic', {
-    runId: rTest,
-  })
+  const wsRounding = await commitFiles(
+    alice,
+    DEMO_REPO,
+    { 'src/billing/invoice.ts': ROUNDING['src/billing/invoice.ts']! },
+    'Round each invoice line before VAT',
+  )
+  const wsFlaky = await commitFiles(
+    bots['test-fixer'],
+    DEMO_REPO,
+    FLAKY_TEST,
+    'Make the invoice test deterministic',
+    {
+      runId: rTest,
+    },
+  )
   const wsNode = await commitFiles(
     bots['dep-updater'],
     DEMO_REPO,
@@ -355,14 +433,16 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
   })
   await attach(bots['docs-writer'], DEMO_REPO, 'docs-writer', rDocs, tDocs, wsDocs.head, {
     model: 'example-writer-small',
-    rationale: 'Read src/auth/session.ts for the TTL and middleware.ts for the cookie name; documented only what the code does.',
+    rationale:
+      'Read src/auth/session.ts for the TTL and middleware.ts for the cookie name; documented only what the code does.',
     checks: ['markdown link check'],
     inputs: ['src/auth/session.ts', 'src/auth/middleware.ts'],
     temperature: '0.4',
   })
   await attach(bots['test-fixer'], DEMO_REPO, 'test-fixer', rTest, tFlaky, wsFlaky.head, {
     model: 'example-coder-large',
-    rationale: 'The old assertion recomputed the total with the code under test. Replaced it with a literal and made withVat integer-only.',
+    rationale:
+      'The old assertion recomputed the total with the code under test. Replaced it with a literal and made withVat integer-only.',
     checks: ['node --test tests/ (20 runs)'],
     inputs: ['tests/invoice.test.ts', 'CI run #4812'],
     temperature: '0.1',
@@ -377,8 +457,20 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
   // ---- reviews that happen before anything lands -----------------------------------------------------------
   log('reviews')
   await review(bob, DEMO_REPO, pGreeting.id, 'approve', 'Reads well. Thanks.')
-  await review(bob, DEMO_REPO, pDocs.id, 'approve', 'Accurate, and the example matches what the middleware reads.')
-  await review(bob, DEMO_REPO, pRounding.id, 'approve', 'Rounding per line is what the printed invoice shows.')
+  await review(
+    bob,
+    DEMO_REPO,
+    pDocs.id,
+    'approve',
+    'Accurate, and the example matches what the middleware reads.',
+  )
+  await review(
+    bob,
+    DEMO_REPO,
+    pRounding.id,
+    'approve',
+    'Rounding per line is what the printed invoice shows.',
+  )
   await review(
     bob,
     DEMO_REPO,
@@ -386,7 +478,13 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
     'request_changes',
     'The literal is good, but please add a regression test for a fractional quantity before this lands.',
   )
-  await review(bob, DEMO_REPO, pNode.id, 'approve', 'Node 22 is fine. The workflow is protected, so someone else must approve too.')
+  await review(
+    bob,
+    DEMO_REPO,
+    pNode.id,
+    'approve',
+    'Node 22 is fine. The workflow is protected, so someone else must approve too.',
+  )
 
   // Alice pushes again after bob approved: his approval no longer covers the head.
   await amend(
@@ -396,8 +494,12 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
     { 'tests/invoice.test.ts': ROUNDING['tests/invoice.test.ts']! },
     'Add a test for fractional quantities',
   )
-  const newHead = (await must(alice.get(`${R}/workspaces/${wsRounding.workspace}`), 'workspace')).head as string
-  await must(alice.patch(`${R}/proposals/${pRounding.id}`, { new_head: newHead }), 'update proposal head')
+  const newHead = (await must(alice.get(`${R}/workspaces/${wsRounding.workspace}`), 'workspace'))
+    .head as string
+  await must(
+    alice.patch(`${R}/proposals/${pRounding.id}`, { new_head: newHead }),
+    'update proposal head',
+  )
 
   // ---- the one that lands first: friendly greeting ------------------------------------------------------------
   log('landing the greeting')
@@ -408,7 +510,8 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
   log('validations')
   // The CI stand-in fails the flaky-test proposal on purpose: a trusted FAIL denies that exact tree.
   failChecksFor(pFlaky.id)
-  for (const id of [pExtract.id, pDocs.id, pFlaky.id, pNode.id]) await validated(alice, DEMO_REPO, id)
+  for (const id of [pExtract.id, pDocs.id, pFlaky.id, pNode.id])
+    await validated(alice, DEMO_REPO, id)
 
   // The docs change is complete (approved + validated): carol queues it. The queue stays queued.
   await must(carol.post(`${R}/queue`, { proposal: pDocs.id }), 'enqueue docs')
@@ -457,7 +560,9 @@ export async function seedDemo(cast: Cast, beats: HeartbeatKeeper): Promise<Demo
 /** A repository with nothing in it: the empty states. */
 export async function seedEmpty(cast: Cast): Promise<void> {
   await must(
-    cast.as('admin').post('/v1/repos', { name: EMPTY_REPO, description: 'Placeholder for the mobile client.' }),
+    cast
+      .as('admin')
+      .post('/v1/repos', { name: EMPTY_REPO, description: 'Placeholder for the mobile client.' }),
     'create empty repo',
   )
 }
@@ -483,7 +588,10 @@ export async function seedHostile(cast: Cast): Promise<{ proposal: string }> {
   const alice = cast.as('alice')
   const bob = cast.as('bob')
   const carol = cast.as('carol')
-  await must(admin.post('/v1/repos', { name: HOSTILE_REPO, description: HOSTILE.description }), 'create hostile repo')
+  await must(
+    admin.post('/v1/repos', { name: HOSTILE_REPO, description: HOSTILE.description }),
+    'create hostile repo',
+  )
   const base = await commitFiles(
     alice,
     HOSTILE_REPO,
@@ -504,14 +612,25 @@ export async function seedHostile(cast: Cast): Promise<{ proposal: string }> {
     description: HOSTILE.proposalBody,
   })
   await review(bob, HOSTILE_REPO, p.id, 'comment', HOSTILE.review)
-  await must(alice.post(`${R}/tasks`, { title: HOSTILE.taskTitle, description: HOSTILE.proposalBody }), 'hostile task')
   await must(
-    cast.as('docs-writer').post(`${R}/agents`, { name: 'docs-writer', public_key: agentKey('docs-writer').publicHex }),
+    alice.post(`${R}/tasks`, { title: HOSTILE.taskTitle, description: HOSTILE.proposalBody }),
+    'hostile task',
+  )
+  await must(
+    cast
+      .as('docs-writer')
+      .post(`${R}/agents`, { name: 'docs-writer', public_key: agentKey('docs-writer').publicHex }),
     'register in hostile repo',
   )
-  const run = await must(cast.as('docs-writer').post(`${R}/runs`, { agent: 'docs-writer' }), 'hostile run')
+  const run = await must(
+    cast.as('docs-writer').post(`${R}/runs`, { agent: 'docs-writer' }),
+    'hostile run',
+  )
   await must(
-    cast.as('docs-writer').post(`${R}/runs/${run.run_id}/complete`, { status: 'completed', summary: HOSTILE.runSummary }),
+    cast.as('docs-writer').post(`${R}/runs/${run.run_id}/complete`, {
+      status: 'completed',
+      summary: HOSTILE.runSummary,
+    }),
     'finish hostile run',
   )
   return { proposal: p.id }

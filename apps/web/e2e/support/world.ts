@@ -5,6 +5,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Api } from './http.ts'
+import type { Reply } from './http.ts'
 import { b64, keyFromSeed, signAttestation } from './signing.ts'
 import type { KeyPair } from './signing.ts'
 
@@ -60,7 +61,10 @@ export async function bootstrapCast(baseURL: string, adminToken: string): Promis
   const admin = new Api(baseURL, adminToken)
   const tokens: Record<string, string> = { admin: adminToken }
   const grant = (subject: string, role: string) =>
-    admin.ok_(admin.post('/v1/roles', { subject, repo: `${ORG}/*`, role }), `grant ${role} to ${subject}`)
+    admin.ok_(
+      admin.post('/v1/roles', { subject, repo: `${ORG}/*`, role }),
+      `grant ${role} to ${subject}`,
+    )
   const mint = async (key: string, subject: string, description: string, repos?: string[]) => {
     const res = await admin.ok_(
       admin.post('/v1/credentials', {
@@ -241,7 +245,12 @@ export function policyDocument(o: PolicyOptions = {}): Record<string, unknown> {
   return doc
 }
 
-export async function setPolicy(api: Api, repo: string, doc: Record<string, unknown>, stream = 'main') {
+export async function setPolicy(
+  api: Api,
+  repo: string,
+  doc: Record<string, unknown>,
+  stream = 'main',
+) {
   return api.ok_(
     api.put(`/v1/repos/${repo}/policy`, { stream, document: JSON.stringify(doc) }),
     'set policy',
@@ -371,7 +380,10 @@ export function startHeartbeats(baseURL: string, everyMs = 2000): HeartbeatKeepe
       await Promise.all(
         [...beating.values()].map(async (b) => {
           try {
-            await new Api(baseURL, b.token).post(`/v1/repos/${b.repo}/runs/${b.runId}/heartbeat`, {})
+            await new Api(baseURL, b.token).post(
+              `/v1/repos/${b.repo}/runs/${b.runId}/heartbeat`,
+              {},
+            )
           } catch {
             /* ignore: the next beat retries */
           }
@@ -397,7 +409,7 @@ export interface AgentRun {
   api: Api
   name: AgentName
   /** Calls the API as this run (the `ag-run` header). */
-  as(method: string, path: string, body?: unknown): ReturnType<Api['call']>
+  as(method: string, path: string, body?: unknown): Promise<Reply>
 }
 
 /** Registers the agent in `repo` (once) and starts a run, optionally on a task. */
@@ -440,7 +452,10 @@ export async function waitFor<T>(
 
 /** Asks for the validation jobs and waits until every required check has a result on the exact tree. */
 export async function validated(api: Api, repo: string, proposal: string, timeoutMs = 30_000) {
-  await api.ok_(api.post(`/v1/repos/${repo}/proposals/${proposal}/validate`, {}), 'request validation')
+  await api.ok_(
+    api.post(`/v1/repos/${repo}/proposals/${proposal}/validate`, {}),
+    'request validation',
+  )
   return waitFor(
     `validation of ${proposal}`,
     async () => {
@@ -472,7 +487,10 @@ export async function freshRepo(
   const repo = `${ORG}/${label}-${suffix()}`
   await cast.as('admin').ok_(cast.as('admin').post('/v1/repos', { name: repo }), `create ${repo}`)
   const c = await commitFiles(cast.as('alice'), repo, files, 'Import the skeleton')
-  const p = await openProposal(cast.as('alice'), repo, { head: c.head, title: 'Import the skeleton' })
+  const p = await openProposal(cast.as('alice'), repo, {
+    head: c.head,
+    title: 'Import the skeleton',
+  })
   const out = await integrate(cast.as('carol'), repo, p.id)
   return { repo, head: out.new_head }
 }

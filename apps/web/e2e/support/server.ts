@@ -23,7 +23,9 @@ export function serverBinary(): string {
   ].filter((p): p is string => !!p)
   const found = candidates.find((p) => existsSync(p))
   if (!found) {
-    throw new Error(`No ag-server binary found. Set AG_SERVER_BIN. Looked in:\n  ${candidates.join('\n  ')}`)
+    throw new Error(
+      `No ag-server binary found. Set AG_SERVER_BIN. Looked in:\n  ${candidates.join('\n  ')}`,
+    )
   }
   return found
 }
@@ -43,7 +45,8 @@ async function freePort(): Promise<number> {
 async function waitHealthy(baseURL: string, child: ChildProcess, log: () => string): Promise<void> {
   const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`ag-server exited early (${child.exitCode}):\n${log()}`)
+    if (child.exitCode !== null)
+      throw new Error(`ag-server exited early (${child.exitCode}):\n${log()}`)
     try {
       const r = await fetch(`${baseURL}/healthz`)
       if (r.ok) return
@@ -57,7 +60,9 @@ async function waitHealthy(baseURL: string, child: ChildProcess, log: () => stri
 
 export async function startServer(webDir: string): Promise<RunningServer> {
   if (!existsSync(join(webDir, 'index.html'))) {
-    throw new Error(`${webDir}/index.html is missing: run \`npm run build\` first (npm run test:e2e does it for you).`)
+    throw new Error(
+      `${webDir}/index.html is missing: run \`npm run build\` first (npm run test:e2e does it for you).`,
+    )
   }
   const dir = mkdtempSync(join(tmpdir(), 'agentgit-e2e-'))
   const dataDir = join(dir, 'data')
@@ -75,7 +80,10 @@ export async function startServer(webDir: string): Promise<RunningServer> {
       `web_dir = ${JSON.stringify(webDir)}`,
       '',
       '[limits]',
-      'requests_per_second = 0', // the suite is not a load test; rate limiting is unit-tested in the client
+      // The suite is not a load test, so the limiter is off unless asked for (AG_E2E_RPS / AG_E2E_BURST), e.g. to
+      // watch the UI ride out real 429 answers. The client's retry rules are unit-tested separately.
+      `requests_per_second = ${Number(process.env.AG_E2E_RPS ?? 0)}`,
+      ...(process.env.AG_E2E_BURST ? [`burst = ${Number(process.env.AG_E2E_BURST)}`] : []),
       '',
       '[metrics]',
       'enabled = false',

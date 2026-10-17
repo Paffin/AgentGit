@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,8 @@
     "test:e2e": "playwright test",
     "gen:api": "openapi-typescript ../../docs/protocol/openapi.json -o src/api/schema.gen.ts && prettier --write src/api/schema.gen.ts",
     "check:api": "node scripts/check-api.mjs",
-    "pretest:e2e": "vite build"
+    "pretest:e2e": "vite build",
+    "demo:server": "vite build && node e2e/demo.ts"
   },
   "dependencies": {
     "pinia": "3.0.4",

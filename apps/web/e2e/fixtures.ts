@@ -63,7 +63,12 @@ export const test = base.extend<Fixtures & { problems: Problems }>({
 
   problems: [
     async ({}, use, testInfo) => {
-      const problems: Problems = { list: [], allowed: [] }
+      // With the server's limiter switched on (AG_E2E_RPS) the browser itself logs every 429 as an error; the
+      // client is expected to wait those out, so they are not problems then.
+      const problems: Problems = {
+        list: [],
+        allowed: process.env.AG_E2E_RPS ? [/status of 429/] : [],
+      }
       await use(problems)
       const unexpected = problems.list.filter((p) => !problems.allowed.some((re) => re.test(p)))
       if (unexpected.length) {

@@ -96,6 +96,7 @@ function jump(i: number) {
   padding: var(--s-1);
 }
 .files a {
+  text-decoration: none;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -106,7 +107,6 @@ function jump(i: number) {
 }
 .files a:hover {
   background: var(--surface-2);
-  text-decoration: none;
 }
 .p {
   overflow-wrap: anywhere;

@@ -27,17 +27,29 @@ export class Api {
     body?: unknown,
     headers: Record<string, string> = {},
   ): Promise<Reply<T>> {
-    const res = await fetch(this.base + path, {
-      method,
-      headers: {
-        ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...headers,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-    const text = await res.text()
-    return { status: res.status, ok: res.ok, json: parseJson(text), headers: res.headers }
+    // A rate-limited answer (429) is waited out and repeated, as any well-behaved client does.
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(this.base + path, {
+        method,
+        headers: {
+          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...headers,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      const text = await res.text()
+      const json = parseJson(text)
+      if (res.status === 429 && attempt < 8) {
+        const wait =
+          Number(json?.error?.retry_after_ms) ||
+          Number(res.headers.get('retry-after')) * 1000 ||
+          250
+        await new Promise((r) => setTimeout(r, Math.min(wait, 5000)))
+        continue
+      }
+      return { status: res.status, ok: res.ok, json, headers: res.headers }
+    }
   }
 
   get<T = any>(path: string, headers?: Record<string, string>) {

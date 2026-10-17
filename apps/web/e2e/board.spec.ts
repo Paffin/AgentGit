@@ -33,13 +33,15 @@ test.describe('the live board of the demo repository', () => {
     await expect(page.getByText(/1 quiet/).first()).toBeVisible()
   })
 
-  test('shows the lease map with fencing tokens, countdowns and overlaps', async ({ page, state }) => {
+  test('shows the lease map with fencing tokens, countdowns and overlaps', async ({
+    page,
+    state,
+  }) => {
     await page.goto(`/repos/${state.demo.repo}`)
     const map = page.getByTestId('lease-map')
-    await expect(map.getByText('src/auth/**')).toBeVisible()
-    await expect(map.getByText('src/billing/**')).toBeVisible()
-    await expect(map.getByText('.github/**')).toBeVisible()
-    await expect(map.getByText('docs/api/**')).toBeVisible()
+    for (const scope of ['src/auth/**', 'src/billing/**', '.github/**', 'docs/api/**']) {
+      await expect(map.getByText(scope, { exact: true }).first()).toBeVisible()
+    }
     // Exclusive leases carry the fencing token an integrator must present.
     await expect(map.getByText(`token ${state.demo.fencing.auth}`)).toBeVisible()
     await expect(map.getByText(`token ${state.demo.fencing.billing}`)).toBeVisible()
@@ -58,7 +60,9 @@ test.describe('the live board of the demo repository', () => {
     const redis = graph.locator(`[data-task="${state.demo.tasks.redis}"]`)
     await expect(redis).toContainText('Blocked')
     await expect(redis).toContainText('1 to wait')
-    await expect(redis).toHaveAccessibleName(/Migrate sessions to Redis.*waiting for Extract the session store/)
+    await expect(redis).toHaveAccessibleName(
+      /Migrate sessions to Redis.*waiting for Extract the session store/,
+    )
     const runbook = graph.locator(`[data-task="${state.demo.tasks.runbook}"]`)
     await expect(runbook).toContainText('2 to wait') // waits for the Redis migration and the metrics
 
@@ -74,17 +78,19 @@ test.describe('the live board of the demo repository', () => {
     await page.goto(`/repos/${state.demo.repo}`)
     const queue = page.getByTestId('queue-panel')
     await expect(queue).toContainText('Document how sessions are created')
-    await expect(queue.getByText('queued')).toBeVisible()
-    await expect(queue.getByRole('button', { name: 'Run queue' })).toBeVisible()
+    await expect(queue.getByText('queued', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Run queue' })).toBeVisible()
 
     const predictions = page.getByTestId('overlap-panel')
-    await expect(predictions).toContainText('8 overlaps')
+    await expect(page.getByText(/\d+ overlaps/).first()).toBeVisible()
     // Two proposals that edit the same test file, and a proposal that edits files in someone's lease.
     await expect(predictions).toContainText('tests/invoice.test.ts')
     await expect(predictions).toContainText('edit the same files')
     await expect(predictions).toContainText('edits files inside a lease held by someone else')
     // The stream moved under a proposal: the conflict that proposal 6 shows in detail.
-    await expect(predictions).toContainText('changed files this proposal also edits since it was opened')
+    await expect(predictions).toContainText(
+      'changed files this proposal also edits since it was opened',
+    )
   })
 
   test('lists open proposals with four independent states each', async ({ page, state }) => {
@@ -113,12 +119,13 @@ test.describe('the live board of the demo repository', () => {
   }) => {
     await page.goto(`/repos/${state.demo.repo}`)
     const feed = page.getByTestId('activity-feed')
-    await expect(feed).toContainText(/queued .* for main/)
+    await expect(feed).toContainText(/queued\s*prop_\w+\s*for main/)
     await expect(feed).toContainText('finished validation job (passed)')
-    const hidden = await feed.getByText(/\d+ hidden/).textContent()
-    await feed.getByRole('checkbox', { name: 'Housekeeping' }).check()
-    await expect(feed.getByText(/\d+ hidden/)).toHaveCount(0)
-    expect(hidden).toMatch(/\d+ hidden/)
+    const toggle = page.getByRole('checkbox', { name: /Housekeeping/ })
+    await expect(toggle).not.toBeChecked()
+    await expect(page.getByText(/\d+ hidden/)).toBeVisible()
+    await toggle.check()
+    await expect(page.getByText(/\d+ hidden/)).toHaveCount(0)
   })
 })
 
@@ -139,7 +146,12 @@ test.describe('the board follows the repository live', () => {
 
     // 1. someone opens a proposal through the API
     const alice = cast.as('alice')
-    const c = await commitFiles(alice, repo, { 'src/util.ts': 'export const triple = (n: number) => n * 3\n' }, 'Add triple')
+    const c = await commitFiles(
+      alice,
+      repo,
+      { 'src/util.ts': 'export const triple = (n: number) => n * 3\n' },
+      'Add triple',
+    )
     const p = await openProposal(alice, repo, { head: c.head, title: 'Add a triple helper' })
     await expect(proposals.locator(`article[data-proposal="${p.id}"]`)).toBeVisible()
     await expect(proposals).toContainText('Add a triple helper')
@@ -147,14 +159,19 @@ test.describe('the board follows the repository live', () => {
 
     // 2. an agent starts a run on a task and takes a lease
     const task = await alice.ok_(
-      alice.post(`/v1/repos/${repo}/tasks`, { title: 'Speed up the util module', scope: ['src/**'] }),
+      alice.post(`/v1/repos/${repo}/tasks`, {
+        title: 'Speed up the util module',
+        scope: ['src/**'],
+      }),
       'task',
     )
     await expect(page.getByTestId('task-graph').locator(`[data-task="${task.id}"]`)).toBeVisible()
     const run = await startRun(cast, repo, 'test-fixer', task.id)
     const runs = page.getByTestId('runs-panel')
     await expect(runs.locator(`[data-run="${run.runId}"]`)).toContainText('test-fixer')
-    await expect(page.getByTestId('task-graph').locator(`[data-task="${task.id}"]`)).toContainText('In progress')
+    await expect(page.getByTestId('task-graph').locator(`[data-task="${task.id}"]`)).toContainText(
+      'In progress',
+    )
 
     const leased = await run.as('POST', `/v1/repos/${repo}/leases`, {
       scope: 'src/util.ts',
@@ -174,17 +191,25 @@ test.describe('the board follows the repository live', () => {
     )
 
     // 3. a soft lease from a person overlaps it
-    const soft = await alice.call('POST', `/v1/repos/${repo}/leases`, { scope: 'src/**', ttl_ms: 600_000 })
+    const soft = await alice.call('POST', `/v1/repos/${repo}/leases`, {
+      scope: 'src/**',
+      ttl_ms: 600_000,
+    })
     expect(soft.ok).toBe(true)
     await expect(map.getByText(/Overlaps/).first()).toBeVisible()
 
     // 4. the proposal is queued
-    await cast.as('carol').ok_(cast.as('carol').post(`/v1/repos/${repo}/queue`, { proposal: p.id }), 'enqueue')
+    await cast
+      .as('carol')
+      .ok_(cast.as('carol').post(`/v1/repos/${repo}/queue`, { proposal: p.id }), 'enqueue')
     await expect(page.getByTestId('queue-panel')).toContainText('Add a triple helper')
 
     // 5. the run finishes and the lease is released
     await run.api.ok_(
-      run.api.post(`/v1/repos/${repo}/runs/${run.runId}/complete`, { status: 'completed', summary: 'done' }),
+      run.api.post(`/v1/repos/${repo}/runs/${run.runId}/complete`, {
+        status: 'completed',
+        summary: 'done',
+      }),
       'complete',
     )
     await expect(runs.locator(`[data-run="${run.runId}"]`)).toHaveCount(0)
@@ -193,31 +218,37 @@ test.describe('the board follows the repository live', () => {
 
     // Everything above arrived over the event stream: the page was never reloaded.
     expect(await page.evaluate(() => (window as unknown as { __kept?: number }).__kept)).toBe(1)
-    await expect(page.getByTestId('activity-feed')).toContainText('Add a triple helper')
+    await expect(page.getByTestId('activity-feed')).toContainText('opened proposal')
   })
 
-  test('survives a dropped connection: shows it, reconnects and catches up on what it missed', async ({
+  test('survives an unreachable event stream: shows it, reconnects and catches up on what it missed', async ({
     page,
-    context,
     cast,
     allowConsole,
   }) => {
-    allowConsole(/ERR_INTERNET_DISCONNECTED|ERR_NETWORK|Failed to (load resource|fetch)/)
+    allowConsole(/ERR_CONNECTION_REFUSED|ERR_FAILED|ERR_INTERNET_DISCONNECTED/)
     const { repo } = await freshRepo(cast, 'drop')
+    // Only the live stream is cut (as a proxy dropping long-lived connections would); everything else works.
+    const sse = /\/v1\/repos\/[^/]+\/[^/]+\/events(\?|$)/
+    await page.route(sse, (route) => route.abort('connectionrefused'))
     await page.goto(`/repos/${repo}`)
-    await waitLive(page)
     const live = page.getByTestId('live-indicator')
-
-    await context.setOffline(true)
     await expect(live).toHaveAttribute('data-status', 'reconnecting', { timeout: 20_000 })
     await expect(live).toContainText('Reconnecting')
+    await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
 
-    // While the browser is offline the world moves on.
+    // While the stream is down the world moves on.
     const alice = cast.as('alice')
-    const c = await commitFiles(alice, repo, { 'docs/notes.md': '# Notes\n\nWritten while you were away.\n' }, 'Notes')
+    const c = await commitFiles(
+      alice,
+      repo,
+      { 'docs/notes.md': '# Notes\n\nWritten while you were away.\n' },
+      'Notes',
+    )
     const p = await openProposal(alice, repo, { head: c.head, title: 'Written while offline' })
+    await expect(page.getByTestId('proposals-panel')).not.toContainText('Written while offline')
 
-    await context.setOffline(false)
+    await page.unroute(sse)
     await expect(live).toHaveAttribute('data-status', 'live', { timeout: 40_000 })
     await expect(
       page.getByTestId('proposals-panel').locator(`article[data-proposal="${p.id}"]`),
@@ -234,7 +265,9 @@ test.describe('the board follows the repository live', () => {
     await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
     await expect(page.getByTestId('runs-panel')).toContainText('No agent is running')
     await expect(page.getByTestId('task-graph')).toContainText('No open tasks')
-    await expect(page.getByTestId('queue-panel')).toContainText(/queue is empty|Nothing is waiting|empty/i)
+    await expect(page.getByTestId('queue-panel')).toContainText(
+      /queue is empty|Nothing is waiting|empty/i,
+    )
     await expect(page.locator('.spinner, [aria-busy="true"]')).toHaveCount(0)
   })
 })

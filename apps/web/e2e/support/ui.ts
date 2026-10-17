@@ -18,10 +18,13 @@ export async function verdicts(scope: Locator): Promise<Record<string, string>> 
   const n = await pills.count()
   for (let i = 0; i < n; i++) {
     const pill = pills.nth(i)
-    out[(await pill.getAttribute('data-state')) ?? '?'] = (await pill.getAttribute('data-tone')) ?? '?'
+    out[(await pill.getAttribute('data-state')) ?? '?'] =
+      (await pill.getAttribute('data-tone')) ?? '?'
   }
   return out
 }
+
+type AxePage = ConstructorParameters<typeof AxeBuilder>[0]['page']
 
 interface AxeNode {
   target: unknown
@@ -43,7 +46,7 @@ export async function expectAccessible(
   label: string,
   opts: { exclude?: string[] } = {},
 ): Promise<void> {
-  let builder = new AxeBuilder({ page }).withTags([
+  let builder = new AxeBuilder({ page: page as unknown as AxePage }).withTags([
     'wcag2a',
     'wcag2aa',
     'wcag21a',

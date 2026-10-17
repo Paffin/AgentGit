@@ -192,6 +192,12 @@ pub async fn serve(
 ) -> anyhow::Result<()> {
     let result = serve_inner(app.clone(), listener, shutdown).await;
     let a = app.clone();
-    let _ = tokio::task::spawn_blocking(move || a.repos.close_all()).await;
+    let _ = tokio::task::spawn_blocking(move || {
+        a.repos.close_all();
+        if let Some(t) = &a.tracer {
+            t.shutdown();
+        }
+    })
+    .await;
     result
 }

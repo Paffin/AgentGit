@@ -33,6 +33,12 @@ pub struct Metrics {
     pub jobs: IntGaugeVec,
     /// Seconds since the server started.
     pub uptime: IntGauge,
+    /// Trace spans delivered to the collector.
+    pub trace_exported: IntCounter,
+    /// Trace spans dropped (queue full or export failed).
+    pub trace_dropped: IntCounter,
+    /// Failed trace export attempts.
+    pub trace_failures: IntCounter,
 }
 
 impl Metrics {
@@ -64,6 +70,12 @@ impl Metrics {
         let subscriptions = IntGauge::new("event_subscriptions", "Open event subscriptions").expect("metric");
         let jobs = IntGaugeVec::new(Opts::new("jobs", "Execution-plane jobs by state"), &["state"]).expect("metric");
         let uptime = IntGauge::new("uptime_seconds", "Seconds since start").expect("metric");
+        let trace_exported =
+            IntCounter::new("trace_spans_exported_total", "Trace spans delivered to the collector").expect("metric");
+        let trace_dropped =
+            IntCounter::new("trace_spans_dropped_total", "Trace spans dropped before delivery").expect("metric");
+        let trace_failures =
+            IntCounter::new("trace_export_failures_total", "Failed trace export attempts").expect("metric");
         for c in [
             Box::new(requests.clone()) as Box<dyn prometheus::core::Collector>,
             Box::new(latency.clone()),
@@ -78,6 +90,9 @@ impl Metrics {
             Box::new(subscriptions.clone()),
             Box::new(jobs.clone()),
             Box::new(uptime.clone()),
+            Box::new(trace_exported.clone()),
+            Box::new(trace_dropped.clone()),
+            Box::new(trace_failures.clone()),
         ] {
             registry.register(c).expect("register metric");
         }
@@ -96,6 +111,9 @@ impl Metrics {
             subscriptions,
             jobs,
             uptime,
+            trace_exported,
+            trace_dropped,
+            trace_failures,
         }
     }
 

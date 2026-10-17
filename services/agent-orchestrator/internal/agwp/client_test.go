@@ -309,12 +309,12 @@ func TestTransportFailureOfAnUnkeyedMutationIsAnUnknownOutcome(t *testing.T) {
 		conn, _, _ := w.(http.Hijacker).Hijack()
 		conn.Close()
 	}))
-	_, err := c.StartRun(context.Background(), "acme/web", "bot", "")
+	_, err := c.MintCredential(context.Background(), MintRequest{Subject: "agent:bot", TTLSecs: 60})
 	if !errors.Is(err, ErrOutcomeUnknown) {
 		t.Fatalf("err = %v, want ErrOutcomeUnknown", err)
 	}
 	var ou *OutcomeUnknownError
-	if !errors.As(err, &ou) || ou.Operation != "agent.start_run" {
+	if !errors.As(err, &ou) || ou.Operation != "admin.credentials.mint" {
 		t.Fatalf("err = %#v", err)
 	}
 	if calls.Load() != 1 {
@@ -342,6 +342,61 @@ func TestKeyedMutationsAreRepeatedWithTheSameKey(t *testing.T) {
 	}
 	if len(keys) != 2 || keys[0] == "" || keys[0] != keys[1] {
 		t.Fatalf("keys = %v", keys)
+	}
+}
+
+// The server records Idempotency-Keys for these mutations, so a lost response is
+// repeated with the same key instead of being reported as an unknown outcome.
+func TestMutationsTheServerHonoursKeysForAreRepeated(t *testing.T) {
+	cases := map[string]func(c *Client) error{
+		"task.create": func(c *Client) error {
+			_, err := c.CreateTask(context.Background(), "acme/web", "t", "", nil, nil)
+			return err
+		},
+		"agent.start_run": func(c *Client) error { _, err := c.StartRun(context.Background(), "acme/web", "bot", ""); return err },
+		"lease.acquire": func(c *Client) error {
+			_, err := c.AcquireLease(context.Background(), "acme/web", "src/**", false, time.Minute, "")
+			return err
+		},
+	}
+	for op, do := range cases {
+		t.Run(op, func(t *testing.T) {
+			var mu sync.Mutex
+			var keys []string
+			c, _, _ := newTestClient(t, dropConn(1, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, `{"id":"x","run_id":"run_1","lease":{"id":"l"}}`)
+			}))
+			inner := c.hc.Transport
+			c.hc.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				mu.Lock()
+				keys = append(keys, r.Header.Get("Idempotency-Key"))
+				mu.Unlock()
+				return inner.RoundTrip(r)
+			})
+			if err := do(c); err != nil {
+				t.Fatalf("%s: %v", op, err)
+			}
+			if len(keys) != 2 || keys[0] == "" || keys[0] != keys[1] {
+				t.Fatalf("%s: keys = %v", op, keys)
+			}
+		})
+	}
+}
+
+func TestRateLimitedIsWaitedOutEvenWithoutTheRetryableFlag(t *testing.T) {
+	var calls atomic.Int32
+	c, _, obs := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			apiError(w, 429, CodeRateLimited, false, 1) // 1 ms
+			return
+		}
+		_, _ = io.WriteString(w, `{"identity":"user:a"}`)
+	}), WithRetry(RetryPolicy{MaxAttempts: 3, BaseDelay: time.Millisecond, MaxRetryAfter: time.Second}))
+	if p, err := c.Whoami(context.Background()); err != nil || p.Identity != "user:a" {
+		t.Fatalf("p=%+v err=%v", p, err)
+	}
+	if calls.Load() != 2 || len(obs.retries) != 1 || obs.retries[0] != CodeRateLimited {
+		t.Fatalf("calls=%d retries=%v", calls.Load(), obs.retries)
 	}
 }
 

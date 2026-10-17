@@ -99,7 +99,7 @@ func TestConfigAndOpsDoNotNeedACredential(t *testing.T) {
 		Orchestrator []string `json:"orchestrator"`
 		Reviewer     []string `json:"reviewer"`
 		Advisor      []string `json:"advisor"`
-		AgentDefault []string `json:"agent_defaults"`
+		AgentDefault []string `json:"agent"`
 	}
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -111,6 +111,28 @@ func TestConfigAndOpsDoNotNeedACredential(t *testing.T) {
 		if config.ForbiddenAgentOps[o] && o != "credentials.mint" && o != "credentials.revoke" && o != "agent.register" && o != "integrate.validate" {
 			t.Errorf("ops lists %q", o)
 		}
+	}
+}
+
+func TestOpsCanBePrintedAsMintFlags(t *testing.T) {
+	p := writeConfig(t, "http://127.0.0.1:1")
+	code, out, errs := exec(t, env(nil), "ops", "-config", p, "-for", "reviewer", "-flags")
+	if code != 0 {
+		t.Fatalf("%d %s", code, errs)
+	}
+	want := "--operation repo.read --operation stream.read --operation proposal.read --operation proposal.review --operation tree.read --operation history.read\n"
+	if out != want {
+		t.Fatalf("flags = %q, want %q", out, want)
+	}
+	code, out, _ = exec(t, env(nil), "ops", "-config", p, "-for", "advisor")
+	if code != 0 || !strings.Contains(out, `"advisor"`) || strings.Contains(out, `"orchestrator"`) {
+		t.Fatalf("-for must narrow the document: %d %s", code, out)
+	}
+	if code, _, errs := exec(t, env(nil), "ops", "-config", p, "-flags"); code != 2 || !strings.Contains(errs, "-for") {
+		t.Fatalf("-flags without -for: %d %q", code, errs)
+	}
+	if code, _, errs := exec(t, env(nil), "ops", "-config", p, "-for", "nobody"); code != 2 || !strings.Contains(errs, "unknown identity") {
+		t.Fatalf("unknown identity: %d %q", code, errs)
 	}
 }
 

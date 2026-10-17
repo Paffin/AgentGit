@@ -533,7 +533,7 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 		entries := []agwp.TreeEntry{}
 		for _, p := range paths {
 			sum := sha256.Sum256(cs.files[p])
-			entries = append(entries, agwp.TreeEntry{Path: p, BlobID: fmt.Sprintf("blob-%x", sum[:12]), Size: uint64(len(cs.files[p])), FileType: "file"})
+			entries = append(entries, agwp.TreeEntry{Path: p, BlobID: fmt.Sprintf("blob-%x", sum[:12]), Size: uint64(len(cs.files[p])), FileType: "regular"})
 		}
 		return map[string]any{"tree_id": "tree-" + cs.id[:12], "entries": entries, "next_page_token": ""}, 0, nil
 	case "tree.file":

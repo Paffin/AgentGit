@@ -183,14 +183,18 @@ func (c *Client) String() string {
 
 // Honoured lists the mutating operations for which the server is known to
 // record Idempotency-Keys, so that repeating them after an unknown outcome is
-// safe. The protocol document promises this for every mutation; the server
-// (as of this writing) implements it for these only (see the server-gap list in
-// the service README). When the server catches up, add operations here.
+// safe (a repeat returns the recorded response). The protocol document promises
+// this for every mutation; the server implements it for these only (stream.create
+// and credentials.mint still ignore the key; see the server-gap list in the
+// service README). When the server catches up, add operations here.
 var Honoured = map[string]bool{
 	"repo.create":           true,
 	"proposal.create":       true,
 	"integration.integrate": true,
 	"objects.publish":       true,
+	"task.create":           true,
+	"agent.start_run":       true,
+	"lease.acquire":         true,
 }
 
 type call struct {
@@ -228,7 +232,7 @@ func (c *Client) do(ctx context.Context, cl *call) error {
 		switch {
 		case errors.As(err, &apiErr):
 			c.obs.ObserveError(apiErr.Code)
-			if !apiErr.Retryable || attempt >= c.retry.MaxAttempts {
+			if !(apiErr.Retryable || apiErr.Code == CodeRateLimited) || attempt >= c.retry.MaxAttempts { // rate_limited is always worth waiting out: the server limits every operation per credential
 				return err
 			}
 			wait := c.backoff(attempt)

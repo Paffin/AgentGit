@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,6 +48,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	fs.SetOutput(stderr)
 	path := fs.String("config", getenv("AG_ORCH_CONFIG"), "configuration file (YAML or JSON); default $AG_ORCH_CONFIG")
 	asJSON := fs.Bool("json", false, "machine-readable output (check)")
+	forWho := fs.String("for", "", "ops: print only one identity's operations (orchestrator, reviewer, advisor or agent)")
+	asFlags := fs.Bool("flags", false, "ops: print the operations as --operation flags for 'ag-server admin mint' (needs -for)")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -71,12 +74,33 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		fmt.Fprint(stdout, cfg.Redacted())
 		return 0
 	case "ops":
+		all := map[string][]string{
+			"orchestrator": app.OrchestratorOps(cfg), "reviewer": app.ReviewerOps(), "advisor": app.AdvisorOps(),
+			"agent": config.DefaultAgentOps,
+		}
+		if *asFlags && *forWho == "" {
+			fmt.Fprintln(stderr, "orchestrator ops: -flags needs -for orchestrator|reviewer|advisor|agent")
+			return 2
+		}
+		if *forWho != "" {
+			ops, ok := all[*forWho]
+			if !ok {
+				fmt.Fprintf(stderr, "orchestrator ops: unknown identity %q (want orchestrator, reviewer, advisor or agent)\n", *forWho)
+				return 2
+			}
+			if *asFlags {
+				parts := make([]string, len(ops))
+				for i, o := range ops {
+					parts[i] = "--operation " + o
+				}
+				fmt.Fprintln(stdout, strings.Join(parts, " "))
+				return 0
+			}
+			all = map[string][]string{*forWho: ops}
+		}
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(map[string]any{
-			"orchestrator": app.OrchestratorOps(cfg), "reviewer": app.ReviewerOps(), "advisor": app.AdvisorOps(),
-			"agent_defaults": config.DefaultAgentOps,
-		})
+		_ = enc.Encode(all)
 		return 0
 	case "check":
 		return doCheck(cfg, getenv, *asJSON, stdout, stderr)
@@ -91,7 +115,9 @@ const usage = `usage: orchestrator [run|check|ops|config|version] [-config FILE]
 
   run      run the service (default)
   check    verify the configuration, credentials and server; changes nothing
-  ops      print the operations each service credential must carry (JSON)
+  ops      print the operations each service credential must carry (JSON);
+           -for orchestrator|reviewer|advisor|agent -flags prints them as
+           --operation flags for 'ag-server admin mint'
   config   print the effective configuration (never contains secrets)
   version  print the version
 `

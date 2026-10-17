@@ -139,7 +139,7 @@ func (c *Component) Sync(ctx context.Context) error {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	for _, e := range entries {
 		switch {
-		case e.FileType != "" && e.FileType != "file":
+		case e.FileType != "" && e.FileType != "regular" && e.FileType != "file": // "regular" today; "file" on older servers
 			continue
 		case c.skip.Match(e.Path):
 			sk.Pattern++

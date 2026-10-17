@@ -91,21 +91,31 @@ func (k *Key) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	// Write a private temporary file completely, then publish it under its final
+	// name with a hard link: the link is atomic and fails if the name exists, so
+	// a concurrent reader never sees a half-written key and two writers never
+	// both win.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".key-*.tmp")
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(b); err != nil {
-		f.Close()
-		os.Remove(path)
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
 		return err
 	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(path)
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
 		return err
 	}
-	return f.Close()
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Link(tmp.Name(), path)
 }
 
 // Load reads a key file, refusing files readable by group or others.

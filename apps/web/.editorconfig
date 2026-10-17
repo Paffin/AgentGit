@@ -1,0 +1,6 @@
+root = false
+
+# The web app follows the usual frontend convention (the repository default is 4 for Rust).
+[*.{ts,js,mjs,vue,css,html,json}]
+indent_style = space
+indent_size = 2

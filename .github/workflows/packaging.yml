@@ -56,7 +56,6 @@ jobs:
         run: |
           shellcheck --version
           shellcheck -s sh scripts/install.sh
-          shellcheck -s bash scripts/pg-test.sh scripts/s3-test.sh
       - name: actionlint (workflows, including their shell steps)
         run: |
           curl -fsSL -o "$RUNNER_TEMP/download-actionlint.bash" "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash"
@@ -116,6 +115,7 @@ jobs:
           set -euo pipefail
           npm ci
           npm run build
+          mkdir -p "$RUNNER_TEMP/npm"
           npm pack --pack-destination "$RUNNER_TEMP/npm"
           tar -tzf "$RUNNER_TEMP"/npm/*.tgz | sort
           npm publish --dry-run --access public

@@ -197,12 +197,15 @@ impl Tx<'_> {
         })
     }
 
-    /// Reads audit entries, optionally filtered by target substring, newest first.
+    /// Reads audit entries, newest first. With a needle, only entries whose
+    /// target, actor or details contain it (a run id, proposal id, identity,
+    /// changeset id, ...).
     pub fn audit_list(&self, target_contains: Option<&str>, limit: usize) -> Result<Vec<AuditEntry>, MetaError> {
         let pattern = format!("%{}%", target_contains.unwrap_or("").replace('%', "\\%").replace('_', "\\_"));
         let mut stmt = self.conn.prepare_cached(
             "SELECT seq, ts, actor, action, target, details, prev_hash, hash FROM audit
-             WHERE target LIKE ?1 ESCAPE '\\' ORDER BY seq DESC LIMIT ?2",
+             WHERE target LIKE ?1 ESCAPE '\\' OR actor LIKE ?1 ESCAPE '\\' OR details LIKE ?1 ESCAPE '\\'
+             ORDER BY seq DESC LIMIT ?2",
         )?;
         let rows = stmt.query_map(params![pattern, limit as i64], |r| {
             Ok(AuditEntry {

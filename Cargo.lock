@@ -155,6 +155,7 @@ dependencies = [
  "ag-object",
  "ag-types",
  "globset",
+ "hex",
  "proptest",
  "serde",
  "serde_json",
@@ -188,7 +189,9 @@ dependencies = [
  "ag-changeset",
  "ag-object",
  "ag-types",
+ "hex",
  "proptest",
+ "serde_json",
  "thiserror",
 ]
 

@@ -58,7 +58,7 @@ impl Ctx {
         } else {
             let text = human();
             if !text.is_empty() {
-                println!("{}", text.trim_end());
+                println!("{}", sanitize_for_terminal(text.trim_end()));
             }
         }
         Ok(())
@@ -68,6 +68,26 @@ impl Ctx {
     pub fn default_stream(&self) -> String {
         self.repo.default_stream().to_string()
     }
+}
+
+/// Neutralizes control characters in text that may contain attacker-controlled
+/// data (commit messages, author names, provenance fields, file names).
+///
+/// A hostile commit message could otherwise carry terminal escape sequences that
+/// rewrite earlier output, hide lines, change the window title or, on some
+/// terminals, inject input. Newlines and tabs are kept; every other control
+/// character (including ESC and the C1 range) is shown as `\u{XXXX}`. JSON output
+/// is unaffected, since JSON already escapes control characters.
+pub fn sanitize_for_terminal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if c.is_control() && c != '\n' && c != '\t' {
+            out.push_str(&format!("\\u{{{:04x}}}", c as u32));
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Parses durations such as `500ms`, `90s`, `30m`, `12h`, `7d`.
@@ -100,6 +120,14 @@ pub fn display_path(p: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_text_is_defanged() {
+        assert_eq!(sanitize_for_terminal("plain\ttext\nline2"), "plain\ttext\nline2");
+        assert_eq!(sanitize_for_terminal("\u{1b}[2J\u{1b}]0;pwned\u{7}"), "\\u{001b}[2J\\u{001b}]0;pwned\\u{0007}");
+        assert_eq!(sanitize_for_terminal("a\u{9b}b\r"), "a\\u{009b}b\\u{000d}");
+        assert_eq!(sanitize_for_terminal("юникод ✓"), "юникод ✓");
+    }
 
     #[test]
     fn durations() {

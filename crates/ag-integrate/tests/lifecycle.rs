@@ -468,3 +468,35 @@ fn derived_tree_cache_is_sparse_but_every_tree_is_still_readable() {
     assert!(f.repo.meta().read(|tx| tx.count_rows("changeset_trees")).unwrap() <= keyframes + 1);
     assert!(f.repo.fsck().unwrap().is_ok());
 }
+
+#[test]
+fn backup_is_consistent_verified_and_independent_of_later_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = disk_repo(dir.path());
+    write(dir.path(), "a.txt", "one\n");
+    let first = land_dir(&repo, dir.path(), "first");
+    repo.pin("keep", &first, "release", &alice()).unwrap();
+
+    let out = tempfile::tempdir().unwrap();
+    let dest = out.path().join("backup");
+    let rep = repo.backup(&dest, false).unwrap();
+    assert!(rep.verification.is_ok(), "{:?}", rep.verification.issues);
+    assert_eq!(rep.objects, 2, "one blob and one changeset");
+    assert!(!rep.keys_included);
+    assert!(repo.backup(&dest, false).is_err(), "never overwrite an existing backup");
+
+    // The original moves on; the backup is a frozen, self-contained repository.
+    write(dir.path(), "a.txt", "two\n");
+    land_dir(&repo, dir.path(), "second");
+    let restored = Repository::open(&dest).unwrap();
+    assert_eq!(restored.resolve_rev("main").unwrap(), first);
+    assert_eq!(restored.pins().unwrap().len(), 1);
+    assert!(restored.fsck().unwrap().is_ok());
+    let tree = restored.tree_of(&first).unwrap();
+    let entry = tree.get(&ag_types::RepoPath::new("a.txt").unwrap()).unwrap();
+    assert_eq!(restored.blob(&entry.content).unwrap(), b"one\n");
+    // and it is fully usable: it can take new work
+    write(&dest, "b.txt", "from the restored copy\n");
+    let head = restored.snapshot("default", &dest, "continue", &alice(), false).unwrap().unwrap();
+    assert_eq!(restored.changeset(&head).unwrap().parents, vec![first]);
+}

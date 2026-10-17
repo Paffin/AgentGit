@@ -192,6 +192,17 @@ impl Meta {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Writes a consistent snapshot of the whole database to `dest` (which must
+    /// not exist) using `VACUUM INTO`. Safe while other connections are writing.
+    pub fn backup_to(&self, dest: &Path) -> Result<(), MetaError> {
+        if dest.exists() {
+            return Err(MetaError::AlreadyExists(format!("backup target {}", dest.display())));
+        }
+        let guard = self.lock();
+        guard.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])?;
+        Ok(())
+    }
+
     /// Runs `f` in a read transaction (consistent snapshot).
     pub fn read<T>(&self, f: impl FnOnce(&Tx<'_>) -> Result<T, MetaError>) -> Result<T, MetaError> {
         let mut guard = self.lock();

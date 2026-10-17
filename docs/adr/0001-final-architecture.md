@@ -1,6 +1,6 @@
 # ADR-0001: AgentGit — финальная архитектура после критического аудита
 
-- Статус: принято
+- Статус: принято. Изменено [ADR-0002](0002-embedded-engine-first.md) (встроенный движок и SQLite на первом этапе); см. также [ADR-0003](0003-sparse-derived-tree-cache.md). Соответствие реализации: [adr-traceability](../architecture/adr-traceability.md).
 - Версия: 2.1
 - Дата: 17 октября 2026
 

@@ -90,5 +90,97 @@
       "payload_hex": "00010f6f72672f7265706f2e6e616d655f310101010101010101010101010101010101010101010101010101010101010101010a736572766963653a6369ffffffffffffffff18d09fd180d0b8d0b2d0b5d1822c20d0bcd0b8d18020e2988303010a62696e2f72756e2e736800011560fbd30c89b25915893c328d767e00d5890fdbbe58c1a97107d39721c20133010cd181d181d18bd0bbd0bad0b00100e66654ee8968fa2cfeb5aaa1dc4e0c5b0bab42ab640cbe063d8b6e516c2efb4f010cd184d0b0d0b9d0bb2e74787400002a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b",
       "id": "5e44ce16b3f28e4f3fc2f21dc5985110eb9fc4b81f85d9a0996fa4c078b0d8ad"
     }
+  ],
+  "trees": [
+    {
+      "name": "empty",
+      "entries": [],
+      "payload_hex": "00",
+      "id": "ac1fdbb13671fd76afd52ecb7390cc212b373c9cb854cca4cd8f39357d6e7dcb"
+    },
+    {
+      "name": "mixed",
+      "entries": [
+        {
+          "path": "src/main.rs",
+          "content": "fn main() {}\n"
+        },
+        {
+          "path": "bin/run.sh",
+          "content": "#!/bin/sh\n",
+          "executable": true
+        },
+        {
+          "path": "link",
+          "content": "src/main.rs",
+          "type": "symlink"
+        },
+        {
+          "path": "файл.txt",
+          "content": ""
+        }
+      ],
+      "payload_hex": "040a62696e2f72756e2e736800011560fbd30c89b25915893c328d767e00d5890fdbbe58c1a97107d39721c20133046c696e6b0100bf4aaa1a016bc98a52081682a01c787d0bc6ece44d81e5ba86fb751d45c9ed0d0b7372632f6d61696e2e727300006b254b7466d7ad837d88c1444f5008d705e6424a55bbbecc296a576942766fc80cd184d0b0d0b9d0bb2e74787400002a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b",
+      "id": "206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b"
+    }
+  ],
+  "attestations": [
+    {
+      "id": "att_0123456789abcdef",
+      "tree_id": "206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b",
+      "check": "tests",
+      "result": "pass",
+      "policy_version": 3,
+      "environment_digest": "sha256:abc",
+      "issuer": "service:ci",
+      "issued_at_ms": 1760659200000,
+      "signing_bytes_hex": "146174745f30313233343536373839616263646566206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b05746573747301030a7368613235363a6162630a736572766963653a636900000199ef775800"
+    },
+    {
+      "id": "att_0123456789abcdef",
+      "tree_id": "206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b",
+      "check": "tests",
+      "result": "fail",
+      "policy_version": 300,
+      "environment_digest": "sha256:abc",
+      "issuer": "service:ci",
+      "issued_at_ms": 1760659200000,
+      "signing_bytes_hex": "146174745f30313233343536373839616263646566206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b05746573747302ac020a7368613235363a6162630a736572766963653a636900000199ef775800"
+    }
+  ],
+  "audit": [
+    {
+      "ts": 1000,
+      "actor": "user:alice",
+      "action": "repo.init",
+      "target": "acme/app",
+      "details": {
+        "default_stream": "main"
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "c53863812346d6ec658d59c3ba83da94fa0b916fd523d7ac4a6dd16a82d347e1"
+    },
+    {
+      "ts": 2000,
+      "actor": "agent:bot#run_1",
+      "action": "stream.integrate",
+      "target": "main",
+      "details": {
+        "version": 1,
+        "proposal": "prop_x",
+        "unicode": "юникод"
+      },
+      "prev_hash": "c53863812346d6ec658d59c3ba83da94fa0b916fd523d7ac4a6dd16a82d347e1",
+      "hash": "ce7cdc1fc1a37008670aaa7854af4a6fd06ab28c9c3713f07b971dacfca5ef51"
+    },
+    {
+      "ts": 3000,
+      "actor": "service:ci",
+      "action": "attestation.submit",
+      "target": "206000a56687f3afb5461836877ffd49e7dec0ae6cd8f1632182b7c14352915b",
+      "details": {},
+      "prev_hash": "ce7cdc1fc1a37008670aaa7854af4a6fd06ab28c9c3713f07b971dacfca5ef51",
+      "hash": "7de767a9c937524a7c16c21a4b9fdc87ffb25079c2b0b2ee7778751697403d50"
+    }
   ]
 }

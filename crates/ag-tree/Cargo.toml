@@ -18,4 +18,6 @@ ag-changeset.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
+hex.workspace = true
 proptest.workspace = true

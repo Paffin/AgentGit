@@ -1,0 +1,30 @@
+# AgentGit documentation
+
+| If you want to… | Read |
+|---|---|
+| try it in five minutes | [Getting started](getting-started.md) |
+| understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md) |
+| run agents safely against a shared repository | [Agents guide](guides/agents.md) |
+| decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
+| move to or from Git | [Git bridge](guides/git-bridge.md) |
+| look up a command | [CLI reference](reference/cli.md) *(generated)* |
+| understand how it works and why it is safe | [Architecture overview](architecture/overview.md) |
+| check a guarantee against the code and the test that proves it | [Publication & integration](architecture/publication-and-integration.md), [Security](architecture/security.md) |
+| implement a compatible reader/writer | [Object formats](architecture/object-format.md) |
+| operate a repository | [Durability & backup](operations/durability.md), [GC & retention](operations/gc-and-retention.md), [Troubleshooting](operations/troubleshooting.md) |
+| see what is built and what is planned | [Roadmap](../ROADMAP.md), [Protocol status](protocol/README.md) |
+| learn why decisions were made | [ADRs](adr/) |
+
+## Keeping the docs true
+
+Documentation that drifts is worse than none, so most of it is *checked*:
+
+- [`reference/cli.md`](reference/cli.md) is **generated** from `ag --help` by
+  `scripts/gen_cli_docs.py`; CI fails if it is stale.
+- The walkthrough in the README comes from [`examples/quickstart.sh`](../examples/quickstart.sh), which CI
+  runs as a test (and so does `cargo test`).
+- Byte-level format claims are backed by [`tests/conformance/`](../tests/conformance/): vectors produced by an
+  independent Python implementation and verified against the Rust code.
+- Every guarantee in the architecture docs names the test that exercises it.
+
+If you change behaviour, change the doc in the same pull request.

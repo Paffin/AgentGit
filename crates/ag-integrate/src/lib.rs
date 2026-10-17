@@ -19,6 +19,7 @@
 //!   derived indexes**.
 
 mod admin;
+mod backup;
 mod derive;
 mod error;
 mod failpoints;
@@ -34,6 +35,7 @@ mod types;
 pub mod workdir;
 mod workspace;
 
+pub use backup::BackupReport;
 pub use derive::{DeriveReport, KEYFRAME_INTERVAL};
 pub use error::Error;
 pub use failpoints::Failpoints;

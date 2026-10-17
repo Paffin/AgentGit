@@ -159,3 +159,35 @@ pub fn pins(ctx: &Ctx) -> Result<u8> {
     })?;
     Ok(exit::OK)
 }
+
+#[derive(Args, Debug)]
+pub struct BackupArgs {
+    /// Destination directory (new or empty).
+    pub dest: std::path::PathBuf,
+    /// Also copy private keys (agent and issuer identities). Off by default.
+    #[arg(long)]
+    pub include_keys: bool,
+}
+
+pub fn backup(ctx: &Ctx, a: &BackupArgs) -> Result<u8> {
+    let rep = ctx.repo.backup(&a.dest, a.include_keys)?;
+    ctx.out(&rep, || {
+        format!(
+            "Backed up {} object file(s), {} byte(s) to {}\nverification: {}{}",
+            rep.objects,
+            rep.bytes,
+            a.dest.display(),
+            if rep.verification.is_ok() {
+                "healthy".to_string()
+            } else {
+                format!("{} problem(s)!", rep.verification.issues.len())
+            },
+            if rep.keys_included {
+                "\nprivate keys were included: protect this backup"
+            } else {
+                "\nprivate keys were NOT included (use --include-keys)"
+            }
+        )
+    })?;
+    Ok(if rep.verification.is_ok() { exit::OK } else { exit::ERROR })
+}

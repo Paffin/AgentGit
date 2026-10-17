@@ -67,6 +67,44 @@ def encode_changeset(ns, parents, author, ts_ms, message, ops) -> bytes:
     return bytes(out)
 
 
+def tree_manifest(entries) -> bytes:
+    """entries: list of dicts {path, content, type?, executable?}; sorted bytewise by path."""
+    entries = sorted(entries, key=lambda e: e["path"].encode("utf-8"))
+    out = bytearray(varint(len(entries)))
+    for e in entries:
+        out += s(e["path"])
+        out += bytes([0 if e.get("type", "file") == "file" else 1])
+        out += bytes([1 if e.get("executable") else 0])
+        out += bytes.fromhex(blob_id(e["content"].encode("utf-8")))
+    return bytes(out)
+
+
+def attestation_signing_bytes(a) -> bytes:
+    out = bytearray()
+    out += s(a["id"])
+    out += bytes.fromhex(a["tree_id"])
+    out += s(a["check"])
+    out += bytes([1 if a["result"] == "pass" else 2])
+    out += varint(a["policy_version"])
+    out += s(a["environment_digest"])
+    out += s(a["issuer"])
+    out += a["issued_at_ms"].to_bytes(8, "big", signed=True)
+    return bytes(out)
+
+
+def audit_chain(entries):
+    prev = "0" * 64
+    rows = []
+    for e in entries:
+        details = json.dumps(e["details"], separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+        pre = s("agentgit.audit.v1") + s(prev) + e["ts"].to_bytes(8, "big", signed=True)
+        pre += s(e["actor"]) + s(e["action"]) + s(e["target"]) + s(details)
+        h = hashlib.sha256(pre).hexdigest()
+        rows.append({**e, "prev_hash": prev, "hash": h})
+        prev = h
+    return rows
+
+
 def vector(name, ns, parents, author, ts_ms, message, ops):
     payload = encode_changeset(ns, parents, author, ts_ms, message, ops)
     return {
@@ -117,7 +155,31 @@ def main():
         {"content_utf8": c, "id": blob_id(c.encode("utf-8"))}
         for c in ["", "hello\n", "new", "b"]
     ]
-    json.dump({"format": "agentgit-conformance-v1", "blobs": blobs, "changesets": vectors},
+    tree_entries = [
+        {"path": "src/main.rs", "content": "fn main() {}\n"},
+        {"path": "bin/run.sh", "content": "#!/bin/sh\n", "executable": True},
+        {"path": "link", "content": "src/main.rs", "type": "symlink"},
+        {"path": "файл.txt", "content": ""},
+    ]
+    trees = [
+        {"name": "empty", "entries": [], "payload_hex": tree_manifest([]).hex(), "id": object_id(3, 1, tree_manifest([]))},
+        {"name": "mixed", "entries": tree_entries, "payload_hex": tree_manifest(tree_entries).hex(),
+         "id": object_id(3, 1, tree_manifest(tree_entries))},
+    ]
+    att = {"id": "att_0123456789abcdef", "tree_id": trees[1]["id"], "check": "tests", "result": "pass",
+           "policy_version": 3, "environment_digest": "sha256:abc", "issuer": "service:ci",
+           "issued_at_ms": 1760659200000}
+    attestations = [{**att, "signing_bytes_hex": attestation_signing_bytes(att).hex()},
+                    {**att, "result": "fail", "policy_version": 300,
+                     "signing_bytes_hex": attestation_signing_bytes({**att, "result": "fail", "policy_version": 300}).hex()}]
+    audit = audit_chain([
+        {"ts": 1000, "actor": "user:alice", "action": "repo.init", "target": "acme/app", "details": {"default_stream": "main"}},
+        {"ts": 2000, "actor": "agent:bot#run_1", "action": "stream.integrate", "target": "main",
+         "details": {"version": 1, "proposal": "prop_x", "unicode": "юникод"}},
+        {"ts": 3000, "actor": "service:ci", "action": "attestation.submit", "target": trees[1]["id"], "details": {}},
+    ])
+    json.dump({"format": "agentgit-conformance-v1", "blobs": blobs, "changesets": vectors, "trees": trees,
+               "attestations": attestations, "audit": audit},
               sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
 

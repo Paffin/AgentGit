@@ -1,0 +1,7 @@
+# Changes to formats, hashing, merge and the publication protocol need an owner's review.
+*                              @Paffin
+/crates/ag-object/             @Paffin
+/crates/ag-changeset/          @Paffin
+/crates/ag-merge/              @Paffin
+/crates/ag-integrate/          @Paffin
+/docs/adr/                     @Paffin

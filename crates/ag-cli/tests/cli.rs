@@ -382,3 +382,20 @@ fn predict_reports_overlapping_work() {
     let r = a.run_as("user:bob", &["lease", "acquire", "shared.txt", "--ttl", "5m"]).ok();
     assert!(r.stdout().contains("warning: overlaps"), "{}", r.stdout());
 }
+
+#[test]
+fn hostile_text_in_history_cannot_inject_terminal_escapes() {
+    let a = Ag::new();
+    a.write("f", "x");
+    // an author controls the snapshot message and may put escape sequences in it
+    a.ag(&["snapshot", "-m", "innocent\u{1b}[2J\u{1b}]0;owned\u{7}"]).ok();
+    for args in [&["log"][..], &["show"], &["status"]] {
+        let out = a.ag(args).ok().stdout();
+        assert!(!out.contains('\u{1b}') && !out.contains('\u{7}'), "{args:?} leaked a control character: {out:?}");
+    }
+    assert!(a.ag(&["log"]).ok().stdout().contains("\\u{001b}"), "the escape is shown, not executed");
+    // JSON mode keeps the data faithful (JSON escapes control characters itself)
+    let j = a.ag(&["--json", "log"]).ok();
+    assert!(!j.stdout().contains('\u{1b}'));
+    assert!(j.json()[0]["message"].as_str().unwrap().contains('\u{1b}'));
+}

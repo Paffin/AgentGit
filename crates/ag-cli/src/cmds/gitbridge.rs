@@ -48,7 +48,7 @@ pub fn git(ctx: &Ctx, cmd: &GitCmd) -> Result<u8> {
                     actor: ctx.me.clone(),
                 },
             )?;
-            ctx.out(
+            ctx.done(
                 &json!({"commits": rep.commits, "head": rep.head, "blobs": rep.blobs, "skipped_paths": rep.skipped_paths, "skipped_submodules": rep.skipped_submodules}),
                 || {
                     let mut s = format!("Imported {} commit(s), {} distinct file content(s) into stream '{stream}' (head {}).", rep.commits, rep.blobs, rep.head.short());
@@ -70,7 +70,7 @@ pub fn git(ctx: &Ctx, cmd: &GitCmd) -> Result<u8> {
                 &ctx.repo,
                 &ExportOptions { stream: stream.clone(), git_dir: path.clone(), branch: branch.clone() },
             )?;
-            ctx.out(&json!({"commits": rep.commits, "branch": rep.branch}), || {
+            ctx.done(&json!({"commits": rep.commits, "branch": rep.branch}), || {
                 format!(
                     "Exported {} commit(s) of '{stream}' to branch '{}' in {}",
                     rep.commits,

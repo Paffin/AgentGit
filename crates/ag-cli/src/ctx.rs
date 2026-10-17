@@ -10,6 +10,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
 
 use crate::Cli;
+use crate::ui;
 
 /// Everything a command needs.
 pub struct Ctx {
@@ -19,23 +20,60 @@ pub struct Ctx {
     pub me: Identity,
     /// Emit JSON instead of text.
     pub json: bool,
+    /// `--quiet`: confirmations and hints are not printed.
+    pub quiet: bool,
     /// Repository root (the working directory of the default workspace).
     pub root: PathBuf,
 }
 
-/// Resolves the acting identity: `--as`, `AG_IDENTITY`, then `user:` and the login name (`$USER`, `$LOGNAME`;
-/// `%USERNAME%` on Windows).
+/// Where the acting identity came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentitySource {
+    /// `--as`.
+    Flag,
+    /// `AG_IDENTITY`.
+    Env,
+    /// `identity` in the user-level configuration file.
+    Config,
+    /// `user:$USER` (nothing was configured).
+    Default,
+}
+
+impl IdentitySource {
+    /// A phrase for messages.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::Flag => "--as",
+            Self::Env => "AG_IDENTITY",
+            Self::Config => "the user configuration file",
+            Self::Default => "default: user:$USER",
+        }
+    }
+}
+
+/// Resolves the acting identity and says where it came from: `--as`, `AG_IDENTITY`, the `identity` setting of
+/// `ag config`, then `user:$USER`.
+pub fn identity_with_source(cli: &Cli) -> Result<(Identity, IdentitySource)> {
+    let (raw, source) = if let Some(i) = cli.identity.clone() {
+        (i, IdentitySource::Flag)
+    } else if let Some(i) = std::env::var("AG_IDENTITY").ok().filter(|s| !s.is_empty()) {
+        (i, IdentitySource::Env)
+    } else if let Some(i) = crate::userconf::load()?.get("identity").map(str::to_string) {
+        (i, IdentitySource::Config)
+    } else {
+        let login =
+            ["USER", "LOGNAME", "USERNAME"].iter().find_map(|v| std::env::var(v).ok().filter(|s| !s.is_empty()));
+        (default_identity(login.as_deref()), IdentitySource::Default)
+    };
+    let id = Identity::new(raw.clone())
+        .map_err(|e| anyhow!("invalid identity '{raw}' (from {}): {e}", source.describe()))?;
+    Ok((id, source))
+}
+
+/// Resolves the acting identity (see [`identity_with_source`]).
 pub fn identity(cli: &Cli) -> Result<Identity> {
-    let raw = cli
-        .identity
-        .clone()
-        .or_else(|| std::env::var("AG_IDENTITY").ok().filter(|s| !s.is_empty()))
-        .unwrap_or_else(|| {
-            let login =
-                ["USER", "LOGNAME", "USERNAME"].iter().find_map(|v| std::env::var(v).ok().filter(|s| !s.is_empty()));
-            default_identity(login.as_deref())
-        });
-    Identity::new(raw.clone()).map_err(|e| anyhow!("invalid identity '{raw}': {e}"))
+    identity_with_source(cli).map(|(i, _)| i)
 }
 
 /// `user:<login>` with every character an identity cannot hold (a space in `John Smith`, non-ASCII letters,
@@ -67,26 +105,61 @@ impl Ctx {
         })?;
         let root = layout.root().to_path_buf();
         let repo = Repository::open(&root)?;
-        Ok(Self { repo, me: identity(cli)?, json: cli.json, root })
+        let (me, source) = identity_with_source(cli)?;
+        ui::verbose(format!("repository {} (namespace {})", root.display(), repo.config().namespace));
+        ui::verbose(format!("acting as {me} (from {})", source.describe()));
+        Ok(Self { repo, me, json: cli.json, quiet: cli.quiet, root })
     }
 
-    /// Prints either the JSON form or the human text.
+    /// Prints data the user asked for: JSON, or the human text. Never suppressed by `--quiet`.
     pub fn out<T: Serialize>(&self, value: &T, human: impl FnOnce() -> String) -> Result<()> {
-        if self.json {
-            println!("{}", serde_json::to_string_pretty(value)?);
-        } else {
-            let text = human();
-            if !text.is_empty() {
-                println!("{}", sanitize_for_terminal(text.trim_end()));
-            }
+        emit(self.json, value, human)
+    }
+
+    /// Prints a confirmation ("Snapshot abc in workspace 'default'"). In text mode `--quiet` suppresses it, since
+    /// the exit code already says it worked; JSON mode always prints, because JSON is data.
+    pub fn done<T: Serialize>(&self, value: &T, human: impl FnOnce() -> String) -> Result<()> {
+        if self.quiet && !self.json {
+            return Ok(());
         }
-        Ok(())
+        emit(self.json, value, human)
+    }
+
+    /// Prints the result of creating something (`id` is its identifier): a confirmation normally, only the bare
+    /// identifier with `--quiet` in text mode, so that `id=$(ag -q propose -t x)` works.
+    pub fn created<T: Serialize>(&self, id: &str, value: &T, human: impl FnOnce() -> String) -> Result<()> {
+        if self.quiet && !self.json {
+            ui::print_line(id);
+            return Ok(());
+        }
+        emit(self.json, value, human)
+    }
+
+    /// A note for a person on standard error, such as what to do about an empty listing. Not printed in JSON
+    /// mode or with `--quiet`, and never part of standard output, so pipelines are unaffected.
+    pub fn note(&self, msg: impl AsRef<str>) {
+        if !self.json {
+            ui::hint(msg);
+        }
     }
 
     /// The default stream name.
     pub fn default_stream(&self) -> String {
         self.repo.default_stream().to_string()
     }
+}
+
+/// Prints JSON, or sanitized and (if allowed) coloured human text, on standard output.
+pub fn emit<T: Serialize>(json: bool, value: &T, human: impl FnOnce() -> String) -> Result<()> {
+    if json {
+        ui::print_line(&serde_json::to_string_pretty(value)?);
+    } else {
+        let text = human();
+        if !text.is_empty() {
+            ui::print_line(&ui::finish(&sanitize_for_terminal(text.trim_end()), ui::settings().color_out));
+        }
+    }
+    Ok(())
 }
 
 /// Neutralizes control characters in text that may contain attacker-controlled

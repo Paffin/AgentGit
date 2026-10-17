@@ -12,6 +12,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::Args;
 use serde_json::json;
 
+use crate::cmds::overview;
 use crate::ctx::{Ctx, display_path};
 use crate::{Cli, exit};
 
@@ -63,19 +64,19 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
         storage,
     };
     let repo = Repository::init(&root, &opts)?;
-    if cli.json {
-        println!(
-            "{}",
-            json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name})
-        );
-    } else {
-        println!("Initialized AgentGit repository in {}", root.join(".ag").display());
-        println!("  namespace: {ns}");
-        println!("  stream:    {}", args.stream);
-        println!("  storage:   {} (see `docs/operations/durability.md`)", repo.objects().durability().name);
-        println!(
-            "Next: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`."
-        );
+    if !(cli.quiet && !cli.json) {
+        crate::ctx::emit(
+            cli.json,
+            &json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name}),
+            || {
+                format!(
+                    "Initialized AgentGit repository in {}\n  namespace: {ns}\n  stream:    {}\n  storage:   {} (see `docs/operations/durability.md`)\nNext: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`.",
+                    root.join(".ag").display(),
+                    args.stream,
+                    repo.objects().durability().name
+                )
+            },
+        )?;
     }
     Ok(exit::OK)
 }
@@ -130,7 +131,7 @@ pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
             {
                 crate::ctx::note_adaptations(&tree);
             }
-            ctx.out(&ws, || format!("Created workspace '{name}' on '{stream}' in {}", display_path(dir)))?;
+            ctx.done(&ws, || format!("Created workspace '{name}' on '{stream}' in {}", display_path(dir)))?;
         }
         WorkspaceCmd::List => {
             let rows = ctx.repo.workspaces()?;
@@ -156,7 +157,7 @@ pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
         }
         WorkspaceCmd::Remove { name } => {
             ctx.repo.workspace_remove(name, &ctx.me)?;
-            ctx.out(&json!({"removed": name}), || format!("Removed workspace '{name}'"))?;
+            ctx.done(&json!({"removed": name}), || format!("Removed workspace '{name}'"))?;
         }
     }
     Ok(exit::OK)
@@ -170,29 +171,42 @@ pub struct StatusArgs {
     /// Working directory of the workspace (required for non-default workspaces).
     #[arg(long)]
     pub dir: Option<PathBuf>,
+    /// Also ask each remote's server for its current head (needs the network and a credential).
+    #[arg(long)]
+    pub remote: bool,
 }
 
-pub fn status(ctx: &Ctx, a: &StatusArgs) -> Result<u8> {
+pub fn status(cli: &Cli, ctx: &Ctx, a: &StatusArgs) -> Result<u8> {
     let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
     let ws = ctx.repo.workspace_row(&a.workspace)?;
     let changes = ctx.repo.workspace_status(&a.workspace, &dir)?;
     let merging = ctx.repo.workspace_is_merging(&a.workspace)?;
-    ctx.out(&json!({"workspace": ws.name, "stream": ws.stream, "base": ws.base, "head": ws.head, "merging": merging, "changes": changes}), || {
-        let mut s = format!("workspace '{}' on stream '{}'\n", ws.name, ws.stream);
-        let _ = writeln!(s, "  base: {}", ws.base.map_or("(none)".into(), |b| b.short()));
-        let _ = writeln!(s, "  head: {}", ws.head.map_or("(no snapshots yet)".into(), |b| b.short()));
-        if merging {
-            s.push_str("  a conflicted sync is waiting: resolve the marked files, then `ag snapshot`\n");
-        }
-        if changes.is_empty() {
-            s.push_str("nothing to snapshot, working directory clean");
-        } else {
-            for c in &changes {
-                let _ = writeln!(s, "  {:<9} {}", c.kind, c.path);
+    let (_, source) = crate::ctx::identity_with_source(cli)?;
+    let summary = overview::summarize(ctx, &ws, source, changes.len(), merging, a.remote)?;
+    ctx.out(
+        &json!({
+            "workspace": ws.name, "stream": ws.stream, "base": ws.base, "head": ws.head, "merging": merging, "changes": changes,
+            "summary": summary,
+        }),
+        || {
+            let mut s = format!("workspace '{}' on stream '{}'\n", ws.name, ws.stream);
+            let _ = writeln!(s, "  base: {}", ws.base.map_or("(none)".into(), |b| b.short()));
+            let _ = writeln!(s, "  head: {}", ws.head.map_or("(no snapshots yet)".into(), |b| b.short()));
+            if merging {
+                s.push_str("  a conflicted sync is waiting: resolve the marked files, then `ag snapshot`\n");
             }
-        }
-        s
-    })?;
+            if changes.is_empty() {
+                s.push_str("nothing to snapshot, working directory clean\n");
+            } else {
+                for c in &changes {
+                    let _ = writeln!(s, "  {:<9} {}", c.kind, c.path);
+                }
+            }
+            s.push('\n');
+            s.push_str(&overview::render(&summary, &ws.stream));
+            s
+        },
+    )?;
     Ok(exit::OK)
 }
 
@@ -215,10 +229,10 @@ pub struct SnapshotArgs {
 pub fn snapshot(ctx: &Ctx, a: &SnapshotArgs) -> Result<u8> {
     let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
     match ctx.repo.snapshot(&a.workspace, &dir, &a.message, &ctx.me, a.force)? {
-        Some(id) => {
-            ctx.out(&json!({"changeset": id}), || format!("Snapshot {} in workspace '{}'", id.short(), a.workspace))?
-        }
-        None => ctx.out(&json!({"changeset": null}), || "Nothing to snapshot.".to_string())?,
+        Some(id) => ctx.created(&id.to_string(), &json!({"changeset": id}), || {
+            format!("Snapshot {} in workspace '{}'", id.short(), a.workspace)
+        })?,
+        None => ctx.done(&json!({"changeset": null}), || "Nothing to snapshot.".to_string())?,
     }
     Ok(exit::OK)
 }
@@ -242,7 +256,7 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
     {
         crate::ctx::note_adaptations(&tree);
     }
-    ctx.out(&out, || match &out {
+    let text = || match &out {
         SyncOutcome::UpToDate => "Already up to date.".into(),
         SyncOutcome::FastForwarded { to } => format!("Fast-forwarded to {}.", to.short()),
         SyncOutcome::Merged { id } => format!("Merged the stream into the workspace: {}.", id.short()),
@@ -256,8 +270,14 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
             }
             s
         }
-    })?;
-    Ok(if matches!(out, SyncOutcome::Conflicted { .. }) { exit::REFUSED } else { exit::OK })
+    };
+    if matches!(out, SyncOutcome::Conflicted { .. }) {
+        ctx.out(&out, text)?;
+        Ok(exit::REFUSED)
+    } else {
+        ctx.done(&out, text)?;
+        Ok(exit::OK)
+    }
 }
 
 /// Resolves an optional revision, defaulting to the workspace head, then the stream.
@@ -490,8 +510,7 @@ pub fn cat(ctx: &Ctx, a: &CatArgs) -> Result<u8> {
     let tree = ctx.repo.tree_of(&id)?;
     let entry = tree.get(&path).ok_or_else(|| anyhow!("'{path}' does not exist at {}", id.short()))?;
     let bytes = ctx.repo.blob(&entry.content)?;
-    use std::io::Write;
-    std::io::stdout().write_all(&bytes)?;
+    crate::ui::print_bytes(&bytes);
     Ok(exit::OK)
 }
 
@@ -611,7 +630,7 @@ pub fn checkout(ctx: &Ctx, a: &CheckoutArgs) -> Result<u8> {
     let tree = ctx.repo.tree_of(&id)?;
     checkout_tree(&ctx.repo, &tree, &a.dir)?;
     crate::ctx::note_adaptations(&tree);
-    ctx.out(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || {
+    ctx.done(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || {
         format!("Wrote {} file(s) of {} to {}", tree.len(), id.short(), display_path(&a.dir))
     })?;
     Ok(exit::OK)

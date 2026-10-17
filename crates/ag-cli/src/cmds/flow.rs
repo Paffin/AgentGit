@@ -69,7 +69,7 @@ pub fn stream(ctx: &Ctx, cmd: &StreamCmd) -> Result<u8> {
                 return Err(anyhow!("{} is not published; propose and integrate it first", f.short()));
             }
             let row = ctx.repo.create_stream(&n, from.as_ref(), &ctx.me)?;
-            ctx.out(&row, || format!("Created stream '{}'", row.name))?;
+            ctx.done(&row, || format!("Created stream '{}'", row.name))?;
         }
         StreamCmd::Show { name } => {
             let row = ctx.repo.meta().read(|tx| tx.stream(name))?.ok_or_else(|| anyhow!("no stream '{name}'"))?;
@@ -133,7 +133,7 @@ pub fn propose(ctx: &Ctx, a: &ProposeArgs) -> Result<u8> {
     let head = rev_or_default(ctx, &a.rev)?;
     let stream = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
     let p = ctx.repo.propose(&stream, &head, &a.title, &a.description, &ctx.me, a.task.as_deref())?;
-    ctx.out(&p, || {
+    ctx.created(&p.id, &p, || {
         format!("Opened proposal {} -> '{stream}' ({}).\nNext: `ag integrate {}`", p.id, head.short(), p.id)
     })?;
     Ok(exit::OK)
@@ -187,6 +187,9 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
     match cmd {
         ProposalCmd::List { state } => {
             let list = ctx.repo.meta().read(|tx| tx.proposals_list(state.as_deref(), 200))?;
+            if list.is_empty() {
+                ctx.note("no proposals match; `ag propose -t TITLE` opens one");
+            }
             ctx.out(&list, || {
                 let mut s = String::new();
                 for p in &list {
@@ -237,18 +240,18 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
                 _ => return Err(anyhow!("choose one of --approve, --request-changes, --comment")),
             };
             let r = ctx.repo.review(id, &ctx.me, decision, message)?;
-            ctx.out(&r, || format!("Recorded '{decision}' by {} on {}", ctx.me, r.head.short()))?;
+            ctx.done(&r, || format!("Recorded '{decision}' by {} on {}", ctx.me, r.head.short()))?;
         }
         ProposalCmd::Update { id, rev } => {
             let head = rev_or_default(ctx, rev)?;
             let p = ctx.repo.update_proposal(id, &head, &ctx.me)?;
-            ctx.out(&p, || {
+            ctx.done(&p, || {
                 format!("Proposal {} now points at {} (earlier approvals no longer count)", p.id, p.head.short())
             })?;
         }
         ProposalCmd::Close { id } => {
             ctx.repo.close_proposal(id, &ctx.me)?;
-            ctx.out(&json!({"closed": id}), || format!("Closed {id}"))?;
+            ctx.done(&json!({"closed": id}), || format!("Closed {id}"))?;
         }
     }
     Ok(exit::OK)
@@ -268,8 +271,11 @@ pub struct IntegrateArgs {
     pub fencing_tokens: Vec<u64>,
 }
 
-pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>) -> Result<u8> {
-    ctx.out(r, || {
+pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>, confirmation: bool) -> Result<u8> {
+    let report = |ctx: &Ctx, text: &dyn Fn() -> String| {
+        if confirmation && matches!(r.state, IntentState::Integrated) { ctx.done(r, text) } else { ctx.out(r, text) }
+    };
+    report(ctx, &|| {
         let mut s = String::new();
         match &r.outcome {
             Outcome::Integrated { new_head, previous_head, version, strategy, changed_files, .. } => {
@@ -345,7 +351,7 @@ pub fn integrate(ctx: &Ctx, a: &IntegrateArgs) -> Result<u8> {
         idempotency_key: a.key.clone(),
         fencing_tokens: a.fencing_tokens.clone(),
     })?;
-    print_result(ctx, &r, Some(&a.proposal))
+    print_result(ctx, &r, Some(&a.proposal), true)
 }
 
 #[derive(Args, Debug)]
@@ -408,16 +414,19 @@ pub fn op(ctx: &Ctx, cmd: &OpCmd) -> Result<u8> {
     match cmd {
         OpCmd::Show { id } => {
             let r = ctx.repo.operation(id)?;
-            print_result(ctx, &r, None)?;
+            print_result(ctx, &r, None, false)?;
             Ok(exit::OK)
         }
         OpCmd::Resume { id, fencing_tokens } => {
             let tokens = if fencing_tokens.is_empty() { None } else { Some(fencing_tokens.as_slice()) };
             let r = ctx.repo.resume_integrate(id, &ctx.me, tokens)?;
-            print_result(ctx, &r, None)
+            print_result(ctx, &r, None, true)
         }
         OpCmd::List { limit } => {
             let list = ctx.repo.meta().read(|tx| tx.intents_recent(*limit))?;
+            if list.is_empty() {
+                ctx.note("no operations yet; publishing and integrating create them");
+            }
             ctx.out(&list, || {
                 let mut s = String::new();
                 for i in &list {
@@ -477,11 +486,14 @@ pub fn queue(ctx: &Ctx, cmd: &QueueCmd) -> Result<u8> {
     match cmd {
         QueueCmd::Add { proposal } => {
             let row = ctx.repo.enqueue(proposal, &ctx.me)?;
-            ctx.out(&row, || format!("Queued {proposal} as #{} on '{}'", row.id, row.stream))?;
+            ctx.done(&row, || format!("Queued {proposal} as #{} on '{}'", row.id, row.stream))?;
         }
         QueueCmd::List { stream } => {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let rows = ctx.repo.queue(&s)?;
+            if rows.is_empty() {
+                ctx.note(format!("the queue of '{s}' is empty; `ag queue add PROPOSAL` adds to it"));
+            }
             ctx.out(&rows, || {
                 let mut t = String::new();
                 for r in &rows {

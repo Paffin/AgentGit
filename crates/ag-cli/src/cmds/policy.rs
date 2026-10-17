@@ -74,11 +74,16 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let text = std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
             let row = ctx.repo.set_policy(&s, &text, &ctx.me)?;
-            ctx.out(&row, || format!("Policy of '{s}' is now version {} (hash {})", row.version, &row.doc_hash[..12]))?;
+            ctx.done(&row, || {
+                format!("Policy of '{s}' is now version {} (hash {})", row.version, &row.doc_hash[..12])
+            })?;
         }
         PolicyCmd::History { stream } => {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let h = ctx.repo.policy_history(&s)?;
+            if h.is_empty() {
+                ctx.note(format!("no policy has been stored for '{s}' yet (the built-in default applies); `ag policy example` shows a document to start from"));
+            }
             ctx.out(&h, || {
                 let mut t = String::new();
                 for r in &h {
@@ -88,7 +93,7 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
                 t
             })?;
         }
-        PolicyCmd::Example => println!("{EXAMPLE_POLICY}"),
+        PolicyCmd::Example => crate::ui::print_line(EXAMPLE_POLICY),
     }
     Ok(exit::OK)
 }
@@ -216,7 +221,9 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
                 ctx.repo.clock().now(),
             )?;
             ctx.repo.submit_attestation(&att)?;
-            ctx.out(&att, || {
+            let report =
+                |ctx: &Ctx, text: &dyn Fn() -> String| if passed { ctx.done(&att, text) } else { ctx.out(&att, text) };
+            report(ctx, &|| {
                 format!(
                     "check '{check}' {} on tree {} (policy v{policy_version}); attestation {} signed by {}",
                     if passed { "PASSED" } else { "FAILED" },

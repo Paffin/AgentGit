@@ -38,6 +38,8 @@ ag-sandbox = { path = "crates/ag-sandbox", version = "0.1.0" }
 anyhow = "1"
 base64 = "0.23"
 clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+clap_mangen = "0.3"
 ed25519-dalek = "3"
 globset = "0.4"
 hex = "0.4"

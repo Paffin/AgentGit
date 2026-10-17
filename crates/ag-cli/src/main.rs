@@ -3,17 +3,54 @@
 
 mod cmds;
 mod ctx;
+mod errors;
+mod ui;
+mod userconf;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use crate::ctx::Ctx;
+use crate::ui::{ColorEnv, ColorMode, Settings};
+
+/// The version of the `--json` output shapes (see `docs/reference/cli-json.md`). Within a version keys are only
+/// ever added.
+pub const JSON_SCHEMA_VERSION: u32 = 1;
+
+const ROOT_HELP: &str = "\
+Common workflow:
+  ag init --namespace me/app     create a repository in this directory
+  ag snapshot -m \"message\"       record the working directory
+  ag propose -t \"title\"          publish it and open a proposal
+  ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+
+Where am I, is it healthy:
+  ag status                      workspace, your proposals, leases, task and remote at a glance
+  ag doctor                      check the installation, the repository, your identity and every remote
+
+Exit codes: 0 ok, 1 error, 2 usage, 3 blocked (provide what is missing and run it again),
+4 refused (conflict, policy denial; the stream was not changed). Add --json for machine-readable output.
+
+Help topics (ag help TOPIC): workflow, policy, leases, identities, revisions, exit-codes, json, config
+Shell completion: ag completions bash|zsh|fish|powershell|elvish     Man pages: ag man --dir DIR
+Documentation: https://github.com/Paffin/AgentGit/tree/main/docs";
 
 /// AgentGit: an agent-native source control system.
 #[derive(Parser, Debug)]
-#[command(name = "ag", version = env!("AG_LONG_VERSION"), about, long_about = None, propagate_version = true)]
+#[command(
+    name = "ag",
+    version = env!("AG_LONG_VERSION"),
+    about,
+    long_about = "AgentGit: an agent-native source control system. People, agents and CI change one codebase at \
+the same time; every change lands through a proposal, and a per-stream policy decides what must be true first \
+(validation of the exact tree, approvals, leases, an autonomy envelope for agents).",
+    after_help = ROOT_HELP,
+    propagate_version = true,
+    disable_help_subcommand = true
+)]
 pub struct Cli {
     /// Operate on the repository at this path (default: discovered from the current directory).
     #[arg(short = 'C', long = "repo", global = true, value_name = "DIR")]
@@ -27,6 +64,18 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    /// Colour the output: auto (a terminal, unless NO_COLOR is set), always or never.
+    #[arg(long, global = true, value_enum, value_name = "WHEN", hide_possible_values = true)]
+    pub color: Option<ColorMode>,
+
+    /// Print only what was asked for: no confirmations or hints. Errors and refusals are still shown.
+    #[arg(short, long, global = true, conflicts_with = "verbose")]
+    pub quiet: bool,
+
+    /// Explain what is happening on standard error: repository, identity, remote, timing.
+    #[arg(short, long, global = true)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -35,7 +84,7 @@ pub struct Cli {
 pub enum Command {
     /// Create a repository in the current directory.
     Init(cmds::repo::InitArgs),
-    /// Show uncommitted changes in the working directory.
+    /// Summarize the workspace, your proposals, leases, task and remote at a glance.
     Status(cmds::repo::StatusArgs),
     /// Record the working directory as a new snapshot.
     Snapshot(cmds::repo::SnapshotArgs),
@@ -61,11 +110,17 @@ pub enum Command {
     #[command(subcommand)]
     Stream(cmds::flow::StreamCmd),
     /// Publish a snapshot and open a proposal to integrate it.
+    #[command(
+        after_help = "Examples:\n  ag propose -t \"Fix the parser\"            propose the workspace head\n  ag propose @docs -t \"Document usage\"      propose the head of workspace 'docs'\n  ag propose --task task_… -t \"…\"           attach the proposal to a task"
+    )]
     Propose(cmds::flow::ProposeArgs),
     /// List, review, update or close proposals.
     #[command(subcommand)]
     Proposal(cmds::flow::ProposalCmd),
     /// Integrate a proposal into its stream.
+    #[command(
+        after_help = "Exit codes: 0 integrated, 3 blocked (provide what is missing and run it again), 4 conflict, denied or invalid.\nThe stream is untouched unless the exit code is 0. Examples:\n  ag integrate prop_8f3a1c                        any unique id prefix works\n  ag integrate prop_8f3a1c --fencing-token 7      present the token of your exclusive lease\n  ag --json integrate prop_8f3a1c                 stable blocker codes for scripts and agents"
+    )]
     Integrate(cmds::flow::IntegrateArgs),
     /// Show what integrating a proposal would do, without doing it.
     Preview(cmds::flow::PreviewArgs),
@@ -78,7 +133,7 @@ pub enum Command {
     #[command(subcommand)]
     Queue(cmds::flow::QueueCmd),
     /// Show or change stream policy.
-    #[command(subcommand)]
+    #[command(subcommand, after_help = "Concepts and fields: ag help policy")]
     Policy(cmds::policy::PolicyCmd),
     /// Run checks and issue signed attestations.
     #[command(subcommand)]
@@ -90,7 +145,7 @@ pub enum Command {
     #[command(subcommand)]
     Task(cmds::agents::TaskCmd),
     /// Soft and exclusive leases with fencing tokens.
-    #[command(subcommand)]
+    #[command(subcommand, after_help = "Concepts: ag help leases")]
     Lease(cmds::agents::LeaseCmd),
     /// Signed provenance of agent-made changes.
     #[command(subcommand)]
@@ -131,6 +186,22 @@ pub enum Command {
     Unpin(cmds::admin::UnpinArgs),
     /// List pins.
     Pins,
+    /// Check the installation, the repository, your identity and every remote's credential.
+    Doctor(cmds::doctor::DoctorArgs),
+    /// Show, get, set and locate configuration (the user file; the repository's settings are shown read-only).
+    #[command(subcommand, after_help = "Files, environment variables and precedence: ag help config")]
+    Config(cmds::config::ConfigCmd),
+    /// Print a shell completion script: bash, zsh, fish, powershell or elvish.
+    #[command(
+        after_help = "Examples:\n  ag completions bash > ~/.local/share/bash-completion/completions/ag\n  ag completions zsh  > \"${fpath[1]}/_ag\"\n  ag completions fish > ~/.config/fish/completions/ag.fish"
+    )]
+    Completions(cmds::shell::CompletionsArgs),
+    /// Print the man page, or write one page per command with --dir.
+    Man(cmds::shell::ManArgs),
+    /// Print the version, the protocol and the JSON schema version.
+    Version,
+    /// Show help for a command, or a topic: workflow, policy, leases, identities, revisions, exit-codes, json, config.
+    Help(cmds::topics::HelpArgs),
 }
 
 /// Process exit codes (stable; agents may rely on them).
@@ -146,37 +217,80 @@ pub mod exit {
     pub const REFUSED: u8 = 4;
 }
 
-fn main() -> ExitCode {
-    let cli = Cli::parse();
-    match run(cli) {
-        Ok(code) => ExitCode::from(code),
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            ExitCode::from(exit::ERROR)
+/// Finds `--color WHEN` / `--color=WHEN` before the argument parser runs, so that even its own help and usage
+/// errors follow the flag.
+fn prescan_color(args: &[OsString]) -> Option<ColorMode> {
+    let mut it = args.iter().skip(1).filter_map(|a| a.to_str());
+    while let Some(a) = it.next() {
+        if a == "--" {
+            return None;
+        }
+        if let Some(v) = a.strip_prefix("--color=") {
+            return ColorMode::parse(v);
+        }
+        if a == "--color" {
+            return it.next().and_then(ColorMode::parse);
         }
     }
+    None
+}
+
+fn main() -> ExitCode {
+    let started = std::time::Instant::now();
+    let args: Vec<OsString> = std::env::args_os().collect();
+    let flag = prescan_color(&args);
+    let setting = userconf::load_lenient().get("color").and_then(ColorMode::parse);
+    let env = ColorEnv::from_process();
+    let color_out = ui::resolve_color(flag, setting, &env, ui::is_tty(false));
+    let color_err = ui::resolve_color(flag, setting, &env, ui::is_tty(true));
+    // Let the argument parser decide by itself unless the user chose; it understands NO_COLOR and terminals.
+    let choice = match (flag, setting) {
+        (None, None | Some(ColorMode::Auto)) | (Some(ColorMode::Auto), _) => clap::ColorChoice::Auto,
+        _ if color_out => clap::ColorChoice::Always,
+        _ => clap::ColorChoice::Never,
+    };
+
+    let mut command = Cli::command().color(choice);
+    let matches = command.try_get_matches_from_mut(&args).unwrap_or_else(|e| e.exit());
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    ui::init(Settings { color_out, color_err, quiet: cli.quiet, verbose: cli.verbose });
+
+    let json = cli.json;
+    let code = match run(cli) {
+        Ok(code) => code,
+        Err(e) => {
+            ui::eprint_line(&errors::render(&e, json, exit::ERROR));
+            exit::ERROR
+        }
+    };
+    ui::verbose(format!("exit code {code} after {} ms", started.elapsed().as_millis()));
+    ExitCode::from(code)
 }
 
 fn run(cli: Cli) -> anyhow::Result<u8> {
     use Command::*;
-    // `init` is the only command that does not need an existing repository.
-    if let Init(args) = &cli.command {
-        return cmds::repo::init(&cli, args);
-    }
-    // Cloning creates the repository; the remote subcommands read their own configuration.
-    if let Clone(args) = &cli.command {
-        return cmds::remote::clone(&cli, args);
-    }
-    if let Remote(args) = &cli.command {
-        return cmds::remote::remote(&cli, args);
+    // Commands that work without a repository.
+    match &cli.command {
+        Init(args) => return cmds::repo::init(&cli, args),
+        Clone(args) => return cmds::remote::clone(&cli, args),
+        Remote(args) => return cmds::remote::remote(&cli, args),
+        Doctor(args) => return cmds::doctor::doctor(&cli, args),
+        Config(c) => return cmds::config::config(&cli, c),
+        Completions(a) => return cmds::shell::completions(a),
+        Man(a) => return cmds::shell::man(a),
+        Version => return cmds::shell::version(&cli),
+        Help(a) => return cmds::topics::help(a),
+        _ => {}
     }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) | Clone(_) | Remote(_) => unreachable!(),
+        Init(_) | Clone(_) | Remote(_) | Doctor(_) | Config(_) | Completions(_) | Man(_) | Version | Help(_) => {
+            unreachable!()
+        }
         Fetch(a) => cmds::remote::fetch(&ctx, a),
         Pull(a) => cmds::remote::pull(&ctx, a),
         Push(a) => cmds::remote::push(&ctx, a),
-        Status(a) => cmds::repo::status(&ctx, a),
+        Status(a) => cmds::repo::status(&cli, &ctx, a),
         Snapshot(a) => cmds::repo::snapshot(&ctx, a),
         Sync(a) => cmds::repo::sync(&ctx, a),
         Log(a) => cmds::repo::log(&ctx, a),

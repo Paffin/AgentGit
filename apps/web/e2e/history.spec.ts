@@ -155,9 +155,8 @@ test.describe('files', () => {
     await expect(page.getByRole('table', { name: 'Directory listing' })).toBeVisible()
   })
 
-  test('an empty repository has an empty-state, not an error', async ({ page, allowConsole }) => {
-    // The server answers a listing of a stream with no commits with 404; the page turns that into an empty state.
-    allowConsole(/status of 404/)
+  test('an empty repository has an empty-state, not an error', async ({ page }) => {
+    // The server lists a stream with no commits as empty (older servers answered 404); no console noise either way.
     await page.goto('/repos/acme/mobile/files')
     await expect(page.getByText('This stream has no files yet')).toBeVisible()
     await page.goto('/repos/acme/mobile/history')

@@ -67,7 +67,10 @@ async function list(append = false) {
     if (mine !== serial) return
     entries.value = append ? [...entries.value, ...page.entries] : page.entries
     next.value = page.nextPageToken
+    // A stream without a single changeset lists as empty at its root.
+    if (!append && !path.value && page.entries.length === 0) emptyRepo.value = true
   } catch (e) {
+    // Servers that predate the empty listing answered 404 "no changesets yet".
     if (mine !== serial) return
     if (e instanceof ApiError && e.isNotFound && /no changesets yet/.test(e.message)) {
       emptyRepo.value = true

@@ -6,13 +6,38 @@ import { ApiError } from './errors'
 type Call = { url: string; init: RequestInit; headers: Headers }
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...headers },
+  })
 }
-function errorBody(code: string, extra: Record<string, unknown> = {}, status = 400, headers: Record<string, string> = {}) {
-  return json({ error: { code, message: code, retryable: false, retry_after_ms: 0, request_id: 'req_x', details: {}, ...extra } }, status, headers)
+function errorBody(
+  code: string,
+  extra: Record<string, unknown> = {},
+  status = 400,
+  headers: Record<string, string> = {},
+) {
+  return json(
+    {
+      error: {
+        code,
+        message: code,
+        retryable: false,
+        retry_after_ms: 0,
+        request_id: 'req_x',
+        details: {},
+        ...extra,
+      },
+    },
+    status,
+    headers,
+  )
 }
 
-function harness(responses: Array<Response | Error | (() => Response | Promise<Response>)>, opts: Partial<ClientOptions> = {}) {
+function harness(
+  responses: Array<Response | Error | (() => Response | Promise<Response>)>,
+  opts: Partial<ClientOptions> = {},
+) {
   const calls: Call[] = []
   const queue = [...responses]
   const fetchMock = vi.fn(async (url: RequestInfo | URL, init: RequestInit = {}) => {
@@ -91,13 +116,17 @@ describe('request shape', () => {
   })
 
   it('builds queries without empty values and joins lists', () => {
-    expect(buildQuery({ a: 'x', b: undefined, c: '', d: 3, e: false, f: ['p', 'q'] })).toBe('?a=x&d=3&e=false&f=p%2Cq')
+    expect(buildQuery({ a: 'x', b: undefined, c: '', d: 3, e: false, f: ['p', 'q'] })).toBe(
+      '?a=x&d=3&e=false&f=p%2Cq',
+    )
     expect(buildQuery({})).toBe('')
   })
 
   it('encodes repository and file paths segment by segment', () => {
     expect(repoPath('acme/web', '/log')).toBe('/v1/repos/acme/web/log')
-    expect(filePath('acme/web', 'src/a b/ü.ts')).toBe('/v1/repos/acme/web/files/src/a%20b/%C3%BC.ts')
+    expect(filePath('acme/web', 'src/a b/ü.ts')).toBe(
+      '/v1/repos/acme/web/files/src/a%20b/%C3%BC.ts',
+    )
   })
 })
 
@@ -119,7 +148,9 @@ describe('errors and retries', () => {
 
   it('retries retryable errors and honours Retry-After', async () => {
     const { client, calls, sleeps } = harness([
-      errorBody('rate_limited', { retryable: true, retry_after_ms: 2000 }, 429, { 'retry-after': '2' }),
+      errorBody('rate_limited', { retryable: true, retry_after_ms: 2000 }, 429, {
+        'retry-after': '2',
+      }),
       json({ done: true }),
     ])
     const out = await client.get<{ done: boolean }>('/v1/x')
@@ -136,13 +167,21 @@ describe('errors and retries', () => {
   })
 
   it('does not sit through a Retry-After longer than it is willing to wait', async () => {
-    const { client, calls } = harness([errorBody('rate_limited', { retryable: true, retry_after_ms: 120_000 }, 429)])
-    await expect(client.get('/v1/x')).rejects.toMatchObject({ code: 'rate_limited', retryAfterMs: 120_000 })
+    const { client, calls } = harness([
+      errorBody('rate_limited', { retryable: true, retry_after_ms: 120_000 }, 429),
+    ])
+    await expect(client.get('/v1/x')).rejects.toMatchObject({
+      code: 'rate_limited',
+      retryAfterMs: 120_000,
+    })
     expect(calls).toHaveLength(1)
   })
 
   it('reuses the SAME idempotency key when a mutation is retried', async () => {
-    const { client, calls } = harness([errorBody('deadline_exceeded', { retryable: true }, 504), json({ ok: 1 })])
+    const { client, calls } = harness([
+      errorBody('deadline_exceeded', { retryable: true }, 504),
+      json({ ok: 1 }),
+    ])
     await client.post('/v1/repos/a/b/proposals', { title: 't' })
     expect(calls).toHaveLength(2)
     expect(calls[0]!.headers.get('idempotency-key')).toBe('key-1')
@@ -159,16 +198,23 @@ describe('errors and retries', () => {
     await expect(keyed.client.post('/v1/x', {})).resolves.toEqual({ n: 2 })
 
     const keyless = harness([down(), json({ n: 3 })])
-    await expect(keyless.client.post('/v1/x', {}, { idempotencyKey: false })).rejects.toMatchObject({ code: 'network_error' })
+    await expect(keyless.client.post('/v1/x', {}, { idempotencyKey: false })).rejects.toMatchObject(
+      { code: 'network_error' },
+    )
     expect(keyless.calls).toHaveLength(1)
   })
 
   it('retries a keyless mutation only when the server proves it did nothing (429/503)', async () => {
-    const { client, calls } = harness([errorBody('rate_limited', { retryable: true }, 429), json({ ok: true })])
+    const { client, calls } = harness([
+      errorBody('rate_limited', { retryable: true }, 429),
+      json({ ok: true }),
+    ])
     await client.post('/v1/x', {}, { idempotencyKey: false })
     expect(calls).toHaveLength(2)
     const timeout = harness([errorBody('deadline_exceeded', { retryable: true }, 504)])
-    await expect(timeout.client.post('/v1/x', {}, { idempotencyKey: false })).rejects.toMatchObject({ code: 'deadline_exceeded' })
+    await expect(timeout.client.post('/v1/x', {}, { idempotencyKey: false })).rejects.toMatchObject(
+      { code: 'deadline_exceeded' },
+    )
     expect(timeout.calls).toHaveLength(1)
   })
 
@@ -179,7 +225,9 @@ describe('errors and retries', () => {
     expect(onUnauthenticated).toHaveBeenCalledTimes(1)
 
     const quiet = harness([errorBody('unauthenticated', {}, 401)], { onUnauthenticated })
-    await expect(quiet.client.get('/v1/whoami', undefined, { quietUnauthenticated: true })).rejects.toBeInstanceOf(ApiError)
+    await expect(
+      quiet.client.get('/v1/whoami', undefined, { quietUnauthenticated: true }),
+    ).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthenticated).toHaveBeenCalledTimes(1)
   })
 
@@ -193,10 +241,16 @@ describe('errors and retries', () => {
     const fetchMock = vi.fn(
       (_: unknown, init?: RequestInit) =>
         new Promise<Response>((_res, reject) =>
-          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          ),
         ),
     )
-    const client = new ApiClient({ getToken: () => 't', fetch: fetchMock as unknown as typeof fetch, sleep: async () => undefined })
+    const client = new ApiClient({
+      getToken: () => 't',
+      fetch: fetchMock as unknown as typeof fetch,
+      sleep: async () => undefined,
+    })
     const p = client.get('/v1/x', undefined, { signal: ctl.signal })
     await Promise.resolve()
     ctl.abort()
@@ -207,9 +261,18 @@ describe('errors and retries', () => {
   it('times out slow servers with a retryable client_timeout', async () => {
     vi.useFakeTimers()
     const hang = (init?: RequestInit) =>
-      new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+      new Promise<Response>((_, reject) =>
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        ),
+      )
     const fetchMock = vi.fn((_: unknown, init?: RequestInit) => hang(init))
-    const client = new ApiClient({ getToken: () => 't', fetch: fetchMock as unknown as typeof fetch, maxRetries: 0, sleep: async () => undefined })
+    const client = new ApiClient({
+      getToken: () => 't',
+      fetch: fetchMock as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => undefined,
+    })
     const p = client.get('/v1/x', undefined, { timeoutMs: 1000 })
     const assertion = expect(p).rejects.toMatchObject({ code: 'client_timeout', retryable: true })
     await vi.advanceTimersByTimeAsync(5000)
@@ -218,7 +281,11 @@ describe('errors and retries', () => {
 })
 
 describe('bytes', () => {
-  const body = (n: number) => new Response(new Uint8Array(n).fill(97), { status: 200, headers: { 'content-length': String(n) } })
+  const body = (n: number) =>
+    new Response(new Uint8Array(n).fill(97), {
+      status: 200,
+      headers: { 'content-length': String(n) },
+    })
 
   it('returns the bytes of a small file', async () => {
     const { client } = harness([body(5)])

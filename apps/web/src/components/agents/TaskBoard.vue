@@ -1,0 +1,345 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { api } from '@/api/instance'
+import { ApiError, describeError } from '@/api/errors'
+import type { Task } from '@/api/types'
+import { useLiveReload } from '@/composables/useLiveReload'
+import { useResource } from '@/composables/useResource'
+import { requirementText } from '@/lib/roles'
+import { useAuth } from '@/stores/auth'
+import { useBoard } from '@/stores/board'
+import { useToasts } from '@/stores/toasts'
+import Alert from '@/ui/Alert.vue'
+import Badge from '@/ui/Badge.vue'
+import Button from '@/ui/Button.vue'
+import Checkbox from '@/ui/Checkbox.vue'
+import Dialog from '@/ui/Dialog.vue'
+import EmptyState from '@/ui/EmptyState.vue'
+import ErrorState from '@/ui/ErrorState.vue'
+import IdentityLabel from '@/ui/IdentityLabel.vue'
+import RelativeTime from '@/ui/RelativeTime.vue'
+import Skeleton from '@/ui/Skeleton.vue'
+import TextArea from '@/ui/TextArea.vue'
+import TextField from '@/ui/TextField.vue'
+
+const props = defineProps<{ repo: string }>()
+const auth = useAuth()
+const board = useBoard()
+const toasts = useToasts()
+
+const tasks = useResource<Task[]>(() => api.agents.tasks(props.repo), { watch: [() => props.repo] })
+useLiveReload(['task', 'run'], () => tasks.reload())
+
+const COLUMNS = [
+  { id: 'open', title: 'Open', hint: 'Waiting for an owner' },
+  { id: 'in_progress', title: 'In progress', hint: 'Claimed by a run' },
+  { id: 'done', title: 'Done', hint: 'Finished' },
+  { id: 'cancelled', title: 'Cancelled', hint: 'Dropped' },
+] as const
+const byId = computed(() => new Map((tasks.data.value ?? []).map((t) => [t.id, t])))
+const grouped = computed(() => {
+  const g: Record<string, Task[]> = { open: [], in_progress: [], done: [], cancelled: [] }
+  for (const t of tasks.data.value ?? []) (g[t.state] ??= []).push(t)
+  g.open?.sort((a, b) => Number(b.ready) - Number(a.ready) || a.created_at_ms - b.created_at_ms)
+  g.done?.sort((a, b) => b.updated_at_ms - a.updated_at_ms)
+  return g
+})
+const waitingFor = (t: Task) => t.depends_on.filter((d) => byId.value.get(d)?.state !== 'done')
+
+// ---- create -----------------------------------------------------------------------------------------
+const creating = ref(false)
+const title = ref('')
+const description = ref('')
+const scope = ref('')
+const depends = ref<string[]>([])
+const error = ref<ApiError | null>(null)
+const busy = ref(false)
+const canCreate = computed(() => auth.can(props.repo, 'createTask'))
+const candidates = computed(() =>
+  (tasks.data.value ?? []).filter((t) => t.state !== 'cancelled' && t.state !== 'done'),
+)
+
+function openCreate() {
+  title.value = ''
+  description.value = ''
+  scope.value = ''
+  depends.value = []
+  error.value = null
+  creating.value = true
+}
+async function create() {
+  busy.value = true
+  error.value = null
+  try {
+    await api.agents.createTask(props.repo, {
+      title: title.value.trim(),
+      description: description.value.trim() || undefined,
+      scope: scope.value
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+      depends_on: depends.value,
+    })
+    creating.value = false
+    toasts.ok('Task created')
+    await tasks.reload()
+    board.touched(['tasks'])
+  } catch (e) {
+    error.value =
+      e instanceof ApiError
+        ? e
+        : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
+  } finally {
+    busy.value = false
+  }
+}
+
+async function finish(t: Task, state: 'done' | 'cancelled') {
+  try {
+    await api.agents.finishTask(props.repo, t.id, state)
+    toasts.ok(state === 'done' ? 'Task marked done' : 'Task cancelled', t.title)
+    await tasks.reload()
+    board.touched(['tasks'])
+  } catch (e) {
+    toasts.error('Could not update the task', e)
+  }
+}
+const toggle = (id: string, on: boolean) => {
+  depends.value = on ? [...depends.value, id] : depends.value.filter((x) => x !== id)
+}
+</script>
+
+<template>
+  <div class="tasks">
+    <div class="bar">
+      <p class="muted">
+        Tasks give an agent ownership of a piece of work. A task is <em>ready</em> when everything
+        it depends on is done.
+      </p>
+      <Button
+        icon="plus"
+        variant="primary"
+        :disabled="!canCreate"
+        :disabled-reason="requirementText('createTask')"
+        @click="openCreate"
+        >New task</Button
+      >
+    </div>
+    <ErrorState
+      v-if="tasks.error.value && !tasks.data.value"
+      what="tasks"
+      :error="tasks.error.value"
+      @retry="tasks.reload()"
+    />
+    <div v-else-if="!tasks.settled.value" class="cols">
+      <Skeleton v-for="n in 4" :key="n" :height="180" radius="10px" />
+    </div>
+    <div v-else class="cols" data-testid="task-board">
+      <section v-for="c in COLUMNS" :key="c.id" class="col" :aria-labelledby="`col-${c.id}`">
+        <header>
+          <h3 :id="`col-${c.id}`">{{ c.title }}</h3>
+          <Badge size="sm">{{ grouped[c.id]?.length ?? 0 }}</Badge>
+        </header>
+        <p class="faint hint">{{ c.hint }}</p>
+        <ul role="list" class="list">
+          <li v-for="t in grouped[c.id]" :key="t.id" class="task" :data-task="t.id">
+            <p class="t">{{ t.title }}</p>
+            <p v-if="t.description" class="d">{{ t.description }}</p>
+            <p class="chips">
+              <Badge
+                v-if="c.id === 'open'"
+                size="sm"
+                :tone="t.ready ? 'ok' : 'warn'"
+                :icon="t.ready ? 'check' : 'lock'"
+                >{{ t.ready ? 'ready' : `waiting for ${waitingFor(t).length}` }}</Badge
+              >
+              <Badge v-for="s in t.scope" :key="s" size="sm" mono>{{ s }}</Badge>
+            </p>
+            <p v-if="waitingFor(t).length" class="deps faint">
+              after:
+              {{
+                waitingFor(t)
+                  .map((d) => byId.get(d)?.title ?? d)
+                  .join(', ')
+              }}
+            </p>
+            <p class="foot faint">
+              <IdentityLabel v-if="t.owner" :identity="t.owner" :size="16" />
+              <span v-else>unowned</span>
+              <RelativeTime :ms="t.updated_at_ms" />
+            </p>
+            <p v-if="c.id === 'in_progress' || c.id === 'open'" class="acts">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="check"
+                :disabled="!canCreate"
+                :disabled-reason="requirementText('createTask')"
+                @click="finish(t, 'done')"
+                >Done</Button
+              >
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="x"
+                :disabled="!canCreate"
+                :disabled-reason="requirementText('createTask')"
+                @click="finish(t, 'cancelled')"
+                >Cancel</Button
+              >
+            </p>
+          </li>
+          <li v-if="!grouped[c.id]?.length" class="none">
+            <EmptyState compact icon="circle" title="None" />
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <Dialog v-model="creating" title="New task" :dismissable="!busy" size="lg">
+      <form id="new-task" class="form" @submit.prevent="create">
+        <TextField
+          v-model="title"
+          label="Title"
+          required
+          autofocus
+          placeholder="Extract the session store"
+        />
+        <TextArea v-model="description" label="Description" :rows="3" />
+        <TextArea
+          v-model="scope"
+          label="Scope (path globs)"
+          :rows="2"
+          mono
+          placeholder="src/auth/**"
+          hint="One per line or comma-separated. Helps predict who overlaps whom."
+        />
+        <fieldset v-if="candidates.length" class="deps-set">
+          <legend>Depends on</legend>
+          <Checkbox
+            v-for="t in candidates"
+            :key="t.id"
+            :model-value="depends.includes(t.id)"
+            :label="t.title"
+            @update:model-value="toggle(t.id, $event)"
+          />
+        </fieldset>
+        <Alert v-if="error" tone="bad" live="alert" title="Could not create the task">{{
+          error.message
+        }}</Alert>
+      </form>
+      <template #footer>
+        <Button :disabled="busy" @click="creating = false">Cancel</Button>
+        <Button type="submit" form="new-task" variant="primary" :loading="busy">Create task</Button>
+      </template>
+    </Dialog>
+  </div>
+</template>
+
+<style scoped>
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+.col {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  min-width: 0;
+}
+.col header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+h3 {
+  font-size: var(--fs-md);
+}
+.hint {
+  font-size: var(--fs-xs);
+  margin-bottom: var(--s-2);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.task {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.t {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.d {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.deps {
+  font-size: var(--fs-xs);
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-xs);
+}
+.acts {
+  display: flex;
+  gap: 4px;
+}
+.none {
+  list-style: none;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.deps-set {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-height: 200px;
+  overflow: auto;
+}
+legend {
+  font-weight: 580;
+  font-size: var(--fs-sm);
+  padding: 0 4px;
+}
+</style>

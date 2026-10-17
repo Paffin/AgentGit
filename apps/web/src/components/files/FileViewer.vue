@@ -1,0 +1,166 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { api } from '@/api/instance'
+import { useResource } from '@/composables/useResource'
+import { formatBytes } from '@/lib/format'
+import { decodeUtf8, imageMime, looksBinary, toDataUrl, baseName } from '@/lib/text'
+import Alert from '@/ui/Alert.vue'
+import Button from '@/ui/Button.vue'
+import CodeBlock from '@/ui/CodeBlock.vue'
+import ErrorState from '@/ui/ErrorState.vue'
+import Skeleton from '@/ui/Skeleton.vue'
+
+const props = defineProps<{ repo: string; rev: string; path: string }>()
+
+/**
+ * The server reports no file sizes in directory listings, so the guard works while downloading:
+ * a declared Content-Length over the limit is refused up front, and an undeclared one is cut off as it streams.
+ */
+const DEFAULT_LIMIT = 1024 * 1024
+const HARD_LIMIT = 8 * 1024 * 1024
+const limit = ref(DEFAULT_LIMIT)
+
+watch(
+  () => [props.repo, props.rev, props.path],
+  () => {
+    limit.value = DEFAULT_LIMIT
+  },
+)
+
+const file = useResource(() => api.tree.file(props.repo, props.rev, props.path, limit.value), {
+  watch: [() => props.repo, () => props.rev, () => props.path, limit],
+})
+
+const content = computed(() => {
+  const f = file.data.value
+  if (!f || f.truncated) return null
+  const binary = looksBinary(f.bytes)
+  return {
+    binary,
+    bytes: f.bytes,
+    text: binary ? '' : decodeUtf8(f.bytes),
+    size: f.size ?? f.bytes.length,
+  }
+})
+const image = computed(() => {
+  const c = content.value
+  const mime = imageMime(props.path)
+  return c && c.binary && mime && c.bytes.length <= DEFAULT_LIMIT ? toDataUrl(c.bytes, mime) : ''
+})
+const tooBig = computed(() => file.data.value?.truncated === true)
+const canRaise = computed(() => limit.value < HARD_LIMIT)
+
+let downloadUrl = ''
+function download() {
+  const c = content.value
+  if (!c) return
+  if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+  downloadUrl = URL.createObjectURL(
+    new Blob([c.bytes as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' }),
+  )
+  const a = document.createElement('a')
+  a.href = downloadUrl
+  a.download = baseName(props.path)
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+onBeforeUnmount(() => {
+  if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+})
+</script>
+
+<template>
+  <div class="viewer" data-testid="file-viewer">
+    <Skeleton v-if="!file.settled.value" :lines="6" />
+    <ErrorState
+      v-else-if="file.error.value"
+      what="this file"
+      :error="file.error.value"
+      compact
+      @retry="file.reload()"
+    />
+    <template v-else-if="tooBig">
+      <Alert tone="warn" title="This file is large">
+        It is larger than {{ formatBytes(limit) }}, so it was not downloaded.
+        <template v-if="file.data.value?.size">
+          Its size is {{ formatBytes(file.data.value.size) }}.</template
+        >
+        <div class="row">
+          <Button v-if="canRaise" size="sm" @click="limit = HARD_LIMIT"
+            >Load up to {{ formatBytes(HARD_LIMIT) }}</Button
+          >
+          <span v-else class="faint"
+            >It exceeds the viewer’s {{ formatBytes(HARD_LIMIT) }} ceiling; fetch it with the
+            CLI.</span
+          >
+        </div>
+      </Alert>
+    </template>
+    <template v-else-if="content">
+      <div class="meta">
+        <span class="faint"
+          >{{ formatBytes(content.size)
+          }}<template v-if="!content.binary">
+            ·
+            {{ content.text.split('\n').length.toLocaleString('en-US') }}
+            lines</template
+          ></span
+        >
+        <span class="spacer" />
+        <RouterLink :to="{ path: `/repos/${repo}/history`, query: { rev, path } }" class="hist"
+          >File history</RouterLink
+        >
+        <Button size="sm" icon="download" @click="download">Download</Button>
+      </div>
+      <figure v-if="image" class="img">
+        <img :src="image" :alt="`Preview of ${baseName(path)}`" />
+      </figure>
+      <Alert v-else-if="content.binary" tone="info" title="Binary file">
+        This looks like binary data ({{ formatBytes(content.size) }}), so it is not shown as text.
+      </Alert>
+      <p v-else-if="content.text === ''" class="faint">This file is empty.</p>
+      <CodeBlock v-else :code="content.text" :label="`Contents of ${path}`" max-height="70vh" />
+      <p class="faint foot">
+        Blame is not available on this server, so line authorship is not shown.
+      </p>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--fs-sm);
+}
+.spacer {
+  flex: 1;
+}
+.row {
+  margin-top: var(--s-2);
+}
+.img {
+  margin: 0;
+  padding: var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  text-align: center;
+}
+.img img {
+  max-width: 100%;
+  max-height: 60vh;
+}
+.foot {
+  font-size: var(--fs-xs);
+}
+</style>

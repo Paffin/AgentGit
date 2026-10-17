@@ -64,7 +64,13 @@ describe('SseParser', () => {
 // ---- the feed -------------------------------------------------------------------------------------
 
 const enc = new TextEncoder()
-const ev = (seq: number, topic = 'proposal.create'): ServerEvent => ({ seq, topic, repo: 'a/b', timestamp_ms: 1, payload: {} })
+const ev = (seq: number, topic = 'proposal.create'): ServerEvent => ({
+  seq,
+  topic,
+  repo: 'a/b',
+  timestamp_ms: 1,
+  payload: {},
+})
 const frame = (e: ServerEvent) => `id: ${e.seq}\nevent: ${e.topic}\ndata: ${JSON.stringify(e)}\n\n`
 
 class Conn {
@@ -76,7 +82,10 @@ class Conn {
         this.controller = c
       },
     })
-    this.response = new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    this.response = new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })
   }
   send(text: string) {
     this.controller.enqueue(enc.encode(text))
@@ -88,22 +97,35 @@ class Conn {
 
 function setup(opts: { stallMs?: number } = {}) {
   const queue: Array<Conn | ApiError> = []
-  const opens: Array<{ query: Record<string, unknown> | undefined; headers: Record<string, string> | undefined }> = []
+  const opens: Array<{
+    query: Record<string, unknown> | undefined
+    headers: Record<string, string> | undefined
+  }> = []
   const client = {
-    open: vi.fn(async (_path: string, o: { query?: Record<string, unknown>; headers?: Record<string, string>; signal?: AbortSignal }) => {
-      opens.push({ query: o.query, headers: o.headers })
-      const next = queue.shift()
-      if (!next) throw new ApiError({ status: 0, code: 'network_error', message: 'down', retryable: true })
-      if (next instanceof ApiError) throw next
-      o.signal?.addEventListener('abort', () => {
-        try {
-          next.controller.error(new DOMException('aborted', 'AbortError'))
-        } catch {
-          /* already closed */
-        }
-      })
-      return next.response
-    }),
+    open: vi.fn(
+      async (
+        _path: string,
+        o: {
+          query?: Record<string, unknown>
+          headers?: Record<string, string>
+          signal?: AbortSignal
+        },
+      ) => {
+        opens.push({ query: o.query, headers: o.headers })
+        const next = queue.shift()
+        if (!next)
+          throw new ApiError({ status: 0, code: 'network_error', message: 'down', retryable: true })
+        if (next instanceof ApiError) throw next
+        o.signal?.addEventListener('abort', () => {
+          try {
+            next.controller.error(new DOMException('aborted', 'AbortError'))
+          } catch {
+            /* already closed */
+          }
+        })
+        return next.response
+      },
+    ),
   } as unknown as ApiClient
   const events: ServerEvent[] = []
   const statuses: FeedStatus[] = []
@@ -240,7 +262,9 @@ describe('openEventFeed', () => {
     h.queue.push(conn)
     openEventFeed({ ...h.feedOptions, afterSeq: 0 })
     await tick()
-    conn.send('event: error\ndata: {"error":{"code":"unauthenticated","message":"the credential expired"}}\n\n')
+    conn.send(
+      'event: error\ndata: {"error":{"code":"unauthenticated","message":"the credential expired"}}\n\n',
+    )
     await tick()
     expect(h.statuses.at(-1)).toBe('unauthenticated')
   })

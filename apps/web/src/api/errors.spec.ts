@@ -38,7 +38,11 @@ describe('errorFromResponse', () => {
   })
 
   it('does not trust the shape: an HTML gateway page still becomes a typed error', () => {
-    const e = errorFromResponse(502, '<html>Bad gateway</html>', headers({ 'x-request-id': 'edge-9' }))
+    const e = errorFromResponse(
+      502,
+      '<html>Bad gateway</html>',
+      headers({ 'x-request-id': 'edge-9' }),
+    )
     expect(e.code).toBe('unavailable')
     expect(e.retryable).toBe(true)
     expect(e.requestId).toBe('edge-9')
@@ -58,7 +62,11 @@ describe('errorFromResponse', () => {
   })
 
   it('stringifies detail values', () => {
-    const e = errorFromResponse(400, { error: { code: 'invalid_argument', message: 'm', details: { n: 3 } } }, headers())
+    const e = errorFromResponse(
+      400,
+      { error: { code: 'invalid_argument', message: 'm', details: { n: 3 } } },
+      headers(),
+    )
     expect(e.details.n).toBe('3')
   })
 })
@@ -78,11 +86,19 @@ describe('parseRetryAfter', () => {
 
 describe('describeError', () => {
   it('speaks plainly about network failures and rate limits', () => {
-    expect(describeError(new ApiError({ status: 0, code: 'network_error', message: 'x' }))).toMatch(/Cannot reach/)
-    expect(describeError(new ApiError({ status: 429, code: 'rate_limited', message: 'x', retryAfterMs: 2500 }))).toContain('3s')
+    expect(describeError(new ApiError({ status: 0, code: 'network_error', message: 'x' }))).toMatch(
+      /Cannot reach/,
+    )
+    expect(
+      describeError(
+        new ApiError({ status: 429, code: 'rate_limited', message: 'x', retryAfterMs: 2500 }),
+      ),
+    ).toContain('3s')
   })
   it('uses the server message otherwise, and survives non-errors', () => {
-    expect(describeError(new ApiError({ status: 400, code: 'invalid_argument', message: 'bad name' }))).toBe('bad name')
+    expect(
+      describeError(new ApiError({ status: 400, code: 'invalid_argument', message: 'bad name' })),
+    ).toBe('bad name')
     expect(describeError('weird')).toBe('Something went wrong.')
     expect(describeError(new Error('boom'))).toBe('boom')
   })

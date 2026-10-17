@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import Badge from '@/ui/Badge.vue'
@@ -11,6 +11,7 @@ import type { IconName } from '@/ui/icons'
 const props = defineProps<{ owner: string; name: string }>()
 const board = useBoard()
 const auth = useAuth()
+const route = useRoute()
 
 const full = computed(() => `${props.owner}/${props.name}`)
 
@@ -45,6 +46,19 @@ const tabs = computed<Tab[]>(() => {
   return list
 })
 
+// On a narrow screen the tab strip scrolls sideways: keep the current tab in view instead of off to one side.
+const strip = ref<HTMLElement | null>(null)
+function revealCurrent() {
+  strip.value
+    ?.querySelector<HTMLElement>('.tab.current')
+    ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+}
+onMounted(revealCurrent)
+watch(
+  () => route.path,
+  () => void nextTick(revealCurrent),
+)
+
 const repoError = computed(() =>
   board.load.repo.status === 'error' ? board.load.repo.error : null,
 )
@@ -67,7 +81,7 @@ const repoError = computed(() =>
       <p v-if="board.repo?.description" class="desc">{{ board.repo.description }}</p>
     </div>
 
-    <nav class="tabs" aria-label="Repository">
+    <nav ref="strip" class="tabs" aria-label="Repository">
       <RouterLink
         v-for="t in tabs"
         :key="t.to"
@@ -156,6 +170,8 @@ const repoError = computed(() =>
   gap: 7px;
   padding: 0 var(--s-3);
   height: 40px;
+  min-height: var(--touch-min);
+  flex: none;
   color: var(--text-2);
   font-weight: 560;
   border-bottom: 2px solid transparent;

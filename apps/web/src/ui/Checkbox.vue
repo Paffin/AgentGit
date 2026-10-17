@@ -43,6 +43,17 @@ input {
 label {
   font-weight: 560;
 }
+/* The label is the target a finger hits: make it a comfortable row. */
+@media (pointer: coarse), (max-width: 820px) {
+  label {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+  input {
+    margin-top: calc((var(--touch-min) - 22px) / 2);
+  }
+}
 .hint {
   color: var(--text-3);
   font-size: var(--fs-xs);

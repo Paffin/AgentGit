@@ -65,6 +65,7 @@ legend {
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
+  min-height: var(--touch-min);
   border-radius: 4px;
   color: var(--text-2);
   font-weight: 560;

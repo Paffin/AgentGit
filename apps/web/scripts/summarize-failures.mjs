@@ -24,7 +24,7 @@ function walk(suite, trail) {
       else flaky++
       const last = t.results.at(-1)
       const err = strip(last?.error?.message ?? last?.errors?.[0]?.message ?? '').split('\n')
-      const head = err.filter((l) => l.trim()).slice(0, 7)
+      const head = err.filter((l) => l.trim()).slice(0, Number(process.argv[3] ?? 7))
       lines.push(
         `${status === 'flaky' ? 'FLAKY ' : 'FAILED'} [${t.projectName}] ${spec.file} > ${[...here, spec.title].join(' > ')}`,
         ...head.map((l) => `        ${l.slice(0, 220)}`),

@@ -82,6 +82,7 @@ async function onSelect(id: string) {
           <button
             type="button"
             class="user"
+            :aria-label="`Account: ${auth.identity}`"
             aria-haspopup="menu"
             :aria-expanded="open"
             :aria-controls="open ? menuId : undefined"
@@ -172,10 +173,25 @@ async function onSelect(id: string) {
   white-space: nowrap;
   font-weight: 560;
 }
+.navlink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+}
 @media (max-width: 720px) {
   .word,
   .who {
     display: none;
+  }
+}
+/* On a phone the brand is the way home; the list of repositories is one tap away from every page. */
+@media (max-width: 560px) {
+  .nav {
+    display: none;
+  }
+  .inner {
+    gap: var(--s-2);
+    padding: 0 var(--s-3);
   }
 }
 </style>

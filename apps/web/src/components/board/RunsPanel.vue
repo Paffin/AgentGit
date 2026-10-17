@@ -242,7 +242,7 @@ const staleOptions = computed(() => {
   color: var(--text-3);
 }
 .stale-pref :deep(select) {
-  min-height: 28px;
+  min-height: max(28px, var(--touch-min));
   font-size: var(--fs-sm);
 }
 </style>

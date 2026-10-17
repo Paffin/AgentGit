@@ -108,7 +108,7 @@ label {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   padding: 0 var(--s-2);
-  min-height: 34px;
+  min-height: max(34px, var(--touch-min));
 }
 .control:focus-within {
   outline: 2px solid var(--focus);

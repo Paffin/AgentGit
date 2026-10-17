@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
+import { useScrollRegion } from '@/composables/useScrollRegion'
 import { lineCount, parseUnifiedDiff } from '@/lib/unidiff'
 import type { FileDiff } from '@/api/types'
 import Badge from './Badge.vue'
@@ -22,6 +23,8 @@ const total = computed(() => lineCount(parsed.value))
 const forced = computed(() => total.value > LARGE)
 const open = ref(!props.collapsed && !forced.value)
 const bodyId = useId()
+// A long line scrolls the diff sideways, inside its own box; the keyboard can reach it then.
+const { setEl: diffRef, attrs: diffAttrs } = useScrollRegion(() => `Changes to ${props.file.path}`)
 
 const statusTone = computed(() =>
   props.file.status === 'added' ? 'ok' : props.file.status === 'deleted' ? 'bad' : 'neutral',
@@ -52,7 +55,7 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
         </template>
       </span>
     </header>
-    <div v-if="open" :id="bodyId" class="diff">
+    <div v-if="open" :id="bodyId" :ref="diffRef" class="diff" v-bind="diffAttrs">
       <p v-if="file.binary" class="note">Binary file: its contents are not shown.</p>
       <p v-else-if="parsed.hunks.length === 0" class="note">No textual changes.</p>
       <template v-else>

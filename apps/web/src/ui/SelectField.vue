@@ -47,7 +47,7 @@ label {
   font-size: var(--fs-sm);
 }
 select {
-  min-height: 34px;
+  min-height: max(34px, var(--touch-min));
   padding: 0 var(--s-2);
   background: var(--surface);
   border: 1px solid var(--border-strong);

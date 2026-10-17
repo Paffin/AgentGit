@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="Row extends object">
-import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
+import { computed, nextTick, watch } from 'vue'
+import { useScrollRegion } from '@/composables/useScrollRegion'
 import { useViewportWidth } from '@/composables/useViewport'
 import Skeleton from './Skeleton.vue'
 import type { Column } from './types'
@@ -30,28 +31,9 @@ const props = withDefaults(
 
 const width = useViewportWidth()
 
-// The table scrolls sideways when it is wider than its container (a long description on a narrow screen). A
-// scroll container that keyboard users cannot reach is an accessibility defect, so while it scrolls it is a
-// labelled, focusable region (the arrow keys scroll it).
-const wrap = ref<HTMLElement | null>(null)
-const scrolls = ref(false)
-let observer: ResizeObserver | undefined
-function measure() {
-  const el = wrap.value
-  scrolls.value = !!el && el.scrollWidth > el.clientWidth + 1
-}
-onMounted(() => {
-  measure()
-  if (typeof ResizeObserver !== 'undefined' && wrap.value) {
-    observer = new ResizeObserver(measure)
-    observer.observe(wrap.value)
-    const table = wrap.value.querySelector('table')
-    if (table) observer.observe(table)
-  }
-})
-// The content can outgrow the box without the box (or the table) resizing: re-measure after every render.
-onUpdated(measure)
-onBeforeUnmount(() => observer?.disconnect())
+// The table scrolls sideways when it is wider than its container (a long description on a narrow screen); then
+// it is a labelled, focusable region, so the keyboard can scroll it.
+const { setEl: wrapRef, attrs: wrapAttrs, measure } = useScrollRegion(() => props.caption)
 watch(
   () => [props.rows, props.loading, width.value],
   () => void nextTick(measure),
@@ -67,13 +49,7 @@ function value(row: Row, key: string): unknown {
 </script>
 
 <template>
-  <div
-    ref="wrap"
-    class="wrap"
-    :tabindex="scrolls ? 0 : undefined"
-    :role="scrolls ? 'region' : undefined"
-    :aria-label="scrolls ? `${caption} (scrolls sideways)` : undefined"
-  >
+  <div :ref="wrapRef" class="wrap" v-bind="wrapAttrs">
     <table class="table" :class="{ dense }" :aria-busy="loading ? 'true' : undefined">
       <caption class="sr-only">
         {{

@@ -34,20 +34,27 @@ async fn grpc_negotiation_errors_and_a_full_change() {
 
     // Negotiation needs no credentials.
     let hello = ProtocolServiceClient::new(ch.clone())
-        .negotiate(Request::new(v1::NegotiateRequest { supported_versions: vec!["agwp.v1".into()], ..Default::default() }))
+        .negotiate(Request::new(v1::NegotiateRequest {
+            supported_versions: vec!["agwp.v1".into()],
+            ..Default::default()
+        }))
         .await
         .unwrap()
         .into_inner();
     assert_eq!(hello.protocol_version, "agwp.v1");
     // ... and refuses a client that speaks only a future version.
     let e = ProtocolServiceClient::new(ch.clone())
-        .negotiate(Request::new(v1::NegotiateRequest { supported_versions: vec!["agwp.v9".into()], ..Default::default() }))
+        .negotiate(Request::new(v1::NegotiateRequest {
+            supported_versions: vec!["agwp.v9".into()],
+            ..Default::default()
+        }))
         .await
         .unwrap_err();
     assert_eq!(ProtocolError::from_status(&e).code, ErrorCode::FailedPrecondition);
 
     // Everything else needs a credential; the error carries a structured code.
-    let e = RepositoryServiceClient::new(ch.clone()).list(Request::new(v1::ListReposRequest::default())).await.unwrap_err();
+    let e =
+        RepositoryServiceClient::new(ch.clone()).list(Request::new(v1::ListReposRequest::default())).await.unwrap_err();
     assert_eq!(e.code(), tonic::Code::Unauthenticated);
     assert_eq!(ProtocolError::from_status(&e).code, ErrorCode::Unauthenticated);
 
@@ -68,7 +75,12 @@ async fn grpc_negotiation_errors_and_a_full_change() {
         let bytes = o.encode_envelope();
         msgs.push(v1::UploadObjectsRequest {
             repo: if i == 0 { "acme/api".into() } else { String::new() },
-            chunk: Some(v1::ObjectChunk { object_id: o.id().to_string(), total_size: bytes.len() as u64, data: bytes, last: true }),
+            chunk: Some(v1::ObjectChunk {
+                object_id: o.id().to_string(),
+                total_size: bytes.len() as u64,
+                data: bytes,
+                last: true,
+            }),
         });
     }
     let summary = ObjectServiceClient::new(ch.clone())
@@ -98,7 +110,13 @@ async fn grpc_negotiation_errors_and_a_full_change() {
 
     // Missing/present objects.
     let missing = ObjectServiceClient::new(ch.clone())
-        .missing(authed(&alice.token, v1::MissingObjectsRequest { repo: "acme/api".into(), object_ids: vec![objects[0].id().to_string(), "11".repeat(32)] }))
+        .missing(authed(
+            &alice.token,
+            v1::MissingObjectsRequest {
+                repo: "acme/api".into(),
+                object_ids: vec![objects[0].id().to_string(), "11".repeat(32)],
+            },
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -106,7 +124,10 @@ async fn grpc_negotiation_errors_and_a_full_change() {
 
     // Subscribe before anything happens, then watch the change land.
     let mut events = EventServiceClient::new(ch.clone())
-        .subscribe(authed(&ADMIN_TOKEN.to_string(), v1::SubscribeRequest { repo: "acme/api".into(), after_seq: u64::MAX, ..Default::default() }))
+        .subscribe(authed(
+            &ADMIN_TOKEN.to_string(),
+            v1::SubscribeRequest { repo: "acme/api".into(), after_seq: u64::MAX, ..Default::default() },
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -114,21 +135,33 @@ async fn grpc_negotiation_errors_and_a_full_change() {
     let prop = ProposalServiceClient::new(ch.clone())
         .create(authed(
             &alice.token,
-            v1::CreateProposalRequest { repo: "acme/api".into(), stream: "main".into(), head: head.to_string(), title: "first".into(), ..Default::default() },
+            v1::CreateProposalRequest {
+                repo: "acme/api".into(),
+                stream: "main".into(),
+                head: head.to_string(),
+                title: "first".into(),
+                ..Default::default()
+            },
         ))
         .await
         .unwrap()
         .into_inner();
     let carol = user_with_role(&srv, "user:carol", "acme/api", "integrator").await;
     let res = IntegrationServiceClient::new(ch.clone())
-        .integrate(authed(&carol.token, v1::IntegrateRequest { repo: "acme/api".into(), proposal: prop.id.clone(), ..Default::default() }))
+        .integrate(authed(
+            &carol.token,
+            v1::IntegrateRequest { repo: "acme/api".into(), proposal: prop.id.clone(), ..Default::default() },
+        ))
         .await
         .unwrap()
         .into_inner();
     assert_eq!(res.outcome.unwrap().status, "integrated");
 
     let head_now = StreamServiceClient::new(ch.clone())
-        .read_head(authed(&alice.token, v1::ReadHeadRequest { repo: "acme/api".into(), stream: "main".into(), ..Default::default() }))
+        .read_head(authed(
+            &alice.token,
+            v1::ReadHeadRequest { repo: "acme/api".into(), stream: "main".into(), ..Default::default() },
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -136,11 +169,17 @@ async fn grpc_negotiation_errors_and_a_full_change() {
 
     // The live feed delivered both the proposal and the integration, in order.
     let topics = collect_topics(&mut events, "stream.integrate").await;
-    assert!(topics.contains(&"proposal.create".to_string()) && topics.contains(&"stream.integrate".to_string()), "{topics:?}");
+    assert!(
+        topics.contains(&"proposal.create".to_string()) && topics.contains(&"stream.integrate".to_string()),
+        "{topics:?}"
+    );
 
     // Role management is an admin-only operation.
     let denied = AdminServiceClient::new(ch.clone())
-        .grant_role(authed(&alice.token, v1::GrantRoleRequest { subject: "user:alice".into(), repo: "acme/api".into(), role: "admin".into() }))
+        .grant_role(authed(
+            &alice.token,
+            v1::GrantRoleRequest { subject: "user:alice".into(), repo: "acme/api".into(), role: "admin".into() },
+        ))
         .await
         .unwrap_err();
     assert_eq!(ProtocolError::from_status(&denied).code, ErrorCode::PermissionDenied);

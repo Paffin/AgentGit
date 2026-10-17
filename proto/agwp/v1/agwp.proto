@@ -1358,33 +1358,34 @@ message ClaimJobResponse {
   Job job = 1;
 }
 
-message JobRef {
+message HeartbeatJobRequest {
   string repo = 1;
   string job_id = 2;
+  // The worker that holds the claim.
   string worker = 3;
-}
-
-message HeartbeatJobRequest {
-  JobRef job = 1;
-  int64 lease_ms = 2;
+  int64 lease_ms = 4;
 }
 
 message CompleteJobRequest {
-  JobRef job = 1;
+  string repo = 1;
+  string job_id = 2;
+  string worker = 3;
   // Free-form result (e.g. exit code, durations, log excerpt) as JSON.
-  string result_json = 2;
+  string result_json = 4;
   // The signed attestation produced for the job, submitted atomically with
   // completion. Required for kind = "validate" unless `stale` is set.
-  Attestation attestation = 3;
+  Attestation attestation = 5;
   // The candidate no longer matched the job's tree id: no attestation.
-  bool stale = 4;
+  bool stale = 6;
 }
 
 message FailJobRequest {
-  JobRef job = 1;
-  string error = 2;
+  string repo = 1;
+  string job_id = 2;
+  string worker = 3;
+  string error = 4;
   // Retry after this many ms (0 = fail permanently).
-  int64 retry_after_ms = 3;
+  int64 retry_after_ms = 5;
 }
 
 message GetJobRequest {

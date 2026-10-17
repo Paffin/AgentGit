@@ -107,6 +107,12 @@ fn placeholders(path: &str) -> Vec<String> {
 /// Builds the OpenAPI 3.1 document.
 pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
     let mut schemas: BTreeMap<String, Value> = BTreeMap::new();
+    // The error body is not the request or response of any one route.
+    let mut errors = Vec::new();
+    collect_for::<ag_protocol::v1::ErrorInfo>(&mut errors);
+    for (name, schema) in errors {
+        schemas.insert(name, serde_json::to_value(schema).unwrap_or(Value::Null));
+    }
     for r in routes {
         if let Payload::Json { collect, .. } = &r.payload {
             let mut found = Vec::new();

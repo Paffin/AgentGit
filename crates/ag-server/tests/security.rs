@@ -30,11 +30,16 @@ async fn minted_credentials_can_only_narrow_and_always_expire() {
     let narrow = srv.client(r.json["token"].as_str().unwrap());
     assert_eq!(narrow.get("/v1/repos/acme/web").await.status, 200);
     assert_eq!(narrow.get("/v1/repos/acme/api").await.status, 403, "outside the credential's repository scope");
-    assert_eq!(narrow.get("/v1/repos/acme/web/streams").await.status, 403, "stream.read is outside the operation scope");
+    assert_eq!(
+        narrow.get("/v1/repos/acme/web/streams").await.status,
+        403,
+        "stream.read is outside the operation scope"
+    );
     assert_eq!(alice.get("/v1/repos/acme/web/streams").await.status, 200, "her own token is unaffected");
 
     // A narrowed credential cannot mint a wider one, nor one for somebody else.
-    let wider = narrow.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": ["acme/web", "acme/api"]}})).await;
+    let wider =
+        narrow.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": ["acme/web", "acme/api"]}})).await;
     assert_eq!(wider.status, 403, "{}", wider.json);
     let unrestricted = narrow.post("/v1/credentials", json!({"ttl_secs": 60})).await;
     assert_eq!(unrestricted.status, 403, "an unrestricted credential cannot be minted from a scoped one");
@@ -88,10 +93,13 @@ async fn start_oidc() -> Oidc {
                 async move { axum::Json(json!({"issuer": iss, "jwks_uri": format!("{iss}/jwks")})) }
             }),
         )
-        .route("/jwks", axum::routing::get(move || {
-            let set = set.clone();
-            async move { axum::Json((*set).clone()) }
-        }));
+        .route(
+            "/jwks",
+            axum::routing::get(move || {
+                let set = set.clone();
+                async move { axum::Json((*set).clone()) }
+            }),
+        );
     let handle = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
@@ -204,7 +212,12 @@ async fn repository_quotas_are_enforced() {
     let admin = srv.admin();
     admin.post("/v1/repos", json!({"name": "acme/small"})).await;
     let r = admin
-        .call("PATCH", "/v1/repos/acme/small", Some(json!({"quota": {"max_total_object_bytes": 2000, "max_streams": 2, "max_open_proposals": 1}})), &[])
+        .call(
+            "PATCH",
+            "/v1/repos/acme/small",
+            Some(json!({"quota": {"max_total_object_bytes": 2000, "max_streams": 2, "max_open_proposals": 1}})),
+            &[],
+        )
         .await;
     assert_eq!(r.status, 200, "{}", r.json);
     let alice = user_with_role(&srv, "user:alice", "acme/small", "writer").await;
@@ -225,9 +238,13 @@ async fn repository_quotas_are_enforced() {
     assert_eq!(alice.post("/v1/repos/acme/small/streams", json!({"name": "dev"})).await.status, 200);
     let r = alice.post("/v1/repos/acme/small/streams", json!({"name": "dev2"})).await;
     assert_eq!(r.json["error"]["code"], "quota_exceeded", "{}", r.json);
-    let p1 = alice.post("/v1/repos/acme/small/proposals", json!({"stream": "main", "head": h1.to_string(), "title": "one"})).await;
+    let p1 = alice
+        .post("/v1/repos/acme/small/proposals", json!({"stream": "main", "head": h1.to_string(), "title": "one"}))
+        .await;
     assert_eq!(p1.status, 200, "{}", p1.json);
-    let p2 = alice.post("/v1/repos/acme/small/proposals", json!({"stream": "dev", "head": h1.to_string(), "title": "two"})).await;
+    let p2 = alice
+        .post("/v1/repos/acme/small/proposals", json!({"stream": "dev", "head": h1.to_string(), "title": "two"}))
+        .await;
     assert_eq!(p2.json["error"]["code"], "quota_exceeded", "{}", p2.json);
     srv.stop().await;
 }

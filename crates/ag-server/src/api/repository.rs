@@ -122,11 +122,7 @@ impl App {
     pub async fn list_repos(&self, call: &Call, req: v1::ListReposRequest) -> ApiResult<v1::ListReposResponse> {
         let bindings = self.bindings().await?;
         let size = page_size(req.page_size);
-        let after = if req.page_token.is_empty() {
-            String::new()
-        } else {
-            base64_decode(&req.page_token)?
-        };
+        let after = if req.page_token.is_empty() { String::new() } else { base64_decode(&req.page_token)? };
         let control = self.control.clone();
         let prefix = req.prefix.clone();
         let principal = call.principal.clone();

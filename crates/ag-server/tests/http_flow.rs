@@ -183,7 +183,12 @@ async fn the_server_enforces_client_deadlines() {
     // Long-poll for a version that never comes, with a 300 ms deadline.
     let started = std::time::Instant::now();
     let r = admin
-        .call("GET", "/v1/repos/acme/slow/streams/head?stream=main&wait_version_gt=99&wait_ms=20000", None, &[("request-timeout", "300")])
+        .call(
+            "GET",
+            "/v1/repos/acme/slow/streams/head?stream=main&wait_version_gt=99&wait_ms=20000",
+            None,
+            &[("request-timeout", "300")],
+        )
         .await;
     assert!(started.elapsed() < std::time::Duration::from_secs(5), "the deadline must cut the wait short");
     assert_eq!(r.status, 504, "{}", r.json);

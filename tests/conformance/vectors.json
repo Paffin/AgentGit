@@ -1,0 +1,94 @@
+{
+  "format": "agentgit-conformance-v1",
+  "blobs": [
+    {
+      "content_utf8": "",
+      "id": "2a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b"
+    },
+    {
+      "content_utf8": "hello\n",
+      "id": "6fdfa63ccd7aa33065dcfab8c0f7b1b605226c87833b50de3345f921122a4545"
+    },
+    {
+      "content_utf8": "new",
+      "id": "e40aa822378f63dc81baa8e77380584278673de8600fac471300b39d4a63feb9"
+    },
+    {
+      "content_utf8": "b",
+      "id": "1b12cf19997ca1591307fe267622207cb96f967f834d155e4af33ce34c0f48d2"
+    }
+  ],
+  "changesets": [
+    {
+      "name": "root-empty",
+      "namespace": "acme/app",
+      "parents": [],
+      "author": "user:alice",
+      "timestamp_ms": 0,
+      "message": "",
+      "ops": [],
+      "payload_hex": "00010861636d652f617070000a757365723a616c69636500000000000000000000",
+      "id": "ba85625d67ec5d73854c86bc71384288fb2644da83b075317a0a614021942bc0"
+    },
+    {
+      "name": "merge-with-mixed-ops",
+      "namespace": "acme/app",
+      "parents": [
+        "0101010101010101010101010101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202020202020202020202020202"
+      ],
+      "author": "agent:bot#run-1",
+      "timestamp_ms": 1760659200000,
+      "message": "add things",
+      "ops": [
+        {
+          "op": "put",
+          "path": "b.txt",
+          "content": "b"
+        },
+        {
+          "op": "delete",
+          "path": "a/old.txt"
+        },
+        {
+          "op": "put",
+          "path": "a/new.txt",
+          "content": "new"
+        }
+      ],
+      "payload_hex": "00010861636d652f61707002010101010101010101010101010101010101010101010101010101010101010102020202020202020202020202020202020202020202020202020202020202020f6167656e743a626f742372756e2d3100000199ef7758000a616464207468696e6773030109612f6e65772e7478740000e40aa822378f63dc81baa8e77380584278673de8600fac471300b39d4a63feb90209612f6f6c642e7478740105622e74787400001b12cf19997ca1591307fe267622207cb96f967f834d155e4af33ce34c0f48d2",
+      "id": "2903975d1c2a3353c3aad1c6aee6eed2edf989021ca664113138fc8b85c4eb35"
+    },
+    {
+      "name": "unicode-and-modes",
+      "namespace": "org/repo.name_1",
+      "parents": [
+        "0101010101010101010101010101010101010101010101010101010101010101"
+      ],
+      "author": "service:ci",
+      "timestamp_ms": -1,
+      "message": "Привет, мир ☃",
+      "ops": [
+        {
+          "op": "put",
+          "path": "bin/run.sh",
+          "content": "#!/bin/sh\n",
+          "executable": true
+        },
+        {
+          "op": "put",
+          "path": "ссылка",
+          "content": "target",
+          "type": "symlink"
+        },
+        {
+          "op": "put",
+          "path": "файл.txt",
+          "content": ""
+        }
+      ],
+      "payload_hex": "00010f6f72672f7265706f2e6e616d655f310101010101010101010101010101010101010101010101010101010101010101010a736572766963653a6369ffffffffffffffff18d09fd180d0b8d0b2d0b5d1822c20d0bcd0b8d18020e2988303010a62696e2f72756e2e736800011560fbd30c89b25915893c328d767e00d5890fdbbe58c1a97107d39721c20133010cd181d181d18bd0bbd0bad0b00100e66654ee8968fa2cfeb5aaa1dc4e0c5b0bab42ab640cbe063d8b6e516c2efb4f010cd184d0b0d0b9d0bb2e74787400002a0a334d0719f25cfd2cf4a6594fb55a5ce0be075ce4a23ba7b4ad95ce6d800b",
+      "id": "5e44ce16b3f28e4f3fc2f21dc5985110eb9fc4b81f85d9a0996fa4c078b0d8ad"
+    }
+  ]
+}

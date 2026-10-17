@@ -1,0 +1,56 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/Paffin/AgentGit"
+homepage = "https://github.com/Paffin/AgentGit"
+authors = ["The AgentGit Authors"]
+keywords = ["scm", "vcs", "agents", "version-control"]
+categories = ["development-tools"]
+
+[workspace.dependencies]
+# internal crates
+ag-types = { path = "crates/ag-types", version = "0.1.0" }
+ag-crypto = { path = "crates/ag-crypto", version = "0.1.0" }
+ag-object = { path = "crates/ag-object", version = "0.1.0" }
+ag-changeset = { path = "crates/ag-changeset", version = "0.1.0" }
+ag-diff = { path = "crates/ag-diff", version = "0.1.0" }
+ag-tree = { path = "crates/ag-tree", version = "0.1.0" }
+ag-dag = { path = "crates/ag-dag", version = "0.1.0" }
+ag-merge = { path = "crates/ag-merge", version = "0.1.0" }
+ag-storage = { path = "crates/ag-storage", version = "0.1.0" }
+ag-policy = { path = "crates/ag-policy", version = "0.1.0" }
+ag-agent = { path = "crates/ag-agent", version = "0.1.0" }
+ag-integrate = { path = "crates/ag-integrate", version = "0.1.0" }
+
+# external crates
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+ed25519-dalek = "3"
+globset = "0.4"
+hex = "0.4"
+proptest = "1"
+getrandom = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+tempfile = "3"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

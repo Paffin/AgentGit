@@ -1,0 +1,22 @@
+[package]
+name = "ag-merge"
+description = "AgentGit: ag-merge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ag-types.workspace = true
+ag-diff.workspace = true
+ag-tree.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+ag-object.workspace = true
+proptest.workspace = true

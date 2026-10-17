@@ -32,6 +32,23 @@ impl Repository {
 
     // ---- proposals -----------------------------------------------------------
 
+    /// Resolves a proposal by exact id or by a unique prefix of at least 6
+    /// characters (for example `prop_d73c`).
+    pub fn find_proposal(&self, id_or_prefix: &str) -> Result<ProposalRow> {
+        if let Some(p) = self.meta.read(|tx| tx.proposal(id_or_prefix))? {
+            return Ok(p);
+        }
+        if id_or_prefix.len() < 6 {
+            return Err(Error::NotFound(format!("proposal '{id_or_prefix}'")));
+        }
+        let mut found = self.meta.read(|tx| tx.proposals_by_prefix(id_or_prefix, 3))?;
+        match found.len() {
+            0 => Err(Error::NotFound(format!("proposal '{id_or_prefix}'"))),
+            1 => Ok(found.remove(0)),
+            _ => Err(Error::Invalid(format!("'{id_or_prefix}' matches more than one proposal; use more characters"))),
+        }
+    }
+
     /// Publishes `head` and opens a proposal to integrate it into `stream`.
     pub fn propose(&self, stream: &str, head: &ChangesetId, title: &str, description: &str, author: &Identity, task_id: Option<&str>) -> Result<ProposalRow> {
         if title.trim().is_empty() {
@@ -58,7 +75,8 @@ impl Repository {
     /// Moves an open proposal to a new head. Earlier approvals stay attached
     /// to the head they reviewed and no longer count.
     pub fn update_proposal(&self, id: &str, new_head: &ChangesetId, actor: &Identity) -> Result<ProposalRow> {
-        let prop = self.meta.read(|tx| tx.proposal(id))?.ok_or_else(|| Error::NotFound(format!("proposal '{id}'")))?;
+        let prop = self.find_proposal(id)?;
+        let id = prop.id.as_str();
         if prop.author.split('#').next() != Some(actor.principal().as_str()) {
             return Err(Error::Conflict(format!("only the author ({}) may update proposal {id}", prop.author)));
         }
@@ -75,7 +93,8 @@ impl Repository {
 
     /// Closes an open proposal without integrating it (author or admin).
     pub fn close_proposal(&self, id: &str, actor: &Identity) -> Result<()> {
-        let prop = self.meta.read(|tx| tx.proposal(id))?.ok_or_else(|| Error::NotFound(format!("proposal '{id}'")))?;
+        let prop = self.find_proposal(id)?;
+        let id = prop.id.as_str();
         if prop.state != "open" {
             return Err(Error::Conflict(format!("proposal '{id}' is already {}", prop.state)));
         }
@@ -96,6 +115,8 @@ impl Repository {
         if !["approve", "request_changes", "comment"].contains(&decision) {
             return Err(Error::Invalid(format!("unknown decision '{decision}' (approve | request_changes | comment)")));
         }
+        let proposal = self.find_proposal(proposal)?.id;
+        let proposal = proposal.as_str();
         Ok(self.meta.write(|tx| {
             let p = tx.proposal(proposal)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{proposal}'")))?;
             if p.state != "open" {

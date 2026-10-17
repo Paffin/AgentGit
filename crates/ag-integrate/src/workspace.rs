@@ -81,6 +81,41 @@ impl Repository {
         })?)
     }
 
+    /// Remembers the directory a workspace lives in.
+    pub fn workspace_set_dir(&self, name: &str, dir: &Path) -> Result<()> {
+        let abs = std::fs::canonicalize(dir)?;
+        self.meta.write(|tx| tx.meta_set(&format!("workspace.{name}.dir"), &abs.to_string_lossy()))?;
+        Ok(())
+    }
+
+    /// The directory recorded for a workspace, if any.
+    pub fn workspace_dir(&self, name: &str) -> Result<Option<std::path::PathBuf>> {
+        Ok(self.meta.read(|tx| tx.meta_get(&format!("workspace.{name}.dir")))?.filter(|s| !s.is_empty()).map(Into::into))
+    }
+
+    /// All workspaces.
+    pub fn workspaces(&self) -> Result<Vec<WorkspaceRow>> {
+        Ok(self.meta.read(|tx| tx.workspaces())?)
+    }
+
+    /// Removes a workspace record. Its snapshots stay in the object store until
+    /// garbage collection finds them unreachable; its directory is untouched.
+    pub fn workspace_remove(&self, name: &str, actor: &Identity) -> Result<()> {
+        if name == "default" {
+            return Err(Error::Conflict("the default workspace cannot be removed".into()));
+        }
+        let removed = self.meta.write(|tx| {
+            let r = tx.workspace_delete(name)?;
+            if r {
+                tx.meta_set(&format!("workspace.{name}.dir"), "")?;
+                tx.meta_set(&pending_key(name), "")?;
+                tx.audit_append(actor.as_str(), "workspace.remove", name, &json!({}))?;
+            }
+            Ok(r)
+        })?;
+        if removed { Ok(()) } else { Err(Error::NotFound(format!("workspace '{name}'"))) }
+    }
+
     /// Looks up a workspace.
     pub fn workspace_row(&self, name: &str) -> Result<WorkspaceRow> {
         self.meta.read(|tx| tx.workspace(name))?.ok_or_else(|| Error::NotFound(format!("workspace '{name}'")))

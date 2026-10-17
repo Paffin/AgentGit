@@ -16,3 +16,21 @@ name = "ag"
 path = "src/main.rs"
 
 [dependencies]
+ag-types.workspace = true
+ag-crypto.workspace = true
+ag-changeset.workspace = true
+ag-diff.workspace = true
+ag-tree.workspace = true
+ag-storage.workspace = true
+ag-policy.workspace = true
+ag-agent.workspace = true
+ag-integrate.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

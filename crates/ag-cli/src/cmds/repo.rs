@@ -1,0 +1,466 @@
+//! Repository, workspace and history commands.
+
+use std::fmt::Write as _;
+use std::path::PathBuf;
+
+use ag_changeset::Op;
+use ag_integrate::workdir::{IgnoreRules, checkout_tree, scan};
+use ag_integrate::{InitOptions, Repository, SyncOutcome};
+use ag_tree::{DirEntry, Entry, Tree};
+use ag_types::{ChangesetId, FileType, Namespace, RepoPath, StreamName};
+use anyhow::{Context, Result, anyhow, bail};
+use clap::Args;
+use serde_json::json;
+
+use crate::ctx::{Ctx, display_path};
+use crate::{Cli, exit};
+
+#[derive(Args, Debug)]
+pub struct InitArgs {
+    /// Repository namespace, e.g. `acme/webapp` (default: `local/<directory name>`).
+    #[arg(long)]
+    pub namespace: Option<String>,
+    /// Name of the first stream.
+    #[arg(long, default_value = "main")]
+    pub stream: String,
+}
+
+pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
+    let root = match &cli.repo {
+        Some(p) => p.clone(),
+        None => std::env::current_dir()?,
+    };
+    std::fs::create_dir_all(&root)?;
+    let ns = match &args.namespace {
+        Some(n) => n.clone(),
+        None => {
+            let name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
+            let clean: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
+            format!("local/{}", clean.trim_start_matches(['-', '.', '_']))
+        }
+    };
+    let opts = InitOptions {
+        namespace: Namespace::new(ns.clone()).map_err(|e| anyhow!("{e}"))?,
+        default_stream: StreamName::new(args.stream.clone()).map_err(|e| anyhow!("{e}"))?,
+        actor: crate::ctx::identity(cli)?,
+    };
+    let repo = Repository::init(&root, &opts)?;
+    if cli.json {
+        println!("{}", json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name}));
+    } else {
+        println!("Initialized AgentGit repository in {}", root.join(".ag").display());
+        println!("  namespace: {ns}");
+        println!("  stream:    {}", args.stream);
+        println!("  storage:   {} (see `docs/operations/durability.md`)", repo.objects().durability().name);
+        println!("Next: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`.");
+    }
+    Ok(exit::OK)
+}
+
+fn workspace_dir(ctx: &Ctx, workspace: &str, dir: &Option<PathBuf>) -> Result<PathBuf> {
+    match (dir, workspace) {
+        (Some(d), _) => Ok(d.clone()),
+        (None, "default") => Ok(ctx.root.clone()),
+        (None, w) => ctx.repo.workspace_dir(w)?.ok_or_else(|| anyhow!("workspace '{w}' has no recorded directory; pass --dir <directory>")),
+    }
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum WorkspaceCmd {
+    /// Create a workspace starting at the stream head and check it out into DIR.
+    Create {
+        /// Workspace name.
+        name: String,
+        /// Directory to check out into (created if missing; must be empty).
+        #[arg(long)]
+        dir: PathBuf,
+        /// Stream to track (default: the default stream).
+        #[arg(long)]
+        stream: Option<String>,
+    },
+    /// List workspaces.
+    List,
+    /// Forget a workspace (its directory is left alone).
+    Remove {
+        /// Workspace name.
+        name: String,
+    },
+}
+
+pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
+    match cmd {
+        WorkspaceCmd::Create { name, dir, stream } => {
+            let stream = StreamName::new(stream.clone().unwrap_or_else(|| ctx.default_stream())).map_err(|e| anyhow!("{e}"))?;
+            std::fs::create_dir_all(dir)?;
+            if std::fs::read_dir(dir)?.next().is_some() {
+                bail!("{} is not empty", display_path(dir));
+            }
+            let ws = ctx.repo.workspace_create(name, &stream, &ctx.me)?;
+            ctx.repo.workspace_checkout(name, dir)?;
+            ctx.repo.workspace_set_dir(name, dir)?;
+            ctx.out(&ws, || format!("Created workspace '{name}' on '{stream}' in {}", display_path(dir)))?;
+        }
+        WorkspaceCmd::List => {
+            let rows = ctx.repo.workspaces()?;
+            ctx.out(&rows, || {
+                let mut s = String::new();
+                for w in &rows {
+                    let dir = if w.name == "default" { Some(ctx.root.clone()) } else { ctx.repo.workspace_dir(&w.name).ok().flatten() };
+                    let _ = writeln!(s, "{:<16} stream {:<12} head {}  {}", w.name, w.stream, w.head.map_or("-".into(), |h| h.short()), dir.map(|d| d.display().to_string()).unwrap_or_default());
+                }
+                s
+            })?;
+        }
+        WorkspaceCmd::Remove { name } => {
+            ctx.repo.workspace_remove(name, &ctx.me)?;
+            ctx.out(&json!({"removed": name}), || format!("Removed workspace '{name}'"))?;
+        }
+    }
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct StatusArgs {
+    /// Workspace name.
+    #[arg(short, long, default_value = "default")]
+    pub workspace: String,
+    /// Working directory of the workspace (required for non-default workspaces).
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+pub fn status(ctx: &Ctx, a: &StatusArgs) -> Result<u8> {
+    let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
+    let ws = ctx.repo.workspace_row(&a.workspace)?;
+    let changes = ctx.repo.workspace_status(&a.workspace, &dir)?;
+    let merging = ctx.repo.workspace_is_merging(&a.workspace)?;
+    ctx.out(&json!({"workspace": ws.name, "stream": ws.stream, "base": ws.base, "head": ws.head, "merging": merging, "changes": changes}), || {
+        let mut s = format!("workspace '{}' on stream '{}'\n", ws.name, ws.stream);
+        let _ = writeln!(s, "  base: {}", ws.base.map_or("(none)".into(), |b| b.short()));
+        let _ = writeln!(s, "  head: {}", ws.head.map_or("(no snapshots yet)".into(), |b| b.short()));
+        if merging {
+            s.push_str("  a conflicted sync is waiting: resolve the marked files, then `ag snapshot`\n");
+        }
+        if changes.is_empty() {
+            s.push_str("nothing to snapshot, working directory clean");
+        } else {
+            for c in &changes {
+                let _ = writeln!(s, "  {:<9} {}", c.kind, c.path);
+            }
+        }
+        s
+    })?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct SnapshotArgs {
+    /// Snapshot message.
+    #[arg(short, long)]
+    pub message: String,
+    /// Workspace name.
+    #[arg(short, long, default_value = "default")]
+    pub workspace: String,
+    /// Working directory of the workspace.
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    /// Snapshot even if conflict markers remain.
+    #[arg(long)]
+    pub force: bool,
+}
+
+pub fn snapshot(ctx: &Ctx, a: &SnapshotArgs) -> Result<u8> {
+    let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
+    match ctx.repo.snapshot(&a.workspace, &dir, &a.message, &ctx.me, a.force)? {
+        Some(id) => ctx.out(&json!({"changeset": id}), || format!("Snapshot {} in workspace '{}'", id.short(), a.workspace))?,
+        None => ctx.out(&json!({"changeset": null}), || "Nothing to snapshot.".to_string())?,
+    }
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct SyncArgs {
+    /// Workspace name.
+    #[arg(short, long, default_value = "default")]
+    pub workspace: String,
+    /// Working directory of the workspace.
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
+    let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
+    let out = ctx.repo.sync_workspace(&a.workspace, &dir, &ctx.me)?;
+    ctx.out(&out, || match &out {
+        SyncOutcome::UpToDate => "Already up to date.".into(),
+        SyncOutcome::FastForwarded { to } => format!("Fast-forwarded to {}.", to.short()),
+        SyncOutcome::Merged { id } => format!("Merged the stream into the workspace: {}.", id.short()),
+        SyncOutcome::Conflicted { conflicts } => {
+            let mut s = format!("{} conflict(s). Resolve the files below, then run `ag snapshot -m \"resolve\"`:\n", conflicts.len());
+            for c in conflicts {
+                let _ = writeln!(s, "  {}  ({})", c.path, c.kind);
+            }
+            s
+        }
+    })?;
+    Ok(if matches!(out, SyncOutcome::Conflicted { .. }) { exit::REFUSED } else { exit::OK })
+}
+
+/// Resolves an optional revision, defaulting to the workspace head, then the stream.
+pub fn rev_or_default(ctx: &Ctx, rev: &Option<String>) -> Result<ChangesetId> {
+    match rev {
+        Some(r) => Ok(ctx.repo.resolve_rev(r)?),
+        None => ctx
+            .repo
+            .resolve_rev("@")
+            .or_else(|_| ctx.repo.resolve_rev(ctx.repo.default_stream().as_str()))
+            .map_err(|_| anyhow!("the repository has no history yet; create files and run `ag snapshot -m ...`")),
+    }
+}
+
+#[derive(Args, Debug)]
+pub struct LogArgs {
+    /// Revision to start from (default: the workspace head).
+    pub rev: Option<String>,
+    /// Maximum number of entries.
+    #[arg(short = 'n', long, default_value_t = 20)]
+    pub limit: usize,
+    /// Only changesets that touched this path.
+    #[arg(long)]
+    pub path: Option<String>,
+}
+
+pub fn log(ctx: &Ctx, a: &LogArgs) -> Result<u8> {
+    let head = rev_or_default(ctx, &a.rev)?;
+    let entries = ctx.repo.log(&head, a.limit, a.path.as_deref())?;
+    ctx.out(&entries, || {
+        let mut s = String::new();
+        for e in &entries {
+            let first = e.message.lines().next().unwrap_or("");
+            let merge = if e.parents.len() > 1 { format!("  (merge of {})", e.parents.iter().map(|p| p.short()).collect::<Vec<_>>().join(" + ")) } else { String::new() };
+            let _ = writeln!(s, "{}  {}  {}{merge}", e.id.short(), e.timestamp, e.author);
+            let _ = writeln!(s, "    {first}");
+        }
+        s
+    })?;
+    Ok(exit::OK)
+}
+
+fn op_marker(parent: &Tree, op: &Op) -> &'static str {
+    match op {
+        Op::Delete { .. } => "D",
+        Op::Put { path, .. } => {
+            if parent.get(path).is_some() { "M" } else { "A" }
+        }
+    }
+}
+
+#[derive(Args, Debug)]
+pub struct ShowArgs {
+    /// Revision (default: the workspace head).
+    pub rev: Option<String>,
+}
+
+pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
+    let id = rev_or_default(ctx, &a.rev)?;
+    let cs = ctx.repo.changeset(&id)?;
+    let parent = ctx.repo.tree_or_empty(cs.first_parent().as_ref())?;
+    let published = ctx.repo.meta().read(|tx| tx.is_ready(&id))?;
+    let prov = ctx.repo.meta().read(|tx| tx.provenance_for(&id))?;
+    let changes: Vec<_> = cs.ops.iter().map(|op| json!({"op": op_marker(&parent, op), "path": op.path()})).collect();
+    ctx.out(
+        &json!({"id": id, "parents": cs.parents, "author": cs.author, "timestamp": cs.timestamp, "message": cs.message, "published": published, "changes": changes, "provenance_records": prov.len()}),
+        || {
+            let mut s = format!("changeset {id}\n");
+            for p in &cs.parents {
+                let _ = writeln!(s, "parent    {p}");
+            }
+            let _ = writeln!(s, "author    {}", cs.author);
+            let _ = writeln!(s, "date      {}", cs.timestamp);
+            let _ = writeln!(s, "published {}", if published { "yes" } else { "no (snapshot only)" });
+            if !prov.is_empty() {
+                let _ = writeln!(s, "provenance {} signed record(s); see `ag provenance show`", prov.len());
+            }
+            s.push('\n');
+            for l in cs.message.lines() {
+                let _ = writeln!(s, "    {l}");
+            }
+            s.push('\n');
+            for op in &cs.ops {
+                let _ = writeln!(s, "  {} {}", op_marker(&parent, op), op.path());
+            }
+            s
+        },
+    )?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct DiffArgs {
+    /// With two revisions: diff A to B. With one: diff it against its first parent.
+    /// With none: diff the workspace head against the working directory.
+    pub revs: Vec<String>,
+    /// Lines of context.
+    #[arg(short = 'U', long, default_value_t = 3)]
+    pub context: usize,
+    /// Workspace (for the no-argument form).
+    #[arg(short, long, default_value = "default")]
+    pub workspace: String,
+    /// Workspace directory (for the no-argument form).
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+fn entry_bytes(repo: &Repository, e: &Entry) -> Result<Vec<u8>> {
+    Ok(repo.blob(&e.content)?)
+}
+
+fn render_diff(
+    repo: &Repository,
+    old: &Tree,
+    new: &Tree,
+    ctx_lines: usize,
+    read_new: &dyn Fn(&RepoPath, &Entry) -> Result<Vec<u8>>,
+) -> Result<String> {
+    let mut out = String::new();
+    for op in old.diff(new) {
+        match &op {
+            Op::Delete { path } => {
+                let e = old.get(path).expect("deleted path existed");
+                let d = ag_diff::unified_diff(&format!("a/{path}"), "/dev/null", &entry_bytes(repo, e)?, b"", ctx_lines);
+                let _ = write!(out, "diff --ag {path}\ndeleted file\n{d}");
+            }
+            Op::Put { path, .. } => {
+                let ne = new.get(path).expect("put path exists");
+                let nb = read_new(path, ne)?;
+                match old.get(path) {
+                    None => {
+                        let d = ag_diff::unified_diff("/dev/null", &format!("b/{path}"), b"", &nb, ctx_lines);
+                        let _ = write!(out, "diff --ag {path}\nnew file{}\n{d}", if ne.executable { " (executable)" } else { "" });
+                    }
+                    Some(oe) => {
+                        let ob = entry_bytes(repo, oe)?;
+                        let _ = writeln!(out, "diff --ag {path}");
+                        if oe.executable != ne.executable {
+                            let _ = writeln!(out, "mode change: executable {} -> {}", oe.executable, ne.executable);
+                        }
+                        if oe.file_type != ne.file_type {
+                            let _ = writeln!(out, "type change: {} -> {}", oe.file_type, ne.file_type);
+                        }
+                        let d = ag_diff::unified_diff(&format!("a/{path}"), &format!("b/{path}"), &ob, &nb, ctx_lines);
+                        out.push_str(&d);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub fn diff(ctx: &Ctx, a: &DiffArgs) -> Result<u8> {
+    let repo = &ctx.repo;
+    let text = match a.revs.as_slice() {
+        [] => {
+            let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
+            let ws = repo.workspace_row(&a.workspace)?;
+            let old = repo.tree_or_empty(ws.head.as_ref())?;
+            let (new, _) = scan(repo, &dir, &IgnoreRules::load(&dir)?, false)?;
+            render_diff(repo, &old, &new, a.context, &|p, e| {
+                let abs = dir.join(p.as_str());
+                if e.file_type == FileType::Symlink {
+                    Ok(std::fs::read_link(&abs)?.to_string_lossy().into_owned().into_bytes())
+                } else {
+                    Ok(std::fs::read(&abs).with_context(|| format!("reading {}", abs.display()))?)
+                }
+            })?
+        }
+        [one] => {
+            let id = repo.resolve_rev(one)?;
+            let cs = repo.changeset(&id)?;
+            let old = repo.tree_or_empty(cs.first_parent().as_ref())?;
+            render_diff(repo, &old, &repo.tree_of(&id)?, a.context, &|_, e| entry_bytes(repo, e))?
+        }
+        [x, y] => {
+            let (ox, oy) = (repo.resolve_rev(x)?, repo.resolve_rev(y)?);
+            render_diff(repo, &repo.tree_of(&ox)?, &repo.tree_of(&oy)?, a.context, &|_, e| entry_bytes(repo, e))?
+        }
+        _ => bail!("diff takes at most two revisions"),
+    };
+    ctx.out(&json!({"diff": text}), || text.clone())?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct CatArgs {
+    /// `REV:PATH`, for example `main:src/lib.rs` or `@:README.md`.
+    pub spec: String,
+}
+
+pub fn cat(ctx: &Ctx, a: &CatArgs) -> Result<u8> {
+    let (rev, path) = a.spec.split_once(':').ok_or_else(|| anyhow!("expected REV:PATH, e.g. main:src/lib.rs"))?;
+    let id = ctx.repo.resolve_rev(rev)?;
+    let path = RepoPath::new(path).map_err(|e| anyhow!("{e}"))?;
+    let tree = ctx.repo.tree_of(&id)?;
+    let entry = tree.get(&path).ok_or_else(|| anyhow!("'{path}' does not exist at {}", id.short()))?;
+    let bytes = ctx.repo.blob(&entry.content)?;
+    use std::io::Write;
+    std::io::stdout().write_all(&bytes)?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct LsArgs {
+    /// Revision (default: the workspace head).
+    pub rev: Option<String>,
+    /// Directory to list (default: the root).
+    pub path: Option<String>,
+}
+
+pub fn ls(ctx: &Ctx, a: &LsArgs) -> Result<u8> {
+    let id = rev_or_default(ctx, &a.rev)?;
+    let tree = ctx.repo.tree_of(&id)?;
+    let dir = a.path.clone().unwrap_or_default();
+    let entries = tree.list_dir(dir.trim_matches('/'));
+    let rows: Vec<_> = entries
+        .iter()
+        .map(|e| match e {
+            DirEntry::Dir { name } => json!({"name": name, "type": "dir"}),
+            DirEntry::File { name, entry } => json!({"name": name, "type": entry.file_type.to_string(), "executable": entry.executable, "blob": entry.content}),
+        })
+        .collect();
+    ctx.out(&rows, || {
+        let mut s = String::new();
+        for e in &entries {
+            match e {
+                DirEntry::Dir { name } => {
+                    let _ = writeln!(s, "dir      {name}/");
+                }
+                DirEntry::File { name, entry } => {
+                    let _ = writeln!(s, "{:<8} {name}{}", entry.file_type.to_string(), if entry.executable { "*" } else { "" });
+                }
+            }
+        }
+        s
+    })?;
+    Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct CheckoutArgs {
+    /// Revision to write out.
+    pub rev: String,
+    /// Destination directory (created if missing; must be empty).
+    pub dir: PathBuf,
+}
+
+pub fn checkout(ctx: &Ctx, a: &CheckoutArgs) -> Result<u8> {
+    let id = ctx.repo.resolve_rev(&a.rev)?;
+    std::fs::create_dir_all(&a.dir)?;
+    if std::fs::read_dir(&a.dir)?.next().is_some() {
+        bail!("{} is not empty", display_path(&a.dir));
+    }
+    let tree = ctx.repo.tree_of(&id)?;
+    checkout_tree(&ctx.repo, &tree, &a.dir)?;
+    ctx.out(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || format!("Wrote {} file(s) of {} to {}", tree.len(), id.short(), display_path(&a.dir)))?;
+    Ok(exit::OK)
+}

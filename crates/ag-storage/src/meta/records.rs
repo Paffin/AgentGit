@@ -160,6 +160,12 @@ impl Tx<'_> {
         self.proposals_where("id = ?1", params![id]).map(|mut v| v.pop())
     }
 
+    /// Proposals whose id starts with `prefix`, at most `limit`.
+    pub fn proposals_by_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<ProposalRow>, MetaError> {
+        let like = format!("{}%", prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        self.proposals_where("id LIKE ?1 ESCAPE '\\' ORDER BY id LIMIT ?2", params![like, limit as i64])
+    }
+
     /// Proposals in `state` (or all), newest first.
     pub fn proposals_list(&self, state: Option<&str>, limit: usize) -> Result<Vec<ProposalRow>, MetaError> {
         match state {

@@ -107,7 +107,7 @@ impl Repository {
     ///
     /// Resumable and idempotent: see [`IntegrateRequest::idempotency_key`].
     pub fn integrate(&self, req: &IntegrateRequest) -> Result<IntegrationResult> {
-        let prop = self.meta.read(|tx| tx.proposal(&req.proposal_id))?.ok_or_else(|| Error::NotFound(format!("proposal '{}'", req.proposal_id)))?;
+        let prop = self.find_proposal(&req.proposal_id)?;
         let key = match &req.idempotency_key {
             Some(k) => k.clone(),
             None => self.default_integrate_key(&prop)?,
@@ -381,7 +381,7 @@ impl Repository {
 
     /// Dry run: reports what integrating `proposal_id` would do now.
     pub fn merge_preview(&self, proposal_id: &str) -> Result<MergePreview> {
-        let prop = self.meta.read(|tx| tx.proposal(proposal_id))?.ok_or_else(|| Error::NotFound(format!("proposal '{proposal_id}'")))?;
+        let prop = self.find_proposal(proposal_id)?;
         let st = self.meta.read(|tx| tx.stream(&prop.stream))?.ok_or_else(|| Error::NotFound(format!("stream '{}'", prop.stream)))?.state;
         let mut preview = MergePreview {
             strategy: Strategy::FastForward,

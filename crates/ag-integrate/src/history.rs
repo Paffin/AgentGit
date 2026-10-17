@@ -153,7 +153,7 @@ impl Repository {
             }
         }
         if base.starts_with("prop_") {
-            return Ok(self.meta.read(|tx| tx.proposal(base))?.ok_or_else(|| Error::NotFound(format!("proposal '{base}'")))?.head);
+            return Ok(self.find_proposal(base)?.head);
         }
         if let Some(s) = self.meta.read(|tx| tx.stream(base))? {
             return s.state.head.ok_or_else(|| Error::NotFound(format!("stream '{base}' has no changesets yet")));

@@ -25,7 +25,8 @@ pub struct QueueRunReport {
 impl Repository {
     /// Appends an open proposal to its stream's integration queue.
     pub fn enqueue(&self, proposal: &str, actor: &Identity) -> Result<QueueRow> {
-        let prop = self.meta.read(|tx| tx.proposal(proposal))?.ok_or_else(|| Error::NotFound(format!("proposal '{proposal}'")))?;
+        let prop = self.find_proposal(proposal)?;
+        let proposal = prop.id.as_str();
         if prop.state != "open" {
             return Err(Error::Conflict(format!("proposal '{proposal}' is {}", prop.state)));
         }

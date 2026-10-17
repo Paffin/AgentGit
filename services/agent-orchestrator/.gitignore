@@ -1,0 +1,4 @@
+/bin/
+/orchestrator
+*.test
+*.out

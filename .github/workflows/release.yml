@@ -221,7 +221,7 @@ jobs:
               d = json.load(open(f))
               assert d["bomFormat"] == "CycloneDX" and d["specVersion"] == "1.5", f
               names = {c["name"] for c in d["components"]}
-              assert len(names) > 50 and {"ag-types", "ag-storage", "rusqlite"} <= names, f
+              assert len(names) > 50 and "ag-types" in names and "tokio" in names, f
               print(f, len(names), "components")
           PY
       - uses: actions/upload-artifact@v4

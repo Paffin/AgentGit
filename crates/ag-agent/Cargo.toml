@@ -1,12 +1,18 @@
 [package]
 name = "ag-agent"
-description = "AgentGit: ag-agent"
+description = "AgentGit agent coordination: identities, runs, tasks, leases with fencing tokens, signed provenance, conflict prediction"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: depends on ag-storage; the name `ag-agent` is taken on crates.io (docs/operations/releasing.md).
+publish = false
 
 [lints]
 workspace = true

@@ -1,12 +1,16 @@
 [package]
 name = "ag-policy"
-description = "AgentGit: ag-policy"
+description = "AgentGit policy engine: a pure function from a policy document and facts to a decision"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [lints]
 workspace = true

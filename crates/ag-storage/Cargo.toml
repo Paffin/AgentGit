@@ -1,12 +1,18 @@
 [package]
 name = "ag-storage"
-description = "AgentGit: ag-storage"
+description = "AgentGit durable storage: an immutable object store and a transactional metadata store (files or S3, SQLite or PostgreSQL)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: reads ../../migrations outside the crate (docs/operations/releasing.md).
+publish = false
 
 [lints]
 workspace = true

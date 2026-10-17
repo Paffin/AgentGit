@@ -7,6 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: compiles ../../proto outside the crate; the name `ag-protocol` is taken on crates.io (docs/operations/releasing.md).
+publish = false
 build = "build.rs"
 
 [lints]

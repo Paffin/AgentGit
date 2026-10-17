@@ -10,7 +10,7 @@ execution plane, and the event feed.
   document.
 - **No runtime dependencies.** `fetch`, `AbortSignal` and `ReadableStream` are the only platform APIs used. The
   Ed25519/SHA-256 code ([`@noble`](https://github.com/paulmillr/noble-ed25519), MIT) is bundled into `dist/`; see
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ESM, CommonJS and `.d.ts` are shipped; Node 20 or newer.
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ESM, CommonJS and `.d.ts` are shipped; Node 20 or newer (the tests were run on 20.20 and 22.22).
 - **Retries that cannot apply a request twice** (see [Errors and retries](#errors-retries-idempotency-and-deadlines)).
 - **Alpha (0.1).** Not published to npm yet: build it from a checkout (`npm ci && npm run build` in `sdk/typescript`).
   The package is exercised by the tests in this directory against a real `ag-server`; it has not been run in a browser.

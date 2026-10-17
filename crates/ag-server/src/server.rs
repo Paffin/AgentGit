@@ -147,6 +147,11 @@ async fn serve_inner(
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()> {
     install_crypto_provider();
+    {
+        // Find work queued before this process started, without delaying the listener.
+        let a = app.clone();
+        tokio::task::spawn_blocking(move || a.rebuild_job_index());
+    }
     let (router, _) = build_router(app.clone());
     let addr = listener.local_addr()?;
     let signal_app = app.clone();

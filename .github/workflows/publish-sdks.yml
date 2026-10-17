@@ -1,0 +1,124 @@
+name: Publish SDKs
+
+# Builds the TypeScript SDK (npm: @agentgit/client) and the Python SDK (PyPI: agentgit-client) and, ONLY when started by
+# hand with `publish: true` on a v* tag, publishes them. Nothing else triggers it; without `publish` it is a build and
+# package check that uploads the packages as a workflow artifact.
+#
+# No token is stored anywhere. Publishing uses OpenID Connect ("trusted publishing"): each registry must be told once
+# to trust this repository, this workflow file and the matching environment (see docs/operations/releasing.md).
+#   npm   : package settings -> Trusted publisher -> GitHub Actions -> Paffin/AgentGit, publish-sdks.yml, environment npm
+#   PyPI  : project -> Publishing -> add a trusted publisher -> Paffin/AgentGit, publish-sdks.yml, environment pypi
+# Until that is configured, a publish run fails at the registry's authentication step and leaves nothing behind.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the registries (only honoured on a v* tag whose version matches the packages)"
+        required: true
+        default: false
+        type: boolean
+      targets:
+        description: "What to publish"
+        required: true
+        default: both
+        type: choice
+        options: [both, npm, pypi]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build and check the packages
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.mode.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: The packages are complete and carry the workspace version
+        run: python3 scripts/check_publish_metadata.py
+      - id: v
+        run: echo "version=$(python3 -c "import json;print(json.load(open('sdk/typescript/package.json'))['version'])")" >> "$GITHUB_OUTPUT"
+      - id: mode
+        name: Publish, or only check?
+        env:
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          publish=false
+          if [ "$INPUT_PUBLISH" = true ]; then
+            if [ "$REF_TYPE" != tag ] || [ "$REF_NAME" != "v$VERSION" ]; then
+              echo "::error::publish=true needs the workflow to run on the tag v$VERSION (it ran on $REF_TYPE '$REF_NAME'). Nothing was published."
+              exit 1
+            fi
+            publish=true
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: TypeScript SDK
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm run check
+          mkdir -p ../../dist/npm
+          npm pack --pack-destination ../../dist/npm
+      - uses: astral-sh/setup-uv@v5
+      - name: Python SDK
+        working-directory: sdk/python
+        run: |
+          uv build --out-dir ../../dist/py
+          uvx twine check --strict ../../dist/py/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-packages
+          path: dist
+          if-no-files-found: error
+
+  npm:
+    name: publish to npm
+    needs: build
+    if: needs.build.outputs.publish == 'true' && inputs.targets != 'pypi'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # OIDC trusted publishing and provenance
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-packages
+          path: dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # npm >= 11.5.1 authenticates with the OIDC token when a trusted publisher is configured; no NODE_AUTH_TOKEN.
+      - run: npm install -g npm@^11.5.1
+      - run: npm publish dist/npm/*.tgz --provenance --access public
+
+  pypi:
+    name: publish to PyPI
+    needs: build
+    if: needs.build.outputs.publish == 'true' && inputs.targets != 'npm'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-packages
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/py

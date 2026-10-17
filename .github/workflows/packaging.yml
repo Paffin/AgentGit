@@ -1,0 +1,137 @@
+name: Packaging
+
+# Everything between "it works on my machine" and "someone else can install it", checked without publishing anything:
+#
+#   tooling   the release/install scripts' tests, shellcheck on install.sh, actionlint on the workflows, the
+#             Homebrew formula and Scoop manifest rendered from a fixture
+#   crates    `cargo publish --dry-run` of every publishable crate (see docs/operations/releasing.md for which
+#             are, and why the rest are `publish = false`), plus the metadata checks
+#   sdks      the TypeScript package (`npm pack`) and the Python package (`uv build`, `twine check`)
+#
+# Publishing is a separate, manual workflow: publish-sdks.yml.
+
+on:
+  push:
+    branches: [main, "wip/**"]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "sdk/**"
+      - "scripts/**"
+      - "packaging/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "sdk/**"
+      - "scripts/**"
+      - "packaging/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packaging-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  ACTIONLINT_VERSION: 1.7.12
+
+jobs:
+  tooling:
+    name: release and install tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tests (check_release, package_release, render_packaging, install.sh)
+        run: python3 scripts/test_release_scripts.py
+      - name: shellcheck (POSIX sh for install.sh)
+        run: |
+          shellcheck --version
+          shellcheck -s sh scripts/install.sh
+          shellcheck -s bash scripts/pg-test.sh scripts/s3-test.sh
+      - name: actionlint (workflows, including their shell steps)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/download-actionlint.bash" "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash"
+          bash "$RUNNER_TEMP/download-actionlint.bash" "$ACTIONLINT_VERSION" "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -color
+      - name: The Homebrew formula parses, and renders with the right hashes
+        run: |
+          ruby -v
+          printf '%s\n' \
+            "$(printf 'a%.0s' $(seq 64))  agentgit-1.2.3-aarch64-apple-darwin.tar.gz" \
+            "$(printf 'b%.0s' $(seq 64))  agentgit-1.2.3-x86_64-apple-darwin.tar.gz" \
+            "$(printf 'c%.0s' $(seq 64))  agentgit-1.2.3-aarch64-unknown-linux-gnu.tar.gz" \
+            "$(printf 'd%.0s' $(seq 64))  agentgit-1.2.3-x86_64-unknown-linux-gnu.tar.gz" \
+            "$(printf 'e%.0s' $(seq 64))  agentgit-1.2.3-x86_64-pc-windows-msvc.zip" > "$RUNNER_TEMP/SHA256SUMS"
+          python3 scripts/render_packaging.py --version 1.2.3 --sums "$RUNNER_TEMP/SHA256SUMS" --out "$RUNNER_TEMP/rendered"
+          ruby -c "$RUNNER_TEMP/rendered/agentgit.rb"
+          python3 -m json.tool "$RUNNER_TEMP/rendered/agentgit.json" > /dev/null
+          grep -c 'sha256 "' "$RUNNER_TEMP/rendered/agentgit.rb"
+
+  crates:
+    name: crates.io dry run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Metadata of every package (crates, npm, PyPI)
+        run: python3 scripts/check_publish_metadata.py --list | tee "$RUNNER_TEMP/metadata.txt"
+      - name: cargo publish --dry-run for every publishable crate, in dependency order
+        run: |
+          set -euo pipefail
+          order=$(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt")
+          args=""
+          for c in $order; do args="$args -p $c"; done
+          echo "cargo publish --dry-run --locked$args"
+          # shellcheck disable=SC2086
+          cargo publish --dry-run --locked $args
+      - name: What the crates would contain
+        run: |
+          for c in $(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt" | tr ' ' '\n'); do
+            echo "== $c"; cargo package --list --locked -p "$c" --allow-dirty | head -30
+          done
+
+  sdks:
+    name: SDK packages (npm pack, uv build, twine check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: TypeScript SDK - build and npm pack
+        working-directory: sdk/typescript
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm pack --pack-destination "$RUNNER_TEMP/npm"
+          tar -tzf "$RUNNER_TEMP"/npm/*.tgz | sort
+          npm publish --dry-run --access public
+      - uses: astral-sh/setup-uv@v5
+      - name: Python SDK - build and twine check
+        working-directory: sdk/python
+        run: |
+          set -euo pipefail
+          uv build --out-dir "$RUNNER_TEMP/py"
+          ls -la "$RUNNER_TEMP/py"
+          uvx twine check --strict "$RUNNER_TEMP"/py/*
+          unzip -l "$RUNNER_TEMP"/py/*.whl | tail -n +4 | head -30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-packages
+          path: |
+            ${{ runner.temp }}/npm
+            ${{ runner.temp }}/py
+          retention-days: 7

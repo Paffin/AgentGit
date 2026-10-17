@@ -497,8 +497,12 @@ type orchConfig struct {
 	Repo string
 	// Executors is the YAML list of executors, each item indented by two spaces.
 	Executors string
-	// Extra is extra top-level YAML (shutdown, loop, ...).
+	// Extra is extra top-level YAML.
 	Extra string
+	// Shutdown is the body of the shutdown mapping, indented two spaces (default: grace 20s).
+	Shutdown string
+	// StateDir reuses a state directory (keys, index) across orchestrator restarts.
+	StateDir string
 	// Admin makes the admin API require this token (via AG_ORCH_ADMIN).
 	AdminToken string
 	// Clock replaces the wall clock (a skewed clock lets a test make a run look stale).
@@ -536,7 +540,14 @@ type orchestrator struct {
 func (w *world) startOrchestrator(oc orchConfig) *orchestrator {
 	t := w.t
 	t.Helper()
-	state := t.TempDir()
+	state := oc.StateDir
+	if state == "" {
+		state = t.TempDir()
+	}
+	shutdown := oc.Shutdown
+	if shutdown == "" {
+		shutdown = "  grace: 20s"
+	}
 	doc := fmt.Sprintf(`
 server:
   url: %s
@@ -550,14 +561,14 @@ loop:
   reconcile: 1s
   debounce: 20ms
 shutdown:
-  grace: 20s
+%s
 %s
 repos:
   - name: %s
 %s
 executors:
 %s
-`, w.srv.URL, state, oc.Extra, w.repo, oc.Repo, oc.Executors)
+`, w.srv.URL, state, shutdown, oc.Extra, w.repo, oc.Repo, oc.Executors)
 	env := map[string]string{"AG_ORCH_TOKEN": "placeholder"}
 	if oc.AdminToken != "" {
 		doc = strings.Replace(doc, "listen: 127.0.0.1:0\n", "listen: 127.0.0.1:0\nadmin:\n  token_env: AG_ORCH_ADMIN\n", 1)

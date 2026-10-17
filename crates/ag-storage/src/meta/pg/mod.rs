@@ -36,7 +36,9 @@ use ag_types::{Limits, Timestamp};
 use postgres::types::{ToSql, Type};
 use sha2::{Digest, Sha256};
 
-use self::pool::{Pool, Pooled};
+pub(crate) use self::pool::{Pool, Pooled};
+pub(crate) use self::tls::connector as tls_connector;
+pub(crate) use self::url::parse_target;
 use super::db::{Conn, Dialect, Param, Row, Value, pg_placeholders};
 use super::migrate::{POSTGRES_MIGRATIONS, SCHEMA_VERSION};
 use super::{MetaError, Tx};
@@ -267,11 +269,19 @@ fn convert_row(row: &postgres::Row) -> Result<Row, MetaError> {
 }
 
 impl PgClient {
+    /// True if the connection can no longer be used.
+    pub(crate) fn is_dead(&self) -> bool {
+        self.broken || self.client.is_closed()
+    }
+
     fn fail(&mut self, e: &postgres::Error, during_commit: bool) -> MetaError {
-        if e.as_db_error().is_none() {
+        let mapped = classify(e, during_commit);
+        // I/O trouble, or the server ending the session (a FATAL answer such as an
+        // administrator's pg_terminate_backend): the connection is of no further use.
+        if e.as_db_error().is_none() || matches!(mapped, MetaError::ConnectionLost { .. }) {
             self.broken = true;
         }
-        classify(e, during_commit)
+        mapped
     }
 
     fn prepare(&mut self, sql: &str) -> Result<postgres::Statement, MetaError> {

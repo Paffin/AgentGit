@@ -497,7 +497,7 @@ fn bad_connection_settings_fail_early_and_never_echo_the_password() {
         clock.clone(),
         Limits::default(),
     );
-    let msg = r.err().expect("connection refused").to_string();
+    let msg = r.expect_err("connection refused").to_string();
     assert!(!msg.contains("s3cret"), "{msg}");
     let r = Meta::open_postgres("not a url", schema.name(), clock, Limits::default());
     assert!(matches!(r, Err(MetaError::Invalid(_))));
@@ -505,6 +505,7 @@ fn bad_connection_settings_fail_early_and_never_echo_the_password() {
 
 // ---- TLS (needs a server with ssl=on; scripts/pg-test.sh provides one) ---------
 
+#[cfg(feature = "tls")]
 fn tls_urls() -> Option<(String, String, String)> {
     let base = url()?;
     let Ok(ca) = std::env::var("AG_TEST_POSTGRES_CA") else {
@@ -538,8 +539,7 @@ fn tls_connections_work_and_certificates_are_verified_when_asked() {
 
     // verify-full without the CA (system/web roots only) must refuse the self-signed server
     let untrusted = verify.split("&sslrootcert=").next().unwrap().to_string();
-    let err =
-        Meta::open_postgres(&untrusted, schema.name(), clock.clone(), Limits::default()).err().expect("must fail");
+    let err = Meta::open_postgres(&untrusted, schema.name(), clock.clone(), Limits::default()).expect_err("must fail");
     assert!(
         err.to_string().to_lowercase().contains("certificate") || err.to_string().to_lowercase().contains("unknown"),
         "{err}"

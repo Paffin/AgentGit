@@ -119,6 +119,9 @@ pub fn connector(target: &Target) -> Result<Connector, MetaError> {
 /// Without TLS support: plain connections only.
 #[cfg(not(feature = "tls"))]
 pub fn connector(target: &Target) -> Result<Connector, MetaError> {
+    if target.root_cert.is_some() {
+        return Err(MetaError::Invalid("sslrootcert needs TLS support (feature `tls`), which this build lacks".into()));
+    }
     match target.tls {
         TlsMode::Disable | TlsMode::Prefer => Ok(Connector::Plain),
         TlsMode::Require | TlsMode::VerifyFull => Err(MetaError::Invalid(

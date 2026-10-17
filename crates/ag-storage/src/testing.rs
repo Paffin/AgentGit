@@ -204,3 +204,72 @@ impl Drop for TestMeta {
         }
     }
 }
+
+// ---- objects -------------------------------------------------------------------
+
+/// Settings of the S3 server under test (the `AG_TEST_S3_*` variables) with every
+/// key under `prefix`. `None` when no server is configured (and `AG_REQUIRE_BACKENDS` is off).
+#[cfg(feature = "s3")]
+pub fn s3_config(prefix: &str) -> Option<crate::S3Config> {
+    let endpoint = s3_endpoint()?;
+    let env =
+        |k: &str, default: &str| std::env::var(k).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| default.to_string());
+    let creds =
+        crate::Credentials::new(env("AG_TEST_S3_ACCESS_KEY_ID", "test"), env("AG_TEST_S3_SECRET_ACCESS_KEY", "test"));
+    let mut cfg = crate::S3Config::new(
+        endpoint,
+        env("AG_TEST_S3_REGION", "us-east-1"),
+        env("AG_TEST_S3_BUCKET", "ag-test"),
+        creds,
+    );
+    cfg.prefix = prefix.to_string();
+    Some(cfg)
+}
+
+/// An [`ObjectStore`](crate::ObjectStore) on whichever backend the environment selects:
+/// an S3 bucket prefix (emptied on drop) if `AG_TEST_S3_ENDPOINT` is set, otherwise memory.
+pub struct TestObjects {
+    store: Arc<dyn crate::ObjectStore>,
+    #[cfg(feature = "s3")]
+    s3: Option<Arc<crate::S3ObjectStore>>,
+}
+
+impl TestObjects {
+    /// Memory (aging by `clock`) or a fresh S3 prefix (aging by the server's clock).
+    pub fn new(clock: Arc<dyn Clock>) -> Self {
+        #[cfg(feature = "s3")]
+        if let Some(cfg) = s3_config(&unique("agtest")) {
+            let s3 = Arc::new(
+                crate::S3ObjectStore::open(cfg, Arc::new(crate::InProcessLock::new())).expect("open the S3 test store"),
+            );
+            return Self { store: s3.clone(), s3: Some(s3) };
+        }
+        Self {
+            store: Arc::new(crate::MemoryObjectStore::with_clock(clock)),
+            #[cfg(feature = "s3")]
+            s3: None,
+        }
+    }
+
+    /// The store.
+    pub fn store(&self) -> Arc<dyn crate::ObjectStore> {
+        self.store.clone()
+    }
+
+    /// True if the store is S3 (object ages then come from the server, not from the test clock).
+    pub fn is_s3(&self) -> bool {
+        #[cfg(feature = "s3")]
+        return self.s3.is_some();
+        #[cfg(not(feature = "s3"))]
+        false
+    }
+}
+
+impl Drop for TestObjects {
+    fn drop(&mut self) {
+        #[cfg(feature = "s3")]
+        if let Some(s3) = &self.s3 {
+            let _ = s3.purge_for_test();
+        }
+    }
+}

@@ -126,6 +126,10 @@ impl Shared {
 }
 
 impl Pooled {
+    pub(crate) fn is_dead(&self) -> bool {
+        self.client().is_dead()
+    }
+
     pub(super) fn client(&self) -> &PgClient {
         self.client.as_ref().expect("connection present until drop")
     }

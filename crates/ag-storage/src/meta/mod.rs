@@ -30,7 +30,7 @@
 pub mod db;
 mod jobs;
 mod migrate;
-mod pg;
+pub(crate) mod pg;
 
 mod agents;
 mod changesets;
@@ -386,6 +386,12 @@ impl Meta {
             Backend::Sqlite(_) => 0,
             Backend::Postgres(p) => p.open_connections(),
         }
+    }
+}
+
+impl std::fmt::Debug for Meta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Meta").field("kind", &self.kind()).field("schema", &self.schema_name()).finish()
     }
 }
 

@@ -6,6 +6,7 @@
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
+| work against a server (clone, pull, push) and offline | [Remote guide](guides/remote.md) |
 | read history: blame, renames, path history | [History guide](guides/history.md) |
 | run checks on untrusted code and sign the result | [Workers guide](guides/workers.md); what the [sandbox](architecture/sandbox.md) does and does not stop |
 | move to or from Git | [Git bridge](guides/git-bridge.md) |

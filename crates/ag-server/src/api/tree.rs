@@ -1,8 +1,8 @@
 //! Trees: paths, directories, whole-tree manifests, diffs and file content.
 
+use ag_integrate::Repository;
 use ag_protocol::v1;
 use ag_tree::{DirEntry, Entry, Tree};
-use ag_integrate::Repository;
 use ag_types::RepoPath;
 
 use super::{paginate, require};

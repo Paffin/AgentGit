@@ -238,12 +238,15 @@ impl App {
                 task.unwrap_or("")
             );
             idempotent_create(repo, "lease.acquire", &req.idempotency_key, &request, || {
-                let got = acquire(repo.meta(), &req.scope, actor.as_str(), req.exclusive, req.ttl_ms, task).map_err(
-                    |e| match e {
-                        ag_agent::AgentError::Conflict(m) => ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m),
-                        other => other.into(),
-                    },
-                )?;
+                let got =
+                    acquire(repo.meta(), &req.scope, actor.as_str(), req.exclusive, req.ttl_ms, task).map_err(|e| {
+                        match e {
+                            ag_agent::AgentError::Conflict(m) => {
+                                ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m)
+                            }
+                            other => other.into(),
+                        }
+                    })?;
                 Ok(v1::AcquireLeaseResponse {
                     lease: Some(convert::lease(&got.lease)),
                     overlapping: got.overlaps.iter().map(convert::lease).collect(),

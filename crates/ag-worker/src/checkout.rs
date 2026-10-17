@@ -103,7 +103,8 @@ fn entry_from_wire(e: &v1::TreeEntry) -> Result<(RepoPath, Entry), CheckoutError
     let content: BlobId =
         e.blob_id.parse().map_err(|_| CheckoutError::Bad(format!("bad blob id '{}' for '{}'", e.blob_id, e.path)))?;
     let file_type = match e.file_type.as_str() {
-        "file" => FileType::Regular,
+        // The protocol says `regular`; servers before that was fixed said `file`.
+        "regular" | "file" => FileType::Regular,
         "symlink" => FileType::Symlink,
         other => return Err(CheckoutError::Bad(format!("unknown file type '{other}' for '{}'", e.path))),
     };
@@ -332,7 +333,7 @@ mod tests {
             path: "src/lib.rs".into(),
             blob_id: "ab".repeat(32),
             size: 0,
-            file_type: "file".into(),
+            file_type: "regular".into(),
             executable: false,
         };
         assert!(entry_from_wire(&ok).is_ok());

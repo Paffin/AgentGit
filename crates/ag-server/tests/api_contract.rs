@@ -43,7 +43,8 @@ async fn repeated_query_parameters_fill_list_fields() {
     let anon = srv.client("");
     let one = anon.get("/v1/capabilities?supported_versions=agwp.v1").await;
     assert_eq!(one.status, 200, "{}", one.json);
-    let many = anon.get("/v1/capabilities?supported_versions=agwp.v1&supported_versions=agwp.v9&features=a&features=b").await;
+    let many =
+        anon.get("/v1/capabilities?supported_versions=agwp.v1&supported_versions=agwp.v9&features=a&features=b").await;
     assert_eq!(many.status, 200, "{}", many.json);
     // A client that speaks only a future version is still refused, now by the negotiation and not the parser.
     let future = anon.get("/v1/capabilities?supported_versions=agwp.v9").await;
@@ -77,12 +78,16 @@ async fn listings_report_sizes_and_the_documented_file_type_names() {
         .post("/v1/repos/acme/web/proposals", json!({"stream": "main", "head": ch.json["head"], "title": "files"}))
         .await;
     let id = p.json["id"].as_str().unwrap();
-    assert_eq!(carol.post(&format!("/v1/repos/acme/web/proposals/{id}/integrate"), json!({})).await.json["outcome"]["status"], "integrated");
+    assert_eq!(
+        carol.post(&format!("/v1/repos/acme/web/proposals/{id}/integrate"), json!({})).await.json["outcome"]["status"],
+        "integrated"
+    );
 
     // The whole-tree listing: real sizes, the documented type names.
     let tree = alice.get("/v1/repos/acme/web/tree?rev=main").await;
     let entries = tree.json["entries"].as_array().unwrap();
-    let by_path = |p: &str| entries.iter().find(|e| e["path"] == p).unwrap_or_else(|| panic!("{p} missing: {entries:?}"));
+    let by_path =
+        |p: &str| entries.iter().find(|e| e["path"] == p).unwrap_or_else(|| panic!("{p} missing: {entries:?}"));
     assert_eq!(by_path("docs/a.txt")["size"], 5);
     assert_eq!(by_path("b.txt")["size"], 1);
     assert_eq!(by_path("docs/a.txt")["file_type"], "regular");
@@ -139,7 +144,11 @@ async fn creations_with_an_idempotency_key_happen_once() {
 
     // Agent runs.
     let key2 = [("idempotency-key", "run-1")];
-    bot.post("/v1/repos/acme/web/agents", json!({"name": "bot", "public_key": ag_crypto::KeyPair::generate().unwrap().public().to_hex()})).await;
+    bot.post(
+        "/v1/repos/acme/web/agents",
+        json!({"name": "bot", "public_key": ag_crypto::KeyPair::generate().unwrap().public().to_hex()}),
+    )
+    .await;
     let r1 = bot.call("POST", "/v1/repos/acme/web/runs", Some(json!({"agent": "bot"})), &key2).await;
     let r2 = bot.call("POST", "/v1/repos/acme/web/runs", Some(json!({"agent": "bot"})), &key2).await;
     assert_eq!(r1.status, 200, "{}", r1.json);

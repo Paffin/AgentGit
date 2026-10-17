@@ -9,11 +9,16 @@
 //
 // Conventions
 //   * Every repository-scoped request carries `repo` ("owner/name").
-//   * Every mutating request carries `idempotency_key`. Repeating a request
-//     with the same key and the same content returns the recorded result;
-//     the same key with different content is rejected (`idempotency_key_reused`).
-//     After a lost response, ask for the outcome (GetOperation) instead of
-//     blindly retrying.
+//   * Requests that create something carry `idempotency_key` and honour it:
+//     CreateRepo, PublishObjects, CreateProposal, Integrate, CreateTask,
+//     StartRun, AcquireLease. Repeating such a request with the same key and
+//     the same content returns the recorded response; the same key with
+//     different content is rejected (`idempotency_key_reused`). Other
+//     mutating requests are naturally idempotent (SetPolicy, GrantRole, pins,
+//     FinishTask ...) or cannot replay their result (a minted credential's
+//     secret is shown once); where the field exists on them it is ignored.
+//     After a lost response, ask for the outcome (GetOperation) or the state
+//     instead of blindly retrying.
 //   * Identifiers are lowercase hex (ids) or the documented name syntax.
 //   * Times are Unix milliseconds in `*_ms` fields.
 //   * Enumerations are strings with a documented value set so that new values
@@ -835,7 +840,9 @@ message QueueEntry {
   uint64 id = 1;
   string stream = 2;
   string proposal = 3;
-  // "queued", "integrated", "blocked", "conflict", "failed", "skipped".
+  // "queued", "done", "blocked", "rejected" (conflict or policy denial) or
+  // "failed". `outcome` explains: "integrated" for done, the blockers or the
+  // number of conflicting paths otherwise.
   string state = 4;
   string enqueued_by = 5;
   int64 enqueued_at_ms = 6;

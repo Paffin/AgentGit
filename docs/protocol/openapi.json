@@ -3283,7 +3283,7 @@
           },
           "state": {
             "default": "",
-            "description": "\"queued\", \"integrated\", \"blocked\", \"conflict\", \"failed\", \"skipped\".",
+            "description": "\"queued\", \"done\", \"blocked\", \"rejected\" (conflict or policy denial) or\n\"failed\". `outcome` explains: \"integrated\" for done, the blockers or the\nnumber of conflicting paths otherwise.",
             "type": "string"
           },
           "stream": {
@@ -4408,7 +4408,7 @@
     }
   },
   "info": {
-    "description": "The HTTP/JSON gateway of AGWP v1. The same messages are served over gRPC; see proto/agwp/v1/agwp.proto. Mutating requests accept an `Idempotency-Key` header. Free-form names (streams, revisions, paths) travel in the query string or body.",
+    "description": "The HTTP/JSON gateway of AGWP v1. The same messages are served over gRPC; see proto/agwp/v1/agwp.proto. Mutating requests that create something (repositories, proposals, objects, tasks, runs, leases, integrations) accept an `Idempotency-Key` header; see docs/protocol/agwp-v1.md for exactly which. Free-form names (streams, revisions, paths) travel in the query string or body.",
     "license": {
       "name": "Apache-2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
@@ -5490,11 +5490,45 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Replay events with a larger sequence number first; absent means follow from now",
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comma-separated topic prefixes, e.g. stream,proposal",
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Interval of keep-alive comments (0 = server default)",
+            "in": "query",
+            "name": "heartbeat_ms",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success (binary or event-stream body)"
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
           },
           "default": {
             "content": {
@@ -5628,11 +5662,28 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Revision expression; empty means the repository's default stream",
+            "in": "query",
+            "name": "rev",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success (binary or event-stream body)"
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
           },
           "default": {
             "content": {
@@ -6799,7 +6850,15 @@
         ],
         "responses": {
           "200": {
-            "description": "Success (binary or event-stream body)"
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
           },
           "default": {
             "content": {
@@ -6848,9 +6907,28 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "Success (binary or event-stream body)"
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
           },
           "default": {
             "content": {

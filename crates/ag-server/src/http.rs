@@ -371,14 +371,16 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::VerifyObjectsResponse,
         verify_objects
     );
-    meta.push(RouteMeta::raw(
-        "put",
-        "/v1/repos/{owner}/{rname}/objects/{object_id}",
-        "objects.put",
-        "Objects",
-        "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
-    )
-    .request_body("application/octet-stream"));
+    meta.push(
+        RouteMeta::raw(
+            "put",
+            "/v1/repos/{owner}/{rname}/objects/{object_id}",
+            "objects.put",
+            "Objects",
+            "Upload one object envelope (binary body); the server verifies that it hashes to object_id",
+        )
+        .request_body("application/octet-stream"),
+    );
     meta.push(RouteMeta::raw(
         "get",
         "/v1/repos/{owner}/{rname}/objects/{object_id}",
@@ -604,14 +606,16 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::DiffResponse,
         diff
     );
-    meta.push(RouteMeta::raw(
-        "get",
-        "/v1/repos/{owner}/{rname}/files/{*path}",
-        "tree.file",
-        "Tree",
-        "File content at a revision (query: rev); binary body",
-    )
-    .query("rev", "string", "Revision expression; empty means the repository's default stream"));
+    meta.push(
+        RouteMeta::raw(
+            "get",
+            "/v1/repos/{owner}/{rname}/files/{*path}",
+            "tree.file",
+            "Tree",
+            "File content at a revision (query: rev); binary body",
+        )
+        .query("rev", "string", "Revision expression; empty means the repository's default stream"),
+    );
     r = r.route(
         "/v1/repos/{owner}/{rname}/files/{*path}",
         get(
@@ -1249,17 +1253,23 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
             },
         ),
     );
-    meta.push(RouteMeta::raw(
-        "get",
-        "/v1/repos/{owner}/{rname}/events",
-        "events.subscribe",
-        "Events",
-        "Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live",
-    )
-    .query("after_seq", "integer", "Replay events with a larger sequence number first; absent means follow from now")
-    .query("topics", "string", "Comma-separated topic prefixes, e.g. stream,proposal")
-    .query("heartbeat_ms", "integer", "Interval of keep-alive comments (0 = server default)")
-    .response_body("text/event-stream"));
+    meta.push(
+        RouteMeta::raw(
+            "get",
+            "/v1/repos/{owner}/{rname}/events",
+            "events.subscribe",
+            "Events",
+            "Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live",
+        )
+        .query(
+            "after_seq",
+            "integer",
+            "Replay events with a larger sequence number first; absent means follow from now",
+        )
+        .query("topics", "string", "Comma-separated topic prefixes, e.g. stream,proposal")
+        .query("heartbeat_ms", "integer", "Interval of keep-alive comments (0 = server default)")
+        .response_body("text/event-stream"),
+    );
     r = r.route(
         "/v1/repos/{owner}/{rname}/events",
         get(

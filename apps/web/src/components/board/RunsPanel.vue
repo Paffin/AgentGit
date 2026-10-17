@@ -35,6 +35,9 @@ const rows = computed(() =>
         b.run.started_at_ms - a.run.started_at_ms,
     ),
 )
+// Rows show their leases, so wait for both before showing any (otherwise each row grows when its chips arrive).
+const waiting = (status: string) => status === 'idle' || status === 'loading'
+const pending = computed(() => waiting(board.load.runs.status) || waiting(board.load.leases.status))
 const staleCount = computed(() => rows.value.filter((r) => r.health.liveness === 'stale').length)
 
 const STALE_OPTIONS = [
@@ -77,8 +80,8 @@ const staleOptions = computed(() => {
       />
     </template>
     <div class="body" data-testid="runs-panel">
-      <div v-if="board.load.runs.status === 'loading' && rows.length === 0" class="sk">
-        <Skeleton :height="56" /><Skeleton :height="56" />
+      <div v-if="pending" class="sk">
+        <Skeleton :height="96" /><Skeleton :height="96" /><Skeleton :height="96" />
       </div>
       <ErrorState
         v-else-if="board.load.runs.status === 'error' && rows.length === 0"

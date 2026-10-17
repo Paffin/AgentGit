@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +32,11 @@ function onKey(e: KeyboardEvent) {
     hide()
   }
 }
+// While it is showing, Escape dismisses it wherever focus or the pointer is (WCAG 1.4.13).
+watch(open, (o) => {
+  if (o) document.addEventListener('keydown', onKey)
+  else document.removeEventListener('keydown', onKey)
+})
 
 onMounted(() => {
   const el = root.value
@@ -46,7 +51,10 @@ onMounted(() => {
     el.setAttribute('aria-describedby', id)
   }
 })
-onBeforeUnmount(() => clearTimeout(timer))
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  document.removeEventListener('keydown', onKey)
+})
 </script>
 
 <template>

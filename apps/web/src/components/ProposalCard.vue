@@ -34,7 +34,12 @@ const reviews = computed(() =>
 </script>
 
 <template>
-  <article class="card" :data-proposal="proposal.id" :aria-label="`Proposal ${proposal.title}`">
+  <article
+    class="card"
+    :class="{ checking: proposal.state === 'open' && !prep?.data }"
+    :data-proposal="proposal.id"
+    :aria-label="`Proposal ${proposal.title}`"
+  >
     <header class="head">
       <h3 class="title">
         <RouterLink :to="to">{{ proposal.title || '(untitled proposal)' }}</RouterLink>
@@ -83,6 +88,10 @@ const reviews = computed(() =>
 </template>
 
 <style scoped>
+.card.checking {
+  /* About what a card with a couple of blockers needs, so the verdicts arrive without moving what is below. */
+  min-height: 11.5rem;
+}
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

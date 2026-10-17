@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, START_LOCATION, useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/shell/AppHeader.vue'
 import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
@@ -21,16 +21,14 @@ const now = useServerNow()
 
 const expiresIn = computed(() => formatDuration(Math.max(0, auth.expiresAt - now.value)))
 
-// After a navigation, tell assistive tech where we are and move focus to the new content.
-watch(
-  () => route.fullPath,
-  async () => {
-    await nextTick()
-    announcement.value = document.title
-    if (route.hash) return
-    main.value?.focus({ preventScroll: true })
-  },
-)
+// After a navigation, tell assistive tech where we are and move focus to the new content. The page's
+// first load keeps focus where the browser put it, so the first Tab reaches the "Skip to content" link.
+router.afterEach(async (to, from) => {
+  await nextTick()
+  announcement.value = document.title
+  if (from === START_LOCATION || to.hash) return
+  main.value?.focus({ preventScroll: true })
+})
 
 // When the session ends (expiry, revocation, sign-out elsewhere) go to the sign-in page.
 watch(

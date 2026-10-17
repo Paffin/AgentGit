@@ -55,6 +55,8 @@ const visible = computed(() => {
 async function enrich(repos: Repo[], mine: number) {
   const todo = repos.filter((r) => !counts.value[r.name])
   await mapLimit(todo, 4, async (r) => {
+    // Stop when this list was replaced or left, or the session ended (no request without a credential).
+    if (mine !== serial || !auth.isAuthenticated) return
     const full = await api.repos.get(r.name)
     if (mine !== serial) return
     counts.value = {

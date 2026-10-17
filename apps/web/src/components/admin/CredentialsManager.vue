@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Credential } from '@/api/types'
@@ -82,6 +82,7 @@ const error = ref<ApiError | null>(null)
 // The secret lives only in this component, only while the dialog shows it.
 const minted = ref<{ token: string; credential: Credential } | null>(null)
 const revealed = ref(true)
+const tokenInput = ref<HTMLInputElement | null>(null)
 
 const isAdmin = computed(() => auth.isAdminAnywhere)
 
@@ -120,7 +121,12 @@ async function mint() {
       },
     })
     minted.value = { token: res.token, credential: res.credential }
+    // A token for someone else is not in "your" list: show that identity's credentials so it appears there.
+    if (res.credential.subject !== auth.identity) subjectFilter.value = res.credential.subject
     void list.reload()
+    // The form that had focus is gone: put focus on the secret (selected, ready to copy), inside the dialog.
+    await nextTick()
+    tokenInput.value?.focus()
   } catch (e) {
     error.value =
       e instanceof ApiError
@@ -297,6 +303,7 @@ async function revoke() {
         </Alert>
         <div class="tokenbox">
           <input
+            ref="tokenInput"
             class="token mono"
             :class="{ masked: !revealed }"
             type="text"

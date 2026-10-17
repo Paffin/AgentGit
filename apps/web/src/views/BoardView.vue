@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ProposalCard from '@/components/ProposalCard.vue'
 import ActivityFeed from '@/components/board/ActivityFeed.vue'
@@ -27,6 +27,32 @@ usePageTitle(() => `Live board · ${repo.value}`)
 const loadingProposals = computed(
   () => board.load.proposals.status !== 'ready' && board.cards.length === 0,
 )
+
+// The panels further down appear once the ones above have their data, so nothing already on screen is
+// pushed around while the board fills in (no layout shift). A repository that is slow to answer does not
+// hold them back for ever.
+const waiting = (status: string) => status === 'idle' || status === 'loading'
+const settled = computed(() => {
+  const l = board.load
+  if (waiting(l.proposals.status) || waiting(l.runs.status) || waiting(l.leases.status))
+    return false
+  return board.cards.every((c) => c.proposal.state !== 'open' || c.prep?.data || c.prep?.error)
+})
+const showRest = ref(false)
+let giveUp: ReturnType<typeof setTimeout> | undefined
+watch(
+  [settled, repo],
+  ([ok], [, before]) => {
+    if (before !== undefined && before !== repo.value) showRest.value = false
+    if (ok) showRest.value = true
+    else if (!showRest.value) {
+      clearTimeout(giveUp)
+      giveUp = setTimeout(() => (showRest.value = true), 6000)
+    }
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => clearTimeout(giveUp))
 </script>
 
 <template>
@@ -39,9 +65,7 @@ const loadingProposals = computed(
         <Card
           title="Open proposals"
           icon="proposal"
-          :subtitle="
-            board.cards.length ? 'Four independent states each; nothing implies another' : undefined
-          "
+          subtitle="Four independent states each; nothing implies another"
         >
           <template #actions>
             <RouterLink :to="`/repos/${repo}/proposals`" class="all">All proposals</RouterLink>
@@ -94,17 +118,21 @@ const loadingProposals = computed(
             </div>
           </template>
         </Card>
-        <TaskGraph />
-        <div class="pair">
-          <QueuePanel :repo="repo" />
-          <OverlapPanel :repo="repo" />
-        </div>
+        <template v-if="showRest">
+          <TaskGraph />
+          <div class="pair">
+            <QueuePanel :repo="repo" />
+            <OverlapPanel :repo="repo" />
+          </div>
+        </template>
       </div>
 
       <div class="col side">
         <RunsPanel :repo="repo" />
-        <LeaseMap />
-        <ActivityFeed :repo="repo" />
+        <template v-if="showRest">
+          <LeaseMap />
+          <ActivityFeed :repo="repo" />
+        </template>
       </div>
     </div>
   </div>

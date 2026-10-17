@@ -16,11 +16,26 @@ function menuItems(): HTMLElement[] {
       [],
   )
 }
+// Opened with the keyboard (Enter, Space, ArrowDown on the trigger), focus goes to the first item, as the
+// menu-button pattern expects; opened with the mouse, focus stays where it is.
+let viaKeyboard = false
 async function toggle(focusFirst = false) {
+  const first = focusFirst || viaKeyboard
+  viaKeyboard = false
   open.value = !open.value
   if (open.value) {
     await nextTick()
-    if (focusFirst) menuItems()[0]?.focus()
+    if (first) menuItems()[0]?.focus()
+  }
+}
+function onTriggerKey(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    e.stopPropagation()
+    if (open.value) menuItems()[0]?.focus()
+    else void toggle(true)
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    viaKeyboard = true
   }
 }
 function close(returnFocus = true) {
@@ -62,7 +77,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
 
 <template>
   <div ref="root" class="menu" @keydown="onKey">
-    <div class="trigger" @keydown.down.prevent="toggle(true)">
+    <div class="trigger" @keydown="onTriggerKey">
       <slot name="trigger" :open="open" :toggle="() => toggle(false)" :menu-id="menuId" />
     </div>
     <div

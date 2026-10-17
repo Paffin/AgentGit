@@ -160,13 +160,22 @@ const versionOptions = computed(() =>
 )
 const from = ref('')
 const to = ref('')
+let newest = -1
 watch(
   versions,
   (list) => {
     if (list.length === 0) return
-    if (!list.some((v) => String(v.version) === to.value)) to.value = String(list[0]?.version)
+    const top = list[0]?.version ?? -1
+    // A new version was stored (or this is the first load): compare it with the one before it.
+    if (top !== newest) {
+      newest = top
+      to.value = String(top)
+      from.value = String(list[1]?.version ?? top)
+      return
+    }
+    if (!list.some((v) => String(v.version) === to.value)) to.value = String(top)
     if (!list.some((v) => String(v.version) === from.value))
-      from.value = String(list[1]?.version ?? list[0]?.version)
+      from.value = String(list[1]?.version ?? top)
   },
   { immediate: true },
 )
@@ -344,7 +353,8 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
           <div
             class="diff"
             role="group"
-            aria-label="Difference between the two versions"
+            tabindex="0"
+            aria-label="Difference between the two versions, scrollable"
             data-testid="policy-diff"
           >
             <p v-if="shown.length === 0" class="faint pad">The two versions are identical.</p>

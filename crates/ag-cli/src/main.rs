@@ -13,7 +13,7 @@ use crate::ctx::Ctx;
 
 /// AgentGit: an agent-native source control system.
 #[derive(Parser, Debug)]
-#[command(name = "ag", version, about, long_about = None, propagate_version = true)]
+#[command(name = "ag", version = env!("AG_LONG_VERSION"), about, long_about = None, propagate_version = true)]
 pub struct Cli {
     /// Operate on the repository at this path (default: discovered from the current directory).
     #[arg(short = 'C', long = "repo", global = true, value_name = "DIR")]

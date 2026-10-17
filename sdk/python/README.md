@@ -278,8 +278,8 @@ operation, recorded per operation in `OPERATIONS[id].retry`:
 |---|---|---|---|
 | `read` | only reads | every `GET`, `history.ancestors`, `tree.diff` | any retryable error |
 | `natural` | repeating has the same effect | `objects.put`, `lease.release`, `stream.cas`, `proposal.close` | any retryable error |
-| `keyed` | the server records the outcome under the `Idempotency-Key` | `repo.create`, `objects.publish`, `proposal.create`, `integration.integrate` | any retryable error; the **same key** is sent again |
-| `unsafe` | a repeat may be applied twice | `task.create`, `lease.acquire`, `workspace.create`, `provenance.submit`, ... | only `rate_limited` (the server rejected it before running it), or with `RetryPolicy(retry_unsafe=True)` |
+| `keyed` | the server records the outcome under the `Idempotency-Key` | `repo.create`, `objects.publish`, `proposal.create`, `integration.integrate`, `task.create`, `agent.start_run`, `lease.acquire` | any retryable error; the **same key** is sent again |
+| `unsafe` | a repeat may be applied twice | `workspace.create`, `stream.create`, `credentials.mint`, `provenance.submit`, ... | only `rate_limited` (the server rejected it before running it), or with `RetryPolicy(retry_unsafe=True)` |
 
 `workspace.modify` becomes `natural` when the request carries `expected_head` (a second application is refused).
 `stream_moved` is never retried automatically: the identical compare-and-swap cannot win; read the stream again.
@@ -287,8 +287,14 @@ operation, recorded per operation in `OPERATIONS[id].retry`:
 `client.operations.get(repo=..., idempotency_key=...)` for the outcome of a keyed operation instead of repeating it.
 
 `tests/test_retries.py` shows these rules against a real server with faults injected between the client and the server
-(a custom `httpx` transport), including that a response lost after `repo.create`, `proposal.create` or
-`integration.integrate` ran does not create or integrate anything twice. The deadline is the per-attempt
+(a custom `httpx` transport), including that a response lost after `repo.create`, `proposal.create`,
+`integration.integrate`, `task.create`, `agent.start_run` or `lease.acquire` ran does not create or integrate anything
+twice, and that a lost `credentials.mint` (whose secret the server can show only once, so it ignores the key) is
+reported, not repeated.
+
+`retryable=True` in an error means that doing the *logical operation* again may succeed (after waiting, after re-reading
+state, or after finding out whether the first attempt took effect). It does not mean that sending the same bytes again
+is safe; that is what the classes above decide. The deadline is the per-attempt
 `request_timeout_ms`: it is sent as `Request-Timeout` and also enforced locally (`httpx` timeouts plus a total check
 while the body is read).
 
@@ -432,23 +438,18 @@ fills in (typed as present; `tests/test_server_contract.py` fails if the server 
 
 ## Things the server does today that show through
 
-Found while writing the tests, against `ag-server 0.1.0`; the SDK works around them where it can, and
-`tests/test_server_gaps.py` pins each one down so that a fix is noticed.
+Checked by `tests/test_server_gaps.py` against `ag-server`, which fails if any of this changes. The SDK has no workaround
+for the behaviour the server has since fixed (repeated query keys, `after_seq` beyond the end, real sizes in listings,
+the error envelope on every route, `regular` file types); these are what remains:
 
-* Only four operations record their outcome under an `Idempotency-Key` (`repo.create`, `objects.publish`,
-  `proposal.create`, `integration.integrate`). The protocol says every mutation does; the other `idempotency_key` fields
-  are ignored (a second `stream.create` with the same key answers `already_exists`; a second `task.create` creates a
-  second task). That is why those operations are in the `unsafe` class.
-* `GET /v1/capabilities` rejects repeated query parameters, so `supported_versions` and `features` cannot be sent over
-  HTTP; `client.negotiate()` omits them and checks the answer's `protocol_version` itself.
-* `events.replay` with `after_seq=18446744073709551615` (u64 max) replays from the start instead of answering "nothing
-  newer"; the client uses `2**53 - 1` to learn the end of the log.
-* `queue.run` reports processed entries as `state="done"`, `outcome="integrated"`, not the `integrated` state the
-  protocol comments list.
-* `tree.get` and `tree.list` report `size == 0` for files that `tree.resolve` reports with their real size.
-* A `405` has an empty body (not the JSON error envelope); the client raises `AgentGitError` with code `http_error`.
-* The OpenAPI document says nothing about the `rev` query parameter of `tree.file`, the body of `objects.put`, or the
-  query of `events.subscribe`; the client adds them by hand.
+* `stream.create` and `credentials.mint` ignore the `Idempotency-Key`, by design: a second `stream.create` answers
+  `already_exists`, and a minted credential's secret can be shown only once, so a second `credentials.mint` is a second
+  credential. Both are in the `unsafe` class.
+* `Retry-After` is whole seconds and at least 1, while `retry_after_ms` in the body can be shorter. The client waits for
+  `retry_after_ms` (plus jitter), so a 429 with `retry_after_ms=40` is not stretched to a second.
+* The OpenAPI document lists `application/octet-stream` for the `200` of `objects.put`, which answers JSON
+  (`{"object_id": ..., ...}`). `sdk/api-policy.json` overrides that one response; everything else about request and
+  response bodies (`tree.file`, `objects.get`, `objects.put`, `events.subscribe`) comes from the document.
 
 ## License
 

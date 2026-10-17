@@ -47,9 +47,14 @@ enum Command {
     Openapi,
     /// Offline administration directly on a data directory (works while the server is stopped).
     Admin {
-        /// Data directory of the server.
-        #[arg(long, env = "AG_DATA_DIR", default_value = "./ag-data")]
-        data_dir: PathBuf,
+        /// Data directory of the server (default: `server.data_dir` of the configuration, else `./ag-data`).
+        #[arg(long, env = "AG_DATA_DIR")]
+        data_dir: Option<PathBuf>,
+        /// The server's configuration. Only `[repos.storage]` and `server.data_dir` are used: a repository created
+        /// here gets the same PostgreSQL schema and S3 prefix as one created through the API. Without it,
+        /// `create-repo` makes a local SQLite repository. The container images set it for you.
+        #[arg(short, long, env = "AG_SERVER_CONFIG")]
+        config: Option<PathBuf>,
         #[command(subcommand)]
         action: AdminAction,
     },
@@ -197,9 +202,17 @@ async fn main() -> Result<()> {
             };
             ag_server::server::serve(app, listener, shutdown).await
         }
-        Command::Admin { data_dir, action } => {
+        Command::Admin { data_dir, config, action } => {
             let mut cfg = ServerConfig::default();
-            cfg.server.data_dir = data_dir;
+            cfg.server.data_dir = PathBuf::from("./ag-data");
+            if let Some(path) = &config {
+                let loaded = ServerConfig::load(path)?;
+                cfg.repos = loaded.repos;
+                cfg.server.data_dir = loaded.server.data_dir;
+            }
+            if let Some(dir) = data_dir {
+                cfg.server.data_dir = dir;
+            }
             let app = App::new(cfg).map_err(|e| anyhow::anyhow!("{e}"))?;
             admin(app, action).await
         }

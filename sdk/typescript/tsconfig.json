@@ -14,6 +14,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": { "@agentgit/client": ["./src/index.ts"] },
     "allowJs": true,
     "checkJs": false
   },

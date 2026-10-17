@@ -402,7 +402,7 @@ func TestProposalsChangingTheSameFunctionOverlapEvenWhenTheTextMerges(t *testing
 		t.Fatalf("overlaps = %+v", ov)
 	}
 	ids := []string{def.A, def.B}
-	if !(contains(ids, a) && contains(ids, b)) || contains(ids, c) {
+	if !contains(ids, a) || !contains(ids, b) || contains(ids, c) {
 		t.Fatalf("the overlap must be between A and B only: %+v", def)
 	}
 	if len(def.Symbols) != 1 || def.Symbols[0].Name != "Fetch" || def.Symbols[0].ChangeA != ChangeModified || def.Severity != "medium" {

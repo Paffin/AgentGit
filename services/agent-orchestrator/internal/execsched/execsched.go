@@ -511,6 +511,7 @@ func (s *Scheduler) Status() Status {
 	st := Status{Repo: s.o.Repo.Name, Stream: s.o.Repo.Stream, StreamHead: s.head.Head, StreamVersion: s.head.Version,
 		Integrated: append([]ProposalStatus(nil), s.recent...), Jobs: append([]agwp.Job(nil), s.jobs...),
 		Queue: append([]agwp.QueueEntry(nil), s.queue...), LastPass: s.lastPass, LastError: s.lastErr}
+	st.Open = []ProposalStatus{} // never null in the JSON
 	for _, e := range s.entries {
 		st.Open = append(st.Open, e.status)
 	}

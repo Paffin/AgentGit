@@ -297,8 +297,6 @@ func put(path, content string) agwp.FileChange {
 	return agwp.FileChange{Path: path, Op: "put", Content: []byte(content)}
 }
 
-func del(path string) agwp.FileChange { return agwp.FileChange{Path: path, Op: "delete"} }
-
 // propose opens a proposal against main from a fresh workspace, as alice.
 func (w *world) propose(ws, title string, changes ...agwp.FileChange) (*agwp.Proposal, *agwp.Workspace) {
 	w.t.Helper()

@@ -151,6 +151,9 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		}
 	}
 	for _, e := range a.cfg.Execs {
+		if e.Slots > 1 {
+			rep.add("warn", "executor "+e.Name, "%d concurrent sessions of agent %q share one server identity: the server binds a credential to the agent, not to a run, so these sessions can act as each other's run. Use slots: 1 (one session per agent) when sessions must be isolated from each other", e.Slots, e.Agent)
+		}
 		switch e.Type {
 		case "command":
 			if _, err := exec.LookPath(e.Command[0]); err != nil {

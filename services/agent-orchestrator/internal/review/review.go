@@ -325,7 +325,7 @@ func (c *Component) remember(r Record) {
 func (c *Component) Status() Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	recent := append([]Record(nil), c.recent...)
+	recent := append([]Record{}, c.recent...)
 	sort.SliceStable(recent, func(i, j int) bool { return recent[i].At.After(recent[j].At) })
 	return Status{Repo: c.o.Repo.Name, Reviewer: c.o.Reviewer, Recent: recent, LastPass: c.lastPass}
 }

@@ -341,7 +341,7 @@ func (c *Component) Suggestions(proposal string) (Record, bool) {
 func (c *Component) Status() Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	st := Status{Repo: c.o.Repo.Name, Advisor: c.o.Advisor.Name()}
+	st := Status{Repo: c.o.Repo.Name, Advisor: c.o.Advisor.Name(), Records: []Summary{}}
 	for _, id := range c.order {
 		r := c.records[id]
 		if r == nil {

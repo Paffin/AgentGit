@@ -114,6 +114,31 @@ func TestConfigAndOpsDoNotNeedACredential(t *testing.T) {
 	}
 }
 
+// The example in examples/ is what the operator guide shows: it must stay valid.
+func TestTheShippedExampleConfigurationIsValid(t *testing.T) {
+	const path = "../../examples/orchestrator.yaml"
+	cfg, err := config.Load(path, env(map[string]string{"AG_ORCH_TOKEN": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Repos) != 1 || cfg.Repos[0].Name != "acme/web" || len(cfg.Execs) != 2 {
+		t.Fatalf("example = %+v", cfg)
+	}
+	if code, out, errs := exec(t, env(nil), "config", "-config", path); code != 0 || !strings.Contains(out, "docs-bot") || !strings.Contains(out, "shell-bot") {
+		t.Fatalf("config: %d %s %s", code, out, errs)
+	}
+	for _, id := range []string{"orchestrator", "reviewer", "advisor", "agent"} {
+		if code, out, errs := exec(t, env(nil), "ops", "-config", path, "-for", id, "-flags"); code != 0 || !strings.Contains(out, "--operation repo.read") {
+			t.Fatalf("ops %s: %d %q %s", id, code, out, errs)
+		}
+	}
+	for _, f := range []string{"../../examples/shell-bot.sh", "../../examples/worked-example.sh"} {
+		if st, err := os.Stat(f); err != nil || st.Size() == 0 {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+}
+
 func TestOpsCanBePrintedAsMintFlags(t *testing.T) {
 	p := writeConfig(t, "http://127.0.0.1:1")
 	code, out, errs := exec(t, env(nil), "ops", "-config", p, "-for", "reviewer", "-flags")

@@ -157,7 +157,7 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 			if st := c.q.Get("state"); st != "" && v.State != st {
 				continue
 			}
-			if c.q.Get("ready_only") == "true" && !(v.Ready && v.State == agwp.TaskOpen) {
+			if c.q.Get("ready_only") == "true" && (!v.Ready || v.State != agwp.TaskOpen) {
 				continue
 			}
 			out = append(out, v)

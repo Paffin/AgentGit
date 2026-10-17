@@ -128,6 +128,12 @@ func TestDependencyOrderedTasksLandThroughPolicy(t *testing.T) {
 		}
 	}
 
+	// Nothing was started that the server then refused (a regression test: a task finished in a
+	// pass was once offered for adoption in the same pass).
+	if _, metrics := o.get("/metrics"); strings.Contains(metrics, `reason="start_failed"`) {
+		t.Errorf("a session start was attempted and refused:\n%s", o.logs.String())
+	}
+
 	// Everything that moved the stream was a human: the audit trail names no service.
 	events, _, err := w.alice.ReplayEvents(ctx, w.repo, 0, 1000, []string{"stream"})
 	if err != nil {

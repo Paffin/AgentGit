@@ -47,12 +47,11 @@ func TestReadSSERejectsRunawayLines(t *testing.T) {
 
 // sseServer scripts successive connections.
 type sseServer struct {
-	mu       sync.Mutex
-	conns    []sseConn // what each connection saw
-	scripts  []func(w http.ResponseWriter, r *http.Request)
-	latest   uint64
-	replays  int
-	finished chan struct{}
+	mu      sync.Mutex
+	conns   []sseConn // what each connection saw
+	scripts []func(w http.ResponseWriter, r *http.Request)
+	latest  uint64
+	replays int
 }
 
 type sseConn struct {

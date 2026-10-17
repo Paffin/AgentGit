@@ -161,8 +161,9 @@ func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.
 		ov = reply.Overlaps
 		return len(ov) > 0
 	})
-	if o1 := ov[0]; o1.Kind != semindex.KindDefinition || !((o1.A == one.ID && o1.B == two.ID) || (o1.A == two.ID && o1.B == one.ID)) ||
-		len(o1.Symbols) != 1 || o1.Symbols[0].Name != "LoadConfig" {
+	o1 := ov[0]
+	between := (o1.A == one.ID && o1.B == two.ID) || (o1.A == two.ID && o1.B == one.ID)
+	if o1.Kind != semindex.KindDefinition || !between || len(o1.Symbols) != 1 || o1.Symbols[0].Name != "LoadConfig" {
 		t.Fatalf("overlaps = %+v", ov)
 	}
 	code, cbody := o.get("/index/changes?proposal=" + one.ID)

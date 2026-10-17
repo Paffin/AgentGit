@@ -594,6 +594,13 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 		}
 		s.log.Info("work landed or was closed; task finished", "task", id, "state", state)
 		s.forgetWaiting(id)
+		// The caller's task list was read before this; record the new state in it so the
+		// finished task is not offered for adoption in this same pass.
+		for i := range tasks {
+			if tasks[i].ID == id {
+				tasks[i].State = state
+			}
+		}
 	}
 }
 
@@ -696,7 +703,12 @@ type Retry struct {
 
 // Status returns a snapshot for the admin API.
 func (s *Scheduler) Status() Status {
-	st := Status{Repo: s.o.Repo.Name, Slots: s.o.Repo.Schedule.Slots, Running: s.repoSessions()}
+	// lists are never null in the JSON
+	st := Status{Repo: s.o.Repo.Name, Slots: s.o.Repo.Schedule.Slots, Running: s.repoSessions(),
+		Waiting: []Waiting{}, Deferred: []Deferral{}, Retrying: []Retry{}}
+	if st.Running == nil {
+		st.Running = []session.Info{}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st.LastPass, st.LastError = s.lastPass, s.lastErr

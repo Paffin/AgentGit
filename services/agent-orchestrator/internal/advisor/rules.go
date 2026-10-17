@@ -379,7 +379,7 @@ func squashSpaces(line string) string {
 	rs := []rune(collapsed)
 	var b strings.Builder
 	for i, r := range rs {
-		if r == ' ' && !(i > 0 && i+1 < len(rs) && isWord(rs[i-1]) && isWord(rs[i+1])) {
+		if r == ' ' && (i <= 0 || i+1 >= len(rs) || !isWord(rs[i-1]) || !isWord(rs[i+1])) {
 			continue
 		}
 		b.WriteRune(r)

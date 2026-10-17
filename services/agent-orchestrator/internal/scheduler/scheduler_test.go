@@ -197,9 +197,18 @@ func TestDependenciesAreRespectedAndWorkWaitsToLand(t *testing.T) {
 	}
 	// A human integrates the proposal; the next pass finishes A as its owner and unblocks B.
 	h.fake.IntegrateProposal(repo, st.Waiting[0].Proposals[0])
+	starts := h.fake.CountRequests("agent.start_run")
 	h.reconcile()
 	if h.state(a) != agwp.TaskDone {
 		t.Fatalf("A = %s, want done once its proposal landed", h.state(a))
+	}
+	// A task finished in this very pass must not be offered for adoption in the same pass
+	// (the task list was read before it was finished).
+	if n := h.fake.CountRequests("agent.start_run"); n != starts {
+		t.Fatalf("the pass that finished A also tried to start a session (%d start requests, was %d)", n, starts)
+	}
+	if d, ok := h.deferral(a); ok {
+		t.Fatalf("a finished task is reported as deferred: %+v", d)
 	}
 	h.reconcile()
 	if len(h.mgr.Active()) != 1 || h.mgr.Active()[0].TaskID != b {

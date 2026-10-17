@@ -255,9 +255,3 @@ func (x *Index) Head() string {
 	defer x.mu.RUnlock()
 	return x.head
 }
-
-func (x *Index) setHead(h string) {
-	x.mu.Lock()
-	x.head = h
-	x.mu.Unlock()
-}

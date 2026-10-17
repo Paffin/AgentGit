@@ -232,7 +232,7 @@ func (c *Client) do(ctx context.Context, cl *call) error {
 		switch {
 		case errors.As(err, &apiErr):
 			c.obs.ObserveError(apiErr.Code)
-			if !(apiErr.Retryable || apiErr.Code == CodeRateLimited) || attempt >= c.retry.MaxAttempts { // rate_limited is always worth waiting out: the server limits every operation per credential
+			if (!apiErr.Retryable && apiErr.Code != CodeRateLimited) || attempt >= c.retry.MaxAttempts { // rate_limited is always worth waiting out: the server limits every operation per credential
 				return err
 			}
 			wait := c.backoff(attempt)

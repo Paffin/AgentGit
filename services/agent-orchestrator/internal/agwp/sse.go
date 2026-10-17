@@ -90,7 +90,6 @@ func (f *Follower) Run(ctx context.Context, handle func(Event)) error {
 			_, latest, err := f.c.ReplayEvents(ctx, f.opt.Repo, 0, 1, f.opt.Topics)
 			if err == nil {
 				f.lastSeq.Store(latest)
-				started = true
 			} else if ctx.Err() != nil {
 				return ctx.Err()
 			} else {

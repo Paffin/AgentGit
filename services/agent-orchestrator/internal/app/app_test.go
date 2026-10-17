@@ -3,11 +3,16 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	golog "log"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -238,6 +243,12 @@ func TestStatusDescribesIdentitiesAndRepositories(t *testing.T) {
 	if st.Sessions == nil {
 		t.Fatal("sessions must be an empty array, not null")
 	}
+	if strings.Contains(body, ": null") {
+		t.Fatalf("lists must be empty arrays, not null:\n%s", body)
+	}
+	if _, rbody := r.get(t, "/readyz", ""); strings.Contains(rbody, "null") {
+		t.Fatalf("/readyz: %s", rbody)
+	}
 }
 
 func TestMethodsOtherThanGetAreRefused(t *testing.T) {
@@ -302,6 +313,59 @@ func TestShutdownIsGracefulAndClosesTheListener(t *testing.T) {
 	if c, err := net.DialTimeout("tcp", addr, 500*time.Millisecond); err == nil {
 		c.Close()
 		t.Fatal("the admin listener is still open after shutdown")
+	}
+}
+
+// server.ca_file: an HTTPS server with a private CA is reachable only when the CA is configured.
+func TestCAFileMakesAPrivateHTTPSServerReachable(t *testing.T) {
+	tls := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"protocol_version":"agwp.v1","server_version":"t","features":["events.replay","auth.scoped_credentials"]}`)
+	}))
+	tls.Config.ErrorLog = golog.New(io.Discard, "", 0) // the refused handshake of the untrusted case is expected
+	tls.StartTLS()
+	defer tls.Close()
+	dir := t.TempDir()
+	caPath := filepath.Join(dir, "ca.pem")
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tls.Certificate().Raw})
+	if err := os.WriteFile(caPath, pemBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	build := func(ca string) (*App, error) {
+		cfg, err := config.Parse(strings.NewReader(configDoc(tls.URL, dir, "")), func(k string) string {
+			if k == "AG_ORCH_TOKEN" {
+				return "x"
+			}
+			return ""
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.Server.CAFile = ca
+		return New(Options{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	}
+	trusted, err := build(caPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caps, err := trusted.orch.Negotiate(context.Background()); err != nil || !caps.Has("events.replay") {
+		t.Fatalf("with the CA configured: %v %+v", err, caps)
+	}
+	untrusted, err := build("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := untrusted.orch.Negotiate(context.Background()); err == nil {
+		t.Fatal("a certificate from an unknown CA must be refused")
+	}
+	if _, err := build(filepath.Join(dir, "missing.pem")); err == nil || !strings.Contains(err.Error(), "ca_file") {
+		t.Fatalf("a missing CA file must be reported: %v", err)
+	}
+	bad := filepath.Join(dir, "bad.pem")
+	if err := os.WriteFile(bad, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := build(bad); err == nil || !strings.Contains(err.Error(), "PEM") {
+		t.Fatalf("a CA file without a certificate must be reported: %v", err)
 	}
 }
 
@@ -394,6 +458,18 @@ func TestCheckReportsARejectedCredential(t *testing.T) {
 	rep := newCheckApp(t, r).Check(context.Background())
 	if rep.OK() || !rep.find("error", "credential rejected") {
 		t.Fatalf("%s", rep)
+	}
+}
+
+func TestCheckWarnsWhenSessionsOfOneAgentRunSideBySide(t *testing.T) {
+	r := newRig(t, func(r *testRig) { r.cfg.Execs[0].Slots = 3 })
+	rep := newCheckApp(t, r).Check(context.Background())
+	if !rep.OK() || !rep.find("warn", "share one server identity") {
+		t.Fatalf("%s", rep)
+	}
+	one := newRig(t, nil)
+	if rep := newCheckApp(t, one).Check(context.Background()); rep.find("warn", "share one server identity") {
+		t.Fatalf("one session per agent needs no warning:\n%s", rep)
 	}
 }
 

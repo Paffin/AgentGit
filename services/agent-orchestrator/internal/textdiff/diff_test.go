@@ -58,7 +58,7 @@ func TestDiffAppliesBackProperty(t *testing.T) {
 	for i := 0; i < 400; i++ {
 		a, b := gen(rng.Intn(30)), gen(rng.Intn(30))
 		hunks := Diff(a, b)
-		if got := Apply(a, b, hunks); !reflect.DeepEqual(got, b) && !(len(got) == 0 && len(b) == 0) {
+		if got := Apply(a, b, hunks); !reflect.DeepEqual(got, b) && (len(got) != 0 || len(b) != 0) {
 			t.Fatalf("Apply(Diff) mismatch\na=%q\nb=%q\nhunks=%+v\ngot=%q", a, b, hunks, got)
 		}
 		prevEnd := -1

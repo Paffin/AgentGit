@@ -43,7 +43,6 @@ type Server struct {
 	repos   map[string]*repoState
 	fails   map[string][]failRule
 	reqLog  []RequestRecord
-	seq     int
 	streams int // currently open SSE connections
 	sseLog  []SSEConnect
 	kill    chan struct{} // closed to drop all SSE connections
@@ -114,7 +113,6 @@ type repoState struct {
 	predict    []agwp.Overlap
 	provenance []agwp.ProvenanceEntry
 	jobs       []agwp.Job
-	queue      []agwp.QueueEntry
 }
 
 type streamState struct {

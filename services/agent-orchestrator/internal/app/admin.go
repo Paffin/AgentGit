@@ -59,7 +59,8 @@ type RepoStatus struct {
 // Status assembles the current status.
 func (a *App) Status() Status {
 	ready, reasons := a.readiness()
-	st := Status{Service: ServiceStatus{Version: Version, StartedAt: a.started, Ready: ready, Reasons: reasons}, Sessions: a.mgr.Active()}
+	st := Status{Service: ServiceStatus{Version: Version, StartedAt: a.started, Ready: ready, Reasons: reasons}, Sessions: a.mgr.Active(),
+		Identity: []IdentityStatus{}, Repos: []RepoStatus{}}
 	a.mu.Lock()
 	for _, label := range []string{"orchestrator", "reviewer", "advisor"} {
 		if p := a.principals[label]; p != nil {
@@ -107,7 +108,7 @@ func (a *App) Status() Status {
 // readiness: the service is ready when it has authenticated to the server and
 // every repository's event stream is connected.
 func (a *App) readiness() (bool, []string) {
-	var reasons []string
+	reasons := []string{} // never null in the JSON
 	if !a.preflightOK.Load() {
 		a.mu.Lock()
 		why := a.preflightEr

@@ -54,6 +54,15 @@ function classify(id, http) {
   return 'unsafe'; // including the operations that are 'natural' only when a guard field is present
 }
 
+/** What an OpenAPI `content` map carries: JSON, raw bytes, or a Server-Sent Events stream. */
+function contentKind(content) {
+  if (!content || Object.keys(content).length === 0) return undefined;
+  if ('application/json' in content) return 'json';
+  if ('text/event-stream' in content) return 'sse';
+  if ('application/octet-stream' in content) return 'bytes';
+  throw new Error(`unsupported media types: ${Object.keys(content).join(', ')}`);
+}
+
 const ops = [];
 for (const [route, item] of Object.entries(spec.paths)) {
   for (const [verb, op] of Object.entries(item)) {
@@ -76,8 +85,8 @@ for (const [route, item] of Object.entries(spec.paths)) {
       summary: (op.summary ?? '').replace(/\s+/g, ' ').trim(),
       pathParams: params.filter((p) => p.in === 'path').map((p) => p.name),
       queryParams: params.filter((p) => p.in === 'query').map((p) => p.name),
-      body: bodies.request ?? (reqName ? 'json' : 'none'),
-      response: bodies.response ?? 'json',
+      body: bodies.request ?? contentKind(op.requestBody?.content) ?? 'none',
+      response: bodies.response ?? contentKind(op.responses?.['200']?.content) ?? 'json',
       retry: classify(id, http),
       retryWhenField: policy.retry.naturalWhenFieldPresent[id],
       idempotencyKey: Boolean(reqSchema?.properties && 'idempotency_key' in reqSchema.properties),
@@ -135,6 +144,30 @@ const SPECIAL = {
   'tree.file': '(request: { repo: string; path: string; rev?: string }, options?: CallOptions): Promise<Uint8Array>',
   'events.subscribe': '(options: SubscribeEventsOptions): AsyncGenerator<AgentEvent, void, undefined>',
 };
+
+// The hand-typed signatures above must keep matching the document: the same operations are non-JSON, and
+// they take the query parameters the signatures name.
+{
+  const nonJson = ops.filter((o) => o.body !== 'json' && o.body !== 'none').map((o) => o.id);
+  nonJson.push(...ops.filter((o) => o.response !== 'json').map((o) => o.id));
+  const expected = {
+    'objects.put': [],
+    'objects.get': [],
+    'tree.file': ['rev'],
+    'events.subscribe': ['after_seq', 'heartbeat_ms', 'topics'],
+  };
+  const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+  if (!same(new Set(nonJson), Object.keys(SPECIAL))) {
+    throw new Error(
+      `non-JSON operations in the document: ${[...new Set(nonJson)].sort()}; SPECIAL has ${Object.keys(SPECIAL)}`,
+    );
+  }
+  for (const [id, query] of Object.entries(expected)) {
+    const got = ops.find((o) => o.id === id)?.queryParams ?? [];
+    if (!same(got, query))
+      throw new Error(`${id}: the document lists query parameters [${got}], the signature has [${query}]`);
+  }
+}
 
 function apiTs() {
   const out = [BANNER];

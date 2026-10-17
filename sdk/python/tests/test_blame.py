@@ -1,8 +1,4 @@
-"""history.blame against a real server: which changeset introduced each line, line ranges, typed errors.
-
-The route exists in servers built from the "line-level blame" commit or later; against an older binary
-(which answers ``no such route``) these tests are skipped.
-"""
+"""history.blame against a real server: which changeset introduced each line, line ranges, typed errors."""
 
 from __future__ import annotations
 
@@ -10,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from agentgit import AgentGitClient, AgentGitError, NotFoundError, put_file
+from agentgit import AgentGitClient, AgentGitError, put_file
 from tests.harness import RunningServer
 
 REPO = "blame/lines"
@@ -56,12 +52,6 @@ def blamed(server: RunningServer) -> Fixture:
         new_head=m2.head,
         reason="blame test",
     )
-    try:
-        alice.history.blame(repo=REPO, path="x.txt")
-    except NotFoundError as e:
-        if "no such route" not in e.message:
-            raise
-        pytest.skip("this ag-server predates history.blame")
     return Fixture(alice, m1.head, m2.head)
 
 

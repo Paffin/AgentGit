@@ -207,15 +207,15 @@ export class AgentGitClient {
   }
 
   /**
-   * Asks the server what it supports and checks that it speaks `agwp.v1`. Throws a
-   * `failed_precondition` error otherwise. (The `supported_versions` list is not sent over HTTP:
-   * `GET /v1/capabilities` of ag-server 0.1.0 does not accept repeated query parameters.)
+   * Asks the server what it supports and checks that it speaks `agwp.v1`. The client sends the versions it
+   * speaks (`supported_versions=agwp.v1`); a server that speaks none of them, or one that answers with another
+   * version, makes this throw a `failed_precondition` error.
    */
   async negotiate(
     info: { clientName?: string; clientVersion?: string } = {},
     options?: CallOptions,
   ): Promise<NegotiateResponse> {
-    const request: Record<string, unknown> = {};
+    const request: Record<string, unknown> = { supported_versions: [PROTOCOL_VERSION] };
     if (info.clientName) request['client_name'] = info.clientName;
     if (info.clientVersion) request['client_version'] = info.clientVersion;
     const hello = (await this.#invoke('session.negotiate', request, undefined, options)) as NegotiateResponse;

@@ -143,7 +143,8 @@ export async function* subscribeEvents(
     let lastSeq = options.afterSeq;
     if (lastSeq === undefined) {
       // "From now": pin down the current end of the log, so that a reconnect cannot skip events
-      // that were appended between two connections.
+      // that were appended between two connections. A replay after the largest exactly representable
+      // integer returns no events and the log's `latest_seq`.
       const probe = (await transport.execute({
         op: OPERATIONS['events.replay'],
         request: { repo: options.repo, after_seq: Number.MAX_SAFE_INTEGER, limit: 1 },

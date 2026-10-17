@@ -27,6 +27,7 @@ from agentgit import (
     RetryPolicy,
     StreamMovedError,
     UnavailableError,
+    generate_agent_key,
     put_file,
 )
 from tests.faults import AsyncFaultyTransport, FaultyTransport, RecordedSleep, Reply
@@ -214,6 +215,41 @@ class TestIdempotencyKeys:
         ) == 1  # one integration, one reflog entry
         assert carol.streams.head(repo=REPO, stream="main").version == 1
 
+    def test_task_run_and_lease_lost_responses_are_retried_with_the_same_key_and_applied_once(
+        self, setup: Setup
+    ) -> None:
+        bot = setup.actor("agent:retry-bot", "writer")
+        bot.agents.register(repo=REPO, name="retry-bot", public_key=generate_agent_key().public_key_hex)
+
+        def lost_once(suffix: str) -> None:
+            setup.net.reset()
+            setup.net.match = lambda r: r.method == "POST" and r.path.endswith(suffix)
+            setup.net.rule = lambda _r, n: "drop-response" if n == 1 else "pass"
+
+        def same_key_twice(suffix: str) -> None:
+            posts = [s for s in setup.net.seen if s.method == "POST" and s.path.endswith(suffix)]
+            assert len(posts) == 2
+            assert posts[0].headers["idempotency-key"].startswith("sdk-")
+            assert posts[1].headers["idempotency-key"] == posts[0].headers["idempotency-key"]
+            assert posts[1].body == posts[0].body
+
+        lost_once("/tasks")
+        task = bot.tasks.create(repo=REPO, title="created once")
+        same_key_twice("/tasks")
+        assert [t.id for t in bot.tasks.list(repo=REPO).tasks if t.title == "created once"] == [task.id]
+
+        lost_once("/runs")
+        run = bot.agents.start_run(repo=REPO, agent="retry-bot", task_id=task.id)
+        same_key_twice("/runs")
+        assert [r.run_id for r in bot.agents.list_runs(repo=REPO, agent="retry-bot").runs] == [run.run_id]
+
+        lost_once("/leases")
+        lease = bot.leases.acquire(repo=REPO, scope="retry/**", exclusive=True, ttl_ms=60_000)
+        same_key_twice("/leases")
+        # the retry did not collide with the first attempt's own lease, and only one lease exists
+        active = [x for x in bot.leases.list(repo=REPO, active_only=True).leases if x.scope == "retry/**"]
+        assert [x.id for x in active] == [lease.lease.id]
+
     def test_objects_put_is_naturally_idempotent_and_retried(self, setup: Setup) -> None:
         setup.net.match = lambda r: r.method == "PUT"
         setup.net.rule = lambda _r, n: "drop-response" if n == 1 else "pass"
@@ -223,25 +259,31 @@ class TestIdempotencyKeys:
 
 
 class TestRequestsTheServerCannotDeduplicate:
+    # credentials.mint ignores Idempotency-Key by design (the secret can only be shown once), so a repeat
+    # would mint a second credential.
+    @staticmethod
+    def minted(client: AgentGitClient, subject: str) -> int:
+        return len([c for c in client.credentials.list(subject=subject).credentials if c.subject == subject])
+
     def test_are_not_retried_after_a_lost_response(self, setup: Setup) -> None:
-        setup.net.match = lambda r: r.method == "POST" and r.path.endswith("/tasks")
+        setup.net.match = lambda r: r.method == "POST" and r.path == "/v1/credentials"
         setup.net.rule = lambda _r, _n: "drop-response"
         with pytest.raises(UnavailableError) as info:
-            setup.client.tasks.create(repo=REPO, title="maybe twice")
+            setup.client.credentials.mint(subject="user:maybe-twice", ttl_secs=60)
         e = info.value
         assert (e.status, e.retryable, e.outcome_unknown, e.attempts) == (0, True, True, 1)
-        assert len(setup.net.to(f"/v1/repos/{REPO}/tasks", "POST")) == 1
-        assert [t.title for t in setup.client.tasks.list(repo=REPO).tasks].count(
-            "maybe twice"
-        ) == 1  # applied once
+        assert len(setup.net.to("/v1/credentials", "POST")) == 1
+        assert self.minted(setup.client, "user:maybe-twice") == 1  # applied once
 
     def test_are_retried_only_on_request_and_then_may_be_applied_twice(self, setup: Setup) -> None:
-        setup.net.match = lambda r: r.method == "POST" and r.path.endswith("/tasks")
+        setup.net.match = lambda r: r.method == "POST" and r.path == "/v1/credentials"
         setup.net.rule = lambda _r, n: "drop-response" if n == 1 else "pass"
-        setup.client.tasks.create(
-            repo=REPO, title="forced retry", options=CallOptions(retry=RetryPolicy(retry_unsafe=True))
+        setup.client.credentials.mint(
+            subject="user:forced-retry",
+            ttl_secs=60,
+            options=CallOptions(retry=RetryPolicy(retry_unsafe=True)),
         )
-        assert [t.title for t in setup.client.tasks.list(repo=REPO).tasks].count("forced retry") == 2
+        assert self.minted(setup.client, "user:forced-retry") == 2
 
     def test_workspace_modify_becomes_retryable_with_expected_head(self, setup: Setup) -> None:
         alice = setup.actor("user:wally", "writer")
@@ -379,13 +421,24 @@ def test_the_async_client_applies_the_same_rules(server: RunningServer) -> None:
 
             # unsafe: not retried, outcome unknown
             net.reset()
-            net.match = lambda r: r.method == "POST" and r.path.endswith("/tasks")
+            net.match = lambda r: r.method == "POST" and r.path == "/v1/credentials"
             net.rule = lambda _r, _n: "drop-response"
             with pytest.raises(AgentGitError) as info:
-                await client.tasks.create(repo=REPO, title="async maybe twice")
+                await client.credentials.mint(subject="user:async-maybe-twice", ttl_secs=60)
             assert (info.value.outcome_unknown, info.value.attempts) == (True, 1)
-            titles = [t.title for t in (await client.tasks.list(repo=REPO)).tasks]
-            assert titles.count("async maybe twice") == 1
+            listed = (await client.credentials.list(subject="user:async-maybe-twice")).credentials
+            assert len(listed) == 1
+
+            # keyed since the server records tasks under the key: a lost response is retried, applied once
+            net.reset()
+            net.match = lambda r: r.method == "POST" and r.path.endswith("/tasks")
+            net.rule = lambda _r, n: "drop-response" if n == 1 else "pass"
+            task = await client.tasks.create(repo=REPO, title="async created once")
+            posts = net.to(f"/v1/repos/{REPO}/tasks", "POST")
+            assert len(posts) == 2
+            assert posts[0].headers["idempotency-key"] == posts[1].headers["idempotency-key"]
+            tasks = (await client.tasks.list(repo=REPO)).tasks
+            assert [t.id for t in tasks if t.title == "async created once"] == [task.id]
 
             # deadline
             net.reset()

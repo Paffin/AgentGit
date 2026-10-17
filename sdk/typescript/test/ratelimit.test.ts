@@ -21,15 +21,27 @@ afterAll(async () => {
 describe('429 rate_limited', () => {
   it('without retries a burst surfaces rate_limited with a retry hint', async () => {
     const reader = await server.actor('user:burst', repo, 'reader', { retry: false });
-    let limited: AgentGitError | undefined;
-    for (let i = 0; i < 30 && !limited; i++) {
-      limited = (await reader.repos.describe({ repo }).catch((e: unknown) => e)) as AgentGitError | undefined;
-      if (!(limited instanceof AgentGitError)) limited = undefined;
-    }
+    // a concurrent burst, so that a slow machine cannot let the bucket refill between requests
+    const outcomes = await Promise.all(
+      Array.from({ length: 30 }, () => reader.repos.describe({ repo }).catch((e: unknown) => e)),
+    );
+    const limited = outcomes.find((o): o is AgentGitError => o instanceof AgentGitError);
     expect(limited).toBeDefined();
     expect(limited).toMatchObject({ code: 'rate_limited', status: 429, retryable: true });
     expect(limited!.retryAfterMs).toBeGreaterThan(0);
     expect(limited!.retryAfterMs).toBeLessThanOrEqual(1000);
+  });
+
+  it('the limit applies to operations that are not tied to a repository, too', async () => {
+    const caller = await server.actor('user:global-burst', repo, 'reader', { retry: false });
+    const outcomes = await Promise.all(
+      Array.from({ length: 30 }, () => caller.session.whoami().catch((e: unknown) => e)),
+    );
+    expect(outcomes.find((o) => o instanceof AgentGitError)).toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+      retryable: true,
+    });
   });
 
   it('with the default retry policy the client waits as told and every request succeeds', async () => {
@@ -55,22 +67,25 @@ describe('429 rate_limited', () => {
 
   it('a mutation the server cannot deduplicate is still retried on 429 - it was rejected before it ran - and applied once', async () => {
     const writer = await server.actor('user:tasker', repo, 'writer', { retry: { maxAttempts: 10 } });
-    const titles = Array.from({ length: 12 }, (_, i) => `task ${i}`);
-    await Promise.all(titles.map((title) => writer.tasks.create({ repo, title })));
-    const tasks = (await writer.tasks.list({ repo })).tasks.map((t) => t.title).sort();
-    expect(tasks).toEqual([...titles].sort());
+    const names = Array.from({ length: 12 }, (_, i) => `ws-${i}`);
+    await Promise.all(names.map((name) => writer.workspaces.create({ repo, name, stream: 'main' })));
+    const created = (await writer.workspaces.list({ repo })).workspaces
+      .map((w) => w.name)
+      .filter((n) => n.startsWith('ws-'))
+      .sort();
+    expect(created).toEqual([...names].sort());
   });
 
   it('an unsafe mutation hit by a non-429 transient error is not retried', async () => {
     const net = new FaultyNetwork();
-    net.match = (r) => r.path.endsWith('/tasks') && r.method === 'POST';
+    net.match = (r) => r.path.endsWith('/workspaces') && r.method === 'POST';
     net.rule = () => ({
       status: 503,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ error: { code: 'unavailable', message: 'busy', retryable: true, retry_after_ms: 1 } }),
     });
     const client = new AgentGitClient({ baseUrl: server.baseUrl, token: server.bootstrapToken, fetch: net.fetch });
-    await expect(client.tasks.create({ repo, title: 'no retry' })).rejects.toMatchObject({
+    await expect(client.workspaces.create({ repo, name: 'no-retry', stream: 'main' })).rejects.toMatchObject({
       code: 'unavailable',
       attempts: 1,
     });

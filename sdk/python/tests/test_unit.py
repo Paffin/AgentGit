@@ -162,7 +162,7 @@ class TestClientOptions:
         with pytest.raises(ValueError, match="base_url"):
             AsyncAgentGitClient("")
 
-    def test_negotiate_does_not_send_version_arrays(self) -> None:
+    def test_negotiate_sends_the_versions_it_speaks_as_a_repeated_parameter(self) -> None:
         calls: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -173,7 +173,7 @@ class TestClientOptions:
 
         with AgentGitClient(BASE, http_client=httpx.Client(transport=httpx.MockTransport(handler))) as c:
             c.negotiate(client_name="x", client_version="1")
-        assert calls[0].url.query == b"client_name=x&client_version=1"
+        assert calls[0].url.query == b"supported_versions=agwp.v1&client_name=x&client_version=1"
         assert "authorization" not in calls[0].headers
 
     def test_call_dispatches_any_operation_by_id(self) -> None:

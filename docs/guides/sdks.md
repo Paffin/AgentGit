@@ -194,11 +194,16 @@ the OpenAPI document does not say; both generators read it.
   server's `retry_after_ms` / `Retry-After`. Transport failures (a dropped connection, a local timeout) count as
   retryable, with `status` 0.
 * **Whether a request may be repeated depends on the operation.** `read` and `natural` operations are repeated freely.
-  `keyed` operations (`repo.create`, `objects.publish`, `proposal.create`, `integration.integrate`) carry an
-  `Idempotency-Key` that the SDK generates and reuses on every retry, so a lost response does not apply them twice.
-  `unsafe` operations (creating a task, acquiring a lease, ...) are not retried after a lost response, because the server
-  cannot deduplicate them; the exception is `rate_limited`, which the server answers before running anything. Pass an
-  explicit retry setting to override.
+  `keyed` operations (`repo.create`, `objects.publish`, `proposal.create`, `integration.integrate`, `task.create`,
+  `agent.start_run`, `lease.acquire`) carry an `Idempotency-Key` that the SDK generates and reuses on every retry, so a
+  lost response does not apply them twice (the server answers a repeat with the recorded response).
+  `unsafe` operations (creating a workspace or a stream, minting a credential, ...) are not retried after a lost response,
+  because the server cannot deduplicate them; the exception is `rate_limited`, which the server answers before running
+  anything. Pass an explicit retry setting to override.
+* `retryable: true` from the server means that doing the *logical operation* again may succeed (after waiting, after
+  re-reading state, or after finding out whether the first attempt took effect), not that sending the same bytes again is
+  safe. That is why the class of the operation decides, and why `stream_moved` and `deadline_exceeded`, which the server
+  marks retryable, are not blindly repeated (below).
 * `stream_moved` is never retried: the identical compare-and-swap cannot win.
 * A deadline is sent as `Request-Timeout` and enforced locally. `outcomeUnknown` / `outcome_unknown` is set when the
   request may have been applied; `operations.get` with the idempotency key tells the outcome.
@@ -491,9 +496,8 @@ The tests need a built `ag-server`; they use `$AG_SERVER_BIN`, then `/home/user/
 own server on `127.0.0.1` with a random port and a temporary data directory, and kills it at the end, also when a test
 fails. Nothing leaves the loopback interface.
 
-A binary built before `history.blame` was added answers that route with `no such route`; the three blame tests and the blame
-step of the all-operations tour are then skipped (and reported as skipped), and every other test runs as usual. Nothing else
-is tolerated: any other missing route fails the suite.
+A binary older than the routes the tests call fails them with `no such route`: build `ag-server` from the same revision as the
+OpenAPI document.
 
 Every code block above is a copy of a region of a program in `sdk/*/examples/`; those programs run in the test suites
 (`test/examples.test.ts`, `tests/test_examples.py`), and `sdk/tools/sync_doc_samples.py` rewrites the blocks when an example
@@ -501,16 +505,21 @@ changes.
 
 ## What the SDKs work around
 
-`ag-server 0.1.0` differs from its own protocol documents in a few places. The SDKs are written around them, and
-`test/server-gaps.test.ts` / `tests/test_server_gaps.py` pin each one down so that a server fix is noticed:
+Very little. The server contract the SDKs rely on is pinned by `test/server-gaps.test.ts` / `tests/test_server_gaps.py`
+(a failure there means the server changed), and most of what an earlier `ag-server` did differently from its protocol
+documents has been fixed on the server: seven creating operations honour `Idempotency-Key`, `GET /v1/capabilities` takes
+repeated keys, `events.replay` beyond the end returns nothing and the real `latest_seq`, listings carry real sizes, every
+route answers in the error envelope with the caller's request id, and file types are `regular` / `symlink`. What remains:
 
-* only four operations honour `Idempotency-Key` (the rest accept and ignore it);
-* `GET /v1/capabilities` rejects repeated query parameters, so the client versions cannot be sent;
-* `events.replay` treats `after_seq` = 2^64 - 1 as "from the start";
-* `queue.run` reports `state: "done"` with an outcome;
-* tree listings report `size: 0` where `tree.resolve` knows the size;
-* a `405` has an empty body, and an unknown route has no request id;
-* file types are `file` when read but `regular` when written.
+* `stream.create` and `credentials.mint` ignore `Idempotency-Key`, by design (a repeated `stream.create` answers
+  `already_exists`; a minted secret can be shown only once), so both are `unsafe` and a lost response is reported with
+  `outcomeUnknown`, not repeated;
+* `Retry-After` is whole seconds and at least 1, while `retry_after_ms` can be shorter: the SDKs wait for
+  `retry_after_ms`;
+* the OpenAPI document lists `application/octet-stream` for the `200` of `objects.put`, which answers JSON; the one
+  override in `sdk/api-policy.json`;
+* the rate limit now applies to every authenticated operation, not only to those of one repository, so any call can
+  answer `429 rate_limited`; the retry rules handle it for every class, since the server rejects before running anything.
 
 ## Not covered
 

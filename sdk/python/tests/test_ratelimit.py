@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import httpx
 import pytest
@@ -29,18 +29,35 @@ def limited() -> Iterator[RunningServer]:
         s.stop()
 
 
+def first_rate_limited(call: Callable[[], object]) -> RateLimitedError | None:
+    """Runs the call 30 times concurrently, so that a slow machine cannot let the bucket refill in between."""
+
+    def attempt(_: int) -> RateLimitedError | None:
+        try:
+            call()
+        except RateLimitedError as e:
+            return e
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(10) as pool:
+        return next((e for e in pool.map(attempt, range(30)) if e is not None), None)
+
+
 def test_without_retries_a_burst_surfaces_rate_limited_with_a_retry_hint(limited: RunningServer) -> None:
     with limited.actor("user:burst", REPO, "reader", retry=False) as reader:
-        error: RateLimitedError | None = None
-        for _ in range(30):
-            try:
-                reader.repos.describe(repo=REPO)
-            except RateLimitedError as e:
-                error = e
-                break
+        error = first_rate_limited(lambda: reader.repos.describe(repo=REPO))
     assert error is not None
     assert (error.code, error.status, error.retryable) == ("rate_limited", 429, True)
     assert 0 < error.retry_after_ms <= 1000
+
+
+def test_the_limit_applies_to_operations_that_are_not_tied_to_a_repository_too(
+    limited: RunningServer,
+) -> None:
+    with limited.actor("user:global-burst", REPO, "reader", retry=False) as caller:
+        error = first_rate_limited(caller.session.whoami)
+    assert error is not None
+    assert (error.code, error.status, error.retryable) == ("rate_limited", 429, True)
 
 
 def test_the_default_policy_waits_as_told_and_every_request_succeeds(limited: RunningServer) -> None:
@@ -73,15 +90,16 @@ def test_a_mutation_the_server_cannot_deduplicate_is_still_retried_on_429_and_ap
     limited: RunningServer,
 ) -> None:
     with limited.actor("user:tasker", REPO, "writer", retry=RetryPolicy(max_attempts=10)) as writer:
-        titles = [f"task {i}" for i in range(12)]
+        names = [f"ws-{i}" for i in range(12)]
         with concurrent.futures.ThreadPoolExecutor(6) as pool:
-            list(pool.map(lambda t: writer.tasks.create(repo=REPO, title=t), titles))
-        assert sorted(t.title for t in writer.tasks.list(repo=REPO).tasks) == sorted(titles)
+            list(pool.map(lambda n: writer.workspaces.create(repo=REPO, name=n, stream="main"), names))
+        created = [w.name for w in writer.workspaces.list(repo=REPO).workspaces if w.name.startswith("ws-")]
+        assert sorted(created) == sorted(names)
 
 
 def test_an_unsafe_mutation_hit_by_another_transient_error_is_not_retried(limited: RunningServer) -> None:
     net = FaultyTransport()
-    net.match = lambda r: r.path.endswith("/tasks") and r.method == "POST"
+    net.match = lambda r: r.path.endswith("/workspaces") and r.method == "POST"
     net.rule = lambda _r, _n: Reply(
         503,
         {"content-type": "application/json"},
@@ -94,7 +112,7 @@ def test_an_unsafe_mutation_hit_by_another_transient_error_is_not_retried(limite
         sleep=lambda _s: None,
     ) as client:
         with pytest.raises(Exception) as info:
-            client.tasks.create(repo=REPO, title="no retry")
+            client.workspaces.create(repo=REPO, name="no-retry", stream="main")
     assert getattr(info.value, "attempts", None) == 1
     assert len(net.seen) == 1
 

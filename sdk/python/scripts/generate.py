@@ -210,6 +210,19 @@ class Op:
     params: list[Param] = field(default_factory=list)
 
 
+def content_kind(content: dict[str, Any] | None) -> str | None:
+    """What an OpenAPI ``content`` map carries: JSON, raw bytes, or a Server-Sent Events stream."""
+    if not content:
+        return None
+    if "application/json" in content:
+        return "json"
+    if "text/event-stream" in content:
+        return "sse"
+    if "application/octet-stream" in content:
+        return "bytes"
+    raise SystemExit(f"unsupported media types: {', '.join(content)}")
+
+
 def build_ops() -> list[Op]:
     ops: list[Op] = []
     for route, item in SPEC["paths"].items():
@@ -233,8 +246,8 @@ def build_ops() -> list[Op]:
                 else None
             )
             ns, name = place_of(op_id)
-            body = bodies.get("request", "json" if req_name else "none")
-            response = bodies.get("response", "json")
+            body = bodies.get("request") or content_kind(o.get("requestBody", {}).get("content")) or "none"
+            response = bodies.get("response") or content_kind(o["responses"]["200"].get("content")) or "json"
             path_params = [p["name"] for p in parameters if p["in"] == "path"]
             repo_scoped = "owner" in path_params and "rname" in path_params
             params: list[Param] = []
@@ -265,8 +278,6 @@ def build_ops() -> list[Op]:
                             p.get("description", ""),
                         )
                     )
-            if op_id == "tree.file":
-                params.append(Param("rev", "rev", "str", False, "Revision (default: the default stream)."))
             if op_id == "objects.put":
                 params.append(
                     Param(
@@ -312,7 +323,27 @@ def build_ops() -> list[Op]:
         if key in seen:
             raise SystemExit(f"{o.id} and {seen[key]} both map to {key}")
         seen[key] = o.id
+    check_hand_written_operations(ops)
     return ops
+
+
+def check_hand_written_operations(ops: list[Op]) -> None:
+    """The operations that are not plain JSON have hand-written methods; the document must keep matching them."""
+    non_json = {o.id for o in ops if o.body not in ("json", "none") or o.response != "json"}
+    hand_written = {"objects.put", "objects.get", "tree.file", "events.subscribe"}
+    if non_json != hand_written:
+        raise SystemExit(
+            f"non-JSON operations in the document: {sorted(non_json)}, expected {sorted(hand_written)}"
+        )
+    expected_query = {
+        "objects.put": set(),
+        "objects.get": set(),
+        "tree.file": {"rev"},
+        "events.subscribe": {"after_seq", "heartbeat_ms", "topics"},
+    }
+    for o in ops:
+        if o.id in expected_query and set(o.query_params) != expected_query[o.id]:
+            raise SystemExit(f"{o.id}: the document lists query parameters {o.query_params}")
 
 
 def operations_py(ops: list[Op]) -> str:

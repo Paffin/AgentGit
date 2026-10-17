@@ -26,7 +26,7 @@ from agentgit.sse import SseFrame, SseParser
 
 DEFAULT_IDLE_MS = 90_000
 # "after_seq" of a replay that is certainly past the end of the log: the answer's latest_seq is the
-# current end. (u64::MAX is not used: ag-server 0.1.0 treats it as "from the start".)
+# current end. (2**53 - 1 is the largest integer every JSON implementation carries exactly.)
 _PAST_THE_END = 2**53 - 1
 
 

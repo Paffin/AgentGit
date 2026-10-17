@@ -31,6 +31,8 @@ pub enum ConfigError {
 pub struct ServerConfig {
     /// Listener, storage and TLS.
     pub server: ServerSection,
+    /// Where credentials, roles and the repository registry live (SQLite file, or PostgreSQL for several replicas).
+    pub control: ControlSection,
     /// Authentication.
     pub auth: AuthSection,
     /// Rate limits and sizes.
@@ -64,6 +66,12 @@ pub struct ServerSection {
     pub cors_origins: Vec<String>,
     /// Externally visible base URL (for links in responses and OIDC redirects).
     pub public_url: Option<String>,
+    /// On SIGTERM, report "not ready" for this many seconds before closing the listener, so a load balancer
+    /// stops sending new requests first (0 = stop at once). Set it just above the balancer's probe interval
+    /// when running several replicas; keep it below the orchestrator's termination grace period.
+    pub drain_secs: u64,
+    /// Name of this replica in logs and metrics. Default: `$HOSTNAME` (the pod name on Kubernetes), else random.
+    pub replica_id: Option<String>,
 }
 
 impl Default for ServerSection {
@@ -77,7 +85,69 @@ impl Default for ServerSection {
             web_dir: None,
             cors_origins: Vec::new(),
             public_url: None,
+            drain_secs: 0,
+            replica_id: None,
         }
+    }
+}
+
+/// `[control]` — the control plane database: credentials, role bindings, the repository registry.
+///
+/// Without `url`/`url_env` it is the SQLite file `<data_dir>/control.db`, which only one server process may use.
+/// With one of them it is a schema of a PostgreSQL database, shared by any number of replicas
+/// (see `docs/operations/high-availability.md`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ControlSection {
+    /// PostgreSQL connection URL without a password (for example `postgres://ag@db.internal/agentgit?sslmode=verify-full`,
+    /// or `host=/var/run/postgresql dbname=agentgit`). A URL with a password is refused: use `url_env`.
+    pub url: Option<String>,
+    /// Name of the environment variable that holds the connection URL (preferred: it usually has a password).
+    pub url_env: Option<String>,
+    /// Schema that holds the control tables (created on first start). Lowercase letters, digits and `_`.
+    pub schema: String,
+    /// Pooled connections to the control database per replica.
+    pub pool_size: usize,
+    /// How long a starting replica keeps retrying an unreachable control database before giving up (seconds).
+    pub startup_timeout_secs: u64,
+    /// How long a replica may use cached role bindings (milliseconds). A role granted or revoked through
+    /// another replica is effective within this time at the latest; usually at once (cluster notice).
+    pub bindings_ttl_ms: u64,
+}
+
+impl Default for ControlSection {
+    fn default() -> Self {
+        Self {
+            url: None,
+            url_env: None,
+            schema: "ag_control".into(),
+            pool_size: 16,
+            startup_timeout_secs: 30,
+            bindings_ttl_ms: 5000,
+        }
+    }
+}
+
+impl ControlSection {
+    /// The PostgreSQL URL when the control plane is on PostgreSQL (`None`: SQLite). Reads the environment
+    /// variable `url_env` names.
+    pub fn resolve_url(&self) -> Result<Option<String>, ConfigError> {
+        if let Some(u) = self.url.as_deref().filter(|u| !u.trim().is_empty()) {
+            return Ok(Some(u.trim().to_string()));
+        }
+        let Some(var) = self.url_env.as_deref().filter(|v| !v.is_empty()) else { return Ok(None) };
+        match std::env::var(var) {
+            Ok(u) if !u.trim().is_empty() => Ok(Some(u.trim().to_string())),
+            _ => Err(ConfigError::Invalid(format!(
+                "control.url_env names {var}, but that environment variable is not set (it must hold the PostgreSQL URL)"
+            ))),
+        }
+    }
+
+    /// True if this section selects PostgreSQL.
+    pub fn is_postgres(&self) -> bool {
+        self.url.as_deref().is_some_and(|u| !u.trim().is_empty())
+            || self.url_env.as_deref().is_some_and(|v| !v.is_empty())
     }
 }
 
@@ -298,6 +368,37 @@ impl ServerConfig {
         if self.repos.pool_size == 0 || self.repos.max_open == 0 {
             return bad("repos.pool_size and repos.max_open must be at least 1");
         }
+        let c = &self.control;
+        if c.url.as_deref().is_some_and(|u| !u.trim().is_empty()) && c.url_env.as_deref().is_some_and(|v| !v.is_empty())
+        {
+            return bad("set either control.url or control.url_env, not both");
+        }
+        if let Some(u) = c.url.as_deref()
+            && ag_storage::meta::url_has_password(u)
+        {
+            return bad(
+                "control.url must not contain a password: put the URL in an environment variable and name it with control.url_env",
+            );
+        }
+        if ag_storage::meta::validate_schema_name(&c.schema).is_err() {
+            return bad(
+                "control.schema must be lowercase letters, digits and '_' (at most 63 bytes, not starting with a digit or 'pg_')",
+            );
+        }
+        if c.pool_size == 0 || c.pool_size > 512 {
+            return bad("control.pool_size must be between 1 and 512");
+        }
+        if c.bindings_ttl_ms > 300_000 {
+            return bad("control.bindings_ttl_ms must be at most 300000 (5 minutes)");
+        }
+        if self.server.drain_secs > 300 {
+            return bad("server.drain_secs must be at most 300");
+        }
+        if let Some(id) = &self.server.replica_id
+            && (id.is_empty() || id.len() > 63 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b)))
+        {
+            return bad("server.replica_id must be 1-63 characters of [A-Za-z0-9._-]");
+        }
         if self.limits.max_concurrent_requests == 0 {
             return bad("limits.max_concurrent_requests must be at least 1");
         }
@@ -328,6 +429,15 @@ impl ServerConfig {
             }
         }
         Ok(())
+    }
+
+    /// True if new repositories keep their metadata in PostgreSQL *and* their objects in S3, i.e. if every
+    /// replica can open them. Anything else lives on the local disk of one host.
+    pub fn repos_are_shared(&self) -> bool {
+        use ag_integrate::{MetaConfig, ObjectsConfig};
+        self.repos.storage.as_ref().is_some_and(|s| {
+            matches!(s.meta, MetaConfig::Postgres { .. }) && matches!(s.objects, ObjectsConfig::S3 { .. })
+        })
     }
 
     /// Whether TLS is configured.

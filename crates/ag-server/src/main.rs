@@ -45,19 +45,29 @@ enum Command {
     DefaultConfig,
     /// Print the OpenAPI document of the HTTP/JSON API.
     Openapi,
-    /// Offline administration directly on a data directory (works while the server is stopped).
+    /// Offline administration directly on the control database (works while the server is stopped).
     Admin {
         /// Data directory of the server (default: `server.data_dir` of the configuration, else `./ag-data`).
         #[arg(long, env = "AG_DATA_DIR")]
         data_dir: Option<PathBuf>,
-        /// The server's configuration. Only `[repos.storage]` and `server.data_dir` are used: a repository created
-        /// here gets the same PostgreSQL schema and S3 prefix as one created through the API. Without it,
+        /// The server's configuration. `[control]` (a PostgreSQL control database), `[repos.storage]` and
+        /// `server.data_dir` are used: a repository created here gets the same PostgreSQL schema and S3 prefix as
+        /// one created through the API. Without it, the control database is `<data-dir>/control.db` and
         /// `create-repo` makes a local SQLite repository. The container images set it for you.
         #[arg(short, long, env = "AG_SERVER_CONFIG")]
         config: Option<PathBuf>,
         #[command(subcommand)]
         action: AdminAction,
     },
+}
+
+/// The two places a control database can live.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum ControlBackend {
+    /// `<data-dir>/control.db`
+    Sqlite,
+    /// The PostgreSQL schema named by `[control]` in the configuration.
+    Postgres,
 }
 
 #[derive(Subcommand, Debug)]
@@ -105,6 +115,35 @@ enum AdminAction {
     },
     /// List repositories.
     Repos,
+    /// Write a logical backup of the control database (credential hashes, roles, repository registry) to a file.
+    /// Works for SQLite and PostgreSQL alike. The file is as sensitive as the database: it is created with mode 0600.
+    BackupControl {
+        /// Where to write it (must not exist).
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Restore a backup written by `backup-control` into the (empty) control database.
+    RestoreControl {
+        /// The backup file.
+        #[arg(long)]
+        from: PathBuf,
+        /// Overwrite what the control database holds now (in one transaction).
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Move the control database between SQLite (`<data-dir>/control.db`) and PostgreSQL (`[control]` in the
+    /// configuration): `--from sqlite --to postgres` is the step from a single server to several replicas.
+    MigrateControl {
+        /// Where the data is now.
+        #[arg(long, value_enum)]
+        from: ControlBackend,
+        /// Where it should go (must be empty unless `--replace`).
+        #[arg(long, value_enum)]
+        to: ControlBackend,
+        /// Overwrite what the target holds now.
+        #[arg(long)]
+        replace: bool,
+    },
 }
 
 /// Colour only for a person at a terminal: never in a file or pipe (a service's log would fill with escape
@@ -176,7 +215,11 @@ async fn main() -> Result<()> {
             }
             cfg.validate()?;
             init_tracing(&cfg);
-            let app = App::new(cfg.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
+            // Opening the control database may talk to PostgreSQL, which must not happen on an async thread.
+            let app = {
+                let cfg = cfg.clone();
+                tokio::task::spawn_blocking(move || App::new(cfg)).await?.map_err(|e| anyhow::anyhow!("{e}"))?
+            };
             if !app.auth.bootstrap_enabled() && !app.auth.oidc_enabled() {
                 tracing::warn!(
                     "no bootstrap token ({}) and no OIDC provider are configured: nobody can authenticate until you \
@@ -209,13 +252,31 @@ async fn main() -> Result<()> {
             if let Some(path) = &config {
                 let loaded = ServerConfig::load(path)?;
                 cfg.repos = loaded.repos;
+                cfg.control = loaded.control;
                 cfg.server.data_dir = loaded.server.data_dir;
             }
             if let Some(dir) = data_dir {
                 cfg.server.data_dir = dir;
             }
-            let app = App::new(cfg).map_err(|e| anyhow::anyhow!("{e}"))?;
-            admin(app, action).await
+            // The administration commands print their own diagnostics; keep the library's quiet unless asked.
+            let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+            let _ = tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_target(false)
+                .with_writer(std::io::stderr)
+                .try_init();
+            // Everything below talks to the control database (possibly PostgreSQL): not on an async thread.
+            tokio::task::spawn_blocking(move || match action {
+                AdminAction::BackupControl { out } => backup_control(&cfg, &out),
+                AdminAction::RestoreControl { from, replace } => restore_control(&cfg, &from, replace),
+                AdminAction::MigrateControl { from, to, replace } => migrate_control(&cfg, from, to, replace),
+                other => {
+                    let app = App::new(cfg).map_err(|e| anyhow::anyhow!("{e}"))?;
+                    admin(app, other)
+                }
+            })
+            .await?
         }
     }
 }
@@ -256,7 +317,98 @@ async fn wait_for_shutdown_signal() {
     tokio::select! { _ = ctrl_c => {}, _ = term => {} }
 }
 
-async fn admin(app: App, action: AdminAction) -> Result<()> {
+fn open_control_for_admin(cfg: &ServerConfig) -> Result<ag_server::control::Control> {
+    std::fs::create_dir_all(&cfg.server.data_dir).context("creating the data directory")?;
+    ag_server::control::Control::from_config(cfg, std::sync::Arc::new(ag_storage::SystemClock))
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+fn backup_control(cfg: &ServerConfig, out: &std::path::Path) -> Result<()> {
+    let control = open_control_for_admin(cfg)?;
+    let dump = control.export().map_err(|e| anyhow::anyhow!("{e}"))?;
+    dump.write_file(out).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!(
+        "wrote {} ({} credential(s), {} role binding(s), {} repositor(ies); control schema {}, from {})",
+        out.display(),
+        dump.credentials.len(),
+        dump.roles.len(),
+        dump.repos.len(),
+        dump.schema_version,
+        dump.source
+    );
+    eprintln!("the file holds credential secret hashes: store it like the database itself");
+    Ok(())
+}
+
+fn restore_control(cfg: &ServerConfig, from: &std::path::Path, replace: bool) -> Result<()> {
+    use ag_server::control::{ControlDump, ImportMode};
+    let dump = ControlDump::read_file(from).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let control = open_control_for_admin(cfg)?;
+    let mode = if replace { ImportMode::Replace } else { ImportMode::RequireEmpty };
+    let s = control.import(&dump, mode).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!(
+        "restored {} credential(s), {} role binding(s), {} repositor(ies), {} idempotency record(s), {} setting(s)",
+        s.credentials, s.roles, s.repos, s.idempotency, s.kv
+    );
+    Ok(())
+}
+
+fn migrate_control(cfg: &ServerConfig, from: ControlBackend, to: ControlBackend, replace: bool) -> Result<()> {
+    use ag_server::control::{Control, ImportMode};
+    if from == to {
+        bail!("--from and --to name the same backend");
+    }
+    let clock: std::sync::Arc<dyn ag_storage::Clock> = std::sync::Arc::new(ag_storage::SystemClock);
+    let sqlite_path = cfg.server.data_dir.join("control.db");
+    let open = |which: ControlBackend, must_exist: bool| -> Result<Control> {
+        match which {
+            ControlBackend::Sqlite => {
+                if must_exist && !sqlite_path.is_file() {
+                    bail!("there is no SQLite control database at {}", sqlite_path.display());
+                }
+                std::fs::create_dir_all(&cfg.server.data_dir).context("creating the data directory")?;
+                Control::open(&sqlite_path, clock.clone()).map_err(|e| anyhow::anyhow!("{e}"))
+            }
+            ControlBackend::Postgres => {
+                if !cfg.control.is_postgres() {
+                    bail!("the PostgreSQL side needs [control] url or url_env in the configuration (--config)");
+                }
+                Control::from_config(cfg, clock.clone()).map_err(|e| anyhow::anyhow!("{e}"))
+            }
+        }
+    };
+    let source = open(from, true)?;
+    let mut dump = source.export().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let filled = if from == ControlBackend::Sqlite { dump.fill_repo_configs(&cfg.server.data_dir) } else { 0 };
+    let target = open(to, false)?;
+    let mode = if replace { ImportMode::Replace } else { ImportMode::RequireEmpty };
+    let s = target.import(&dump, mode).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!(
+        "moved {} credential(s), {} role binding(s), {} repositor(ies), {} idempotency record(s), {} setting(s) from {from:?} to {to:?}",
+        s.credentials, s.roles, s.repos, s.idempotency, s.kv
+    );
+    let local_only: Vec<&str> = dump
+        .repos
+        .iter()
+        .filter(|r| !ag_server::repos::config_is_shared(&r.config_json))
+        .map(|r| r.name.as_str())
+        .collect();
+    if filled > 0 {
+        eprintln!("took the stored configuration of {filled} repositor(ies) from {}", cfg.server.data_dir.display());
+    }
+    if !local_only.is_empty() {
+        eprintln!(
+            "note: {} repositor(ies) keep their data on this host's disk (not PostgreSQL + S3) and can only be served by a server \
+             that has {}: {}",
+            local_only.len(),
+            cfg.server.data_dir.display(),
+            local_only.join(", ")
+        );
+    }
+    Ok(())
+}
+
+fn admin(app: App, action: AdminAction) -> Result<()> {
     let by = "system:cli-admin";
     match action {
         AdminAction::Grant { subject, repo, role } => {
@@ -300,6 +452,9 @@ async fn admin(app: App, action: AdminAction) -> Result<()> {
             for r in app.control.repos("", "", 10_000).map_err(|e| anyhow::anyhow!("{e}"))? {
                 println!("{}\t{}", r.name, r.description);
             }
+        }
+        AdminAction::BackupControl { .. } | AdminAction::RestoreControl { .. } | AdminAction::MigrateControl { .. } => {
+            bail!("handled before an application is built")
         }
     }
     Ok(())

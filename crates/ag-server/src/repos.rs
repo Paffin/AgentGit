@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ag_integrate::{InitOptions, MetaConfig, ObjectsConfig, Repository, StorageConfig};
+use ag_integrate::{InitOptions, MetaConfig, ObjectsConfig, RepoConfig, Repository, StorageConfig};
 use ag_protocol::v1;
 use ag_storage::Clock;
 use ag_types::{Identity, Namespace, StreamName};
@@ -37,6 +37,28 @@ impl RepoPool {
     fn touched(&self) -> std::time::Instant {
         *self.last_used.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// Whether a stored `.ag/config.json` puts the repository in PostgreSQL + S3, i.e. where every replica can reach it.
+pub fn config_is_shared(config_json: &str) -> bool {
+    serde_json::from_str::<RepoConfig>(config_json).is_ok_and(|c| {
+        let s = c.storage();
+        matches!(s.meta, MetaConfig::Postgres { .. }) && matches!(s.objects, ObjectsConfig::S3 { .. })
+    })
+}
+
+/// The registry knows the repository but this host has none of its files and they are not in shared storage.
+fn missing_local_data(name: &str) -> ApiError {
+    tracing::error!(
+        repo = name,
+        "repository is registered but its data is not on this host and is not in PostgreSQL + S3; \
+         it is served only by the replica that holds its files"
+    );
+    ApiError::new(
+        ag_protocol::ErrorCode::Unavailable,
+        format!("repository '{name}' is stored on another host's disk and cannot be served by this replica"),
+    )
+    .with_retry_after(1000)
 }
 
 /// Validates `owner/name` (exactly two segments) and returns the pieces.
@@ -152,6 +174,8 @@ impl RepoManager {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(e.into());
         }
+        // Registered with the exact configuration `init` wrote: any other replica can then open the repository.
+        let config_json = std::fs::read_to_string(dir.join(".ag").join("config.json")).map_err(ApiError::internal)?;
         let row = RepoRow {
             name: name.to_string(),
             namespace: namespace.to_string(),
@@ -161,9 +185,51 @@ impl RepoManager {
             created_by: actor.to_string(),
             quota,
             object_bytes: 0,
+            config_json,
         };
         self.control.insert_repo(&row)?;
         Ok(row)
+    }
+
+    /// Makes sure `<data_dir>/repos/<name>/.ag/config.json` exists, writing it from the registry if this replica
+    /// has never seen the repository. Only a repository whose metadata is in PostgreSQL and whose objects are in
+    /// S3 is shared between replicas; for anything else the files exist on one host only, and writing a
+    /// configuration here would create a second, *empty* repository — so that case is an error instead.
+    fn ensure_local_marker(&self, row: &RepoRow) -> ApiResult<()> {
+        let dir = self.dir(&row.name);
+        let marker = dir.join(".ag").join("config.json");
+        if marker.is_file() {
+            return Ok(());
+        }
+        let text = if row.config_json.is_empty() {
+            // Registered before the registry kept configurations: rebuild what `create` would have written.
+            let template = self.storage.as_ref().ok_or_else(|| missing_local_data(&row.name))?;
+            let config = RepoConfig {
+                format: 1,
+                namespace: Namespace::new(&row.namespace).map_err(|e| ApiError::internal(e.to_string()))?,
+                default_stream: StreamName::new(&row.default_stream).map_err(|e| ApiError::internal(e.to_string()))?,
+                storage: Some(derive_storage(template, &row.name)),
+            };
+            serde_json::to_string_pretty(&config).map_err(ApiError::internal)?
+        } else {
+            row.config_json.clone()
+        };
+        let config: RepoConfig = serde_json::from_str(&text).map_err(ApiError::internal)?;
+        let storage = config.storage();
+        let shared =
+            matches!(storage.meta, MetaConfig::Postgres { .. }) && matches!(storage.objects, ObjectsConfig::S3 { .. });
+        if !shared {
+            return Err(missing_local_data(&row.name));
+        }
+        let ag = dir.join(".ag");
+        std::fs::create_dir_all(&ag).map_err(ApiError::internal)?;
+        // Write-then-rename: a concurrent request on this replica sees the whole file or none.
+        let tmp = ag.join(format!("config.json.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, text.as_bytes())
+            .and_then(|()| std::fs::rename(&tmp, &marker))
+            .map_err(ApiError::internal)?;
+        tracing::info!(repo = %row.name, "opened a repository created by another replica");
+        Ok(())
     }
 
     /// Returns the pool for `name`, opening the repository on first use.
@@ -172,9 +238,10 @@ impl RepoManager {
         if let Some(p) = self.open.lock().unwrap_or_else(|e| e.into_inner()).get(name) {
             return Ok(p.clone());
         }
-        if self.control.repo(name)?.is_none() {
+        let Some(row) = self.control.repo(name)? else {
             return Err(ApiError::not_found(format!("repository '{name}' not found")));
-        }
+        };
+        self.ensure_local_marker(&row)?;
         let dir = self.dir(name);
         let first = Repository::open_with_clock(&dir, self.clock.clone())?;
         let mut handles = vec![Arc::new(first)];

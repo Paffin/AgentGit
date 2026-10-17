@@ -100,8 +100,10 @@ impl App {
             repo,
             topics: req.topics,
             cursor: start,
+            live_after: first.latest_seq,
             buffer: VecDeque::new(),
             last_sent: Instant::now(),
+            last_credential_check: Instant::now(),
             heartbeat,
             done: false,
             shutdown: self.shutdown_signal(),
@@ -114,7 +116,20 @@ impl App {
                 }
                 if let Some(ev) = st.buffer.pop_front() {
                     st.last_sent = Instant::now();
+                    if ev.seq > st.live_after {
+                        // Only events recorded after the subscription began measure the live path (not a replay).
+                        let lag_ms = st.app.clock.now().as_millis().saturating_sub(ev.timestamp_ms).max(0);
+                        st.app.metrics.event_lag.observe(lag_ms as f64 / 1000.0);
+                    }
                     return Some((Ok(ev), st));
+                }
+                // A credential revoked while a stream is open ends the stream, on any replica, within seconds.
+                if st.last_credential_check.elapsed() >= CREDENTIAL_RECHECK {
+                    st.last_credential_check = Instant::now();
+                    if let Err(e) = st.app.auth.still_active(&st.call.principal).await {
+                        st.done = true;
+                        return Some((Err(e), st));
+                    }
                 }
                 if st.call.principal.expires_at_ms > 0
                     && st.app.clock.now().as_millis() >= st.call.principal.expires_at_ms
@@ -179,14 +194,20 @@ impl Drop for GaugeGuard {
     }
 }
 
+/// How often an open event stream checks that its credential is still valid.
+const CREDENTIAL_RECHECK: Duration = Duration::from_secs(5);
+
 struct FeedState {
     app: App,
     call: Call,
     repo: String,
     topics: Vec<String>,
     cursor: u64,
+    /// Events with a higher `seq` were recorded after the subscription began.
+    live_after: u64,
     buffer: VecDeque<v1::Event>,
     last_sent: Instant,
+    last_credential_check: Instant,
     heartbeat: Duration,
     done: bool,
     shutdown: tokio::sync::watch::Receiver<bool>,

@@ -6,9 +6,8 @@
 //! Repository-scoped operations then go through [`App::with_repo`], which
 //! authorizes, rate limits and runs the engine call on a blocking thread.
 
-use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -19,14 +18,13 @@ use tokio::sync::{Notify, Semaphore};
 
 use crate::auth::{Authenticator, Principal};
 use crate::authz::{Authorizer, Binding, Cap};
+use crate::cluster::{Bus, BusMetrics, Local, Signal};
 use crate::config::ServerConfig;
 use crate::control::Control;
 use crate::error::{ApiError, ApiResult};
 use crate::limits::RateLimiter;
 use crate::metrics::Metrics;
 use crate::repos::RepoManager;
-
-const BINDINGS_TTL: Duration = Duration::from_secs(5);
 
 /// What a transport extracted from a request before the operation runs.
 #[derive(Clone, Debug, Default)]
@@ -92,13 +90,15 @@ pub struct AppState {
     /// Set when the server begins shutting down; long-lived streams end.
     shutdown: tokio::sync::watch::Sender<bool>,
     bindings: Mutex<Option<BindingsCache>>,
-    /// Repositories that may have queued jobs (a hint, rebuilt by scanning).
-    pub(crate) job_repos: Mutex<std::collections::BTreeSet<String>>,
-    /// Wakes workers long-polling for jobs.
-    pub(crate) job_notify: Notify,
+    /// What waits inside this process (event feeds, job claimers, the bindings cache epoch).
+    pub(crate) local: Arc<Local>,
     pub(crate) job_rescan: Mutex<Instant>,
-    bindings_epoch: AtomicU64,
-    notifiers: Mutex<HashMap<String, Arc<Notify>>>,
+    /// Tells the other replicas of this installation what changed (inert on SQLite).
+    bus: Bus,
+    /// Name of this replica (logs, metrics).
+    pub replica_id: String,
+    /// Set from SIGTERM until exit: `/readyz` says "not ready" so balancers stop sending requests.
+    draining: AtomicBool,
 }
 
 /// Cheap, clonable handle to the shared state.
@@ -110,6 +110,29 @@ impl std::ops::Deref for App {
     fn deref(&self) -> &AppState {
         &self.0
     }
+}
+
+/// `server.replica_id`, else `$HOSTNAME` (the pod name on Kubernetes), else random.
+fn resolve_replica_id(cfg: &ServerConfig) -> String {
+    let clean = |s: &str| -> Option<String> {
+        let s: String = s
+            .trim()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' })
+            .take(63)
+            .collect();
+        (!s.is_empty()).then_some(s)
+    };
+    cfg.server
+        .replica_id
+        .as_deref()
+        .and_then(clean)
+        .or_else(|| std::env::var("HOSTNAME").ok().as_deref().and_then(clean))
+        .unwrap_or_else(|| format!("r-{}", random_hex()))
+}
+
+fn random_hex() -> String {
+    ag_crypto::random_bytes::<4>().map(hex::encode).unwrap_or_else(|_| format!("{:08x}", std::process::id()))
 }
 
 /// Parses `name=value,name2=value2` (the `OTEL_EXPORTER_OTLP_HEADERS` format).
@@ -139,7 +162,13 @@ impl App {
     /// Full control: explicit clock and bootstrap token (tests, embedding).
     pub fn with_options(cfg: ServerConfig, clock: Arc<dyn Clock>, bootstrap_token: Option<String>) -> ApiResult<Self> {
         std::fs::create_dir_all(&cfg.server.data_dir).map_err(ApiError::internal)?;
-        let control = Arc::new(Control::open(&cfg.server.data_dir.join("control.db"), clock.clone())?);
+        let control = Arc::new(Control::from_config(&cfg, clock.clone())?);
+        if cfg.control.is_postgres() && !cfg.repos_are_shared() {
+            tracing::warn!(
+                "the control database is shared (PostgreSQL) but repositories are stored on this host's disk: run \
+                 exactly one replica, or set [repos.storage] to PostgreSQL metadata and S3 objects"
+            );
+        }
         let auth = Authenticator::with_bootstrap(control.clone(), clock.clone(), &cfg.auth, bootstrap_token)?;
         let repos = RepoManager::new(
             &cfg.server.data_dir,
@@ -170,6 +199,27 @@ impl App {
         });
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
+        let replica_id = resolve_replica_id(&cfg);
+        let local = Arc::new(Local::default());
+        // The bus's origin must differ between processes even if two were misconfigured with one replica id.
+        let bus = Bus::start(
+            control.clone(),
+            format!("{replica_id}.{}", random_hex()),
+            local.clone(),
+            BusMetrics {
+                notices: metrics.cluster_notices.clone(),
+                listener_up: metrics.cluster_listener_up.clone(),
+                resyncs: metrics.cluster_resyncs.clone(),
+            },
+        );
+        let (stored_schema, _) = control.schema_versions()?;
+        metrics.control_schema_version.set(stored_schema);
+        let backend = match control.kind() {
+            crate::control::ControlKind::Sqlite => "sqlite",
+            crate::control::ControlKind::Postgres => "postgres",
+        };
+        metrics.replica_info.with_label_values(&[&replica_id, env!("CARGO_PKG_VERSION"), backend]).set(1);
+        tracing::info!(replica = %replica_id, control = backend, control_schema = stored_schema, "control plane ready");
         Ok(Self(Arc::new(AppState {
             cfg,
             clock,
@@ -183,11 +233,11 @@ impl App {
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,
             bindings: Mutex::new(None),
-            job_repos: Mutex::new(std::collections::BTreeSet::new()),
-            job_notify: Notify::new(),
+            local,
             job_rescan: Mutex::new(Instant::now()),
-            bindings_epoch: AtomicU64::new(0),
-            notifiers: Mutex::new(HashMap::new()),
+            bus,
+            replica_id,
+            draining: AtomicBool::new(false),
         })))
     }
 
@@ -280,12 +330,14 @@ impl App {
 
     // ---- authorization ------------------------------------------------------------
 
-    /// Role bindings, cached briefly.
+    /// Role bindings, cached for at most `control.bindings_ttl_ms` (and dropped at once when this or another
+    /// replica changes a binding).
     pub async fn bindings(&self) -> ApiResult<Arc<Vec<Binding>>> {
-        let epoch = self.bindings_epoch.load(Ordering::Acquire);
+        let epoch = self.local.bindings_epoch.load(Ordering::Acquire);
+        let ttl = Duration::from_millis(self.cfg.control.bindings_ttl_ms);
         if let Some((at, e, b)) = &*self.bindings.lock().unwrap_or_else(|e| e.into_inner())
             && *e == epoch
-            && at.elapsed() < BINDINGS_TTL
+            && at.elapsed() < ttl
         {
             return Ok(b.clone());
         }
@@ -297,9 +349,10 @@ impl App {
         Ok(loaded)
     }
 
-    /// Call after changing role bindings so the change is effective at once.
+    /// Call after changing role bindings so the change is effective at once — here, and on the other replicas.
     pub fn invalidate_bindings(&self) {
-        self.bindings_epoch.fetch_add(1, Ordering::AcqRel);
+        self.local.invalidate_bindings();
+        self.bus.publish(Signal::Bindings);
     }
 
     /// Checks `cap` on `repo` (and optionally `stream`) for the caller.
@@ -332,13 +385,18 @@ impl App {
 
     // ---- repository access --------------------------------------------------------
 
+    /// A repository's registry row (off the async threads: the control database may be a network service).
+    pub async fn repo_row(&self, name: &str) -> ApiResult<Option<crate::control::RepoRow>> {
+        let (control, name) = (self.control.clone(), name.to_string());
+        tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)?
+    }
+
     /// `stream` if given, otherwise the repository's default stream (for reads, where "the stream" is obvious).
     pub async fn stream_or_default(&self, repo: &str, stream: &str) -> ApiResult<String> {
         if !stream.is_empty() {
             return Ok(stream.to_string());
         }
-        let (control, name) = (self.control.clone(), repo.to_string());
-        let row = tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)??;
+        let row = self.repo_row(repo).await?;
         // An unknown repository is reported by the authorization that follows, without revealing anything.
         Ok(row.map(|r| r.default_stream).unwrap_or_else(|| self.cfg.repos.default_stream.clone()))
     }
@@ -351,11 +409,7 @@ impl App {
         F: FnOnce(&Repository, &Identity) -> ApiResult<T> + Send + 'static,
     {
         self.authorize(call, repo, cap, stream).await?;
-        let row = {
-            let control = self.control.clone();
-            let name = repo.to_string();
-            tokio::task::spawn_blocking(move || control.repo(&name)).await.map_err(ApiError::internal)??
-        };
+        let row = self.repo_row(repo).await?;
         let quota = row.as_ref().map(|r| r.quota);
         self.repo_rate_limit(call, repo, quota.as_ref())?;
         let repos = self.0.clone();
@@ -393,9 +447,45 @@ impl App {
 
     // ---- events -----------------------------------------------------------------------
 
-    /// Tells long-lived streams (event subscriptions) to end.
+    /// Tells long-lived streams (event subscriptions) and job long-polls to end.
     pub fn begin_shutdown(&self) {
         let _ = self.shutdown.send(true);
+    }
+
+    /// Tells the other replicas that `repo` may have claimable jobs (and wakes local claimers).
+    pub(crate) fn announce_jobs(&self, repo: &str) {
+        self.local.note_jobs(repo);
+        self.bus.publish(Signal::Jobs(repo.to_string()));
+    }
+
+    /// Whether shutdown has begun.
+    pub fn is_shutting_down(&self) -> bool {
+        *self.shutdown.borrow()
+    }
+
+    /// Starts draining: `/readyz` reports "not ready" from now on, so a load balancer stops sending new
+    /// requests while this replica keeps serving the ones it has.
+    pub fn begin_drain(&self) {
+        self.draining.store(true, Ordering::Release);
+        self.metrics.draining.set(1);
+    }
+
+    /// Whether the replica is draining.
+    pub fn is_draining(&self) -> bool {
+        self.draining.load(Ordering::Acquire)
+    }
+
+    /// Why this replica should not receive new requests, if it should not: draining, or the control database
+    /// does not answer within two seconds. (`/healthz` is the separate, database-free liveness check.)
+    pub async fn not_ready_reason(&self) -> Option<&'static str> {
+        if self.is_draining() {
+            return Some("draining");
+        }
+        let control = self.control.clone();
+        match tokio::time::timeout(Duration::from_secs(2), tokio::task::spawn_blocking(move || control.ping())).await {
+            Ok(Ok(Ok(()))) => None,
+            _ => Some("control database unavailable"),
+        }
     }
 
     /// A receiver that reports `true` once shutdown began.
@@ -405,14 +495,13 @@ impl App {
 
     /// The wake-up handle of a repository's event feed.
     pub fn notifier(&self, repo: &str) -> Arc<Notify> {
-        self.notifiers.lock().unwrap_or_else(|e| e.into_inner()).entry(repo.to_string()).or_default().clone()
+        self.local.notifier(repo)
     }
 
-    /// Wakes subscribers of `repo`.
+    /// Wakes subscribers of `repo`, on this replica and (best effort) on the others.
     pub fn notify(&self, repo: &str) {
-        if let Some(n) = self.notifiers.lock().unwrap_or_else(|e| e.into_inner()).get(repo) {
-            n.notify_waiters();
-        }
+        self.local.wake_repo(repo);
+        self.bus.publish(Signal::Events(repo.to_string()));
     }
 }
 

@@ -1,0 +1,151 @@
+name: Security
+
+# Supply-chain and vulnerability gates. They run on every pull request and push to main, and once a day
+# (the advisory databases change without any commit of ours). Policy, the exception process and how to reproduce
+# each job locally: docs/operations/supply-chain.md. Accepted findings, with an owner and an expiry date:
+# security/exceptions.toml.
+#
+# What each job guards:
+#   cargo-deny        Rust: RustSec advisories (also yanked/unmaintained/unsound), licences against the Apache-2.0
+#                     policy, duplicate and wildcard dependencies, crates.io as the only source.
+#   npm / pip / go    the web UI, the TypeScript SDK, the Python SDK and the Go orchestrator: fail on a high or
+#                     critical advisory (any advisory for Python, whose scanner reports no severity).
+#   dependency-review the change a pull request makes to the dependency graph.
+#   hygiene           workflow pinning/permissions, expiry of accepted exceptions, THIRD_PARTY_LICENSES freshness.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-deny:
+    name: cargo-deny (${{ matrix.manifest }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manifest: [Cargo.toml, fuzz/Cargo.toml]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: ${{ matrix.manifest }}
+          command: check
+          command-arguments: --hide-inclusion-graph
+
+  npm-audit:
+    name: npm audit (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [apps/web, sdk/typescript]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # `npm audit` exits non-zero for any finding; the gate below applies the severity threshold and the
+      # accepted exceptions instead, so the raw JSON is only captured here.
+      - name: Production dependencies
+        working-directory: ${{ matrix.dir }}
+        run: |
+          npm audit --omit=dev --json > "$RUNNER_TEMP/npm-prod.json" || true
+          python3 "$GITHUB_WORKSPACE/scripts/security_exceptions.py" npm "$RUNNER_TEMP/npm-prod.json"
+      - name: All dependencies (build and test tooling too)
+        working-directory: ${{ matrix.dir }}
+        run: |
+          npm audit --json > "$RUNNER_TEMP/npm-all.json" || true
+          python3 "$GITHUB_WORKSPACE/scripts/security_exceptions.py" npm "$RUNNER_TEMP/npm-all.json"
+
+  pip-audit:
+    name: pip-audit (sdk/python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Audit the locked runtime dependencies
+        working-directory: sdk/python
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-hashes -o "$RUNNER_TEMP/py-requirements.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/py-requirements.txt" --no-deps --disable-pip --format json \
+            -o "$RUNNER_TEMP/pip-audit.json" || true
+          python3 "$GITHUB_WORKSPACE/scripts/security_exceptions.py" pip "$RUNNER_TEMP/pip-audit.json"
+
+  govulncheck:
+    name: govulncheck (services/agent-orchestrator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      # govulncheck reports a vulnerability only when the code can reach the vulnerable function.
+      - name: govulncheck
+        working-directory: services/agent-orchestrator
+        env:
+          GOVULNCHECK_VERSION: v1.1.4
+        run: |
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          "$(go env GOPATH)/bin/govulncheck" -format json ./... > "$RUNNER_TEMP/govulncheck.json" || true
+          python3 "$GITHUB_WORKSPACE/scripts/security_exceptions.py" go "$RUNNER_TEMP/govulncheck.json"
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+
+  hygiene:
+    name: workflows, exceptions, licence file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: pip install pyyaml
+      - name: Workflows pin their actions, declare permissions, avoid risky triggers
+        run: python3 scripts/check_workflows.py
+      - name: Accepted exceptions have not expired and match the scanner configuration
+        run: |
+          python3 scripts/security_exceptions.py check
+          python3 -m unittest scripts/test_security_exceptions.py
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-about
+      - name: THIRD_PARTY_LICENSES.md is up to date with Cargo.lock
+        run: scripts/third_party_licenses.sh --check

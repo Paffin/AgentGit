@@ -1,0 +1,109 @@
+{
+ "bootstrap_token": "compat-bootstrap-token-0123456789abcdef",
+ "created_at_ms": 1792276300795,
+ "credential_ids": {
+  "alice": "cred_afe4989fe3e6cfd2",
+  "bot": "cred_f7e2e9da8747cf88",
+  "revoked": "cred_db64c85df08546b2"
+ },
+ "format": "agentgit-compat-server-expected-v1",
+ "repos": [
+  [
+   "acme/docs",
+   "trunk",
+   "acme/docs"
+  ],
+  [
+   "acme/web",
+   "main",
+   "acme/web"
+  ]
+ ],
+ "roles": [
+  [
+   "agent:bot",
+   "acme/web",
+   "writer"
+  ],
+  [
+   "group:platform",
+   "*",
+   "admin"
+  ],
+  [
+   "user:alice",
+   "acme/*",
+   "writer"
+  ],
+  [
+   "user:bob",
+   "acme/web",
+   "reader"
+  ]
+ ],
+ "tokens": {
+  "alice": "agt_afe4989fe3e6cfd2_VQJqSxr12oKmTSBG01U17RKt9GEULKSCva1TnqulKxM",
+  "bot": "agt_f7e2e9da8747cf88_e4z2fisP7MYzLRIBrtYIepqcfAIwVR8aNWUwOuN7l44",
+  "revoked": "agt_db64c85df08546b2_Ch-ABLczUbM7T9jAc1I9S4rylHqpi_JznguwIFBBpt0"
+ },
+ "whoami": {
+  "alice": {
+   "credential_id": "cred_afe4989fe3e6cfd2",
+   "expires_at_ms": 1792362700795,
+   "identity": "user:alice",
+   "kind": "user",
+   "method": "token",
+   "roles": [
+    "acme/*:writer"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "streams": []
+   }
+  },
+  "bootstrap": {
+   "credential_id": "bootstrap",
+   "expires_at_ms": 0,
+   "identity": "user:bootstrap-admin",
+   "kind": "user",
+   "method": "bootstrap",
+   "roles": [
+    "*:admin"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "streams": []
+   }
+  },
+  "bot": {
+   "credential_id": "cred_f7e2e9da8747cf88",
+   "expires_at_ms": 1792279900816,
+   "identity": "agent:bot",
+   "kind": "agent",
+   "method": "token",
+   "roles": [
+    "acme/web:writer"
+   ],
+   "scope": {
+    "operations": [
+     "repo.read",
+     "objects.read",
+     "objects.write",
+     "publish",
+     "history.read",
+     "tree.read",
+     "stream.read",
+     "stream.cas"
+    ],
+    "repos": [
+     "acme/web"
+    ],
+    "streams": [
+     "main"
+    ]
+   }
+  }
+ }
+}

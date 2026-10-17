@@ -49,9 +49,12 @@ const tabs = computed<Tab[]>(() => {
 // On a narrow screen the tab strip scrolls sideways: keep the current tab in view instead of off to one side.
 const strip = ref<HTMLElement | null>(null)
 function revealCurrent() {
-  strip.value
-    ?.querySelector<HTMLElement>('.tab.current')
-    ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  // Scroll the strip itself (not scrollIntoView, which would also move the page and the keyboard's starting point).
+  const box = strip.value
+  const tab = box?.querySelector<HTMLElement>('.tab.current')
+  if (!box || !tab) return
+  const left = tab.getBoundingClientRect().left - box.getBoundingClientRect().left + box.scrollLeft
+  box.scrollLeft = Math.max(0, left - (box.clientWidth - tab.offsetWidth) / 2)
 }
 onMounted(revealCurrent)
 watch(

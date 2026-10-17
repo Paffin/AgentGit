@@ -652,8 +652,10 @@ impl Accepts {
     }
 }
 
-/// The Content-Security-Policy of every UI response: scripts and styles only from the server itself. The browser
-/// may talk to the server and, when redirect sign-in is configured, to the identity providers' origins.
+/// The Content-Security-Policy of every UI response: scripts only from the server itself (no inline script, no
+/// eval), styles from the server plus inline style attributes (WebKit refuses the app's CSSOM-driven styles under a
+/// stricter `style-src`; the policy test in CI proved it). The browser may talk to the server and, when redirect
+/// sign-in is configured, to the identity providers' origins.
 fn csp(cfg: &ServerConfig) -> HeaderValue {
     let mut connect = vec!["'self'".to_string()];
     for l in &cfg.ui.login {
@@ -666,7 +668,7 @@ fn csp(cfg: &ServerConfig) -> HeaderValue {
         }
     }
     let policy = format!(
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; \
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; \
          connect-src {}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
         connect.join(" ")
     );
@@ -754,7 +756,8 @@ mod tests {
         let plain = csp(&cfg).to_str().unwrap().to_string();
         assert!(plain.contains("connect-src 'self';"), "{plain}");
         assert!(plain.contains("script-src 'self';"));
-        assert!(!plain.contains("unsafe-inline") && !plain.contains("unsafe-eval"));
+        assert!(!plain.contains("unsafe-eval") && !plain.contains("script-src 'self' 'unsafe-inline'"));
+        assert!(plain.contains("style-src 'self' 'unsafe-inline';"));
         cfg.ui.login.push(UiLogin {
             token_endpoint: Some("https://tokens.example.net/oauth/token".into()),
             ..UiLogin::new("https://idp.example.com/realms/acme", "web")

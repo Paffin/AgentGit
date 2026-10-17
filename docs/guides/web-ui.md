@@ -12,28 +12,33 @@ client. Nothing in the UI can do what the API would refuse.
 
 ## Turning it on
 
-Build the UI once and point the server at the result:
-
-```bash
-cd apps/web
-npm ci
-npm run build                 # writes apps/web/dist
-```
+`ag-server` serves the UI itself: the build of `apps/web` is compiled into the binary (cargo feature `ui`, on by
+default), so one file is the whole product. Release and CI builds run `scripts/build_ui.sh` (Node 22.18 or newer:
+`npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p ag-server`.
+A server built without the UI build still compiles and runs; a browser then sees a page that says how to get the
+UI (and API clients keep their JSON 404). If you built the UI by hand after a first cargo build, `touch
+crates/ag-server/build.rs` (Cargo cannot watch a directory that did not exist yet; `build_ui.sh` does it for you).
 
 ```toml
 # ag-server.toml
-[server]
-listen  = "127.0.0.1:8080"
-web_dir = "/srv/agentgit/web"   # a copy of apps/web/dist
+[ui]
+enabled = true                  # default; false leaves only the API
+# dir = "/srv/agentgit/web"     # serve a copy of apps/web/dist from disk instead of the embedded build
 ```
 
-Start the server and open `http://127.0.0.1:8080/`. Requests under `/v1/` and `/agwp.` always reach the API;
-every other path serves the app (it handles its own routes), so a bookmarked URL works after a reload.
+`server.web_dir` is the old spelling of `ui.dir` and still works. Open `http://127.0.0.1:8080/`. Requests under
+`/v1/` and `/agwp.`, and `/metrics`, `/healthz`, `/readyz` and `/openapi.json`, always reach the server (a path
+under those prefixes that matches nothing is the API's JSON 404, never the page); every other path that is not a
+file serves the app, so a bookmarked URL works after a reload. Missing assets are 404s.
 
-The server sends the UI with a strict `Content-Security-Policy`
-(`default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'`),
-`X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The UI is built to work under exactly that:
-it loads nothing from any other origin.
+Hashed assets are sent `Cache-Control: public, max-age=31536000, immutable`; the page and everything else is
+`no-cache` with an `ETag` (304 on revalidation); brotli or gzip is chosen by `Accept-Encoding`. Every UI response
+carries `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;
+font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors
+'none'` (no inline script and no eval; inline style attributes are allowed because WebKit refuses the app's styles
+under a stricter `style-src`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+`X-Frame-Options: DENY`. With redirect sign-in configured, `connect-src` also names exactly the identity providers'
+origins. The UI finds the API on its own origin; nothing is configured.
 
 To try it without setting anything up, `npm run demo:server` in `apps/web` starts a throw-away server with a
 realistic team and four agents, and prints a token for each of them (see the
@@ -41,14 +46,40 @@ realistic team and four agents, and prints a token for each of them (see the
 
 ## Signing in
 
-Paste a token. Tokens are the same ones the CLI and SDKs use: a scoped credential (`agt_…`) minted by an
-administrator (`POST /v1/credentials`, or from the **Admin → Credentials** page), an OIDC ID or access token if
-your organisation configured single sign-on, or the bootstrap token for first-time setup. After signing in you see
-who the server thinks you are, what roles you hold, and when the credential expires.
+**Single sign-on (redirect).** When the server lists an identity provider, the sign-in page offers "Sign in with
+<name>": OpenID Connect authorization code with PKCE (S256), `state` and `nonce` checked by the browser, then the
+code is exchanged at the provider's token endpoint. The server still verifies every token with the provider's keys
+(`GET /v1/auth/config`, public, tells the UI which providers exist; see the [protocol](../protocol/agwp-v1.md)).
 
-The token stays in this tab's session storage (closing the tab signs you out), is sent only in an
-`Authorization` header, and never appears in a URL. If the credential expires or is revoked while you work, the
-session ends with an explanation instead of a page full of errors.
+```toml
+[[auth.oidc]]                                  # makes the server accept the provider's tokens
+issuer = "https://idp.example.com/realms/acme"
+audience = "agentgit-web"                      # = the UI's client_id when the ID token is presented
+group_roles = [{ group = "platform", role = "admin", repo = "acme/*" }]
+
+[[ui.login]]                                   # makes the UI offer the button
+issuer = "https://idp.example.com/realms/acme"
+client_id = "agentgit-web"                     # a public client; redirect URI: <UI origin>/auth/callback
+# scopes = ["openid", "profile"]; token = "id_token" | "access_token"
+# authorization_endpoint / token_endpoint / end_session_endpoint: otherwise read from discovery
+```
+
+The provider must allow requests from the UI's origin (CORS) on its discovery and token endpoints. If its token
+endpoint is on another origin than the issuer, set `token_endpoint` so the Content-Security-Policy can allow it.
+
+*Trade-off, on purpose:* the token is kept **in memory only**, never in `localStorage` or `sessionStorage` (only the
+short-lived PKCE/state/nonce survive the redirect, deleted when the callback is handled). So a script injected into
+the page cannot read a stored credential, but a reload (or a second tab) asks the provider again, silently
+(`prompt=none`: instant while the provider's own session lives, otherwise you are asked to sign in). A refresh token,
+when the provider issues one, renews the session silently a minute before expiry; without one you are warned and
+the session ends at expiry with an explanation. Signing out also ends the provider's session when it offers a
+logout endpoint. Redirect sign-in needs a secure context (HTTPS or localhost) for PKCE.
+
+**Paste a token.** Still available next to it, and the way for scoped credentials: `agt_…` tokens minted by an
+administrator (`POST /v1/credentials`, or **Admin → Credentials**), an OIDC ID or access token, or the bootstrap token.
+A pasted token stays in this tab's session storage (closing the tab signs you out), is sent only in an
+`Authorization` header and never appears in a URL. If a credential expires or is revoked while you work, the session
+ends with an explanation instead of a page full of errors.
 
 ## The live board
 
@@ -144,14 +175,28 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
 - **Settings and quota**, **GC and fsck** (garbage collection always starts as a *dry run*; the real run is only offered
   after one, behind a confirmation), **Audit log** (filterable, with a button that verifies the hash chain) and **Pins**.
 
-## Keyboard and accessibility
+## Keyboard, accessibility and small screens
 
 Everything works without a mouse: a skip link, one tab stop per tab list with arrow keys, dialogs that trap focus and give
 it back, a visible focus ring everywhere, and screen-reader announcements for route changes, toasts and the live
 indicator. State is never colour alone: states have icons and words, diffs have `+`/`−`. The UI follows your system's
-colour scheme and reduced-motion setting. The test suite runs an automated accessibility audit (axe-core, WCAG 2.x A
-and AA) on every main screen in both themes; automated checks do not replace trying it with your assistive technology,
-and reports of problems are welcome.
+colour scheme and `prefers-reduced-motion`. Below 820 px wide (or on a touch screen) every control is at least 44 px and
+the header, tab strips and tables adapt: tables that do not fit scroll sideways as a labelled region the keyboard can reach.
+
+What is tested, and what is not (honestly):
+
+- **axe-core** (WCAG 2.x A and AA plus best practices) runs on every main screen in the light and the dark theme, at
+  desktop, tablet (768) and phone (390) size, plus the error screens and the main dialogs; serious or critical findings
+  fail the build. Findings fixed on the way: a table that scrolls without keyboard access, an account button with no
+  name on a phone, a tab-strip that hid its current tab.
+- **Layout** is asserted at 768 and 390 px in Chromium (no page-wide horizontal scroll on any route, header and menus fit,
+  every repository tab reachable, dialogs fit and keep their action in reach, controls at least 40 px).
+- **Browsers:** the suite is wired to run in Chromium, Firefox and WebKit in CI (`web.yml`). See `dev/handoff/web.md` for
+  the state of the Firefox and WebKit jobs; a browser that is not green there is not claimed to work.
+- Automated checks find only part of the problems. Keyboard-only flows of the proposal page and the dialogs are tested
+  (`keyboard.spec.ts`); a pass with a real screen reader (NVDA, VoiceOver, TalkBack) and on real phones has **not** been
+  done. There is no command palette. Known minor issues: the tab strips of a repository have no scroll hint other than the
+  cut-off tab; the diff and blame views are read-only on a phone (they scroll sideways inside their own box).
 
 ## Security notes
 
@@ -171,5 +216,4 @@ and reports of problems are welcome.
 ## Not in the UI
 
 - Writing code. The UI shows and steers; agents and people write through workspaces, the CLI and the SDKs.
-- Redirect-based single sign-on. OIDC works by pasting an ID or access token.
 - Email or chat notifications. The board is live while it is open.

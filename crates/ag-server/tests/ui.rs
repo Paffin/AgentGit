@@ -158,7 +158,9 @@ async fn every_ui_response_carries_a_strict_content_security_policy() {
         ] {
             assert!(csp.contains(must), "{path}: {csp}");
         }
-        assert!(!csp.contains("unsafe-inline") && !csp.contains("unsafe-eval") && !csp.contains('*'), "{path}: {csp}");
+        // Scripts: only the server's own files. Styles may be inline (WebKit needs it); nothing is ever eval'd.
+        assert!(!csp.contains("unsafe-eval") && !csp.contains('*'), "{path}: {csp}");
+        assert!(!csp.contains("script-src 'self' 'unsafe-inline'"), "{path}: {csp}");
         assert_eq!(r.headers["x-content-type-options"], "nosniff", "{path}");
         assert_eq!(r.headers["referrer-policy"], "no-referrer", "{path}");
         assert_eq!(r.headers["x-frame-options"], "DENY", "{path}");

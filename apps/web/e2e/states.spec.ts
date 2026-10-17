@@ -63,6 +63,9 @@ test.describe('loading', () => {
     await page.addInitScript(() => {
       const w = window as unknown as { __cls: number }
       w.__cls = 0
+      // Layout-shift entries exist only in Chromium (Firefox and WebKit warn "unsupported entryTypes"): there the
+      // observer is not installed and the measure stays 0, so these two tests check the rest of their story only.
+      if (!PerformanceObserver.supportedEntryTypes?.includes('layout-shift')) return
       new PerformanceObserver((list) => {
         for (const e of list.getEntries() as unknown as {
           value: number
@@ -86,6 +89,9 @@ test.describe('loading', () => {
     await page.addInitScript(() => {
       const w = window as unknown as { __cls: number }
       w.__cls = 0
+      // Layout-shift entries exist only in Chromium (Firefox and WebKit warn "unsupported entryTypes"): there the
+      // observer is not installed and the measure stays 0, so these two tests check the rest of their story only.
+      if (!PerformanceObserver.supportedEntryTypes?.includes('layout-shift')) return
       new PerformanceObserver((list) => {
         for (const e of list.getEntries() as unknown as {
           value: number

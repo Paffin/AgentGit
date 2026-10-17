@@ -33,7 +33,7 @@ test.describe('the UI served from the binary', () => {
     expect(h['cache-control']).toBe('no-cache')
     expect(h['etag']).toBeTruthy()
     expect(h['content-security-policy']).toContain("script-src 'self'")
-    expect(h['content-security-policy']).not.toContain('unsafe-inline')
+    expect(h['content-security-policy']).not.toMatch(/script-src[^;]*unsafe-inline/)
     expect(h['x-content-type-options']).toBe('nosniff')
     expect(h['content-encoding']).toBe('br')
     const html = await page.text()

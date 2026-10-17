@@ -144,7 +144,7 @@ message = "agentgit.sig.v1\0" ‖ len(domain):u8 ‖ domain ‖ payload        d
   task_id`. (`created_at` is Unix milliseconds.) The signature is checked against the key registered for the
   agent, and only the agent itself may submit it.
 * **Attestations** (workers only): the canonical binary signing bytes are specified in
-  [object-format](../architecture/object-format.md#attestation-signing-bytes).
+  [object-format](../architecture/object-format.md#signatures).
 
 ## Events
 

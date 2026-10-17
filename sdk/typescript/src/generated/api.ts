@@ -38,6 +38,7 @@ export const NAMESPACE_METHODS = {
   },
   history: {
     ancestors: 'history.ancestors',
+    blame: 'history.blame',
     changeset: 'history.changeset',
     log: 'history.log',
     mergeBase: 'history.merge_base',
@@ -195,6 +196,8 @@ export interface Api {
   readonly history: {
     /** Changesets reachable from want but not from have, parents first (`POST /v1/repos/{owner}/{rname}/history/ancestors`, operation `history.ancestors`) */
     ancestors(request: Req<'history.ancestors'>, options?: CallOptions): Promise<Res<'history.ancestors'>>;
+    /** Which changeset introduced each line of a file (follows renames) (`GET /v1/repos/{owner}/{rname}/blame`, operation `history.blame`) */
+    blame(request: Req<'history.blame'>, options?: CallOptions): Promise<Res<'history.blame'>>;
     /** One changeset by revision expression (`GET /v1/repos/{owner}/{rname}/changeset`, operation `history.changeset`) */
     changeset(request: Req<'history.changeset'>, options?: CallOptions): Promise<Res<'history.changeset'>>;
     /** History from a revision, newest first (`GET /v1/repos/{owner}/{rname}/log`, operation `history.log`) */

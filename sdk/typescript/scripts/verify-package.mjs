@@ -37,7 +37,7 @@ for (const [name, m] of [
     m.verifyProvenance(record, m.signProvenance(record, key.privateKey), key.publicKey),
     `${name}: provenance signatures verify`,
   );
-  check(Object.keys(m.OPERATIONS).length === 90, `${name}: 90 operations`);
+  check(Object.keys(m.OPERATIONS).length === 91, `${name}: 91 operations`);
   check(
     new m.AgentGitClient({ baseUrl: 'http://127.0.0.1:1' }).proposals.create instanceof Function,
     `${name}: namespaced methods exist`,

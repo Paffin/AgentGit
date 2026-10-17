@@ -176,6 +176,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/blame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which changeset introduced each line of a file (follows renames) */
+        get: operations["history.blame"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/changeset": {
         parameters: {
             query?: never;
@@ -1341,6 +1358,101 @@ export interface components {
              * @default 0
              */
             timestamp_ms: number;
+        };
+        BlameLine: {
+            /** @default  */
+            author: string;
+            /**
+             * @description True if the walk stopped before finding the real origin.
+             * @default false
+             */
+            boundary: boolean;
+            /**
+             * @description The changeset that introduced it.
+             * @default
+             */
+            changeset: string;
+            /**
+             * Format: int32
+             * @description Line number at the requested revision (1-based).
+             * @default 0
+             */
+            line: number;
+            /**
+             * Format: int32
+             * @description The line's number in that changeset's version (1-based).
+             * @default 0
+             */
+            original_line: number;
+            /**
+             * @description The path the file had in that changeset (differs after a rename).
+             * @default
+             */
+            path: string;
+            /**
+             * @description First line of that changeset's message.
+             * @default
+             */
+            summary: string;
+            /**
+             * @description The line's text without its terminator (lossy UTF-8).
+             * @default
+             */
+            text: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            timestamp_ms: number;
+        };
+        BlameRequest: {
+            /**
+             * Format: int32
+             * @description Only lines first_line..=last_line (1-based); both 0 = the whole file.
+             * @default 0
+             */
+            first_line: number;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            last_line: number;
+            /**
+             * Format: int32
+             * @description Visit at most this many changesets (0 = the server default).
+             * @default 0
+             */
+            max_commits: number;
+            /** @default  */
+            path: string;
+            /** @default  */
+            repo: string;
+            /**
+             * @description Revision expression (default: the repository's default stream).
+             * @default
+             */
+            rev: string;
+        };
+        BlameResponse: {
+            /** @default [] */
+            lines: components["schemas"]["BlameLine"][];
+            /** @default  */
+            path: string;
+            /**
+             * @description The revision, resolved to a changeset id.
+             * @default
+             */
+            rev: string;
+            /**
+             * @description True if max_commits was reached before every line found its origin.
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            visited: number;
         };
         Blocker: {
             /**
@@ -4136,6 +4248,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerifyAuditResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "history.blame": {
+        parameters: {
+            query?: {
+                first_line?: number;
+                last_line?: number;
+                max_commits?: number;
+                path?: string;
+                rev?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlameResponse"];
                 };
             };
             /** @description Error */

@@ -5,7 +5,7 @@ repositories, virtual workspaces, proposals, integration, agents with runs, leas
 execution plane, and the event feed. Import name: `agentgit`.
 
 * **Sync and async with one surface.** `AgentGitClient` (on `httpx.Client`) and `AsyncAgentGitClient` (on
-  `httpx.AsyncClient`) expose the same 90 operations of
+  `httpx.AsyncClient`) expose the same 91 operations of
   [`docs/protocol/openapi.json`](../../docs/protocol/openapi.json), grouped into namespaces named after the operation
   ids (`proposal.create` is `client.proposals.create(...)`, `history.merge_base` is `client.history.merge_base(...)`).
 * **Typed.** Every message is a dataclass in `agentgit.models`, generated from that document; every method takes
@@ -105,7 +105,7 @@ print(status)  # integrated
 | `integration` | `prepare`, `validate`, `integrate`, `attest`, `attestations` |
 | `queue` | `enqueue`, `list`, `run` |
 | `streams` | `list`, `create`, `head`, `cas`, `reflog` |
-| `history` | `resolve`, `log`, `changeset`, `ancestors`, `merge_base` |
+| `history` | `resolve`, `log`, `changeset`, `ancestors`, `merge_base`, `blame` |
 | `tree` | `get`, `list`, `resolve`, `diff`, `file` (returns `bytes`) |
 | `objects` | `missing`, `put` (bytes), `get` (bytes), `verify`, `publish`, plus `put_blob` and `upload` |
 | `operations` | `get` (the recorded outcome of an operation, by operation id or idempotency key) |

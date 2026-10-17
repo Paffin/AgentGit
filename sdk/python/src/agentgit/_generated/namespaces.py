@@ -14,6 +14,9 @@ from agentgit._generated.models import (
     AncestorsResponse,
     Attestation,
     AuditEntry,
+    BlameLine,
+    BlameRequest,
+    BlameResponse,
     Blocker,
     Changeset,
     ClaimJobRequest,
@@ -498,6 +501,20 @@ class HistoryApi:
     ) -> AncestorsResponse:
         """Changesets reachable from want but not from have, parents first (`POST /v1/repos/{owner}/{rname}/history/ancestors`, operation `history.ancestors`)."""
         return self._c._call("history.ancestors", {"repo": repo, "have": have, "page_size": page_size, "page_token": page_token, "want": want}, options, AncestorsResponse)
+
+    def blame(
+        self,
+        *,
+        repo: str,
+        first_line: int | None = None,
+        last_line: int | None = None,
+        max_commits: int | None = None,
+        path: str | None = None,
+        rev: str | None = None,
+        options: CallOptions | None = None,
+    ) -> BlameResponse:
+        """Which changeset introduced each line of a file (follows renames) (`GET /v1/repos/{owner}/{rname}/blame`, operation `history.blame`)."""
+        return self._c._call("history.blame", {"repo": repo, "first_line": first_line, "last_line": last_line, "max_commits": max_commits, "path": path, "rev": rev}, options, BlameResponse)
 
     def changeset(
         self,
@@ -1726,6 +1743,20 @@ class AsyncHistoryApi:
     ) -> AncestorsResponse:
         """Changesets reachable from want but not from have, parents first (`POST /v1/repos/{owner}/{rname}/history/ancestors`, operation `history.ancestors`)."""
         return await self._c._call("history.ancestors", {"repo": repo, "have": have, "page_size": page_size, "page_token": page_token, "want": want}, options, AncestorsResponse)
+
+    async def blame(
+        self,
+        *,
+        repo: str,
+        first_line: int | None = None,
+        last_line: int | None = None,
+        max_commits: int | None = None,
+        path: str | None = None,
+        rev: str | None = None,
+        options: CallOptions | None = None,
+    ) -> BlameResponse:
+        """Which changeset introduced each line of a file (follows renames) (`GET /v1/repos/{owner}/{rname}/blame`, operation `history.blame`)."""
+        return await self._c._call("history.blame", {"repo": repo, "first_line": first_line, "last_line": last_line, "max_commits": max_commits, "path": path, "rev": rev}, options, BlameResponse)
 
     async def changeset(
         self,

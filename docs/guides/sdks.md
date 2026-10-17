@@ -2,7 +2,7 @@
 
 AgentGit has two client SDKs for the [AGWP v1](../protocol/agwp-v1.md) HTTP/JSON API, in
 [`sdk/typescript`](../../sdk/typescript/README.md) (`@agentgit/client`) and
-[`sdk/python`](../../sdk/python/README.md) (`agentgit-client`, imported as `agentgit`). They cover **all 90 operations**
+[`sdk/python`](../../sdk/python/README.md) (`agentgit-client`, imported as `agentgit`). They cover **all 91 operations**
 of [`openapi.json`](../protocol/openapi.json), with the same names and the same rules, and add what a protocol
 description cannot: retries that cannot apply a request twice, deadlines, pagination, an event feed that resumes, and the
 helpers for content ids and signatures.
@@ -490,6 +490,10 @@ The tests need a built `ag-server`; they use `$AG_SERVER_BIN`, then `/home/user/
 `target/debug/ag-server` or `target/release/ag-server` (`cargo build -p ag-server`). Every test file or module starts its
 own server on `127.0.0.1` with a random port and a temporary data directory, and kills it at the end, also when a test
 fails. Nothing leaves the loopback interface.
+
+A binary built before `history.blame` was added answers that route with `no such route`; the three blame tests and the blame
+step of the all-operations tour are then skipped (and reported as skipped), and every other test runs as usual. Nothing else
+is tolerated: any other missing route fails the suite.
 
 Every code block above is a copy of a region of a program in `sdk/*/examples/`; those programs run in the test suites
 (`test/examples.test.ts`, `tests/test_examples.py`), and `sdk/tools/sync_doc_samples.py` rewrites the blocks when an example

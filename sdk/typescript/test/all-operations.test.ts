@@ -1,5 +1,5 @@
 // A tour of EVERY operation of the HTTP API through the SDK, against a real server. A recording
-// fetch maps each request back to its OpenAPI operation id; the final test fails if any of the 90
+// fetch maps each request back to its OpenAPI operation id; the final test fails if any of the 91
 // operations was not reached (or if the server answered "no such route" / 405 for one).
 
 import { readFileSync } from 'node:fs';
@@ -11,6 +11,7 @@ import {
   blobObject,
   buildChangeset,
   generateAgentKey,
+  isAgentGitError,
   putFile,
   signAttestation,
   signProvenance,
@@ -49,6 +50,7 @@ const recording: typeof fetch = async (input, init) => {
 };
 
 let server: RunningServer;
+let blameSupported: boolean | undefined;
 const repo = 'tour/all';
 const ciKey: AgentKey = generateAgentKey();
 let admin: AgentGitClient;
@@ -246,6 +248,21 @@ describe('the tour', () => {
     expect((await alice.operations.get({ repo, idempotency_key: 'tour-publish' })).kind).toBe('publish');
   });
 
+  // history.blame exists in servers built from the commit that added it ("line-level blame") or later.
+  // An older binary answers `no such route`; that is the only failure this test turns into a skip.
+  it('line-level blame', async (ctx) => {
+    try {
+      const blame = await alice.history.blame({ repo, path: 'b/c.txt', rev: 'main' });
+      expect(blame.lines.map((l) => [l.line, l.text, l.path])).toEqual([[1, 'c', 'b/c.txt']]);
+      expect(blame.lines[0]!.changeset).toMatch(/^[0-9a-f]{64}$/);
+      blameSupported = true;
+    } catch (e) {
+      if (!isAgentGitError(e) || e.code !== 'not_found' || !e.message.includes('no such route')) throw e;
+      blameSupported = false;
+      ctx.skip('this ag-server predates history.blame');
+    }
+  });
+
   it('agents, tasks, leases and provenance', async () => {
     const bot = await server.actor('agent:tour-bot', repo, 'writer', { fetch: recording });
     const key = generateAgentKey();
@@ -327,6 +344,7 @@ describe('coverage', () => {
     const reached = new Set(hits.map((h) => h.id));
     const missing = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => !reached.has(id));
     expect(missing).toEqual([]);
-    expect(hits.filter((h) => h.routeMissing)).toEqual([]);
+    const knownGap = (h: Hit) => h.id === 'history.blame' && blameSupported === false;
+    expect(hits.filter((h) => h.routeMissing && !knownGap(h))).toEqual([]);
   });
 });

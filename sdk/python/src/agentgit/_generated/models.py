@@ -14,6 +14,9 @@ __all__ = [
     "AncestorsResponse",
     "Attestation",
     "AuditEntry",
+    "BlameLine",
+    "BlameRequest",
+    "BlameResponse",
     "Blocker",
     "Changeset",
     "ClaimJobRequest",
@@ -266,6 +269,41 @@ class AuditEntry:
     seq: int = field(default=0)
     target: str = field(default="")
     timestamp_ms: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class BlameLine:
+    """The `BlameLine` message."""
+    author: str = field(default="")
+    boundary: bool = field(default=False)
+    changeset: str = field(default="")
+    line: int = field(default=0)
+    original_line: int = field(default=0)
+    path: str = field(default="")
+    summary: str = field(default="")
+    text: str = field(default="")
+    timestamp_ms: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class BlameRequest:
+    """The `BlameRequest` message."""
+    first_line: int = field(default=0)
+    last_line: int = field(default=0)
+    max_commits: int = field(default=0)
+    path: str = field(default="")
+    repo: str = field(default="")
+    rev: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class BlameResponse:
+    """The `BlameResponse` message."""
+    lines: list[BlameLine] = field(default_factory=list)
+    path: str = field(default="")
+    rev: str = field(default="")
+    truncated: bool = field(default=False)
+    visited: int = field(default=0)
 
 
 @dataclass(kw_only=True)

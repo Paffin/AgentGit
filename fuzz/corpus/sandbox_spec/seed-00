@@ -1,0 +1,1 @@
+{"argv": ["sh", "-c", "true"], "env": {"CI": "true"}, "workdir": "/tmp", "ro_mounts": [{"host": "/usr", "sandbox": "/usr", "identity": "usr@1"}], "rw_tmp_bytes": 1048576, "limits": {"wall_ms": 1000, "cpu_s": 1, "memory_bytes": 67108864, "pids": 16}, "network": "none", "stdin": [104, 105]}

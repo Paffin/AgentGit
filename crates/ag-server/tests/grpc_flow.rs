@@ -125,7 +125,7 @@ async fn grpc_negotiation_errors_and_a_full_change() {
     // Subscribe before anything happens, then watch the change land.
     let mut events = EventServiceClient::new(ch.clone())
         .subscribe(authed(
-            &ADMIN_TOKEN.to_string(),
+            ADMIN_TOKEN,
             v1::SubscribeRequest { repo: "acme/api".into(), after_seq: u64::MAX, ..Default::default() },
         ))
         .await

@@ -166,6 +166,33 @@ function breakingStreams(
   };
 }
 
+describe('stopping', () => {
+  it('leaving the loop early closes the connection to the server', async () => {
+    let cancelled = 0;
+    const tracking: typeof fetch = async (input, init) => {
+      const res = await fetch(input, init);
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (!url.includes('/events?') || !res.body) return res;
+      const upstream = res.body.getReader();
+      const body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          const { done, value } = await upstream.read();
+          if (done) controller.close();
+          else controller.enqueue(value);
+        },
+        async cancel(reason) {
+          cancelled++;
+          await upstream.cancel(reason);
+        },
+      });
+      return new Response(body, { status: res.status, headers: res.headers });
+    };
+    const client = new AgentGitClient({ baseUrl: server.baseUrl, token: server.bootstrapToken, fetch: tracking });
+    for await (const _event of client.subscribeEvents({ repo, afterSeq: 0 })) break;
+    expect(cancelled).toBe(1);
+  });
+});
+
 describe('reconnect', () => {
   it.each([['close' as const], ['error' as const]])(
     'resumes without gaps or duplicates when the connection %ss mid-stream',

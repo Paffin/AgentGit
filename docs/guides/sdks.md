@@ -13,7 +13,7 @@ real `ag-server` binary (never a mock of it), and only what those tests show is 
 | | TypeScript | Python |
 |---|---|---|
 | Package | `@agentgit/client` | `agentgit-client` (`import agentgit`) |
-| Runtime | Node 20+ (tests: 20.20 and 22.22); written with `fetch` only, not run in a browser here | Python 3.10+ (tests: 3.10 and 3.13) |
+| Runtime | Node 20+ (tests: 20.20 and 22.22); written with `fetch` only, not run in a browser here | Python 3.10+ (tests: 3.10 to 3.13) |
 | Dependencies | none (Ed25519 and SHA-256 from two MIT libraries are bundled) | `httpx`, `cryptography` |
 | Clients | `AgentGitClient` | `AgentGitClient` and `AsyncAgentGitClient` |
 | Types | generated from `openapi.json` by `openapi-typescript` | dataclasses generated from `openapi.json` by `scripts/generate.py` |
@@ -511,5 +511,5 @@ changes.
 ## Not covered
 
 gRPC (the SDKs speak the HTTP/JSON gateway only), browsers (the TypeScript code uses only standard `fetch` APIs but has not
-been run in one), TLS and OIDC against a real provider, and the Python versions between 3.10 and 3.13. The SDKs have no
+been run in one), and TLS and OIDC against a real provider. The SDKs have no
 telemetry and make no requests other than the ones you ask for.

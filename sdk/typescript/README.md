@@ -58,8 +58,9 @@ for await (const changeset of client.paginate('history.log', { repo, rev: 'main'
 ```
 
 Requests are flat objects shaped like the protocol messages (`repo` is `"owner/name"`; path, query and body fields sit
-side by side). Missing fields take the protocol's zero value. Free-form text is never placed in the URL path except for
-file paths, whose segments are percent-encoded.
+side by side). Missing fields take the protocol's zero value. Whatever goes into the URL path (ids, workspace names, file
+paths) is percent-encoded segment by segment; stream names, revisions and the like travel in the query string or the
+body, as the protocol prescribes.
 
 ## The API at a glance
 

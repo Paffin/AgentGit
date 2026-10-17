@@ -11,7 +11,7 @@ execution plane, and the event feed. Import name: `agentgit`.
 * **Typed.** Every message is a dataclass in `agentgit.models`, generated from that document; every method takes
   keyword arguments and returns a model. `py.typed` is shipped; the package type-checks under `mypy --strict`.
 * **Two runtime dependencies:** `httpx` and `cryptography`.
-* **Python 3.10 or newer.** The test suite passes on 3.13 and on 3.10; other versions are not run here.
+* **Python 3.10 or newer.** The test suite passes on 3.10, 3.11, 3.12 and 3.13; newer versions are not run here.
 * **Alpha (0.1).** Not published to PyPI yet: install from a checkout (`pip install ./sdk/python`, or `uv sync` in
   `sdk/python` for development). It is exercised by the tests in this directory against a real `ag-server`.
 

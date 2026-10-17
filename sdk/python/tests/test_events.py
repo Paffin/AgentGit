@@ -134,6 +134,45 @@ def test_reconnect_resumes_without_gaps_or_duplicates(
     assert after[1] in expected
 
 
+def test_leaving_the_loop_early_closes_the_connection(server: RunningServer, alice: AgentGitClient) -> None:
+    closed: list[bool] = []
+
+    class Tracking(httpx.SyncByteStream):
+        def __init__(self, upstream: httpx.SyncByteStream) -> None:
+            self.upstream = upstream
+
+        def __iter__(self) -> Iterator[bytes]:
+            yield from self.upstream
+
+        def close(self) -> None:
+            closed.append(True)
+            self.upstream.close()
+
+    class Transport(httpx.BaseTransport):
+        def __init__(self) -> None:
+            self.real = httpx.HTTPTransport()
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            response = self.real.handle_request(request)
+            if "/events?" in str(request.url):
+                assert isinstance(response.stream, httpx.SyncByteStream)
+                return httpx.Response(
+                    response.status_code, headers=response.headers, stream=Tracking(response.stream)
+                )
+            return response
+
+    with AgentGitClient(
+        server.base_url, server.bootstrap_token, http_client=httpx.Client(transport=Transport())
+    ) as client:
+        for _event in client.subscribe_events(repo=REPO, after_seq=0):
+            break
+        # a generator that is left suspended is closed by the garbage collector; closing it is immediate
+        feed = client.subscribe_events(repo=REPO, after_seq=0)
+        next(feed)
+        feed.close()
+    assert closed == [True, True]
+
+
 def test_a_non_retryable_error_stops_the_subscription(server: RunningServer, alice: AgentGitClient) -> None:
     short = server.actor("user:shorty", REPO, "reader")
     with server.admin() as admin:

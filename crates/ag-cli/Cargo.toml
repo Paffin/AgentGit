@@ -26,12 +26,19 @@ ag-policy.workspace = true
 ag-agent.workspace = true
 ag-integrate.workspace = true
 ag-git.workspace = true
+ag-client.workspace = true
+ag-object.workspace = true
+ag-protocol.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tokio.workspace = true
+tonic.workspace = true
 
 [dev-dependencies]
+ag-server.workspace = true
 tempfile.workspace = true
+tokio.workspace = true

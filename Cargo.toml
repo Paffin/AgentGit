@@ -29,6 +29,8 @@ ag-agent = { path = "crates/ag-agent", version = "0.1.0" }
 ag-integrate = { path = "crates/ag-integrate", version = "0.1.0" }
 ag-git = { path = "crates/ag-git", version = "0.1.0" }
 ag-protocol = { path = "crates/ag-protocol", version = "0.1.0" }
+ag-client = { path = "crates/ag-client", version = "0.1.0" }
+ag-server = { path = "crates/ag-server", version = "0.1.0" }
 
 # external crates
 anyhow = "1"
@@ -47,7 +49,7 @@ tempfile = "3"
 thiserror = "2"
 prost = "0.14"
 protox = "0.10"
-tonic = { version = "0.14", features = ["tls-ring"] }
+tonic = { version = "0.14", features = ["tls-aws-lc", "tls-webpki-roots"] }
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
 utoipa = { version = "6", features = ["preserve_order"] }

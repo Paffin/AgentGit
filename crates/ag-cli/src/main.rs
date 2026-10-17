@@ -111,6 +111,16 @@ pub enum Command {
     /// Import from or export to Git (needs the `git` command).
     #[command(subcommand)]
     Git(cmds::gitbridge::GitCmd),
+    /// Clone a repository from an `ag-server`.
+    Clone(cmds::remote::CloneArgs),
+    /// Download new history from the server.
+    Fetch(cmds::remote::SyncArgs),
+    /// Fetch, then fast-forward the local stream and bring the workspace up to date.
+    Pull(cmds::remote::SyncArgs),
+    /// Upload your snapshot and open a proposal on the server.
+    Push(cmds::remote::PushArgs),
+    /// Manage remotes and work with proposals, events and policy on a server.
+    Remote(cmds::remote::RemoteArgs),
     /// Pin a revision so garbage collection keeps it.
     Pin(cmds::admin::PinArgs),
     /// Remove a pin.
@@ -149,9 +159,19 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     if let Init(args) = &cli.command {
         return cmds::repo::init(&cli, args);
     }
+    // Cloning creates the repository; the remote subcommands read their own configuration.
+    if let Clone(args) = &cli.command {
+        return cmds::remote::clone(&cli, args);
+    }
+    if let Remote(args) = &cli.command {
+        return cmds::remote::remote(&cli, args);
+    }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) => unreachable!(),
+        Init(_) | Clone(_) | Remote(_) => unreachable!(),
+        Fetch(a) => cmds::remote::fetch(&ctx, a),
+        Pull(a) => cmds::remote::pull(&ctx, a),
+        Push(a) => cmds::remote::push(&ctx, a),
         Status(a) => cmds::repo::status(&ctx, a),
         Snapshot(a) => cmds::repo::snapshot(&ctx, a),
         Sync(a) => cmds::repo::sync(&ctx, a),

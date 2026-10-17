@@ -45,11 +45,15 @@ version = "0.1.0"
 dependencies = [
  "ag-agent",
  "ag-changeset",
+ "ag-client",
  "ag-crypto",
  "ag-diff",
  "ag-git",
  "ag-integrate",
+ "ag-object",
  "ag-policy",
+ "ag-protocol",
+ "ag-server",
  "ag-storage",
  "ag-tree",
  "ag-types",
@@ -60,6 +64,27 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
+name = "ag-client"
+version = "0.1.0"
+dependencies = [
+ "ag-changeset",
+ "ag-object",
+ "ag-protocol",
+ "ag-server",
+ "ag-types",
+ "futures-util",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -2674,6 +2699,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+ "webpki-roots",
 ]
 
 [[package]]

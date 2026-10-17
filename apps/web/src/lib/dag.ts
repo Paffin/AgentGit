@@ -42,8 +42,8 @@ export interface DagOptions {
 }
 
 export const DEFAULT_DAG: DagOptions = {
-  nodeW: 176,
-  nodeH: 52,
+  nodeW: 200,
+  nodeH: 68,
   gapX: 44,
   gapY: 12,
   maxLooseDone: 3,

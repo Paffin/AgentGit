@@ -69,7 +69,7 @@ const summary = computed(() => {
   <Card title="Tasks and dependencies" icon="task" :subtitle="summary" flush>
     <div class="body" data-testid="task-graph">
       <div v-if="board.load.tasks.status === 'loading' && layout.nodes.length === 0" class="sk">
-        <Skeleton :height="52" width="176px" /><Skeleton :height="52" width="176px" />
+        <Skeleton :height="68" width="200px" /><Skeleton :height="68" width="200px" />
       </div>
       <ErrorState
         v-else-if="board.load.tasks.status === 'error' && layout.nodes.length === 0"

@@ -37,12 +37,15 @@ watch(
 )
 const streamOptions = computed(() => board.streams.map((s) => ({ value: s.name, label: s.name })))
 
+// The server needs a stream name; wait until the repository's streams are known.
+const known = () => stream.value !== ''
 const current = useResource<PolicyVersion>(() => api.admin.policy(props.repo, stream.value), {
   watch: [() => props.repo, stream],
+  enabled: known,
 })
 const history = useResource<PolicyVersion[]>(
   () => api.admin.policyHistory(props.repo, stream.value),
-  { watch: [() => props.repo, stream] },
+  { watch: [() => props.repo, stream], enabled: known },
 )
 
 const text = ref('')

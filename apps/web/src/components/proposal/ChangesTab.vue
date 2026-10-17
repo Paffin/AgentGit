@@ -37,7 +37,7 @@ function jump(i: number) {
         <code class="mono">{{ diff.base ? shortId(diff.base, 8) : 'the empty tree' }}</code>
         with the proposal’s head. Context is three lines.
       </p>
-      <div class="layout">
+      <div class="layout" :class="{ 'with-nav': diff.files.length > 1 }">
         <nav v-if="diff.files.length > 1" class="files" aria-label="Changed files">
           <ul role="list">
             <li v-for="(f, i) in diff.files" :key="f.path">
@@ -125,7 +125,7 @@ function jump(i: number) {
   color: var(--bad);
 }
 @media (min-width: 1100px) {
-  .layout {
+  .layout.with-nav {
     grid-template-columns: 260px minmax(0, 1fr);
   }
   .files {

@@ -289,7 +289,7 @@ function changed() {
           </p>
         </div>
 
-        <div v-if="isOpen" class="actions" role="group" label="Actions">
+        <div v-if="isOpen" class="actions" role="group" aria-label="Actions">
           <Button
             variant="primary"
             icon="merge"

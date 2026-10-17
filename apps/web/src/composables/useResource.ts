@@ -18,7 +18,12 @@ export interface Resource<T> {
  */
 export function useResource<T>(
   load: (signal: AbortSignal) => Promise<T>,
-  options: { watch?: WatchSource[]; immediate?: boolean } = {},
+  options: {
+    watch?: WatchSource[]
+    immediate?: boolean
+    /** While this returns false nothing is requested (for inputs that are not known yet). */
+    enabled?: () => boolean
+  } = {},
 ): Resource<T> {
   const data = shallowRef<T>()
   const error = shallowRef<unknown>(null)
@@ -29,6 +34,11 @@ export function useResource<T>(
 
   async function reload() {
     controller?.abort()
+    if (options.enabled && !options.enabled()) {
+      serial++
+      loading.value = false
+      return
+    }
     const mine = ++serial
     const ctl = new AbortController()
     controller = ctl

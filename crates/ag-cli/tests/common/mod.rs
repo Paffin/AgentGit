@@ -2,6 +2,8 @@
 //! remote tests) an in-process `ag-server`.
 #![allow(dead_code, missing_docs)]
 
+pub mod golden;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

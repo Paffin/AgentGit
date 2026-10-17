@@ -1,0 +1,862 @@
+{
+  "commands": {
+    "agent disable": {
+      "disabled": "string"
+    },
+    "agent enable": {
+      "enabled": "string"
+    },
+    "agent finish": {
+      "run": "string",
+      "status": "string"
+    },
+    "agent heartbeat": {
+      "run": "string"
+    },
+    "agent list": [
+      {
+        "created_at": "number",
+        "disabled": "bool",
+        "identity": "string",
+        "name": "string",
+        "public_key": "string",
+        "role": "string"
+      }
+    ],
+    "agent reap": [],
+    "agent register": {
+      "created_at": "number",
+      "disabled": "bool",
+      "identity": "string",
+      "name": "string",
+      "public_key": "string",
+      "role": "string"
+    },
+    "agent runs": [
+      {
+        "agent": "string",
+        "finished_at": "null",
+        "last_heartbeat": "number",
+        "run_id": "string",
+        "started_at": "number",
+        "status": "string",
+        "summary": "null",
+        "task_id": "string"
+      }
+    ],
+    "agent start": {
+      "identity": "string",
+      "run_id": "string"
+    },
+    "audit": {
+      "entries": "number",
+      "first_bad": "null",
+      "head": "string"
+    },
+    "audit#list": [
+      {
+        "action": "string",
+        "actor": "string",
+        "details": "string",
+        "hash": "string",
+        "prev_hash": "string",
+        "seq": "number",
+        "target": "string",
+        "timestamp": "number"
+      }
+    ],
+    "backup": {
+      "bytes": "number",
+      "keys_included": "bool",
+      "objects": "number",
+      "verification": {
+        "audit_entries": "number",
+        "audit_head": "string",
+        "changesets_checked": "number",
+        "heads_recomputed": "number",
+        "issues": [],
+        "objects_checked": "number"
+      }
+    },
+    "blame": {
+      "lines": [
+        {
+          "author": "string",
+          "boundary": "bool",
+          "changeset": "string",
+          "line": "number",
+          "original_line": "number",
+          "path": "string",
+          "summary": "string",
+          "text": "string",
+          "timestamp": "number"
+        }
+      ],
+      "path": "string",
+      "rev": "string",
+      "truncated": "bool",
+      "visited": "number"
+    },
+    "checkout": {
+      "changeset": "string",
+      "dir": "string",
+      "files": "number"
+    },
+    "config get": {
+      "key": "string",
+      "settable": "bool",
+      "source": "string",
+      "value": "string"
+    },
+    "config list": [
+      {
+        "key": "string",
+        "settable": "bool",
+        "source": "string",
+        "value": "string"
+      }
+    ],
+    "config path": {
+      "repository": {
+        "config": "string",
+        "keys": "string",
+        "remotes": "string"
+      },
+      "user": {
+        "exists": "bool",
+        "path": "string"
+      }
+    },
+    "config set": {
+      "file": "string",
+      "key": "string",
+      "value": "string"
+    },
+    "config unset": {
+      "file": "string",
+      "key": "string",
+      "was_set": "bool"
+    },
+    "diff": {
+      "diff": "string"
+    },
+    "doctor": {
+      "checks": [
+        {
+          "hint": "null|string",
+          "id": "string",
+          "status": "string",
+          "summary": "string"
+        }
+      ],
+      "ok": "bool",
+      "summary": {
+        "fail": "number",
+        "ok": "number",
+        "skip": "number",
+        "warn": "number"
+      },
+      "version": "string"
+    },
+    "gc": {
+      "bytes": "number",
+      "deleted": [],
+      "dry_run": "bool",
+      "kept_staged": "number",
+      "kept_young": "number",
+      "reachable_blobs": "number",
+      "reachable_changesets": "number",
+      "scanned": "number"
+    },
+    "git export": {
+      "branch": "string",
+      "commits": "number"
+    },
+    "git import": {
+      "blobs": "number",
+      "commits": "number",
+      "head": "string",
+      "skipped_paths": [],
+      "skipped_submodules": "number"
+    },
+    "init": {
+      "durability": "string",
+      "namespace": "string",
+      "root": "string",
+      "stream": "string"
+    },
+    "integrate": {
+      "operation_id": "string",
+      "outcome": {
+        "changed_files": "number",
+        "new_head": "string",
+        "previous_head": "null",
+        "status": "string",
+        "strategy": "string",
+        "tree_id": "string",
+        "version": "number"
+      },
+      "state": "string"
+    },
+    "integrate#blocked": {
+      "operation_id": "string",
+      "outcome": {
+        "blockers": [
+          {
+            "code": "string",
+            "detail": {
+              "have": "number",
+              "kind": "string",
+              "required": "number",
+              "scope": "string"
+            },
+            "message": "string"
+          }
+        ],
+        "candidate_changeset": "string",
+        "candidate_tree": "string",
+        "policy_version": "number",
+        "status": "string"
+      },
+      "state": "string"
+    },
+    "lease acquire": {
+      "lease": {
+        "acquired_at": "number",
+        "exclusive": "bool",
+        "expires_at": "number",
+        "holder": "string",
+        "id": "string",
+        "released_at": "null",
+        "scope": "string",
+        "task_id": "null",
+        "token": "number"
+      },
+      "overlaps": []
+    },
+    "lease extend": {
+      "acquired_at": "number",
+      "exclusive": "bool",
+      "expires_at": "number",
+      "holder": "string",
+      "id": "string",
+      "released_at": "null",
+      "scope": "string",
+      "task_id": "null",
+      "token": "number"
+    },
+    "lease list": [
+      {
+        "acquired_at": "number",
+        "exclusive": "bool",
+        "expires_at": "number",
+        "holder": "string",
+        "id": "string",
+        "released_at": "null",
+        "scope": "string",
+        "task_id": "null",
+        "token": "number"
+      }
+    ],
+    "lease release": {
+      "released": "string"
+    },
+    "log": [
+      {
+        "author": "string",
+        "generation": "number",
+        "id": "string",
+        "message": "string",
+        "parents": [
+          "string"
+        ],
+        "timestamp": "number"
+      }
+    ],
+    "ls": [
+      {
+        "blob": "string",
+        "executable": "bool",
+        "name": "string",
+        "type": "string"
+      }
+    ],
+    "op list": [
+      {
+        "actor": "string",
+        "created_at": "number",
+        "error": "null",
+        "idempotency_key": "string",
+        "kind": "string",
+        "operation_id": "string",
+        "payload": {
+          "head": "string",
+          "proposal": "string",
+          "stream": "string",
+          "tokens": []
+        },
+        "request_hash": "string",
+        "result": {
+          "blobs": "number",
+          "changed_files": "number",
+          "changesets": "number",
+          "new_head": "string",
+          "previous_head": "null",
+          "status": "string",
+          "strategy": "string",
+          "tree_id": "string",
+          "version": "number"
+        },
+        "state": "string",
+        "stream": "null|string",
+        "updated_at": "number"
+      }
+    ],
+    "op resume": {
+      "operation_id": "string",
+      "outcome": {
+        "changed_files": "number",
+        "new_head": "string",
+        "previous_head": "null",
+        "status": "string",
+        "strategy": "string",
+        "tree_id": "string",
+        "version": "number"
+      },
+      "state": "string"
+    },
+    "op show": {
+      "operation_id": "string",
+      "outcome": {
+        "blockers": [
+          {
+            "code": "string",
+            "detail": {
+              "have": "number",
+              "kind": "string",
+              "required": "number",
+              "scope": "string"
+            },
+            "message": "string"
+          }
+        ],
+        "candidate_changeset": "string",
+        "candidate_tree": "string",
+        "policy_version": "number",
+        "status": "string"
+      },
+      "state": "string"
+    },
+    "pin": {
+      "changeset": "string",
+      "pin": "string"
+    },
+    "pins": [
+      {
+        "changeset": "string",
+        "created_at": "number",
+        "name": "string",
+        "reason": "string"
+      }
+    ],
+    "policy history": [
+      {
+        "created_at": "number",
+        "created_by": "string",
+        "doc": "string",
+        "doc_hash": "string",
+        "stream": "string",
+        "version": "number"
+      }
+    ],
+    "policy set": {
+      "created_at": "number",
+      "created_by": "string",
+      "doc": "string",
+      "doc_hash": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "policy show": {
+      "policy": {
+        "admins": [],
+        "agent_autonomy": {
+          "allowed_paths": [],
+          "auto_integrate": "bool",
+          "max_files": "number"
+        },
+        "allowed_authors": [],
+        "approvals": {
+          "approvers": [],
+          "forbid_self_approval": "bool",
+          "min": "number",
+          "min_for_agents": "number"
+        },
+        "integrators": [],
+        "max_changed_files": "number",
+        "protected_paths": [],
+        "require_provenance_for_agents": "bool",
+        "required_validations": [],
+        "trusted_issuers": []
+      },
+      "stream": "string",
+      "version": "number"
+    },
+    "predict": {
+      "overlaps": []
+    },
+    "preview": {
+      "algorithm": "string",
+      "base": "null",
+      "candidate_tree": "string",
+      "changed_files": [
+        "string"
+      ],
+      "conflicts": [],
+      "problem": "null",
+      "strategy": "string"
+    },
+    "proposal close": {
+      "closed": "string"
+    },
+    "proposal list": [
+      {
+        "author": "string",
+        "created_at": "number",
+        "description": "string",
+        "head": "string",
+        "id": "string",
+        "integrated_as": "null",
+        "state": "string",
+        "stream": "string",
+        "task_id": "null",
+        "title": "string",
+        "updated_at": "number"
+      }
+    ],
+    "proposal review": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "id": "number",
+      "proposal": "string",
+      "reviewer": "string",
+      "timestamp": "number"
+    },
+    "proposal show": {
+      "proposal": {
+        "author": "string",
+        "created_at": "number",
+        "description": "string",
+        "head": "string",
+        "id": "string",
+        "integrated_as": "null",
+        "state": "string",
+        "stream": "string",
+        "task_id": "null",
+        "title": "string",
+        "updated_at": "number"
+      },
+      "reviews": []
+    },
+    "proposal update": {
+      "author": "string",
+      "created_at": "number",
+      "description": "string",
+      "head": "string",
+      "id": "string",
+      "integrated_as": "null",
+      "state": "string",
+      "stream": "string",
+      "task_id": "null",
+      "title": "string",
+      "updated_at": "number"
+    },
+    "propose": {
+      "author": "string",
+      "created_at": "number",
+      "description": "string",
+      "head": "string",
+      "id": "string",
+      "integrated_as": "null",
+      "state": "string",
+      "stream": "string",
+      "task_id": "null",
+      "title": "string",
+      "updated_at": "number"
+    },
+    "provenance attach": {
+      "changeset": "string",
+      "record": "number"
+    },
+    "provenance show": [
+      {
+        "agent": "string",
+        "error": "null",
+        "id": "number",
+        "record": {
+          "agent": "string",
+          "changeset": "string",
+          "checks_run": [
+            "string"
+          ],
+          "created_at": "number",
+          "inputs": [],
+          "model": "string",
+          "parameters": {},
+          "prompt_digest": "null",
+          "rationale": "null",
+          "run_id": "null",
+          "schema": "string",
+          "task_id": "null"
+        },
+        "verified": "bool"
+      }
+    ],
+    "queue add": {
+      "enqueued_at": "number",
+      "enqueued_by": "string",
+      "id": "number",
+      "outcome": "null",
+      "processed_at": "null",
+      "proposal": "string",
+      "state": "string",
+      "stream": "string"
+    },
+    "queue list": [
+      {
+        "enqueued_at": "number",
+        "enqueued_by": "string",
+        "id": "number",
+        "outcome": "null",
+        "processed_at": "null",
+        "proposal": "string",
+        "state": "string",
+        "stream": "string"
+      }
+    ],
+    "queue run": {
+      "blocked": [],
+      "failed": [],
+      "integrated": [
+        "string"
+      ],
+      "rejected": []
+    },
+    "recover": {
+      "aborted": [],
+      "errors": [],
+      "resumed": [],
+      "waiting": []
+    },
+    "reindex": {
+      "changesets": "number"
+    },
+    "remote add": {
+      "repo": "string",
+      "token_env": "string",
+      "url": "string"
+    },
+    "remote list": {
+      "origin": {
+        "repo": "string",
+        "token_env": "string",
+        "url": "string"
+      }
+    },
+    "remote remove": {
+      "removed": "string"
+    },
+    "show": {
+      "author": "string",
+      "changes": [
+        {
+          "op": "string",
+          "path": "string"
+        }
+      ],
+      "id": "string",
+      "message": "string",
+      "parents": [
+        "string"
+      ],
+      "provenance_records": "number",
+      "published": "bool",
+      "timestamp": "number"
+    },
+    "snapshot": {
+      "changeset": "null|string"
+    },
+    "status": {
+      "base": "null|string",
+      "changes": [
+        {
+          "kind": "string",
+          "path": "string"
+        }
+      ],
+      "head": "null|string",
+      "merging": "bool",
+      "stream": "string",
+      "summary": {
+        "ahead": "number",
+        "behind": "number",
+        "identity": "string",
+        "identity_source": "string",
+        "leases": {
+          "active": "number",
+          "mine": [
+            {
+              "exclusive": "bool",
+              "expires_at": "number",
+              "id": "string",
+              "scope": "string",
+              "token": "number"
+            }
+          ]
+        },
+        "next": "string",
+        "proposals": {
+          "mine": [
+            {
+              "author": "string",
+              "id": "string",
+              "is_workspace_head": "bool",
+              "stream": "string",
+              "title": "string"
+            }
+          ],
+          "open": "number"
+        },
+        "relation": "string",
+        "remotes": [],
+        "stream_head": "null|string",
+        "stream_version": "number",
+        "task": {
+          "id": "string",
+          "state": "string",
+          "title": "string"
+        },
+        "unpublished": "number"
+      },
+      "workspace": "string"
+    },
+    "stream create": {
+      "created_at": "number",
+      "created_by": "string",
+      "name": "string",
+      "state": {
+        "head": "string",
+        "version": "number"
+      }
+    },
+    "stream list": [
+      {
+        "created_at": "number",
+        "created_by": "string",
+        "name": "string",
+        "state": {
+          "head": "string",
+          "version": "number"
+        }
+      }
+    ],
+    "stream reflog": [
+      {
+        "actor": "string",
+        "new_head": "string",
+        "old_head": "null|string",
+        "operation_id": "string",
+        "reason": "string",
+        "seq": "number",
+        "stream": "string",
+        "timestamp": "number",
+        "version": "number"
+      }
+    ],
+    "stream show": {
+      "policy_version": "number",
+      "stream": {
+        "created_at": "number",
+        "created_by": "string",
+        "name": "string",
+        "state": {
+          "head": "string",
+          "version": "number"
+        }
+      }
+    },
+    "sync": {
+      "conflicts": [
+        {
+          "kind": "string",
+          "path": "string"
+        }
+      ],
+      "id": "string",
+      "status": "string",
+      "to": "string"
+    },
+    "task cancel": {
+      "state": "string",
+      "task": "string"
+    },
+    "task create": {
+      "created_at": "number",
+      "created_by": "string",
+      "description": "string",
+      "id": "string",
+      "owner": "null",
+      "scope": [
+        "string"
+      ],
+      "state": "string",
+      "title": "string",
+      "updated_at": "number"
+    },
+    "task depend": {
+      "depends_on": "string",
+      "task": "string"
+    },
+    "task done": {
+      "state": "string",
+      "task": "string"
+    },
+    "task list": [
+      {
+        "created_at": "number",
+        "created_by": "string",
+        "description": "string",
+        "id": "string",
+        "owner": "null",
+        "scope": [
+          "string"
+        ],
+        "state": "string",
+        "title": "string",
+        "updated_at": "number"
+      }
+    ],
+    "task ready": [
+      {
+        "created_at": "number",
+        "created_by": "string",
+        "description": "string",
+        "id": "string",
+        "owner": "null",
+        "scope": [
+          "string"
+        ],
+        "state": "string",
+        "title": "string",
+        "updated_at": "number"
+      }
+    ],
+    "trace": [
+      {
+        "action": "string",
+        "actor": "string",
+        "details": "string",
+        "hash": "string",
+        "prev_hash": "string",
+        "seq": "number",
+        "target": "string",
+        "timestamp": "number"
+      }
+    ],
+    "unpin": {
+      "unpinned": "string"
+    },
+    "validate keygen": {
+      "identity": "string",
+      "key_file": "string",
+      "name": "string",
+      "public_key": "string"
+    },
+    "validate list": [
+      {
+        "check_name": "string",
+        "environment_digest": "string",
+        "id": "string",
+        "issued_at": "number",
+        "issuer": "string",
+        "payload": {
+          "check": "string",
+          "environment_digest": "string",
+          "id": "string",
+          "issued_at": "number",
+          "issuer": "string",
+          "policy_version": "number",
+          "public_key": "string",
+          "result": "string",
+          "signature": "string",
+          "tree_id": "string"
+        },
+        "policy_version": "number",
+        "public_key": "string",
+        "result": "string",
+        "signature": "string",
+        "tree_id": "string"
+      }
+    ],
+    "validate run": {
+      "check": "string",
+      "environment_digest": "string",
+      "id": "string",
+      "issued_at": "number",
+      "issuer": "string",
+      "policy_version": "number",
+      "public_key": "string",
+      "result": "string",
+      "signature": "string",
+      "tree_id": "string"
+    },
+    "verify": {
+      "audit_entries": "number",
+      "audit_head": "string",
+      "changesets_checked": "number",
+      "heads_recomputed": "number",
+      "issues": [],
+      "objects_checked": "number"
+    },
+    "version": {
+      "arch": "string",
+      "json_schema": "number",
+      "os": "string",
+      "protocol": "string",
+      "version": "string"
+    },
+    "workspace create": {
+      "base": "string",
+      "created_at": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at": "number"
+    },
+    "workspace list": [
+      {
+        "base": "null|string",
+        "created_at": "number",
+        "head": "string",
+        "name": "string",
+        "owner": "string",
+        "stream": "string",
+        "updated_at": "number"
+      }
+    ],
+    "workspace remove": {
+      "removed": "string"
+    }
+  },
+  "raw": [
+    "cat",
+    "completions",
+    "help",
+    "man",
+    "policy example",
+    "remote cat"
+  ],
+  "schema_version": 1
+}

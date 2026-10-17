@@ -355,16 +355,8 @@ fn stale_operations_expire_and_waiting_ones_are_left_alone() {
 
 #[test]
 fn concurrent_integrations_never_lose_an_update() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = ag_integrate::Repository::init(
-        dir.path(),
-        &ag_integrate::InitOptions {
-            namespace: ag_types::Namespace::new("acme/app").unwrap(),
-            default_stream: ag_types::StreamName::new("main").unwrap(),
-            actor: id("user:alice"),
-        },
-    )
-    .unwrap();
+    let dir = tempdir();
+    let repo = init_repo(&dir);
     let base = snap_in(&repo, None, &[("README", "base\n")], "user:alice");
     let p0 = repo.propose("main", &base, "base", "", &id("user:alice"), None).unwrap();
     repo.integrate(&IntegrateRequest {
@@ -436,4 +428,25 @@ fn concurrent_integrations_never_lose_an_update() {
     let all = ag_dag::ancestors(&repo.graph(), &[st.head.unwrap()], 1000).unwrap();
     assert_eq!(all.len(), 2 * N, "base + N proposals + (N-1) merges");
     let _ = Arc::new(());
+}
+
+#[test]
+fn the_backends_under_test_are_the_ones_the_environment_selects() {
+    // Guards the parametrization itself: if this passed while the suites silently ran on the
+    // defaults, a green PostgreSQL / S3 run would prove nothing.
+    let want_pg = ag_storage::testing::postgres_url().is_some();
+    let want_s3 = ag_storage::testing::s3_endpoint().is_some();
+    let f = fx();
+    assert_eq!(meta_is_postgres(&f.repo), want_pg);
+    assert_eq!(f.wallclock_objects(), want_s3);
+    assert_eq!(f.repo.objects().durability().name == "s3-compatible", want_s3);
+
+    let dir = tempdir();
+    let repo = init_repo(&dir);
+    assert_eq!(meta_is_postgres(&repo), want_pg);
+    assert_eq!(objects_are_s3(&repo), want_s3);
+    assert_eq!(repo.config().storage.is_some(), want_pg || want_s3);
+    // the configuration names environment variables, never holds a secret
+    let json = std::fs::read_to_string(dir.path().join(".ag/config.json")).unwrap();
+    assert!(!json.contains("password") && !json.contains("secret_access_key\""), "{json}");
 }

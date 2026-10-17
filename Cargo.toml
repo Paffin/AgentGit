@@ -23,7 +23,7 @@ ag-diff = { path = "crates/ag-diff", version = "0.1.0" }
 ag-tree = { path = "crates/ag-tree", version = "0.1.0" }
 ag-dag = { path = "crates/ag-dag", version = "0.1.0" }
 ag-merge = { path = "crates/ag-merge", version = "0.1.0" }
-ag-storage = { path = "crates/ag-storage", version = "0.1.0" }
+ag-storage = { path = "crates/ag-storage", version = "0.1.0", default-features = false }
 ag-policy = { path = "crates/ag-policy", version = "0.1.0" }
 ag-agent = { path = "crates/ag-agent", version = "0.1.0" }
 ag-integrate = { path = "crates/ag-integrate", version = "0.1.0" }
@@ -42,6 +42,11 @@ hex = "0.4"
 proptest = "1"
 getrandom = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
+postgres = "0.19"
+rustls = { version = "0.23", default-features = false, features = ["ring", "aws_lc_rs", "std", "tls12"] }
+tokio-postgres-rustls = { version = "0.14", default-features = false, features = ["ring"] }
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+webpki-roots = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
@@ -60,7 +65,6 @@ futures-util = "0.3"
 http-body-util = "0.1"
 jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 prometheus = { version = "0.14", default-features = false }
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 rcgen = "0.14"
 serde_urlencoded = "0.7"
 subtle = "2"
@@ -71,7 +75,6 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "set-header", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-ureq = { version = "3", features = ["json"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

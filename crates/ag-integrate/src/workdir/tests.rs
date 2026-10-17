@@ -135,6 +135,7 @@ fn a_damaged_blob_is_an_error_not_a_silent_checkout() {
             namespace: Namespace::new("t/t").unwrap(),
             default_stream: StreamName::new("main").unwrap(),
             actor: ag_types::Identity::new("user:t").unwrap(),
+            storage: None,
         },
     )
     .unwrap();

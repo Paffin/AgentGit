@@ -1,9 +1,9 @@
 use ag_changeset::{Changeset, Op};
 use ag_types::{ChangesetId, Timestamp};
-use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 
-use super::{MetaError, Tx, parse, ts};
+use super::db::params;
+use super::{MetaError, Tx, escape_like, parse, ts};
 
 /// Index row of a published changeset.
 #[derive(Clone, Debug, Serialize)]
@@ -53,7 +53,7 @@ impl Tx<'_> {
         self.conn.execute(
             "INSERT INTO changesets (id, generation, fp_depth, author, ts, first_parent, parent_count, ready_at, summary)
              VALUES (?1, ?2, ?9, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
+            &params![
                 id.to_hex(),
                 generation as i64,
                 cs.author.as_str(),
@@ -68,9 +68,14 @@ impl Tx<'_> {
         for (i, p) in cs.parents.iter().enumerate() {
             self.conn.execute(
                 "INSERT INTO changeset_parents (child, ord, parent) VALUES (?1, ?2, ?3)",
-                params![id.to_hex(), i as i64, p.to_hex()],
+                &params![id.to_hex(), i as i64, p.to_hex()],
             )?;
         }
+        self.insert_paths(id, cs)?;
+        Ok(generation)
+    }
+
+    fn insert_paths(&self, id: &ChangesetId, cs: &Changeset) -> Result<(), MetaError> {
         for op in &cs.ops {
             let kind = match op {
                 Op::Put { .. } => "put",
@@ -78,28 +83,26 @@ impl Tx<'_> {
             };
             self.conn.execute(
                 "INSERT INTO changeset_paths (changeset, path, op) VALUES (?1, ?2, ?3)",
-                params![id.to_hex(), op.path().as_str(), kind],
+                &params![id.to_hex(), op.path().as_str(), kind],
             )?;
         }
-        Ok(generation)
+        Ok(())
     }
 
     /// Generation number of a published changeset.
     pub fn generation(&self, id: &ChangesetId) -> Result<Option<u64>, MetaError> {
-        Ok(self
-            .conn
-            .query_row("SELECT generation FROM changesets WHERE id = ?1", [id.to_hex()], |r| r.get::<_, i64>(0))
-            .optional()?
-            .map(|g| g as u64))
+        self.conn
+            .query_opt("SELECT generation FROM changesets WHERE id = ?1", &params![id.to_hex()])?
+            .map(|r| Ok(r.i64(0)? as u64))
+            .transpose()
     }
 
     /// Depth of the first-parent chain ending at a published changeset (1 for roots).
     pub fn fp_depth(&self, id: &ChangesetId) -> Result<Option<u64>, MetaError> {
-        Ok(self
-            .conn
-            .query_row("SELECT fp_depth FROM changesets WHERE id = ?1", [id.to_hex()], |r| r.get::<_, i64>(0))
-            .optional()?
-            .map(|g| g as u64))
+        self.conn
+            .query_opt("SELECT fp_depth FROM changesets WHERE id = ?1", &params![id.to_hex()])?
+            .map(|r| Ok(r.i64(0)? as u64))
+            .transpose()
     }
 
     /// True if the changeset is published.
@@ -109,43 +112,27 @@ impl Tx<'_> {
 
     /// Ordered parents of a published changeset.
     pub fn parents(&self, id: &ChangesetId) -> Result<Vec<ChangesetId>, MetaError> {
-        let mut stmt =
-            self.conn.prepare_cached("SELECT parent FROM changeset_parents WHERE child = ?1 ORDER BY ord")?;
-        let rows = stmt.query_map([id.to_hex()], |r| r.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(parse::<ChangesetId>(&r?, "parent id")?);
-        }
-        Ok(out)
+        let rows = self
+            .conn
+            .query("SELECT parent FROM changeset_parents WHERE child = ?1 ORDER BY ord", &params![id.to_hex()])?;
+        rows.iter().map(|r| parse::<ChangesetId>(r.str(0)?, "parent id")).collect()
     }
 
     /// Index information about a published changeset.
     pub fn changeset_info(&self, id: &ChangesetId) -> Result<Option<ChangesetInfo>, MetaError> {
-        let row = self
-            .conn
-            .query_row(
-                "SELECT generation, author, ts, ready_at, summary FROM changesets WHERE id = ?1",
-                [id.to_hex()],
-                |r| {
-                    Ok((
-                        r.get::<_, i64>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
-                        r.get::<_, i64>(3)?,
-                        r.get::<_, String>(4)?,
-                    ))
-                },
-            )
-            .optional()?;
-        let Some((generation, author, t, ready_at, summary)) = row else { return Ok(None) };
+        let row = self.conn.query_opt(
+            "SELECT generation, author, ts, ready_at, summary FROM changesets WHERE id = ?1",
+            &params![id.to_hex()],
+        )?;
+        let Some(r) = row else { return Ok(None) };
         Ok(Some(ChangesetInfo {
             id: *id,
-            generation: generation as u64,
-            author,
-            timestamp: ts(t),
+            generation: r.i64(0)? as u64,
+            author: r.string(1)?,
+            timestamp: ts(r.i64(2)?),
             parents: self.parents(id)?,
-            ready_at: ts(ready_at),
-            summary,
+            ready_at: ts(r.i64(3)?),
+            summary: r.string(4)?,
         }))
     }
 
@@ -154,78 +141,66 @@ impl Tx<'_> {
         if prefix.is_empty() || !prefix.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
             return Err(MetaError::Invalid(format!("'{prefix}' is not a hex prefix")));
         }
-        let mut stmt =
-            self.conn.prepare_cached("SELECT id FROM changesets WHERE id >= ?1 AND id < ?2 ORDER BY id LIMIT ?3")?;
         // id range scan: [prefix, prefix + 'g') since 'g' sorts after every hex digit
+        // (byte-wise on both backends: the PostgreSQL columns use the "C" collation)
         let upper = format!("{prefix}g");
-        let rows = stmt.query_map(params![prefix, upper, limit as i64], |r| r.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(parse::<ChangesetId>(&r?, "changeset id")?);
-        }
-        Ok(out)
+        let rows = self.conn.query(
+            "SELECT id FROM changesets WHERE id >= ?1 AND id < ?2 ORDER BY id LIMIT ?3",
+            &params![prefix, upper, limit as i64],
+        )?;
+        rows.iter().map(|r| parse::<ChangesetId>(r.str(0)?, "changeset id")).collect()
     }
 
     /// Paths touched by a changeset, with the operation kind.
     pub fn changeset_paths(&self, id: &ChangesetId) -> Result<Vec<(String, String)>, MetaError> {
-        let mut stmt =
-            self.conn.prepare_cached("SELECT path, op FROM changeset_paths WHERE changeset = ?1 ORDER BY path")?;
-        let rows = stmt.query_map([id.to_hex()], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        let rows = self
+            .conn
+            .query("SELECT path, op FROM changeset_paths WHERE changeset = ?1 ORDER BY path", &params![id.to_hex()])?;
+        rows.iter().map(|r| Ok((r.string(0)?, r.string(1)?))).collect()
     }
 
     /// True if the changeset touched `path` itself or anything beneath it.
     pub fn touches_path(&self, id: &ChangesetId, path: &str) -> Result<bool, MetaError> {
-        let like = format!("{}/%", path.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
-        let n: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM changeset_paths WHERE changeset = ?1 AND (path = ?2 OR path LIKE ?3 ESCAPE '\\')",
-            params![id.to_hex(), path, like],
-            |r| r.get(0),
-        )?;
+        let like = format!("{}/%", escape_like(path));
+        // `lower()` on both sides pins the case-insensitive (ASCII) comparison that
+        // SQLite's LIKE has by itself, so PostgreSQL's case-sensitive LIKE agrees.
+        let n = self
+            .conn
+            .query_one(
+                "SELECT COUNT(*) FROM changeset_paths
+                 WHERE changeset = ?1 AND (lower(path) = lower(?2) OR lower(path) LIKE lower(?3) ESCAPE '\\')",
+                &params![id.to_hex(), path, like],
+            )?
+            .i64(0)?;
         Ok(n > 0)
     }
 
     /// Every published changeset id, oldest generation first.
     pub fn all_changeset_ids(&self) -> Result<Vec<ChangesetId>, MetaError> {
-        let mut stmt = self.conn.prepare_cached("SELECT id FROM changesets ORDER BY generation, id")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(parse::<ChangesetId>(&r?, "changeset id")?);
-        }
-        Ok(out)
+        let rows = self.conn.query("SELECT id FROM changesets ORDER BY generation, id", &[])?;
+        rows.iter().map(|r| parse::<ChangesetId>(r.str(0)?, "changeset id")).collect()
     }
 
     /// Number of published changesets.
     pub fn count_changesets(&self) -> Result<u64, MetaError> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM changesets", [], |r| r.get::<_, i64>(0))? as u64)
+        Ok(self.conn.query_one("SELECT COUNT(*) FROM changesets", &[])?.i64(0)? as u64)
     }
 
     /// Removes the index rows of changesets that were garbage collected.
     pub fn delete_changesets(&self, ids: &[ChangesetId]) -> Result<(), MetaError> {
         for id in ids {
             let h = id.to_hex();
-            self.conn.execute("DELETE FROM changeset_parents WHERE child = ?1", [&h])?;
-            self.conn.execute("DELETE FROM changeset_paths WHERE changeset = ?1", [&h])?;
-            self.conn.execute("DELETE FROM changeset_trees WHERE changeset = ?1", [&h])?;
-            self.conn.execute("DELETE FROM changesets WHERE id = ?1", [&h])?;
+            self.conn.execute("DELETE FROM changeset_parents WHERE child = ?1", &params![&h])?;
+            self.conn.execute("DELETE FROM changeset_paths WHERE changeset = ?1", &params![&h])?;
+            self.conn.execute("DELETE FROM changeset_trees WHERE changeset = ?1", &params![&h])?;
+            self.conn.execute("DELETE FROM changesets WHERE id = ?1", &params![&h])?;
         }
         Ok(())
     }
 
     /// Rebuilds the path index rows of one changeset (used by reindex).
     pub fn rebuild_paths(&self, id: &ChangesetId, cs: &Changeset) -> Result<(), MetaError> {
-        self.conn.execute("DELETE FROM changeset_paths WHERE changeset = ?1", [id.to_hex()])?;
-        for op in &cs.ops {
-            let kind = match op {
-                Op::Put { .. } => "put",
-                Op::Delete { .. } => "delete",
-            };
-            self.conn.execute(
-                "INSERT INTO changeset_paths (changeset, path, op) VALUES (?1, ?2, ?3)",
-                params![id.to_hex(), op.path().as_str(), kind],
-            )?;
-        }
-        Ok(())
+        self.conn.execute("DELETE FROM changeset_paths WHERE changeset = ?1", &params![id.to_hex()])?;
+        self.insert_paths(id, cs)
     }
 }

@@ -58,6 +58,6 @@ pub struct MetaTreeCache<'a>(pub &'a Meta);
 
 impl TreeCache for MetaTreeCache<'_> {
     fn cached_tree(&self, id: &ChangesetId) -> Option<Tree> {
-        self.0.read(|tx| tx.derived_tree(id)).ok().flatten()
+        self.0.read_single(|tx| tx.derived_tree(id)).ok().flatten()
     }
 }

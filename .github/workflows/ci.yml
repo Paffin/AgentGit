@@ -74,3 +74,19 @@ jobs:
         run: AG=target/release/ag python3 scripts/gen_cli_docs.py --check
       - name: README demo still behaves as documented
         run: AG=$PWD/target/release/ag ./examples/quickstart.sh
+
+  backends:
+    name: PostgreSQL + S3 backends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # scripts/pg-test.sh finds the server binaries under /usr/lib/postgresql/*/bin
+      # (PostgreSQL ships on the runner image); scripts/s3-test.sh installs moto into a venv.
+      - name: Make sure the PostgreSQL server binaries are present
+        run: ls /usr/lib/postgresql/*/bin/initdb || sudo apt-get install -y --no-install-recommends postgresql
+      # Every suite on PostgreSQL metadata and S3 objects; a missing server fails the run
+      # instead of silently falling back to SQLite and files.
+      - name: Test on PostgreSQL + S3
+        run: AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace

@@ -169,6 +169,7 @@ Options:
       --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --stream <STREAM>        Name of the first stream [default: main]
       --json                   Machine-readable JSON output
+      --storage <FILE>         JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`
   -h, --help                   Print help
   -V, --version                Print version
 ```

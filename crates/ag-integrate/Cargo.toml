@@ -11,6 +11,13 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["tls", "s3"]
+# TLS for PostgreSQL connections (sslmode=require / verify-full).
+tls = ["ag-storage/tls"]
+# S3-compatible object storage.
+s3 = ["ag-storage/s3"]
+
 [dependencies]
 ag-types.workspace = true
 ag-crypto.workspace = true
@@ -33,4 +40,3 @@ thiserror.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 proptest.workspace = true
-rusqlite.workspace = true

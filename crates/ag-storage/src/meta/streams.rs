@@ -1,7 +1,7 @@
 use ag_types::{ChangesetId, StreamName, Timestamp};
-use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 
+use super::db::{Row, params};
 use super::{MetaError, Tx, parse, stream_name, ts};
 
 /// The full compare-and-swap token of a stream: head *and* version, so a
@@ -54,17 +54,26 @@ fn opt_id(s: Option<String>, what: &str) -> Result<Option<ChangesetId>, MetaErro
     s.map(|s| parse::<ChangesetId>(&s, what)).transpose()
 }
 
+fn stream_row(r: &Row) -> Result<StreamRow, MetaError> {
+    Ok(StreamRow {
+        name: stream_name(r.str(0)?)?,
+        state: StreamState { head: opt_id(r.opt_string(1)?, "stream head")?, version: r.i64(2)? as u64 },
+        created_at: ts(r.i64(3)?),
+        created_by: r.string(4)?,
+    })
+}
+
 impl Tx<'_> {
     /// Creates a stream with no head.
     pub fn create_stream(&self, name: &StreamName, actor: &str) -> Result<StreamRow, MetaError> {
-        let exists: i64 =
-            self.conn.query_row("SELECT COUNT(*) FROM streams WHERE name = ?1", [name.as_str()], |r| r.get(0))?;
+        let exists =
+            self.conn.query_one("SELECT COUNT(*) FROM streams WHERE name = ?1", &params![name.as_str()])?.i64(0)?;
         if exists > 0 {
             return Err(MetaError::AlreadyExists(format!("stream '{name}'")));
         }
         self.conn.execute(
             "INSERT INTO streams (name, head, version, created_at, created_by) VALUES (?1, NULL, 0, ?2, ?3)",
-            params![name.as_str(), self.now().as_millis(), actor],
+            &params![name.as_str(), self.now().as_millis(), actor],
         )?;
         Ok(StreamRow {
             name: name.clone(),
@@ -76,34 +85,22 @@ impl Tx<'_> {
 
     /// Looks up a stream.
     pub fn stream(&self, name: &str) -> Result<Option<StreamRow>, MetaError> {
-        let row = self
-            .conn
-            .query_row("SELECT name, head, version, created_at, created_by FROM streams WHERE name = ?1", [name], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, Option<String>>(1)?,
-                    r.get::<_, i64>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, String>(4)?,
-                ))
-            })
-            .optional()?;
-        row.map(|(n, head, v, c, by)| {
-            Ok(StreamRow {
-                name: stream_name(&n)?,
-                state: StreamState { head: opt_id(head, "stream head")?, version: v as u64 },
-                created_at: ts(c),
-                created_by: by,
-            })
-        })
-        .transpose()
+        self.conn
+            .query_opt(
+                "SELECT name, head, version, created_at, created_by FROM streams WHERE name = ?1",
+                &params![name],
+            )?
+            .map(|r| stream_row(&r))
+            .transpose()
     }
 
     /// Lists all streams by name.
     pub fn list_streams(&self) -> Result<Vec<StreamRow>, MetaError> {
-        let mut stmt = self.conn.prepare_cached("SELECT name FROM streams ORDER BY name")?;
-        let names: Vec<String> = stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
-        names.iter().map(|n| self.stream(n)?.ok_or_else(|| MetaError::Corrupt("stream vanished".into()))).collect()
+        self.conn
+            .query("SELECT name, head, version, created_at, created_by FROM streams ORDER BY name", &[])?
+            .iter()
+            .map(stream_row)
+            .collect()
     }
 
     /// Atomically moves a stream head if (and only if) its state still equals
@@ -132,7 +129,7 @@ impl Tx<'_> {
         let version = expected.version + 1;
         let changed = self.conn.execute(
             "UPDATE streams SET head = ?1, version = ?2 WHERE name = ?3 AND version = ?4",
-            params![new_head.to_hex(), version as i64, name, expected.version as i64],
+            &params![new_head.to_hex(), version as i64, name, expected.version as i64],
         )?;
         if changed != 1 {
             return Err(MetaError::CasMismatch {
@@ -144,7 +141,7 @@ impl Tx<'_> {
         self.conn.execute(
             "INSERT INTO reflog (stream, old_head, new_head, version, operation_id, actor, ts, reason)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
+            &params![
                 name,
                 expected.head.map(|h| h.to_hex()),
                 new_head.to_hex(),
@@ -160,50 +157,34 @@ impl Tx<'_> {
 
     /// The newest `limit` reflog entries of a stream, newest first.
     pub fn reflog(&self, stream: &str, limit: usize) -> Result<Vec<ReflogEntry>, MetaError> {
-        let mut stmt = self.conn.prepare_cached(
+        let rows = self.conn.query(
             "SELECT seq, stream, old_head, new_head, version, operation_id, actor, ts, reason
              FROM reflog WHERE stream = ?1 ORDER BY seq DESC LIMIT ?2",
+            &params![stream, limit as i64],
         )?;
-        let rows = stmt.query_map(params![stream, limit as i64], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, Option<String>>(2)?,
-                r.get::<_, Option<String>>(3)?,
-                r.get::<_, i64>(4)?,
-                r.get::<_, Option<String>>(5)?,
-                r.get::<_, String>(6)?,
-                r.get::<_, i64>(7)?,
-                r.get::<_, String>(8)?,
-            ))
-        })?;
-        let mut out = Vec::new();
-        for row in rows {
-            let (seq, stream, old, new, version, op, actor, t, reason) = row?;
-            out.push(ReflogEntry {
-                seq: seq as u64,
-                stream: stream_name(&stream)?,
-                old_head: opt_id(old, "reflog old head")?,
-                new_head: opt_id(new, "reflog new head")?,
-                version: version as u64,
-                operation_id: op,
-                actor,
-                timestamp: ts(t),
-                reason,
-            });
-        }
-        Ok(out)
+        rows.iter()
+            .map(|r| {
+                Ok(ReflogEntry {
+                    seq: r.i64(0)? as u64,
+                    stream: stream_name(r.str(1)?)?,
+                    old_head: opt_id(r.opt_string(2)?, "reflog old head")?,
+                    new_head: opt_id(r.opt_string(3)?, "reflog new head")?,
+                    version: r.i64(4)? as u64,
+                    operation_id: r.opt_string(5)?,
+                    actor: r.string(6)?,
+                    timestamp: ts(r.i64(7)?),
+                    reason: r.string(8)?,
+                })
+            })
+            .collect()
     }
 
     /// Reflog entries of all streams newer than `since` (retention roots for GC).
     pub fn reflog_heads_since(&self, since: Timestamp) -> Result<Vec<ChangesetId>, MetaError> {
-        let mut stmt =
-            self.conn.prepare_cached("SELECT DISTINCT new_head FROM reflog WHERE new_head IS NOT NULL AND ts >= ?1")?;
-        let rows = stmt.query_map([since.as_millis()], |r| r.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(parse::<ChangesetId>(&r?, "reflog head")?);
-        }
-        Ok(out)
+        let rows = self.conn.query(
+            "SELECT DISTINCT new_head FROM reflog WHERE new_head IS NOT NULL AND ts >= ?1",
+            &params![since.as_millis()],
+        )?;
+        rows.iter().map(|r| parse::<ChangesetId>(r.str(0)?, "reflog head")).collect()
     }
 }

@@ -2,9 +2,13 @@
 
 ## Layout
 
+This is the default layout. A repository can instead keep its metadata in PostgreSQL and its objects in an
+S3-compatible bucket; `config.json` then carries a `storage` section and `.ag/` holds only the configuration and
+the keys. See [PostgreSQL and S3](../operations/postgres-and-s3.md) and [ADR-0004](../adr/0004-postgres-and-s3-backends.md).
+
 ```text
 .ag/
-├── config.json          {"format":1,"namespace":…,"default_stream":…} — written last by `init`
+├── config.json          {"format":1,"namespace":…,"default_stream":…[,"storage":…]} — written last by `init`
 ├── meta.db              SQLite (WAL); -wal and -shm files exist while open
 ├── store/
 │   ├── objects/ab/cdef… immutable objects, 0444, fan-out by the first byte of the ID
@@ -15,7 +19,8 @@
 
 ## Object store
 
-`ObjectStore` is a trait; shipped backends are the filesystem store and an in-memory store (tests).
+`ObjectStore` is a trait; shipped backends are the filesystem store, an S3-compatible store (below) and an
+in-memory store (tests). The rules in this section hold for every backend unless stated otherwise.
 
 - **Write**: temp file → `fsync` → `chmod 0444` → atomic `rename` → `fsync` of the directory. A reader never
   sees a partial object.
@@ -33,12 +38,74 @@
   exclusively, re-checks the object's age and unlinks. A writer that re-puts an old object just before GC
   acts therefore always wins, closing the "collected what a writer is about to reference" race.
 
+### S3-compatible store
+
+`S3ObjectStore` (crate feature `s3`, on by default) speaks the S3 REST API with a hand-written AWS Signature V4
+over a blocking HTTP client; there is no SDK and no async runtime on this path. Keys are
+`<prefix>/objects/<2 hex>/<62 hex>`, the same fan-out and envelope as the filesystem store.
+
+- **Write**: a conditional create (`PUT` with `If-None-Match: *`). If the object exists (HTTP 412) it is read
+  back and verified; a healthy one has its age refreshed by a server-side `CopyObject` onto itself with
+  `REPLACE` metadata (so `LastModified` moves and a collector keeps it); a damaged one is overwritten, which
+  repairs the store. A service that ignores the conditional header rewrites identical bytes, which is
+  equivalent. One request per object (no multipart), so the largest object is the repository's blob limit.
+- **Read**: the envelope is parsed and the content ID **recomputed** on every `get`, exactly as for files.
+- **Errors**: connection errors, timeouts and 408/409/429/5xx are retried with backoff; anything else that is not
+  a success is an error. A 404 means "absent" only where absence is a valid answer, so a permission problem is
+  never mistaken for a missing object.
+- **Durability contract** (`ObjectStore::durability`, name `s3-compatible`): an acknowledged write survives a
+  crash or loss of *this* host, and loss of a disk or node **if the service replicates or erasure-codes**
+  (Amazon S3 and multi-node MinIO do). It does not survive loss of the storage of a single-node service, loss of
+  a site the bucket is not replicated across, or deletion by anyone with write access (use bucket versioning).
+  A 2xx is not evidence of replication — the same honesty as the filesystem store.
+- **GC coordination — `ObjectLock`.** S3 gives no atomicity across requests, so writers and the collector share a
+  lock: `put` (and the age refresh) hold it *shared*; `delete_if_older_than` holds it *exclusive* across its whole
+  check-then-delete. Implementations: `InProcessLock` (one process), `FileLock` (processes on one host, for
+  SQLite metadata) and `PostgresAdvisoryLock` (session-level advisory locks on a dedicated connection; a crashed
+  process releases it automatically). `ObjectStore::block_gc` takes the shared side for backups. The race and its
+  fix are reproduced in `s3_gc_cannot_delete_an_object_a_writer_just_reput`.
+- Object ages are the server's `LastModified`. GC grace periods are hours, so clock differences do not matter in
+  practice.
+
 ## Metadata store
 
-SQLite with `journal_mode=WAL`, `synchronous=FULL`, `busy_timeout=30s`, `trusted_schema=OFF`. The schema
-version is in `PRAGMA user_version`; a database written by a *newer* version is refused. All SQL lives in
-`crates/ag-storage/src/meta/` and is exposed as methods on a transaction handle (`Tx`), composed by the
-engine inside `Meta::write` (`BEGIN IMMEDIATE`, commit on `Ok`, roll back on `Err`).
+Two backends behind one API: **SQLite** (the default) with `journal_mode=WAL`, `synchronous=FULL`,
+`busy_timeout=30s`, `trusted_schema=OFF`, and **PostgreSQL** (`Meta::open_postgres`, one schema per repository).
+All SQL lives in `crates/ag-storage/src/meta/` and is exposed as methods on a transaction handle (`Tx`),
+composed by the engine inside `Meta::write` (commit on `Ok`, roll back on `Err`). Every query is written once, in the
+subset of SQL both engines share, on top of a thin `Conn`/`Param`/`Row` layer (`meta/db.rs`); `?N` placeholders
+become `$N` for PostgreSQL, and PostgreSQL text columns use the `"C"` collation and integers are `BIGINT` so
+ordering and arithmetic match SQLite's.
+
+### Transaction semantics per backend
+
+The engine's correctness argument is "one writer at a time, reading a state nobody can change until it
+commits" (the stream CAS and the policy evaluation happen in one such transaction). Both backends provide it:
+
+| | SQLite | PostgreSQL |
+|---|---|---|
+| `Meta::write` | `BEGIN IMMEDIATE`: the database write lock, across threads and processes | `READ COMMITTED`, first statement `pg_advisory_xact_lock(key(schema))`: writers of one repository are serialized, writers of different repositories are not |
+| `Meta::read` | deferred transaction: a snapshot | `REPEATABLE READ READ ONLY`: a snapshot, never blocked |
+| waiting for the write lock | `busy_timeout` 30 s | `lock_timeout` 30 s |
+| wait expires | `MetaError::Retriable` | `MetaError::Retriable` |
+| connection lost | n/a (in-process) | `MetaError::ConnectionLost`; `during_commit: true` means the outcome is unknown |
+| crashed writer | the OS releases the file lock | the server ends the session and releases the lock |
+| schema version | `PRAGMA user_version` (and the `meta` table) | the `meta` table, key `schema` |
+| migrations | `migrations/sqlite/NNNN_*.sql` in a `BEGIN IMMEDIATE` | `migrations/postgres/NNNN_*.sql` in a transaction holding an advisory lock |
+
+Why `READ COMMITTED` and not a stronger level for writers: a snapshot is taken at the first statement, which is
+the lock request itself — *before* the lock is granted — so a stronger level would read the state as it was
+before the previous writer committed. Under `READ COMMITTED` each statement after the lock sees the latest
+commit. The stream CAS is additionally a conditional `UPDATE … WHERE version = ?`, so it holds even for a
+writer that did not take the lock.
+
+PostgreSQL aborts a transaction after any failed statement, SQLite does not; a write whose closure ignored such
+an error is rolled back rather than committed half done (`a_swallowed_statement_error_does_not_commit_a_half_transaction`).
+The tests that pin this down: `writers_of_one_repository_are_serialized_and_see_each_others_commits`,
+`many_connections_racing_the_stream_cas_never_lose_an_update`, `readers_are_never_blocked_by_a_writer_and_see_a_snapshot`,
+`a_connection_killed_mid_transaction_is_an_error_and_nothing_is_applied`,
+`waiting_too_long_for_the_write_lock_is_a_retriable_error`, `opening_twice_at_once_migrates_exactly_once`. The
+metadata, engine, policy, lifecycle and agent suites run unchanged on PostgreSQL.
 
 | Table | Contents | Authority |
 |---|---|---|
@@ -51,6 +118,7 @@ engine inside `Meta::write` (`BEGIN IMMEDIATE`, commit on `Ok`, roll back on `Er
 | `proposals`, `reviews`, `attestations`, `pins`, `workspaces`, `queue` | collaboration state | source of truth |
 | `agents`, `agent_runs`, `tasks`, `task_deps`, `leases`, `counters`, `provenance` | agent coordination; `counters` provides fencing tokens | source of truth |
 | `trees`, `changeset_trees` | **derived** tree manifests | disposable cache |
+| `jobs` | the asynchronous job queue (schema version 2): leased claims, retry with backoff, dedupe keys | source of truth |
 
 There are deliberately no foreign keys: referential consistency is checked by `ag verify`, which lets
 garbage collection remove rows in any order.
@@ -84,4 +152,6 @@ Known limits:
   are on the [roadmap](../../ROADMAP.md);
 - blobs are read fully into memory (bounded by the blob limit), and snapshots hash every file of the
   working directory;
-- the engine is single-node: SQLite serializes writers.
+- writers of one repository are serialized, on every backend: throughput per repository is bounded by the round
+  trips of a short transaction. SQLite is a local file (one host); PostgreSQL and S3 lift that limit for the number
+  of processes and hosts, not for concurrent writers of the *same* repository.

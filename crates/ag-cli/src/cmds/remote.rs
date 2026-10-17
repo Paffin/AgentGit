@@ -369,11 +369,11 @@ pub fn clone(cli: &Cli, a: &CloneArgs) -> Result<u8> {
     std::fs::create_dir_all(&dir)?;
     let repo = Repository::init(
         &dir,
-        &InitOptions {
-            namespace: Namespace::new(info.namespace.clone()).map_err(|e| anyhow!("{e}"))?,
-            default_stream: StreamName::new(stream.clone()).map_err(|e| anyhow!("{e}"))?,
-            actor: identity(cli)?,
-        },
+        &InitOptions::new(
+            Namespace::new(info.namespace.clone()).map_err(|e| anyhow!("{e}"))?,
+            StreamName::new(stream.clone()).map_err(|e| anyhow!("{e}"))?,
+            identity(cli)?,
+        ),
     )?;
     if let Some(t) = &stdin_token {
         write_secret(&dir.join(".ag").join("credentials").join(&a.name), t)?;

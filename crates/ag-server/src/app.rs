@@ -128,6 +128,7 @@ impl App {
             clock.clone(),
             cfg.repos.pool_size,
             cfg.repos.max_open,
+            cfg.repos.storage.clone(),
         );
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);

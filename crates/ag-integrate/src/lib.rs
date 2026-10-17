@@ -33,6 +33,7 @@ mod prepare;
 mod publish;
 mod queue;
 mod repo;
+mod storage;
 mod types;
 mod virtual_ws;
 pub mod workdir;
@@ -55,6 +56,10 @@ pub use publish::PublishResult;
 pub use ag_storage::meta::IntentState as PublishState;
 pub use queue::QueueRunReport;
 pub use repo::Repository;
+pub use storage::{
+    DEFAULT_PG_URL_ENV, DEFAULT_S3_ACCESS_KEY_ID_ENV, DEFAULT_S3_SECRET_ACCESS_KEY_ENV, DEFAULT_S3_SESSION_TOKEN_ENV,
+    MetaConfig, ObjectLockKind, ObjectsConfig, StorageConfig,
+};
 pub use types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
 pub use virtual_ws::{VirtualChange, VirtualContent};
 pub use workspace::{Change, SyncOutcome};

@@ -95,11 +95,20 @@ impl App {
         }
         .ok_or_else(|| ApiError::not_found(format!("repository '{name}' not found")))?;
         let mut wire = row_to_wire(&row);
-        let (streams, changesets, durability) = self
+        let (streams, changesets, durability, backends) = self
             .with_repo(call, &name, Cap::RepoRead, None, |repo, _| {
                 let streams = repo.meta().read(|tx| tx.list_streams())?.len() as u32;
                 let changesets = repo.meta().read(|tx| tx.count_changesets())?;
                 let d = repo.objects().durability();
+                let storage = repo.config().storage();
+                let backends = (
+                    if matches!(storage.meta, ag_integrate::MetaConfig::Postgres { .. }) {
+                        "postgres"
+                    } else {
+                        "sqlite"
+                    },
+                    if matches!(storage.objects, ag_integrate::ObjectsConfig::S3 { .. }) { "s3" } else { "fs" },
+                );
                 Ok((
                     streams,
                     changesets,
@@ -109,12 +118,15 @@ impl App {
                         d.survives.join(", "),
                         d.does_not_survive.join(", ")
                     ),
+                    backends,
                 ))
             })
             .await?;
         wire.stream_count = streams;
         wire.changeset_count = changesets;
         wire.durability = durability;
+        wire.meta_backend = backends.0.into();
+        wire.object_backend = backends.1.into();
         Ok(wire)
     }
 

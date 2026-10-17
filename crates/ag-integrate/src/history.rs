@@ -31,8 +31,8 @@ impl<'a> HybridGraph<'a> {
 
 impl Graph for HybridGraph<'_> {
     fn parents(&self, id: &ChangesetId) -> std::result::Result<Vec<ChangesetId>, DagError> {
-        if self.meta.read(|tx| tx.is_ready(id)).map_err(Self::meta_err)? {
-            return self.meta.read(|tx| tx.parents(id)).map_err(Self::meta_err);
+        if self.meta.read_single(|tx| tx.is_ready(id)).map_err(Self::meta_err)? {
+            return self.meta.read_single(|tx| tx.parents(id)).map_err(Self::meta_err);
         }
         Ok(self.source.changeset(id)?.parents.clone())
     }
@@ -47,7 +47,7 @@ impl Graph for HybridGraph<'_> {
                 stack.pop();
                 continue;
             }
-            if let Some(g) = self.meta.read(|tx| tx.generation(&cur)).map_err(Self::meta_err)? {
+            if let Some(g) = self.meta.read_single(|tx| tx.generation(&cur)).map_err(Self::meta_err)? {
                 self.memo.write().expect("lock").insert(cur, g);
                 stack.pop();
                 continue;

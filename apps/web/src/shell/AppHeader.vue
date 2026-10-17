@@ -30,7 +30,13 @@ const items = computed<MenuItem[]>(() => [
 
 async function onSelect(id: string) {
   if (id === 'signout') {
-    auth.signOut()
+    // After a single sign-on the provider has a session of its own; when it offers a way to end it, go there
+    // (it sends the browser back to the sign-in page).
+    const providerLogout = auth.signOut()
+    if (providerLogout) {
+      window.location.assign(providerLogout)
+      return
+    }
     await router.replace({ name: 'signin' })
   } else if (id === 'access') {
     await router.push({ name: 'access' })

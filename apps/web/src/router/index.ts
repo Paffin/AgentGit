@@ -20,6 +20,13 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Sign in' },
   },
   {
+    // Where the identity provider sends the browser back to after a redirect sign-in.
+    path: '/auth/callback',
+    name: 'auth-callback',
+    component: () => import('@/views/AuthCallbackView.vue'),
+    meta: { public: true, title: 'Signing in' },
+  },
+  {
     path: '/',
     name: 'repos',
     component: () => import('@/views/ReposView.vue'),
@@ -118,9 +125,10 @@ export function createAppRouter(history = createWebHistory()): Router {
 
   router.beforeEach(async (to) => {
     const auth = useAuth()
-    if (auth.status === 'anonymous' && auth.token === null) {
+    // The callback finishes a sign-in itself; resuming one there would start another.
+    if (to.name !== 'auth-callback' && auth.status === 'anonymous' && auth.token === null) {
       try {
-        await auth.restore()
+        await auth.restore(to.fullPath)
       } catch (e) {
         // The server is unreachable while resuming a saved session: say so instead of showing a sign-in form.
         if (e instanceof ApiError && e.isNetwork && to.name !== 'offline') {

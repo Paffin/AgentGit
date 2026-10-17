@@ -73,6 +73,30 @@ export function defaultUi(webDir: string): string {
   return process.env.AG_E2E_UI === 'embedded' ? 'embedded' : webDir
 }
 
+/**
+ * Configuration that makes the server trust an identity provider and the UI offer redirect sign-in with it.
+ * Every OIDC user belongs to `staff` (a reader of acme/*); `platform` members are administrators.
+ */
+export function oidcConfig(issuer: string, clientId: string): string[] {
+  return [
+    '[[auth.oidc]]',
+    `issuer = ${JSON.stringify(issuer)}`,
+    `audience = ${JSON.stringify(clientId)}`,
+    `jwks_uri = ${JSON.stringify(`${issuer}/jwks`)}`,
+    'algorithms = ["EdDSA"]',
+    'group_roles = [',
+    '  { group = "staff", role = "reader", repo = "acme/*" },',
+    '  { group = "platform", role = "admin", repo = "acme/*" },',
+    ']',
+    '',
+    '[[ui.login]]',
+    `issuer = ${JSON.stringify(issuer)}`,
+    `client_id = ${JSON.stringify(clientId)}`,
+    'name = "Fake SSO"',
+    '',
+  ]
+}
+
 export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   const webDir = opts.ui
   if (webDir !== 'embedded' && !existsSync(join(webDir, 'index.html'))) {

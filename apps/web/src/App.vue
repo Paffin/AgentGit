@@ -5,6 +5,7 @@ import AppHeader from '@/shell/AppHeader.vue'
 import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
 import Alert from '@/ui/Alert.vue'
+import Button from '@/ui/Button.vue'
 import ToastHost from '@/ui/ToastHost.vue'
 import { useServerNow } from '@/composables/useNow'
 import { formatDuration } from '@/lib/format'
@@ -20,6 +21,16 @@ const announcement = ref('')
 const now = useServerNow()
 
 const expiresIn = computed(() => formatDuration(Math.max(0, auth.expiresAt - now.value)))
+
+const reauthBusy = ref(false)
+async function reauthenticate() {
+  reauthBusy.value = true
+  try {
+    await auth.reauthenticate(route.fullPath)
+  } catch {
+    reauthBusy.value = false
+  }
+}
 
 // After a navigation, tell assistive tech where we are and move focus to the new content. The page's
 // first load keeps focus where the browser put it, so the first Tab reaches the "Skip to content" link.
@@ -46,7 +57,14 @@ watch(
   <AppHeader />
   <div v-if="auth.isAuthenticated && auth.expiryWarned" class="expiry">
     <Alert tone="warn" live="status" title="Your credential is about to expire">
-      You will be signed out in {{ expiresIn }}. Mint a new token or sign in again to keep working.
+      You will be signed out in {{ expiresIn }}.
+      <template v-if="auth.method === 'oidc'">
+        Sign in again to keep working; you come back to this page.
+        <Button size="sm" data-testid="reauth" :loading="reauthBusy" @click="reauthenticate">
+          Sign in again
+        </Button>
+      </template>
+      <template v-else>Mint a new token or sign in again to keep working.</template>
     </Alert>
   </div>
   <main id="main" ref="main" tabindex="-1" class="main">

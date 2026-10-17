@@ -15,6 +15,8 @@ export interface State {
   tokens: Record<string, string>
   demo: Demo
   hostile: { proposal: string }
+  /** The fake identity provider the server trusts and the UI offers a sign-in button for. */
+  idp: { issuer: string; clientId: string }
 }
 
 export function writeState(state: State): void {

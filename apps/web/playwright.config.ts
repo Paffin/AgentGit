@@ -39,7 +39,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : 3,
   reporter: process.env.CI
-    ? [['list'], ['html', { open: 'never' }], ['github']]
+    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/results.json' }]]
     : [['list'], ['html', { open: 'never' }]],
   use: {
     ...desktop,

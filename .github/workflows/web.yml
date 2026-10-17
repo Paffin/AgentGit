@@ -94,6 +94,10 @@ jobs:
           AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
           AG_E2E_UI: embedded
           CI: "true"
+      - name: What failed
+        if: failure()
+        run: node scripts/summarize-failures.mjs
+        working-directory: apps/web
       - name: Keep the report when something failed
         if: failure()
         uses: actions/upload-artifact@v4

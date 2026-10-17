@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="Row extends object">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
 import { useViewportWidth } from '@/composables/useViewport'
 import Skeleton from './Skeleton.vue'
 import type { Column } from './types'
@@ -49,6 +49,8 @@ onMounted(() => {
     if (table) observer.observe(table)
   }
 })
+// The content can outgrow the box without the box (or the table) resizing: re-measure after every render.
+onUpdated(measure)
 onBeforeUnmount(() => observer?.disconnect())
 watch(
   () => [props.rows, props.loading, width.value],
@@ -131,7 +133,10 @@ function value(row: Row, key: string): unknown {
 
 <style scoped>
 .wrap {
+  /* Only sideways: with `overflow-x` alone the other axis computes to `auto` too, and a sub-pixel rounding
+     difference in the height would make a scroll container of it that no keyboard can reach. */
   overflow-x: auto;
+  overflow-y: hidden;
 }
 .table {
   width: 100%;

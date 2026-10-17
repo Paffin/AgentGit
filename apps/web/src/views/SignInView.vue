@@ -39,10 +39,28 @@ const reason = computed(() => {
   }
 })
 const methods = computed(() => auth.capabilities?.auth_methods ?? [])
+const providers = computed(() => auth.config?.providers ?? [])
+const ssoError = computed(() => (auth.endedBecause === 'sso' ? auth.ssoMessage : ''))
+const ssoBusy = ref(-1)
+const ssoStartError = ref('')
 
 onMounted(() => {
   void auth.loadCapabilities()
+  void auth.loadAuthConfig()
 })
+
+async function signInWithSso(index: number) {
+  if (ssoBusy.value >= 0) return
+  ssoBusy.value = index
+  ssoStartError.value = ''
+  try {
+    // The browser leaves for the provider; this page only stays when something went wrong before that.
+    await auth.signInWithSso(index, next.value)
+  } catch (e) {
+    ssoStartError.value = e instanceof Error ? e.message : describeError(e)
+    ssoBusy.value = -1
+  }
+}
 
 async function submit() {
   if (busy.value) return
@@ -74,14 +92,49 @@ async function proceed() {
     <div class="intro">
       <h1>Sign in to AgentGit</h1>
       <p class="muted">
-        Paste a token to see live agent work, proposals and policy. It stays in this tab’s session
-        storage and is never put in a URL.
+        See live agent work, proposals and policy.
+        {{
+          providers.length
+            ? 'Sign in with your organisation’s single sign-on, or paste a token.'
+            : 'Paste a token to continue.'
+        }}
       </p>
     </div>
 
+    <Card v-if="!who && providers.length" title="Single sign-on" icon="shield" :level="2">
+      <div class="form">
+        <Alert v-if="ssoError" tone="warn" live="alert" title="Single sign-on did not complete">
+          {{ ssoError }}
+        </Alert>
+        <Alert v-else-if="reason" tone="info" live="status">{{ reason }}</Alert>
+        <Alert v-if="ssoStartError" tone="bad" live="alert" title="Could not start sign-in">
+          {{ ssoStartError }}
+        </Alert>
+        <Button
+          v-for="(p, i) in providers"
+          :key="`${p.issuer}|${p.client_id}`"
+          type="button"
+          variant="primary"
+          icon="key"
+          block
+          :loading="ssoBusy === i"
+          :data-testid="`sso-login-${i}`"
+          @click="signInWithSso(i)"
+        >
+          Sign in with {{ p.name }}
+        </Button>
+        <p class="faint small">
+          You are sent to your identity provider and back. The token it issues is kept in this tab’s
+          memory only: it is never stored, so reloading the page asks the provider again.
+        </p>
+      </div>
+    </Card>
+
     <Card v-if="!who" title="Token" icon="key" :level="2">
       <form class="form" novalidate @submit.prevent="submit">
-        <Alert v-if="reason && !error" tone="info" live="status">{{ reason }}</Alert>
+        <Alert v-if="reason && !error && !providers.length" tone="info" live="status">{{
+          reason
+        }}</Alert>
         <TextField
           v-model="token"
           label="Access token"
@@ -139,10 +192,10 @@ async function proceed() {
           once. Opaque, always expiring, revocable.
         </li>
         <li>
-          <strong>Single sign-on (OIDC).</strong> If your organisation configured OIDC, paste your
-          <em>ID token</em> or <em>access token</em> from your identity provider. The server checks
-          issuer, audience, expiry and signature, and maps your groups to roles. Tokens from other
-          providers are rejected.
+          <strong>Single sign-on (OIDC).</strong> If your organisation configured it, use the
+          sign-in button above. Otherwise paste your <em>ID token</em> or <em>access token</em> from
+          your identity provider. The server checks issuer, audience, expiry and signature, and maps
+          your groups to roles. Tokens from other providers are rejected.
         </li>
         <li>
           <strong>Bootstrap token.</strong> The administrator token set in the server’s environment.
@@ -158,8 +211,9 @@ async function proceed() {
         >
       </p>
       <p class="note faint">
-        <Icon name="shield" :size="14" /> The token is sent only to this server, in an Authorization
-        header. Closing the tab signs you out.
+        <Icon name="shield" :size="14" /> A token is sent only to this server, in an Authorization
+        header. A pasted token stays in this tab’s session storage (closing the tab signs you out);
+        a single sign-on token is kept in memory only.
       </p>
     </Card>
   </div>
@@ -208,6 +262,9 @@ async function proceed() {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  font-size: var(--fs-sm);
+}
+.small {
   font-size: var(--fs-sm);
 }
 .note {

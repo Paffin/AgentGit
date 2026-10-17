@@ -208,11 +208,15 @@ pub(crate) struct PgTarget {
 }
 
 /// Opens the metadata store named by `storage`.
+///
+/// With `create`, a PostgreSQL schema that does not exist yet is created (`ag init`);
+/// without it, a missing or empty schema is an error (opening an existing repository).
 pub(crate) fn open_meta(
     storage: &StorageConfig,
     layout: &Layout,
     clock: Arc<dyn Clock>,
     limits: &Limits,
+    create: bool,
 ) -> Result<(Meta, Option<PgTarget>)> {
     match &storage.meta {
         MetaConfig::Sqlite => Ok((Meta::open_with(&layout.db_path(), clock, limits.clone())?, None)),
@@ -224,7 +228,7 @@ pub(crate) fn open_meta(
                     env_value(var, "the PostgreSQL connection URL", "storage.meta.url_env")?
                 }
             };
-            let mut opts = PgOptions::default();
+            let mut opts = PgOptions { create_schema: create, ..PgOptions::default() };
             if let Some(n) = pool_size {
                 opts.pool_size = *n;
             }

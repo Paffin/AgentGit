@@ -67,6 +67,11 @@ pub struct PgOptions {
     pub idle_in_transaction_timeout: Duration,
     /// `application_name` shown in `pg_stat_activity`.
     pub application_name: String,
+    /// Create the schema (and its tables) if it does not exist. Turn off to *open an existing
+    /// repository*: a missing or empty schema is then [`MetaError::NotFound`] instead of
+    /// silently becoming a new, empty one (a dropped schema, a URL pointing at the wrong database).
+    /// An existing schema of an older version is migrated either way.
+    pub create_schema: bool,
 }
 
 impl Default for PgOptions {
@@ -79,6 +84,7 @@ impl Default for PgOptions {
             statement_timeout: None,
             idle_in_transaction_timeout: Duration::from_secs(600),
             application_name: "agentgit".into(),
+            create_schema: true,
         }
     }
 }
@@ -414,6 +420,12 @@ pub(crate) struct PgBackend {
     opts: PgOptions,
 }
 
+fn missing_repository(schema: &str) -> MetaError {
+    MetaError::NotFound(format!(
+        "PostgreSQL schema '{schema}' holds no repository (was it dropped, or does the connection URL point at the wrong database?)"
+    ))
+}
+
 fn ms(d: Duration) -> u128 {
     d.as_millis().max(1)
 }
@@ -459,6 +471,9 @@ impl PgBackend {
                 .i64(0)?
                 > 0;
             if !exists {
+                if !self.opts.create_schema {
+                    return Err(missing_repository(&self.schema));
+                }
                 c.batch(&format!("CREATE SCHEMA {}", quote_ident(&self.schema)))?;
             }
             let qualified = format!("{}.meta", quote_ident(&self.schema));
@@ -476,6 +491,9 @@ impl PgBackend {
             };
             if current > SCHEMA_VERSION {
                 return Err(MetaError::UnsupportedSchema { found: current, supported: SCHEMA_VERSION });
+            }
+            if current == 0 && !self.opts.create_schema {
+                return Err(missing_repository(&self.schema));
             }
             for m in POSTGRES_MIGRATIONS.iter().filter(|m| m.version > current) {
                 c.batch(m.sql).map_err(|e| m.failed(e))?;

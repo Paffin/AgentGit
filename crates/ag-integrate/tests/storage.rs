@@ -156,6 +156,20 @@ fn a_postgres_repository_is_created_reopened_and_cannot_be_initialized_twice() {
     let third = tempdir();
     let r2 = Repository::init(third.path(), &opts(Some(postgres_section(second.name())))).unwrap();
     assert!(r2.resolve_rev("main").is_err(), "empty: schemas isolate repositories");
+    drop(r2);
+
+    // A schema that vanished (dropped, or the URL points at another database) must not quietly
+    // become a new, empty repository when opened.
+    ag_storage::meta::drop_schema(&url, second.name()).unwrap();
+    let err = Repository::open(third.path()).err().expect("refused").to_string();
+    assert!(err.contains("holds no repository") && err.contains(second.name()), "{err}");
+    let m = ag_storage::Meta::open_postgres(
+        &url,
+        second.name(),
+        std::sync::Arc::new(ag_storage::SystemClock),
+        Default::default(),
+    );
+    assert!(m.is_ok(), "(creating it explicitly, as init does, still works)");
     drop((schema, second));
 }
 

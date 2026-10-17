@@ -51,7 +51,7 @@ impl Repository {
             default_stream: opts.default_stream.clone(),
             storage,
         };
-        let repo = Self::assemble(layout.clone(), config.clone(), Arc::new(SystemClock))?;
+        let repo = Self::assemble(layout.clone(), config.clone(), Arc::new(SystemClock), true)?;
         // A PostgreSQL schema or an S3 prefix can already hold a repository (initialized from
         // another directory): never initialize on top of it.
         if repo.meta.read(|tx| tx.list_streams())?.iter().any(|_| true) {
@@ -92,7 +92,7 @@ impl Repository {
         if config.format != 1 {
             return Err(Error::Config(format!("unsupported repository format {}", config.format)));
         }
-        Self::assemble(layout, config, clock)
+        Self::assemble(layout, config, clock, false)
     }
 
     /// A throwaway in-memory repository for tests and embedding.
@@ -136,10 +136,10 @@ impl Repository {
         Ok(repo)
     }
 
-    fn assemble(layout: Layout, config: RepoConfig, clock: Arc<dyn Clock>) -> Result<Self> {
+    fn assemble(layout: Layout, config: RepoConfig, clock: Arc<dyn Clock>, create: bool) -> Result<Self> {
         let limits = Limits::default();
         let storage: StorageConfig = config.storage();
-        let (meta, pg) = storage::open_meta(&storage, &layout, clock, &limits)?;
+        let (meta, pg) = storage::open_meta(&storage, &layout, clock, &limits, create)?;
         let objects = storage::open_objects(&storage, &layout, config.namespace.as_str(), &limits, pg.as_ref())?;
         let meta = Arc::new(meta);
         Ok(Self {

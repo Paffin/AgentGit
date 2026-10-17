@@ -20,8 +20,6 @@ jobs:
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # macOS is expected to work but is not yet a merge gate.
-    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -55,7 +53,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
+      # Select the toolchain with the `toolchain` input rather than an `@1.89.0` ref:
+      # Dependabot would "update" such a ref and silently move the MSRV.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets
 

@@ -6,6 +6,7 @@
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
+| read history: blame, renames, path history | [History guide](guides/history.md) |
 | move to or from Git | [Git bridge](guides/git-bridge.md) |
 | look up a command | [CLI reference](reference/cli.md) *(generated)* |
 | understand how it works and why it is safe | [Architecture overview](architecture/overview.md) |

@@ -499,6 +499,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/blame",
+        "history.blame",
+        "History",
+        "Which changeset introduced each line of a file (follows renames)",
+        v1::BlameRequest,
+        v1::BlameResponse,
+        blame
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/history/ancestors",

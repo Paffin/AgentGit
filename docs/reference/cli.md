@@ -25,6 +25,7 @@ Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
 - [`ag show`](#ag-show)
 - [`ag diff`](#ag-diff)
 - [`ag cat`](#ag-cat)
+- [`ag blame`](#ag-blame)
 - [`ag ls`](#ag-ls)
 - [`ag checkout`](#ag-checkout)
 - [`ag stream`](#ag-stream)
@@ -117,6 +118,7 @@ Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
 - [`ag remote events`](#ag-remote-events)
 - [`ag remote policy`](#ag-remote-policy)
 - [`ag remote log`](#ag-remote-log)
+- [`ag remote blame`](#ag-remote-blame)
 - [`ag remote cat`](#ag-remote-cat)
 - [`ag pin`](#ag-pin)
 - [`ag unpin`](#ag-unpin)
@@ -138,6 +140,7 @@ Commands:
   show        Show one changeset and what it changed
   diff        Show differences between two revisions, or the working directory and its snapshot
   cat         Print a file as of a revision: `ag cat main:src/lib.rs`
+  blame       Show which changeset introduced each line of a file
   ls          List a directory as of a revision
   checkout    Write a revision's files into a new directory
   stream      Manage streams
@@ -327,6 +330,26 @@ Options:
       --json           Machine-readable JSON output
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag blame
+
+```text
+Show which changeset introduced each line of a file
+
+Usage: ag blame [OPTIONS] <SPEC>
+
+Arguments:
+  <SPEC>  `[REV:]PATH`, for example `src/lib.rs`, `main:src/lib.rs` or `@:README.md`. Without a revision, the workspace head (or the default stream) is used
+
+Options:
+  -C, --repo <DIR>                 Operate on the repository at this path (default: discovered from the current directory)
+  -L, --lines <START,END>          Only these lines, `START,END` (1-based, inclusive)
+      --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --max-commits <MAX_COMMITS>  Visit at most this many changesets; older lines are marked as a boundary [default: 100000]
+      --json                       Machine-readable JSON output
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
 ## ag ls
@@ -1839,6 +1862,7 @@ Commands:
   events     Show the events of the repository (replay), or follow them live
   policy     Show or set a stream's policy
   log        Show history of a revision on the server
+  blame      Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
   cat        Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
   help       Print this message or the help of the given subcommand(s)
 
@@ -2116,6 +2140,26 @@ Options:
       --json             Machine-readable JSON output
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag remote blame
+
+```text
+Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
+
+Usage: ag remote blame [OPTIONS] <SPEC>
+
+Arguments:
+  <SPEC>  `[REV:]PATH`
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+  -L, --lines <START,END>  Only these lines, `START,END`
+      --remote <REMOTE>    Remote to use (default: origin)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json               Machine-readable JSON output
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## ag remote cat

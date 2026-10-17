@@ -315,6 +315,40 @@ fn a_content_conflict_after_a_rename_gets_markers_in_the_new_file() {
 }
 
 #[test]
+fn blame_and_show_follow_a_rename() {
+    let a = Ag::new();
+    let body: String = (1..=6).map(|i| format!("line {i}\n")).collect();
+    a.write("old.txt", &body);
+    let first = a.propose_as("user:alice", "create it");
+    a.ag(&["integrate", &first]).ok();
+
+    fs::remove_file(a.root().join("old.txt")).unwrap();
+    a.write("new.txt", &body.replace("line 6", "line six"));
+    let second = a.run_as("user:bob", &["snapshot", "-m", "rename and edit"]).ok();
+    drop(second);
+    let rev = a.run_as("user:bob", &["--json", "show", "@"]).ok().json();
+    assert_eq!(rev["changes"][0]["op"], "R", "{rev}");
+    assert_eq!(rev["changes"][0]["from"], "old.txt");
+    assert_eq!(rev["changes"][0]["path"], "new.txt");
+    let text = a.run_as("user:bob", &["show", "@"]).ok().stdout();
+    assert!(text.contains("R old.txt -> new.txt"), "{text}");
+
+    let out = a.run_as("user:bob", &["blame", "new.txt"]).ok().stdout();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 6, "{out}");
+    assert!(
+        lines[0].contains("user:alice") && lines[0].contains("old.txt") && lines[0].ends_with("1) line 1"),
+        "{out}"
+    );
+    assert!(lines[5].contains("user:bob") && lines[5].ends_with("6) line six"), "{out}");
+    // a range and the JSON form
+    let j = a.run_as("user:bob", &["--json", "blame", "-L", "2,3", "@:new.txt"]).ok().json();
+    assert_eq!(j["lines"].as_array().unwrap().len(), 2);
+    assert_eq!(j["lines"][0]["path"], "old.txt");
+    a.run_as("user:bob", &["blame", "nope.txt"]).code_is(1);
+}
+
+#[test]
 fn validation_gate_with_signed_attestations() {
     let a = Ag::new();
     let key = a.ag(&["--json", "validate", "keygen", "ci"]).ok().json();

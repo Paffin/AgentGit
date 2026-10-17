@@ -221,6 +221,9 @@ impl HistoryService for Grpc {
     async fn log(&self, request: Request<v1::LogRequest>) -> Result<Response<v1::LogResponse>, Status> {
         unary!(self, request, "history.log", log)
     }
+    async fn blame(&self, request: Request<v1::BlameRequest>) -> Result<Response<v1::BlameResponse>, Status> {
+        unary!(self, request, "history.blame", blame)
+    }
     async fn ancestors(
         &self,
         request: Request<v1::AncestorsRequest>,

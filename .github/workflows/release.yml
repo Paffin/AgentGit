@@ -16,7 +16,6 @@ name: Release
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
-    branches: ["wip/**"] # rehearsal while this workflow is being developed (removed before it lands on main)
   workflow_dispatch:
     inputs:
       version:

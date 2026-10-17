@@ -12,7 +12,7 @@ name: Packaging
 
 on:
   push:
-    branches: [main, "wip/**"]
+    branches: [main]
     paths:
       - "crates/**"
       - "Cargo.toml"

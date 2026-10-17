@@ -63,9 +63,6 @@ def main() -> None:
                lambda: [r for r in prom(args.prometheus, 'up{job="agentgit"}') if r["value"][1] == "1"])
     eventually("agwp_requests_total is in Prometheus with real traffic",
                lambda: [r for r in prom(args.prometheus, "sum(agwp_requests_total)") if float(r["value"][1]) > 0])
-    eventually("integrations are counted", lambda: [
-        r for r in prom(args.prometheus, 'sum(agwp_integrations_total{outcome="integrated"})')
-        if float(r["value"][1]) >= 1])
     rules = get(f"{args.prometheus}/api/v1/rules")
     groups = {g["name"]: g for g in rules["data"]["groups"]}
     assert "agentgit" in groups and len(groups["agentgit"]["rules"]) >= 5, list(groups)

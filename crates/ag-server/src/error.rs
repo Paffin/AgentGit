@@ -94,6 +94,26 @@ impl From<MetaError> for ApiError {
                 Self::new(ErrorCode::ObjectMissing, format!("parent changeset {id} is not published"))
             }
             MetaError::Invalid(m) => Self::invalid(m),
+            // Transient trouble with the database (a busy lock, a restart, a failover): nothing was committed,
+            // so the caller may simply try again — on this replica or another.
+            MetaError::Retriable(m) => {
+                tracing::warn!(error = %m, "transient metadata failure");
+                Self::new(ErrorCode::Unavailable, "the metadata database is busy or restarting; retry")
+                    .with_retry_after(250)
+            }
+            MetaError::ConnectionLost { during_commit: false, message } => {
+                tracing::warn!(error = %message, "lost the connection to the metadata database");
+                Self::new(ErrorCode::Unavailable, "the metadata database is unreachable; retry").with_retry_after(500)
+            }
+            // The commit was in flight when the connection died: it may or may not have been applied.
+            MetaError::ConnectionLost { during_commit: true, message } => {
+                tracing::warn!(error = %message, "lost the connection to the metadata database while committing");
+                Self::new(
+                    ErrorCode::DeadlineExceeded,
+                    "the connection to the metadata database was lost while committing; the operation may or may not \
+                     have happened — ask for its outcome before retrying",
+                )
+            }
             MetaError::UnsupportedSchema { .. } | MetaError::Corrupt(_) | MetaError::Json(_) => Self::internal(e),
             other => Self::internal(other),
         }

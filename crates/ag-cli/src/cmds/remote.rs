@@ -76,11 +76,16 @@ fn write_secret(path: &Path, token: &str) -> Result<()> {
 }
 
 fn read_token(root: &Path, name: &str, r: &Remote) -> Result<String> {
+    credential_source(root, name, r).map(|(token, _)| token)
+}
+
+/// Finds a remote's credential and says where it came from (never the credential itself in the label).
+pub(crate) fn credential_source(root: &Path, name: &str, r: &Remote) -> Result<(String, String)> {
     if let Some(var) = &r.token_env
         && let Ok(v) = std::env::var(var)
         && !v.trim().is_empty()
     {
-        return Ok(v.trim().to_string());
+        return Ok((v.trim().to_string(), format!("environment variable {var}")));
     }
     if let Some(file) = &r.token_file {
         let path = if Path::new(file).is_absolute() { PathBuf::from(file) } else { root.join(".ag").join(file) };
@@ -93,7 +98,7 @@ fn read_token(root: &Path, name: &str, r: &Remote) -> Result<String> {
                 bail!("{} is readable by other users; run `chmod 600 {}`", path.display(), path.display());
             }
         }
-        return Ok(std::fs::read_to_string(&path)?.trim().to_string());
+        return Ok((std::fs::read_to_string(&path)?.trim().to_string(), format!("file {}", path.display())));
     }
     let upper: String =
         name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
@@ -101,10 +106,12 @@ fn read_token(root: &Path, name: &str, r: &Remote) -> Result<String> {
         if let Ok(v) = std::env::var(&var)
             && !v.trim().is_empty()
         {
-            return Ok(v.trim().to_string());
+            return Ok((v.trim().to_string(), format!("environment variable {var}")));
         }
     }
-    bail!("no credential for remote '{name}': set AG_TOKEN (or AG_TOKEN_{upper}), or `ag remote add --token-stdin`")
+    bail!(
+        "no credential for remote '{name}': set AG_TOKEN (or AG_TOKEN_{upper}), or pass --token-stdin to `ag clone` / `ag remote add`"
+    )
 }
 
 /// Splits `https://host:8080/acme/web` into the server URL and `acme/web`.
@@ -130,18 +137,52 @@ fn rt() -> Result<tokio::runtime::Runtime> {
 }
 
 async fn connect(root: &Path, name: &str, r: &Remote) -> Result<Client> {
+    connect_with_timeout(root, name, r, std::time::Duration::from_secs(120)).await
+}
+
+/// Connects with `timeout` as the deadline of every call (`ag doctor` asks for a short one).
+pub(crate) async fn connect_with_timeout(
+    root: &Path,
+    name: &str,
+    r: &Remote,
+    timeout: std::time::Duration,
+) -> Result<Client> {
     let token = read_token(root, name, r)?;
     let run = std::env::var("AG_RUN").ok().filter(|s| !s.is_empty());
+    crate::ui::verbose(format!("remote {name}: {} (repository {})", r.url, r.repo));
     Client::connect(Options {
         endpoint: r.url.clone(),
         token,
         run,
         ca_file: r.ca_file.clone(),
-        timeout: Some(std::time::Duration::from_secs(120)),
+        timeout: Some(timeout),
         user_agent: Some(format!("ag/{}", env!("CARGO_PKG_VERSION"))),
     })
     .await
     .map_err(|e| anyhow!("{e}"))
+}
+
+/// The configured remotes in name order (none when the repository has no `remotes.json`).
+pub(crate) fn load_remotes_if_any(root: &Path) -> Result<Vec<(String, Remote)>> {
+    Ok(load_remotes(root)?.remotes.into_iter().collect())
+}
+
+/// Asks the server for the current head of `stream` (a short, non-retrying call for `ag status --remote`).
+pub(crate) fn server_head(root: &Path, name: &str, remote: &Remote, stream: &str) -> Result<String> {
+    rt()?.block_on(async {
+        let client = connect_with_timeout(root, name, remote, std::time::Duration::from_secs(10)).await?;
+        let head = client
+            .streams()
+            .read_head(client.req(v1::ReadHeadRequest {
+                repo: remote.repo.clone(),
+                stream: stream.into(),
+                ..Default::default()
+            }))
+            .await
+            .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+            .into_inner();
+        Ok(if head.head.is_empty() { "(empty)".to_string() } else { head.head })
+    })
 }
 
 fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
@@ -153,7 +194,7 @@ fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
     Ok((name, r))
 }
 
-fn tracking_key(remote: &str, stream: &str) -> String {
+pub(crate) fn tracking_key(remote: &str, stream: &str) -> String {
     format!("remote.{remote}.{stream}")
 }
 
@@ -386,12 +427,12 @@ pub fn clone(cli: &Cli, a: &CloneArgs) -> Result<u8> {
     let mut all = Remotes::default();
     all.remotes.insert(a.name.clone(), remote.clone());
     save_remotes(&dir, &all)?;
-    let ctx = Ctx { repo, me: identity(cli)?, json: cli.json, root: dir.canonicalize()? };
+    let ctx = Ctx { repo, me: identity(cli)?, json: cli.json, quiet: cli.quiet, root: dir.canonicalize()? };
     let report = runtime.block_on(fetch_stream(&client, &a.name, &remote, &ctx.repo, &stream))?;
     if let Some(h) = &report.head {
         advance_local(&ctx, &stream, &h.parse().map_err(|_| anyhow!("bad head"))?)?;
     }
-    ctx.out(&report, || {
+    ctx.done(&report, || {
         format!(
             "Cloned {} into {} ({} changeset(s), {} blob(s)); stream '{stream}' at {}.",
             remote.repo,
@@ -423,7 +464,7 @@ pub fn fetch(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
         let client = connect(&ctx.root, &name, &remote).await?;
         fetch_stream(&client, &name, &remote, &ctx.repo, &stream).await
     })?;
-    ctx.out(&report, || match &report.head {
+    ctx.done(&report, || match &report.head {
         Some(h) => format!(
             "Fetched {} changeset(s) and {} blob(s); {name}/{stream} is at {}.",
             report.changesets,
@@ -443,7 +484,7 @@ pub fn pull(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
         fetch_stream(&client, &name, &remote, &ctx.repo, &stream).await
     })?;
     let Some(head) = &report.head else {
-        ctx.out(&report, || format!("{name}/{stream} has no changesets yet."))?;
+        ctx.done(&report, || format!("{name}/{stream} has no changesets yet."))?;
         return Ok(exit::OK);
     };
     let outcome = advance_local(ctx, &stream, &head.parse().map_err(|_| anyhow!("bad head"))?)?;
@@ -456,7 +497,7 @@ pub fn pull(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
             format!("Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.", conflicts.len())
         }
     };
-    ctx.out(&serde_json::json!({"fetch": report, "workspace": outcome}), || text.clone())?;
+    ctx.done(&serde_json::json!({"fetch": report, "workspace": outcome}), || text.clone())?;
     Ok(if matches!(outcome, Some(SyncOutcome::Conflicted { .. })) { exit::REFUSED } else { exit::OK })
 }
 
@@ -532,7 +573,7 @@ pub fn push(ctx: &Ctx, a: &PushArgs) -> Result<u8> {
         Ok::<_, anyhow::Error>((prop, sent.stored.len(), to_send.len()))
     })?;
     let (prop, stored, sent) = outcome;
-    ctx.out(&serde_json::json!({"proposal": prop, "objects_sent": sent, "objects_stored": stored}), || {
+    ctx.done(&serde_json::json!({"proposal": prop, "objects_sent": sent, "objects_stored": stored}), || {
         format!(
             "Uploaded {sent} object(s) and opened proposal {} -> '{stream}'.\nNext: `ag remote prepare {}` to see what is missing, `ag remote integrate {}` when it is ready.",
             prop.id, prop.id, prop.id
@@ -682,15 +723,15 @@ fn local_root(cli: &Cli) -> Result<PathBuf> {
 }
 
 fn print<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String) -> Result<()> {
-    if cli.json {
-        println!("{}", serde_json::to_string_pretty(value)?);
-    } else {
-        let text = human();
-        if !text.is_empty() {
-            println!("{}", crate::ctx::sanitize_for_terminal(text.trim_end()));
-        }
+    crate::ctx::emit(cli.json, value, human)
+}
+
+/// Like [`print`] for confirmations, which `--quiet` suppresses.
+fn print_done<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String) -> Result<()> {
+    if cli.quiet && !cli.json {
+        return Ok(());
     }
-    Ok(())
+    print(cli, value, human)
 }
 
 pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
@@ -713,7 +754,7 @@ pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
             let mut all = load_remotes(&root)?;
             all.remotes.insert(name.clone(), r.clone());
             save_remotes(&root, &all)?;
-            print(cli, &r, || format!("Added remote '{name}' -> {}/{}", r.url, r.repo))?;
+            print_done(cli, &r, || format!("Added remote '{name}' -> {}/{}", r.url, r.repo))?;
         }
         RemoteCmd::List => {
             let all = load_remotes(&root)?;
@@ -728,7 +769,7 @@ pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
             }
             save_remotes(&root, &all)?;
             let _ = std::fs::remove_file(root.join(".ag").join("credentials").join(name));
-            print(cli, &serde_json::json!({"removed": name}), || format!("Removed remote '{name}'."))?;
+            print_done(cli, &serde_json::json!({"removed": name}), || format!("Removed remote '{name}'."))?;
         }
         other => return remote_online(cli, &root, args.remote.as_deref(), other),
     }
@@ -868,7 +909,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     .await
                     .map_err(s)?
                     .into_inner();
-                print(cli, &rv, || format!("Recorded '{}' on head {}.", rv.decision, &rv.head[..12]))?;
+                print_done(cli, &rv, || format!("Recorded '{}' on head {}.", rv.decision, &rv.head[..12]))?;
             }
             RemoteCmd::Integrate { id, fencing_tokens } => {
                 let res = c
@@ -883,7 +924,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     .map_err(s)?
                     .into_inner();
                 let o = res.outcome.clone().unwrap_or_default();
-                print(cli, &res, || match o.status.as_str() {
+                let human = || match o.status.as_str() {
                     "integrated" => format!(
                         "Integrated ({}): stream is now at {} (version {}), {} file(s) changed.",
                         o.strategy,
@@ -909,7 +950,12 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
                     ),
                     _ => format!("Not integrated: {}", o.reason),
-                })?;
+                };
+                if o.status == "integrated" {
+                    print_done(cli, &res, human)?;
+                } else {
+                    print(cli, &res, human)?;
+                }
                 return Ok(match o.status.as_str() {
                     "integrated" => exit::OK,
                     "blocked" => exit::BLOCKED,
@@ -923,7 +969,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     .await
                     .map_err(s)?
                     .into_inner();
-                print(cli, &p, || format!("Closed {}.", p.id))?;
+                print_done(cli, &p, || format!("Closed {}.", p.id))?;
             }
             RemoteCmd::Streams => {
                 let r = c.streams().list(c.req(v1::ListStreamsRequest { repo })).await.map_err(s)?.into_inner();
@@ -1073,8 +1119,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 let (rev, path) =
                     spec.split_once(':').ok_or_else(|| anyhow!("expected REV:PATH, e.g. main:src/lib.rs"))?;
                 let bytes = c.get_file(&repo, rev, path).await.map_err(e)?;
-                use std::io::Write;
-                std::io::stdout().write_all(&bytes)?;
+                crate::ui::print_bytes(&bytes);
             }
             RemoteCmd::Add { .. } | RemoteCmd::List | RemoteCmd::Remove { .. } => unreachable!("handled offline"),
         }

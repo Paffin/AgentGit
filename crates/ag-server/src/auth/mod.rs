@@ -218,6 +218,20 @@ impl Authenticator {
         Err(unauthenticated())
     }
 
+    /// Checks that an already authenticated principal is still allowed to be one: a scoped token must not
+    /// have been revoked (on any replica) or expired since. Used by long-lived streams.
+    pub async fn still_active(&self, p: &Principal) -> ApiResult<()> {
+        if p.method != AuthMethod::Token {
+            return Ok(());
+        }
+        let (control, id) = (self.control.clone(), p.credential_id.clone());
+        let cred = tokio::task::spawn_blocking(move || control.credential(&id)).await.map_err(ApiError::internal)??;
+        match cred {
+            Some(c) if c.revoked_at_ms.is_none() && c.expires_at_ms > self.clock.now().as_millis() => Ok(()),
+            _ => Err(ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "the credential was revoked or expired")),
+        }
+    }
+
     async fn authenticate_token(&self, token: &str) -> ApiResult<Principal> {
         let Some((id, secret)) = split_token(token) else {
             return Err(unauthenticated());

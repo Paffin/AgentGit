@@ -112,7 +112,7 @@ pub fn gc(ctx: &Ctx, a: &GcArgs) -> Result<u8> {
 
 pub fn reindex(ctx: &Ctx) -> Result<u8> {
     let n = ctx.repo.reindex()?;
-    ctx.out(&json!({"changesets": n}), || format!("Rebuilt derived indexes for {n} changeset(s)."))?;
+    ctx.done(&json!({"changesets": n}), || format!("Rebuilt derived indexes for {n} changeset(s)."))?;
     Ok(exit::OK)
 }
 
@@ -130,7 +130,7 @@ pub struct PinArgs {
 pub fn pin(ctx: &Ctx, a: &PinArgs) -> Result<u8> {
     let id = ctx.repo.resolve_rev(&a.rev)?;
     ctx.repo.pin(&a.name, &id, &a.reason, &ctx.me)?;
-    ctx.out(&json!({"pin": a.name, "changeset": id}), || format!("Pinned {} as '{}'", id.short(), a.name))?;
+    ctx.done(&json!({"pin": a.name, "changeset": id}), || format!("Pinned {} as '{}'", id.short(), a.name))?;
     Ok(exit::OK)
 }
 
@@ -144,12 +144,15 @@ pub fn unpin(ctx: &Ctx, a: &UnpinArgs) -> Result<u8> {
     if !ctx.repo.unpin(&a.name, &ctx.me)? {
         return Err(anyhow!("no pin named '{}'", a.name));
     }
-    ctx.out(&json!({"unpinned": a.name}), || format!("Removed pin '{}'", a.name))?;
+    ctx.done(&json!({"unpinned": a.name}), || format!("Removed pin '{}'", a.name))?;
     Ok(exit::OK)
 }
 
 pub fn pins(ctx: &Ctx) -> Result<u8> {
     let rows = ctx.repo.pins()?;
+    if rows.is_empty() {
+        ctx.note("no pins; `ag pin NAME REV` keeps a revision through garbage collection");
+    }
     ctx.out(&rows, || {
         let mut s = String::new();
         for p in &rows {

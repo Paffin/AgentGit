@@ -1,0 +1,365 @@
+{
+  "commands": {
+    "clone": {
+      "blobs": "number",
+      "changesets": "number",
+      "head": "string",
+      "remote": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "doctor#remote": {
+      "checks": [
+        {
+          "hint": "null",
+          "id": "string",
+          "status": "string",
+          "summary": "string"
+        }
+      ],
+      "ok": "bool",
+      "summary": {
+        "fail": "number",
+        "ok": "number",
+        "skip": "number",
+        "warn": "number"
+      },
+      "version": "string"
+    },
+    "fetch": {
+      "blobs": "number",
+      "changesets": "number",
+      "head": "string",
+      "remote": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "pull": {
+      "fetch": {
+        "blobs": "number",
+        "changesets": "number",
+        "head": "string",
+        "remote": "string",
+        "stream": "string",
+        "version": "number"
+      },
+      "workspace": "null"
+    },
+    "push": {
+      "objects_sent": "number",
+      "objects_stored": "number",
+      "proposal": {
+        "author": "string",
+        "created_at_ms": "number",
+        "description": "string",
+        "head": "string",
+        "id": "string",
+        "integrated_as": "string",
+        "state": "string",
+        "stream": "string",
+        "task_id": "string",
+        "title": "string",
+        "updated_at_ms": "number"
+      }
+    },
+    "remote blame": {
+      "lines": [
+        {
+          "author": "string",
+          "boundary": "bool",
+          "changeset": "string",
+          "line": "number",
+          "original_line": "number",
+          "path": "string",
+          "summary": "string",
+          "text": "string",
+          "timestamp_ms": "number"
+        }
+      ],
+      "path": "string",
+      "rev": "string",
+      "truncated": "bool",
+      "visited": "number"
+    },
+    "remote close": {
+      "author": "string",
+      "created_at_ms": "number",
+      "description": "string",
+      "head": "string",
+      "id": "string",
+      "integrated_as": "string",
+      "state": "string",
+      "stream": "string",
+      "task_id": "string",
+      "title": "string",
+      "updated_at_ms": "number"
+    },
+    "remote events": {
+      "events": [
+        {
+          "payload": {
+            "actor": "string",
+            "details": {
+              "blockers": [
+                {
+                  "code": "string",
+                  "detail": {
+                    "have": "number",
+                    "kind": "string",
+                    "required": "number",
+                    "scope": "string"
+                  },
+                  "message": "string"
+                }
+              ],
+              "candidate_changeset": "string",
+              "candidate_tree": "string",
+              "changesets": "number",
+              "decision": "string",
+              "default_stream": "string",
+              "hash": "string",
+              "head": "string",
+              "new_head": "string",
+              "old_head": "null",
+              "operation_id": "string",
+              "policy_version": "number",
+              "proposal": "string",
+              "status": "string",
+              "stream": "string",
+              "tree": "string",
+              "version": "number"
+            },
+            "target": "string"
+          },
+          "repo": "string",
+          "seq": "number",
+          "timestamp_ms": "number",
+          "topic": "string"
+        }
+      ],
+      "latest_seq": "number"
+    },
+    "remote integrate": {
+      "operation_id": "string",
+      "outcome": {
+        "base": "string",
+        "blockers": [],
+        "candidate_changeset": "string",
+        "candidate_tree": "string",
+        "changed_files": "number",
+        "conflicts": [],
+        "new_head": "string",
+        "policy_version": "number",
+        "previous_head": "string",
+        "reason": "string",
+        "status": "string",
+        "strategy": "string",
+        "tree_id": "string",
+        "version": "number"
+      },
+      "state": "string"
+    },
+    "remote integrate#blocked": {
+      "operation_id": "string",
+      "outcome": {
+        "base": "string",
+        "blockers": [
+          {
+            "code": "string",
+            "detail": {
+              "have": "number",
+              "kind": "string",
+              "required": "number",
+              "scope": "string"
+            },
+            "message": "string"
+          }
+        ],
+        "candidate_changeset": "string",
+        "candidate_tree": "string",
+        "changed_files": "number",
+        "conflicts": [],
+        "new_head": "string",
+        "policy_version": "number",
+        "previous_head": "string",
+        "reason": "string",
+        "status": "string",
+        "strategy": "string",
+        "tree_id": "string",
+        "version": "number"
+      },
+      "state": "string"
+    },
+    "remote log": {
+      "changesets": [
+        {
+          "author": "string",
+          "generation": "number",
+          "id": "string",
+          "message": "string",
+          "namespace": "string",
+          "ops": [],
+          "parents": [],
+          "published": "bool",
+          "timestamp_ms": "number"
+        }
+      ],
+      "next_page_token": "string"
+    },
+    "remote policy": {
+      "created_at_ms": "number",
+      "created_by": "string",
+      "doc_hash": "string",
+      "document": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "remote prepare": {
+      "algorithm": "string",
+      "base": "string",
+      "blockers": [
+        {
+          "code": "string",
+          "detail": {
+            "have": "number",
+            "kind": "string",
+            "required": "number",
+            "scope": "string"
+          },
+          "message": "string"
+        }
+      ],
+      "candidate_tree": "string",
+      "changed_files": [
+        "string"
+      ],
+      "conflicts": [],
+      "jobs": [],
+      "policy_version": "number",
+      "problem": "string",
+      "proposal": "string",
+      "strategy": "string",
+      "validations": []
+    },
+    "remote proposal": {
+      "proposal": {
+        "author": "string",
+        "created_at_ms": "number",
+        "description": "string",
+        "head": "string",
+        "id": "string",
+        "integrated_as": "string",
+        "state": "string",
+        "stream": "string",
+        "task_id": "string",
+        "title": "string",
+        "updated_at_ms": "number"
+      },
+      "reviews": []
+    },
+    "remote proposals": {
+      "next_page_token": "string",
+      "proposals": [
+        {
+          "author": "string",
+          "created_at_ms": "number",
+          "description": "string",
+          "head": "string",
+          "id": "string",
+          "integrated_as": "string",
+          "state": "string",
+          "stream": "string",
+          "task_id": "string",
+          "title": "string",
+          "updated_at_ms": "number"
+        }
+      ]
+    },
+    "remote review": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "id": "number",
+      "proposal": "string",
+      "reviewer": "string",
+      "timestamp_ms": "number"
+    },
+    "remote streams": {
+      "streams": [
+        {
+          "created_at_ms": "number",
+          "created_by": "string",
+          "head": "string",
+          "name": "string",
+          "policy_version": "number",
+          "version": "number"
+        }
+      ]
+    },
+    "remote whoami": {
+      "credential_id": "string",
+      "expires_at_ms": "number",
+      "identity": "string",
+      "kind": "string",
+      "method": "string",
+      "roles": [
+        "string"
+      ],
+      "scope": {
+        "operations": [],
+        "repos": [],
+        "streams": []
+      }
+    },
+    "status#remote": {
+      "base": "string",
+      "changes": [],
+      "head": "string",
+      "merging": "bool",
+      "stream": "string",
+      "summary": {
+        "ahead": "number",
+        "behind": "number",
+        "identity": "string",
+        "identity_source": "string",
+        "leases": {
+          "active": "number",
+          "mine": []
+        },
+        "next": "null",
+        "proposals": {
+          "mine": [],
+          "open": "number"
+        },
+        "relation": "string",
+        "remotes": [
+          {
+            "ahead": "number",
+            "behind": "number",
+            "fetched_head": "string",
+            "name": "string",
+            "repo": "string",
+            "server_head": "string",
+            "state": "string",
+            "stream": "string",
+            "url": "string"
+          }
+        ],
+        "stream_head": "string",
+        "stream_version": "number",
+        "task": "null",
+        "unpublished": "number"
+      },
+      "workspace": "string"
+    }
+  },
+  "raw": [
+    "cat",
+    "completions",
+    "help",
+    "man",
+    "policy example",
+    "remote cat"
+  ],
+  "schema_version": 1
+}

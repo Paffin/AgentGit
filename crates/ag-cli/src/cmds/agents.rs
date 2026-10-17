@@ -82,7 +82,7 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
         AgentCmd::Register { name, role } => {
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let row = registry::register_agent(meta, &keys, name, role, ctx.me.as_str())?;
-            ctx.out(&row, || {
+            ctx.done(&row, || {
                 format!(
                     "Registered {} (key {}). Its private key is {}.",
                     row.identity,
@@ -93,6 +93,9 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
         }
         AgentCmd::List => {
             let rows = meta.read(|tx| tx.agents())?;
+            if rows.is_empty() {
+                ctx.note("no agents yet; `ag agent register NAME` creates one");
+            }
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for r in &rows {
@@ -116,14 +119,17 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
         }
         AgentCmd::Finish { run, status, message } => {
             registry::finish_run(meta, run, status, message.as_deref())?;
-            ctx.out(&json!({"run": run, "status": status}), || format!("Run {run} {status}; leases released"))?;
+            ctx.done(&json!({"run": run, "status": status}), || format!("Run {run} {status}; leases released"))?;
         }
         AgentCmd::Heartbeat { run } => {
             registry::heartbeat(meta, run)?;
-            ctx.out(&json!({"run": run}), || format!("ok {run}"))?;
+            ctx.done(&json!({"run": run}), || format!("ok {run}"))?;
         }
         AgentCmd::Runs { name } => {
             let rows = meta.read(|tx| tx.runs(name.as_deref(), 50))?;
+            if rows.is_empty() {
+                ctx.note("no runs yet; `ag agent start NAME` starts one");
+            }
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for r in &rows {
@@ -156,7 +162,7 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
                 tx.audit_append(ctx.me.as_str(), "agent.disable", name, &json!({}))?;
                 Ok(())
             })?;
-            ctx.out(&json!({"disabled": name}), || format!("Disabled {name}"))?;
+            ctx.done(&json!({"disabled": name}), || format!("Disabled {name}"))?;
         }
         AgentCmd::Enable { name } => {
             meta.write(|tx| {
@@ -164,7 +170,7 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
                 tx.audit_append(ctx.me.as_str(), "agent.enable", name, &json!({}))?;
                 Ok(())
             })?;
-            ctx.out(&json!({"enabled": name}), || format!("Enabled {name}"))?;
+            ctx.done(&json!({"enabled": name}), || format!("Enabled {name}"))?;
         }
     }
     Ok(exit::OK)
@@ -232,15 +238,18 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
     match cmd {
         TaskCmd::Create { title, description, scope } => {
             let t = tasks::create_task(meta, title, description, scope, ctx.me.as_str())?;
-            ctx.out(&t, || format!("Created task {}", t.id))?;
+            ctx.created(&t.id, &t, || format!("Created task {}", t.id))?;
         }
         TaskCmd::List { state } => {
             let rows = meta.read(|tx| tx.tasks(state.as_deref()))?;
+            if rows.is_empty() {
+                ctx.note("no tasks match; `ag task create TITLE` adds one");
+            }
             ctx.out(&rows, || print(&rows))?;
         }
         TaskCmd::Depend { task, on } => {
             tasks::add_dependency(meta, task, on, ctx.me.as_str())?;
-            ctx.out(&json!({"task": task, "depends_on": on}), || format!("{task} now waits for {on}"))?;
+            ctx.done(&json!({"task": task, "depends_on": on}), || format!("{task} now waits for {on}"))?;
         }
         TaskCmd::Ready => {
             let rows = tasks::ready_tasks(meta)?;
@@ -248,11 +257,11 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
         }
         TaskCmd::Done { task } => {
             tasks::finish_task(meta, task, "done", ctx.me.as_str())?;
-            ctx.out(&json!({"task": task, "state": "done"}), || format!("{task} done"))?;
+            ctx.done(&json!({"task": task, "state": "done"}), || format!("{task} done"))?;
         }
         TaskCmd::Cancel { task } => {
             tasks::finish_task(meta, task, "cancelled", ctx.me.as_str())?;
-            ctx.out(&json!({"task": task, "state": "cancelled"}), || format!("{task} cancelled"))?;
+            ctx.done(&json!({"task": task, "state": "cancelled"}), || format!("{task} cancelled"))?;
         }
     }
     Ok(exit::OK)
@@ -321,15 +330,18 @@ pub fn lease(ctx: &Ctx, cmd: &LeaseCmd) -> Result<u8> {
         }
         LeaseCmd::Release { id } => {
             leases::release(meta, id, ctx.me.as_str())?;
-            ctx.out(&json!({"released": id}), || format!("Released {id}"))?;
+            ctx.done(&json!({"released": id}), || format!("Released {id}"))?;
         }
         LeaseCmd::Extend { id, ttl } => {
             let l = leases::extend(meta, id, ctx.me.as_str(), parse_duration_ms(ttl)?)?;
-            ctx.out(&l, || format!("{} now expires {} (token {} unchanged)", l.id, l.expires_at, l.token))?;
+            ctx.done(&l, || format!("{} now expires {} (token {} unchanged)", l.id, l.expires_at, l.token))?;
         }
         LeaseCmd::List { all } => {
             let rows = if *all { meta.read(|tx| tx.leases_all(200))? } else { meta.read(|tx| tx.leases_active())? };
             let now = ctx.repo.clock().now();
+            if rows.is_empty() {
+                ctx.note("no active leases; `ag lease acquire 'GLOB'` claims a scope");
+            }
             ctx.out(&rows, || {
                 let mut s = String::new();
                 for l in &rows {
@@ -421,7 +433,7 @@ pub fn provenance(ctx: &Ctx, cmd: &ProvCmd) -> Result<u8> {
             }
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let n = provenance::attach(ctx.repo.meta(), &keys, agent, &rec)?;
-            ctx.out(&json!({"record": n, "changeset": id}), || {
+            ctx.done(&json!({"record": n, "changeset": id}), || {
                 format!("Signed provenance record #{n} for {} by {}", id.short(), rec.agent)
             })?;
         }

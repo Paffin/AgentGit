@@ -10,7 +10,8 @@
 //! directory is not listed or if the two lists disagree.
 
 /// One schema migration.
-pub(crate) struct Migration {
+#[derive(Clone, Copy, Debug)]
+pub struct Migration {
     /// The schema version after applying it.
     pub version: i64,
     /// File name, for diagnostics.

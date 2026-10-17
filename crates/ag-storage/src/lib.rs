@@ -24,6 +24,7 @@ pub mod meta;
 mod object_store;
 #[cfg(feature = "s3")]
 pub mod s3;
+pub mod sqldb;
 pub mod testing;
 
 pub use clock::{Clock, ManualClock, SystemClock};

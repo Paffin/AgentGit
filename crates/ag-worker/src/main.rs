@@ -13,7 +13,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// The AgentGit execution-plane worker.
 #[derive(Parser, Debug)]
-#[command(name = "ag-worker", version, about)]
+#[command(name = "ag-worker", version = env!("AG_LONG_VERSION"), about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

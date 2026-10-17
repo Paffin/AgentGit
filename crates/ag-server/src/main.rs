@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 
 /// The AgentGit server: AGWP over gRPC and HTTP/JSON on one port.
 #[derive(Parser, Debug)]
-#[command(name = "ag-server", version, about)]
+#[command(name = "ag-server", version = env!("AG_LONG_VERSION"), about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

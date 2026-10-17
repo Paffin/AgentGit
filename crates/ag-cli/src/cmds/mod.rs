@@ -5,4 +5,5 @@ pub mod agents;
 pub mod flow;
 pub mod gitbridge;
 pub mod policy;
+pub mod remote;
 pub mod repo;

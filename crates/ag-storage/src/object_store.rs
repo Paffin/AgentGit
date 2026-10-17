@@ -9,6 +9,7 @@ use ag_types::{Limits, ObjectId, Timestamp};
 
 use crate::clock::{Clock, SystemClock};
 use crate::error::StoreError;
+use crate::lock::LockGuard;
 
 /// What a backend actually guarantees once `put` returns.
 ///
@@ -71,6 +72,13 @@ pub trait ObjectStore: Send + Sync {
     /// simply rewrites it. This closes the "GC deletes what a writer is about to
     /// reference" race. Returns whether the object was deleted.
     fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError>;
+    /// Holds garbage collection off until the returned guard is dropped (the
+    /// store's shared lock): no object can be deleted meanwhile. Used by backups,
+    /// which copy objects while others keep writing. Backends without a collector
+    /// to exclude return a no-op guard.
+    fn block_gc(&self) -> Result<LockGuard, StoreError> {
+        Ok(Box::new(()))
+    }
     /// The durability contract of this backend.
     fn durability(&self) -> Durability;
 }
@@ -97,12 +105,15 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError> {
         (**self).delete_if_older_than(id, cutoff)
     }
+    fn block_gc(&self) -> Result<LockGuard, StoreError> {
+        (**self).block_gc()
+    }
     fn durability(&self) -> Durability {
         (**self).durability()
     }
 }
 
-fn check_size(obj: &RawObject, limits: &Limits) -> Result<(), StoreError> {
+pub(crate) fn check_size(obj: &RawObject, limits: &Limits) -> Result<(), StoreError> {
     if obj.kind == ObjectKind::Blob && obj.payload.len() as u64 > limits.max_blob_size {
         return Err(StoreError::TooLarge { size: obj.payload.len() as u64, limit: limits.max_blob_size });
     }
@@ -374,6 +385,12 @@ impl ObjectStore for FsObjectStore {
         }
         fs::remove_file(&path)?;
         Ok(true)
+    }
+
+    fn block_gc(&self) -> Result<LockGuard, StoreError> {
+        let lock = self.lock_file()?;
+        lock.lock_shared()?;
+        Ok(Box::new(lock))
     }
 
     fn durability(&self) -> Durability {

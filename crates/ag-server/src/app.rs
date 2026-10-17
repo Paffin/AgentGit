@@ -90,6 +90,11 @@ pub struct AppState {
     /// Set when the server begins shutting down; long-lived streams end.
     shutdown: tokio::sync::watch::Sender<bool>,
     bindings: Mutex<Option<BindingsCache>>,
+    /// Repositories that may have queued jobs (a hint, rebuilt by scanning).
+    pub(crate) job_repos: Mutex<std::collections::BTreeSet<String>>,
+    /// Wakes workers long-polling for jobs.
+    pub(crate) job_notify: Notify,
+    pub(crate) job_rescan: Mutex<Instant>,
     bindings_epoch: AtomicU64,
     notifiers: Mutex<HashMap<String, Arc<Notify>>>,
 }
@@ -128,6 +133,7 @@ impl App {
             clock.clone(),
             cfg.repos.pool_size,
             cfg.repos.max_open,
+            cfg.repos.storage.clone(),
         );
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
@@ -143,6 +149,9 @@ impl App {
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,
             bindings: Mutex::new(None),
+            job_repos: Mutex::new(std::collections::BTreeSet::new()),
+            job_notify: Notify::new(),
+            job_rescan: Mutex::new(Instant::now()),
             bindings_epoch: AtomicU64::new(0),
             notifiers: Mutex::new(HashMap::new()),
         })))

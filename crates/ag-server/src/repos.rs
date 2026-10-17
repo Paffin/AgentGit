@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ag_integrate::{InitOptions, Repository};
+use ag_integrate::{InitOptions, MetaConfig, ObjectsConfig, Repository, StorageConfig};
 use ag_protocol::v1;
 use ag_storage::Clock;
 use ag_types::{Identity, Namespace, StreamName};
@@ -53,6 +53,30 @@ pub fn parse_repo_name(name: &str) -> ApiResult<(&str, &str)> {
     Ok((owner, repo))
 }
 
+/// Turns the server's storage template into the layout of one repository:
+/// a PostgreSQL schema of its own and an S3 key prefix of its own.
+pub fn derive_storage(template: &StorageConfig, repo: &str) -> StorageConfig {
+    let mut out = template.clone();
+    if let MetaConfig::Postgres { schema, .. } = &mut out.meta {
+        let clean: String =
+            repo.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
+        let mut name = format!("{schema}_{clean}");
+        if name.len() > 60 {
+            use sha2::{Digest, Sha256};
+            let h = hex::encode(&Sha256::digest(name.as_bytes())[..4]);
+            name.truncate(51);
+            name = format!("{name}_{h}");
+        }
+        *schema = name;
+    }
+    if let ObjectsConfig::S3 { prefix, .. } = &mut out.objects {
+        let base = prefix.take().unwrap_or_default();
+        *prefix =
+            Some(if base.is_empty() { repo.to_string() } else { format!("{}/{repo}", base.trim_end_matches('/')) });
+    }
+    out
+}
+
 /// Opens, creates and caches hosted repositories.
 pub struct RepoManager {
     root: PathBuf,
@@ -60,6 +84,7 @@ pub struct RepoManager {
     clock: Arc<dyn Clock>,
     pool_size: usize,
     max_open: usize,
+    storage: Option<StorageConfig>,
     open: Mutex<HashMap<String, Arc<RepoPool>>>,
 }
 
@@ -71,8 +96,10 @@ impl RepoManager {
         clock: Arc<dyn Clock>,
         pool_size: usize,
         max_open: usize,
+        storage: Option<StorageConfig>,
     ) -> Self {
         Self {
+            storage,
             root: data_dir.join("repos"),
             control,
             clock,
@@ -114,7 +141,12 @@ impl RepoManager {
         std::fs::create_dir_all(&dir).map_err(ApiError::internal)?;
         let init = Repository::init(
             &dir,
-            &InitOptions { namespace: namespace.clone(), default_stream: stream.clone(), actor: actor.clone() },
+            &InitOptions {
+                namespace: namespace.clone(),
+                default_stream: stream.clone(),
+                actor: actor.clone(),
+                storage: self.storage.as_ref().map(|t| derive_storage(t, name)),
+            },
         );
         if let Err(e) = init {
             let _ = std::fs::remove_dir_all(&dir);
@@ -170,6 +202,13 @@ impl RepoManager {
         Ok(self.pool(name)?.get())
     }
 
+    /// Closes every open repository. Call from a blocking thread: dropping a PostgreSQL
+    /// connection pool blocks, and must not happen on an async worker.
+    pub fn close_all(&self) {
+        let pools: Vec<_> = self.open.lock().unwrap_or_else(|e| e.into_inner()).drain().collect();
+        drop(pools);
+    }
+
     /// Number of repositories currently open.
     pub fn open_count(&self) -> usize {
         self.open.lock().unwrap_or_else(|e| e.into_inner()).len()
@@ -196,11 +235,55 @@ mod tests {
     }
 
     #[test]
+    fn storage_templates_give_every_repository_its_own_schema_and_prefix() {
+        let template = StorageConfig {
+            meta: MetaConfig::Postgres { url_env: None, url: None, schema: "ag".into(), pool_size: None },
+            objects: ObjectsConfig::S3 {
+                endpoint: "http://minio:9000".into(),
+                region: "us-east-1".into(),
+                bucket: "b".into(),
+                prefix: Some("prod/".into()),
+                path_style: None,
+                access_key_id_env: None,
+                secret_access_key_env: None,
+                session_token_env: None,
+                ca_bundle: None,
+                lock: Default::default(),
+            },
+        };
+        let a = derive_storage(&template, "acme/web");
+        let b = derive_storage(&template, "acme/api");
+        match (&a.meta, &a.objects, &b.meta) {
+            (
+                MetaConfig::Postgres { schema: sa, .. },
+                ObjectsConfig::S3 { prefix, .. },
+                MetaConfig::Postgres { schema: sb, .. },
+            ) => {
+                assert_eq!(sa, "ag_acme_web");
+                assert_eq!(sb, "ag_acme_api");
+                assert_eq!(prefix.as_deref(), Some("prod/acme/web"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        // Long names stay valid PostgreSQL identifiers and stay distinct.
+        let long1 = derive_storage(&template, &format!("{}/{}", "a".repeat(40), "x".repeat(40)));
+        let long2 = derive_storage(&template, &format!("{}/{}", "a".repeat(40), "y".repeat(40)));
+        match (&long1.meta, &long2.meta) {
+            (MetaConfig::Postgres { schema: s1, .. }, MetaConfig::Postgres { schema: s2, .. }) => {
+                assert!(s1.len() <= 63 && s2.len() <= 63 && s1 != s2);
+                ag_storage::meta::validate_schema_name(s1).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(derive_storage(&StorageConfig::default(), "acme/web"), StorageConfig::default());
+    }
+
+    #[test]
     fn repositories_are_created_once_and_reopened() {
         let dir = tempfile::tempdir().unwrap();
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
         let control = Arc::new(Control::open_in_memory(clock.clone()).unwrap());
-        let mgr = RepoManager::new(dir.path(), control, clock, 2, 1);
+        let mgr = RepoManager::new(dir.path(), control, clock, 2, 1, None);
         let actor = Identity::new("user:root").unwrap();
         mgr.create("acme/web", "main", "d", &actor, Default::default()).unwrap();
         assert!(mgr.create("acme/web", "main", "d", &actor, Default::default()).is_err());

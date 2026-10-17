@@ -22,6 +22,18 @@ pub enum StoreError {
         /// Configured limit.
         limit: u64,
     },
+    /// A remote object store refused a request or could not be reached, after
+    /// the retries allowed for transient failures.
+    #[error("{message}")]
+    Remote {
+        /// HTTP status of the last response, `None` if there was none (connection failure, timeout).
+        status: Option<u16>,
+        /// What happened, including the service's error code and message when it sent one.
+        message: String,
+    },
+    /// The lock that coordinates writers with garbage collection could not be taken.
+    #[error("object store lock error: {0}")]
+    Lock(String),
     /// A fault injected by the test harness.
     #[error("injected fault: {0}")]
     Injected(String),

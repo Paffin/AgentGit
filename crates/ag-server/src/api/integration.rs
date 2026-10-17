@@ -49,7 +49,7 @@ fn v10(v: &ag_integrate::ValidationState, jobs: &[v1::Job]) -> v1::ValidationSta
     }
 }
 
-fn attestation_from_wire(a: &v1::Attestation) -> ApiResult<Attestation> {
+pub(crate) fn attestation_from_wire(a: &v1::Attestation) -> ApiResult<Attestation> {
     let bad = |what: &str, e: String| ApiError::invalid(format!("attestation {what}: {e}"));
     Ok(Attestation {
         id: require(&a.id, "attestation.id")?.to_string(),

@@ -18,12 +18,18 @@
 pub mod clock;
 mod error;
 pub mod history;
+pub mod lock;
 pub mod meta;
 mod object_store;
+#[cfg(feature = "s3")]
+pub mod s3;
 pub mod testing;
 
 pub use clock::{Clock, ManualClock, SystemClock};
 pub use error::StoreError;
 pub use history::{MetaTreeCache, StoreHistory};
+pub use lock::{FileLock, InProcessLock, NoLock, ObjectLock, PostgresAdvisoryLock};
 pub use meta::Meta;
 pub use object_store::{Durability, FsObjectStore, MemoryObjectStore, ObjectInfo, ObjectStatus, ObjectStore};
+#[cfg(feature = "s3")]
+pub use s3::{Credentials, S3Config, S3ObjectStore};

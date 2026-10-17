@@ -1,0 +1,29 @@
+[package]
+name = "ag-client"
+description = "AgentGit: Rust client for the AGWP protocol (gRPC)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ag-protocol.workspace = true
+ag-object.workspace = true
+ag-types.workspace = true
+futures-util.workspace = true
+rustls.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+ag-server.workspace = true
+ag-changeset.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true

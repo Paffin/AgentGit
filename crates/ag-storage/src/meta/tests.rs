@@ -8,9 +8,17 @@ use serde_json::json;
 
 use super::*;
 use crate::clock::ManualClock;
+use crate::testing::TestMeta;
 
-fn meta() -> Meta {
-    Meta::open_in_memory(Arc::new(ManualClock::new(Timestamp::from_millis(1_000_000)))).unwrap()
+mod jobs;
+mod semantics;
+
+fn meta() -> TestMeta {
+    TestMeta::new(clock())
+}
+
+fn clock() -> Arc<ManualClock> {
+    Arc::new(ManualClock::new(Timestamp::from_millis(1_000_000)))
 }
 
 fn cs(parents: Vec<ChangesetId>, file: &str) -> (ChangesetId, Changeset) {
@@ -34,26 +42,58 @@ fn cs(parents: Vec<ChangesetId>, file: &str) -> (ChangesetId, Changeset) {
 
 #[test]
 fn schema_is_created_once_and_versioned() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("m.db");
-    {
-        let m = Meta::open(&path).unwrap();
-        m.write(|tx| tx.meta_set("k", "v")).unwrap();
-    }
-    let m = Meta::open(&path).unwrap();
-    assert_eq!(m.read(|tx| tx.meta_get("k")).unwrap().as_deref(), Some("v"));
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("1"));
+    let first = TestMeta::shared(clock());
+    first.write(|tx| tx.meta_set("k", "v")).unwrap();
+    let again = first.reopen().unwrap();
+    assert_eq!(again.read(|tx| tx.meta_get("k")).unwrap().as_deref(), Some("v"));
+    assert_eq!(again.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
+    assert_eq!(SCHEMA_VERSION, 2, "bump the migration tests together with the version");
+    assert!(again.read(|tx| tx.meta_get("created_at")).unwrap().is_some());
 }
 
 #[test]
 fn refuses_newer_schema() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("m.db");
-    drop(Meta::open(&path).unwrap());
-    let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.pragma_update(None, "user_version", 99).unwrap();
-    drop(conn);
-    assert!(matches!(Meta::open(&path), Err(MetaError::UnsupportedSchema { found: 99, .. })));
+    let m = TestMeta::shared(clock());
+    if let Some(path) = m.sqlite_path() {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.pragma_update(None, "user_version", 99).unwrap();
+        drop(conn);
+        assert!(matches!(Meta::open(&path), Err(MetaError::UnsupportedSchema { found: 99, .. })));
+    } else {
+        m.write(|tx| tx.raw_execute("UPDATE meta SET value = '99' WHERE key = 'schema'", &[])).unwrap();
+        assert!(matches!(m.reopen(), Err(MetaError::UnsupportedSchema { found: 99, .. })));
+    }
+}
+
+#[test]
+fn a_version_1_database_migrates_forward_and_keeps_its_data() {
+    // Build a database exactly as release 0.1 left it: schema 1 only.
+    let dir = std::env::temp_dir().join(crate::testing::unique("agtest-v1"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meta.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(migrate::SQLITE_MIGRATIONS[0].sql).unwrap();
+        conn.execute("INSERT INTO meta (key, value) VALUES ('created_at', '5'), ('schema', '1')", []).unwrap();
+        conn.execute(
+            "INSERT INTO streams (name, head, version, created_at, created_by) VALUES ('main', NULL, 0, 1, 'user:t')",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+    }
+    let m = Meta::open(&path).unwrap();
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("created_at")).unwrap().as_deref(), Some("5"), "creation time is kept");
+    assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "existing rows survive");
+    let job = m.write(|tx| tx.job_enqueue("k", &json!({}), None, Timestamp::from_millis(0))).unwrap();
+    assert_eq!(job.state, JobState::Queued, "the jobs table exists after migrating");
+    let version: i64 =
+        rusqlite::Connection::open(&path).unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 2);
+    drop(m);
+    Meta::open(&path).unwrap(); // opening again changes nothing
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -86,8 +126,8 @@ fn register_changeset_computes_generation_and_requires_parents() {
     .unwrap();
 
     // the Graph impl agrees with ag-dag algorithms
-    assert_eq!(ag_dag::merge_bases(&m, &b, &side).unwrap(), vec![a]);
-    assert!(ag_dag::is_ancestor(&m, &a, &mrg).unwrap());
+    assert_eq!(ag_dag::merge_bases(&*m, &b, &side).unwrap(), vec![a]);
+    assert!(ag_dag::is_ancestor(&*m, &a, &mrg).unwrap());
 }
 
 #[test]
@@ -230,7 +270,7 @@ fn intent_transitions_are_guarded() {
 #[test]
 fn staged_objects_are_protected_until_intent_finishes_and_grace_passes() {
     let clock = Arc::new(ManualClock::new(Timestamp::from_millis(10_000)));
-    let m = Meta::open_in_memory(clock.clone()).unwrap();
+    let m = TestMeta::new(clock.clone());
     let payload = json!({});
     let obj = hash_blob(b"staged").object_id();
     m.write(|tx| {
@@ -273,9 +313,7 @@ fn outbox_is_at_least_once() {
 
 #[test]
 fn audit_chain_detects_tampering() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("m.db");
-    let m = Meta::open(&path).unwrap();
+    let m = meta();
     for i in 0..5 {
         m.write(|tx| tx.audit_append("user:t", "act", &format!("t{i}"), &json!({"i": i}))).unwrap();
     }
@@ -283,26 +321,23 @@ fn audit_chain_detects_tampering() {
     assert_eq!((rep.entries, rep.first_bad), (5, None));
 
     // An attacker edits an old row directly in the database.
-    let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.execute("UPDATE audit SET details = '{\"i\":99}' WHERE seq = 3", []).unwrap();
-    drop(conn);
+    m.write(|tx| tx.raw_execute("UPDATE audit SET details = '{\"i\":99}' WHERE seq = 3", &[])).unwrap();
     let rep = m.read(|tx| tx.audit_verify()).unwrap();
     assert_eq!(rep.first_bad, Some(3));
 
     // Deleting a row breaks the chain at the following entry.
-    let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.execute("UPDATE audit SET details = '{\"i\":2}' WHERE seq = 3", []).unwrap();
-    conn.execute("DELETE FROM audit WHERE seq = 2", []).unwrap();
-    drop(conn);
+    m.write(|tx| {
+        tx.raw_execute("UPDATE audit SET details = '{\"i\":2}' WHERE seq = 3", &[])?;
+        tx.raw_execute("DELETE FROM audit WHERE seq = 2", &[])
+    })
+    .unwrap();
     let rep = m.read(|tx| tx.audit_verify()).unwrap();
     assert_eq!(rep.first_bad, Some(3));
 }
 
 #[test]
 fn derived_trees_roundtrip_and_detect_cache_corruption() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("m.db");
-    let m = Meta::open(&path).unwrap();
+    let m = meta();
     let (a, ca) = cs(vec![], "a");
     m.write(|tx| tx.register_changeset(&a, &ca)).unwrap();
     assert_eq!(m.read(|tx| tx.changesets_without_tree(10)).unwrap(), vec![a]);
@@ -313,9 +348,7 @@ fn derived_trees_roundtrip_and_detect_cache_corruption() {
     assert!(m.read(|tx| tx.changesets_without_tree(10)).unwrap().is_empty());
 
     // corrupt the cache: the result must be "absent", never a wrong tree
-    let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.execute("UPDATE trees SET data = x'00'", []).unwrap();
-    drop(conn);
+    m.write(|tx| tx.raw_execute("UPDATE trees SET data = ?1", &[Param::from(vec![0u8])])).unwrap();
     assert!(m.read(|tx| tx.derived_tree(&a)).unwrap().is_none());
 }
 
@@ -369,9 +402,7 @@ fn policy_versions_are_append_only() {
 
 #[test]
 fn concurrent_cas_from_many_connections_never_loses_an_update() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("m.db");
-    let setup = Meta::open(&path).unwrap();
+    let setup = TestMeta::shared(clock());
     // 24 independent changesets; each worker tries to advance the stream to its own.
     let mut chain = Vec::new();
     let mut parent: Vec<ChangesetId> = vec![];
@@ -387,9 +418,8 @@ fn concurrent_cas_from_many_connections_never_loses_an_update() {
     let handles: Vec<_> = chain
         .iter()
         .map(|target| {
-            let (path, target, wins) = (path.clone(), *target, wins.clone());
+            let (m, target, wins) = (setup.reopen().unwrap(), *target, wins.clone());
             std::thread::spawn(move || {
-                let m = Meta::open(&path).unwrap();
                 // classic optimistic loop: read, then CAS; retry on mismatch
                 for _ in 0..200 {
                     let st = m.read(|tx| tx.stream("main")).unwrap().unwrap().state;
@@ -426,7 +456,7 @@ fn concurrent_cas_from_many_connections_never_loses_an_update() {
 #[test]
 fn leases_and_queue_basics() {
     let clock = Arc::new(ManualClock::new(Timestamp::from_millis(1_000)));
-    let m = Meta::open_in_memory(clock.clone()).unwrap();
+    let m = TestMeta::new(clock.clone());
     let token = m.write(|tx| tx.next_counter("fencing")).unwrap();
     let lease = LeaseRow {
         id: "lease_1".into(),

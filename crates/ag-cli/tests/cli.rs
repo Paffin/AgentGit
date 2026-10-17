@@ -131,6 +131,58 @@ fn full_cycle_with_history_inspection() {
 }
 
 #[test]
+fn init_with_a_storage_file_checks_it_and_never_stores_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    let ag = |args: &[&str]| Run {
+        out: Command::new(env!("CARGO_BIN_EXE_ag"))
+            .current_dir(dir.path())
+            .env("AG_IDENTITY", "user:alice")
+            .args(args)
+            .output()
+            .unwrap(),
+    };
+    // a password in a literal URL is refused, and the message does not repeat it
+    fs::write(
+        dir.path().join("bad.json"),
+        r#"{"meta":{"kind":"postgres","url":"postgres://alice:hunter2@db.example/ag","schema":"ag_demo"}}"#,
+    )
+    .unwrap();
+    let r = ag(&["init", "--storage", "bad.json"]).code_is(1);
+    assert!(r.stderr().contains("password") && !r.stderr().contains("hunter2"), "{}", r.stderr());
+    assert!(!dir.path().join(".ag").exists(), "nothing was created");
+
+    // unknown keys and missing files are reported, not ignored
+    fs::write(dir.path().join("typo.json"), r#"{"meta":{"kind":"postgres","schema":"s","url_envv":"X"}}"#).unwrap();
+    let r = ag(&["init", "--storage", "typo.json"]).code_is(1);
+    assert!(r.stderr().contains("url_envv"), "{}", r.stderr());
+    ag(&["init", "--storage", "missing.json"]).code_is(1);
+
+    // with a server: a PostgreSQL repository, usable through the CLI, whose backup is refused
+    let Some(_) = ag_storage::testing::postgres_url() else {
+        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
+        return;
+    };
+    let schema = ag_storage::testing::TempSchema::new(&ag_storage::testing::postgres_url().unwrap());
+    fs::write(
+        dir.path().join("pg.json"),
+        format!(r#"{{"meta":{{"kind":"postgres","url_env":"AG_TEST_POSTGRES_URL","schema":"{}"}}}}"#, schema.name()),
+    )
+    .unwrap();
+    ag(&["init", "--namespace", "acme/pg", "--storage", "pg.json"]).ok();
+    let config = fs::read_to_string(dir.path().join(".ag/config.json")).unwrap();
+    assert!(config.contains("AG_TEST_POSTGRES_URL") && !config.contains("postgres://"), "{config}");
+    fs::write(dir.path().join("README.md"), "# pg\n").unwrap();
+    ag(&["snapshot", "-m", "first"]).ok();
+    ag(&["propose", "-t", "first"]).ok();
+    let proposals = ag(&["--json", "proposal", "list"]).ok().json();
+    let id = proposals[0]["id"].as_str().unwrap().to_string();
+    ag(&["integrate", &id]).ok();
+    ag(&["verify"]).ok();
+    let r = ag(&["backup", "../backup"]).code_is(1);
+    assert!(r.stderr().contains("pg_dump"), "{}", r.stderr());
+}
+
+#[test]
 fn exit_codes_are_distinct_for_blocked_refused_usage_and_error() {
     let a = Ag::new();
     a.write("f.txt", "1\n2\n3\n");

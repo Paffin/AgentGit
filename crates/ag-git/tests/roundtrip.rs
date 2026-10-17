@@ -100,6 +100,7 @@ fn ag_repo(dir: &Path) -> Repository {
             namespace: Namespace::new("acme/imported").unwrap(),
             default_stream: StreamName::new("main").unwrap(),
             actor: Identity::new("user:importer").unwrap(),
+            storage: None,
         },
     )
     .unwrap()

@@ -1,0 +1,1029 @@
+//! Working with an `ag-server`: clone, fetch, pull, push and remote administration.
+//!
+//! A local clone is an ordinary embedded AgentGit repository whose default
+//! stream *mirrors* the remote stream: `pull` only ever fast-forwards it, and
+//! changes travel back as **proposals** (`push`), which the server integrates
+//! under its policy. Nothing here can move a remote stream head directly.
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+use ag_changeset::Changeset;
+use ag_client::{Client, ClientError, Options};
+use ag_integrate::{InitOptions, Repository, SyncOutcome};
+use ag_object::RawObject;
+use ag_protocol::v1;
+use ag_types::{ChangesetId, Namespace, ObjectId, StreamName};
+use anyhow::{Context, Result, anyhow, bail};
+use clap::{Args, Subcommand};
+use serde::{Deserialize, Serialize};
+
+use crate::cmds::repo::rev_or_default;
+use crate::ctx::{Ctx, identity};
+use crate::{Cli, exit};
+
+// ---- configuration -----------------------------------------------------------
+
+/// One configured remote.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Remote {
+    /// `http://host:port` or `https://host:port`.
+    pub url: String,
+    /// Repository on the server, `owner/name`.
+    pub repo: String,
+    /// Environment variable holding the credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_env: Option<String>,
+    /// File holding the credential (mode 0600), relative to `.ag/` unless absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_file: Option<String>,
+    /// Extra CA certificate to trust.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Remotes {
+    #[serde(default)]
+    remotes: std::collections::BTreeMap<String, Remote>,
+}
+
+fn remotes_path(root: &Path) -> PathBuf {
+    root.join(".ag").join("remotes.json")
+}
+
+fn load_remotes(root: &Path) -> Result<Remotes> {
+    match std::fs::read(remotes_path(root)) {
+        Ok(b) => serde_json::from_slice(&b).context("remotes.json is damaged"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Remotes::default()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn save_remotes(root: &Path, r: &Remotes) -> Result<()> {
+    std::fs::write(remotes_path(root), serde_json::to_vec_pretty(r)?)?;
+    Ok(())
+}
+
+fn write_secret(path: &Path, token: &str) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
+    f.write_all(token.trim().as_bytes())?;
+    Ok(())
+}
+
+fn read_token(root: &Path, name: &str, r: &Remote) -> Result<String> {
+    if let Some(var) = &r.token_env
+        && let Ok(v) = std::env::var(var)
+        && !v.trim().is_empty()
+    {
+        return Ok(v.trim().to_string());
+    }
+    if let Some(file) = &r.token_file {
+        let path = if Path::new(file).is_absolute() { PathBuf::from(file) } else { root.join(".ag").join(file) };
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .with_context(|| format!("cannot read {}", path.display()))?
+                .permissions()
+                .mode();
+            if mode & 0o077 != 0 {
+                bail!("{} is readable by other users; run `chmod 600 {}`", path.display(), path.display());
+            }
+        }
+        return Ok(std::fs::read_to_string(&path)?.trim().to_string());
+    }
+    let upper: String =
+        name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
+    for var in [format!("AG_TOKEN_{upper}"), "AG_TOKEN".to_string()] {
+        if let Ok(v) = std::env::var(&var)
+            && !v.trim().is_empty()
+        {
+            return Ok(v.trim().to_string());
+        }
+    }
+    bail!("no credential for remote '{name}': set AG_TOKEN (or AG_TOKEN_{upper}), or `ag remote add --token-stdin`")
+}
+
+/// Splits `https://host:8080/acme/web` into the server URL and `acme/web`.
+fn split_url(url: &str) -> Result<(String, Option<String>)> {
+    let (scheme, rest) =
+        url.split_once("://").ok_or_else(|| anyhow!("'{url}' is not a URL like http://host:8080/owner/name"))?;
+    if scheme != "http" && scheme != "https" {
+        bail!("unsupported scheme '{scheme}' (use http or https)");
+    }
+    let (authority, path) = match rest.split_once('/') {
+        Some((a, p)) => (a, p.trim_matches('/')),
+        None => (rest, ""),
+    };
+    if authority.is_empty() {
+        bail!("'{url}' has no host");
+    }
+    let repo = (!path.is_empty()).then(|| path.to_string());
+    Ok((format!("{scheme}://{authority}"), repo))
+}
+
+fn rt() -> Result<tokio::runtime::Runtime> {
+    Ok(tokio::runtime::Builder::new_current_thread().enable_all().build()?)
+}
+
+async fn connect(root: &Path, name: &str, r: &Remote) -> Result<Client> {
+    let token = read_token(root, name, r)?;
+    let run = std::env::var("AG_RUN").ok().filter(|s| !s.is_empty());
+    Client::connect(Options {
+        endpoint: r.url.clone(),
+        token,
+        run,
+        ca_file: r.ca_file.clone(),
+        timeout: Some(std::time::Duration::from_secs(120)),
+        user_agent: Some(format!("ag/{}", env!("CARGO_PKG_VERSION"))),
+    })
+    .await
+    .map_err(|e| anyhow!("{e}"))
+}
+
+fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
+    let all = load_remotes(root)?;
+    let name = name.unwrap_or("origin").to_string();
+    let r = all.remotes.get(&name).cloned().ok_or_else(|| {
+        anyhow!("no remote named '{name}' (see `ag remote list`; add one with `ag remote add {name} <url>`)")
+    })?;
+    Ok((name, r))
+}
+
+fn tracking_key(remote: &str, stream: &str) -> String {
+    format!("remote.{remote}.{stream}")
+}
+
+// ---- fetch ----------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct FetchReport {
+    pub remote: String,
+    pub stream: String,
+    pub head: Option<String>,
+    pub version: u64,
+    pub changesets: usize,
+    pub blobs: usize,
+}
+
+async fn download(client: &Client, remote_repo: &str, repo: &Repository, id: &ObjectId) -> Result<RawObject> {
+    let raw = client.get_object(remote_repo, id).await.map_err(|e| anyhow!("{e}"))?;
+    repo.objects().put(&raw)?;
+    Ok(raw)
+}
+
+async fn fetch_stream(
+    client: &Client,
+    remote_name: &str,
+    remote: &Remote,
+    repo: &Repository,
+    stream: &str,
+) -> Result<FetchReport> {
+    let head = client
+        .retrying(|| async {
+            client
+                .streams()
+                .read_head(client.req(v1::ReadHeadRequest {
+                    repo: remote.repo.clone(),
+                    stream: stream.into(),
+                    ..Default::default()
+                }))
+                .await
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))?
+        .into_inner();
+    let mut report = FetchReport {
+        remote: remote_name.into(),
+        stream: stream.into(),
+        head: None,
+        version: head.version,
+        changesets: 0,
+        blobs: 0,
+    };
+    if head.head.is_empty() {
+        return Ok(report);
+    }
+    let want: ChangesetId = head.head.parse().map_err(|_| anyhow!("the server sent a bad head id"))?;
+    let key = tracking_key(remote_name, stream);
+    let mut have: Vec<ChangesetId> = Vec::new();
+    if let Some(prev) = repo.meta().read(|tx| tx.meta_get(&key))?.and_then(|s| s.parse().ok()) {
+        have.push(prev);
+    }
+    // Everything the server has that we do not, parents first.
+    let mut ids: Vec<ChangesetId> = Vec::new();
+    let mut token = String::new();
+    loop {
+        let resp = client
+            .retrying(|| async {
+                client
+                    .history()
+                    .ancestors(client.req(v1::AncestorsRequest {
+                        repo: remote.repo.clone(),
+                        want: vec![want.to_string()],
+                        have: have.iter().map(|h| h.to_string()).collect(),
+                        page_size: 1000,
+                        page_token: token.clone(),
+                    }))
+                    .await
+            })
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .into_inner();
+        for id in &resp.changeset_ids {
+            ids.push(id.parse().map_err(|_| anyhow!("the server sent a bad changeset id"))?);
+        }
+        if resp.next_page_token.is_empty() {
+            break;
+        }
+        token = resp.next_page_token;
+    }
+    let mut blobs: BTreeSet<ObjectId> = BTreeSet::new();
+    for id in &ids {
+        let oid = id.object_id();
+        let raw = if repo.objects().contains(&oid)? {
+            repo.objects().get(&oid)?.ok_or_else(|| anyhow!("object {oid} vanished"))?
+        } else {
+            report.changesets += 1;
+            download(client, &remote.repo, repo, &oid).await?
+        };
+        let cs = Changeset::from_raw(&raw, repo.limits()).map_err(|e| anyhow!("changeset {id}: {e}"))?;
+        blobs.extend(cs.blobs().map(|b| b.object_id()));
+    }
+    for b in blobs {
+        if !repo.objects().contains(&b)? {
+            download(client, &remote.repo, repo, &b).await?;
+            report.blobs += 1;
+        }
+    }
+    let actor = identity_for_local(repo);
+    let published = repo.publish(&want, &actor, None)?;
+    if published.state != ag_integrate::PublishState::Published {
+        bail!("the fetched history failed local verification: {}", published.reason.unwrap_or_default());
+    }
+    repo.meta().write(|tx| tx.meta_set(&key, &want.to_hex()))?;
+    report.head = Some(want.to_string());
+    Ok(report)
+}
+
+fn identity_for_local(_repo: &Repository) -> ag_types::Identity {
+    ag_types::Identity::new("system:sync").expect("valid")
+}
+
+/// Fast-forwards the local stream to the fetched head and updates the workspace.
+fn advance_local(ctx: &Ctx, stream: &str, head: &ChangesetId) -> Result<Option<SyncOutcome>> {
+    let state = ctx.repo.meta().read(|tx| tx.stream(stream))?;
+    let name = StreamName::new(stream.to_string()).map_err(|e| anyhow!("{e}"))?;
+    match state {
+        None => {
+            ctx.repo.create_stream(&name, Some(head), &ctx.me)?;
+        }
+        Some(row) => {
+            if row.state.head == Some(*head) {
+                return Ok(None);
+            }
+            ctx.repo
+                .stream_cas(stream, &row.state, head, &ctx.me, "pull", false)
+                .map_err(|e| anyhow!("the local stream '{stream}' cannot fast-forward to the remote head ({e}); it has local history the server lacks"))?;
+        }
+    }
+    Ok(Some(ctx.repo.sync_workspace("default", &ctx.root, &ctx.me)?))
+}
+
+// ---- clone -----------------------------------------------------------------------
+
+#[derive(Args, Debug)]
+pub struct CloneArgs {
+    /// `http(s)://host:port/owner/name`
+    pub url: String,
+    /// Directory to create (default: the repository name).
+    pub dir: Option<PathBuf>,
+    /// Stream to clone (default: the repository's default stream).
+    #[arg(long)]
+    pub stream: Option<String>,
+    /// Name for the remote.
+    #[arg(long, default_value = "origin")]
+    pub name: String,
+    /// Environment variable holding the credential (default: AG_TOKEN).
+    #[arg(long)]
+    pub token_env: Option<String>,
+    /// Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600).
+    #[arg(long)]
+    pub token_stdin: bool,
+    /// Extra CA certificate (PEM) to trust.
+    #[arg(long)]
+    pub ca_file: Option<PathBuf>,
+}
+
+pub fn clone(cli: &Cli, a: &CloneArgs) -> Result<u8> {
+    let (server, repo_name) = split_url(&a.url)?;
+    let repo_name = repo_name.ok_or_else(|| anyhow!("the URL must name the repository: {server}/owner/name"))?;
+    let dir = a.dir.clone().unwrap_or_else(|| PathBuf::from(repo_name.rsplit('/').next().unwrap_or("repo")));
+    if dir.exists() && std::fs::read_dir(&dir)?.next().is_some() {
+        bail!("{} already exists and is not empty", dir.display());
+    }
+    let mut remote = Remote {
+        url: server,
+        repo: repo_name.clone(),
+        token_env: a.token_env.clone(),
+        token_file: None,
+        ca_file: a.ca_file.clone(),
+    };
+    let mut stdin_token = None;
+    if a.token_stdin {
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut s)?;
+        remote.token_file = Some(format!("credentials/{}", a.name));
+        stdin_token = Some(s);
+    }
+    let runtime = rt()?;
+    // Validate the connection and the credential before creating anything on disk.
+    let (client, info) = runtime.block_on(async {
+        let token = match &stdin_token {
+            Some(t) => t.trim().to_string(),
+            None => read_token(Path::new("."), &a.name, &remote)?,
+        };
+        let client = Client::connect(Options {
+            endpoint: remote.url.clone(),
+            token,
+            ca_file: remote.ca_file.clone(),
+            timeout: Some(std::time::Duration::from_secs(120)),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))?;
+        let info = client
+            .repos()
+            .describe(client.req(v1::GetRepoRequest { repo: repo_name.clone() }))
+            .await
+            .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+            .into_inner();
+        Ok::<_, anyhow::Error>((client, info))
+    })?;
+    let stream = a.stream.clone().unwrap_or_else(|| info.default_stream.clone());
+    std::fs::create_dir_all(&dir)?;
+    let repo = Repository::init(
+        &dir,
+        &InitOptions::new(
+            Namespace::new(info.namespace.clone()).map_err(|e| anyhow!("{e}"))?,
+            StreamName::new(stream.clone()).map_err(|e| anyhow!("{e}"))?,
+            identity(cli)?,
+        ),
+    )?;
+    if let Some(t) = &stdin_token {
+        write_secret(&dir.join(".ag").join("credentials").join(&a.name), t)?;
+    }
+    let mut all = Remotes::default();
+    all.remotes.insert(a.name.clone(), remote.clone());
+    save_remotes(&dir, &all)?;
+    let ctx = Ctx { repo, me: identity(cli)?, json: cli.json, root: dir.canonicalize()? };
+    let report = runtime.block_on(fetch_stream(&client, &a.name, &remote, &ctx.repo, &stream))?;
+    if let Some(h) = &report.head {
+        advance_local(&ctx, &stream, &h.parse().map_err(|_| anyhow!("bad head"))?)?;
+    }
+    ctx.out(&report, || {
+        format!(
+            "Cloned {} into {} ({} changeset(s), {} blob(s)); stream '{stream}' at {}.",
+            remote.repo,
+            dir.display(),
+            report.changesets,
+            report.blobs,
+            report.head.as_deref().map(|h| &h[..12]).unwrap_or("(empty)")
+        )
+    })?;
+    Ok(exit::OK)
+}
+
+// ---- fetch / pull / push -------------------------------------------------------------
+
+#[derive(Args, Debug)]
+pub struct SyncArgs {
+    /// Remote name (default: origin).
+    #[arg(long)]
+    pub remote: Option<String>,
+    /// Stream (default: the repository's default stream).
+    #[arg(long)]
+    pub stream: Option<String>,
+}
+
+pub fn fetch(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
+    let (name, remote) = resolve_remote(&ctx.root, a.remote.as_deref())?;
+    let stream = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
+    let report = rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &remote).await?;
+        fetch_stream(&client, &name, &remote, &ctx.repo, &stream).await
+    })?;
+    ctx.out(&report, || match &report.head {
+        Some(h) => format!(
+            "Fetched {} changeset(s) and {} blob(s); {name}/{stream} is at {}.",
+            report.changesets,
+            report.blobs,
+            &h[..12]
+        ),
+        None => format!("{name}/{stream} has no changesets yet."),
+    })?;
+    Ok(exit::OK)
+}
+
+pub fn pull(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
+    let (name, remote) = resolve_remote(&ctx.root, a.remote.as_deref())?;
+    let stream = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
+    let report = rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &remote).await?;
+        fetch_stream(&client, &name, &remote, &ctx.repo, &stream).await
+    })?;
+    let Some(head) = &report.head else {
+        ctx.out(&report, || format!("{name}/{stream} has no changesets yet."))?;
+        return Ok(exit::OK);
+    };
+    let outcome = advance_local(ctx, &stream, &head.parse().map_err(|_| anyhow!("bad head"))?)?;
+    let text = match &outcome {
+        None => "Already up to date.".to_string(),
+        Some(SyncOutcome::UpToDate) => "Already up to date.".to_string(),
+        Some(SyncOutcome::FastForwarded { to }) => format!("Fast-forwarded the workspace to {}.", to.short()),
+        Some(SyncOutcome::Merged { id }) => format!("Merged remote changes into the workspace ({}).", id.short()),
+        Some(SyncOutcome::Conflicted { conflicts }) => {
+            format!("Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.", conflicts.len())
+        }
+    };
+    ctx.out(&serde_json::json!({"fetch": report, "workspace": outcome}), || text.clone())?;
+    Ok(if matches!(outcome, Some(SyncOutcome::Conflicted { .. })) { exit::REFUSED } else { exit::OK })
+}
+
+#[derive(Args, Debug)]
+pub struct PushArgs {
+    /// Remote name (default: origin).
+    #[arg(long)]
+    pub remote: Option<String>,
+    /// Revision to propose (default: the workspace head).
+    pub rev: Option<String>,
+    /// Proposal title.
+    #[arg(short, long)]
+    pub title: String,
+    /// Longer description.
+    #[arg(short, long, default_value = "")]
+    pub description: String,
+    /// Target stream (default: the repository's default stream).
+    #[arg(long)]
+    pub stream: Option<String>,
+    /// Task this proposal belongs to.
+    #[arg(long)]
+    pub task: Option<String>,
+}
+
+pub fn push(ctx: &Ctx, a: &PushArgs) -> Result<u8> {
+    let (name, remote) = resolve_remote(&ctx.root, a.remote.as_deref())?;
+    let stream = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
+    let head = rev_or_default(ctx, &a.rev)?;
+    let changes = ctx.repo.workspace_status("default", &ctx.root)?;
+    if a.rev.is_none() && !changes.is_empty() {
+        bail!("the working directory has {} uncommitted change(s); run `ag snapshot -m ...` first", changes.len());
+    }
+    let key = tracking_key(&name, &stream);
+    let known: Vec<ChangesetId> =
+        ctx.repo.meta().read(|tx| tx.meta_get(&key))?.and_then(|s| s.parse().ok()).into_iter().collect();
+    let ids = ctx.repo.ancestors_between(&[head], &known)?;
+    let mut objects: Vec<RawObject> = Vec::new();
+    let mut blob_ids: BTreeSet<ObjectId> = BTreeSet::new();
+    for id in &ids {
+        let raw = ctx
+            .repo
+            .objects()
+            .get(&id.object_id())?
+            .ok_or_else(|| anyhow!("changeset {id} is not in the local store"))?;
+        let cs = Changeset::from_raw(&raw, ctx.repo.limits()).map_err(|e| anyhow!("changeset {id}: {e}"))?;
+        blob_ids.extend(cs.blobs().map(|b| b.object_id()));
+        objects.push(raw);
+    }
+    for b in &blob_ids {
+        objects.push(ctx.repo.objects().get(b)?.ok_or_else(|| anyhow!("blob {b} is not in the local store"))?);
+    }
+    let outcome = rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &remote).await?;
+        let all_ids: Vec<ObjectId> = objects.iter().map(|o| o.id()).collect();
+        let missing: BTreeSet<ObjectId> =
+            client.missing_objects(&remote.repo, &all_ids).await.map_err(|e| anyhow!("{e}"))?.into_iter().collect();
+        let to_send: Vec<RawObject> = objects.iter().filter(|o| missing.contains(&o.id())).cloned().collect();
+        let sent = client.upload_objects(&remote.repo, &to_send).await.map_err(|e| anyhow!("{e}"))?;
+        let req = v1::CreateProposalRequest {
+            repo: remote.repo.clone(),
+            stream: stream.clone(),
+            head: head.to_string(),
+            title: a.title.clone(),
+            description: a.description.clone(),
+            task_id: a.task.clone().unwrap_or_default(),
+            idempotency_key: format!("push:{stream}:{head}"),
+        };
+        let prop = client
+            .retrying(|| async { client.proposals().create(client.req(req.clone())).await })
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .into_inner();
+        Ok::<_, anyhow::Error>((prop, sent.stored.len(), to_send.len()))
+    })?;
+    let (prop, stored, sent) = outcome;
+    ctx.out(&serde_json::json!({"proposal": prop, "objects_sent": sent, "objects_stored": stored}), || {
+        format!(
+            "Uploaded {sent} object(s) and opened proposal {} -> '{stream}'.\nNext: `ag remote prepare {}` to see what is missing, `ag remote integrate {}` when it is ready.",
+            prop.id, prop.id, prop.id
+        )
+    })?;
+    Ok(exit::OK)
+}
+
+// ---- remote administration ------------------------------------------------------------------
+
+#[derive(Args, Debug)]
+pub struct RemoteArgs {
+    /// Remote to use (default: origin).
+    #[arg(long, global = true)]
+    pub remote: Option<String>,
+    #[command(subcommand)]
+    pub cmd: RemoteCmd,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum RemoteCmd {
+    /// Add a remote.
+    Add {
+        /// Name, e.g. origin.
+        name: String,
+        /// `http(s)://host:port/owner/name`
+        url: String,
+        /// Environment variable holding the credential.
+        #[arg(long)]
+        token_env: Option<String>,
+        /// Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600).
+        #[arg(long)]
+        token_stdin: bool,
+        /// Extra CA certificate (PEM) to trust.
+        #[arg(long)]
+        ca_file: Option<PathBuf>,
+    },
+    /// List remotes.
+    List,
+    /// Forget a remote.
+    Remove {
+        /// Name.
+        name: String,
+    },
+    /// Show who the server thinks you are.
+    Whoami,
+    /// List proposals on the server.
+    Proposals {
+        /// Filter: open, integrated, closed.
+        #[arg(long)]
+        state: Option<String>,
+    },
+    /// Show a proposal with its reviews.
+    Proposal {
+        /// Proposal id.
+        id: String,
+    },
+    /// What would integrating do now, and what is missing?
+    Prepare {
+        /// Proposal id.
+        id: String,
+        /// Also queue the validation jobs the policy knows how to run.
+        #[arg(long)]
+        validate: bool,
+    },
+    /// Review a proposal's current head.
+    Review {
+        /// Proposal id.
+        id: String,
+        /// Approve.
+        #[arg(long, group = "decision")]
+        approve: bool,
+        /// Request changes.
+        #[arg(long, group = "decision")]
+        request_changes: bool,
+        /// Comment only.
+        #[arg(long, group = "decision")]
+        comment: bool,
+        /// Review text.
+        #[arg(short, long, default_value = "")]
+        message: String,
+    },
+    /// Integrate a proposal into its stream.
+    Integrate {
+        /// Proposal id.
+        id: String,
+        /// Fencing tokens of exclusive leases the author holds.
+        #[arg(long = "fencing-token")]
+        fencing_tokens: Vec<u64>,
+    },
+    /// Close a proposal without integrating it.
+    Close {
+        /// Proposal id.
+        id: String,
+    },
+    /// List streams.
+    Streams,
+    /// Show the events of the repository (replay), or follow them live.
+    Events {
+        /// Replay events after this sequence number.
+        #[arg(long, default_value_t = 0)]
+        after: u64,
+        /// Only these topics (prefix match), e.g. `stream,proposal`.
+        #[arg(long, value_delimiter = ',')]
+        topics: Vec<String>,
+        /// Keep following new events.
+        #[arg(long)]
+        follow: bool,
+    },
+    /// Show or set a stream's policy.
+    Policy {
+        /// Stream.
+        stream: String,
+        /// Replace the policy with the JSON document in this file.
+        #[arg(long)]
+        set: Option<PathBuf>,
+    },
+    /// Show history of a revision on the server.
+    Log {
+        /// Revision (default: the default stream).
+        rev: Option<String>,
+        /// Maximum entries.
+        #[arg(short = 'n', long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`.
+    Cat {
+        /// `REV:PATH`
+        spec: String,
+    },
+}
+
+fn local_root(cli: &Cli) -> Result<PathBuf> {
+    let start = match &cli.repo {
+        Some(p) => p.clone(),
+        None => std::env::current_dir()?,
+    };
+    Ok(ag_integrate::Layout::discover(&start).map(|l| l.root().to_path_buf()).unwrap_or(start))
+}
+
+fn print<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String) -> Result<()> {
+    if cli.json {
+        println!("{}", serde_json::to_string_pretty(value)?);
+    } else {
+        let text = human();
+        if !text.is_empty() {
+            println!("{}", crate::ctx::sanitize_for_terminal(text.trim_end()));
+        }
+    }
+    Ok(())
+}
+
+pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
+    let root = local_root(cli)?;
+    match &args.cmd {
+        RemoteCmd::Add { name, url, token_env, token_stdin, ca_file } => {
+            if !root.join(".ag").is_dir() {
+                bail!("not an AgentGit repository; run `ag init` first");
+            }
+            let (server, repo) = split_url(url)?;
+            let repo = repo.ok_or_else(|| anyhow!("the URL must name the repository: {server}/owner/name"))?;
+            let mut r =
+                Remote { url: server, repo, token_env: token_env.clone(), token_file: None, ca_file: ca_file.clone() };
+            if *token_stdin {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut std::io::stdin(), &mut s)?;
+                r.token_file = Some(format!("credentials/{name}"));
+                write_secret(&root.join(".ag").join("credentials").join(name), &s)?;
+            }
+            let mut all = load_remotes(&root)?;
+            all.remotes.insert(name.clone(), r.clone());
+            save_remotes(&root, &all)?;
+            print(cli, &r, || format!("Added remote '{name}' -> {}/{}", r.url, r.repo))?;
+        }
+        RemoteCmd::List => {
+            let all = load_remotes(&root)?;
+            print(cli, &all.remotes, || {
+                all.remotes.iter().map(|(n, r)| format!("{n}\t{}/{}", r.url, r.repo)).collect::<Vec<_>>().join("\n")
+            })?;
+        }
+        RemoteCmd::Remove { name } => {
+            let mut all = load_remotes(&root)?;
+            if all.remotes.remove(name).is_none() {
+                bail!("no remote named '{name}'");
+            }
+            save_remotes(&root, &all)?;
+            let _ = std::fs::remove_file(root.join(".ag").join("credentials").join(name));
+            print(cli, &serde_json::json!({"removed": name}), || format!("Removed remote '{name}'."))?;
+        }
+        other => return remote_online(cli, &root, args.remote.as_deref(), other),
+    }
+    Ok(exit::OK)
+}
+
+fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &RemoteCmd) -> Result<u8> {
+    let (name, r) = resolve_remote(root, remote_name)?;
+    let repo = r.repo.clone();
+    let runtime = rt()?;
+    runtime.block_on(async {
+        let c = connect(root, &name, &r).await?;
+        let e = |e: ClientError| anyhow!("{e}");
+        let s = |s: tonic::Status| anyhow!("{}", ClientError::from(s));
+        match cmd {
+            RemoteCmd::Whoami => {
+                let p = c.protocol().whoami(c.req(v1::WhoamiRequest {})).await.map_err(s)?.into_inner();
+                print(cli, &p, || {
+                    format!("{} ({}, via {})\nroles: {}", p.identity, p.kind, p.method, p.roles.join(", "))
+                })?;
+            }
+            RemoteCmd::Proposals { state } => {
+                let resp = c
+                    .proposals()
+                    .list(c.req(v1::ListProposalsRequest {
+                        repo,
+                        state: state.clone().unwrap_or_default(),
+                        page_size: 200,
+                        ..Default::default()
+                    }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &resp, || {
+                    resp.proposals
+                        .iter()
+                        .map(|p| {
+                            format!(
+                                "{}  {:<10} {} -> {}  {}  ({})",
+                                p.id,
+                                p.state,
+                                &p.head[..12],
+                                p.stream,
+                                p.title,
+                                p.author
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })?;
+            }
+            RemoteCmd::Proposal { id } => {
+                let d = c
+                    .proposals()
+                    .get(c.req(v1::GetProposalRequest { repo, id: id.clone() }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &d, || {
+                    let p = d.proposal.clone().unwrap_or_default();
+                    let mut t = format!(
+                        "{}  [{}]  {}\n  {} -> {}  head {}\n  author {}\n",
+                        p.id,
+                        p.state,
+                        p.title,
+                        p.author,
+                        p.stream,
+                        &p.head[..12],
+                        p.author
+                    );
+                    for r in &d.reviews {
+                        t.push_str(&format!(
+                            "  review: {} by {} on {}  {}\n",
+                            r.decision,
+                            r.reviewer,
+                            &r.head[..12],
+                            r.body
+                        ));
+                    }
+                    t
+                })?;
+            }
+            RemoteCmd::Prepare { id, validate } => {
+                let p = c
+                    .integration()
+                    .prepare(c.req(v1::PrepareRequest {
+                        repo,
+                        proposal: id.clone(),
+                        enqueue_validations: *validate,
+                        idempotency_key: String::new(),
+                    }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &p, || {
+                    let mut t = format!("strategy: {}\ncandidate tree: {}\n", p.strategy, p.candidate_tree);
+                    for cf in &p.conflicts {
+                        t.push_str(&format!("conflict: {} ({})\n", cf.path, cf.kind));
+                    }
+                    if !p.problem.is_empty() {
+                        t.push_str(&format!("problem: {}\n", p.problem));
+                    }
+                    for v in &p.validations {
+                        t.push_str(&format!("check {:<16} {}\n", v.check, v.state));
+                    }
+                    for b in &p.blockers {
+                        t.push_str(&format!("blocked: {}\n", b.message));
+                    }
+                    if p.blockers.is_empty() && p.conflicts.is_empty() && p.problem.is_empty() {
+                        t.push_str("nothing blocks this integration.\n");
+                    }
+                    t
+                })?;
+                if !p.conflicts.is_empty() || !p.problem.is_empty() {
+                    return Ok(exit::REFUSED);
+                }
+                if !p.blockers.is_empty() {
+                    return Ok(exit::BLOCKED);
+                }
+            }
+            RemoteCmd::Review { id, approve, request_changes, comment, message } => {
+                let decision = match (approve, request_changes, comment) {
+                    (true, _, _) => "approve",
+                    (_, true, _) => "request_changes",
+                    (_, _, true) => "comment",
+                    _ => bail!("choose one of --approve, --request-changes, --comment"),
+                };
+                let rv = c
+                    .proposals()
+                    .review(c.req(v1::ReviewProposalRequest {
+                        repo,
+                        id: id.clone(),
+                        decision: decision.into(),
+                        body: message.clone(),
+                        idempotency_key: String::new(),
+                    }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &rv, || format!("Recorded '{}' on head {}.", rv.decision, &rv.head[..12]))?;
+            }
+            RemoteCmd::Integrate { id, fencing_tokens } => {
+                let res = c
+                    .integration()
+                    .integrate(c.req(v1::IntegrateRequest {
+                        repo,
+                        proposal: id.clone(),
+                        idempotency_key: String::new(),
+                        fencing_tokens: fencing_tokens.clone(),
+                    }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                let o = res.outcome.clone().unwrap_or_default();
+                print(cli, &res, || match o.status.as_str() {
+                    "integrated" => format!(
+                        "Integrated ({}): stream is now at {} (version {}), {} file(s) changed.",
+                        o.strategy,
+                        &o.new_head[..12],
+                        o.version,
+                        o.changed_files
+                    ),
+                    "blocked" => format!(
+                        "Blocked (policy v{}); the stream was not changed:\n{}",
+                        o.policy_version,
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                    ),
+                    "conflict" => format!(
+                        "Conflict:\n{}",
+                        o.conflicts
+                            .iter()
+                            .map(|c| format!("  - {} ({})", c.path, c.kind))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    ),
+                    "denied" => format!(
+                        "Denied by policy; the stream was not changed:\n{}",
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                    ),
+                    _ => format!("Not integrated: {}", o.reason),
+                })?;
+                return Ok(match o.status.as_str() {
+                    "integrated" => exit::OK,
+                    "blocked" => exit::BLOCKED,
+                    _ => exit::REFUSED,
+                });
+            }
+            RemoteCmd::Close { id } => {
+                let p = c
+                    .proposals()
+                    .close(c.req(v1::CloseProposalRequest { repo, id: id.clone(), idempotency_key: String::new() }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &p, || format!("Closed {}.", p.id))?;
+            }
+            RemoteCmd::Streams => {
+                let r = c.streams().list(c.req(v1::ListStreamsRequest { repo })).await.map_err(s)?.into_inner();
+                print(cli, &r, || {
+                    r.streams
+                        .iter()
+                        .map(|x| {
+                            format!(
+                                "{:<20} {}  v{}  policy v{}",
+                                x.name,
+                                if x.head.is_empty() { "(empty)".into() } else { x.head[..12].to_string() },
+                                x.version,
+                                x.policy_version
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })?;
+            }
+            RemoteCmd::Events { after, topics, follow } => {
+                if *follow {
+                    let mut stream = c
+                        .events()
+                        .subscribe(tonic::Request::new(v1::SubscribeRequest {
+                            repo,
+                            topics: topics.clone(),
+                            after_seq: *after,
+                            heartbeat_ms: 15_000,
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner();
+                    while let Some(ev) = stream.message().await.map_err(s)? {
+                        if ev.topic == "heartbeat" {
+                            continue;
+                        }
+                        print(cli, &ev, || format!("{:>6}  {}  {}", ev.seq, ev.topic, ev.payload_json))?;
+                    }
+                } else {
+                    let r = c
+                        .events()
+                        .replay(c.req(v1::ReplayRequest {
+                            repo,
+                            topics: topics.clone(),
+                            after_seq: *after,
+                            limit: 500,
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner();
+                    print(cli, &r, || {
+                        r.events
+                            .iter()
+                            .map(|ev| format!("{:>6}  {}  {}", ev.seq, ev.topic, ev.payload_json))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })?;
+                }
+            }
+            RemoteCmd::Policy { stream, set } => {
+                let v = match set {
+                    Some(file) => {
+                        let doc =
+                            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+                        c.admin()
+                            .set_policy(c.req(v1::SetPolicyRequest {
+                                repo,
+                                stream: stream.clone(),
+                                document: doc,
+                                idempotency_key: String::new(),
+                            }))
+                            .await
+                            .map_err(s)?
+                            .into_inner()
+                    }
+                    None => c
+                        .admin()
+                        .get_policy(c.req(v1::GetPolicyRequest { repo, stream: stream.clone() }))
+                        .await
+                        .map_err(s)?
+                        .into_inner(),
+                };
+                print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
+            }
+            RemoteCmd::Log { rev, limit } => {
+                let r = c
+                    .history()
+                    .log(c.req(v1::LogRequest {
+                        repo,
+                        rev: rev.clone().unwrap_or_default(),
+                        page_size: *limit,
+                        ..Default::default()
+                    }))
+                    .await
+                    .map_err(s)?
+                    .into_inner();
+                print(cli, &r, || {
+                    r.changesets
+                        .iter()
+                        .map(|x| format!("{}  {}  {}", &x.id[..12], x.author, x.message.lines().next().unwrap_or("")))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })?;
+            }
+            RemoteCmd::Cat { spec } => {
+                let (rev, path) =
+                    spec.split_once(':').ok_or_else(|| anyhow!("expected REV:PATH, e.g. main:src/lib.rs"))?;
+                let bytes = c.get_file(&repo, rev, path).await.map_err(e)?;
+                use std::io::Write;
+                std::io::stdout().write_all(&bytes)?;
+            }
+            RemoteCmd::Add { .. } | RemoteCmd::List | RemoteCmd::Remove { .. } => unreachable!("handled offline"),
+        }
+        Ok::<u8, anyhow::Error>(exit::OK)
+    })
+}

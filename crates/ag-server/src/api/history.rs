@@ -52,7 +52,7 @@ impl App {
     pub async fn get_changeset(&self, call: &Call, req: v1::GetChangesetRequest) -> ApiResult<v1::Changeset> {
         let rev = require(&req.rev, "rev")?.to_string();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
-            let id = repo.resolve_rev(&rev)?;
+            let id = super::resolve(repo, &rev)?;
             changeset_to_wire(repo, &id, req.include_ops)
         })
         .await
@@ -60,12 +60,12 @@ impl App {
 
     /// History from a revision, newest first, optionally limited to a path.
     pub async fn log(&self, call: &Call, req: v1::LogRequest) -> ApiResult<v1::LogResponse> {
-        let rev = if req.rev.is_empty() { "@".to_string() } else { req.rev.clone() };
+        let rev = req.rev.clone();
         let (path, size, token) = (req.path.clone(), req.page_size, req.page_token.clone());
         let offset = super::decode_offset("log", &token)?;
         let want = super::page_size(size);
         self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
-            let head = repo.resolve_rev(&rev)?;
+            let head = super::resolve(repo, &rev)?;
             let entries =
                 repo.log(&head, offset + want + 1, if path.is_empty() { None } else { Some(path.as_str()) })?;
             let (page, next) = paginate("log", entries, size, &token)?;
@@ -113,7 +113,7 @@ impl App {
     pub async fn resolve_rev(&self, call: &Call, req: v1::ResolveRevRequest) -> ApiResult<v1::ResolveRevResponse> {
         let rev = require(&req.rev, "rev")?.to_string();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
-            Ok(v1::ResolveRevResponse { changeset_id: repo.resolve_rev(&rev)?.to_string() })
+            Ok(v1::ResolveRevResponse { changeset_id: super::resolve(repo, &rev)?.to_string() })
         })
         .await
     }

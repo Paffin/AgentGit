@@ -34,10 +34,10 @@ pub(crate) fn tree_page(tree: &Tree, size: u32, token: &str) -> ApiResult<v1::Ge
 impl App {
     /// What exists at a path.
     pub async fn resolve_path(&self, call: &Call, req: v1::ResolvePathRequest) -> ApiResult<v1::ResolvePathResponse> {
-        let rev = if req.rev.is_empty() { "@".to_string() } else { req.rev.clone() };
+        let rev = req.rev.clone();
         let path = req.path.trim_matches('/').to_string();
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&repo.resolve_rev(&rev)?)?;
+            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
             if path.is_empty() {
                 return Ok(v1::ResolvePathResponse { kind: "dir".into(), entry: None });
             }
@@ -62,11 +62,11 @@ impl App {
         call: &Call,
         req: v1::ListDirectoryRequest,
     ) -> ApiResult<v1::ListDirectoryResponse> {
-        let rev = if req.rev.is_empty() { "@".to_string() } else { req.rev.clone() };
+        let rev = req.rev.clone();
         let dir = req.path.trim_matches('/').to_string();
         let (size, token) = (req.page_size, req.page_token.clone());
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&repo.resolve_rev(&rev)?)?;
+            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
             let items = tree.list_dir(&dir);
             if items.is_empty() && !dir.is_empty() {
                 let prefix = format!("{dir}/");
@@ -97,10 +97,10 @@ impl App {
 
     /// The whole tree of a revision as a sorted, paginated manifest.
     pub async fn get_tree(&self, call: &Call, req: v1::GetTreeRequest) -> ApiResult<v1::GetTreeResponse> {
-        let rev = if req.rev.is_empty() { "@".to_string() } else { req.rev.clone() };
+        let rev = req.rev.clone();
         let (size, token) = (req.page_size, req.page_token.clone());
         self.with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-            let tree = repo.tree_of(&repo.resolve_rev(&rev)?)?;
+            let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
             tree_page(&tree, size, &token)
         })
         .await
@@ -142,11 +142,11 @@ impl App {
 
     /// The bytes of a file at a revision.
     pub async fn file_content(&self, call: &Call, req: v1::GetFileRequest) -> ApiResult<Vec<u8>> {
-        let rev = if req.rev.is_empty() { "@".to_string() } else { req.rev.clone() };
+        let rev = req.rev.clone();
         let path = require(&req.path, "path")?.trim_matches('/').to_string();
         let out = self
             .with_repo(call, require(&req.repo, "repo")?, Cap::TreeRead, None, move |repo, _| {
-                let tree = repo.tree_of(&repo.resolve_rev(&rev)?)?;
+                let tree = repo.tree_of(&super::resolve(repo, &rev)?)?;
                 let rp = RepoPath::new(&path).map_err(|e| ApiError::invalid(e.to_string()))?;
                 let e =
                     tree.get(&rp).ok_or_else(|| ApiError::not_found(format!("'{path}' does not exist at {rev}")))?;

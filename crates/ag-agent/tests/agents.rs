@@ -8,12 +8,14 @@ use ag_agent::registry::{self, KeyStore};
 use ag_agent::{AgentError, predict, tasks};
 use ag_changeset::{Changeset, Op};
 use ag_object::hash_blob;
-use ag_storage::meta::Meta;
+use ag_storage::testing::TestMeta;
 use ag_storage::{Clock, ManualClock};
 use ag_types::{ChangesetId, FileType, Identity, Limits, Namespace, RepoPath, StreamName, Timestamp};
 
+/// The metadata store is whichever backend the environment selects (SQLite by default,
+/// PostgreSQL with `AG_TEST_POSTGRES_URL`; see `ag_storage::testing`).
 struct Env {
-    meta: Meta,
+    meta: TestMeta,
     keys: KeyStore,
     clock: Arc<ManualClock>,
     _dir: tempfile::TempDir,
@@ -22,7 +24,7 @@ struct Env {
 fn env() -> Env {
     let dir = tempfile::tempdir().unwrap();
     let clock = Arc::new(ManualClock::new(Timestamp::from_millis(1_000_000)));
-    let meta = Meta::open_with(&dir.path().join("m.db"), clock.clone(), Limits::default()).unwrap();
+    let meta = TestMeta::new(clock.clone());
     let keys = KeyStore::open(dir.path().join("keys")).unwrap();
     Env { meta, keys, clock, _dir: dir }
 }

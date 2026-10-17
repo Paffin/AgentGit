@@ -211,11 +211,17 @@ pub struct ReposSection {
     pub max_open: usize,
     /// Default stream for new repositories.
     pub default_stream: String,
+    /// Storage for new repositories. Absent: a SQLite file and a directory per
+    /// repository under the data directory. With PostgreSQL, `meta.schema` is a
+    /// *prefix* and each repository gets its own schema (`<prefix>_<owner>_<name>`);
+    /// with S3, each repository gets the key prefix `<prefix>/<owner>/<name>`.
+    /// Credentials are read from the environment variables the section names.
+    pub storage: Option<ag_integrate::StorageConfig>,
 }
 
 impl Default for ReposSection {
     fn default() -> Self {
-        Self { pool_size: 4, max_open: 256, default_stream: "main".into() }
+        Self { pool_size: 4, max_open: 256, default_stream: "main".into(), storage: None }
     }
 }
 

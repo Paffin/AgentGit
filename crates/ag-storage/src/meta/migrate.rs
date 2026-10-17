@@ -1,0 +1,79 @@
+//! Numbered schema migrations, one list per backend.
+//!
+//! The SQL lives in the top-level `migrations/` directory, compiled in with
+//! `include_str!`. A migration is applied exactly once, in order, inside the
+//! transaction that records the new schema version; the version is kept in
+//! `PRAGMA user_version` (SQLite) and in the `meta` table, key `schema` (both).
+//!
+//! To add one: create `migrations/<backend>/NNNN_name.sql` for *both* backends,
+//! list it below and raise [`SCHEMA_VERSION`]. A test fails if a file in the
+//! directory is not listed or if the two lists disagree.
+
+/// One schema migration.
+pub(crate) struct Migration {
+    /// The schema version after applying it.
+    pub version: i64,
+    /// File name, for diagnostics.
+    pub name: &'static str,
+    /// The SQL (possibly several statements).
+    pub sql: &'static str,
+}
+
+impl Migration {
+    /// Names the migration in an error; transient and connection errors pass through untouched.
+    pub(crate) fn failed(&self, e: super::MetaError) -> super::MetaError {
+        use super::MetaError;
+        match e {
+            MetaError::Retriable(_) | MetaError::ConnectionLost { .. } => e,
+            other => MetaError::Invalid(format!("schema migration {} failed: {other}", self.name)),
+        }
+    }
+}
+
+/// Schema version understood by this build.
+pub const SCHEMA_VERSION: i64 = 2;
+
+pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
+    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../../../migrations/sqlite/0001_init.sql") },
+    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../../../migrations/sqlite/0002_jobs.sql") },
+];
+
+pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
+    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../../../migrations/postgres/0001_init.sql") },
+    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../../../migrations/postgres/0002_jobs.sql") },
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn files(backend: &str) -> Vec<String> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations").join(backend);
+        let mut v: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|n| n.ends_with(".sql"))
+            .collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn every_migration_file_is_listed_in_order_for_both_backends() {
+        for (backend, list) in [("sqlite", SQLITE_MIGRATIONS), ("postgres", POSTGRES_MIGRATIONS)] {
+            let listed: Vec<&str> = list.iter().map(|m| m.name).collect();
+            assert_eq!(files(backend), listed, "{backend}: migrations/ and the list in migrate.rs disagree");
+            for (i, m) in list.iter().enumerate() {
+                assert_eq!(m.version, i as i64 + 1, "{backend}: versions are consecutive from 1");
+                assert!(
+                    m.name.starts_with(&format!("{:04}_", m.version)),
+                    "{backend}: {} is numbered {}",
+                    m.name,
+                    m.version
+                );
+                assert!(!m.sql.trim().is_empty());
+            }
+            assert_eq!(list.last().unwrap().version, SCHEMA_VERSION, "{backend}");
+        }
+    }
+}

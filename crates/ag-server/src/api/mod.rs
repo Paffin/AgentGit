@@ -77,3 +77,10 @@ pub(crate) fn paginate<T>(kind: &str, items: Vec<T>, size: u32, token: &str) -> 
 pub(crate) fn require<'a>(value: &'a str, field: &str) -> ApiResult<&'a str> {
     if value.is_empty() { Err(ApiError::invalid(format!("'{field}' is required"))) } else { Ok(value) }
 }
+
+/// Resolves a revision expression; an empty one means the repository's default stream
+/// (a server-side repository has no working copy, so `@` would be meaningless).
+pub(crate) fn resolve(repo: &ag_integrate::Repository, rev: &str) -> ApiResult<ag_types::ChangesetId> {
+    let rev = if rev.is_empty() { repo.default_stream().as_str() } else { rev };
+    Ok(repo.resolve_rev(rev)?)
+}

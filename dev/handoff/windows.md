@@ -1,7 +1,9 @@
 # Windows track — handoff
 
-Status when this was written: the code is landed; the Windows CI workflow (`.github/workflows/windows.yml`) was
-**not yet green** — see "Verified" for exactly what was observed.
+Status when this was written: the code and `docs/operations/windows.md` are landed (main c4ebdb2); the Windows CI
+workflow (`.github/workflows/windows.yml`) was **not yet green** — its runs for c4ebdb2:
+<https://github.com/Paffin/AgentGit/actions/runs/39077344233> (Windows), <https://github.com/Paffin/AgentGit/actions/runs/39077344272> (CI).
+See "Verified" for exactly what was observed.
 
 ## Verified (with evidence)
 
@@ -52,9 +54,9 @@ Status when this was written: the code is landed; the Windows CI workflow (`.git
 
 1. Look at the Windows run for `ef20d10`: Actions -> "Windows". Download logs with the artifact tooling or
    `get_job_logs`; fix failures (likely candidates: `quickstart.ps1` quoting, `console.rs` helper, ACL test).
-2. Write `docs/operations/windows.md` (support matrix, install notes, semantics table, list of gated tests above)
-   and add it to `docs/README.md`; touch `docs/getting-started.md` and `docs/architecture/adr-traceability.md`
-   only with facts from step 1. Add `windows.md` to the doc checks if `scripts/check_docs.py` requires it.
+2. `docs/operations/windows.md` is written (landed in c4ebdb2); after step 1, flip every **(unverified)** in it to
+   verified or fix it, and update the "Status honesty" paragraph. Touch `docs/getting-started.md` (Windows install
+   line) and `docs/architecture/adr-traceability.md` only with facts from step 1.
 3. Once green twice in a row, tell the orchestrator that "Windows" can become a required check. For the release
    track: ship `ag.exe` and `ag-server.exe` only; build with `RUSTFLAGS=-C target-feature=+crt-static` to avoid
    the VC++ redistributable (**not yet verified** — add a CI step using `dumpbin /dependents`); `ag-worker.exe` is

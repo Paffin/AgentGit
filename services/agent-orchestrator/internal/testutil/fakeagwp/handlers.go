@@ -461,14 +461,28 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 			return nil, 0, errDenied("integrate.validate required")
 		}
 		prep := s.prepareLocked(r, p)
-		if in.Enqueue && s.StubJobs {
-			for i, v := range prep.Validations {
-				if v.State == "missing" {
-					j := agwp.Job{ID: "job_" + randHex(4), Kind: "validation", State: "queued", Repo: r.name}
-					r.jobs = append(r.jobs, j)
-					prep.Jobs = append(prep.Jobs, j)
-					prep.Validations[i].State, prep.Validations[i].JobID = "pending", j.ID
+		// Like the real server: reuse a queued or claimed job for the same
+		// proposal, check and tree instead of queueing a second one.
+		for i, v := range prep.Validations {
+			if v.State != "missing" {
+				continue
+			}
+			var job *agwp.Job
+			for k := range r.jobs {
+				j := &r.jobs[k]
+				if j.Validation != nil && j.Validation.Proposal == p.ID && j.Validation.Check == v.Check && j.Validation.TreeID == prep.CandidateTree &&
+					(j.State == agwp.JobQueued || j.State == agwp.JobClaimed) {
+					job = j
 				}
+			}
+			if job == nil && in.Enqueue && s.StubJobs {
+				r.jobs = append(r.jobs, agwp.Job{ID: "job_" + randHex(4), Kind: "validate", State: agwp.JobQueued, Repo: r.name,
+					Validation: &agwp.ValidationTask{Check: v.Check, Proposal: p.ID, Stream: p.Stream, TreeID: prep.CandidateTree, PolicyVersion: 1}})
+				job = &r.jobs[len(r.jobs)-1]
+			}
+			if job != nil {
+				prep.Jobs = append(prep.Jobs, *job)
+				prep.Validations[i].State, prep.Validations[i].JobID = "pending", job.ID
 			}
 		}
 		return prep, 0, nil

@@ -23,7 +23,7 @@ e2e, Go suite green.
 ## Product-readiness tracks (7 parallel agents; briefs in `dev/tracks/tracks.md`)
 | # | Track | Owner files | State at snapshot |
 |---|---|---|---|
-| 14 | release & distribution | release.yml, containers.yml, deploy/, scripts/install.sh, packaging/ | in progress; WIP branches `wip/dist-track*` on the remote |
+| 14 | release & distribution | release.yml, containers.yml, deploy/, scripts/install.sh, packaging/ | **landed on main (6a87d70)**; handoff `dev/handoff/release.md`. Proven in CI: image, layer cache, kind, compose up+smoke+restart (observability step still `continue-on-error`), packaging dry-runs. Release rehearsal (`workflow_dispatch`) partly green (3/4 binaries, both image arches); `x86_64-apple-darwin` on `macos-15-intel` hung >25 min so release assembly/attestation/install jobs never ran |
 | 15 | server HA (control plane on PostgreSQL) | ag-server, ag-storage | in progress; ADR-0007 first |
 | 16 | web product (embed UI, responsive, a11y, cross-browser, OIDC PKCE) | apps/web, web.yml | in progress; branch `web-product-ci` |
 | 17 | MCP server `ag-mcp` | crates/ag-mcp, docs/guides/mcp.md | in progress (binary builds) |
@@ -64,6 +64,11 @@ Also known: the orchestrator's advisor/reviewers/semantic index are deterministi
 model-backed implementations behind the existing interfaces; **no API keys in code** — the session had OpenRouter
 reachable with proxy-injected authorization, so a provider (OpenAI-compatible chat API) can be verified live.
 
+Release-track findings not yet fixed: `repo.create`/list responses hardcode sqlite/fs backends (ag-server; fold into the
+HA track/audit); `deployment.md` verified-table still says MinIO and "nothing was run" (Compose now uses SeaweedFS);
+`ci.yml`'s `images` job duplicates `containers.yml`; drop `continue-on-error` in `containers.yml` once the observability
+step is green.
+
 ## Next wave (after the tracks land)
 1. Fold agent reports into `README.md`, `README.ru.md`, `CHANGELOG.md`, `ROADMAP.md`, `docs/architecture/adr-traceability.md`
    (agents were told not to edit these; each final report has "Changelog entries" and "README/ROADMAP notes").
@@ -76,6 +81,13 @@ reachable with proxy-injected authorization, so a provider (OpenAI-compatible ch
    `scripts/check_docs.py`, `scripts/gen_cli_docs.py --check`, `scripts/gen_readme_assets.py --check`.
 
 ## Owner action items
+* **Run the release rehearsal from the Actions UI** (Release → Run workflow, version `0.0.0-rc.dry`, publish off): the
+  session's GitHub token gets `403 Resource not accessible by integration` on `run_workflow`/cancel, so agents cannot
+  dispatch. Then fix what it finds (see `dev/handoff/release.md`; likely: `macos-15-intel` runner — cross-compile on
+  macos-14 instead — attestation permissions, `install.sh` attestation verification).
+* crates.io: names `ag-agent`, `ag-git`, `ag-protocol`, `ag-worker` are taken by others; two crates read files outside
+  their crate dir — 9 crates are `publish = false` for now. Decide on a naming scheme (e.g. `agentgit-*`) before any
+  crates.io publish.
 * Enable GitHub Pages (Settings → Pages → Source: GitHub Actions) so the docs site deploys.
 * Delete the leftover remote branches listed above.
 * Decide when to cut the first release tag (publishing images/crates/SDKs is outward-facing; nothing is published yet).

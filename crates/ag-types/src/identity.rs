@@ -207,6 +207,74 @@ impl<'de> Deserialize<'de> for Namespace {
     }
 }
 
+/// Reasons a string is not a valid [`StreamName`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("stream name must be 1..=64 chars of lowercase letters, digits, '.', '_', '-' with optional '/' separators")]
+pub struct StreamNameError;
+
+/// The name of a stream (AgentGit's branch-like line of integration).
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct StreamName(String);
+
+impl StreamName {
+    /// Validates and wraps a stream name.
+    pub fn new(s: impl Into<String>) -> Result<Self, StreamNameError> {
+        let s: String = s.into();
+        if s.is_empty() || s.len() > 64 {
+            return Err(StreamNameError);
+        }
+        for seg in s.split('/') {
+            let mut chars = seg.chars();
+            match chars.next() {
+                Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit() => {}
+                _ => return Err(StreamNameError),
+            }
+            if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "._-".contains(c)) {
+                return Err(StreamNameError);
+            }
+        }
+        Ok(Self(s))
+    }
+
+    /// The name as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for StreamName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl fmt::Debug for StreamName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "StreamName({})", self.0)
+    }
+}
+
+impl std::str::FromStr for StreamName {
+    type Err = StreamNameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+impl Serialize for StreamName {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for StreamName {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        StreamName::new(s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// Reasons a string is not a valid [`OperationId`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("operation id must be 8..=64 characters of [A-Za-z0-9_-]")]
@@ -297,6 +365,15 @@ mod tests {
         assert!(Namespace::new("a").is_ok());
         for bad in ["", "Acme", "/a", "a/", "a//b", "-a", "a b"] {
             assert!(Namespace::new(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn stream_name_validation() {
+        assert!(StreamName::new("main").is_ok());
+        assert!(StreamName::new("feature/login-v2").is_ok());
+        for bad in ["", "Main", "/x", "x/", "a//b", "a b", "-x", &"a".repeat(65)] {
+            assert!(StreamName::new(bad).is_err(), "{bad:?}");
         }
     }
 

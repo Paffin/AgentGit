@@ -14,7 +14,7 @@ mod time;
 pub use id::{BlobId, ChangesetId, IdParseError, ObjectId, TreeId};
 pub use identity::{
     Identity, IdentityError, IdentityKind, Namespace, NamespaceError, OperationId,
-    OperationIdError,
+    OperationIdError, StreamName, StreamNameError,
 };
 pub use limits::Limits;
 pub use path::{PathError, RepoPath};

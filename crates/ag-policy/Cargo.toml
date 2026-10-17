@@ -12,3 +12,13 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ag-types.workspace = true
+ag-crypto.workspace = true
+ag-object.workspace = true
+globset.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

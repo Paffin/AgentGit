@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -65,6 +65,12 @@ pub trait ObjectStore: Send + Sync {
     fn list(&self) -> Result<Vec<ObjectInfo>, StoreError>;
     /// Deletes an object (garbage collection only). Returns whether it existed.
     fn delete(&self, id: &ObjectId) -> Result<bool, StoreError>;
+    /// Deletes an object only if it was last written before `cutoff`, atomically
+    /// with respect to concurrent `put`s: a `put` that finishes before this call
+    /// refreshes the object's age and therefore saves it, one that starts after
+    /// simply rewrites it. This closes the "GC deletes what a writer is about to
+    /// reference" race. Returns whether the object was deleted.
+    fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError>;
     /// The durability contract of this backend.
     fn durability(&self) -> Durability;
 }
@@ -87,6 +93,9 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     }
     fn delete(&self, id: &ObjectId) -> Result<bool, StoreError> {
         (**self).delete(id)
+    }
+    fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError> {
+        (**self).delete_if_older_than(id, cutoff)
     }
     fn durability(&self) -> Durability {
         (**self).durability()
@@ -143,7 +152,12 @@ impl ObjectStore for MemoryObjectStore {
             .get(&id)
             .map(|(b, _)| RawObject::decode_envelope(b).ok().is_some_and(|o| o.verify(&id).is_ok()))
             .unwrap_or(false);
-        if !healthy {
+        if healthy {
+            // refresh the age so a concurrent GC keeps it
+            if let Some(slot) = g.get_mut(&id) {
+                slot.1 = self.clock.now();
+            }
+        } else {
             g.insert(id, (env, self.clock.now()));
         }
         Ok(id)
@@ -181,6 +195,14 @@ impl ObjectStore for MemoryObjectStore {
 
     fn delete(&self, id: &ObjectId) -> Result<bool, StoreError> {
         Ok(self.objects.write().expect("lock").remove(id).is_some())
+    }
+
+    fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError> {
+        let mut g = self.objects.write().expect("lock");
+        match g.get(id) {
+            Some((_, t)) if *t < cutoff => Ok(g.remove(id).is_some()),
+            _ => Ok(false),
+        }
     }
 
     fn durability(&self) -> Durability {
@@ -228,6 +250,10 @@ impl FsObjectStore {
         Ok(Some(obj))
     }
 
+    fn lock_file(&self) -> std::io::Result<File> {
+        OpenOptions::new().create(true).truncate(false).write(true).open(self.root.join("gc.lock"))
+    }
+
     fn sync_dir(dir: &Path) -> std::io::Result<()> {
         #[cfg(unix)]
         {
@@ -246,7 +272,12 @@ impl ObjectStore for FsObjectStore {
         check_size(obj, &self.limits)?;
         let id = obj.id();
         let path = self.path_of(&id);
+        // Writers hold a shared lock; the collector's delete takes it exclusively.
+        let lock = self.lock_file()?;
+        lock.lock_shared()?;
         if let Ok(Some(_)) = self.read_verified(&id, &path) {
+            // Already stored: refresh its age so a concurrent GC keeps it.
+            File::open(&path)?.set_modified(std::time::SystemTime::now())?;
             return Ok(id);
         }
         let dir = path.parent().expect("object path has a parent");
@@ -321,6 +352,28 @@ impl ObjectStore for FsObjectStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(e) => Err(e.into()),
         }
+    }
+
+    fn delete_if_older_than(&self, id: &ObjectId, cutoff: Timestamp) -> Result<bool, StoreError> {
+        let lock = self.lock_file()?;
+        lock.lock()?;
+        let path = self.path_of(id);
+        let md = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e.into()),
+        };
+        let modified = md
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        if modified >= cutoff.as_millis() {
+            return Ok(false);
+        }
+        fs::remove_file(&path)?;
+        Ok(true)
     }
 
     fn durability(&self) -> Durability {
@@ -439,5 +492,41 @@ mod tests {
         }
         assert_eq!(s.get(&obj.id()).unwrap().unwrap(), obj);
         assert_eq!(s.list().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn reput_refreshes_age_and_delete_if_older_respects_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        let obj = RawObject::blob(b"old but wanted".to_vec());
+        let id = s.put(&obj).unwrap();
+        let path = s.path_of(&id);
+        let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        File::open(&path).unwrap().set_modified(an_hour_ago).unwrap();
+        let cutoff = Timestamp::from_millis(Timestamp::now().as_millis() - 1_800_000);
+        assert!(s.list().unwrap()[0].modified < cutoff, "object looks old");
+
+        // A writer touches it again just before the collector acts: it survives.
+        s.put(&obj).unwrap();
+        assert!(!s.delete_if_older_than(&id, cutoff).unwrap());
+        assert!(s.contains(&id).unwrap());
+
+        // Without the refresh it is collected.
+        File::open(&path).unwrap().set_modified(an_hour_ago).unwrap();
+        assert!(s.delete_if_older_than(&id, cutoff).unwrap());
+        assert!(!s.contains(&id).unwrap());
+        assert!(!s.delete_if_older_than(&id, cutoff).unwrap(), "already gone");
+    }
+
+    #[test]
+    fn memory_store_delete_if_older_respects_refresh() {
+        let clock = Arc::new(crate::clock::ManualClock::new(Timestamp::from_millis(1_000)));
+        let s = MemoryObjectStore::with_clock(clock.clone());
+        let obj = RawObject::blob(b"x".to_vec());
+        let id = s.put(&obj).unwrap();
+        clock.advance_ms(10_000);
+        s.put(&obj).unwrap(); // refresh at t=11_000
+        assert!(!s.delete_if_older_than(&id, Timestamp::from_millis(5_000)).unwrap());
+        assert!(s.delete_if_older_than(&id, Timestamp::from_millis(20_000)).unwrap());
     }
 }

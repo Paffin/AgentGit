@@ -1,0 +1,79 @@
+use ag_tree::Tree;
+use ag_types::{ChangesetId, TreeId};
+use rusqlite::{OptionalExtension, params};
+
+use super::{MetaError, Tx, parse};
+
+impl Tx<'_> {
+    /// Stores the derived tree of a changeset (idempotent).
+    pub fn put_derived_tree(&self, changeset: &ChangesetId, tree: &Tree) -> Result<TreeId, MetaError> {
+        let id = tree.id();
+        self.conn.execute(
+            "INSERT OR IGNORE INTO trees (tree_id, data) VALUES (?1, ?2)",
+            params![id.to_hex(), tree.encode()],
+        )?;
+        self.conn.execute(
+            "INSERT INTO changeset_trees (changeset, tree_id) VALUES (?1, ?2)
+             ON CONFLICT(changeset) DO UPDATE SET tree_id = excluded.tree_id",
+            params![changeset.to_hex(), id.to_hex()],
+        )?;
+        Ok(id)
+    }
+
+    /// The tree id recorded for a changeset, if it has been derived.
+    pub fn derived_tree_id(&self, changeset: &ChangesetId) -> Result<Option<TreeId>, MetaError> {
+        self.conn
+            .query_row("SELECT tree_id FROM changeset_trees WHERE changeset = ?1", [changeset.to_hex()], |r| r.get::<_, String>(0))
+            .optional()?
+            .map(|s| parse::<TreeId>(&s, "tree id"))
+            .transpose()
+    }
+
+    /// Loads and verifies the derived tree of a changeset.
+    ///
+    /// A cached tree whose manifest does not hash to its recorded id is
+    /// treated as corruption of a *disposable* cache: it returns `None` so the
+    /// caller recomputes from history.
+    pub fn derived_tree(&self, changeset: &ChangesetId) -> Result<Option<Tree>, MetaError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT t.tree_id, t.data FROM changeset_trees c JOIN trees t ON t.tree_id = c.tree_id WHERE c.changeset = ?1",
+                [changeset.to_hex()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?)),
+            )
+            .optional()?;
+        let Some((id, data)) = row else { return Ok(None) };
+        let Ok(tree) = Tree::decode(&data, self.limits) else { return Ok(None) };
+        if tree.id().to_hex() != id {
+            return Ok(None);
+        }
+        Ok(Some(tree))
+    }
+
+    /// Published changesets that have no derived tree yet, oldest first.
+    pub fn changesets_without_tree(&self, limit: usize) -> Result<Vec<ChangesetId>, MetaError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT c.id FROM changesets c LEFT JOIN changeset_trees t ON t.changeset = c.id
+             WHERE t.changeset IS NULL ORDER BY c.generation, c.id LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit as i64], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(parse::<ChangesetId>(&r?, "changeset id")?);
+        }
+        Ok(out)
+    }
+
+    /// Drops every derived tree (they can all be recomputed).
+    pub fn clear_derived(&self) -> Result<(), MetaError> {
+        self.conn.execute("DELETE FROM changeset_trees", [])?;
+        self.conn.execute("DELETE FROM trees", [])?;
+        Ok(())
+    }
+
+    /// Removes manifests no longer referenced by any changeset.
+    pub fn prune_orphan_trees(&self) -> Result<u64, MetaError> {
+        Ok(self.conn.execute("DELETE FROM trees WHERE tree_id NOT IN (SELECT tree_id FROM changeset_trees)", [])? as u64)
+    }
+}

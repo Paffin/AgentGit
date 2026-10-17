@@ -1,6 +1,4 @@
 // history.blame against a real server: which changeset introduced each line, line ranges, typed errors.
-// The route exists in servers built from the "line-level blame" commit or later; against an older
-// binary (which answers `no such route`) the suite is skipped.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isAgentGitError, putFile, type AgentGitClient } from '../src/index.js';
@@ -9,7 +7,6 @@ import { startServer, type RunningServer } from './harness/server.js';
 const repo = 'blame/lines';
 let server: RunningServer;
 let alice: AgentGitClient;
-let supported = true;
 let first = '';
 let second = '';
 
@@ -54,20 +51,13 @@ beforeAll(async () => {
   });
   first = m1.head;
   second = m2.head;
-  try {
-    await alice.history.blame({ repo, path: 'x.txt' });
-  } catch (e) {
-    if (!isAgentGitError(e) || !e.message.includes('no such route')) throw e;
-    supported = false;
-  }
 });
 afterAll(async () => {
   await server?.stop();
 });
 
 describe('history.blame', () => {
-  it('attributes every line to the changeset that last wrote it', async (ctx) => {
-    if (!supported) ctx.skip();
+  it('attributes every line to the changeset that last wrote it', async () => {
     const blame = await alice.history.blame({ repo, path: 'x.txt', rev: 'main' });
     expect(blame.rev).toBe(second);
     expect(blame.truncated).toBe(false);
@@ -79,8 +69,7 @@ describe('history.blame', () => {
     expect(blame.lines.every((l) => l.path === 'x.txt' && l.author === 'user:alice')).toBe(true);
   });
 
-  it('honours first_line / last_line and a revision other than the tip', async (ctx) => {
-    if (!supported) ctx.skip();
+  it('honours first_line / last_line and a revision other than the tip', async () => {
     const range = await alice.history.blame({ repo, path: 'x.txt', first_line: 2, last_line: 3 });
     expect(range.lines.map((l) => l.line)).toEqual([2, 3]);
     const before = await alice.history.blame({ repo, path: 'x.txt', rev: first });
@@ -88,8 +77,7 @@ describe('history.blame', () => {
     expect(new Set(before.lines.map((l) => l.changeset))).toEqual(new Set([first]));
   });
 
-  it('reports a missing file as a typed error', async (ctx) => {
-    if (!supported) ctx.skip();
+  it('reports a missing file as a typed error', async () => {
     const err = await alice.history.blame({ repo, path: 'nope.txt' }).catch((e: unknown) => e);
     expect(isAgentGitError(err)).toBe(true);
     expect(isAgentGitError(err) && err.retryable).toBe(false);

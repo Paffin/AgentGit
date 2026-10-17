@@ -10,6 +10,7 @@ from agentgit import (
     AgentGitError,
     AlreadyExistsError,
     AsyncAgentGitClient,
+    CallOptions,
     FailedPreconditionError,
     InvalidArgumentError,
     NotFoundError,
@@ -88,13 +89,43 @@ def test_repositories_are_hidden_from_callers_without_a_role(server: RunningServ
             mallory.repos.create(name="acme/mine")
 
 
-def test_an_answer_that_is_not_the_json_envelope_becomes_a_typed_error(server: RunningServer) -> None:
+def test_a_wrong_method_or_an_unknown_route_answers_in_the_standard_envelope(
+    server: RunningServer,
+) -> None:
+    auth = {"authorization": f"Bearer {server.bootstrap_token}"}
+    wrong = httpx.delete(f"{server.base_url}/v1/repos/acme/errs", headers={**auth, "x-request-id": "req-405"})
+    assert wrong.status_code == 405
+    assert "GET" in wrong.headers["allow"]
+    assert wrong.json()["error"]["code"] == "invalid_argument"
+    assert wrong.json()["error"]["request_id"] == "req-405"
+    unknown = httpx.get(f"{server.base_url}/v1/nope", headers={**auth, "x-request-id": "req-404"})
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == "not_found"
+    assert unknown.json()["error"]["request_id"] == "req-404"
+
+    # ... which the SDK turns into the usual typed error
     def to_delete(request: httpx.Request) -> httpx.Response:
-        # The server answers 405 with an empty body for a verb a route does not support.
         return httpx.Client().send(httpx.Request("DELETE", request.url, headers=request.headers))
 
     with server.admin(
         retry=False, http_client=httpx.Client(transport=httpx.MockTransport(to_delete))
+    ) as client:
+        with pytest.raises(AgentGitError) as info:
+            client.repos.describe(repo="acme/errs", options=CallOptions(request_id="req-sdk"))
+    assert (info.value.status, info.value.code, info.value.retryable) == (405, "invalid_argument", False)
+    assert info.value.request_id == "req-sdk"
+
+
+def test_an_answer_that_is_not_the_json_envelope_becomes_a_typed_error(server: RunningServer) -> None:
+    # e.g. a proxy in front of the server
+    def empty_405(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(405)
+
+    with AgentGitClient(
+        server.base_url,
+        server.bootstrap_token,
+        retry=False,
+        http_client=httpx.Client(transport=httpx.MockTransport(empty_405)),
     ) as client:
         with pytest.raises(AgentGitError) as info:
             client.repos.describe(repo="acme/errs")

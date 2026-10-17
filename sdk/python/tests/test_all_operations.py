@@ -19,7 +19,6 @@ from agentgit import (
     OPERATIONS,
     AgentGitClient,
     AsyncAgentGitClient,
-    NotFoundError,
     PutOp,
     blob_object,
     build_changeset,
@@ -105,7 +104,6 @@ def attest(v: dict[str, Any]) -> dict[str, Any]:
 
 class Seed:
     head = ""
-    blame_supported: bool | None = None
 
 
 def test_session_repositories_roles_and_credentials(tour: dict[str, AgentGitClient]) -> None:
@@ -249,18 +247,7 @@ def test_history_trees_streams_and_objects(tour: dict[str, AgentGitClient]) -> N
 
 
 def test_line_level_blame(tour: dict[str, AgentGitClient]) -> None:
-    """history.blame exists in servers built from the commit that added it ("line-level blame") or later.
-
-    An older binary answers ``no such route``; that is the only failure this test turns into a skip.
-    """
-    try:
-        blame = tour["alice"].history.blame(repo=REPO, path="b/c.txt", rev="main")
-    except NotFoundError as e:
-        if "no such route" not in e.message:
-            raise
-        Seed.blame_supported = False
-        pytest.skip("this ag-server predates history.blame")
-    Seed.blame_supported = True
+    blame = tour["alice"].history.blame(repo=REPO, path="b/c.txt", rev="main")
     assert [(ln.line, ln.text, ln.path) for ln in blame.lines] == [(1, "c", "b/c.txt")]
     assert re.fullmatch(r"[0-9a-f]{64}", blame.lines[0].changeset)
 
@@ -360,5 +347,4 @@ def test_every_operation_of_the_openapi_document_has_a_method_in_both_clients() 
 def test_the_tour_reached_every_operation_and_no_route_was_missing(recorder: Recorder) -> None:
     missing = sorted(set(OPERATIONS) - recorder.reached)
     assert missing == []
-    known_gap = ["history.blame"] if Seed.blame_supported is False else []
-    assert [op for op in recorder.route_missing if op not in known_gap] == []
+    assert recorder.route_missing == []

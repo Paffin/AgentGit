@@ -76,18 +76,45 @@ describe('errors', () => {
     await expect(mallory.repos.create({ name: 'acme/mine' })).rejects.toMatchObject({ code: 'permission_denied' });
   });
 
-  it('turns an answer that is not the JSON envelope into a typed error', async () => {
-    // The server answers 405 with an empty body for a verb a route does not support.
-    const res = await fetch(`${server.baseUrl}/v1/repos/acme/errs`, {
+  it("a wrong method or an unknown route answers in the standard envelope, with the caller's request id", async () => {
+    const auth = { authorization: `Bearer ${server.bootstrapToken}` };
+    const wrongMethod = await fetch(`${server.baseUrl}/v1/repos/acme/errs`, {
       method: 'DELETE',
-      headers: { authorization: `Bearer ${server.bootstrapToken}` },
+      headers: { ...auth, 'x-request-id': 'req-405' },
     });
-    expect(res.status).toBe(405);
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get('allow')).toMatch(/GET/);
+    expect(((await wrongMethod.json()) as { error: { code: string; request_id: string } }).error).toMatchObject({
+      code: 'invalid_argument',
+      request_id: 'req-405',
+    });
+    const unknown = await fetch(`${server.baseUrl}/v1/nope`, { headers: { ...auth, 'x-request-id': 'req-404' } });
+    expect(unknown.status).toBe(404);
+    expect(((await unknown.json()) as { error: { code: string; request_id: string } }).error).toMatchObject({
+      code: 'not_found',
+      request_id: 'req-404',
+    });
+    // ... which the SDK turns into the usual typed error
     const client = new AgentGitClient({
       baseUrl: server.baseUrl,
       token: server.bootstrapToken,
       retry: false,
       fetch: (input, init) => fetch(input, { ...init, method: 'DELETE' }),
+    });
+    const err = (await client.repos
+      .describe({ repo: 'acme/errs' }, { requestId: 'req-sdk' })
+      .catch((e: unknown) => e)) as AgentGitError;
+    expect(err).toBeInstanceOf(AgentGitError);
+    expect(err).toMatchObject({ status: 405, code: 'invalid_argument', requestId: 'req-sdk', retryable: false });
+  });
+
+  it('turns an answer that is not the JSON envelope (a proxy, say) into a typed error', async () => {
+    const empty405: typeof fetch = async () => new Response(null, { status: 405 });
+    const client = new AgentGitClient({
+      baseUrl: server.baseUrl,
+      token: server.bootstrapToken,
+      retry: false,
+      fetch: empty405,
     });
     const err = (await client.repos.describe({ repo: 'acme/errs' }).catch((e: unknown) => e)) as AgentGitError;
     expect(err).toBeInstanceOf(AgentGitError);

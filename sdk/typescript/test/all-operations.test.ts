@@ -11,7 +11,6 @@ import {
   blobObject,
   buildChangeset,
   generateAgentKey,
-  isAgentGitError,
   putFile,
   signAttestation,
   signProvenance,
@@ -50,7 +49,6 @@ const recording: typeof fetch = async (input, init) => {
 };
 
 let server: RunningServer;
-let blameSupported: boolean | undefined;
 const repo = 'tour/all';
 const ciKey: AgentKey = generateAgentKey();
 let admin: AgentGitClient;
@@ -171,7 +169,7 @@ describe('the tour', () => {
     expect(entry.state).toBe('queued');
     expect((await carol.queue.list({ repo, stream: 'main' })).entries).toHaveLength(1);
     const ran = await carol.queue.run({ repo, stream: 'main' });
-    // (proto/agwp.proto documents the states as queued|integrated|blocked|...; ag-server 0.1.0 reports done + outcome)
+    // (queue states: queued, done, blocked, rejected, failed; outcome explains "done": "integrated")
     expect(ran.processed[0]).toMatchObject({ state: 'done', outcome: 'integrated' });
     seedHead = m2.head;
 
@@ -248,19 +246,10 @@ describe('the tour', () => {
     expect((await alice.operations.get({ repo, idempotency_key: 'tour-publish' })).kind).toBe('publish');
   });
 
-  // history.blame exists in servers built from the commit that added it ("line-level blame") or later.
-  // An older binary answers `no such route`; that is the only failure this test turns into a skip.
-  it('line-level blame', async (ctx) => {
-    try {
-      const blame = await alice.history.blame({ repo, path: 'b/c.txt', rev: 'main' });
-      expect(blame.lines.map((l) => [l.line, l.text, l.path])).toEqual([[1, 'c', 'b/c.txt']]);
-      expect(blame.lines[0]!.changeset).toMatch(/^[0-9a-f]{64}$/);
-      blameSupported = true;
-    } catch (e) {
-      if (!isAgentGitError(e) || e.code !== 'not_found' || !e.message.includes('no such route')) throw e;
-      blameSupported = false;
-      ctx.skip('this ag-server predates history.blame');
-    }
+  it('line-level blame', async () => {
+    const blame = await alice.history.blame({ repo, path: 'b/c.txt', rev: 'main' });
+    expect(blame.lines.map((l) => [l.line, l.text, l.path])).toEqual([[1, 'c', 'b/c.txt']]);
+    expect(blame.lines[0]!.changeset).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('agents, tasks, leases and provenance', async () => {
@@ -344,7 +333,6 @@ describe('coverage', () => {
     const reached = new Set(hits.map((h) => h.id));
     const missing = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => !reached.has(id));
     expect(missing).toEqual([]);
-    const knownGap = (h: Hit) => h.id === 'history.blame' && blameSupported === false;
-    expect(hits.filter((h) => h.routeMissing && !knownGap(h))).toEqual([]);
+    expect(hits.filter((h) => h.routeMissing)).toEqual([]);
   });
 });

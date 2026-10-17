@@ -3,7 +3,7 @@
 
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AgentGitClient, AgentGitError, putFile, type AgentGitClientOptions } from '../src/index.js';
+import { AgentGitClient, AgentGitError, generateAgentKey, putFile, type AgentGitClientOptions } from '../src/index.js';
 import { FaultyNetwork, recordedSleep } from './harness/faults.js';
 import { startServer, type RunningServer } from './harness/server.js';
 
@@ -209,6 +209,47 @@ describe('idempotency keys', () => {
     expect((await carol.streams.head({ repo, stream: 'main' })).version).toBe(1);
   });
 
+  it('task.create, agent.start_run and lease.acquire: a lost response is retried with the SAME key and the effect happens once', async () => {
+    const { net } = setup();
+    const bot = await server.actor('agent:retry-bot', repo, 'writer', {
+      fetch: net.fetch,
+      sleep: async () => undefined,
+    });
+    await bot.agents.register({ repo, name: 'retry-bot', public_key: generateAgentKey().publicKeyHex });
+    net.reset();
+    const lostOnce = (path: RegExp) => {
+      net.reset();
+      net.match = (r) => r.method === 'POST' && path.test(r.path);
+      net.rule = (_r, n) => (n === 1 ? 'drop-response' : 'pass');
+    };
+    const sameKeyTwice = (path: RegExp) => {
+      const posts = net.seen.filter((r) => r.method === 'POST' && path.test(r.path));
+      expect(posts).toHaveLength(2);
+      expect(posts[0]!.headers.get('idempotency-key')).toMatch(/^sdk-/);
+      expect(posts[1]!.headers.get('idempotency-key')).toBe(posts[0]!.headers.get('idempotency-key'));
+      expect(posts[1]!.body).toBe(posts[0]!.body);
+    };
+
+    lostOnce(/\/tasks$/);
+    const task = await bot.tasks.create({ repo, title: 'created once' });
+    sameKeyTwice(/\/tasks$/);
+    const tasks = (await bot.tasks.list({ repo })).tasks.filter((t) => t.title === 'created once');
+    expect(tasks.map((t) => t.id)).toEqual([task.id]);
+
+    lostOnce(/\/runs$/);
+    const run = await bot.agents.startRun({ repo, agent: 'retry-bot', task_id: task.id });
+    sameKeyTwice(/\/runs$/);
+    const runs = (await bot.agents.listRuns({ repo, agent: 'retry-bot' })).runs;
+    expect(runs.map((r) => r.run_id)).toEqual([run.run_id]);
+
+    lostOnce(/\/leases$/);
+    const lease = await bot.leases.acquire({ repo, scope: 'retry/**', exclusive: true, ttl_ms: 60_000 });
+    sameKeyTwice(/\/leases$/);
+    // the retry did not collide with the first attempt's own lease, and only one lease exists
+    const leases = (await bot.leases.list({ repo, active_only: true })).leases.filter((l) => l.scope === 'retry/**');
+    expect(leases.map((l) => l.id)).toEqual([lease.lease.id]);
+  });
+
   it('objects.put is naturally idempotent and is retried after a lost response', async () => {
     const { net, client } = setup();
     net.match = (r) => r.method === 'PUT';
@@ -220,26 +261,31 @@ describe('idempotency keys', () => {
 });
 
 describe('requests the server cannot deduplicate', () => {
+  // credentials.mint ignores Idempotency-Key by design (the secret can only be shown once), so a repeat
+  // would mint a second credential.
+  const minted = async (client: AgentGitClient, subject: string) =>
+    (await client.credentials.list({ subject })).credentials.filter((c) => c.subject === subject);
+
   it('are NOT retried after a lost response: the error says the outcome is unknown', async () => {
     const { net, client } = setup();
-    net.match = (r) => r.method === 'POST' && r.path.endsWith('/tasks');
+    net.match = (r) => r.method === 'POST' && r.path === '/v1/credentials';
     net.rule = () => 'drop-response';
-    const err = (await client.tasks.create({ repo, title: 'maybe twice' }).catch((e: unknown) => e)) as AgentGitError;
+    const err = (await client.credentials
+      .mint({ subject: 'user:maybe-twice', ttl_secs: 60 })
+      .catch((e: unknown) => e)) as AgentGitError;
     expect(err).toBeInstanceOf(AgentGitError);
     expect(err).toMatchObject({ code: 'unavailable', status: 0, retryable: true, outcomeUnknown: true, attempts: 1 });
-    expect(net.to(`/v1/repos/${repo}/tasks`, 'POST')).toHaveLength(1);
+    expect(net.to('/v1/credentials', 'POST')).toHaveLength(1);
     // The server did apply it once.
-    const tasks = await client.tasks.list({ repo });
-    expect(tasks.tasks.filter((t) => t.title === 'maybe twice')).toHaveLength(1);
+    expect(await minted(client, 'user:maybe-twice')).toHaveLength(1);
   });
 
   it('are retried only on request, and then they can be applied twice - which is why that is off by default', async () => {
     const { net, client } = setup();
-    net.match = (r) => r.method === 'POST' && r.path.endsWith('/tasks');
+    net.match = (r) => r.method === 'POST' && r.path === '/v1/credentials';
     net.rule = (_r, n) => (n === 1 ? 'drop-response' : 'pass');
-    await client.tasks.create({ repo, title: 'forced retry' }, { retry: { retryUnsafe: true } });
-    const tasks = await client.tasks.list({ repo });
-    expect(tasks.tasks.filter((t) => t.title === 'forced retry')).toHaveLength(2);
+    await client.credentials.mint({ subject: 'user:forced-retry', ttl_secs: 60 }, { retry: { retryUnsafe: true } });
+    expect(await minted(client, 'user:forced-retry')).toHaveLength(2);
   });
 
   it('workspace.modify becomes retryable once it carries expected_head: a second application is refused', async () => {

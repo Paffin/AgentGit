@@ -12,6 +12,7 @@ homepage = "https://github.com/Paffin/AgentGit"
 authors = ["The AgentGit Authors"]
 keywords = ["scm", "vcs", "agents", "version-control"]
 categories = ["development-tools"]
+readme = "README.md"
 
 [workspace.dependencies]
 # internal crates

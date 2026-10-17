@@ -1,12 +1,16 @@
 [package]
 name = "ag-object"
-description = "AgentGit: ag-object"
+description = "AgentGit content addressing and the canonical binary encoding toolkit"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [lints]
 workspace = true

@@ -1,12 +1,16 @@
 [package]
 name = "ag-sandbox"
-description = "AgentGit: isolated execution of untrusted commands (rootless namespaces, OCI, limits-only fallback)"
+description = "AgentGit sandboxes: isolated execution of untrusted commands (rootless namespaces, OCI, limits-only fallback)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 # This crate does not inherit `[workspace.lints]`: the workspace forbids `unsafe`, and running a process in
 # fresh namespaces needs raw system calls. Instead `unsafe` is *denied* crate-wide and re-allowed only in the

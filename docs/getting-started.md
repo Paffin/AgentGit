@@ -41,8 +41,8 @@ tar xzf agentgit-$V-$T.tar.gz && install agentgit-$V-$T/ag* ~/.local/bin/
 
 **3. Homebrew / Scoop.** The repository carries a formula and a manifest *template* under
 [`packaging/`](../packaging) and `scripts/render_packaging.py` fills them from a release's `SHA256SUMS` (every
-release attaches the rendered `agentgit.rb`). There is no tap and no Scoop bucket yet, and AgentGit has never
-been built on Windows, so treat both as unpublished.
+release attaches the rendered `agentgit.rb`). There is no tap and no Scoop bucket yet, and the release workflow does not build
+a Windows archive yet (the Windows port is tested by its own workflow), so treat both as unpublished.
 
 **4. From source.** You need Rust **1.89+** and a C compiler (SQLite is compiled in). `git` and `python3` are
 optional (Git bridge, demo script).

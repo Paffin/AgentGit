@@ -3,7 +3,7 @@
     "description": "Agent-native source control: deterministic core, policy-bound autonomy, tamper-evident audit",
     "homepage": "https://github.com/Paffin/AgentGit",
     "license": "Apache-2.0",
-    "notes": "TEMPLATE. There is no Windows build of AgentGit yet (nothing has been compiled or run on Windows), so no release contains the archive this manifest points at. scripts/render_packaging.py fills version and checksum from a release's SHA256SUMS once one does.",
+    "notes": "TEMPLATE. The release workflow does not build a Windows archive yet, so no release contains the file this manifest points at. scripts/render_packaging.py fills version and checksum from a release's SHA256SUMS once one does. ag-worker is Linux-only and is not installed.",
     "architecture": {
         "64bit": {
             "url": "@BASE_URL@/agentgit-@VERSION@-x86_64-pc-windows-msvc.zip",
@@ -13,8 +13,7 @@
     },
     "bin": [
         "ag.exe",
-        "ag-server.exe",
-        "ag-worker.exe"
+        "ag-server.exe"
     ],
     "checkver": {
         "github": "https://github.com/Paffin/AgentGit"

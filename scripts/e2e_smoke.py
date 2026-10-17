@@ -255,6 +255,9 @@ def main() -> None:
         status, desc = api.call("POST", "/v1/repos", args.bootstrap_token,
                                 {"name": args.repo, "default_stream": "main", "description": "e2e smoke"})
     check(status == 200, f"repository {args.repo} exists", desc)
+    # The create response carries placeholder backends ("sqlite"/"fs"); `describe` reports what the repository really uses.
+    status, desc = api.call("GET", repo_path, args.bootstrap_token)
+    check(status == 200, "the repository can be described", desc)
     ok(f"storage: meta={desc.get('meta_backend')} objects={desc.get('object_backend')}")
     if args.expect_meta_backend:
         check(desc.get("meta_backend", "").startswith(args.expect_meta_backend),

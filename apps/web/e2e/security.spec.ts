@@ -5,8 +5,10 @@ import { HOSTILE, HOSTILE_REPO } from './support/seed.ts'
 // The UI shows text it does not control: titles, descriptions, diffs, file names and contents, review
 // bodies, run summaries. None of it may ever run or turn into markup.
 
+// No 'unsafe-inline' anywhere: not for scripts, and not for styles either (the app styles through classes and the
+// CSSOM, never through style attributes or <style> elements in markup).
 const CSP =
-  "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 test.describe('content security policy', () => {
   test('the server sends a strict CSP with the UI, and the built page needs nothing more', async ({
@@ -19,7 +21,7 @@ test.describe('content security policy', () => {
     expect(csp).toBeTruthy()
     for (const directive of CSP.split('; ')) expect(csp).toContain(directive)
     expect(csp).not.toContain('unsafe-eval')
-    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
+    expect(csp).not.toContain('unsafe-inline')
     const html = await res.text()
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>\s*\S/)
     expect(html).not.toMatch(/https?:\/\/(?!127\.0\.0\.1|localhost)/)

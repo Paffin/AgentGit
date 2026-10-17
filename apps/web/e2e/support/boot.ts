@@ -4,7 +4,7 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { seedDemo, seedEmpty, seedHostile } from './seed.ts'
 import type { Demo } from './seed.ts'
-import { startServer } from './server.ts'
+import { defaultUi, startServer } from './server.ts'
 import type { RunningServer } from './server.ts'
 import { RUNTIME_DIR, WEB_ROOT, writeState } from './state.ts'
 import type { State } from './state.ts'
@@ -25,7 +25,7 @@ export interface World {
 export async function bootWorld(webDir = join(WEB_ROOT, 'dist')): Promise<World> {
   rmSync(RUNTIME_DIR, { recursive: true, force: true })
   mkdirSync(RUNTIME_DIR, { recursive: true })
-  const server = await startServer(webDir)
+  const server = await startServer({ ui: defaultUi(webDir) })
   let worker: Worker | undefined
   let beats: HeartbeatKeeper | undefined
   const stop = async () => {

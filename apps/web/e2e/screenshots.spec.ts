@@ -5,13 +5,17 @@ import { waitLive } from './support/ui.ts'
 import { WEB_ROOT } from './support/state.ts'
 
 // The pictures in docs/guides/web-ui.md. They are taken from the seeded demo world (plausible agents,
-// task titles and file paths), at desktop size, and written over the committed ones: `npm run test:e2e`
-// refreshes them. This project runs first, before other tests add events to the demo repository.
+// task titles and file paths), at desktop size. By default they land in test-results/screenshots (a test
+// run never dirties the working tree); `AG_UPDATE_SCREENSHOTS=1 npm run test:e2e` writes them over the
+// committed ones in docs/assets. This project runs first, before other tests add events to the demo repository.
 
-const out = (name: string) => resolve(WEB_ROOT, '../../docs/assets', name)
+const outDir = process.env.AG_UPDATE_SCREENSHOTS
+  ? resolve(WEB_ROOT, '../../docs/assets')
+  : resolve(WEB_ROOT, 'test-results/screenshots')
+const out = (name: string) => resolve(outDir, name)
 
 test.describe('documentation screenshots', () => {
-  test.beforeAll(() => mkdirSync(resolve(WEB_ROOT, '../../docs/assets'), { recursive: true }))
+  test.beforeAll(() => mkdirSync(outDir, { recursive: true }))
   test.beforeEach(async ({ page }) => {
     // Show the agent that went quiet as quiet, without waiting two minutes for it.
     await page.addInitScript(() => localStorage.setItem('agentgit.staleAfterSec', '10'))

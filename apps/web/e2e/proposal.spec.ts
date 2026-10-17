@@ -212,7 +212,8 @@ test.describe('acting on a proposal', () => {
     const p = await openProposal(alice, repo, { head: c.head, title: 'Extend the notes' })
     await open(page, repo, p.id)
     await page.getByTestId('act-enqueue').click()
-    await expect(page.getByText(/queue/i).first()).toBeVisible()
+    // Wait for the server's answer (the toast), not for any text that merely mentions the queue: the button does.
+    await expect(page.getByText('Added to the integration queue').first()).toBeVisible()
 
     await page.goto(`/repos/${repo}`)
     const queue = page.getByTestId('queue-panel')

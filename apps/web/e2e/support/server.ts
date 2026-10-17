@@ -58,8 +58,24 @@ async function waitHealthy(baseURL: string, child: ChildProcess, log: () => stri
   throw new Error(`ag-server did not become healthy:\n${log()}`)
 }
 
-export async function startServer(webDir: string): Promise<RunningServer> {
-  if (!existsSync(join(webDir, 'index.html'))) {
+export interface ServerOptions {
+  /**
+   * Where the UI comes from. A directory (`[ui] dir`, the override), or `'embedded'`: no UI configuration at all,
+   * so the server answers with the build compiled into its own binary (the production path).
+   */
+  ui: string | 'embedded'
+  /** Extra TOML appended to the configuration (after the sections the suite always writes). */
+  extraConfig?: string[]
+}
+
+/** The UI source the suite runs against: AG_E2E_UI=embedded (CI) or the freshly built directory (default). */
+export function defaultUi(webDir: string): string {
+  return process.env.AG_E2E_UI === 'embedded' ? 'embedded' : webDir
+}
+
+export async function startServer(opts: ServerOptions): Promise<RunningServer> {
+  const webDir = opts.ui
+  if (webDir !== 'embedded' && !existsSync(join(webDir, 'index.html'))) {
     throw new Error(
       `${webDir}/index.html is missing: run \`npm run build\` first (npm run test:e2e does it for you).`,
     )
@@ -77,8 +93,8 @@ export async function startServer(webDir: string): Promise<RunningServer> {
       '[server]',
       `listen = "127.0.0.1:${port}"`,
       `data_dir = ${JSON.stringify(dataDir)}`,
-      `web_dir = ${JSON.stringify(webDir)}`,
       '',
+      ...(webDir === 'embedded' ? [] : ['[ui]', `dir = ${JSON.stringify(webDir)}`, '']),
       '[limits]',
       // The suite is not a load test, so the limiter is off unless asked for (AG_E2E_RPS / AG_E2E_BURST), e.g. to
       // watch the UI ride out real 429 answers. The client's retry rules are unit-tested separately.
@@ -87,6 +103,8 @@ export async function startServer(webDir: string): Promise<RunningServer> {
       '',
       '[metrics]',
       'enabled = false',
+      '',
+      ...(opts.extraConfig ?? []),
     ].join('\n'),
   )
   let output = ''

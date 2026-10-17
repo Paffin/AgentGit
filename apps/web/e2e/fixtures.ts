@@ -89,12 +89,18 @@ export const test = base.extend<Fixtures & { problems: Problems }>({
     await use(page)
   },
 
-  openAs: async ({ browser, cast, problems, baseURL }, use) => {
+  openAs: async ({ browser, cast, problems, baseURL }, use, testInfo) => {
     const contexts: { close(): Promise<void> }[] = []
+    // The second session looks like the first: same viewport and device (tablet and phone projects).
+    const device = testInfo.project.use
     await use(async (who, opts = {}) => {
       const ctx = await (browser as Browser).newContext({
         baseURL,
-        viewport: { width: 1440, height: 900 },
+        viewport: device.viewport ?? { width: 1440, height: 900 },
+        userAgent: device.userAgent,
+        isMobile: device.isMobile,
+        hasTouch: device.hasTouch,
+        deviceScaleFactor: device.deviceScaleFactor,
         locale: 'en-US',
         timezoneId: 'UTC',
         colorScheme: opts.colorScheme ?? 'light',

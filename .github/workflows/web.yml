@@ -4,17 +4,19 @@ name: Web UI
 # or the server it is tested against change.
 on:
   push:
-    branches: [main]
+    branches: [main, web-product-ci]
     paths:
       - "apps/web/**"
       - "docs/protocol/openapi.json"
       - "crates/ag-server/**"
+      - "scripts/build_ui.sh"
       - ".github/workflows/web.yml"
   pull_request:
     paths:
       - "apps/web/**"
       - "docs/protocol/openapi.json"
       - "crates/ag-server/**"
+      - "scripts/build_ui.sh"
       - ".github/workflows/web.yml"
 
 permissions:
@@ -48,37 +50,55 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # The whole suite, against a REAL ag-server that serves the UI from its own binary (the UI is built first and
+  # embedded: `scripts/build_ui.sh`, then `cargo build`), in three browser engines, plus the layout and
+  # accessibility specs at tablet and phone size. Nothing is quarantined: a failure is a bug or a documented
+  # engine difference in the spec itself.
   e2e:
-    name: end-to-end (real ag-server, Chromium)
+    name: end-to-end (${{ matrix.project }})
     runs-on: ubuntu-latest
     needs: checks
-    defaults:
-      run:
-        working-directory: apps/web
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: chromium, browser: chromium }
+          - { project: firefox, browser: firefox }
+          - { project: webkit, browser: webkit }
+          - { project: tablet, browser: chromium }
+          - { project: phone, browser: chromium }
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build the server
-        run: cargo build -p ag-server
-        working-directory: .
+        with:
+          shared-key: web-e2e
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Build the UI (npm ci, production build, pre-compression)
+        run: scripts/build_ui.sh
+      - name: Build the server (with the UI inside) and the CLI
+        run: cargo build -p ag-server -p ag-cli
+      - name: Install the browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+        working-directory: apps/web
       - name: Run the end-to-end suite
-        run: npm run test:e2e
+        run: npx playwright test --project=${{ matrix.project }}
+        working-directory: apps/web
         env:
           AG_SERVER_BIN: ${{ github.workspace }}/target/debug/ag-server
+          AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
+          AG_E2E_UI: embedded
           CI: "true"
       - name: Keep the report when something failed
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             apps/web/playwright-report
             apps/web/test-results

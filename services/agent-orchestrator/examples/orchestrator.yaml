@@ -1,0 +1,59 @@
+# Agent Platform for the acme/web repository (see docs/guides/orchestrator.md).
+#
+# Credentials are never written here. The file only names the environment
+# variables that hold them (the token_env settings).
+server:
+  url: http://127.0.0.1:18090
+  token_env: AG_ORCH_TOKEN               # service:orchestrator (default)
+  reviewer_token_env: AG_REVIEWER_TOKEN  # service:reviewer (default)
+  advisor_token_env: AG_ADVISOR_TOKEN    # service:advisor (default)
+
+listen: 127.0.0.1:19090                  # admin and observability API
+state_dir: /var/lib/orchestrator         # agent keys, semantic index, session work directories
+
+log:
+  format: text
+  level: info
+
+loop:
+  reconcile: 5s                          # safety net under the event-driven loop
+
+shutdown:
+  mode: wait                             # let running sessions finish ...
+  grace: 2m                              # ... for at most this long
+
+repos:
+  - name: acme/web
+    stream: main
+    schedule:
+      slots: 3                           # sessions at once in this repository
+      placement: avoid                   # defer tasks whose scope overlaps live work
+      lease: soft                        # advertise the task scope while it runs
+      attempts: 2
+      backoff: 20s
+      default_executor: docs-bot
+      routes:
+        - executor: shell-bot
+          scope: "notes/**"
+    review:
+      max_files: 40
+      max_lines: 1500
+
+executors:
+  # Built-in stand-in for an agent: edits a virtual workspace, signs provenance, opens a proposal.
+  - name: docs-bot
+    type: scripted
+    heartbeat: 5s
+    scripted:
+      task_files: true                   # the task description carries the files to write
+      model: scripted-demo
+
+  # Any program. It gets AG_SERVER, AG_TOKEN, AG_RUN, AG_REPO, AG_TASK, AG_KEY_FILE, ... in its environment.
+  - name: shell-bot
+    type: command
+    command: ["/bin/sh", "/opt/orchestrator/shell-bot.sh"]
+    pass_env: [PATH]
+    timeout: 5m
+    grace: 10s
+    heartbeat: 5s
+    credential_ttl: 10m

@@ -349,11 +349,13 @@ fn passes(policy: &Policy, v: &RequiredValidation, a: &Attestation, facts: &Fact
     if v.environment_digest.as_ref().is_some_and(|d| d != &a.environment_digest) {
         return false;
     }
-    let age_ms = facts.now.as_millis() - a.issued_at.as_millis();
+    // Both timestamps are attacker-influenced `i64`s (an attestation is only verified below), so saturate.
+    let age_ms = facts.now.as_millis().saturating_sub(a.issued_at.as_millis());
     if age_ms < -MAX_FUTURE_SKEW_MS {
         return false;
     }
-    if v.max_age_secs.is_some_and(|max| age_ms > (max as i64).saturating_mul(1000)) {
+    // `max as i64` would turn a limit above `i64::MAX` into a negative one.
+    if v.max_age_secs.is_some_and(|max| age_ms > i64::try_from(max).unwrap_or(i64::MAX).saturating_mul(1000)) {
         return false;
     }
     a.verify_signature().is_ok()

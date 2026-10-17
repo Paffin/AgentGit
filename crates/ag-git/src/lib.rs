@@ -27,6 +27,13 @@ mod run;
 pub use export::{ExportOptions, ExportReport, export};
 pub use import::{ImportOptions, ImportReport, import};
 
+/// The parsers behind [`import`], exposed for the fuzz targets in `fuzz/`. Not a stable interface.
+#[doc(hidden)]
+pub mod fuzzing {
+    pub use crate::export::fast_import_path;
+    pub use crate::import::{Commit, RawChange, import_message, import_timestamp, parse_log, parse_raw};
+}
+
 /// Errors from the Git bridge.
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {

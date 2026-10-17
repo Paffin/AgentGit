@@ -190,6 +190,55 @@ fn environment_digest_and_age_constraints() {
     assert_eq!(c2.eval(&policy_with_tests()).decision, Decision::Blocked);
 }
 
+/// Found by the `policy_eval` fuzz target: `now - issued_at` overflowed for an attestation timestamp near
+/// `i64::MIN` (a panic in debug builds, a wrapped age in release) - and it was computed before the signature
+/// was checked, so a forged attestation naming a trusted issuer could trigger it.
+#[test]
+fn extreme_timestamps_are_blocked_not_a_panic() {
+    let p = policy_with_tests();
+    let mut aged = policy_with_tests();
+    aged.required_validations[0].max_age_secs = Some(3600);
+    for at in [i64::MIN, i64::MIN + 1, i64::MAX, i64::MAX - 1] {
+        let mut c = Ctx::new();
+        c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, at));
+        let far_future = at > 0;
+        // Dated after `now` + skew: refused. Dated at the beginning of time: valid unless the policy limits
+        // the age, in which case it is far too old.
+        assert_eq!(c.eval(&p).is_allowed(), !far_future, "issued_at {at}");
+        assert!(!c.eval(&aged).is_allowed(), "issued_at {at} with a one-hour limit");
+        // ... and the same when the evaluation clock itself is extreme.
+        let mut facts_now = Ctx::new();
+        facts_now.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, 0));
+        let far = Facts {
+            stream: "main",
+            actor: &facts_now.actor,
+            author: &facts_now.author,
+            proposal_head: cs(1),
+            candidate_tree: tree(1),
+            policy_version: 3,
+            changed: &facts_now.changed,
+            attestations: &facts_now.atts,
+            approvals: &facts_now.approvals,
+            has_provenance: false,
+            now: Timestamp::from_millis(at),
+        };
+        let _ = evaluate(&p, &far);
+    }
+}
+
+/// A `max_age_secs` above `i64::MAX` used to wrap to a negative number of milliseconds, which made *every*
+/// attestation "too old" (fail closed, but the opposite of what a very large limit means).
+#[test]
+fn a_huge_max_age_means_no_limit() {
+    let mut p = policy_with_tests();
+    let mut c = Ctx::new();
+    c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, 100_000));
+    for max in [u64::MAX, i64::MAX as u64, i64::MAX as u64 + 1, u64::MAX / 1000] {
+        p.required_validations[0].max_age_secs = Some(max);
+        assert!(c.eval(&p).is_allowed(), "max_age_secs = {max}");
+    }
+}
+
 fn approval_policy(min: u32) -> Policy {
     Policy { approvals: ApprovalRules { min, ..ApprovalRules::default() }, ..Policy::default() }
 }

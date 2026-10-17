@@ -84,15 +84,22 @@ impl Drop for CatFile {
     }
 }
 
-struct RawChange {
-    old_mode: String,
-    new_mode: String,
-    new_sha: String,
-    path: String,
+/// One record of `git diff-tree --raw -z`.
+#[doc(hidden)]
+pub struct RawChange {
+    /// Mode before the change (`000000` if the path did not exist).
+    pub old_mode: String,
+    /// Mode after the change (`000000` if the path was deleted).
+    pub new_mode: String,
+    /// Object id of the new content.
+    pub new_sha: String,
+    /// The path; starts with a NUL byte if it is not valid UTF-8 (the rest is a lossy rendering).
+    pub path: String,
 }
 
 /// Parses `git diff-tree --raw -z` output.
-fn parse_raw(out: &[u8]) -> Result<Vec<RawChange>, GitError> {
+#[doc(hidden)]
+pub fn parse_raw(out: &[u8]) -> Result<Vec<RawChange>, GitError> {
     let mut fields = out.split(|b| *b == 0).filter(|f| !f.is_empty());
     let mut changes = Vec::new();
     while let Some(meta) = fields.next() {
@@ -119,19 +126,33 @@ fn parse_raw(out: &[u8]) -> Result<Vec<RawChange>, GitError> {
     Ok(changes)
 }
 
-struct Commit {
-    sha: String,
-    parents: Vec<String>,
-    author_name: String,
-    author_email: String,
-    time: i64,
-    message: String,
+/// One commit as `git log` printed it.
+#[doc(hidden)]
+pub struct Commit {
+    /// The commit's object id.
+    pub sha: String,
+    /// Parent object ids, first parent first.
+    pub parents: Vec<String>,
+    /// Author name.
+    pub author_name: String,
+    /// Author email.
+    pub author_email: String,
+    /// Author date, seconds since the epoch.
+    pub time: i64,
+    /// The message, without trailing whitespace.
+    pub message: String,
 }
 
 fn list_commits(dir: &Path, rev: &str) -> Result<Vec<Commit>, GitError> {
     let out =
         git(dir, &["log", "--topo-order", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%B%x1e", rev, "--"])?;
-    let text = String::from_utf8_lossy(&out);
+    parse_log(&String::from_utf8_lossy(&out))
+}
+
+/// Parses the records of the `git log` format used by [`import`]: fields separated by U+001F, records ended
+/// by U+001E.
+#[doc(hidden)]
+pub fn parse_log(text: &str) -> Result<Vec<Commit>, GitError> {
     let mut commits = Vec::new();
     for rec in text.split('\u{1e}') {
         let rec = rec.trim_start_matches('\n');
@@ -152,6 +173,36 @@ fn list_commits(dir: &Path, rev: &str) -> Result<Vec<Commit>, GitError> {
         });
     }
     Ok(commits)
+}
+
+/// Longest part of a Git message the importer keeps, in bytes.
+const MAX_IMPORTED_MESSAGE: usize = 60_000;
+
+/// The message of an imported commit: the original (cut at a character boundary if it is very long) and the
+/// `Imported-From` trailer.
+#[doc(hidden)]
+pub fn import_message(original: &str, sha: &str) -> String {
+    let mut message = original.to_string();
+    if message.len() > MAX_IMPORTED_MESSAGE {
+        // `String::truncate` panics inside a multi-byte character; back up to the previous boundary.
+        let mut cut = MAX_IMPORTED_MESSAGE;
+        while !message.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        message.truncate(cut);
+        message.push_str("\n[message truncated by the git importer]");
+    }
+    message.push_str(&format!("\n\nImported-From: git {sha}"));
+    message
+}
+
+/// The changeset timestamp for a Git author date in seconds. Git accepts dates far beyond what fits in the
+/// milliseconds of an `i64`; those are refused instead of wrapping around.
+#[doc(hidden)]
+pub fn import_timestamp(secs: i64) -> Result<Timestamp, GitError> {
+    secs.checked_mul(1000)
+        .map(Timestamp::from_millis)
+        .ok_or_else(|| GitError::Unsupported(format!("author date {secs} is out of range")))
 }
 
 /// Imports the history reachable from `opts.rev` as a new stream.
@@ -239,17 +290,12 @@ pub fn import(repo: &Repository, opts: &ImportOptions) -> Result<ImportReport, G
         let who = if c.author_email.is_empty() { &c.author_name } else { &c.author_email };
         let author = Identity::new(format!("user:{}", sanitize_identity_name(who)))
             .map_err(|e| GitError::Parse(e.to_string()))?;
-        let mut message = c.message.clone();
-        if message.len() > 60_000 {
-            message.truncate(60_000);
-            message.push_str("\n[message truncated by the git importer]");
-        }
-        message.push_str(&format!("\n\nImported-From: git {}", c.sha));
+        let message = import_message(&c.message, &c.sha);
         let cs = Changeset::build(
             repo.config().namespace.clone(),
             parents,
             author,
-            Timestamp::from_millis(c.time * 1000),
+            import_timestamp(c.time).map_err(|e| GitError::Unsupported(format!("commit {}: {e}", c.sha)))?,
             message,
             ops,
             repo.limits(),

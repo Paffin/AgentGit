@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +65,35 @@ func TestEnvironmentOverridesTheFile(t *testing.T) {
 	}
 	if c.Server.URL != "http://localhost:9999" || c.Listen != "127.0.0.1:1234" || c.State != "/var/x" || c.Log.Format != "json" || c.Log.Level != "debug" {
 		t.Fatalf("overrides not applied: %+v", c)
+	}
+}
+
+func TestLoadNoCredentialsSkipsOnlyThePresenceCheck(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "good.yaml")
+	if err := os.WriteFile(good, []byte(minimal), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(good, env(nil)); err == nil || !strings.Contains(err.Error(), "AG_ORCH_TOKEN") {
+		t.Fatalf("Load without the credential must fail naming the variable, got %v", err)
+	}
+	c, err := LoadNoCredentials(good, env(nil))
+	if err != nil {
+		t.Fatalf("LoadNoCredentials: %v", err)
+	}
+	if c.Repos[0].Name != "acme/web" {
+		t.Fatalf("%+v", c.Repos)
+	}
+	// everything else is still validated
+	bad := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(bad, []byte(strings.Replace(minimal, "http://127.0.0.1:8080", "ftp://x", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNoCredentials(bad, env(nil)); err == nil || !strings.Contains(err.Error(), "server.url") {
+		t.Fatalf("other validation errors must remain, got %v", err)
+	}
+	if _, err := LoadNoCredentials(filepath.Join(dir, "missing.yaml"), env(nil)); err == nil {
+		t.Fatal("a missing file must be an error")
 	}
 }
 

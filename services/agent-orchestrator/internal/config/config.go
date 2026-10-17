@@ -211,8 +211,24 @@ func Load(path string, getenv func(string) string) (*Config, error) {
 	return Parse(f, getenv)
 }
 
+// LoadNoCredentials is Load without the check that the credential environment
+// variables are set. It serves the commands that only describe the
+// configuration (config, ops) and so run before any token exists.
+func LoadNoCredentials(path string, getenv func(string) string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	defer f.Close()
+	return parseDoc(f, getenv, false)
+}
+
 // Parse is Load for an in-memory document.
 func Parse(r io.Reader, getenv func(string) string) (*Config, error) {
+	return parseDoc(r, getenv, true)
+}
+
+func parseDoc(r io.Reader, getenv func(string) string, needCredentials bool) (*Config, error) {
 	raw, err := io.ReadAll(io.LimitReader(r, 1<<20))
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
@@ -225,7 +241,7 @@ func Parse(r io.Reader, getenv func(string) string) (*Config, error) {
 	}
 	c.applyEnv(getenv)
 	c.applyDefaults()
-	if err := c.Validate(getenv); err != nil {
+	if err := c.validate(getenv, needCredentials); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -364,7 +380,9 @@ func setDur(p *time.Duration, v time.Duration) {
 }
 
 // Validate checks the (defaulted) configuration and reports every problem.
-func (c *Config) Validate(getenv func(string) string) error {
+func (c *Config) Validate(getenv func(string) string) error { return c.validate(getenv, true) }
+
+func (c *Config) validate(getenv func(string) string, needCredentials bool) error {
 	var errs []string
 	add := func(path, format string, a ...any) { errs = append(errs, path+": "+fmt.Sprintf(format, a...)) }
 	if getenv == nil {
@@ -385,7 +403,7 @@ func (c *Config) Validate(getenv func(string) string) error {
 			add(p.path, "must be the NAME of an environment variable, got %q (never put a token in the file)", p.v)
 		}
 	}
-	if getenv(c.Server.TokenEnv) == "" {
+	if needCredentials && getenv(c.Server.TokenEnv) == "" {
 		add("server.token_env", "environment variable %s is empty or unset: the orchestrator's own credential is required", c.Server.TokenEnv)
 	}
 	if c.Server.Timeout < time.Second {
@@ -403,7 +421,7 @@ func (c *Config) Validate(getenv func(string) string) error {
 	case !isLoopbackHost(host) && c.Admin.TokenEnv == "":
 		add("listen", "%q is not a loopback address; set admin.token_env so /status and the index API require a bearer token", c.Listen)
 	}
-	if c.Admin.TokenEnv != "" && getenv(c.Admin.TokenEnv) == "" {
+	if needCredentials && c.Admin.TokenEnv != "" && getenv(c.Admin.TokenEnv) == "" {
 		add("admin.token_env", "environment variable %s is empty or unset", c.Admin.TokenEnv)
 	}
 	if c.State == "" {

@@ -164,7 +164,10 @@ impl ControlDump {
     /// synced and renamed, so a crash never leaves a half-written backup under the final name.
     pub fn write_file(&self, path: &Path) -> ApiResult<()> {
         if path.exists() {
-            return Err(ApiError::invalid(format!("{} already exists; refusing to overwrite a backup", path.display())));
+            return Err(ApiError::invalid(format!(
+                "{} already exists; refusing to overwrite a backup",
+                path.display()
+            )));
         }
         let tmp = path.with_extension("tmp");
         let body = serde_json::to_vec_pretty(self).map_err(ApiError::internal)?;
@@ -429,7 +432,11 @@ mod tests {
             subject: "agent:bot".into(),
             kind: "agent".into(),
             description: "ci".into(),
-            scope: v1::CredentialScope { repos: vec!["acme/*".into()], streams: vec!["main".into()], operations: vec![] },
+            scope: v1::CredentialScope {
+                repos: vec!["acme/*".into()],
+                streams: vec!["main".into()],
+                operations: vec![],
+            },
             created_at_ms: 10,
             expires_at_ms: 99_999_999_999_999,
             revoked_at_ms: None,
@@ -476,7 +483,10 @@ mod tests {
     fn a_dump_restores_everything_into_sqlite_and_postgres_and_back() {
         let source = populated();
         let dump = source.export().unwrap();
-        assert_eq!((dump.credentials.len(), dump.roles.len(), dump.repos.len(), dump.idempotency.len(), dump.kv.len()), (2, 2, 1, 1, 1));
+        assert_eq!(
+            (dump.credentials.len(), dump.roles.len(), dump.repos.len(), dump.idempotency.len(), dump.kv.len()),
+            (2, 2, 1, 1, 1)
+        );
         assert_eq!(dump.source, "sqlite");
 
         // File round trip: mode 0600, no overwrite, validated on read.
@@ -485,7 +495,10 @@ mod tests {
         dump.write_file(&file).unwrap();
         assert!(dump.write_file(&file).is_err(), "never overwrite a backup");
         #[cfg(unix)]
-        assert_eq!(std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&file).unwrap().permissions()) & 0o777, 0o600);
+        assert_eq!(
+            std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&file).unwrap().permissions()) & 0o777,
+            0o600
+        );
         let back = ControlDump::read_file(&file).unwrap();
         assert_eq!(back, dump);
         std::fs::write(dir.path().join("junk.json"), b"{\"format\":\"other\"}").unwrap();
@@ -496,7 +509,16 @@ mod tests {
         let summary = sqlite.import(&back, ImportMode::RequireEmpty).unwrap();
         assert_eq!(summary, ImportSummary { credentials: 2, roles: 2, repos: 1, idempotency: 1, kv: 1 });
         let again = sqlite.export().unwrap();
-        assert_eq!((again.credentials, again.roles, again.repos, again.idempotency, again.kv), (dump.credentials.clone(), dump.roles.clone(), dump.repos.clone(), dump.idempotency.clone(), dump.kv.clone()));
+        assert_eq!(
+            (again.credentials, again.roles, again.repos, again.idempotency, again.kv),
+            (
+                dump.credentials.clone(),
+                dump.roles.clone(),
+                dump.repos.clone(),
+                dump.idempotency.clone(),
+                dump.kv.clone()
+            )
+        );
         // A non-empty target is refused, atomically; --replace overwrites.
         assert!(sqlite.import(&back, ImportMode::RequireEmpty).is_err());
         sqlite.kv_set("extra", "x").unwrap();
@@ -507,12 +529,19 @@ mod tests {
         // A dump from the future is refused.
         let mut future = back.clone();
         future.schema_version = 99;
-        assert!(Control::open_in_memory(Arc::new(SystemClock)).unwrap().import(&future, ImportMode::RequireEmpty).is_err());
+        assert!(
+            Control::open_in_memory(Arc::new(SystemClock)).unwrap().import(&future, ImportMode::RequireEmpty).is_err()
+        );
 
         // Into PostgreSQL and back out into SQLite: the data survives both moves.
         if let Some(url) = ag_storage::testing::postgres_url() {
             let schema = ag_storage::testing::unique("agctl");
-            let target = PostgresTarget { url: url.clone(), schema: schema.clone(), pool_size: 2, startup_timeout: Duration::from_secs(5) };
+            let target = PostgresTarget {
+                url: url.clone(),
+                schema: schema.clone(),
+                pool_size: 2,
+                startup_timeout: Duration::from_secs(5),
+            };
             let pg = Control::open_postgres(&target, Arc::new(SystemClock)).unwrap();
             pg.import(&back, ImportMode::RequireEmpty).unwrap();
             let from_pg = pg.export().unwrap();

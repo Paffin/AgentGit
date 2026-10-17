@@ -272,7 +272,9 @@ impl Database {
         check_channel(channel)?;
         match &self.backend {
             Backend::Sqlite(_) => Ok(()),
-            Backend::Postgres(_) => self.execute("SELECT pg_notify(?1, ?2)", &[Param::from(channel), Param::from(payload)]).map(|_| ()),
+            Backend::Postgres(_) => {
+                self.execute("SELECT pg_notify(?1, ?2)", &[Param::from(channel), Param::from(payload)]).map(|_| ())
+            }
         }
     }
 
@@ -343,7 +345,11 @@ mod tests {
     use super::*;
 
     const SQLITE: &[Migration] = &[
-        Migration { version: 1, name: "0001_t.sql", sql: "CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER NOT NULL) STRICT;" },
+        Migration {
+            version: 1,
+            name: "0001_t.sql",
+            sql: "CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER NOT NULL) STRICT;",
+        },
         Migration { version: 2, name: "0002_u.sql", sql: "ALTER TABLE t ADD COLUMN note TEXT NOT NULL DEFAULT '';" },
     ];
     const POSTGRES: &[Migration] = &[

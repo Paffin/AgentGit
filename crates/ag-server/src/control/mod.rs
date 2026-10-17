@@ -509,7 +509,8 @@ impl Control {
         if key.is_empty() {
             return Ok(None);
         }
-        let rows = db(self.db.query("SELECT request_hash, result_json FROM idempotency WHERE key = ?1", &sql_params![key]))?;
+        let rows =
+            db(self.db.query("SELECT request_hash, result_json FROM idempotency WHERE key = ?1", &sql_params![key]))?;
         let Some(r) = rows.first() else { return Ok(None) };
         let (h, result) = (db(r.string(0))?, db(r.string(1))?);
         if h == request_hash {

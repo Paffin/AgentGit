@@ -146,7 +146,8 @@ impl ControlSection {
 
     /// True if this section selects PostgreSQL.
     pub fn is_postgres(&self) -> bool {
-        self.url.as_deref().is_some_and(|u| !u.trim().is_empty()) || self.url_env.as_deref().is_some_and(|v| !v.is_empty())
+        self.url.as_deref().is_some_and(|u| !u.trim().is_empty())
+            || self.url_env.as_deref().is_some_and(|v| !v.is_empty())
     }
 }
 
@@ -368,16 +369,21 @@ impl ServerConfig {
             return bad("repos.pool_size and repos.max_open must be at least 1");
         }
         let c = &self.control;
-        if c.url.as_deref().is_some_and(|u| !u.trim().is_empty()) && c.url_env.as_deref().is_some_and(|v| !v.is_empty()) {
+        if c.url.as_deref().is_some_and(|u| !u.trim().is_empty()) && c.url_env.as_deref().is_some_and(|v| !v.is_empty())
+        {
             return bad("set either control.url or control.url_env, not both");
         }
         if let Some(u) = c.url.as_deref()
             && ag_storage::meta::url_has_password(u)
         {
-            return bad("control.url must not contain a password: put the URL in an environment variable and name it with control.url_env");
+            return bad(
+                "control.url must not contain a password: put the URL in an environment variable and name it with control.url_env",
+            );
         }
         if ag_storage::meta::validate_schema_name(&c.schema).is_err() {
-            return bad("control.schema must be lowercase letters, digits and '_' (at most 63 bytes, not starting with a digit or 'pg_')");
+            return bad(
+                "control.schema must be lowercase letters, digits and '_' (at most 63 bytes, not starting with a digit or 'pg_')",
+            );
         }
         if c.pool_size == 0 || c.pool_size > 512 {
             return bad("control.pool_size must be between 1 and 512");

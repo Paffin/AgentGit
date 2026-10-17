@@ -115,8 +115,12 @@ impl std::ops::Deref for App {
 /// `server.replica_id`, else `$HOSTNAME` (the pod name on Kubernetes), else random.
 fn resolve_replica_id(cfg: &ServerConfig) -> String {
     let clean = |s: &str| -> Option<String> {
-        let s: String =
-            s.trim().chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).take(63).collect();
+        let s: String = s
+            .trim()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' })
+            .take(63)
+            .collect();
         (!s.is_empty()).then_some(s)
     };
     cfg.server

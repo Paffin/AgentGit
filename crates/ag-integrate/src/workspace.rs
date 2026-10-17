@@ -294,7 +294,13 @@ impl Repository {
             infos.push(ConflictInfo { path: c.path.to_string(), kind: c.kind.to_string() });
             paths.push(c.path.to_string());
             if let ConflictKind::Content { .. } = c.kind {
-                let (b, o, t) = (base_tree.get(&c.path), ours_tree.get(&c.path), theirs_tree.get(&c.path));
+                // After a rename the three versions live at different paths; the marker file goes where
+                // the merged result keeps the file.
+                let (bp, op, tp) = match &c.origin {
+                    Some(o) => (&o.base, &o.ours, &o.theirs),
+                    None => (&c.path, &c.path, &c.path),
+                };
+                let (b, o, t) = (base_tree.get(bp), ours_tree.get(op), theirs_tree.get(tp));
                 if let (Some(b), Some(o), Some(t)) = (b, o, t)
                     && let TextMerge::Conflicted { rendered, .. } =
                         merge_text(&self.blob(&b.content)?, &self.blob(&o.content)?, &self.blob(&t.content)?)

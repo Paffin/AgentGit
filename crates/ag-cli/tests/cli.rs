@@ -263,6 +263,58 @@ fn conflicts_exit_with_code_4_and_leave_the_stream_alone() {
 }
 
 #[test]
+fn renames_follow_edits_through_sync_and_integration() {
+    let a = Ag::new();
+    let body: String = (1..=10).map(|i| format!("line {i}\n")).collect();
+    a.write("src/old.txt", &body);
+    let base = a.propose_as("user:alice", "base");
+    a.ag(&["integrate", &base]).ok();
+
+    // bob edits the last line in his own workspace
+    let bob_dir = tempfile::tempdir().unwrap();
+    let bob = bob_dir.path().join("bob");
+    a.run_as("user:bob", &["workspace", "create", "bob", "--dir", bob.to_str().unwrap()]).ok();
+    let edited = body.replace("line 10", "line 10 (bob)");
+    fs::write(bob.join("src/old.txt"), &edited).unwrap();
+    a.run_as("user:bob", &["snapshot", "-m", "bob edit", "--workspace", "bob"]).ok();
+
+    // alice moves the file and lands that
+    fs::create_dir_all(a.root().join("moved")).unwrap();
+    fs::rename(a.root().join("src/old.txt"), a.root().join("moved/new.txt")).unwrap();
+    let pa = a.propose_as("user:alice", "move it");
+    a.ag(&["integrate", &pa]).ok();
+
+    // bob's sync merges cleanly: his edit lands in the moved file, the old path is gone
+    let out = a.run_as("user:bob", &["sync", "--workspace", "bob"]).ok().stdout();
+    assert!(out.to_lowercase().contains("merge"), "{out}");
+    assert_eq!(fs::read_to_string(bob.join("moved/new.txt")).unwrap(), edited);
+    assert!(!bob.join("src/old.txt").exists());
+}
+
+#[test]
+fn a_content_conflict_after_a_rename_gets_markers_in_the_new_file() {
+    let a = Ag::new();
+    a.write("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\n");
+    let base = a.propose_as("user:alice", "base");
+    a.ag(&["integrate", &base]).ok();
+    let bob_dir = tempfile::tempdir().unwrap();
+    let bob = bob_dir.path().join("bob");
+    a.run_as("user:bob", &["workspace", "create", "bob", "--dir", bob.to_str().unwrap()]).ok();
+    fs::write(bob.join("a.txt"), "1\n2\nBOB\n4\n5\n6\n7\n8\n").unwrap();
+    a.run_as("user:bob", &["snapshot", "-m", "bob edit", "--workspace", "bob"]).ok();
+
+    fs::rename(a.root().join("a.txt"), a.root().join("b.txt")).unwrap();
+    a.write("b.txt", "1\n2\nALICE\n4\n5\n6\n7\n8\n");
+    let pa = a.propose_as("user:alice", "rename and edit");
+    a.ag(&["integrate", &pa]).ok();
+
+    let r = a.run_as("user:bob", &["sync", "--workspace", "bob"]).code_is(4);
+    assert!(r.stdout().contains("b.txt"), "{}", r.stdout());
+    let marked = fs::read_to_string(bob.join("b.txt")).unwrap();
+    assert!(marked.contains("<<<<<<< ours") && marked.contains("ALICE") && marked.contains("BOB"), "{marked}");
+}
+
+#[test]
 fn validation_gate_with_signed_attestations() {
     let a = Ag::new();
     let key = a.ag(&["--json", "validate", "keygen", "ci"]).ok().json();

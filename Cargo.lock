@@ -203,6 +203,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-sandbox"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "ag-server"
 version = "0.1.0"
 dependencies = [

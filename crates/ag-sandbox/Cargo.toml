@@ -1,0 +1,38 @@
+[package]
+name = "ag-sandbox"
+description = "AgentGit: isolated execution of untrusted commands (rootless namespaces, OCI, limits-only fallback)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# This crate does not inherit `[workspace.lints]`: the workspace forbids `unsafe`, and running a process in
+# fresh namespaces needs raw system calls. Instead `unsafe` is *denied* crate-wide and re-allowed only in the
+# few modules that need it (`sys`, `spawn`, `seccomp`), and every `unsafe` block must carry a `// SAFETY:` comment.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[dependencies]
+libc.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+serde_json.workspace = true
+
+# Test-support program that the integration tests run *inside* the sandboxes (network probes, syscall attempts,
+# fork bombs, memory hogs, ...). It is never needed at run time.
+[[bin]]
+name = "ag-sandbox-probe"
+path = "tests/support/probe.rs"
+test = false
+doctest = false

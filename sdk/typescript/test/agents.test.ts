@@ -164,8 +164,8 @@ describe('an agent run that lands signed work under policy', () => {
       agent: run.identity,
       run_id: run.run_id,
       rationale: 'quote " backslash \\ newline \n snowman ☃ crab \u{1f980} Привет',
-      inputs: ['line\r\nbreak', ' '],
-      parameters: { '\u{10000}': 'astral', '￿': 'bmp', z: '1', é: '2', 'a-first': '3' },
+      inputs: ['line\r\nbreak', '\u2028'],
+      parameters: { '\u{10000}': 'astral', '\uffff': 'bmp', z: '1', é: '2', 'a-first': '3' },
       created_at_ms: 1_760_659_200_000,
     };
     const entry = await runner.provenance.submit({ repo, record, signature: signProvenance(record, key.privateKey) });

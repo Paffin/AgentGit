@@ -74,7 +74,7 @@ CASES = [
             "changeset": CHANGESET,
             "agent": "agent:bot#run_1",
             "rationale": 'quote " backslash \\ newline \n tab \t control \u0001 del \u007f snowman ☃ crab \U0001f980',
-            "inputs": ["Привет, мир", "line\r\nbreak", "  separator"],
+            "inputs": ["Привет, мир", "line\r\nbreak", "\u2028 separator"],
             "parameters": {"ключ": "значение", "kéy": "v"},
             "created_at_ms": -1,
         },
@@ -85,7 +85,7 @@ CASES = [
             "changeset": CHANGESET,
             "agent": "agent:bot",
             # U+FFFF sorts after U+10000 in UTF-16 code units but before it by code point / UTF-8 bytes.
-            "parameters": {"\U00010000": "astral", "￿": "bmp-last", "z": "ascii", "é": "latin"},
+            "parameters": {"\U00010000": "astral", "\uffff": "bmp-last", "z": "ascii", "é": "latin"},
             "created_at_ms": 0,
         },
     ),

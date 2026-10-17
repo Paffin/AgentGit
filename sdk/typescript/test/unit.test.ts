@@ -129,7 +129,7 @@ describe('SSE parsing', () => {
   });
 
   it('strips a BOM, keeps the last id across frames, reads retry, and drops an unterminated event', async () => {
-    const got = await frames(['﻿id: 1\ndata: a\n\n', 'data: b\nretry: 1500\n\n', 'data: never finished']);
+    const got = await frames(['\ufeffid: 1\ndata: a\n\n', 'data: b\nretry: 1500\n\n', 'data: never finished']);
     expect(got).toEqual([
       { event: 'message', data: 'a', id: '1' },
       { event: 'message', data: 'b', id: '1', retry: 1500 },

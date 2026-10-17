@@ -7,6 +7,28 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- **`ag-sandbox`**: isolated execution of untrusted commands behind one `Sandbox` trait — a rootless Linux
+  namespace sandbox (user, mount, PID, IPC, UTS and network namespaces; private read-only root; dropped
+  capabilities; `no_new_privs`; a seccomp deny-list; hardened `/proc`; CPU, memory, process, file and output
+  limits; optional cgroup v2), an OCI sandbox (`docker`/`podman`, digest-pinned images) and a limits-only
+  process sandbox that reports itself as *not isolation*. Every run returns an `IsolationReport` that claims
+  only what was set up, and an environment digest for binding attestations to it. See
+  [the sandbox page](docs/architecture/sandbox.md) for what each mechanism does and does not stop.
+- **`ag-worker`**: the execution-plane worker. Claims validation jobs from `ag-server`, verifies it has the
+  exact candidate tree, runs the policy's command in a sandbox, signs an attestation with its own key and
+  completes the job; keeps its lease by heartbeat; fails the job (not the tree) when the worker is at fault.
+  See [the workers guide](docs/guides/workers.md).
+
+### Known limitations
+
+- The sandboxes share the host kernel; they are not virtual machines. The OCI sandbox has only been tested
+  against a fake runtime script, the cgroup v2 limits only against a fake directory, and there is no
+  namespace sandbox on macOS.
+- Memory and process limits are enforced by sampling (milliseconds apart) unless a cgroup is delegated, and a
+  root worker without `--sandbox-uid` mapping loses the kernel's process limit.
+
 ## [0.1.0] — 2026-10-17
 
 First public alpha.

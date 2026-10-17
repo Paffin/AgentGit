@@ -28,10 +28,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Ubuntu 24.04 runners restrict unprivileged user namespaces with AppArmor, which is what the namespace
+      # sandbox (`ag-sandbox`) needs. Lift that, and make the sandbox suites *fail* instead of skipping if the
+      # runner still cannot run them: a green run must mean the isolation was actually exercised.
+      - name: Allow unprivileged user namespaces
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Build
         run: cargo build --workspace --all-targets
       - name: Test
         run: cargo test --workspace
+        env:
+          AG_REQUIRE_SANDBOX: ${{ runner.os == 'Linux' && '1' || '' }}
 
   lint:
     name: fmt + clippy + rustdoc

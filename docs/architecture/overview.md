@@ -61,6 +61,8 @@ flowchart TB
 | `ag-policy` | policy document, attestation signing/verification, pure evaluation |
 | `ag-agent` | agent registry and runs, tasks, leases and fencing, provenance, conflict prediction |
 | `ag-integrate` | the engine: publication, integration, workspaces, queue, GC, fsck, backup, recovery |
+| `ag-sandbox` | isolated execution of untrusted commands: rootless namespaces, OCI containers, a limits-only fallback ([sandbox](sandbox.md)) |
+| `ag-worker` | the execution-plane worker: claims validation jobs, runs them in `ag-sandbox`, signs attestations ([guide](../guides/workers.md)) |
 | `ag-git` | Git import/export via `git` plumbing |
 | `ag-cli` | the `ag` binary |
 
@@ -102,7 +104,8 @@ one machine) are safe against one repository. This is tested with parallel worke
 
 ## What is deliberately not here (yet)
 
-A network server, the AGWP protocol, PostgreSQL/S3 backends, a Web UI, SDKs for other languages, a
-sandboxed execution plane, rename detection and blame. They are specified in ADR-0001 and listed with
-status in the [roadmap](../../ROADMAP.md) and [traceability](adr-traceability.md). The engine is a library
+A network server, the AGWP protocol, PostgreSQL/S3 backends, a Web UI, SDKs for other languages, rename
+detection and blame. They are specified in ADR-0001 and listed with status in the
+[roadmap](../../ROADMAP.md) and [traceability](adr-traceability.md). (A sandboxed execution plane exists in a
+first version: see the [sandbox](sandbox.md) and the [workers guide](../guides/workers.md).) The engine is a library
 with the same operations those layers will expose; see the [protocol mapping](../protocol/README.md).

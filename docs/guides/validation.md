@@ -40,9 +40,10 @@ ag integrate <proposal>              # lands
 
 Exit code 0 if the check passed, 4 if it failed (the FAIL attestation is recorded and **denies** that tree).
 
-> ⚠️ **The runner is not a sandbox.** The command has your user's file and network access. It is for code
-> you trust and for local workflows. Running untrusted code needs an isolated execution plane, which is on
-> the [roadmap](../../ROADMAP.md). Keep issuer keys out of any environment that runs untrusted code.
+> ⚠️ **The local runner is not a sandbox.** The command has your user's file and network access. It is for
+> code you trust and for local workflows. To run untrusted code, use an [execution-plane worker](workers.md):
+> it runs the policy's command in an [isolated sandbox](../architecture/sandbox.md) and signs the result.
+> Keep issuer keys out of any environment that runs untrusted code.
 
 ## Your own CI today
 
@@ -55,8 +56,9 @@ repo.submit_attestation(&att)?;        // verifies the signature, stores it; the
 ```
 
 `Repository::submit_attestation` accepts any validly signed attestation (bounded at 64 per tree); only
-those from `trusted_issuers` ever satisfy a policy. Remote execution planes that submit attestations over
-a network arrive with the server ([roadmap](../../ROADMAP.md)).
+those from `trusted_issuers` ever satisfy a policy. Over a network, the same is done by an
+[execution-plane worker](workers.md), which claims queued validation jobs from `ag-server`, runs them in a
+sandbox and submits the signed attestation.
 
 ## Inspecting
 

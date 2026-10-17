@@ -204,6 +204,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-sandbox"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "ag-server"
 version = "0.1.0"
 dependencies = [
@@ -301,6 +313,34 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "ag-worker"
+version = "0.1.0"
+dependencies = [
+ "ag-changeset",
+ "ag-client",
+ "ag-crypto",
+ "ag-integrate",
+ "ag-object",
+ "ag-policy",
+ "ag-protocol",
+ "ag-sandbox",
+ "ag-server",
+ "ag-storage",
+ "ag-tree",
+ "ag-types",
+ "anyhow",
+ "clap",
+ "futures-util",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

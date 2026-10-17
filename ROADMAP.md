@@ -19,8 +19,12 @@ backup, tamper-evident audit · Git import/export · the `ag` CLI.
   per repository, stream and operation. This is what turns policy from "enforced by a cooperative engine"
   into "enforced against an uncooperative client".
 - **PostgreSQL metadata backend** and **S3-compatible object store** behind the existing seams.
-- **Remote execution plane**: isolated workers (OCI/VM) that run checks on a candidate tree and submit
-  signed attestations over the network. Until then `ag validate run` is explicitly unsandboxed.
+- **Remote execution plane** — *first version built*: `ag-worker` claims validation jobs, verifies the exact
+  candidate tree, runs the policy's command in an `ag-sandbox` sandbox (rootless namespaces; OCI container
+  backend) and submits signed attestations ([guide](docs/guides/workers.md),
+  [sandbox](docs/architecture/sandbox.md)). Still to do: verify the OCI backend and cgroup v2 limits against a
+  real runtime and hierarchy, microVM isolation (Firecracker/gVisor) for hostile multi-tenant use, a sandbox
+  on macOS, worker pools and labels, per-job log storage. `ag validate run` stays explicitly unsandboxed.
 - Quotas and rate limits; OpenTelemetry traces and Prometheus metrics.
 
 ## Then

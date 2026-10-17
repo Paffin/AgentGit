@@ -14,10 +14,10 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Incomplete merge model → first-parent / resulting-tree semantics | ✅ | [Merge semantics](merge-semantics.md) |
 | Lost changes in races → CAS + mandatory revalidation | ✅ | `attestation_cannot_be_reused_after_the_stream_moves`, concurrency tests |
 | Unreliable GC → reachability + grace + retention roots | ✅ | `gc.rs`, GC tests |
-| Unsafe agents → sandboxed executors without direct storage access | 🟡 | agents cannot integrate by default and hold no storage rights; a real **sandbox** is not built (`ag validate run` is explicitly unsandboxed) |
+| Unsafe agents → sandboxed executors without direct storage access | 🟡 | agents cannot integrate by default and hold no storage rights; checks run in an [`ag-sandbox`](sandbox.md) sandbox through `ag-worker` (rootless namespaces, tested from inside; OCI backend untested against a real runtime; not a VM); `ag validate run` stays explicitly unsandboxed |
 | Forged CI → signed attestations bound to the exact state | ✅ | `ag-policy`; policy tests |
 | Undefined consistency → strong metadata, eventual derived indexes | ✅ | `Meta` (SQLite) + outbox-driven derivation |
-| Premature microservices → modular monolith + separate execution plane | 🟡 | modular crates, in-process engine ✓; separate execution plane 🔜 |
+| Premature microservices → modular monolith + separate execution plane | ✅ | modular crates, in-process engine ✓; the execution plane is a separate process (`ag-worker`) that talks to `ag-server` over AGWP |
 | Unclear offline mode → online-first MVP | ↔ | local-first embedded engine instead (ADR-0002) |
 | Overpromising → SLOs after benchmarks | ✅ | no SLOs are claimed; [indicative numbers](storage.md#scaling-notes-indicative) only |
 
@@ -30,7 +30,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | 3 | Publication is atomic for readers | ✅ |
 | 4 | No global repository lock | ✅ per-stream CAS; SQLite serializes only the short commit |
 | 5 | Every merge is reproducible | ✅ versioned algorithm, deterministic, tested |
-| 6 | The agent is not a trusted party | ✅ policy, leases, signed provenance; 🟡 no sandbox |
+| 6 | The agent is not a trusted party | ✅ policy, leases, signed provenance; 🟡 sandboxed checks share the host kernel ([details](sandbox.md)) |
 | 7 | Git is an external adapter | ✅ `ag-git` |
 | 8 | Every step is observable | ✅ reflog, audit chain, outbox, `ag trace`; 🔜 OpenTelemetry/Prometheus |
 
@@ -44,7 +44,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | S3 / MinIO object storage | 🔜 | `ObjectStore` trait is the seam; filesystem backend ships |
 | Derived workers: trees ✅; path history ✅ (path index); blame 🔜 | 🟡 | |
 | Outbox dispatcher | ✅ | at-least-once; in-process consumer (tree derivation) |
-| Isolated execution plane | 🔜 | |
+| Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). Not yet: VM-level isolation, a verified OCI backend, worker pools/labels |
 | Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | 🔜 | the coordination primitives it needs exist in `ag-agent` |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |
 | Crash recovery, object availability, unknown commit outcome | ✅ | tests above |
@@ -82,8 +82,8 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 |---|---|
 | OIDC users; scoped short-lived agent credentials | 🔜 (server) |
 | RBAC/ABAC by repo/stream/operation | 🟡 policy lists for integrators/admins/authors/approvers; no authentication in local mode |
-| Sandbox with CPU/RAM/network/FS limits | 🔜 |
-| No standing secrets for untrusted code | 🟡 `validate run` clears the environment; no isolation |
+| Sandbox with CPU/RAM/network/FS limits | 🟡 `ag-sandbox`: all five enforced and tested from inside the namespace sandbox; memory/task limits are sampled (not kernel-exact) unless a cgroup is delegated; see [sandbox](sandbox.md) |
+| No standing secrets for untrusted code | 🟡 the worker's key and credential are never visible to the sandboxed check (tested); `validate run` only clears the environment |
 | Signed CI attestations | ✅ |
 | Prompt-injection hardening | ✅ data is never interpreted; terminal output sanitized |
 | Limits on blobs, ops, DAG depth, requests | ✅ (requests 🔜) |

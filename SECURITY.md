@@ -49,7 +49,10 @@ These are documented trade-offs, not vulnerabilities:
   object store directly. Integrity checks (`ag verify`, the hash-chained audit log) make tampering
   *detectable*, not impossible; anchor the audit head hash somewhere you trust. Multi-user enforcement
   needs the (planned) server mode.
-- `ag validate run` executes the given command **without a sandbox**. Use it only for code you trust.
+- `ag validate run` executes the given command **without a sandbox**. Use it only for code you trust. To run
+  untrusted code use an [`ag-worker`](docs/guides/workers.md), whose [sandbox](docs/architecture/sandbox.md)
+  shares the host kernel (it is not a virtual machine); its limits and untested parts are listed there.
+  A way out of the sandbox is a vulnerability: please report it as described below.
 - Private keys are stored as `0600` files and are not encrypted at rest.
 - Case-insensitive filesystems can merge paths that differ only by case on checkout.
 

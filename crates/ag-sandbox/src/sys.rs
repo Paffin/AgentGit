@@ -21,36 +21,44 @@ pub(crate) fn cvt(ret: c_int) -> io::Result<c_int> {
 /// or 2 can never alias them, and so that a concurrent `fork`+`exec` in another thread cannot leak them.
 pub(crate) fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     let mut fds = [0 as c_int; 2];
-    // SAFETY: `fds` is a valid array of two ints, as pipe2 requires.
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "dragonfly"
-    ))]
-    cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) })?;
-    // No pipe2 (macOS): pipe, then close-on-exec. A fork+exec in another thread between the two calls could
-    // leak the descriptors into its child; that is a narrow window the platform leaves us with.
-    // SAFETY: `fds` is a valid array of two ints, as pipe requires; fcntl on descriptors just created.
-    #[cfg(not(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "dragonfly"
-    )))]
-    unsafe {
-        cvt(libc::pipe(fds.as_mut_ptr()))?;
-        for fd in fds {
-            cvt(libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC))?;
-        }
-    }
-    // SAFETY: pipe2 just returned these two descriptors and nothing else owns them.
+    raw_pipe_cloexec(&mut fds)?;
+    // SAFETY: the pipe call just returned these two descriptors and nothing else owns them.
     let (r, w) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
     Ok((lift(r)?, lift(w)?))
+}
+
+/// `pipe2(O_CLOEXEC)`.
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+))]
+fn raw_pipe_cloexec(fds: &mut [c_int; 2]) -> io::Result<()> {
+    // SAFETY: `fds` is a valid array of two ints, as pipe2 requires.
+    cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }).map(drop)
+}
+
+/// No `pipe2` (macOS): `pipe`, then close-on-exec. A fork+exec in another thread between the two calls could
+/// leak the descriptors into its child; that is a narrow window the platform leaves us with.
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+)))]
+fn raw_pipe_cloexec(fds: &mut [c_int; 2]) -> io::Result<()> {
+    // SAFETY: `fds` is a valid array of two ints, as pipe requires.
+    cvt(unsafe { libc::pipe(fds.as_mut_ptr()) })?;
+    for fd in *fds {
+        // SAFETY: fcntl on a descriptor `pipe` just created.
+        cvt(unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) })?;
+    }
+    Ok(())
 }
 
 /// Move `fd` above the standard descriptors (a no-op if it already is).

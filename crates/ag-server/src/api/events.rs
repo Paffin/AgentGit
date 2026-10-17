@@ -104,11 +104,12 @@ impl App {
             last_sent: Instant::now(),
             heartbeat,
             done: false,
+            shutdown: self.shutdown_signal(),
             _gauge: GaugeGuard(self.clone()),
         };
         Ok(futures_util::stream::unfold(state, |mut st| async move {
             loop {
-                if st.done {
+                if st.done || *st.shutdown.borrow() {
                     return None;
                 }
                 if let Some(ev) = st.buffer.pop_front() {
@@ -160,7 +161,11 @@ impl App {
                     return Some((Ok(hb), st));
                 }
                 // Poll the log at least every 500 ms so changes made by other server processes show up too.
-                let _ = tokio::time::timeout(until_heartbeat.min(Duration::from_millis(500)), notified).await;
+                let mut shutdown = st.shutdown.clone();
+                tokio::select! {
+                    _ = tokio::time::timeout(until_heartbeat.min(Duration::from_millis(500)), notified) => {}
+                    _ = shutdown.changed() => {}
+                }
             }
         }))
     }
@@ -184,5 +189,6 @@ struct FeedState {
     last_sent: Instant,
     heartbeat: Duration,
     done: bool,
+    shutdown: tokio::sync::watch::Receiver<bool>,
     _gauge: GaugeGuard,
 }

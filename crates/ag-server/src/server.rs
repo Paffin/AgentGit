@@ -18,6 +18,16 @@ use crate::app::App;
 use crate::error::ApiError;
 use crate::routes::{RouteMeta, openapi};
 
+/// Installs the process-wide TLS crypto provider (aws-lc-rs). Several TLS
+/// stacks are linked into the server; choosing explicitly avoids a runtime panic
+/// when rustls cannot decide. Safe to call repeatedly.
+pub fn install_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
+}
+
 /// Builds the complete router: API, gRPC, health, metrics, OpenAPI and (if
 /// configured) the Web UI. Returns the route table too (for tests and docs).
 pub fn build_router(app: App) -> (Router, Vec<RouteMeta>) {
@@ -136,8 +146,15 @@ pub async fn serve(
     listener: tokio::net::TcpListener,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()> {
+    install_crypto_provider();
     let (router, _) = build_router(app.clone());
     let addr = listener.local_addr()?;
+    let signal_app = app.clone();
+    let shutdown = async move {
+        shutdown.await;
+        // Streams are long-lived; ask them to finish so graceful shutdown can complete.
+        signal_app.begin_shutdown();
+    };
     if app.cfg.tls_enabled() {
         let cert = app.cfg.server.tls_cert.clone().expect("checked");
         let key = app.cfg.server.tls_key.clone().expect("checked");

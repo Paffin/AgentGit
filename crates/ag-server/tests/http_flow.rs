@@ -174,3 +174,25 @@ async fn private_repositories_do_not_reveal_their_existence() {
     assert_eq!(r.status, 403, "creating repositories outside one's own pattern is denied");
     srv.stop().await;
 }
+
+#[tokio::test]
+async fn the_server_enforces_client_deadlines() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/slow"})).await;
+    // Long-poll for a version that never comes, with a 300 ms deadline.
+    let started = std::time::Instant::now();
+    let r = admin
+        .call("GET", "/v1/repos/acme/slow/streams/head?stream=main&wait_version_gt=99&wait_ms=20000", None, &[("request-timeout", "300")])
+        .await;
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "the deadline must cut the wait short");
+    assert_eq!(r.status, 504, "{}", r.json);
+    assert_eq!(r.json["error"]["code"], "deadline_exceeded");
+    assert!(r.json["error"]["retryable"].as_bool().unwrap());
+
+    // Without a deadline the long-poll returns when the wait elapses, with the current state.
+    let r = admin.get("/v1/repos/acme/slow/streams/head?stream=main&wait_version_gt=99&wait_ms=200").await;
+    assert_eq!(r.status, 200);
+    assert_eq!(r.json["version"], 0);
+    srv.stop().await;
+}

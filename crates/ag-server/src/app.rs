@@ -87,6 +87,8 @@ pub struct AppState {
     pub concurrency: Semaphore,
     /// When the process started.
     pub started: Instant,
+    /// Set when the server begins shutting down; long-lived streams end.
+    shutdown: tokio::sync::watch::Sender<bool>,
     bindings: Mutex<Option<BindingsCache>>,
     bindings_epoch: AtomicU64,
     notifiers: Mutex<HashMap<String, Arc<Notify>>>,
@@ -139,6 +141,7 @@ impl App {
             metrics: Metrics::new(),
             concurrency,
             started: Instant::now(),
+            shutdown: tokio::sync::watch::channel(false).0,
             bindings: Mutex::new(None),
             bindings_epoch: AtomicU64::new(0),
             notifiers: Mutex::new(HashMap::new()),
@@ -302,6 +305,16 @@ impl App {
     }
 
     // ---- events -----------------------------------------------------------------------
+
+    /// Tells long-lived streams (event subscriptions) to end.
+    pub fn begin_shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+
+    /// A receiver that reports `true` once shutdown began.
+    pub fn shutdown_signal(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.shutdown.subscribe()
+    }
 
     /// The wake-up handle of a repository's event feed.
     pub fn notifier(&self, repo: &str) -> Arc<Notify> {

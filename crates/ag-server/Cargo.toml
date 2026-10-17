@@ -41,10 +41,11 @@ futures-util.workspace = true
 globset.workspace = true
 hex.workspace = true
 http-body-util.workspace = true
-jsonwebtoken.workspace = true
+jsonwebtoken = { workspace = true }
 prometheus.workspace = true
 prost.workspace = true
 rusqlite.workspace = true
+rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true
@@ -63,6 +64,10 @@ ureq.workspace = true
 utoipa.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
+jsonwebtoken = { workspace = true, features = ["use_pem"] }
 rcgen.workspace = true
 tempfile.workspace = true
 ureq.workspace = true
+futures-util.workspace = true
+tokio-stream.workspace = true

@@ -16,12 +16,13 @@
 //! policy engine checks against an explicit list of trusted issuers.
 
 use std::fmt;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+pub mod private_file;
 
 const SIG_PREFIX: &[u8] = b"agentgit.sig.v1\0";
 
@@ -201,8 +202,8 @@ impl KeyPair {
         Ok(Signature(self.signing.sign(&m)))
     }
 
-    /// Writes the key to `path`, refusing to overwrite and restricting
-    /// permissions to the owner (`0600`) on Unix.
+    /// Writes the key to `path`, refusing to overwrite and restricting access to the owner (mode `0600` on
+    /// Unix, an owner-only ACL on Windows; see [`private_file`]).
     pub fn save(&self, path: &Path) -> Result<(), CryptoError> {
         let file = KeyFile {
             version: 1,
@@ -211,27 +212,19 @@ impl KeyPair {
             public: self.public().to_hex(),
         };
         let json = serde_json::to_vec_pretty(&file).map_err(|e| CryptoError::InvalidKeyFile(e.to_string()))?;
-        let mut opts = OpenOptions::new();
-        opts.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut f = opts.open(path)?;
+        let mut f = private_file::create(path, true)?;
         f.write_all(&json)?;
         f.sync_all()?;
         Ok(())
     }
 
     /// Loads a key written by [`KeyPair::save`]. On Unix, refuses files that
-    /// are accessible to group or others.
+    /// are accessible to group or others (not checked on Windows).
     pub fn load(path: &Path) -> Result<Self, CryptoError> {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(path)?.permissions().mode();
-            if mode & 0o077 != 0 {
+        match private_file::check_owner_only(path) {
+            Ok(()) => {}
+            Err(private_file::Insecure::Io(e)) => return Err(e.into()),
+            Err(private_file::Insecure::Accessible) => {
                 return Err(CryptoError::InsecurePermissions(path.display().to_string()));
             }
         }

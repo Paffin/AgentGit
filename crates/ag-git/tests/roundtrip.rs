@@ -39,6 +39,49 @@ fn write(dir: &Path, rel: &str, data: &[u8]) {
     fs::write(p, data).unwrap();
 }
 
+/// Sets the Unix mode of a file. Windows has no mode bits, so there the history simply lacks the mode-only
+/// changes (the Unix run of this test covers them).
+#[cfg(unix)]
+fn set_mode(p: &Path, mode: u32) {
+    fs::set_permissions(p, std::os::unix::fs::PermissionsExt::from_mode(mode)).unwrap();
+}
+#[cfg(not(unix))]
+fn set_mode(_: &Path, _: u32) {}
+
+/// Creates a symlink; where the platform cannot (Windows, without a privilege) a plain file stands in, so the
+/// history keeps its shape and the Unix run covers real symlinks.
+#[cfg(unix)]
+fn symlink(target: &str, link: &Path) {
+    std::os::unix::fs::symlink(target, link).unwrap();
+}
+#[cfg(not(unix))]
+fn symlink(target: &str, link: &Path) {
+    fs::write(link, target).unwrap();
+}
+
+/// Stores `data` as a blob and returns its id.
+fn hash_object(dir: &Path, data: &[u8]) -> String {
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["hash-object", "-w", "--stdin"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), data).unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// Puts `data` in the index under `path` — for names a working tree on this platform cannot hold (a
+/// backslash is a separator on Windows).
+fn index_blob(dir: &Path, mode: &str, path: &str, data: &[u8]) {
+    let sha = hash_object(dir, data);
+    g(dir, &["update-index", "--add", "--cacheinfo", &format!("{mode},{sha},{path}")]);
+}
+
 fn commit(dir: &Path, msg: &str) -> String {
     g(dir, &["add", "-A"]);
     g(dir, &["commit", "-q", "--allow-empty", "-m", msg]);
@@ -52,8 +95,8 @@ fn build_history(dir: &Path) -> Vec<String> {
     write(dir, "README.md", b"# project\n");
     write(dir, "src/a.txt", b"alpha\nbeta\n");
     write(dir, "bin/run.sh", b"#!/bin/sh\necho hi\n");
-    fs::set_permissions(dir.join("bin/run.sh"), std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
-    std::os::unix::fs::symlink("src/a.txt", dir.join("link")).unwrap();
+    set_mode(&dir.join("bin/run.sh"), 0o755);
+    symlink("src/a.txt", &dir.join("link"));
     write(dir, "empty.txt", b"");
     write(dir, "blob.bin", &[0, 1, 2, 255, 254, 0, 7]);
     write(dir, "документ/файл.txt", "юникод\n".as_bytes());
@@ -83,12 +126,12 @@ fn build_history(dir: &Path) -> Vec<String> {
     shas.push(commit(dir, "dir becomes file"));
 
     // mode-only change
-    fs::set_permissions(dir.join("bin/run.sh"), std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+    set_mode(&dir.join("bin/run.sh"), 0o644);
     shas.push(commit(dir, "drop exec bit"));
 
     // file -> symlink type change
     fs::remove_file(dir.join("main-only.txt")).unwrap();
-    std::os::unix::fs::symlink("src/a.txt", dir.join("main-only.txt")).unwrap();
+    symlink("src/a.txt", &dir.join("main-only.txt"));
     shas.push(commit(dir, "file becomes symlink"));
     shas
 }
@@ -180,9 +223,9 @@ fn import_reports_what_it_cannot_represent_and_skips_submodules() {
     let dir = src.path();
     g(dir, &["init", "-q", "-b", "main"]);
     write(dir, "ok.txt", b"fine\n");
-    write(dir, "weird\\name.txt", b"backslash\n");
     write(dir, "a/.git-notes/readme", b"component .git-notes is fine\n");
     g(dir, &["add", "-A"]);
+    index_blob(dir, "100644", "weird\\name.txt", b"backslash\n");
     g(dir, &["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,vendor/sub"]);
     g(dir, &["commit", "-q", "-m", "tricky"]);
 
@@ -228,12 +271,7 @@ fn hostile_git_content_cannot_escape_or_plant_dot_git() {
     let src = tempfile::tempdir().unwrap();
     let dir = src.path();
     g(dir, &["init", "-q", "-b", "main"]);
-    let evil = Command::new("sh")
-        .current_dir(dir)
-        .args(["-c", "printf 'hook' | git hash-object -w --stdin"])
-        .output()
-        .unwrap();
-    let evil = String::from_utf8_lossy(&evil.stdout).trim().to_string();
+    let evil = hash_object(dir, b"hook");
 
     let dot_git_dir = mktree(dir, &format!("100644 blob {evil}\tconfig\n"));
     let nested = mktree(dir, &format!("040000 tree {dot_git_dir}\t.GIT\n100644 blob {evil}\tfine.txt\n"));

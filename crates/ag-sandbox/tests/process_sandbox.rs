@@ -1,6 +1,8 @@
 //! The limits-only fallback: what it does enforce, and — as importantly — what it does not (it is not
 //! isolation, and these tests say so out loud).
 #![allow(unsafe_code)]
+#![cfg(unix)]
+// the sandbox crate is empty on other platforms (Windows has no equivalent; docs/operations/windows.md)
 // The tests that rely on Linux details (/proc, RLIMIT_DATA, setsid, ...) are Linux-only; the rest run anywhere.
 #![cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
 

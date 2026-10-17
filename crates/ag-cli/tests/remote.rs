@@ -218,7 +218,6 @@ fn clone_push_review_integrate_and_pull() {
 
 #[test]
 fn tokens_can_be_stored_with_restricted_permissions() {
-    use std::os::unix::fs::PermissionsExt;
     let srv = Server::start();
     srv.app
         .repos
@@ -241,7 +240,21 @@ fn tokens_can_be_stored_with_restricted_permissions() {
     let out = child.wait_with_output().unwrap();
     assert!(out.status.success(), "{}", text(&out));
     let secret = target.join(".ag/credentials/origin");
-    assert_eq!(fs::metadata(&secret).unwrap().permissions().mode() & 0o777, 0o600);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(fs::metadata(&secret).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    #[cfg(windows)]
+    {
+        // No mode bits: the file's ACL must be replaced by one entry for the current user.
+        let acl = Command::new("icacls").arg(&secret).output().unwrap();
+        let acl = String::from_utf8_lossy(&acl.stdout).to_string();
+        for broad in ["Everyone", "Users", "Authenticated Users", "BUILTIN"] {
+            assert!(!acl.contains(broad), "{broad} must not have access to a stored credential:\n{acl}");
+        }
+        assert!(acl.contains("(F)"), "the owner keeps full control:\n{acl}");
+    }
     // Later commands find the stored credential without any environment variable.
     let o = Command::new(env!("CARGO_BIN_EXE_ag"))
         .current_dir(&target)
@@ -251,15 +264,18 @@ fn tokens_can_be_stored_with_restricted_permissions() {
         .output()
         .unwrap();
     assert!(o.status.success(), "{}", text(&o));
-    // And a world-readable credential file is refused.
-    fs::set_permissions(&secret, fs::Permissions::from_mode(0o644)).unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_ag"))
-        .current_dir(&target)
-        .env("AG_IDENTITY", "user:alice")
-        .env_remove("AG_TOKEN")
-        .args(["remote", "whoami"])
-        .output()
-        .unwrap();
-    assert!(!o.status.success());
-    assert!(text(&o).contains("readable by other users"), "{}", text(&o));
+    // And a world-readable credential file is refused (Unix only: Windows cannot read an ACL back, see the docs).
+    #[cfg(unix)]
+    {
+        fs::set_permissions(&secret, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_ag"))
+            .current_dir(&target)
+            .env("AG_IDENTITY", "user:alice")
+            .env_remove("AG_TOKEN")
+            .args(["remote", "whoami"])
+            .output()
+            .unwrap();
+        assert!(!o.status.success());
+        assert!(text(&o).contains("readable by other users"), "{}", text(&o));
+    }
 }

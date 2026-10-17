@@ -1,0 +1,44 @@
+name: Windows
+
+# Windows is a supported platform for the CLI, the server and the clients (see docs/operations/windows.md).
+# This is a separate workflow from ci.yml so that it can be iterated on without blocking anything; it becomes a
+# required check once it has been green and stable on main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  windows:
+    name: windows (x86_64-pc-windows-msvc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Show the toolchain and Git
+        run: |
+          rustc -Vv
+          git --version
+          git config --show-origin --get-all core.autocrlf
+          where.exe nasm
+        continue-on-error: true
+      - name: Build everything that is portable
+        run: cargo build --workspace --all-targets
+      # The execution plane (ag-sandbox, ag-worker) is Linux-only: ag-sandbox is empty here, ag-worker is a
+      # binary that refuses to run (tests/unsupported.rs proves it). Everything else runs its whole suite.
+      - name: Test
+        run: cargo test --workspace --no-fail-fast

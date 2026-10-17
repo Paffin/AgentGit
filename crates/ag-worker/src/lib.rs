@@ -31,14 +31,32 @@
 //! allows, the tree cannot be fetched — fails the **job** (with a retry delay), never signs a `fail`, and
 //! lets another worker try. A candidate that has moved on completes the job as `stale`.
 
+/// What the `ag-worker` binary says on a platform without the sandbox it drives (anything but Unix; the
+/// namespace sandbox itself needs Linux). The worker is a hard "not supported" there — never a degraded mode
+/// that runs a check without isolation.
+pub const UNSUPPORTED_PLATFORM: &str = "the execution-plane worker is not supported on this platform: it runs \
+checks in a sandbox built on Linux namespaces (or a container runtime), which Windows does not provide. \
+Run `ag-worker` on a Linux host; `ag`, `ag-server` and the clients work on Windows. \
+See docs/operations/windows.md.";
+
+#[cfg(unix)]
 mod attest;
+#[cfg(unix)]
 mod checkout;
+#[cfg(unix)]
 mod plan;
+#[cfg(unix)]
 mod profile;
+#[cfg(unix)]
 mod worker;
 
+#[cfg(unix)]
 pub use attest::{attestation_id, describe, result_json, tail, to_wire, verdict};
+#[cfg(unix)]
 pub use checkout::{Checkout, CheckoutError};
+#[cfg(unix)]
 pub use plan::{DEFAULT_PATH, Unrunnable, sandbox_spec};
+#[cfg(unix)]
 pub use profile::{Backend, Ceilings, DEFAULT_SANDBOX_ID, Defaults, Profile, Refusal};
+#[cfg(unix)]
 pub use worker::{Disposition, JobReport, Options, Worker};

@@ -5,6 +5,7 @@
 //! limits-only process sandbox (explicitly opted into, as the worker requires) so that the claim / check out /
 //! run / sign / complete loop is still exercised; the tests that are *about* isolation then skip.
 #![allow(missing_docs)]
+#![cfg(unix)] // the execution plane drives a Unix sandbox; tests/unsupported.rs covers other platforms
 
 mod common;
 

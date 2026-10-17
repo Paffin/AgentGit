@@ -12,5 +12,12 @@
 #[cfg(target_os = "linux")]
 include!("probe_linux.rs");
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(unix, not(target_os = "linux")))]
 include!("probe_portable.rs");
+
+// The sandbox crate is empty off Unix, so there is nothing to probe; the binary only has to build.
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("ag-sandbox-probe: the sandbox is not supported on this platform");
+    std::process::exit(2);
+}

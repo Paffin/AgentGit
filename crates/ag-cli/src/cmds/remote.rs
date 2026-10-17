@@ -67,11 +67,10 @@ fn save_remotes(root: &Path, r: &Remotes) -> Result<()> {
 
 fn write_secret(path: &Path, token: &str) -> Result<()> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
+    let mut f = ag_crypto::private_file::create(path, false)?;
     f.write_all(token.trim().as_bytes())?;
     Ok(())
 }
@@ -85,13 +84,12 @@ fn read_token(root: &Path, name: &str, r: &Remote) -> Result<String> {
     }
     if let Some(file) = &r.token_file {
         let path = if Path::new(file).is_absolute() { PathBuf::from(file) } else { root.join(".ag").join(file) };
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(&path)
-                .with_context(|| format!("cannot read {}", path.display()))?
-                .permissions()
-                .mode();
-            if mode & 0o077 != 0 {
+        match ag_crypto::private_file::check_owner_only(&path) {
+            Ok(()) => {}
+            Err(ag_crypto::private_file::Insecure::Io(e)) => {
+                return Err(anyhow::Error::new(e).context(format!("cannot read {}", path.display())));
+            }
+            Err(ag_crypto::private_file::Insecure::Accessible) => {
                 bail!("{} is readable by other users; run `chmod 600 {}`", path.display(), path.display());
             }
         }

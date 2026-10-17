@@ -23,13 +23,7 @@ impl KeyStore {
     /// Opens (creating) a key directory with owner-only permissions.
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, AgentError> {
         let dir = dir.into();
-        std::fs::create_dir_all(&dir).map_err(ag_crypto::CryptoError::from)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
-                .map_err(ag_crypto::CryptoError::from)?;
-        }
+        ag_crypto::private_file::create_dir_all(&dir).map_err(ag_crypto::CryptoError::from)?;
         Ok(Self { dir })
     }
 

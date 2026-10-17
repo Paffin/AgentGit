@@ -18,6 +18,13 @@ impl NamespaceSandbox {
         NamespaceSandbox { _private: () }
     }
 
+    /// Accepted so that callers compile on every platform; the sandbox is unavailable here, so the ids are
+    /// never used.
+    #[must_use]
+    pub fn with_host_ids(self, _uid: u32, _gid: u32) -> Self {
+        self
+    }
+
     /// Always `Unavailable` off Linux.
     pub fn availability(&self) -> Availability {
         Availability::Unavailable("namespaces are a Linux feature".into())

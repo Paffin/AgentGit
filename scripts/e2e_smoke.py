@@ -220,7 +220,7 @@ def main() -> None:
         return
     owner, name = args.repo.split("/")
     repo_path = f"/v1/repos/{owner}/{name}"
-    work = args.keep or tempfile.mkdtemp(prefix="ag-e2e-")
+    work = os.path.abspath(args.keep or tempfile.mkdtemp(prefix="ag-e2e-"))
     os.makedirs(work, exist_ok=True)
 
     # ---- 1. the server is up ---------------------------------------------------------------

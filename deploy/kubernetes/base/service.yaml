@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ag-server
+  labels:
+    app.kubernetes.io/name: ag-server
+    app.kubernetes.io/part-of: agentgit
+spec:
+  selector:
+    app.kubernetes.io/name: ag-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      # gRPC and HTTP/JSON share the port; h2c lets meshes and gateways route both.
+      appProtocol: kubernetes.io/h2c

@@ -1,0 +1,137 @@
+# AgentGit on one machine: the server, PostgreSQL (metadata) and MinIO (objects).
+#
+#   cp .env.example .env      # then fill in every value
+#   docker compose up -d
+#   docker compose --profile observability up -d     # + Prometheus, Grafana, OpenTelemetry collector
+#
+# The server listens on 127.0.0.1:8080 only. This stack is a starting point for a
+# single host, not a high-availability deployment (see docs/operations/deployment.md).
+
+name: agentgit
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: agentgit
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ag -d agentgit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    <<: *restart
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the bucket once, then exits.
+  create-bucket:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MC_HOST_local: http://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@minio:9000
+    entrypoint: ["mc", "mb", "--ignore-existing", "local/agentgit"]
+    restart: "no"
+
+  ag-server:
+    <<: *restart
+    image: ${AG_IMAGE:-ghcr.io/paffin/agentgit-server}:${AG_VERSION:-latest}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      AG_BOOTSTRAP_TOKEN: ${AG_BOOTSTRAP_TOKEN:?set AG_BOOTSTRAP_TOKEN in .env (at least 32 random characters)}
+      AG_METRICS_TOKEN: ${AG_METRICS_TOKEN:?set AG_METRICS_TOKEN in .env}
+      AG_PG_URL: postgres://ag:${POSTGRES_PASSWORD}@postgres:5432/agentgit?sslmode=disable
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    volumes:
+      - agdata:/data
+      - ./ag-server.toml:/etc/agentgit/ag-server.toml:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # ---- observability (docker compose --profile observability up -d) -----------------
+
+  otel-collector:
+    <<: *restart
+    profiles: [observability]
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ../observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  prometheus:
+    <<: *restart
+    profiles: [observability]
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    # The metrics token reaches Prometheus as a mounted file (secrets/metrics_token),
+    # not on its command line or in its environment.
+    volumes:
+      - ../observability/prometheus.compose.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+      - type: bind
+        source: ./secrets/metrics_token
+        target: /etc/prometheus/metrics_token
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  grafana:
+    <<: *restart
+    profiles: [observability]
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  agdata:
+  pgdata:
+  miniodata:
+  promdata:
+  grafanadata:

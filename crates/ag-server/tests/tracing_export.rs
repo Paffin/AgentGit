@@ -209,7 +209,12 @@ async fn the_healthcheck_subcommand_reports_readiness() {
     let srv = TestServer::start().await;
     let ok = tokio::task::spawn_blocking({
         let base = srv.base.clone();
-        move || std::process::Command::new(env!("CARGO_BIN_EXE_ag-server")).args(["healthcheck", "--url", &base]).status().unwrap()
+        move || {
+            std::process::Command::new(env!("CARGO_BIN_EXE_ag-server"))
+                .args(["healthcheck", "--url", &base])
+                .status()
+                .unwrap()
+        }
     })
     .await
     .unwrap();

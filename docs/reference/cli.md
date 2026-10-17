@@ -98,6 +98,26 @@ Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`.
 - [`ag git`](#ag-git)
 - [`ag git import`](#ag-git-import)
 - [`ag git export`](#ag-git-export)
+- [`ag clone`](#ag-clone)
+- [`ag fetch`](#ag-fetch)
+- [`ag pull`](#ag-pull)
+- [`ag push`](#ag-push)
+- [`ag remote`](#ag-remote)
+- [`ag remote add`](#ag-remote-add)
+- [`ag remote list`](#ag-remote-list)
+- [`ag remote remove`](#ag-remote-remove)
+- [`ag remote whoami`](#ag-remote-whoami)
+- [`ag remote proposals`](#ag-remote-proposals)
+- [`ag remote proposal`](#ag-remote-proposal)
+- [`ag remote prepare`](#ag-remote-prepare)
+- [`ag remote review`](#ag-remote-review)
+- [`ag remote integrate`](#ag-remote-integrate)
+- [`ag remote close`](#ag-remote-close)
+- [`ag remote streams`](#ag-remote-streams)
+- [`ag remote events`](#ag-remote-events)
+- [`ag remote policy`](#ag-remote-policy)
+- [`ag remote log`](#ag-remote-log)
+- [`ag remote cat`](#ag-remote-cat)
 - [`ag pin`](#ag-pin)
 - [`ag unpin`](#ag-unpin)
 - [`ag pins`](#ag-pins)
@@ -143,6 +163,11 @@ Commands:
   reindex     Rebuild derived indexes from the object store
   backup      Write a verified, consistent copy of the repository to a new directory
   git         Import from or export to Git (needs the `git` command)
+  clone       Clone a repository from an `ag-server`
+  fetch       Download new history from the server
+  pull        Fetch, then fast-forward the local stream and bring the workspace up to date
+  push        Upload your snapshot and open a proposal on the server
+  remote      Manage remotes and work with proposals, events and policy on a server
   pin         Pin a revision so garbage collection keeps it
   unpin       Remove a pin
   pins        List pins
@@ -1705,6 +1730,407 @@ Arguments:
 Options:
       --branch <BRANCH>  Branch name in Git [default: main]
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag clone
+
+```text
+Clone a repository from an `ag-server`
+
+Usage: ag clone [OPTIONS] <URL> [DIR]
+
+Arguments:
+  <URL>  `http(s)://host:port/owner/name`
+  [DIR]  Directory to create (default: the repository name)
+
+Options:
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>        Stream to clone (default: the repository's default stream)
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --name <NAME>            Name for the remote [default: origin]
+      --json                   Machine-readable JSON output
+      --token-env <TOKEN_ENV>  Environment variable holding the credential (default: AG_TOKEN)
+      --token-stdin            Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600)
+      --ca-file <CA_FILE>      Extra CA certificate (PEM) to trust
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag fetch
+
+```text
+Download new history from the server
+
+Usage: ag fetch [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote name (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --stream <STREAM>  Stream (default: the repository's default stream)
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag pull
+
+```text
+Fetch, then fast-forward the local stream and bring the workspace up to date
+
+Usage: ag pull [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote name (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --stream <STREAM>  Stream (default: the repository's default stream)
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag push
+
+```text
+Upload your snapshot and open a proposal on the server
+
+Usage: ag push [OPTIONS] --title <TITLE> [REV]
+
+Arguments:
+  [REV]  Revision to propose (default: the workspace head)
+
+Options:
+  -C, --repo <DIR>                 Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>            Remote name (default: origin)
+      --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+  -t, --title <TITLE>              Proposal title
+  -d, --description <DESCRIPTION>  Longer description [default: ""]
+      --json                       Machine-readable JSON output
+      --stream <STREAM>            Target stream (default: the repository's default stream)
+      --task <TASK>                Task this proposal belongs to
+  -h, --help                       Print help
+  -V, --version                    Print version
+```
+
+## ag remote
+
+```text
+Manage remotes and work with proposals, events and policy on a server
+
+Usage: ag remote [OPTIONS] <COMMAND>
+
+Commands:
+  add        Add a remote
+  list       List remotes
+  remove     Forget a remote
+  whoami     Show who the server thinks you are
+  proposals  List proposals on the server
+  proposal   Show a proposal with its reviews
+  prepare    What would integrating do now, and what is missing?
+  review     Review a proposal's current head
+  integrate  Integrate a proposal into its stream
+  close      Close a proposal without integrating it
+  streams    List streams
+  events     Show the events of the repository (replay), or follow them live
+  policy     Show or set a stream's policy
+  log        Show history of a revision on the server
+  cat        Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote add
+
+```text
+Add a remote
+
+Usage: ag remote add [OPTIONS] <NAME> <URL>
+
+Arguments:
+  <NAME>  Name, e.g. origin
+  <URL>   `http(s)://host:port/owner/name`
+
+Options:
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>        Remote to use (default: origin)
+      --token-env <TOKEN_ENV>  Environment variable holding the credential
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --token-stdin            Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600)
+      --ca-file <CA_FILE>      Extra CA certificate (PEM) to trust
+      --json                   Machine-readable JSON output
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag remote list
+
+```text
+List remotes
+
+Usage: ag remote list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote remove
+
+```text
+Forget a remote
+
+Usage: ag remote remove [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote whoami
+
+```text
+Show who the server thinks you are
+
+Usage: ag remote whoami [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote proposals
+
+```text
+List proposals on the server
+
+Usage: ag remote proposals [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --state <STATE>    Filter: open, integrated, closed
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote proposal
+
+```text
+Show a proposal with its reviews
+
+Usage: ag remote proposal [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote prepare
+
+```text
+What would integrating do now, and what is missing?
+
+Usage: ag remote prepare [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --validate         Also queue the validation jobs the policy knows how to run
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote review
+
+```text
+Review a proposal's current head
+
+Usage: ag remote review [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+      --approve            Approve
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>    Remote to use (default: origin)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --request-changes    Request changes
+      --comment            Comment only
+      --json               Machine-readable JSON output
+  -m, --message <MESSAGE>  Review text [default: ""]
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## ag remote integrate
+
+```text
+Integrate a proposal into its stream
+
+Usage: ag remote integrate [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>                      Operate on the repository at this path (default: discovered from the current directory)
+      --fencing-token <FENCING_TOKENS>  Fencing tokens of exclusive leases the author holds
+      --remote <REMOTE>                 Remote to use (default: origin)
+      --as <IDENTITY>                   Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json                            Machine-readable JSON output
+  -h, --help                            Print help
+  -V, --version                         Print version
+```
+
+## ag remote close
+
+```text
+Close a proposal without integrating it
+
+Usage: ag remote close [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote streams
+
+```text
+List streams
+
+Usage: ag remote streams [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote events
+
+```text
+Show the events of the repository (replay), or follow them live
+
+Usage: ag remote events [OPTIONS]
+
+Options:
+      --after <AFTER>    Replay events after this sequence number [default: 0]
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --topics <TOPICS>  Only these topics (prefix match), e.g. `stream,proposal`
+      --follow           Keep following new events
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote policy
+
+```text
+Show or set a stream's policy
+
+Usage: ag remote policy [OPTIONS] <STREAM>
+
+Arguments:
+  <STREAM>  Stream
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --set <SET>        Replace the policy with the JSON document in this file
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote log
+
+```text
+Show history of a revision on the server
+
+Usage: ag remote log [OPTIONS] [REV]
+
+Arguments:
+  [REV]  Revision (default: the default stream)
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+  -n, --limit <LIMIT>    Maximum entries [default: 20]
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote cat
+
+```text
+Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+
+Usage: ag remote cat [OPTIONS] <SPEC>
+
+Arguments:
+  <SPEC>  `REV:PATH`
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
   -h, --help             Print help

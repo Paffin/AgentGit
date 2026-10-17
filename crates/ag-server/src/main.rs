@@ -124,8 +124,8 @@ async fn main() -> Result<()> {
                 .build()
                 .into();
             let target = format!("{}/readyz", url.trim_end_matches('/'));
-            let probe = tokio::task::spawn_blocking(move || agent.get(&target).call().map(|r| r.status().as_u16()))
-                .await?;
+            let probe =
+                tokio::task::spawn_blocking(move || agent.get(&target).call().map(|r| r.status().as_u16())).await?;
             match probe {
                 Ok(200) => Ok(()),
                 Ok(code) => bail!("not ready: HTTP {code}"),

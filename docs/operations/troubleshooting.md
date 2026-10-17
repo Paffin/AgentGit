@@ -43,10 +43,31 @@ depth. `.ag` and `.git` are always ignored.
 | You see | Do |
 |---|---|
 | `not an AgentGit repository (or any parent …)` | run inside a repository or pass `-C <dir>` |
-| `metadata database error: database is locked` | another process holds the write lock for more than 30 s; find it (a hung `ag`, a backup, a debugger) |
+| `transient metadata failure (safe to retry): the database is busy: database is locked` | SQLite: another process held the write lock for more than 30 s; find it (a hung `ag`, a backup, a debugger) and run the command again |
 | `key file … is readable by other users; run chmod 600` | `chmod 600 .ag/keys/*.json` |
 | `database schema version N is newer than supported` | upgrade `ag` |
 | `cannot run git` | install git (only the Git bridge needs it) |
+
+## PostgreSQL and S3
+
+| You see | Meaning | Do |
+|---|---|---|
+| `the environment variable AG_PG_URL is not set; it must hold the PostgreSQL connection URL (named by storage.meta.url_env …)` (or the S3 credential variables) | the configuration only names the variables; they must be set in the environment of every `ag` process | export them (the message names which) |
+| `storage.meta.url contains a password …` | a literal URL with a password is refused so that secrets stay out of `.ag/config.json` | put the URL in an environment variable and use `url_env` |
+| `PostgreSQL schema '…' holds no repository (was it dropped, or does the connection URL point at the wrong database?)` | opening never creates a schema | check `AG_PG_URL` and `storage.meta.schema`; restore the schema if it was dropped |
+| `the PostgreSQL schema '…' already holds a repository` | `ag init` refuses to initialize over one | use another `schema`, or open the existing one |
+| `transient metadata failure (safe to retry): … lock timeout (SQLSTATE 55P03)` | a write waited 30 s for the repository's write lock: another writer is busy or stuck | run the command again; find a long transaction with `SELECT * FROM pg_stat_activity WHERE state = 'idle in transaction'` |
+| `lost the connection to the metadata database: …` | the connection died before a commit was requested; nothing was committed | run the command again |
+| `lost the connection … while committing (the outcome is unknown)` | the connection died while the commit was in flight; it may or may not have been applied | do **not** repeat blindly: `ag op show <operation-id>` (or re-run `ag integrate <proposal>`, which replays a recorded result) |
+| `database schema version N is newer than supported version M` | the schema was migrated by a newer `ag` | upgrade `ag`; there is no downgrade |
+| `error performing TLS handshake: … UnknownIssuer` / `invalid peer certificate` | `sslmode=verify-full` and the server's CA is not trusted | add `sslrootcert=/path/to/ca.pem` to the URL (or use a certificate from a public CA) |
+| `HTTP 403 SignatureDoesNotMatch` / `InvalidAccessKeyId` (S3) | wrong access key or secret | check the credential variables named in `storage.objects` |
+| `HTTP 403 RequestTimeTooSkewed` (S3) | this machine's clock is far from the service's | fix NTP |
+| `HTTP 404 NoSuchBucket` / `HTTP 301 PermanentRedirect` (S3) | the bucket does not exist, or the region/endpoint does not match it | create the bucket; fix `region` / `endpoint` |
+| `HTTP 403 AccessDenied` (S3) | the credentials lack `s3:ListBucket` / `GetObject` / `PutObject` / `DeleteObject` on the prefix | grant them |
+| `… (gave up after N attempt(s))` (S3) | the service kept failing with 5xx/timeouts through all retries | check the service; run the command again |
+| `this repository keeps its metadata in PostgreSQL … which `ag backup` cannot copy consistently` | `ag backup` does not back up PostgreSQL | [Durability](durability.md#postgresql-and-s3) |
+| `unable to open database file` / `Not a directory` for `.ag/meta.db` or `.ag/store` on an older `ag` | the repository uses PostgreSQL/S3 and this binary predates the `storage` section; the placeholder stops it from creating a local copy | upgrade `ag` |
 
 ## `ag verify` issue kinds
 

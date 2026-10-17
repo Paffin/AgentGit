@@ -201,7 +201,7 @@ Not benchmarked; these follow from the design. Writes to **one** repository are 
 transaction is short (a few statements), but throughput per repository is bounded by round trips to the
 database, not by the number of processes. Different repositories do not contend. Reads are snapshots and scale
 with connections. Every object operation on S3 is a network round trip: a new object costs one `PUT`; an
-object that already exists costs a `PUT` (412), a `GET` and a `CopyObject`; `ag verify` and `ag fsck` read every
+object that already exists costs a `PUT` (412), a `GET` and a `CopyObject`; `ag verify` reads every
 object. Keep the database and the bucket in the same region as the `ag` processes.
 
 ### Honest limits

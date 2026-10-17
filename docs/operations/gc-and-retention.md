@@ -30,9 +30,23 @@ follows parents and the blobs each changeset references.
   deletion is performed by `delete_if_older_than`, which takes the store's exclusive lock and re-checks the
   age. A writer that finishes first wins; one that starts after simply rewrites the object
   (`rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc`).
+- **With S3 the lock is an `ObjectLock`.** A bucket has no `flock`, and two HTTP requests (check the age, delete)
+  are not atomic. Writers hold the repository's object lock *shared* around `put` and the age refresh; the
+  collector holds it *exclusive* across one object's check-then-delete. Without it a writer's `put` could return
+  between the collector's check and its delete and the object would be gone
+  (`s3_gc_cannot_delete_an_object_a_writer_just_reput` shows the loss without the lock and its absence with it;
+  `rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3` runs the scenario through the engine).
+  The lock must span **every process that writes to or collects from the prefix**: with PostgreSQL metadata the
+  default is PostgreSQL advisory locks (any host; a crashed process releases it by itself), with SQLite metadata it
+  is a file lock (this host only). Do not run several hosts against one prefix with `file` or `in_process` locks.
+  See [PostgreSQL and S3](postgres-and-s3.md#the-object-lock).
 - **Backups hold GC off** while objects are copied.
 - GC is safe to run while other `ag` processes work; it only contends on the store lock for individual
   deletes.
+- On S3, "older than the grace period" is the server's `LastModified` (one-second resolution on Amazon S3), and a
+  re-`put` refreshes it with a server-side copy. Grace periods are hours, so clock differences between machines and
+  the service do not matter in practice. Never put a lifecycle *expiration* rule on the prefix: deletion belongs
+  to `ag gc`, which knows what is reachable.
 
 ## After deletion
 
@@ -48,6 +62,12 @@ no longer exist once past the grace period and retention window.
 | abandoned experiments for a while | rely on `--reflog-retention` (heads that were ever a stream head) or pin them |
 | unproposed workspace snapshots | they are roots as long as the workspace exists (`ag workspace list`); removing a workspace releases them |
 | everything, for now | don't run `ag gc` |
+
+## What it costs on S3
+
+`ag gc` lists the prefix once (paged), reads every object reachable from a root to verify it (the fail-closed
+rule), and for each candidate issues one `HEAD` and, if it is still due, one `DELETE`. A repository with many
+objects therefore makes many requests; run GC off-peak and keep the `ag` process near the bucket.
 
 ## Not implemented
 

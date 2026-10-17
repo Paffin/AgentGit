@@ -1,4 +1,4 @@
-# AgentGit on one machine: the server, PostgreSQL (metadata) and MinIO (objects).
+# AgentGit on one machine: the server, PostgreSQL (metadata) and an S3-compatible store (objects).
 #
 #   cp .env.example .env      # then fill in every value
 #   docker compose up -d
@@ -28,30 +28,46 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
+  # The S3-compatible object store. SeaweedFS (Apache-2.0) rather than MinIO: MinIO stopped publishing container
+  # images, so the pinned MinIO tag this file used to name no longer exists on any registry. Any S3-compatible
+  # service works if it supports path-style addressing, SigV4, ListObjectsV2 and CopyObject; SeaweedFS passes
+  # AgentGit's S3 suites (crates/ag-storage/tests/s3.rs). The S3 credentials are the ones from .env.
+  seaweedfs:
     <<: *restart
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: ["server", "/data", "--console-address", ":9001"]
+    image: chrislusf/seaweedfs:4.48
+    # master + volume server + filer + S3 gateway in one process; 8333 is the S3 API. The root credential is
+    # taken from the environment (an S3 server with no credential configured would be open to anyone).
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.port=8333
+      - -master.volumeSizeLimitMB=1024
+      - -volume.max=0
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
     volumes:
-      - miniodata:/data
+      - objectdata:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/status"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
 
-  # Creates the bucket once, then exits.
+  # Creates the bucket once, then exits (a second run finds it and succeeds).
   create-bucket:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: chrislusf/seaweedfs:4.48
     depends_on:
-      minio:
+      seaweedfs:
         condition: service_healthy
-    environment:
-      MC_HOST_local: http://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@minio:9000
-    entrypoint: ["mc", "mb", "--ignore-existing", "local/agentgit"]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        out=$$(echo 's3.bucket.create -name agentgit' | weed shell -master=seaweedfs:9333 2>&1)
+        echo "$$out"
+        case "$$out" in *"created bucket"*|*"already exists"*) exit 0;; *) exit 1;; esac
     restart: "no"
 
   ag-server:
@@ -132,6 +148,6 @@ services:
 volumes:
   agdata:
   pgdata:
-  miniodata:
+  objectdata:
   promdata:
   grafanadata:

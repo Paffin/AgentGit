@@ -6,8 +6,8 @@ name: Containers
 #               `--version`, runs it hardened (read-only root, no capabilities) and drives the end-to-end smoke
 #               (scripts/e2e_smoke.py) against it; its artifacts feed the next two jobs
 #   cache       a fresh runner rebuilds from the gha cache and must find the expensive layers CACHED
-#   compose     `docker compose up` of deploy/compose (server + PostgreSQL + MinIO), the same smoke against it
-#               (repository metadata in PostgreSQL, objects in MinIO), a restart, then the observability profile
+#   compose     `docker compose up` of deploy/compose (server + PostgreSQL + SeaweedFS (S3)), the same smoke against it
+#               (repository metadata in PostgreSQL, objects in an S3 bucket), a restart, then the observability profile
 #   kubernetes  a kind cluster, deploy/kubernetes (base through the ci overlay), the same smoke through
 #               `kubectl port-forward`, a rollout restart
 #
@@ -215,7 +215,7 @@ jobs:
           retention-days: 7
 
   compose:
-    name: docker compose (server + PostgreSQL + MinIO + observability)
+    name: docker compose (server + PostgreSQL + SeaweedFS (S3) + observability)
     needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -259,7 +259,7 @@ jobs:
             --admin-exec "docker compose exec -T ag-server /usr/local/bin/ag-server admin --data-dir /data" \
             --expect-meta-backend postgres --expect-object-backend s3 \
             --keep "$RUNNER_TEMP/smoke-work" --save-state "$RUNNER_TEMP/state.json"
-      - name: The data really is in PostgreSQL and MinIO
+      - name: The data really is in PostgreSQL and the S3 store
         working-directory: deploy/compose
         run: |
           set -euo pipefail
@@ -270,9 +270,10 @@ jobs:
           rows=$(docker compose exec -T postgres psql -U ag -d agentgit -Atc "select count(*) from \"$schema\".changesets")
           echo "changesets in PostgreSQL: $rows"
           test "$rows" -ge 3
-          docker compose run --rm --no-deps -T --entrypoint mc create-bucket ls --recursive local/agentgit | tee "$RUNNER_TEMP/minio-objects.txt"
-          objects=$(wc -l < "$RUNNER_TEMP/minio-objects.txt")
-          echo "objects in the MinIO bucket: $objects"
+          docker compose run --rm --no-deps -T --entrypoint /bin/sh create-bucket \
+            -c "echo 'fs.du /buckets/agentgit/acme/web' | weed shell -master=seaweedfs:9333 2>&1 | grep 'logical size'" | tee "$RUNNER_TEMP/s3-objects.txt"
+          objects=$(sed -E 's/^block: *([0-9]+).*/\1/' "$RUNNER_TEMP/s3-objects.txt")
+          echo "object files in the bucket under acme/web: $objects"
           test "$objects" -ge 3
       - name: Restart the stack's server, then check nothing was lost
         working-directory: deploy/compose

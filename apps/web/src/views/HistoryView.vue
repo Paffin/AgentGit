@@ -117,7 +117,9 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
     <div class="head">
       <div>
         <h1>History</h1>
-        <p class="muted">Newest first. Merge commits show their parents; blame is not available.</p>
+        <p class="muted">
+          Newest first. Merge commits show their parents. Open a file for line-by-line blame.
+        </p>
       </div>
       <form class="rev" @submit.prevent="apply">
         <TextField

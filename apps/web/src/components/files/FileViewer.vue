@@ -7,24 +7,33 @@ import { formatBytes } from '@/lib/format'
 import { decodeUtf8, imageMime, looksBinary, toDataUrl, baseName } from '@/lib/text'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
+import BlameTable from './BlameTable.vue'
 import CodeBlock from '@/ui/CodeBlock.vue'
 import ErrorState from '@/ui/ErrorState.vue'
+import Segmented from '@/ui/Segmented.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
 const props = defineProps<{ repo: string; rev: string; path: string }>()
 
 /**
- * The server reports no file sizes in directory listings, so the guard works while downloading:
- * a declared Content-Length over the limit is refused up front, and an undeclared one is cut off as it streams.
+ * Whatever the listing says about size, the guard works while downloading: a declared Content-Length over
+ * the limit is refused up front, and an undeclared one is cut off as it streams.
  */
 const DEFAULT_LIMIT = 1024 * 1024
 const HARD_LIMIT = 8 * 1024 * 1024
 const limit = ref(DEFAULT_LIMIT)
+/** Plain contents, or who last changed each line. */
+const view = ref<'contents' | 'blame'>('contents')
+const VIEWS = [
+  { value: 'contents', label: 'Contents' },
+  { value: 'blame', label: 'Blame' },
+] as const
 
 watch(
   () => [props.repo, props.rev, props.path],
   () => {
     limit.value = DEFAULT_LIMIT
+    view.value = 'contents'
   },
 )
 
@@ -110,6 +119,7 @@ onBeforeUnmount(() => {
           ></span
         >
         <span class="spacer" />
+        <Segmented v-if="!content.binary" v-model="view" legend="View" :options="VIEWS" />
         <RouterLink :to="{ path: `/repos/${repo}/history`, query: { rev, path } }" class="hist"
           >File history</RouterLink
         >
@@ -122,10 +132,8 @@ onBeforeUnmount(() => {
         This looks like binary data ({{ formatBytes(content.size) }}), so it is not shown as text.
       </Alert>
       <p v-else-if="content.text === ''" class="faint">This file is empty.</p>
+      <BlameTable v-else-if="view === 'blame'" :repo="repo" :rev="rev" :path="path" />
       <CodeBlock v-else :code="content.text" :label="`Contents of ${path}`" max-height="70vh" />
-      <p class="faint foot">
-        Blame is not available on this server, so line authorship is not shown.
-      </p>
     </template>
   </div>
 </template>
@@ -159,8 +167,5 @@ onBeforeUnmount(() => {
 .img img {
   max-width: 100%;
   max-height: 60vh;
-}
-.foot {
-  font-size: var(--fs-xs);
 }
 </style>

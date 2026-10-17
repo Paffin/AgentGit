@@ -36,6 +36,7 @@ import type {
   Task,
   TreeEntry,
   Attestation,
+  BlameResponse,
   Job,
   Page,
   Quota,
@@ -109,6 +110,18 @@ export function createApi(c: ApiClient) {
       resolve: async (repo: string, rev: string, o?: Opts) =>
         (await c.get<{ changeset_id: string }>(r(repo, '/history/resolve'), { rev }, o))
           .changeset_id,
+      /** Who last changed each line. Follows renames; lines whose origin is older than the walk are `boundary`. */
+      blame: (
+        repo: string,
+        q: {
+          path: string
+          rev?: string
+          first_line?: number
+          last_line?: number
+          max_commits?: number
+        },
+        o?: Opts,
+      ) => c.get<BlameResponse>(r(repo, '/blame'), q, o),
       mergeBase: async (repo: string, a: string, b: string, o?: Opts) =>
         (await c.get<{ bases: string[] }>(r(repo, '/history/merge-base'), { a, b }, o)).bases ?? [],
     },

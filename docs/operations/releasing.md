@@ -93,8 +93,9 @@ licenses; they are in `SHA256SUMS` and attested like the archives.
   `agentgit.rb`. **There is no tap yet** (`github.com/Paffin/homebrew-agentgit` would be the place); until one
   exists nothing installs through `brew`, and the formula has not been exercised by `brew install`.
 * **Scoop** — [`packaging/scoop/agentgit.json`](../../packaging/scoop/agentgit.json) is a template for a Windows
-  archive that **does not exist**: AgentGit has not been built or run on Windows, so no release contains it.
-  The renderer is tested on a fixture that includes a Windows entry. Treat it as a placeholder.
+  archive (`ag.exe`, `ag-server.exe`) that **the release workflow does not build yet**, so no release contains it.
+  The renderer is tested on a fixture that includes a Windows entry; adding `x86_64-pc-windows-msvc` to the
+  `binaries` matrix (as a `.zip`) is what makes the manifest real. Treat it as a placeholder.
 
 ## SDKs (npm and PyPI)
 
@@ -160,7 +161,7 @@ The rehearsal runs everything but the writes. These have therefore **never run**
 * `install.sh` and `gh attestation verify` against real release URLs (the rehearsal uses a `file://` base URL;
   `releases/latest` redirect lookup is untested because no release exists).
 * npm and PyPI trusted publishing (needs the one-time registry setup above), and any crates.io publish.
-* A Homebrew tap, a Scoop bucket, Windows, musl/Alpine, 32-bit and FreeBSD builds.
+* A Homebrew tap, a Scoop bucket, a Windows archive, musl/Alpine, 32-bit and FreeBSD builds.
 
 Also not done: actions are referenced by major version tag, not by commit SHA (Dependabot keeps them current; pin
 by SHA if your threat model includes a compromised action tag); no signing of Git tags or of the SBOM beyond

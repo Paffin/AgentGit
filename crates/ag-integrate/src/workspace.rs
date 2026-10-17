@@ -22,7 +22,7 @@ use serde_json::json;
 
 use crate::repo::RepoBlobs;
 use crate::types::ConflictInfo;
-use crate::workdir::{IgnoreRules, checkout_tree, scan, update_dir};
+use crate::workdir::{IgnoreRules, checkout_tree, scan_against, update_dir};
 use crate::{Error, Repository, Result};
 
 /// Result of [`Repository::sync_workspace`].
@@ -148,8 +148,8 @@ impl Repository {
     pub fn workspace_status(&self, name: &str, dir: &Path) -> Result<Vec<Change>> {
         let ws = self.workspace_row(name)?;
         let rules = IgnoreRules::load(dir)?;
-        let (now, _) = scan(self, dir, &rules, false)?;
         let head = self.tree_or_empty(ws.head.as_ref())?;
+        let (now, _) = scan_against(self, dir, &rules, false, &head)?;
         Ok(head
             .diff(&now)
             .into_iter()
@@ -176,8 +176,8 @@ impl Repository {
     ) -> Result<Option<ChangesetId>> {
         let ws = self.workspace_row(name)?;
         let rules = IgnoreRules::load(dir)?;
-        let (tree, _) = scan(self, dir, &rules, true)?;
         let head_tree = self.tree_or_empty(ws.head.as_ref())?;
+        let (tree, _) = scan_against(self, dir, &rules, true, &head_tree)?;
         let pending = self.pending_merge(name)?;
         if tree == head_tree && pending.is_none() {
             return Ok(None);

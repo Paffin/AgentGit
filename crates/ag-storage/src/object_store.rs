@@ -279,6 +279,8 @@ impl FsObjectStore {
     }
 
     fn sync_dir(dir: &Path) -> std::io::Result<()> {
+        // Unix: make the new directory entry durable. Windows has no directory handle to flush through std
+        // (NTFS journals the rename; see `durability()` and docs/operations/windows.md for what that means).
         #[cfg(unix)]
         {
             File::open(dir)?.sync_all()?;
@@ -291,6 +293,21 @@ impl FsObjectStore {
     }
 }
 
+/// Sets the modification time of `path` to now: how a re-`put` tells a concurrent GC that the object is wanted.
+fn touch(path: &Path) -> std::io::Result<()> {
+    // `set_modified` needs write access to the *attributes* on Windows, which a plain `File::open` (read
+    // access only) does not have; elsewhere a read-only handle is enough, even on a 0444 object.
+    #[cfg(windows)]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+        OpenOptions::new().access_mode(FILE_WRITE_ATTRIBUTES).open(path)?
+    };
+    #[cfg(not(windows))]
+    let file = File::open(path)?;
+    file.set_modified(std::time::SystemTime::now())
+}
+
 impl ObjectStore for FsObjectStore {
     fn put(&self, obj: &RawObject) -> Result<ObjectId, StoreError> {
         check_size(obj, &self.limits)?;
@@ -301,7 +318,7 @@ impl ObjectStore for FsObjectStore {
         lock.lock_shared()?;
         if let Ok(Some(_)) = self.read_verified(&id, &path) {
             // Already stored: refresh its age so a concurrent GC keeps it.
-            File::open(&path)?.set_modified(std::time::SystemTime::now())?;
+            touch(&path)?;
             return Ok(id);
         }
         let dir = path.parent().expect("object path has a parent");
@@ -321,7 +338,7 @@ impl ObjectStore for FsObjectStore {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&tmp, fs::Permissions::from_mode(0o444))?;
         }
-        fs::rename(&tmp, &path)?;
+        crate::fsutil::rename_replace(&tmp, &path)?;
         Self::sync_dir(dir)?;
         Ok(id)
     }
@@ -415,11 +432,28 @@ impl ObjectStore for FsObjectStore {
         Ok(Box::new(lock))
     }
 
+    #[cfg(not(windows))]
     fn durability(&self) -> Durability {
         Durability {
             name: "local-fsync",
             survives: &["process crash", "kernel panic", "power loss (fsync honoured by the disk)"],
             does_not_survive: &["disk loss", "host loss", "site loss"],
+        }
+    }
+
+    /// Windows flushes the object's data (`FlushFileBuffers`) before the rename but cannot flush the
+    /// directory entry through `std`, so the rename itself rides on the NTFS journal.
+    #[cfg(windows)]
+    fn durability(&self) -> Durability {
+        Durability {
+            name: "local-fsync",
+            survives: &["process crash", "operating system crash (object data is flushed before the rename)"],
+            does_not_survive: &[
+                "power loss right after a write (the rename is not flushed explicitly; fsck reports a lost object)",
+                "disk loss",
+                "host loss",
+                "site loss",
+            ],
         }
     }
 }
@@ -533,6 +567,18 @@ mod tests {
         assert_eq!(s.list().unwrap().len(), 1);
     }
 
+    /// Sets a modification time; see [`touch`] for why this is not just `File::open(..).set_modified(..)`.
+    fn set_mtime(path: &Path, t: std::time::SystemTime) {
+        #[cfg(windows)]
+        let f = {
+            use std::os::windows::fs::OpenOptionsExt;
+            OpenOptions::new().access_mode(0x0100).open(path).unwrap()
+        };
+        #[cfg(not(windows))]
+        let f = File::open(path).unwrap();
+        f.set_modified(t).unwrap();
+    }
+
     #[test]
     fn reput_refreshes_age_and_delete_if_older_respects_it() {
         let dir = tempfile::tempdir().unwrap();
@@ -541,7 +587,7 @@ mod tests {
         let id = s.put(&obj).unwrap();
         let path = s.path_of(&id);
         let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
-        File::open(&path).unwrap().set_modified(an_hour_ago).unwrap();
+        set_mtime(&path, an_hour_ago);
         let cutoff = Timestamp::from_millis(Timestamp::now().as_millis() - 1_800_000);
         assert!(s.list().unwrap()[0].modified < cutoff, "object looks old");
 
@@ -551,7 +597,7 @@ mod tests {
         assert!(s.contains(&id).unwrap());
 
         // Without the refresh it is collected.
-        File::open(&path).unwrap().set_modified(an_hour_ago).unwrap();
+        set_mtime(&path, an_hour_ago);
         assert!(s.delete_if_older_than(&id, cutoff).unwrap());
         assert!(!s.contains(&id).unwrap());
         assert!(!s.delete_if_older_than(&id, cutoff).unwrap(), "already gone");

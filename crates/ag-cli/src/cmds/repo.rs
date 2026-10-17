@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use ag_changeset::Op;
-use ag_integrate::workdir::{IgnoreRules, checkout_tree, scan};
+use ag_integrate::workdir::{IgnoreRules, checkout_tree, scan_against};
 use ag_integrate::{InitOptions, Repository, StorageConfig, SyncOutcome};
 use ag_tree::{DirEntry, Entry, Tree};
 use ag_types::{ChangesetId, FileType, Namespace, RepoPath, StreamName};
@@ -125,6 +125,11 @@ pub fn workspace(ctx: &Ctx, cmd: &WorkspaceCmd) -> Result<u8> {
             let ws = ctx.repo.workspace_create(name, &stream, &ctx.me)?;
             ctx.repo.workspace_checkout(name, dir)?;
             ctx.repo.workspace_set_dir(name, dir)?;
+            if let Ok(w) = ctx.repo.workspace_row(name)
+                && let Ok(tree) = ctx.repo.tree_or_empty(w.head.as_ref())
+            {
+                crate::ctx::note_adaptations(&tree);
+            }
             ctx.out(&ws, || format!("Created workspace '{name}' on '{stream}' in {}", display_path(dir)))?;
         }
         WorkspaceCmd::List => {
@@ -231,6 +236,12 @@ pub struct SyncArgs {
 pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
     let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
     let out = ctx.repo.sync_workspace(&a.workspace, &dir, &ctx.me)?;
+    if !matches!(out, SyncOutcome::UpToDate)
+        && let Ok(w) = ctx.repo.workspace_row(&a.workspace)
+        && let Ok(tree) = ctx.repo.tree_or_empty(w.head.as_ref())
+    {
+        crate::ctx::note_adaptations(&tree);
+    }
     ctx.out(&out, || match &out {
         SyncOutcome::UpToDate => "Already up to date.".into(),
         SyncOutcome::FastForwarded { to } => format!("Fast-forwarded to {}.", to.short()),
@@ -438,10 +449,12 @@ pub fn diff(ctx: &Ctx, a: &DiffArgs) -> Result<u8> {
             let dir = workspace_dir(ctx, &a.workspace, &a.dir)?;
             let ws = repo.workspace_row(&a.workspace)?;
             let old = repo.tree_or_empty(ws.head.as_ref())?;
-            let (new, _) = scan(repo, &dir, &IgnoreRules::load(&dir)?, false)?;
+            let (new, _) = scan_against(repo, &dir, &IgnoreRules::load(&dir)?, false, &old)?;
             render_diff(repo, &old, &new, a.context, &|p, e| {
                 let abs = dir.join(p.as_str());
-                if e.file_type == FileType::Symlink {
+                // Where symlinks cannot be created they are plain files holding the target: read those as files.
+                let is_link = std::fs::symlink_metadata(&abs).is_ok_and(|m| m.file_type().is_symlink());
+                if e.file_type == FileType::Symlink && is_link {
                     Ok(std::fs::read_link(&abs)?.to_string_lossy().into_owned().into_bytes())
                 } else {
                     Ok(std::fs::read(&abs).with_context(|| format!("reading {}", abs.display()))?)
@@ -597,8 +610,68 @@ pub fn checkout(ctx: &Ctx, a: &CheckoutArgs) -> Result<u8> {
     }
     let tree = ctx.repo.tree_of(&id)?;
     checkout_tree(&ctx.repo, &tree, &a.dir)?;
+    crate::ctx::note_adaptations(&tree);
     ctx.out(&json!({"changeset": id, "dir": a.dir, "files": tree.len()}), || {
         format!("Wrote {} file(s) of {} to {}", tree.len(), id.short(), display_path(&a.dir))
     })?;
     Ok(exit::OK)
+}
+
+#[derive(Args, Debug)]
+pub struct PortabilityArgs {
+    /// Revision to inspect (default: the workspace head).
+    #[arg(default_value = "@")]
+    pub rev: String,
+    /// File system to check against: `windows`, `macos` or `linux` (default: this machine).
+    #[arg(long, value_name = "PLATFORM")]
+    pub target: Option<String>,
+}
+
+/// Lists what a revision contains that a platform's file system cannot hold: Windows device names and forbidden
+/// characters, names that differ only in case on Windows and macOS. Exit status 4 if there is anything.
+pub fn portability(ctx: &Ctx, a: &PortabilityArgs) -> Result<u8> {
+    use ag_integrate::workdir::{Platform, adaptations, inspect_tree};
+    let platform = match &a.target {
+        Some(t) => Platform::named(t).ok_or_else(|| anyhow!("unknown platform '{t}' (use windows, macos or linux)"))?,
+        None => Platform::host(),
+    };
+    let id = ctx.repo.resolve_rev(&a.rev)?;
+    let tree = ctx.repo.tree_of(&id)?;
+    let findings = inspect_tree(&tree, &platform);
+    let adapted = adaptations(&tree, &platform);
+    let problems = findings.describe(usize::MAX);
+    let ok = findings.is_clean();
+    ctx.out(
+        &json!({
+            "changeset": id,
+            "platform": platform.name(),
+            "paths": tree.len(),
+            "ok": ok,
+            "problems": problems,
+            "hazards": findings.hazards.iter().map(|h| json!({"path": h.path, "component": h.component, "message": h.to_string()})).collect::<Vec<_>>(),
+            "collisions": findings.collisions.iter().map(|c| &c.spellings).collect::<Vec<_>>(),
+            "symlinks_as_files": adapted.symlinks_as_files,
+            "executables_without_bit": adapted.executables_without_bit,
+        }),
+        || {
+            let mut s = if ok {
+                format!("All {} path(s) of {} can be checked out on {}.\n", tree.len(), id.short(), platform.name())
+            } else {
+                format!(
+                    "{} cannot be checked out on {}: {} problem(s)\n",
+                    id.short(),
+                    platform.name(),
+                    problems.len()
+                )
+            };
+            for p in &problems {
+                let _ = writeln!(s, "  {p}");
+            }
+            for line in adapted.describe() {
+                let _ = writeln!(s, "note: {line}");
+            }
+            s
+        },
+    )?;
+    Ok(if ok { exit::OK } else { exit::REFUSED })
 }

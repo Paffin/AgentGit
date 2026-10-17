@@ -118,3 +118,65 @@ mod windows {
         .map_err(|e| io::Error::other(e.clone()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+
+    #[test]
+    fn exclusive_never_overwrites_and_otherwise_truncates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret");
+        create(&path, true).unwrap().write_all(b"first").unwrap();
+        assert_eq!(create(&path, true).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&path).unwrap(), b"first");
+        create(&path, false).unwrap().write_all(b"2").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"2");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_files_are_0600_and_directories_0700_and_loose_files_are_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret");
+        create(&path, true).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        check_owner_only(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(matches!(check_owner_only(&path), Err(Insecure::Accessible)));
+        // re-opening an existing loose file for a new secret tightens it
+        create(&path, false).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        let sub = dir.path().join("keys/inner");
+        create_dir_all(&sub).unwrap();
+        assert_eq!(mode(&sub), 0o700);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_files_and_directories_get_an_owner_only_acl() {
+        let acl = |p: &Path| {
+            let out = std::process::Command::new("icacls").arg(p).output().unwrap();
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("secret");
+        create(&file, true).unwrap();
+        let sub = dir.path().join("keys");
+        create_dir_all(&sub).unwrap();
+        for (what, p) in [("file", &file), ("directory", &sub)] {
+            let text = acl(p);
+            assert!(!text.contains("(I)"), "{what}: nothing may be inherited from the parent:\n{text}");
+            for broad in ["Everyone", "BUILTIN\\Users", "Authenticated Users", "INTERACTIVE"] {
+                assert!(!text.contains(broad), "{what}: {broad} must not have access:\n{text}");
+            }
+            assert!(text.contains("(F)"), "{what}: the owner has full control:\n{text}");
+        }
+        // The ACL cannot be read back (documented): `check_owner_only` has nothing to say on Windows.
+        check_owner_only(&file).unwrap();
+    }
+}

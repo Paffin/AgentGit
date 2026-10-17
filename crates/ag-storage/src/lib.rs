@@ -17,6 +17,7 @@
 
 pub mod clock;
 mod error;
+pub mod fsutil;
 pub mod history;
 pub mod lock;
 pub mod meta;

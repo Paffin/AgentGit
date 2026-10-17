@@ -379,21 +379,12 @@ fn validation_gate_with_signed_attestations() {
     // a new proposal (new head, new tree) with a passing check lands
     a.write("app.txt", "version 2\n");
     let p2 = a.propose_as("user:alice", "v2");
-    let r = a
-        .ag(&[
-            "validate",
-            "run",
-            &p2,
-            "--check",
-            "tests",
-            "--key",
-            "ci",
-            "--",
-            "sh",
-            "-c",
-            "grep -q 'version 2' app.txt",
-        ])
-        .ok();
+    // The check is any command that exits 0 on the candidate tree: `sh`/`grep` here, `cmd`/`findstr` on Windows.
+    let check: &[&str] =
+        if cfg!(windows) { &["cmd", "/c", "findstr 2 app.txt"] } else { &["sh", "-c", "grep -q 'version 2' app.txt"] };
+    let mut argv = vec!["validate", "run", &p2, "--check", "tests", "--key", "ci", "--"];
+    argv.extend_from_slice(check);
+    let r = a.ag(&argv).ok();
     assert!(r.stdout().contains("PASSED"), "{}", r.stdout());
     a.ag(&["integrate", &p2]).ok();
 

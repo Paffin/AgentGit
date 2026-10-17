@@ -242,6 +242,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "jsonwebtoken",
+ "nu-ansi-term",
  "prometheus",
  "prost",
  "rcgen",
@@ -314,6 +315,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "unicode-normalization",
 ]
 
 [[package]]

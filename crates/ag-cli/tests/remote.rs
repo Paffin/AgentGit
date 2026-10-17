@@ -247,10 +247,12 @@ fn tokens_can_be_stored_with_restricted_permissions() {
     }
     #[cfg(windows)]
     {
-        // No mode bits: the file's ACL must be replaced by one entry for the current user.
+        // No mode bits: the ACL must not inherit anything from the parent (that is where "Users" and
+        // "Authenticated Users" come from) and must not name a broad group.
         let acl = Command::new("icacls").arg(&secret).output().unwrap();
         let acl = String::from_utf8_lossy(&acl.stdout).to_string();
-        for broad in ["Everyone", "Users", "Authenticated Users", "BUILTIN"] {
+        assert!(!acl.contains("(I)"), "no inherited entries on a stored credential:\n{acl}");
+        for broad in ["Everyone", "BUILTIN\\Users", "Authenticated Users", "INTERACTIVE"] {
             assert!(!acl.contains(broad), "{broad} must not have access to a stored credential:\n{acl}");
         }
         assert!(acl.contains("(F)"), "the owner keeps full control:\n{acl}");

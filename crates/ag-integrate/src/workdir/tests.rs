@@ -69,10 +69,18 @@ fn ignore_rules() {
 #[test]
 fn scan_rejects_unrecordable_names_with_a_helpful_message() {
     let r = repo();
-    let src = tempfile::tempdir().unwrap();
-    write(src.path(), "bad\\name", b"x");
-    let err = scan(&r, src.path(), &IgnoreRules::none(), false).unwrap_err();
-    assert!(err.to_string().contains(".agignore"), "{err}");
+    // A backslash cannot be part of a file name on Windows; `GIT~1` is a name every platform can hold and
+    // that RepoPath refuses (it is the 8.3 alias of `.git`).
+    let mut names = vec!["GIT~1/x"];
+    if cfg!(unix) {
+        names.push("bad\\name");
+    }
+    for name in names {
+        let src = tempfile::tempdir().unwrap();
+        write(src.path(), name, b"x");
+        let err = scan(&r, src.path(), &IgnoreRules::none(), false).unwrap_err();
+        assert!(err.to_string().contains(".agignore"), "{name}: {err}");
+    }
 }
 
 #[cfg(unix)]

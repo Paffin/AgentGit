@@ -9,6 +9,7 @@ mod id;
 mod identity;
 mod limits;
 mod path;
+pub mod portable;
 mod time;
 
 pub use id::{BlobId, ChangesetId, IdParseError, ObjectId, TreeId};

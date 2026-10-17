@@ -107,10 +107,20 @@ enum AdminAction {
     Repos,
 }
 
+/// Colour only for a person at a terminal: never in a file or pipe (a service's log would fill with escape
+/// codes), never with `NO_COLOR`, and on Windows only if the console accepts virtual-terminal sequences.
+fn use_ansi() -> bool {
+    use std::io::IsTerminal;
+    let wanted = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty());
+    #[cfg(windows)]
+    let wanted = wanted && nu_ansi_term::enable_ansi_support().is_ok();
+    wanted
+}
+
 fn init_tracing(cfg: &ServerConfig) {
     use tracing_subscriber::EnvFilter;
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&cfg.telemetry.log_filter));
-    let builder = tracing_subscriber::fmt().with_env_filter(filter).with_target(false);
+    let builder = tracing_subscriber::fmt().with_env_filter(filter).with_target(false).with_ansi(use_ansi());
     if cfg.telemetry.log_format == "json" {
         builder.json().init();
     } else {
@@ -188,16 +198,7 @@ async fn main() -> Result<()> {
                 .await
                 .with_context(|| format!("binding {}", cfg.server.listen))?;
             let shutdown = async {
-                let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
-                #[cfg(unix)]
-                let term = async {
-                    if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                        s.recv().await;
-                    }
-                };
-                #[cfg(not(unix))]
-                let term = std::future::pending::<()>();
-                tokio::select! { _ = ctrl_c => {}, _ = term => {} }
+                wait_for_shutdown_signal().await;
                 tracing::info!("shutting down");
             };
             ag_server::server::serve(app, listener, shutdown).await
@@ -217,6 +218,42 @@ async fn main() -> Result<()> {
             admin(app, action).await
         }
     }
+}
+
+/// Resolves when the process is asked to stop, so the server drains in-flight requests and flushes telemetry.
+///
+/// Unix: SIGINT (Ctrl+C) and SIGTERM. Windows, where a console process gets control events instead of
+/// signals: Ctrl+C, Ctrl+Break, closing the console window, and logoff/shutdown of the machine.
+async fn wait_for_shutdown_signal() {
+    let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
+    #[cfg(unix)]
+    let term = async {
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            s.recv().await;
+        }
+    };
+    #[cfg(windows)]
+    let term = async {
+        use tokio::signal::windows;
+        // A stream that cannot be registered never fires; the others still do.
+        async fn wait<F: std::future::Future>(s: std::io::Result<F>) {
+            match s {
+                Ok(f) => {
+                    f.await;
+                }
+                Err(_) => std::future::pending::<()>().await,
+            }
+        }
+        tokio::select! {
+            _ = async { wait(windows::ctrl_break().map(|mut s| async move { s.recv().await })).await } => {}
+            _ = async { wait(windows::ctrl_close().map(|mut s| async move { s.recv().await })).await } => {}
+            _ = async { wait(windows::ctrl_shutdown().map(|mut s| async move { s.recv().await })).await } => {}
+            _ = async { wait(windows::ctrl_logoff().map(|mut s| async move { s.recv().await })).await } => {}
+        }
+    };
+    #[cfg(not(any(unix, windows)))]
+    let term = std::future::pending::<()>();
+    tokio::select! { _ = ctrl_c => {}, _ = term => {} }
 }
 
 async fn admin(app: App, action: AdminAction) -> Result<()> {

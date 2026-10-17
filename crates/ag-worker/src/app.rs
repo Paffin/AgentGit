@@ -151,6 +151,10 @@ pub fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with_writer(std::io::stderr)
+        .with_ansi(
+            std::io::IsTerminal::is_terminal(&std::io::stderr())
+                && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty()),
+        )
         .init();
     let cli = Cli::parse();
     let result = match cli.command {

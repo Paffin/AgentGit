@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
+use ag_integrate::workdir::{Platform, adaptations};
 use ag_integrate::{Layout, Repository};
+use ag_tree::Tree;
 use ag_types::Identity;
 use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
@@ -21,19 +23,36 @@ pub struct Ctx {
     pub root: PathBuf,
 }
 
-/// Resolves the acting identity: `--as`, `AG_IDENTITY`, then `user:$USER`.
+/// Resolves the acting identity: `--as`, `AG_IDENTITY`, then `user:` and the login name (`$USER`, `$LOGNAME`;
+/// `%USERNAME%` on Windows).
 pub fn identity(cli: &Cli) -> Result<Identity> {
     let raw = cli
         .identity
         .clone()
         .or_else(|| std::env::var("AG_IDENTITY").ok().filter(|s| !s.is_empty()))
         .unwrap_or_else(|| {
-            let user = std::env::var("USER").or_else(|_| std::env::var("LOGNAME")).unwrap_or_else(|_| "unknown".into());
-            let clean: String =
-                user.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' }).collect();
-            format!("user:{clean}")
+            let login =
+                ["USER", "LOGNAME", "USERNAME"].iter().find_map(|v| std::env::var(v).ok().filter(|s| !s.is_empty()));
+            default_identity(login.as_deref())
         });
     Identity::new(raw.clone()).map_err(|e| anyhow!("invalid identity '{raw}': {e}"))
+}
+
+/// `user:<login>` with every character an identity cannot hold (a space in `John Smith`, non-ASCII letters,
+/// a `DOMAIN\` prefix) replaced by `_`; `user:unknown` without a login name.
+fn default_identity(login: Option<&str>) -> String {
+    let user = login.unwrap_or("unknown");
+    let clean: String =
+        user.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' }).collect();
+    format!("user:{clean}")
+}
+
+/// Tells the user, on stderr, what writing `tree` to this machine's file system adapts: symlinks that became
+/// plain files, executable flags that cannot be applied. Silent where nothing is adapted (Linux, macOS).
+pub fn note_adaptations(tree: &Tree) {
+    for line in adaptations(tree, &Platform::host()).describe() {
+        eprintln!("note: {line}");
+    }
 }
 
 impl Ctx {
@@ -127,6 +146,18 @@ mod tests {
         assert_eq!(sanitize_for_terminal("\u{1b}[2J\u{1b}]0;pwned\u{7}"), "\\u{001b}[2J\\u{001b}]0;pwned\\u{0007}");
         assert_eq!(sanitize_for_terminal("a\u{9b}b\r"), "a\\u{009b}b\\u{000d}");
         assert_eq!(sanitize_for_terminal("юникод ✓"), "юникод ✓");
+    }
+
+    #[test]
+    fn default_identity_uses_the_login_name_and_cleans_it() {
+        assert_eq!(default_identity(Some("alice")), "user:alice");
+        assert_eq!(default_identity(Some("John Smith")), "user:John_Smith");
+        assert_eq!(default_identity(Some("CORP\\jdoe")), "user:CORP_jdoe");
+        assert_eq!(default_identity(Some("Юрий")), "user:____");
+        assert_eq!(default_identity(None), "user:unknown");
+        for login in ["alice", "John Smith", "CORP\\jdoe", "Юрий", "a.b-c_d"] {
+            assert!(Identity::new(default_identity(Some(login))).is_ok(), "{login}");
+        }
     }
 
     #[test]

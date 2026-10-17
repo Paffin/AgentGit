@@ -70,6 +70,10 @@ ureq.workspace = true
 utoipa.workspace = true
 serde_html_form.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# `enable_ansi_support()`: switches a Windows console to virtual-terminal mode (safe wrapper, no `unsafe` here).
+nu-ansi-term.workspace = true
+
 [dev-dependencies]
 base64.workspace = true
 jsonwebtoken = { workspace = true, features = ["use_pem"] }

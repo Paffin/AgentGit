@@ -202,6 +202,13 @@ impl RepoManager {
         Ok(self.pool(name)?.get())
     }
 
+    /// Closes every open repository. Call from a blocking thread: dropping a PostgreSQL
+    /// connection pool blocks, and must not happen on an async worker.
+    pub fn close_all(&self) {
+        let pools: Vec<_> = self.open.lock().unwrap_or_else(|e| e.into_inner()).drain().collect();
+        drop(pools);
+    }
+
     /// Number of repositories currently open.
     pub fn open_count(&self) -> usize {
         self.open.lock().unwrap_or_else(|e| e.into_inner()).len()

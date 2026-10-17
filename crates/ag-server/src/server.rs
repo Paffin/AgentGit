@@ -140,8 +140,8 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
 }
 
-/// Runs the server until `shutdown` completes.
-pub async fn serve(
+/// Serves until `shutdown` completes.
+async fn serve_inner(
     app: App,
     listener: tokio::net::TcpListener,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -177,4 +177,16 @@ pub async fn serve(
             .await?;
     }
     Ok(())
+}
+
+/// Runs the server until `shutdown` completes, then closes the repositories.
+pub async fn serve(
+    app: App,
+    listener: tokio::net::TcpListener,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> anyhow::Result<()> {
+    let result = serve_inner(app.clone(), listener, shutdown).await;
+    let a = app.clone();
+    let _ = tokio::task::spawn_blocking(move || a.repos.close_all()).await;
+    result
 }

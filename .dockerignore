@@ -1,9 +1,19 @@
-target
-.git
-.claude
+# The build context is an allow-list: only what `cargo build` and the image's COPY lines need.
+# (Everything else — docs, the web UI, SDKs, examples, CI files — cannot change the image, so it must not
+# be able to invalidate a layer either.)
+*
+!Cargo.toml
+!Cargo.lock
+!LICENSE
+!NOTICE
+!crates
+!proto
+!migrations
+!deploy/docker/ag-server.toml
+
+# ...minus build output, local state and tests that may sit inside the allowed directories.
+**/target
+**/.ag
 **/node_modules
-**/dist
-apps/web/test-results
-sdk/*/.venv
-services/*/bin
-*.log
+crates/*/tests
+crates/*/proptest-regressions

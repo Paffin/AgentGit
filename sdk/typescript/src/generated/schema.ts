@@ -3079,7 +3079,9 @@ export interface components {
             /** @default  */
             proposal: string;
             /**
-             * @description "queued", "integrated", "blocked", "conflict", "failed", "skipped".
+             * @description "queued", "done", "blocked", "rejected" (conflict or policy denial) or
+             *     "failed". `outcome` explains: "integrated" for done, the blockers or the
+             *     number of conflicting paths otherwise.
              * @default
              */
             state: string;
@@ -4378,7 +4380,14 @@ export interface operations {
     };
     "events.subscribe": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Replay events with a larger sequence number first; absent means follow from now */
+                after_seq?: number;
+                /** @description Comma-separated topic prefixes, e.g. stream,proposal */
+                topics?: string;
+                /** @description Interval of keep-alive comments (0 = server default) */
+                heartbeat_ms?: number;
+            };
             header?: never;
             path: {
                 /** @description Repository owner (first half of owner/name) */
@@ -4390,12 +4399,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success (binary or event-stream body) */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/event-stream": string;
+                };
             };
             /** @description Error */
             default: {
@@ -4448,7 +4459,10 @@ export interface operations {
     };
     "tree.file": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Revision expression; empty means the repository's default stream */
+                rev?: string;
+            };
             header?: never;
             path: {
                 /** @description Repository owner (first half of owner/name) */
@@ -4461,12 +4475,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success (binary or event-stream body) */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/octet-stream": string;
+                };
             };
             /** @description Error */
             default: {
@@ -5133,12 +5149,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success (binary or event-stream body) */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/octet-stream": string;
+                };
             };
             /** @description Error */
             default: {
@@ -5164,14 +5182,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
         responses: {
-            /** @description Success (binary or event-stream body) */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/octet-stream": string;
+                };
             };
             /** @description Error */
             default: {

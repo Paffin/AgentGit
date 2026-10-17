@@ -205,7 +205,7 @@ describe('client options', () => {
     }
   });
 
-  it('negotiate does not send version arrays (ag-server 0.1.0 rejects repeated query parameters)', async () => {
+  it('negotiate sends the versions it speaks as a repeated query parameter, without credentials', async () => {
     const calls: Request[] = [];
     const client = new AgentGitClient({
       baseUrl: base,
@@ -217,7 +217,7 @@ describe('client options', () => {
       },
     });
     await client.negotiate({ clientName: 'x', clientVersion: '1' });
-    expect(new URL(calls[0]!.url).search).toBe('?client_name=x&client_version=1');
+    expect(new URL(calls[0]!.url).search).toBe('?supported_versions=agwp.v1&client_name=x&client_version=1');
     expect(calls[0]!.headers.get('authorization')).toBeNull();
   });
 });

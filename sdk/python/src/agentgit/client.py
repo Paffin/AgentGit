@@ -137,9 +137,13 @@ def _negotiated(hello: NegotiateResponse) -> NegotiateResponse:
 
 
 def _negotiate_params(client_name: str | None, client_version: str | None) -> dict[str, Any]:
-    # The `supported_versions` list is not sent over HTTP: GET /v1/capabilities of ag-server 0.1.0
-    # does not accept repeated query parameters.
-    return {"client_name": client_name, "client_version": client_version}
+    # The versions this client speaks travel as a repeated query parameter; a server that speaks none of
+    # them answers failed_precondition.
+    return {
+        "supported_versions": [PROTOCOL_VERSION],
+        "client_name": client_name,
+        "client_version": client_version,
+    }
 
 
 class _ObjectsExt(ObjectsApi):

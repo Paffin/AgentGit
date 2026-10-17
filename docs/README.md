@@ -9,6 +9,7 @@
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
 | work against a server (clone, pull, push) and offline | [Remote guide](guides/remote.md) |
 | read history: blame, renames, path history | [History guide](guides/history.md) |
+| watch agents work, review and integrate in a browser | [Web UI guide](guides/web-ui.md) |
 | run checks on untrusted code and sign the result | [Workers guide](guides/workers.md); what the [sandbox](architecture/sandbox.md) does and does not stop |
 | move to or from Git | [Git bridge](guides/git-bridge.md) |
 | look up a command | [CLI reference](reference/cli.md) *(generated)* |

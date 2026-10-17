@@ -1,31 +1,118 @@
 name: Release
 
-# Push a tag like v0.2.0 to build binaries for four platforms, a container image, checksums and
-# build-provenance attestations, and to publish a GitHub release whose notes are the matching
-# CHANGELOG section. Nothing here has run yet — the first tag is its first test; see
-# docs/operations/releasing.md for what to check.
+# A tag vX.Y.Z (or vX.Y.Z-rc.N) PUBLISHES a release: GitHub release with archives for four platforms,
+# SHA256SUMS, CycloneDX SBOMs and build-provenance attestations, and multi-arch container images on GHCR.
+#
+# Run it by hand (Actions -> Release -> Run workflow) to REHEARSE the same pipeline without publishing anything:
+#
+#   version   what to call the rehearsal, default 0.0.0-rc.dry (any semver; Cargo.toml need not agree)
+#   publish   default false. true is honoured only when the workflow is run on a v* tag whose name matches `version`
+#
+# A rehearsal builds and smoke-tests every binary, assembles SHA256SUMS, attests and verifies the attestations,
+# builds both image architectures natively, merges them into a multi-arch manifest in a throw-away local
+# registry, and installs the result with scripts/install.sh. It uploads the would-be release as the workflow
+# artifact `release-dist`. What it cannot prove is spelled out in docs/operations/releasing.md.
 
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+    branches: ["wip/**"] # rehearsal while this workflow is being developed (removed before it lands on main)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, e.g. 0.0.0-rc.dry (a rehearsal) or the tag's version when publishing"
+        required: true
+        default: 0.0.0-rc.dry
+        type: string
+      publish:
+        description: "Publish for real (only on a v* tag ref). Leave off to rehearse."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  REGISTRY_IMAGE_SERVER: ghcr.io/paffin/agentgit-server
+  REGISTRY_IMAGE_CLI: ghcr.io/paffin/agentgit-cli
 
 jobs:
   verify:
-    name: tag matches the code
+    name: what are we releasing
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      cargo_version: ${{ steps.v.outputs.cargo_version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+      publish: ${{ steps.mode.outputs.publish }}
+      commit_date: ${{ steps.mode.outputs.commit_date }}
+      epoch: ${{ steps.mode.outputs.epoch }}
     steps:
       - uses: actions/checkout@v7
+      - id: mode
+        name: Publish, or rehearse?
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          publish=false
+          if [ "$EVENT" = push ] && [ "$REF_TYPE" = tag ]; then
+            publish=true
+            ref="$REF_NAME"
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            ref="$INPUT_VERSION"
+            if [ "$INPUT_PUBLISH" = true ]; then
+              if [ "$REF_TYPE" != tag ] || [ "${REF_NAME#v}" != "${INPUT_VERSION#v}" ]; then
+                echo "::error::publish=true needs the workflow to run on the tag v${INPUT_VERSION#v} (it ran on $REF_TYPE '$REF_NAME'). Nothing was published."
+                exit 1
+              fi
+              publish=true
+            fi
+          else
+            ref="0.0.0-rc.dry" # a push to a rehearsal branch
+          fi
+          echo "ref=$ref" >> "$GITHUB_ENV"
+          {
+            echo "publish=$publish"
+            echo "commit_date=$(git show -s --format=%cs HEAD)"
+            echo "epoch=$(git show -s --format=%ct HEAD)"
+          } >> "$GITHUB_OUTPUT"
+          echo "mode: publish=$publish ref=$ref"
       - id: v
-        run: python3 scripts/check_release.py "${GITHUB_REF_NAME}" | tee -a "$GITHUB_OUTPUT"
+        name: The version matches the code and the CHANGELOG
+        run: |
+          set -euo pipefail
+          flag=""
+          [ "${{ steps.mode.outputs.publish }}" = true ] || flag="--dry-run"
+          python3 scripts/check_release.py "$ref" $flag | tee -a "$GITHUB_OUTPUT"
+      - name: Summary
+        run: |
+          {
+            echo "## Release: ${{ steps.mode.outputs.publish == 'true' && 'PUBLISH' || 'rehearsal (nothing is published)' }}"
+            echo
+            echo "- version: \`$(grep ^version= "$GITHUB_OUTPUT" | cut -d= -f2)\` (Cargo.toml: \`$(grep ^cargo_version= "$GITHUB_OUTPUT" | cut -d= -f2)\`)"
+            echo "- commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  scripts:
+    name: release tooling tests
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/test_release_scripts.py
 
   test:
     name: tests
@@ -35,62 +122,142 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # As in ci.yml: Ubuntu 24.04 restricts unprivileged user namespaces; the sandbox suites must run, not skip.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - run: cargo test --workspace --locked
+        env:
+          AG_REQUIRE_SANDBOX: "1"
 
   binaries:
     name: binaries (${{ matrix.target }})
     needs: [verify, test]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - {target: x86_64-unknown-linux-gnu, os: ubuntu-22.04}
           - {target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm}
           - {target: aarch64-apple-darwin, os: macos-14}
-          - {target: x86_64-apple-darwin, os: macos-13}
+          - {target: x86_64-apple-darwin, os: macos-15-intel}
     runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
+      SOURCE_DATE_EPOCH: ${{ needs.verify.outputs.epoch }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
       - name: Build
         env:
           # Do not embed the build directory in the binaries.
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
-        run: cargo build --release --locked --target ${{ matrix.target }} -p ag-cli -p ag-server
-      - name: Package
-        id: pkg
+        run: cargo build --release --locked --target ${{ matrix.target }} -p ag-cli -p ag-server -p ag-worker
+      - name: Archive
+        run: |
+          python3 scripts/package_release.py archive --version "$VERSION" --target ${{ matrix.target }} \
+            --bin-dir target/${{ matrix.target }}/release --out dist
+          ls -la dist
+      - name: Smoke-test what is in the archive (versions, then the real end-to-end flow)
         run: |
           set -euo pipefail
-          name="agentgit-${{ needs.verify.outputs.version }}-${{ matrix.target }}"
-          mkdir "$name"
-          cp "target/${{ matrix.target }}/release/ag" "target/${{ matrix.target }}/release/ag-server" LICENSE NOTICE README.md "$name/"
-          tar -czf "$name.tar.gz" "$name"
-          echo "file=$name.tar.gz" >> "$GITHUB_OUTPUT"
+          name="agentgit-${VERSION}-${{ matrix.target }}"
+          work="$RUNNER_TEMP/unpacked"; mkdir -p "$work"
+          tar -xzf "dist/$name.tar.gz" -C "$work"
+          bin="$work/$name"
+          ls -la "$bin"
+          for b in ag ag-server ag-worker; do
+            v=$("$bin/$b" --version); echo "$v"
+            case "$v" in "$b $CARGO_VERSION ("*") "*|"$b $CARGO_VERSION ("*")") ;; *) echo "::error::$b --version is '$v'"; exit 1;; esac
+            case "$v" in *"${GITHUB_SHA:0:12}"*) ;; *) echo "::error::$b does not report this commit"; exit 1;; esac
+          done
+          "$bin/ag-worker" doctor || true
+          AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+          AG_METRICS_TOKEN=$(openssl rand -hex 32)
+          export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN
+          "$bin/ag-server" serve --listen 127.0.0.1:18080 --data-dir "$work/data" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag "$bin/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" || { tail -50 "$work/server.log"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.pkg.outputs.file }}
-          path: ${{ steps.pkg.outputs.file }}
+          name: archive-${{ matrix.target }}
+          path: dist/*.tar.gz
           if-no-files-found: error
+          retention-days: 14
+
+  sbom:
+    name: CycloneDX SBOMs
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx@0.5.9
+      - name: One SBOM per shipped binary (from Cargo.lock; build-time dependencies included)
+        run: |
+          set -euo pipefail
+          cargo cyclonedx --format json --spec-version 1.5 --describe binaries --target all
+          mkdir -p dist
+          for pair in ag-cli:ag ag-server:ag-server ag-worker:ag-worker; do
+            crate=${pair%%:*}; bin=${pair##*:}
+            cp "crates/$crate/${bin}_bin.cdx.json" "dist/agentgit-${VERSION}-${bin}.cdx.json"
+          done
+          python3 - <<'PY'
+          import glob, json
+          files = sorted(glob.glob("dist/*.cdx.json"))
+          assert len(files) == 3, files
+          for f in files:
+              d = json.load(open(f))
+              assert d["bomFormat"] == "CycloneDX" and d["specVersion"] == "1.5", f
+              names = {c["name"] for c in d["components"]}
+              assert len(names) > 50 and {"ag-types", "ag-storage", "rusqlite"} <= names, f
+              print(f, len(names), "components")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: dist/*.cdx.json
+          if-no-files-found: error
+          retention-days: 14
 
   image:
-    name: container images
+    name: image (${{ matrix.arch }})
     needs: [verify, test]
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: amd64, os: ubuntu-latest}
+          - {arch: arm64, os: ubuntu-22.04-arm}
+    runs-on: ${{ matrix.os }}
+    env:
+      PUBLISH: ${{ needs.verify.outputs.publish }}
+      VERSION: ${{ needs.verify.outputs.version }}
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
+        if: needs.verify.outputs.publish == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Native builds on native runners: an emulated Rust build would take hours. Publishing pushes each
+      # architecture by digest; a rehearsal exports a tarball instead. The manifest job merges them.
       - name: Server image
         id: server
         uses: docker/build-push-action@v6
@@ -98,15 +265,22 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile
           target: server
-          push: true
-          provenance: mode=max
-          sbom: true
-          tags: |
-            ghcr.io/paffin/agentgit-server:${{ needs.verify.outputs.version }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ needs.verify.outputs.commit_date }}
           labels: |
             org.opencontainers.image.source=https://github.com/Paffin/AgentGit
             org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
+          cache-from: |
+            type=gha,scope=agentgit-image
+            type=gha,scope=agentgit-image-release-${{ matrix.arch }}
+          cache-to: type=gha,scope=agentgit-image-release-${{ matrix.arch }},mode=max
+          provenance: ${{ needs.verify.outputs.publish == 'true' && 'mode=max' || 'false' }}
+          sbom: ${{ needs.verify.outputs.publish == 'true' }}
+          outputs: ${{ needs.verify.outputs.publish == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_SERVER) || format('type=docker,dest={0}/server-{1}.tar,name=agentgit-server:{2}', runner.temp, matrix.arch, matrix.arch) }}
       - name: CLI image
         id: cli
         uses: docker/build-push-action@v6
@@ -114,32 +288,145 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile
           target: cli
-          push: true
-          provenance: mode=max
-          sbom: true
-          tags: |
-            ghcr.io/paffin/agentgit-cli:${{ needs.verify.outputs.version }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ needs.verify.outputs.commit_date }}
           labels: |
             org.opencontainers.image.source=https://github.com/Paffin/AgentGit
             org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
-      - uses: actions/attest-build-provenance@v2
+          cache-from: type=gha,scope=agentgit-image-release-${{ matrix.arch }}
+          provenance: ${{ needs.verify.outputs.publish == 'true' && 'mode=max' || 'false' }}
+          sbom: ${{ needs.verify.outputs.publish == 'true' }}
+          outputs: ${{ needs.verify.outputs.publish == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_CLI) || format('type=docker,dest={0}/cli-{1}.tar,name=agentgit-cli:{2}', runner.temp, matrix.arch, matrix.arch) }}
+      - name: Rehearsal - the native image starts, is healthy and reports its version
+        if: needs.verify.outputs.publish != 'true'
+        run: |
+          set -euo pipefail
+          docker load -i "$RUNNER_TEMP/server-${{ matrix.arch }}.tar"
+          docker load -i "$RUNNER_TEMP/cli-${{ matrix.arch }}.tar"
+          docker image inspect agentgit-server:${{ matrix.arch }} --format '{{.Architecture}} {{.Size}}'
+          docker run --rm agentgit-server:${{ matrix.arch }} --version
+          docker run --rm agentgit-cli:${{ matrix.arch }} --version
+          docker run -d --name ag -e AG_BOOTSTRAP_TOKEN="$(openssl rand -hex 32)" agentgit-server:${{ matrix.arch }}
+          for _ in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy ] && break
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy || { docker logs ag; exit 1; }
+      - name: Keep the result for the manifest job
+        run: |
+          mkdir -p "$RUNNER_TEMP/handoff"
+          if [ "$PUBLISH" = true ]; then
+            digest="${{ steps.server.outputs.digest }}"; touch "$RUNNER_TEMP/handoff/server-${digest#sha256:}"
+            digest="${{ steps.cli.outputs.digest }}"; touch "$RUNNER_TEMP/handoff/cli-${digest#sha256:}"
+          else
+            cp "$RUNNER_TEMP"/server-${{ matrix.arch }}.tar "$RUNNER_TEMP"/cli-${{ matrix.arch }}.tar "$RUNNER_TEMP/handoff/"
+          fi
+          ls -la "$RUNNER_TEMP/handoff"
+      - uses: actions/upload-artifact@v4
         with:
-          subject-name: ghcr.io/paffin/agentgit-server
-          subject-digest: ${{ steps.server.outputs.digest }}
+          name: image-${{ matrix.arch }}
+          path: ${{ runner.temp }}/handoff
+          if-no-files-found: error
+          retention-days: 3
+
+  manifest:
+    name: multi-arch manifest
+    needs: [verify, image]
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH: ${{ needs.verify.outputs.publish }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: handoff
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: needs.verify.outputs.publish == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish - merge the per-architecture digests into one tag
+        if: needs.verify.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          for kind in server cli; do
+            image=$([ "$kind" = server ] && echo "$REGISTRY_IMAGE_SERVER" || echo "$REGISTRY_IMAGE_CLI")
+            tags="-t $image:$VERSION"
+            [ "$PRERELEASE" = true ] || tags="$tags -t $image:latest"
+            refs=""
+            for f in handoff/image-*/"$kind"-*; do refs="$refs $image@sha256:${f##*/"$kind"-}"; done
+            # shellcheck disable=SC2086
+            docker buildx imagetools create $tags $refs
+            docker buildx imagetools inspect "$image:$VERSION"
+          done
+      - name: Rehearsal - the same merge, in a throw-away local registry
+        if: needs.verify.outputs.publish != 'true'
+        run: |
+          set -euo pipefail
+          docker run -d --name registry -p 127.0.0.1:5000:5000 registry:2
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:5000/v2/ > /dev/null && break; sleep 1; done
+          for kind in server cli; do
+            refs=""
+            for arch in amd64 arm64; do
+              docker load -i "handoff/image-$arch/$kind-$arch.tar"
+              docker tag "agentgit-$kind:$arch" "localhost:5000/agentgit-$kind:$VERSION-$arch"
+              docker push "localhost:5000/agentgit-$kind:$VERSION-$arch"
+              refs="$refs localhost:5000/agentgit-$kind:$VERSION-$arch"
+            done
+            # shellcheck disable=SC2086
+            docker buildx imagetools create -t "localhost:5000/agentgit-$kind:$VERSION" $refs
+            docker buildx imagetools inspect "localhost:5000/agentgit-$kind:$VERSION" | tee "inspect-$kind.txt"
+            grep -q 'linux/amd64' "inspect-$kind.txt"
+            grep -q 'linux/arm64' "inspect-$kind.txt"
+          done
+          echo "the merged manifest lists both architectures"
+          docker run --rm "localhost:5000/agentgit-server:$VERSION" --version
+      - name: Publish - attest the images
+        if: needs.verify.outputs.publish == 'true'
+        id: digests
+        run: |
+          set -euo pipefail
+          for kind in server cli; do
+            image=$([ "$kind" = server ] && echo "$REGISTRY_IMAGE_SERVER" || echo "$REGISTRY_IMAGE_CLI")
+            echo "$kind=$(docker buildx imagetools inspect "$image:$VERSION" --format '{{json .Manifest.Digest}}' | tr -d '"')" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/attest-build-provenance@v2
+        if: needs.verify.outputs.publish == 'true'
+        with:
+          subject-name: ${{ env.REGISTRY_IMAGE_SERVER }}
+          subject-digest: ${{ steps.digests.outputs.server }}
           push-to-registry: true
       - uses: actions/attest-build-provenance@v2
+        if: needs.verify.outputs.publish == 'true'
         with:
-          subject-name: ghcr.io/paffin/agentgit-cli
-          subject-digest: ${{ steps.cli.outputs.digest }}
+          subject-name: ${{ env.REGISTRY_IMAGE_CLI }}
+          subject-digest: ${{ steps.digests.outputs.cli }}
           push-to-registry: true
 
-  publish:
-    name: GitHub release
-    needs: [verify, binaries, image]
+  release:
+    name: assemble the release
+    needs: [verify, scripts, binaries, sbom, manifest]
     runs-on: ubuntu-latest
+    env:
+      PUBLISH: ${{ needs.verify.outputs.publish }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      DRY_RUN: ${{ needs.verify.outputs.dry_run }}
+      GH_TOKEN: ${{ github.token }}
     permissions:
-      contents: write
+      contents: write # only used when publishing
       id-token: write
       attestations: write
     steps:
@@ -147,20 +434,117 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: "{archive-*,sbom}"
           merge-multiple: true
-      - name: Checksums
-        working-directory: dist
-        run: sha256sum agentgit-*.tar.gz | tee SHA256SUMS
+      - name: Checksums and the Homebrew formula
+        run: |
+          set -euo pipefail
+          ls -la dist
+          set -- dist/*.tar.gz; test $# = 4
+          set -- dist/*.cdx.json; test $# = 3
+          python3 scripts/package_release.py sums dist/*.tar.gz dist/*.cdx.json | tee dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+          python3 scripts/render_packaging.py --version "$VERSION" --sums dist/SHA256SUMS --out dist --only homebrew
+          ruby -c dist/agentgit.rb
       - uses: actions/attest-build-provenance@v2
+        id: attest
         with:
-          subject-path: dist/agentgit-*.tar.gz
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.cdx.json
+            dist/SHA256SUMS
+      - name: The attestations verify
+        run: |
+          set -euo pipefail
+          for f in dist/*.tar.gz dist/*.cdx.json dist/SHA256SUMS; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" > /dev/null
+            echo "attested: $f"
+          done
       - name: Release notes from the CHANGELOG
-        run: python3 scripts/check_release.py "${GITHUB_REF_NAME}" --notes > notes.md
-      - name: Create the release
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: |
+          flag=""; [ "$DRY_RUN" = true ] && flag="--dry-run"
+          python3 scripts/check_release.py "$VERSION" $flag --notes > dist/RELEASE_NOTES.md
+          wc -l dist/RELEASE_NOTES.md
+      - name: Create the GitHub release
         run: |
           set -euo pipefail
           flags=""
-          case "${GITHUB_REF_NAME}" in *-*) flags="--prerelease";; esac
-          gh release create "${GITHUB_REF_NAME}" dist/* --title "AgentGit ${GITHUB_REF_NAME}" --notes-file notes.md $flags
+          case "$VERSION" in *-*) flags="--prerelease";; esac
+          files="$(echo dist/*.tar.gz) $(echo dist/*.cdx.json) dist/SHA256SUMS dist/agentgit.rb"
+          if [ "$PUBLISH" = true ]; then
+            # shellcheck disable=SC2086
+            gh release create "v$VERSION" $files --title "AgentGit v$VERSION" --notes-file dist/RELEASE_NOTES.md $flags --verify-tag
+          else
+            echo "REHEARSAL - would run: gh release create v$VERSION --title 'AgentGit v$VERSION' --notes-file RELEASE_NOTES.md $flags <files>"
+            echo "$files"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+          retention-days: 14
+      - name: Summary
+        run: |
+          title="Rehearsal: the release that would be published (nothing was)"
+          [ "$PUBLISH" = true ] && title="Published"
+          {
+            echo "## $title"
+            echo
+            echo '```'
+            (cd dist && wc -c -- * | grep -v ' total$')
+            echo '```'
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  install:
+    name: install.sh (${{ matrix.os }})
+    needs: [verify, release]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+      - name: Install from the assembled release, verifying checksum and attestation
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/prefix"
+          # A https://github.com/.../releases/download URL does not exist for a rehearsal; a file:// URL has the same layout.
+          sh scripts/install.sh --version "$VERSION" --prefix "$prefix" --base-url "file://$PWD/dist" --require-attestation
+          "$prefix/bin/ag" --version
+          "$prefix/bin/ag-server" --version
+          "$prefix/bin/ag-worker" --version
+          case "$("$prefix/bin/ag" --version)" in "ag $CARGO_VERSION "*) ;; *) echo "::error::unexpected version"; exit 1;; esac
+      - name: A corrupted download is refused and installs nothing
+        run: |
+          set -euo pipefail
+          mkdir bad && cp dist/* bad/
+          for f in bad/agentgit-*.tar.gz; do printf 'x' >> "$f"; done
+          if sh scripts/install.sh --version "$VERSION" --prefix "$RUNNER_TEMP/bad-prefix" --base-url "file://$PWD/bad" --no-attestation; then
+            echo "::error::install.sh accepted a corrupted archive"; exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/bad-prefix/bin"
+      - name: The installed binaries work end to end
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/prefix"
+          AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+          AG_METRICS_TOKEN=$(openssl rand -hex 32)
+          export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN
+          "$prefix/bin/ag-server" serve --listen 127.0.0.1:18080 --data-dir "$RUNNER_TEMP/data" > "$RUNNER_TEMP/server.log" 2>&1 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag "$prefix/bin/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" || { tail -50 "$RUNNER_TEMP/server.log"; exit 1; }

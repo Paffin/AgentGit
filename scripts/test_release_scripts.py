@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+"""Tests for the release and install tooling: check_release.py, package_release.py, render_packaging.py and
+install.sh. No network: archives are built here from stub binaries and served from a directory.
+
+    python3 scripts/test_release_scripts.py            # also run by .github/workflows/packaging.yml
+"""
+import gzip
+import hashlib
+import io
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "scripts"
+PY = sys.executable
+
+
+def run(*cmd, env=None, cwd=None, check=False):
+    e = dict(os.environ)
+    e.update(env or {})
+    p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, env=e, cwd=cwd)
+    if check and p.returncode:
+        raise AssertionError(f"{cmd} -> {p.returncode}\n{p.stdout}\n{p.stderr}")
+    return p
+
+
+class CheckRelease(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmp.name)
+        (self.root / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.0"\n\n[workspace.dependencies]\n')
+        (self.root / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n- upcoming\n\n## [0.3.0] — 2026-01-01\n\n- three\n\n## [0.2.0]\n\n- two\n"
+        )
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def check(self, *args):
+        return run(PY, SCRIPTS / "check_release.py", *args, env={"AG_RELEASE_ROOT": str(self.root)})
+
+    def kv(self, out):
+        return dict(line.split("=", 1) for line in out.strip().splitlines())
+
+    def test_a_matching_tag_passes(self):
+        p = self.check("v0.3.0")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(
+            self.kv(p.stdout),
+            {"version": "0.3.0", "cargo_version": "0.3.0", "prerelease": "false", "dry_run": "false",
+             "notes_section": "0.3.0"},
+        )
+
+    def test_notes_are_the_section(self):
+        self.assertEqual(self.check("v0.3.0", "--notes").stdout.strip(), "- three")
+
+    def test_a_tag_that_disagrees_with_cargo_toml_fails(self):
+        p = self.check("v0.2.0")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("does not match the workspace version 0.3.0", p.stderr)
+
+    def test_a_tag_without_a_changelog_section_fails(self):
+        (self.root / "Cargo.toml").write_text('[workspace.package]\nversion = "0.4.0"\n')
+        p = self.check("v0.4.0")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("no (non-empty) section for [0.4.0]", p.stderr)
+
+    def test_an_empty_section_fails(self):
+        (self.root / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.3.0]\n\n## [0.2.0]\n- x\n")
+        p = self.check("v0.3.0")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("empty section", p.stderr)
+
+    def test_a_prerelease_tag(self):
+        (self.root / "Cargo.toml").write_text('[workspace.package]\nversion = "0.4.0-rc.1"\n')
+        (self.root / "CHANGELOG.md").write_text("## [0.4.0-rc.1] — 2026\n\n- rc\n")
+        p = self.check("v0.4.0-rc.1")
+        self.assertEqual(self.kv(p.stdout)["prerelease"], "true")
+
+    def test_garbage_is_refused(self):
+        for bad in ("0.3.0", "v1.2", "release-1", "v1.2.3;rm", ""):
+            self.assertEqual(self.check(bad).returncode, 1, bad)
+
+    def test_dry_run_accepts_any_semver_and_falls_back_to_unreleased(self):
+        for ref in ("0.0.0-rc.dry", "v0.0.0-rc.dry"):
+            p = self.check(ref, "--dry-run")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(
+                self.kv(p.stdout),
+                {"version": "0.0.0-rc.dry", "cargo_version": "0.3.0", "prerelease": "true", "dry_run": "true",
+                 "notes_section": "Unreleased"},
+            )
+        self.assertEqual(self.check("0.0.0-rc.dry", "--dry-run", "--notes").stdout.strip(), "- upcoming")
+
+    def test_dry_run_uses_the_real_section_when_there_is_one(self):
+        self.assertEqual(self.kv(self.check("0.3.0", "--dry-run").stdout)["notes_section"], "0.3.0")
+
+    def test_dry_run_still_rejects_non_versions(self):
+        self.assertEqual(self.check("latest", "--dry-run").returncode, 1)
+
+    def test_the_real_repository_passes_a_dry_run(self):
+        p = run(PY, SCRIPTS / "check_release.py", "0.0.0-rc.dry", "--dry-run")
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+
+def stub_bin(path: pathlib.Path, name: str, version: str):
+    path.mkdir(parents=True, exist_ok=True)
+    f = path / name
+    f.write_text(f'#!/bin/sh\necho "{name} {version} (stub)"\n')
+    f.chmod(0o755)
+
+
+def host_target() -> str:
+    out = run("uname", "-sm").stdout.split()
+    arch = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}[out[1]]
+    return f"{arch}-apple-darwin" if out[0] == "Darwin" else f"{arch}-unknown-linux-gnu"
+
+
+class Packaging(unittest.TestCase):
+    version = "9.9.9-rc.1"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = pathlib.Path(self.tmp.name)
+        self.bin = self.dir / "bin"
+        for b in ("ag", "ag-server", "ag-worker"):
+            stub_bin(self.bin, b, self.version)
+        self.dist = self.dir / "dist"
+        self.target = host_target()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def archive(self, out=None, target=None, epoch="1700000000"):
+        p = run(PY, SCRIPTS / "package_release.py", "archive", "--version", self.version,
+                "--target", target or self.target, "--bin-dir", self.bin, "--out", out or self.dist,
+                env={"SOURCE_DATE_EPOCH": epoch}, check=True)
+        return pathlib.Path(p.stdout.strip().splitlines()[-1])
+
+    def release_dir(self, targets=None):
+        """A directory laid out like a GitHub release: archives + SHA256SUMS."""
+        for t in targets or [self.target]:
+            self.archive(target=t)
+        sums = run(PY, SCRIPTS / "package_release.py", "sums", *sorted(self.dist.glob("*.tar.gz")), check=True).stdout
+        (self.dist / "SHA256SUMS").write_text(sums)
+        return self.dist
+
+    def test_the_archive_has_the_documented_layout(self):
+        a = self.archive()
+        self.assertEqual(a.name, f"agentgit-{self.version}-{self.target}.tar.gz")
+        top = a.name[: -len(".tar.gz")]
+        with tarfile.open(a) as t:
+            members = {m.name: m for m in t.getmembers()}
+        self.assertEqual(
+            sorted(members),
+            sorted([top] + [f"{top}/{n}" for n in ("ag", "ag-server", "ag-worker", "LICENSE", "NOTICE", "README.md")]),
+        )
+        for n in ("ag", "ag-server", "ag-worker"):
+            self.assertEqual(members[f"{top}/{n}"].mode, 0o755)
+        for m in members.values():
+            self.assertEqual((m.uid, m.gid, m.mtime), (0, 0, 1700000000))
+
+    def test_the_archive_is_deterministic(self):
+        a = self.archive(out=self.dir / "one").read_bytes()
+        b = self.archive(out=self.dir / "two").read_bytes()
+        self.assertEqual(hashlib.sha256(a).hexdigest(), hashlib.sha256(b).hexdigest())
+        self.assertNotEqual(a, self.archive(out=self.dir / "three", epoch="1700000001").read_bytes())
+        self.assertEqual(gzip.decompress(a)[:0], b"")  # a valid gzip stream
+
+    def test_optional_directories_are_included_only_when_present(self):
+        comp = self.dir / "completions"
+        comp.mkdir()
+        (comp / "ag.bash").write_text("# completion\n")
+        out = run(PY, SCRIPTS / "package_release.py", "archive", "--version", self.version, "--target", self.target,
+                  "--bin-dir", self.bin, "--out", self.dist, "--include-dir", f"completions={comp}",
+                  "--include-dir", f"man={self.dir / 'nope'}", env={"SOURCE_DATE_EPOCH": "1"}, check=True)
+        with tarfile.open(out.stdout.strip()) as t:
+            names = t.getnames()
+        self.assertTrue(any(n.endswith("completions/ag.bash") for n in names), names)
+        self.assertFalse(any("/man" in n for n in names), names)
+
+    def test_a_missing_binary_is_an_error(self):
+        (self.bin / "ag-worker").unlink()
+        p = run(PY, SCRIPTS / "package_release.py", "archive", "--version", "1.0.0", "--target", self.target,
+                "--bin-dir", self.bin, "--out", self.dist)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("ag-worker", p.stderr)
+
+    def test_sums_match_sha256sum_format(self):
+        d = self.release_dir()
+        line = (d / "SHA256SUMS").read_text().strip()
+        digest, name = re.fullmatch(r"([0-9a-f]{64})  (\S+)", line).groups()
+        self.assertEqual(hashlib.sha256((d / name).read_bytes()).hexdigest(), digest)
+        if shutil.which("sha256sum"):
+            self.assertEqual(run("sha256sum", "-c", "SHA256SUMS", cwd=d).returncode, 0)
+
+    # ---- install.sh ------------------------------------------------------------------------------------
+    def install(self, *args, release=None, shell="sh"):
+        base = release or self.release_dir()
+        prefix = self.dir / "prefix"
+        p = run(shell, SCRIPTS / "install.sh", "--version", self.version, "--prefix", prefix,
+                "--base-url", f"file://{base}", "--no-attestation", *args)
+        return p, prefix
+
+    def test_install_sh_installs_and_runs(self):
+        p, prefix = self.install()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("checksum ok", p.stdout)
+        for b in ("ag", "ag-server", "ag-worker"):
+            f = prefix / "bin" / b
+            self.assertTrue(os.access(f, os.X_OK), f)
+        self.assertEqual(run(prefix / "bin" / "ag", "--version").stdout.strip(), f"ag {self.version} (stub)")
+        self.assertTrue((prefix / "share/doc/agentgit/LICENSE").is_file())
+        self.assertEqual(list((prefix / "bin").glob(".*")), [], "no temporary files left behind")
+
+    def test_install_sh_works_under_dash_when_available(self):
+        if not shutil.which("dash"):
+            self.skipTest("dash is not installed")
+        p, prefix = self.install(shell="dash")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+
+    def test_install_sh_overwrites_an_older_install(self):
+        p, prefix = self.install()
+        (prefix / "bin" / "ag").write_text("#!/bin/sh\necho old\n")
+        p2, _ = self.install()
+        self.assertEqual(p2.returncode, 0, p2.stderr)
+        self.assertEqual(run(prefix / "bin" / "ag", "--version").stdout.strip(), f"ag {self.version} (stub)")
+
+    def test_a_tampered_archive_installs_nothing(self):
+        d = self.release_dir()
+        archive = next(d.glob("*.tar.gz"))
+        archive.write_bytes(archive.read_bytes() + b"x")
+        p, prefix = self.install(release=d)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("checksum mismatch", p.stderr)
+        self.assertFalse((prefix / "bin").exists(), "nothing may be installed after a failed check")
+
+    def test_a_missing_checksum_entry_installs_nothing(self):
+        d = self.release_dir()
+        (d / "SHA256SUMS").write_text(f"{'0' * 64}  agentgit-{self.version}-some-other-target.tar.gz\n")
+        p, prefix = self.install(release=d)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("no entry for", p.stderr)
+        self.assertFalse((prefix / "bin").exists())
+
+    def test_a_missing_archive_is_a_clear_error(self):
+        d = self.release_dir()
+        next(d.glob("*.tar.gz")).unlink()
+        p, _ = self.install(release=d)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("could not download", p.stderr)
+
+    def test_dry_run_downloads_and_installs_nothing(self):
+        p, prefix = self.install("--dry-run", release=self.dir / "does-not-exist")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("dry run", p.stdout)
+        self.assertIn(f"agentgit-{self.version}-{self.target}.tar.gz", p.stdout)
+        self.assertFalse(prefix.exists())
+
+    def test_target_override_and_unsupported_targets(self):
+        p = run("sh", SCRIPTS / "install.sh", "--version", "1.2.3", "--dry-run", "--target", "aarch64-apple-darwin")
+        self.assertIn("agentgit-1.2.3-aarch64-apple-darwin.tar.gz", p.stdout)
+        p = run("sh", SCRIPTS / "install.sh", "--version", "1.2.3", "--dry-run", "--target", "x86_64-pc-windows-msvc")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("unsupported target", p.stderr)
+
+    def test_bad_versions_and_options(self):
+        for v in ("1.2", "abc", "1.2.3/../x", "1.2.3 4"):
+            p = run("sh", SCRIPTS / "install.sh", "--version", v, "--dry-run")
+            self.assertNotEqual(p.returncode, 0, v)
+        self.assertNotEqual(run("sh", SCRIPTS / "install.sh", "--frobnicate").returncode, 0)
+        self.assertEqual(run("sh", SCRIPTS / "install.sh", "--help").returncode, 0)
+
+    def test_a_leading_v_is_accepted(self):
+        p = run("sh", SCRIPTS / "install.sh", "--version", "v1.2.3", "--dry-run")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("AgentGit 1.2.3 for", p.stdout)
+
+    def test_require_attestation_fails_without_gh(self):
+        d = self.release_dir()
+        env_path = str(self.dir / "emptybin")
+        os.makedirs(env_path)
+        for tool in ("sh", "cp", "chmod", "mv", "mkdir", "mktemp", "rm", "tar", "awk", "cut", "sed", "grep", "uname",
+                     "sha256sum", "shasum", "dirname", "cat"):
+            src = shutil.which(tool)
+            if src:
+                os.symlink(src, os.path.join(env_path, tool))
+        p = run("sh", SCRIPTS / "install.sh", "--version", self.version, "--prefix", self.dir / "p2",
+                "--base-url", f"file://{d}", "--require-attestation", env={"PATH": env_path})
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("--require-attestation", p.stderr)
+        self.assertFalse((self.dir / "p2/bin").exists())
+
+    # ---- render_packaging.py ---------------------------------------------------------------------------------
+    def sums_for(self, targets):
+        lines = []
+        for i, t in enumerate(targets):
+            ext = "zip" if "windows" in t else "tar.gz"
+            lines.append(f"{hashlib.sha256(str(i).encode()).hexdigest()}  agentgit-{self.version}-{t}.{ext}")
+        p = self.dir / "SHA256SUMS.fixture"
+        p.write_text("\n".join(lines) + "\n")
+        return p, {t: line.split()[0] for t, line in zip(targets, lines)}
+
+    def test_templates_are_filled_from_sha256sums(self):
+        targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu",
+                   "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+        sums, digests = self.sums_for(targets)
+        out = self.dir / "rendered"
+        run(PY, SCRIPTS / "render_packaging.py", "--version", f"v{self.version}", "--sums", sums, "--out", out,
+            check=True)
+        rb = (out / "agentgit.rb").read_text()
+        self.assertIn(f'version "{self.version}"', rb)
+        for t in targets[:4]:
+            self.assertIn(digests[t], rb)
+            self.assertIn(f"releases/download/v{self.version}/agentgit-{self.version}-{t}.tar.gz", rb)
+        self.assertNotIn("@", rb.replace("#{bin}", ""))
+        self.assertTrue(rb.startswith("# Rendered by"), rb[:80])
+        manifest = json.loads((out / "agentgit.json").read_text())
+        self.assertEqual(manifest["version"], self.version)
+        self.assertEqual(manifest["architecture"]["64bit"]["hash"], digests["x86_64-pc-windows-msvc"])
+        self.assertTrue(manifest["architecture"]["64bit"]["url"].endswith(".zip"))
+        if shutil.which("ruby"):
+            self.assertEqual(run("ruby", "-c", out / "agentgit.rb").returncode, 0)
+
+    def test_a_missing_checksum_is_an_error_unless_allowed(self):
+        sums, _ = self.sums_for(["x86_64-unknown-linux-gnu"])
+        p = run(PY, SCRIPTS / "render_packaging.py", "--version", self.version, "--sums", sums, "--out", self.dir / "o1")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("aarch64-apple-darwin", p.stderr)
+        self.assertFalse((self.dir / "o1" / "agentgit.rb").exists())
+        p = run(PY, SCRIPTS / "render_packaging.py", "--version", self.version, "--sums", sums, "--out", self.dir / "o2",
+                "--only", "homebrew", "--allow-missing")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("0" * 64, (self.dir / "o2" / "agentgit.rb").read_text())
+        self.assertFalse((self.dir / "o2" / "agentgit.json").exists())
+
+    def test_a_checksum_for_another_version_does_not_count(self):
+        sums, _ = self.sums_for(["x86_64-unknown-linux-gnu"])
+        p = run(PY, SCRIPTS / "render_packaging.py", "--version", "1.0.0", "--sums", sums, "--out", self.dir / "o3",
+                "--only", "homebrew")
+        self.assertEqual(p.returncode, 1)
+
+    def test_base_url_can_point_at_a_local_directory(self):
+        sums, _ = self.sums_for(["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu",
+                                 "x86_64-unknown-linux-gnu"])
+        run(PY, SCRIPTS / "render_packaging.py", "--version", self.version, "--sums", sums, "--out", self.dir / "o4",
+            "--only", "homebrew", "--base-url", "file:///tmp/dist/", check=True)
+        self.assertIn(f'url "file:///tmp/dist/agentgit-{self.version}-aarch64-apple-darwin.tar.gz"',
+                      (self.dir / "o4" / "agentgit.rb").read_text())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

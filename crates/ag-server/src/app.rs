@@ -199,9 +199,14 @@ impl App {
     where
         Fut: Future<Output = ApiResult<T>>,
     {
+        use tracing::Instrument as _;
         let started = Instant::now();
         let span = self.tracer.as_ref().and_then(|t| t.begin(ing.traceparent.as_deref()));
-        let result = self.dispatch_inner(&ing, op, f).await.map_err(|e| e.with_request_id(&ing.request_id));
+        // Every log line written while serving this request — including the cause of an `internal` error,
+        // which the response deliberately does not reveal — carries the request id the client was given.
+        let log_span = tracing::info_span!("request", op, request_id = %ing.request_id, transport = ing.transport);
+        let result =
+            self.dispatch_inner(&ing, op, f).instrument(log_span).await.map_err(|e| e.with_request_id(&ing.request_id));
         let code = match &result {
             Ok(_) => "ok",
             Err(e) => e.code().as_str(),
@@ -345,7 +350,9 @@ impl App {
         let repos = self.0.clone();
         let name = repo.to_string();
         let call2 = call.clone();
+        let log_span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
+            let _in_request = log_span.enter();
             let handle = repos.repos.handle(&name)?;
             repos.metrics.open_repos.set(repos.repos.open_count() as i64);
             let actor = effective_actor(&call2, &handle)?;

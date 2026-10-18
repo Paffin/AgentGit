@@ -7,7 +7,7 @@ Linux and macOS runners (BSD tar has no --sort/--mtime).
     scripts/package_release.py sums dist/agentgit-*.tar.gz dist/*.cdx.json > dist/SHA256SUMS
 
 An archive `agentgit-<version>-<target>.tar.gz` holds one directory `agentgit-<version>-<target>/` with `ag`,
-`ag-server`, `ag-worker`, LICENSE, NOTICE and README.md, plus `completions/` and `man/` when the files exist
+`ag-server`, `ag-worker`, `ag-mcp`, LICENSE, NOTICE and README.md, plus `completions/` and `man/` when the files exist
 (`--include-dir completions=PATH`). It is deterministic: entries sorted, owner 0:0, modes 0755/0644, a fixed
 mtime (SOURCE_DATE_EPOCH, else the HEAD commit time) and no gzip timestamp, so the same inputs give the same
 bytes.
@@ -23,7 +23,7 @@ import sys
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BINARIES = ["ag", "ag-server", "ag-worker"]
+BINARIES = ["ag", "ag-server", "ag-worker", "ag-mcp"]
 DOCS = ["LICENSE", "NOTICE", "README.md"]
 
 
@@ -60,7 +60,7 @@ def cmd_archive(args: argparse.Namespace) -> None:
     for b in BINARIES:
         p = bin_dir / b
         if not p.is_file():
-            die(f"{p} does not exist (build with: cargo build --release -p ag-cli -p ag-server -p ag-worker)")
+            die(f"{p} does not exist (build with: cargo build --release -p ag-cli -p ag-server -p ag-worker -p ag-mcp)")
         entries.append((b, p.read_bytes(), 0o755))
     for d in DOCS:
         entries.append((d, (ROOT / d).read_bytes(), 0o644))

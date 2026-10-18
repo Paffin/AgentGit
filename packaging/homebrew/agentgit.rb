@@ -31,7 +31,7 @@ class Agentgit < Formula
   end
 
   def install
-    bin.install "ag", "ag-server", "ag-worker"
+    bin.install "ag", "ag-server", "ag-worker", "ag-mcp"
     doc.install "README.md"
   end
 

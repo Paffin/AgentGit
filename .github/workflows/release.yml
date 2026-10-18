@@ -177,7 +177,7 @@ jobs:
         env:
           # Do not embed the build directory in the binaries.
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
-        run: cargo build --release --locked --target ${{ matrix.target }} -p ag-cli -p ag-server -p ag-worker
+        run: cargo build --release --locked --target ${{ matrix.target }} -p ag-cli -p ag-server -p ag-worker -p ag-mcp
       - name: Archive
         run: |
           python3 scripts/package_release.py archive --version "$VERSION" --target ${{ matrix.target }} \
@@ -197,6 +197,10 @@ jobs:
             case "$v" in *"${GITHUB_SHA:0:12}"*) ;; *) echo "::error::$b does not report this commit"; exit 1;; esac
           done
           "$bin/ag-worker" doctor || true
+          # ag-mcp has no build script, so its version line carries no commit: check the crate version only.
+          v=$("$bin/ag-mcp" --version); echo "$v"
+          [ "$v" = "ag-mcp $CARGO_VERSION" ] || { echo "::error::ag-mcp --version is '$v'"; exit 1; }
+          "$bin/ag-mcp" --list-tools --server http://127.0.0.1:1 | grep -q '"name"'
           AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
           AG_METRICS_TOKEN=$(openssl rand -hex 32)
           export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN
@@ -543,6 +547,7 @@ jobs:
           "$prefix/bin/ag" --version
           "$prefix/bin/ag-server" --version
           "$prefix/bin/ag-worker" --version
+          "$prefix/bin/ag-mcp" --version
           case "$("$prefix/bin/ag" --version)" in "ag $CARGO_VERSION "*) ;; *) echo "::error::unexpected version"; exit 1;; esac
       - name: A corrupted download is refused and installs nothing
         run: |

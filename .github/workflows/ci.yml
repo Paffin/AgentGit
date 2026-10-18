@@ -247,3 +247,31 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh fish
       - name: The scripts parse; bash completes real commands; the shipped copies are current
         run: AG_REQUIRE_SHELLS=1 cargo test -p ag-cli --test completions
+
+  # ag-mcp with an agent in front of it: the scripted client (no model) runs on every push; the run with a real
+  # model is opt-in (it costs money and CI has no key unless the repository defines the OPENROUTER_API_KEY secret
+  # and the AG_LLM_MODEL variable; forks and pull requests from forks have neither, so the step is skipped).
+  mcp:
+    name: MCP server with an agent (scripted; live model opt-in)
+    runs-on: ubuntu-latest
+    env:
+      AG_LLM_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AG_LLM_MODEL: ${{ vars.AG_LLM_MODEL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build -p ag-server -p ag-mcp
+      - name: The examples compile
+        run: python3 -m py_compile examples/agents/*.py
+      - name: Scripted agent against a real ag-server (claim, lease, edit, propose, refusals, human integrates)
+        run: python3 examples/agents/mcp_scripted_agent.py --ag-server target/debug/ag-server --ag-mcp target/debug/ag-mcp
+      - name: Real model against ag-mcp (only when a key and a model are configured)
+        if: ${{ env.AG_LLM_API_KEY != '' && env.AG_LLM_MODEL != '' && github.event_name == 'push' }}
+        env:
+          AG_LIVE_LLM: "1"
+        run: python3 examples/agents/mcp_llm_agent.py --ag-server target/debug/ag-server --ag-mcp target/debug/ag-mcp

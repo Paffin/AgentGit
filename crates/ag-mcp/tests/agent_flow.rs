@@ -401,3 +401,23 @@ fn review_is_available_only_when_allowed_and_binds_to_the_head_that_was_read() {
     let nope: Value = r.refused("workspace_create", json!({"name": "x"}), "tool_disabled").raw;
     assert_eq!(nope["isError"], true);
 }
+
+#[test]
+fn claiming_a_task_twice_does_not_start_a_second_run() {
+    let w = world();
+    let task = create_task(&w, "One pair of hands", "only one run at a time", &["docs/**"]);
+    let mut m = Mcp::start(&w.srv, &w.agent, &["--repo", REPO]);
+    let first = m.ok("task_claim", json!({"task_id": task}));
+    let run = first.structured["run"]["run_id"].as_str().unwrap().to_string();
+    // The same agent claims the same task again: the server refuses, and says which run holds it.
+    let again = m.call("task_claim", json!({"task_id": task}));
+    assert!(again.is_error, "{}", again.text);
+    assert!(again.text.contains(&run), "the refusal names the run that holds the task: {}", again.text);
+    let runs = w.srv.http(&w.agent).get(&format!("/v1/repos/{REPO}/runs"));
+    assert_eq!(runs.0, 200, "{}", runs.1);
+    assert_eq!(runs.1["runs"].as_array().unwrap().len(), 1, "exactly one run exists: {}", runs.1);
+    // Once the run ended, the task can be claimed again.
+    m.ok("run_finish", json!({"run_id": run, "status": "completed", "summary": "done"}));
+    let second = m.ok("task_claim", json!({"task_id": task}));
+    assert_ne!(second.structured["run"]["run_id"], first.structured["run"]["run_id"]);
+}

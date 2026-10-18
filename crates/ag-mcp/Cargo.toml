@@ -39,4 +39,5 @@ ag-types.workspace = true
 ag-server = { path = "../ag-server" }
 ag-storage = { path = "../ag-storage", default-features = false }
 tempfile.workspace = true
+rcgen.workspace = true
 tokio.workspace = true

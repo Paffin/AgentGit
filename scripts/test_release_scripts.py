@@ -131,7 +131,7 @@ class Packaging(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = pathlib.Path(self.tmp.name)
         self.bin = self.dir / "bin"
-        for b in ("ag", "ag-server", "ag-worker"):
+        for b in ("ag", "ag-server", "ag-worker", "ag-mcp"):
             stub_bin(self.bin, b, self.version)
         self.dist = self.dir / "dist"
         self.target = host_target()
@@ -161,9 +161,9 @@ class Packaging(unittest.TestCase):
             members = {m.name: m for m in t.getmembers()}
         self.assertEqual(
             sorted(members),
-            sorted([top] + [f"{top}/{n}" for n in ("ag", "ag-server", "ag-worker", "LICENSE", "NOTICE", "README.md")]),
+            sorted([top] + [f"{top}/{n}" for n in ("ag", "ag-server", "ag-worker", "ag-mcp", "LICENSE", "NOTICE", "README.md")]),
         )
-        for n in ("ag", "ag-server", "ag-worker"):
+        for n in ("ag", "ag-server", "ag-worker", "ag-mcp"):
             self.assertEqual(members[f"{top}/{n}"].mode, 0o755)
         for m in members.values():
             self.assertEqual((m.uid, m.gid, m.mtime), (0, 0, 1700000000))
@@ -214,7 +214,7 @@ class Packaging(unittest.TestCase):
         p, prefix = self.install()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn("checksum ok", p.stdout)
-        for b in ("ag", "ag-server", "ag-worker"):
+        for b in ("ag", "ag-server", "ag-worker", "ag-mcp"):
             f = prefix / "bin" / b
             self.assertTrue(os.access(f, os.X_OK), f)
         self.assertEqual(run(prefix / "bin" / "ag", "--version").stdout.strip(), f"ag {self.version} (stub)")

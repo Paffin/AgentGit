@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs AgentGit (`ag`, `ag-server`, `ag-worker`) from a GitHub release.
+# Installs AgentGit (`ag`, `ag-server`, `ag-worker`, `ag-mcp`) from a GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh
 #   sh install.sh --version 0.2.0 --prefix /opt/agentgit
@@ -25,7 +25,7 @@
 set -eu
 
 REPO="Paffin/AgentGit"
-BINARIES="ag ag-server ag-worker"
+BINARIES="ag ag-server ag-worker ag-mcp"
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }

@@ -28,10 +28,27 @@ pub struct TestServer {
 
 impl TestServer {
     pub fn start() -> Self {
+        Self::start_with(|_| {})
+    }
+
+    /// An HTTPS server with this certificate chain and key (PEM files).
+    pub fn start_tls(cert: &Path, key: &Path) -> Self {
+        ag_server::server::install_crypto_provider();
+        let (c, k) = (cert.to_path_buf(), key.to_path_buf());
+        let mut s = Self::start_with(move |cfg| {
+            cfg.server.tls_cert = Some(c);
+            cfg.server.tls_key = Some(k);
+        });
+        s.url = s.url.replacen("http://", "https://", 1);
+        s
+    }
+
+    pub fn start_with(tweak: impl FnOnce(&mut ServerConfig)) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let mut cfg = ServerConfig::default();
         cfg.server.data_dir = dir.path().to_path_buf();
         cfg.limits.requests_per_second = 0;
+        tweak(&mut cfg);
         let clock = Arc::new(ManualClock::new(Timestamp::now()));
         let app = App::with_options(cfg, clock.clone(), Some(ADMIN.to_string())).unwrap();
         let (tx, rx) = channel();
@@ -312,6 +329,13 @@ impl Mcp {
         let w = self.stdin.as_mut().expect("stdin open");
         w.write_all(line.as_bytes()).unwrap();
         w.write_all(b"\n").unwrap();
+        w.flush().unwrap();
+    }
+
+    /// Writes a line without its terminator (the client closed the pipe in the middle of a message).
+    pub fn write_unterminated(&mut self, line: &str) {
+        let w = self.stdin.as_mut().expect("stdin open");
+        w.write_all(line.as_bytes()).unwrap();
         w.flush().unwrap();
     }
 

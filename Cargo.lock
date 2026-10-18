@@ -164,6 +164,7 @@ dependencies = [
  "clap",
  "getrandom 0.4.3",
  "globset",
+ "rcgen",
  "serde_json",
  "tempfile",
  "tokio",

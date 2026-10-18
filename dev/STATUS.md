@@ -21,13 +21,20 @@ Verified at last full run: 76 Rust suites / 554 tests green; clippy clean; TS SD
 e2e, Go suite green.
 
 ## 2026-10-18 update (session resumed after the usage limit reset)
-* **`main` is RED** at `c69526d` (merging seven parallel tracks without waiting for CI): CI jobs MSRV 1.89, rustdoc,
-  macOS tests (`ag-sandbox` `the_child_never_touches_the_allocator`), client SDKs (TypeScript step), agent orchestrator
-  (Go), container images build; plus the Windows, Containers and Packaging workflows. Web UI and ubuntu tests,
-  PG+S3 backends, docs+demo, deployment files are green. Rule from now on: **no further feature work until main is
-  green**, and every landing waits for its CI.
-* Fix workflow running: `dev/workflows/restore-green-main.js` (3 fixers: rust / sdk-go / containers, then a CI
-  verifier that polls Actions; up to 3 rounds).
+* **`main` was red and is GREEN again** (verified in Actions at `938f744`): CI 9/9 jobs, Windows (green twice in a row),
+  Containers (image + UI stage, compose with PostgreSQL+SeaweedFS incl. observability, kind), Packaging (11 crates
+  dry-run), Web UI. Root causes fixed: rustc 1.89 type inference (`&String` vs `&str` array), ambiguous rustdoc link,
+  non-portable macOS allocator test, stale generated SDK clients after `/v1/auth/config`, a real ordering race in the Go
+  advisor, Dockerfile not building the embedded UI, `ag doctor` not compiling on Windows + 5 host-assumption tests.
+  Open from that round: a flaky Web UI axe race (`scrollable-region-focusable`, dark theme) — in wave 2, web_tail.
+  Rule: no landing without watching its CI.
+* **Wave 2 is running** (`dev/workflows/product-wave-2.js`, 3 sequential lanes, cap 2 concurrent agents): A server
+  (server_audit → server_hardening → ha_tail → perf), B core (core_engine_storage → policy_cli_execution → clients_ops →
+  orchestrator incl. model-backed advisors verified live via OpenRouter), C docs/infra (docs_site → security_tail → mcp_tail
+  → web_tail incl. real-IdP e2e). Then a CI verifier (+generic fix rounds) and a docs-fold agent that rewrites README/
+  CHANGELOG/ROADMAP/traceability from the handoffs. If the session dies: re-run it with
+  `Workflow({scriptPath: "dev/workflows/product-wave-2.js"})` after checking which `dev/handoff/<wp>.md` files exist
+  (done packages are the ones with a handoff and green CI; remove them from the lane lists first).
 * Audit finished (see the Audit section).
 
 ## Product-readiness tracks (7 parallel agents; briefs in `dev/tracks/tracks.md`)

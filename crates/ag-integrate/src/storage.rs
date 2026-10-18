@@ -542,6 +542,14 @@ mod tests {
 
     #[cfg(feature = "s3")]
     #[test]
+    fn the_configurable_page_size_ceiling_is_the_clients() {
+        // The config validation lives here so that it works without the `s3` feature; it must not drift from the
+        // client's own ceiling.
+        assert_eq!(MAX_S3_LIST_PAGE, ag_storage::s3::MAX_LIST_PAGE);
+    }
+
+    #[cfg(feature = "s3")]
+    #[test]
     fn configured_values_reach_the_client_and_absent_ones_leave_its_defaults() {
         use std::time::Duration;
 

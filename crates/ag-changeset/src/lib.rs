@@ -39,6 +39,9 @@ pub const FORMAT_VERSION: u16 = 1;
 const TAG_PUT: u8 = 1;
 const TAG_DELETE: u8 = 2;
 const MAX_AUTHOR_LEN: usize = 160;
+/// The operation list is allocated up front for at most this many operations whatever the (untrusted) count in the
+/// header says; it grows normally past that, as the operations are actually decoded.
+const MAX_PREALLOCATED_OPS: usize = 4096;
 const MAX_NAMESPACE_LEN: usize = 128;
 
 /// One file operation inside a changeset.
@@ -227,7 +230,7 @@ impl Changeset {
         let timestamp = Timestamp::from_millis(r.i64()?);
         let message = r.str(limits.max_message_len)?.to_string();
         let n_ops = r.bounded_varint(limits.max_ops as u64)? as usize;
-        let mut ops = Vec::with_capacity(n_ops.min(4096));
+        let mut ops = Vec::with_capacity(n_ops.min(MAX_PREALLOCATED_OPS));
         for _ in 0..n_ops {
             let tag = r.u8()?;
             let path = RepoPath::new(r.str(ag_types::path_limits::MAX_PATH_LEN)?).map_err(|e| invalid("path", e))?;

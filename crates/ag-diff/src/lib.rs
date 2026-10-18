@@ -62,9 +62,12 @@ pub fn split_lines(data: &[u8]) -> Vec<&[u8]> {
     lines
 }
 
-/// Heuristic binary detection: a NUL byte in the first 8 KiB.
+/// How much of a file [`is_binary`] looks at.
+pub const BINARY_SNIFF_LEN: usize = 8192;
+
+/// Heuristic binary detection: a NUL byte in the first [`BINARY_SNIFF_LEN`] bytes (8 KiB).
 pub fn is_binary(data: &[u8]) -> bool {
-    data[..data.len().min(8192)].contains(&0)
+    data[..data.len().min(BINARY_SNIFF_LEN)].contains(&0)
 }
 
 /// Computes the hunks that turn `a` into `b`. Hunks are ordered, disjoint and

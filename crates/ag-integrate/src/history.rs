@@ -10,6 +10,8 @@ use serde::Serialize;
 
 use crate::{Error, Repository, Result};
 
+/// Largest `~N` / `^N` step count a revision expression may carry (`main~100000` is accepted, one more is not).
+const MAX_REVISION_STEPS: usize = 100_000;
 /// Most changesets one `log` walk visits, whatever `max_dag_depth` allows: a log that long is not a log anybody
 /// reads, and the walk holds the request meanwhile. Hitting it is an error (`DagError::LimitExceeded`), not a
 /// silently shortened history.
@@ -115,7 +117,7 @@ impl Repository {
             } else {
                 n_str.parse().map_err(|_| Error::Invalid(format!("bad revision suffix in '{spec}'")))?
             };
-            if n > 100_000 {
+            if n > MAX_REVISION_STEPS {
                 return Err(Error::Invalid(format!("revision suffix too large in '{spec}'")));
             }
             let cs = self.changeset(&cur)?;

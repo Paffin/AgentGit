@@ -22,6 +22,11 @@ use serde_json::json;
 
 use crate::{Error, Repository, Result};
 
+/// Default for [`GcOptions::grace_ms`]: 24 hours (`docs/operations/gc-and-retention.md`).
+pub const DEFAULT_GC_GRACE_MS: i64 = 24 * 3600 * 1000;
+/// Default for [`GcOptions::reflog_retention_ms`]: 90 days (`docs/operations/gc-and-retention.md`).
+pub const DEFAULT_REFLOG_RETENTION_MS: i64 = 90 * 24 * 3600 * 1000;
+
 /// Garbage collection options.
 #[derive(Clone, Debug)]
 pub struct GcOptions {
@@ -35,7 +40,7 @@ pub struct GcOptions {
 
 impl Default for GcOptions {
     fn default() -> Self {
-        Self { grace_ms: 24 * 3600 * 1000, reflog_retention_ms: 90 * 24 * 3600 * 1000, dry_run: false }
+        Self { grace_ms: DEFAULT_GC_GRACE_MS, reflog_retention_ms: DEFAULT_REFLOG_RETENTION_MS, dry_run: false }
     }
 }
 

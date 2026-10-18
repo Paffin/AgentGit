@@ -47,7 +47,7 @@ pub use derive::{DeriveReport, DeriveStatus, KEYFRAME_INTERVAL};
 pub use error::Error;
 pub use failpoints::Failpoints;
 pub use fsck::{FsckIssue, FsckReport};
-pub use gc::{GcOptions, GcReport};
+pub use gc::{DEFAULT_GC_GRACE_MS, DEFAULT_REFLOG_RETENTION_MS, GcOptions, GcReport};
 pub use history::{HybridGraph, LogEntry};
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};

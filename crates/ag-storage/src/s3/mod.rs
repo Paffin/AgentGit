@@ -48,6 +48,9 @@ use crate::error::StoreError;
 use crate::lock::{LockGuard, ObjectLock};
 use crate::object_store::{Durability, ObjectInfo, ObjectStatus, ObjectStore, check_size};
 
+/// Most keys one `ListObjectsV2` page may carry: the service's own limit (it may return fewer).
+pub const MAX_LIST_PAGE: u32 = 1000;
+
 /// Where and how to reach the bucket.
 ///
 /// Credentials live only in memory here; a repository's configuration file
@@ -101,7 +104,7 @@ impl S3Config {
             limits: Limits::default(),
             max_retries: 5,
             request_timeout: Duration::from_secs(300),
-            list_page_size: 1000,
+            list_page_size: MAX_LIST_PAGE,
         }
     }
 }
@@ -145,7 +148,7 @@ impl S3ObjectStore {
             bucket: cfg.bucket.clone(),
             limits: cfg.limits,
             lock,
-            page_size: cfg.list_page_size.clamp(1, 1000),
+            page_size: cfg.list_page_size.clamp(1, MAX_LIST_PAGE),
             hook: Mutex::new(None),
         };
         // Fail now, with an actionable message, if the endpoint, bucket or credentials are wrong.

@@ -128,6 +128,20 @@ jobs:
           print("STATE", json.dumps(d.get("State"), sort_keys=True), "USER", json.dumps(d.get("Config", {}).get("User")))
           PY
           "$rt" rm -f ag-diag > /dev/null
+      # How this runtime reports a container whose process the kernel killed for memory: the sandbox maps that to
+      # a memory-limit status from the record, so the record has to say it.
+      - name: What the runtime records for a container the kernel killed for memory
+        run: |
+          rt="${AG_OCI_RUNTIME}"
+          "$rt" rm -f ag-oom > /dev/null 2>&1 || true
+          code=0
+          "$rt" run --name ag-oom --pull never --memory 67108864 --memory-swap 67108864 --entrypoint sh \
+            "$OCI_TEST_IMAGE" -c 'awk "BEGIN { s = \"xxxxxxxxxxxxxxxx\"; while (1) s = s s }"' || code=$?
+          echo "run exited with $code"
+          "$rt" inspect --type container ag-oom --format 'OOMSTATE {{json .State}}'
+          "$rt" events --since 5m --until 0s --filter container=ag-oom --format '{{.Status}}' || true
+          sudo dmesg 2>/dev/null | grep -i -E 'out of memory|killed process|oom' | tail -n 5 || true
+          "$rt" rm -f ag-oom > /dev/null
       - name: Build the tests
         run: cargo test -p ag-sandbox --test oci_real -p ag-worker --test oci_e2e --no-run
       - name: The sandbox against the real runtime, checked from inside the container

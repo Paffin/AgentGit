@@ -11,7 +11,7 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# A measurement tool for this repository, not a product: nothing depends on it and nobody installs it.
+# Not publishable yet: a measurement tool for this repository, not a product (nothing depends on it, nobody installs it).
 publish = false
 
 [lints]
@@ -35,8 +35,10 @@ clap.workspace = true
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 ureq.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

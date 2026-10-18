@@ -12,6 +12,7 @@ mod engine;
 mod load;
 mod report;
 mod stats;
+mod tmp;
 
 use std::path::PathBuf;
 use std::time::Duration;

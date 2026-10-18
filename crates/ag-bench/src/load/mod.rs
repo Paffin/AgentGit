@@ -10,6 +10,8 @@ mod client;
 mod scenarios;
 mod server;
 
+pub use server::random_hex;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;

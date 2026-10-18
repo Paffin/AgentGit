@@ -42,7 +42,7 @@ pub struct Server {
     pub admin_token: String,
     /// The settings it was started with.
     pub settings: ServerSettings,
-    _dir: tempfile::TempDir,
+    _dir: crate::tmp::TempDir,
     log: PathBuf,
 }
 
@@ -61,10 +61,7 @@ pub fn random_hex() -> Result<String> {
 impl Server {
     /// Starts `bin serve` on a free port with a fresh data directory and waits until `/readyz` answers.
     pub fn start(bin: &Path, settings: ServerSettings, data_parent: Option<&Path>) -> Result<Self> {
-        let dir = match data_parent {
-            Some(p) => tempfile::tempdir_in(p)?,
-            None => tempfile::tempdir()?,
-        };
+        let dir = crate::tmp::TempDir::new(data_parent)?;
         let cfg = dir.path().join("server.toml");
         std::fs::write(&cfg, settings.toml())?;
         let port = free_port()?;

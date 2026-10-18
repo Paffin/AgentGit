@@ -179,7 +179,7 @@ pub fn run(opts: &Options) -> Result<Vec<Row>> {
 }
 
 fn run_size(b: &mut Bench<'_>, n: usize) -> Result<()> {
-    let dir = tempfile::tempdir()?;
+    let dir = crate::tmp::TempDir::new(None)?;
     let repo = open_repo(b.opts, dir.path())?;
     let limits = repo.limits().clone();
     let (alice, bob) = (actor("user:alice"), actor("user:bob"));

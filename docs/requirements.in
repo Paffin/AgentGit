@@ -1,0 +1,8 @@
+# Inputs of the documentation build (mkdocs.yml). Pin an exact version of everything the site depends on; the
+# resolved, hash-locked set is docs/requirements.txt:
+#
+#   uv pip compile docs/requirements.in --universal --generate-hashes --python-version 3.10 -o docs/requirements.txt
+#
+# MkDocs 1.x only: Material for MkDocs 9.x is built on it (MkDocs 2.0 is a different, incompatible system).
+mkdocs==1.6.1
+mkdocs-material==9.7.7

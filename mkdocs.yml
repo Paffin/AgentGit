@@ -1,0 +1,156 @@
+# The documentation site. `docs/` is the source of truth and is written to read well on GitHub too; this file only
+# turns it into a static site (offline search, light/dark theme, strict link and anchor checks).
+#
+#   python3 -m venv .venv-docs && .venv-docs/bin/pip install --require-hashes -r docs/requirements.txt
+#   .venv-docs/bin/mkdocs serve            # live preview
+#   .venv-docs/bin/mkdocs build --strict   # what CI runs (.github/workflows/docs.yml)
+#
+# Strict mode turns every warning into an error: a broken link, a broken #anchor or a page that cannot be found
+# fails the build. Links that leave docs/ are rewritten to GitHub by scripts/mkdocs_hooks.py; pages missing from
+# `nav` below are appended under "More" by the same hook (and reported), never dropped.
+site_name: AgentGit
+site_description: An agent-native source control system - documentation
+site_url: https://paffin.github.io/AgentGit/
+repo_url: https://github.com/Paffin/AgentGit
+repo_name: Paffin/AgentGit
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+strict: true
+use_directory_urls: true
+
+# requirements.txt/.in are inputs of the build, not pages.
+exclude_docs: |
+  requirements.txt
+  requirements.in
+
+hooks:
+  - scripts/mkdocs_hooks.py
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+theme:
+  name: material
+  language: en
+  # No Google Fonts request: the site renders the same offline and does not tell a third party who reads it.
+  font: false
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+plugins:
+  - search
+  # Makes the built site usable from a directory (file://) too, search included.
+  - offline
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: false
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  # Where links that leave docs/ point; CI sets DOCS_SOURCE_REF to the commit being published.
+  source_ref: main
+
+nav:
+  - Home: README.md
+  - Get started:
+      - Getting started: getting-started.md
+      - Concepts: concepts.md
+      - Tutorials:
+          - Overview: tutorials/README.md
+          - Your first agent-safe repository: tutorials/first-agent-safe-repo.md
+          - Run a team server: tutorials/team-server.md
+          - Policy cookbook: tutorials/policy-cookbook.md
+          - Migrating a Git repository: tutorials/migrating-from-git.md
+          - Troubleshooting a blocked integration: tutorials/troubleshooting-blocked-integration.md
+      - FAQ: faq.md
+      - Glossary: glossary.md
+      - AgentGit compared: comparison.md
+  - Guides:
+      - Running agents: guides/agents.md
+      - Policy: guides/policy.md
+      - Validation and attestations: guides/validation.md
+      - Working with a server: guides/remote.md
+      - Reading history: guides/history.md
+      - Git bridge: guides/git-bridge.md
+      - Execution-plane workers: guides/workers.md
+      - The Web UI: guides/web-ui.md
+      - Client SDKs: guides/sdks.md
+      - The orchestrator: guides/orchestrator.md
+  - Operations:
+      - Deploying ag-server: operations/deployment.md
+      - Observability: operations/observability.md
+      - Durability, backup, restore: operations/durability.md
+      - GC and retention: operations/gc-and-retention.md
+      - PostgreSQL and S3: operations/postgres-and-s3.md
+      - Releasing: operations/releasing.md
+      - Windows: operations/windows.md
+      - Troubleshooting: operations/troubleshooting.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Publication and integration: architecture/publication-and-integration.md
+      - Merge semantics: architecture/merge-semantics.md
+      - Object formats: architecture/object-format.md
+      - Storage: architecture/storage.md
+      - Security model: architecture/security.md
+      - The sandbox: architecture/sandbox.md
+      - ADR traceability: architecture/adr-traceability.md
+      - Decision records:
+          - Index: adr/README.md
+          - "0001 Architecture (RU)": adr/0001-final-architecture.md
+          - "0002 Embedded engine first": adr/0002-embedded-engine-first.md
+          - "0003 Derived-tree cache": adr/0003-sparse-derived-tree-cache.md
+          - "0004 PostgreSQL and S3": adr/0004-postgres-and-s3-backends.md
+          - "0005 Rename-aware merge": adr/0005-rename-aware-merge.md
+          - "0006 Flat trees": adr/0006-flat-trees-measured.md
+          - "0007 Several replicas": adr/0007-multi-replica-server.md
+          - "0008 MCP server": adr/0008-mcp-server.md
+          - "0009 Identity names": adr/0009-identity-names-and-principals.md
+  - Protocol:
+      - Overview: protocol/README.md
+      - AGWP v1: protocol/agwp-v1.md
+  - Reference:
+      - CLI commands: reference/cli.md
+      - Help topics: reference/help-topics.md
+      - JSON output: reference/cli-json.md
+      - Configuration: reference/configuration.md
+      - Completions and man pages: reference/completions.md

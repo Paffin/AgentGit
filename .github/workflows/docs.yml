@@ -1,0 +1,124 @@
+name: Docs
+
+# The documentation site (MkDocs Material, docs/ is the source of truth), the tutorials' commands run against the real
+# binaries, and the deploy to GitHub Pages.
+#
+#   site      builds the site with `mkdocs build --strict` on every push and pull request: a broken link, a broken
+#             #anchor or a page missing from the navigation fails the build.
+#   snippets  builds `ag` and `ag-server` and runs every command of the tutorials (scripts/doc_snippets.py), checks
+#             that the output the pages show is what the commands print, and that the policy documents of the
+#             cookbook go through the real parser.
+#   deploy    publishes the site from main to GitHub Pages, but only when Pages is enabled for the repository
+#             (Settings, Pages, Source: GitHub Actions). When it is not, the job says so and succeeds: the build above
+#             is still checked, nothing is published. It never runs for pull requests.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  # Material for MkDocs prints a banner about MkDocs 2.0 on every build; this is its documented switch.
+  NO_MKDOCS_2_WARNING: "true"
+
+jobs:
+  site:
+    name: site (mkdocs build --strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Every dependency is pinned with its hash (docs/requirements.txt); pip refuses anything else.
+      - name: Install the pinned documentation toolchain
+        run: |
+          python3 -m venv .venv-docs
+          .venv-docs/bin/pip install --require-hashes -r docs/requirements.txt
+      - name: Build the site (strict)
+        run: .venv-docs/bin/mkdocs build --strict
+      - name: The hooks that adapt docs/ to the site have tests
+        run: .venv-docs/bin/python scripts/test_mkdocs_hooks.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: site
+          retention-days: 7
+
+  snippets:
+    name: tutorials run against the real binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build ag and ag-server
+        run: cargo build -p ag-cli -p ag-server
+      - name: The harness has tests of its own
+        run: python3 scripts/test_doc_snippets.py
+      - name: Every command in the tutorials runs, and prints what the pages show
+        run: python3 scripts/doc_snippets.py --bin-dir target/debug
+      - name: The cookbook's policy documents go through the real parser
+        run: cargo test -p ag-policy --test cookbook
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: [site, snippets]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Fails when Pages is not enabled for the repository (or is not set to "GitHub Actions"). That is not an error of
+      # this workflow: everything after it is skipped and the job succeeds.
+      - name: Is GitHub Pages enabled?
+        id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+      - name: Pages is not enabled, nothing is published
+        if: steps.pages.outcome != 'success'
+        run: |
+          echo "::notice title=GitHub Pages is not enabled::The site was built and checked but not published. Enable Settings > Pages > Source: GitHub Actions to publish it."
+      - name: Install the pinned documentation toolchain
+        if: steps.pages.outcome == 'success'
+        run: |
+          python3 -m venv .venv-docs
+          .venv-docs/bin/pip install --require-hashes -r docs/requirements.txt
+      # Links that leave docs/ point at the files of exactly the commit that is published.
+      - name: Build the site for the commit being published
+        if: steps.pages.outcome == 'success'
+        env:
+          DOCS_SOURCE_REF: ${{ github.sha }}
+        run: .venv-docs/bin/mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outcome == 'success'
+        with:
+          path: site
+      - name: Deploy
+        id: deployment
+        if: steps.pages.outcome == 'success'
+        uses: actions/deploy-pages@v4

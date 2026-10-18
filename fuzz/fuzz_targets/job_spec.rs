@@ -21,15 +21,11 @@ const IMAGE: &str = "registry.example/ci@sha256:00000000000000000000000000000000
 fn profiles() -> &'static [Profile] {
     static P: OnceLock<Vec<Profile>> = OnceLock::new();
     P.get_or_init(|| {
-        let mut ns = Profile::new(Backend::Namespace { host_ids: (65534, 65534) });
+        let mut ns = Profile::new(Backend::namespace((65534, 65534)));
         ns.ro_mounts.clear();
         let mut net = ns.clone();
         net.allow_network = true;
-        let mut oci = Profile::new(Backend::Oci {
-            runtime: "docker".into(),
-            default_image: Some(IMAGE.into()),
-            user: "65534:65534".into(),
-        });
+        let mut oci = Profile::new(Backend::oci("docker", Some(IMAGE.into()), "65534:65534"));
         oci.ro_mounts.clear();
         let mut tight = ns.clone();
         tight.ceilings = ag_worker::Ceilings { timeout_secs: 60, memory_mb: 256, cpu_secs: 60, max_pids: 64 };

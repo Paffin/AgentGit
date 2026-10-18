@@ -145,7 +145,6 @@ fn run(u: &mut Unstructured<'_>) -> ArbResult<()> {
         .collect::<ArbResult<_>>()?;
     let (actor, author) = (ident(u)?, ident(u)?);
     let facts = Facts {
-        stream: "main",
         actor: &actor,
         author: &author,
         proposal_head: head,

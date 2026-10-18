@@ -186,6 +186,35 @@ fn a_record_that_contradicts_the_request_means_no_verdict() {
 }
 
 #[test]
+fn a_kill_that_podman_does_not_record_as_a_memory_kill_is_explained_in_the_notes() {
+    let fake = Fake::new("ok");
+    fake.set("exit", "137");
+    fake.set("inspect.json", r#"[{"State":{"Status":"exited","ExitCode":137,"OOMKilled":false}}]"#);
+    let w = workdir();
+    let mut spec = spec_in(w.path());
+    spec.limits.memory_bytes = 64 << 20;
+    let excuse =
+        |o: &ag_sandbox::Outcome| o.isolation.notes.iter().any(|n| n.contains("cannot be told from another SIGKILL"));
+    // Podman's `info` and a record that says nothing about memory: the status is the exit status, and why
+    // it is not a memory-limit status is said
+    fake.set("info.json", r#"{"host":{"security":{"rootless":false,"seccompEnabled":true}}}"#);
+    let o = fake.sandbox().run(&spec).unwrap();
+    assert_eq!(o.status, ExitStatus::Exited(137));
+    assert!(excuse(&o), "{:?}", o.isolation.notes);
+    // Docker's record of the same exit is no excuse: it would have said so
+    fake.set("info.json", r#"{"SecurityOptions":[]}"#);
+    let o = fake.sandbox().run(&spec).unwrap();
+    assert_eq!(o.status, ExitStatus::Exited(137));
+    assert!(!excuse(&o), "{:?}", o.isolation.notes);
+    // and a Podman that does record the kill gets the memory-limit status and no excuse
+    fake.set("info.json", r#"{"host":{"security":{"rootless":false,"seccompEnabled":true}}}"#);
+    fake.set("inspect.json", r#"[{"State":{"Status":"exited","ExitCode":137,"OOMKilled":true}}]"#);
+    let o = fake.sandbox().run(&spec).unwrap();
+    assert_eq!(o.status, ExitStatus::MemoryLimit);
+    assert!(!excuse(&o));
+}
+
+#[test]
 fn the_runtimes_description_of_itself_is_used_for_seccomp_and_user_namespaces() {
     let fake = Fake::new("ok");
     fake.set("info.json", r#"{"SecurityOptions":["name=seccomp,profile=builtin","name=rootless"]}"#);

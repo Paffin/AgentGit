@@ -150,6 +150,7 @@ jobs:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
           AG_REQUIRE_OCI: "1"
       - name: The worker end to end with this runtime (a check that writes its tree, a missing image, stopping now)
+        if: ${{ !cancelled() }}
         run: cargo test -p ag-worker --test oci_e2e -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}

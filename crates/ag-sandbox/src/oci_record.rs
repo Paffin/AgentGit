@@ -13,9 +13,25 @@
 
 use serde_json::Value;
 
+/// Which family of runtime answered `info`. The two spell parts of their records differently, and they differ
+/// in what they record: Podman (checked on 4.9 in CI) does not set `State.OOMKilled` for a process the kernel
+/// killed for exceeding the memory limit, Docker does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Engine {
+    /// Docker (or something that answers `info` the way it does).
+    Docker,
+    /// Podman.
+    Podman,
+    /// The answer looked like neither.
+    #[default]
+    Unknown,
+}
+
 /// What a daemon says about itself (`<runtime> info --format '{{json .}}'`). `None`: not reported.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct DaemonFacts {
+    /// Which family of runtime this is.
+    pub engine: Engine,
     /// A seccomp profile is applied to containers by default.
     pub seccomp: Option<bool>,
     /// Containers run in a user namespace (rootless mode, or `userns-remap`): container root is not host root.
@@ -30,6 +46,7 @@ pub(crate) fn daemon_facts(info: &Value) -> DaemonFacts {
         let options: Vec<&str> = options.iter().filter_map(Value::as_str).collect();
         let rootless = options.contains(&"name=rootless");
         return DaemonFacts {
+            engine: Engine::Docker,
             seccomp: Some(options.iter().any(|o| o.starts_with("name=seccomp") && !o.contains("profile=unconfined"))),
             user_ns: Some(rootless || options.iter().any(|o| o.starts_with("name=userns"))),
             rootless: Some(rootless),
@@ -38,6 +55,7 @@ pub(crate) fn daemon_facts(info: &Value) -> DaemonFacts {
     if let Some(sec) = info.pointer("/host/security") {
         let rootless = sec.get("rootless").and_then(Value::as_bool);
         return DaemonFacts {
+            engine: Engine::Podman,
             seccomp: sec.get("seccompEnabled").and_then(Value::as_bool),
             user_ns: rootless,
             rootless,
@@ -514,7 +532,7 @@ mod tests {
         let docker = json!({"SecurityOptions": ["name=seccomp,profile=builtin", "name=cgroupns"]});
         assert_eq!(
             daemon_facts(&docker),
-            DaemonFacts { seccomp: Some(true), user_ns: Some(false), rootless: Some(false) }
+            DaemonFacts { engine: Engine::Docker, seccomp: Some(true), user_ns: Some(false), rootless: Some(false) }
         );
         let rootless = json!({"SecurityOptions": ["name=seccomp,profile=builtin", "name=rootless", "name=cgroupns"]});
         assert_eq!(daemon_facts(&rootless).user_ns, Some(true));
@@ -526,7 +544,7 @@ mod tests {
         let podman = json!({"host": {"security": {"rootless": true, "seccompEnabled": true}}});
         assert_eq!(
             daemon_facts(&podman),
-            DaemonFacts { seccomp: Some(true), user_ns: Some(true), rootless: Some(true) }
+            DaemonFacts { engine: Engine::Podman, seccomp: Some(true), user_ns: Some(true), rootless: Some(true) }
         );
         assert_eq!(daemon_facts(&json!({"something": "else"})), DaemonFacts::default());
     }

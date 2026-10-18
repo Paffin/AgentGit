@@ -23,6 +23,7 @@ path = "src/main.rs"
 
 [dependencies]
 ag-types.workspace = true
+ag-crypto.workspace = true
 ag-object.workspace = true
 ag-changeset.workspace = true
 ag-tree.workspace = true

@@ -24,6 +24,7 @@ name = "ag-bench"
 version = "0.1.0"
 dependencies = [
  "ag-changeset",
+ "ag-crypto",
  "ag-integrate",
  "ag-merge",
  "ag-object",

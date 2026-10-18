@@ -1,6 +1,5 @@
 //! Starting and watching a real `ag-server` process.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -51,11 +50,10 @@ fn free_port() -> Result<u16> {
     Ok(std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?.port())
 }
 
-/// 128 random bits as hex, from the operating system.
+/// 80 random bits as hex, from the operating system.
 pub fn random_hex() -> Result<String> {
-    let mut b = [0u8; 16];
-    std::fs::File::open("/dev/urandom").context("/dev/urandom")?.read_exact(&mut b)?;
-    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+    let mut id = ag_crypto::random_id("r").map_err(|e| anyhow::anyhow!("random bytes: {e}"))?;
+    Ok(id.split_off(2))
 }
 
 impl Server {

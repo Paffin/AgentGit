@@ -4,6 +4,7 @@
 //! limit, load shedding and event fan-out.
 #![allow(missing_docs)]
 
+#[cfg(unix)]
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -13,6 +14,7 @@ fn bench() -> Command {
     Command::new(env!("CARGO_BIN_EXE_ag-bench"))
 }
 
+#[cfg(unix)]
 /// The `ag-server` binary of the test profile, brought up to date now.
 fn server_bin() -> PathBuf {
     if let Some(p) = std::env::var_os("AG_SERVER_BIN") {
@@ -77,6 +79,9 @@ fn the_engine_benchmark_measures_every_hot_path() {
     assert!(rep["environment"]["cpus"].as_u64().unwrap() >= 1);
 }
 
+// The generator starts `ag-server` as a process and reads /proc; it is a Unix measurement tool and has not been
+// run on Windows.
+#[cfg(unix)]
 #[test]
 fn the_load_generator_drives_a_real_server_over_both_protocols() {
     let dir = tempfile::tempdir().unwrap();

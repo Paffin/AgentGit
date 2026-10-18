@@ -21,8 +21,20 @@ pub enum Strategy {
 pub struct ConflictInfo {
     /// The path.
     pub path: String,
-    /// What kind of conflict.
+    /// The kind of conflict as a stable code (`content`, `both_added`, `delete_modify`, `binary`, `type_change`,
+    /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`): see `ag_merge::ConflictKind::code`.
     pub kind: String,
+    /// The same, in words for a person (`content conflict (2 region(s))`). Outcomes stored before this field
+    /// existed have none.
+    #[serde(default)]
+    pub message: String,
+}
+
+impl ConflictInfo {
+    /// The wire description of a merge conflict.
+    pub fn from_conflict(c: &ag_merge::Conflict) -> Self {
+        ConflictInfo { path: c.path.to_string(), kind: c.kind.code().to_string(), message: c.kind.to_string() }
+    }
 }
 
 /// A reason an integration cannot proceed (yet).
@@ -40,8 +52,7 @@ pub struct Blocker {
 impl Blocker {
     pub(crate) fn from_unmet(u: &Unmet) -> Self {
         let detail = serde_json::to_value(u).unwrap_or(Value::Null);
-        let code = detail.get("kind").and_then(Value::as_str).unwrap_or("policy").to_string();
-        Self { code, message: u.to_string(), detail }
+        Self { code: u.code().to_string(), message: u.to_string(), detail }
     }
 }
 

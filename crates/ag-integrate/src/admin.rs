@@ -280,6 +280,11 @@ impl Repository {
 
     /// Stores a new policy version for a stream. Requires an admin of the
     /// *current* policy (any user while no admins are configured).
+    ///
+    /// Setting a document that is identical (after canonicalisation) to the current one changes nothing: the
+    /// current row is returned, no version is added and nothing is audited. A new version invalidates every
+    /// attestation made under the old one, so a retried request after a lost response, or a policy-as-code
+    /// loop that re-applies the same file, must not do that.
     pub fn set_policy(&self, stream: &str, json_doc: &str, actor: &Identity) -> Result<PolicyRow> {
         if self.meta.read(|tx| tx.stream(stream))?.is_none() {
             return Err(Error::NotFound(format!("stream '{stream}'")));
@@ -290,6 +295,11 @@ impl Repository {
         let policy = Policy::parse(json_doc)?;
         let canonical = policy.to_json();
         Ok(self.meta.write(|tx| {
+            if let Some(current) = tx.policy_current(stream)?
+                && current.doc == canonical
+            {
+                return Ok(current);
+            }
             let row = tx.policy_put(stream, &canonical, actor.as_str())?;
             tx.audit_append(
                 actor.as_str(),

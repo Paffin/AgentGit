@@ -376,7 +376,7 @@ pub fn preview(ctx: &Ctx, a: &PreviewArgs) -> Result<u8> {
             let _ = writeln!(s, "candidate tree: {t}");
         }
         for c in &pv.conflicts {
-            let _ = writeln!(s, "conflict: {} ({})", c.path, c.kind);
+            let _ = writeln!(s, "conflict: {} ({})", c.path, if c.message.is_empty() { &c.kind } else { &c.message });
         }
         if !pv.changed_files.is_empty() {
             let _ = writeln!(s, "would change {} file(s): {}", pv.changed_files.len(), pv.changed_files.join(", "));

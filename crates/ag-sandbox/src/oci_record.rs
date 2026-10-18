@@ -218,16 +218,23 @@ pub(crate) fn observe(rec: &Value, want: &Requested<'_>) -> Observed {
         }
     };
 
+    // Docker records `--cap-drop ALL` as "ALL". Podman expands it into the list of the capabilities it was
+    // dropping and reports what is left in `EffectiveCaps` / `BoundingCaps`: empty means none.
     let capabilities_dropped = match (strings(hc("CapDrop")), strings(hc("CapAdd"))) {
-        (Some(drop), Some(add)) => {
-            if !drop.iter().any(|c| c.eq_ignore_ascii_case("all")) {
-                Check::Violated(format!("capabilities dropped: {drop:?}, requested ALL"))
-            } else if !add.is_empty() {
-                Check::Violated(format!("capabilities added back: {add:?}"))
-            } else {
-                Check::Holds
+        (Some(_), Some(add)) if !add.is_empty() => Check::Violated(format!("capabilities added back: {add:?}")),
+        (Some(drop), Some(_)) if drop.iter().any(|c| c.eq_ignore_ascii_case("all")) => Check::Holds,
+        (Some(drop), Some(_)) => match (strings(rec.get("EffectiveCaps")), strings(rec.get("BoundingCaps"))) {
+            (Some(effective), Some(bounding)) if effective.is_empty() && bounding.is_empty() => Check::Holds,
+            (Some(effective), _) if !effective.is_empty() => {
+                Check::Violated(format!("capabilities left: {effective:?}"))
             }
-        }
+            (_, Some(bounding)) if !bounding.is_empty() => {
+                Check::Violated(format!("capabilities left in the bounding set: {bounding:?}"))
+            }
+            _ => Check::Violated(format!(
+                "capabilities dropped: {drop:?}, requested ALL, and the runtime does not say what is left"
+            )),
+        },
         _ => Check::Unread,
     };
 
@@ -306,7 +313,12 @@ pub(crate) fn observe(rec: &Value, want: &Requested<'_>) -> Observed {
         Some(Value::Array(list)) => {
             let mut result = Check::Holds;
             for (name, soft, hard) in &want.ulimits {
-                let found = list.iter().find(|u| u.get("Name").and_then(Value::as_str) == Some(name));
+                // Docker names a limit `nofile`, Podman `RLIMIT_NOFILE`.
+                let found = list.iter().find(|u| {
+                    u.get("Name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|n| n.trim_start_matches("RLIMIT_").eq_ignore_ascii_case(name))
+                });
                 let read_soft = found.and_then(|u| u.get("Soft")).and_then(Value::as_i64);
                 let read_hard = found.and_then(|u| u.get("Hard")).and_then(Value::as_i64);
                 let want = (i64::try_from(*soft).unwrap_or(i64::MAX), i64::try_from(*hard).unwrap_or(i64::MAX));
@@ -439,6 +451,30 @@ mod tests {
         );
         assert!(broken(|r| r["Mounts"][1]["RW"] = json!(true))[0].contains("read-only"));
         assert!(broken(|r| r["Mounts"] = json!([]))[0].contains("missing"));
+    }
+
+    #[test]
+    fn podman_spells_capabilities_and_ulimits_its_own_way() {
+        let mut doc = docker_record();
+        let host = &mut doc[0]["HostConfig"];
+        host["CapDrop"] = json!(["CAP_CHOWN", "CAP_KILL", "CAP_SETUID"]);
+        host["Ulimits"] = json!([
+            {"Name": "RLIMIT_NOFILE", "Soft": 1024, "Hard": 1024},
+            {"Name": "RLIMIT_CORE", "Soft": 0, "Hard": 0}
+        ]);
+        // the runtime says nothing about what is left: not claimed, and not accepted
+        let o = observe(record(&doc).unwrap(), &requested());
+        assert_eq!(o.rlimits, Check::Holds);
+        assert!(o.violations().iter().any(|v| v.contains("does not say what is left")), "{:?}", o.violations());
+        // with the effective and bounding sets empty, nothing is left
+        doc[0]["EffectiveCaps"] = json!(null);
+        doc[0]["BoundingCaps"] = json!([]);
+        let o = observe(record(&doc).unwrap(), &requested());
+        assert!(o.violations().is_empty(), "{:?}", o.violations());
+        // a capability that is still there is a violation, however the drop list reads
+        doc[0]["EffectiveCaps"] = json!(["CAP_NET_BIND_SERVICE"]);
+        let o = observe(record(&doc).unwrap(), &requested());
+        assert!(o.violations().iter().any(|v| v.contains("capabilities left")), "{:?}", o.violations());
     }
 
     #[test]

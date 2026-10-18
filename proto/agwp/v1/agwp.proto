@@ -14,11 +14,15 @@
 //     StartRun, AcquireLease. Repeating such a request with the same key and
 //     the same content returns the recorded response; the same key with
 //     different content is rejected (`idempotency_key_reused`). Other
-//     mutating requests are naturally idempotent (SetPolicy, GrantRole, pins,
-//     FinishTask ...) or cannot replay their result (a minted credential's
-//     secret is shown once); where the field exists on them it is ignored.
-//     After a lost response, ask for the outcome (GetOperation) or the state
-//     instead of blindly retrying.
+//     mutating requests are idempotent because repeating them changes
+//     nothing (SetPolicy with a document identical to the current one adds
+//     no version and no audit entry; GrantRole, pins, FinishTask ...), or they
+//     are NOT safe to repeat blindly and the field on them is ignored:
+//     ModifyWorkspace (a new changeset each time), ReviewProposal (a new
+//     review), Enqueue (a new queue entry), SubmitProvenance (a new record),
+//     MintCredential (a second credential: a secret is shown once) and
+//     RunQueue. After a lost response, ask for the outcome (GetOperation) or
+//     the state instead of blindly retrying.
 //   * Identifiers are lowercase hex (ids) or the documented name syntax.
 //   * Times are Unix milliseconds in `*_ms` fields.
 //   * Enumerations are strings with a documented value set so that new values
@@ -463,6 +467,8 @@ message DiffRequest {
   string from = 2;
   string to = 3;
   repeated string paths = 4;
+  // Lines of context around each hunk: 0 = the default of 3, at most 100 (larger values are lowered); a diff
+  // with no context lines cannot be asked for.
   uint32 context = 5;
 }
 
@@ -518,6 +524,7 @@ message ReadHeadRequest {
   string stream = 2;
   // Long-poll: wait up to `wait_ms` for the stream version to exceed this value.
   uint64 wait_version_gt = 3;
+  // At most 30000; larger values are lowered.
   uint32 wait_ms = 4;
 }
 
@@ -728,13 +735,19 @@ message CloseProposalRequest {
 
 message Conflict {
   string path = 1;
-  // "content", "both_added", "delete_modify", "binary", "type_change",
-  // "too_large", "file_directory".
+  // A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
+  // "too_large", "file_directory", "rename_rename" or "rename_delete". Clients may switch on it;
+  // `message` is for people.
   string kind = 2;
+  // The conflict in words, with the details the code leaves out (e.g. "content conflict (2 region(s))").
+  // Empty for outcomes stored before the field existed. Do not parse it.
+  string message = 3;
 }
 
 message Blocker {
-  // e.g. missing_validation, approvals, missing_provenance, lease, not_allowed.
+  // A stable code: missing_validation, failed_validation, insufficient_approvals, changes_requested,
+  // missing_provenance, too_many_changed_files, actor_not_allowed, author_not_allowed, or lease (an exclusive
+  // lease held by someone else covers a changed path).
   string code = 1;
   string message = 2;
   // Structured details as a JSON object.
@@ -1158,6 +1171,8 @@ message Overlap {
   string a = 1;
   string b = 2;
   string kind = 3;
+  // The overlapping paths, sorted, at most 20: a longer list is cut and the cut is not signalled, so treat the
+  // list as a sample. The overlap itself (the entry's existence) is what matters.
   repeated string paths = 4;
 }
 
@@ -1171,8 +1186,10 @@ message PredictResponse { repeated Overlap overlaps = 1; }
 // never reused: clients resume with `after_seq` (SSE: Last-Event-ID).
 message Event {
   uint64 seq = 1;
-  // e.g. "stream.updated", "proposal.created", "integration.completed",
-  // "publication.published", "job.queued", "lease.acquired", "audit.appended".
+  // The audit action the event is a view of, e.g. "stream.integrate", "proposal.create", "proposal.review",
+  // "changeset.publish", "lease.acquire", "run.start", "job.enqueue", "policy.set". SubscribeRequest.topics
+  // matches by exact name, by dotted prefix ("proposal" matches "proposal.create" and "proposal.review") or
+  // "*" (everything).
   string topic = 2;
   string repo = 3;
   int64 timestamp_ms = 4;
@@ -1182,12 +1199,12 @@ message Event {
 
 message SubscribeRequest {
   string repo = 1;
-  // Topic prefixes to include (empty = all).
+  // Audit actions to include, by exact name, dotted prefix or "*" (empty = all).
   repeated string topics = 2;
   // Deliver events with seq > after_seq first (replay), then follow live.
   // Use the special value u64::MAX to start from "now".
   uint64 after_seq = 3;
-  // Send an empty heartbeat event every this many ms (0 = 15000).
+  // Send an empty heartbeat event every this many ms (0 = 15000; values below 1000 are raised to 1000).
   uint32 heartbeat_ms = 4;
 }
 
@@ -1482,8 +1499,9 @@ message ClaimJobRequest {
   string repo = 1;
   repeated string kinds = 2;
   string worker = 3;
+  // How long the claim lasts without a heartbeat (<= 0 = 120000; at most 3600000, larger values are lowered).
   int64 lease_ms = 4;
-  // Long-poll for up to this many ms when nothing is queued.
+  // Long-poll for up to this many ms when nothing is queued (at most 30000, larger values are lowered).
   uint32 wait_ms = 5;
 }
 
@@ -1497,6 +1515,7 @@ message HeartbeatJobRequest {
   string job_id = 2;
   // The worker that holds the claim.
   string worker = 3;
+  // The new lease (<= 0 = 120000; at most 3600000, larger values are lowered).
   int64 lease_ms = 4;
 }
 

@@ -36,7 +36,8 @@ pub(crate) struct Sample {
 pub(crate) struct Hooks<'a> {
     /// The process leads its own process group, which is killed along with it.
     pub group: bool,
-    /// Extra action when the sandbox must be killed (e.g. `docker kill`).
+    /// Extra action when the sandbox must be killed (e.g. `docker kill`); runs before the process and its group
+    /// are signalled.
     pub on_kill: Option<&'a mut dyn FnMut()>,
     /// Measures the sandbox; called only after the command has started. Memory is always checked against
     /// the limit; the number of tasks only if `task_limit` is set.
@@ -140,12 +141,15 @@ pub(crate) fn supervise(
     let mut sample_interval = Duration::from_millis(10);
 
     let kill_all = |hooks: &mut Hooks<'_>| {
+        // The sandbox-specific kill first: a container has to be stopped through its runtime while the client
+        // that is creating or running it is still there (killing the client mid-creation leaves a created,
+        // never started container behind).
+        if let Some(f) = hooks.on_kill.as_mut() {
+            f();
+        }
         sys::kill(pid, libc::SIGKILL);
         if hooks.group {
             sys::killpg(pid, libc::SIGKILL);
-        }
-        if let Some(f) = hooks.on_kill.as_mut() {
-            f();
         }
     };
 

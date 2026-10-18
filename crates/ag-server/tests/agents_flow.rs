@@ -266,6 +266,9 @@ async fn leases_tasks_and_conflicting_workspaces() {
     // w2 now conflicts; the API says exactly where, and w2 is untouched.
     let prep = carol.post(&format!("/v1/repos/acme/web/proposals/{}/prepare", rid(&p2.json["id"])), json!({})).await;
     assert_eq!(prep.json["conflicts"][0]["path"], "f.txt", "{}", prep.json);
+    // `kind` is a stable code a client can switch on; the words for a person travel in `message`
+    assert_eq!(prep.json["conflicts"][0]["kind"], "content", "{}", prep.json);
+    assert!(prep.json["conflicts"][0]["message"].as_str().unwrap().starts_with("content conflict"), "{}", prep.json);
     let sync = alice.post("/v1/repos/acme/web/workspaces/w2/sync", json!({})).await;
     assert_eq!(sync.json["status"], "conflicted", "{}", sync.json);
     assert_eq!(alice.get("/v1/repos/acme/web/workspaces/w2").await.json["head"], rid(&r2.json["head"]));

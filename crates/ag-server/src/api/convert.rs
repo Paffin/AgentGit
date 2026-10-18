@@ -238,7 +238,7 @@ pub fn strategy(s: Strategy) -> &'static str {
 }
 
 pub fn conflict(c: &ag_integrate::ConflictInfo) -> v1::Conflict {
-    v1::Conflict { path: c.path.clone(), kind: c.kind.clone() }
+    v1::Conflict { path: c.path.clone(), kind: c.kind.clone(), message: c.message.clone() }
 }
 
 pub fn outcome(o: &Outcome) -> v1::IntegrationOutcome {

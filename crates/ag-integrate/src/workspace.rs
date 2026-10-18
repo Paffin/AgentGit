@@ -291,7 +291,7 @@ impl Repository {
         let mut paths = Vec::new();
         let mut infos = Vec::new();
         for c in &merged.conflicts {
-            infos.push(ConflictInfo { path: c.path.to_string(), kind: c.kind.to_string() });
+            infos.push(ConflictInfo::from_conflict(c));
             paths.push(c.path.to_string());
             if let ConflictKind::Content { .. } = c.kind {
                 // After a rename the three versions live at different paths; the marker file goes where

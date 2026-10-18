@@ -30,11 +30,19 @@ case "$1" in
       ok) echo "hello from the container"; echo "a warning" >&2; exit "$(cat "$dir/exit" 2>/dev/null || echo 0)" ;;
       stdin) cat ;;
       timeout) while [ ! -f "$dir/killed" ]; do sleep 0.02; done; exit 137 ;;
+      slowcreate) sleep 0.8; touch "$dir/created"; while [ ! -f "$dir/killed" ]; do sleep 0.02; done; exit 137 ;;
       flood) while :; do echo yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy; done ;;
       error125) echo "docker: Error response from daemon: pull access denied for check" >&2; exit 125 ;;
     esac ;;
   kill) touch "$dir/killed" ;;
-  inspect) cat "$dir/inspect.json" 2>/dev/null || { echo "Error: No such container" >&2; exit 1; } ;;
+  inspect)
+    case "$*" in
+      # the state word a kill waits for: running until the container was killed
+      *--format*)
+        if [ "$(cat "$dir/mode")" = slowcreate ] && [ ! -f "$dir/created" ]; then echo "Error: No such container" >&2; exit 1; fi
+        if [ -f "$dir/killed" ] || [ "$(cat "$dir/mode")" = ok ]; then echo exited; else echo running; fi ;;
+      *) cat "$dir/inspect.json" 2>/dev/null || { echo "Error: No such container" >&2; exit 1; } ;;
+    esac ;;
   info) cat "$dir/info.json" 2>/dev/null || echo '{}' ;;
   image) if [ -f "$dir/noimage" ]; then echo "Error: No such image" >&2; exit 1; else echo sha256:abc; fi ;;
   ps) cat "$dir/ps.txt" 2>/dev/null ;;
@@ -210,6 +218,25 @@ fn a_timeout_stops_the_container_not_just_the_client() {
     assert_eq!(fake.call("kill").expect("the runtime was asked to kill the container"), ["kill", &name]);
     assert!(fake.call("rm").is_some(), "and to remove it");
     assert!(host_processes_matching(&fake.runtime().to_string_lossy()).is_empty(), "no client process is left");
+}
+
+#[test]
+fn a_timeout_during_the_creation_waits_for_the_container_instead_of_orphaning_it() {
+    // The first container on a cold daemon takes a while to be created. Killing the client at that moment
+    // leaves a container that was created and never started (found on a real Docker): the sandbox waits for it
+    // to exist, kills it through the runtime, and only then lets go of the client.
+    let fake = Fake::new("slowcreate");
+    let w = workdir();
+    let mut spec = spec_in(w.path());
+    spec.limits.wall_ms = 300;
+    let started = std::time::Instant::now();
+    let o = fake.sandbox().run(&spec).unwrap();
+    assert_eq!(o.status, ExitStatus::TimedOut);
+    assert!(fake.dir.path().join("created").exists(), "the container came into existence while the sandbox waited");
+    let name = flag_value(&fake.call("run").unwrap(), "--name").unwrap();
+    assert_eq!(fake.call("kill").expect("it was killed through the runtime"), ["kill", &name]);
+    assert!(fake.call("rm").is_some());
+    assert!(started.elapsed() < std::time::Duration::from_secs(8), "{:?}", started.elapsed());
 }
 
 #[test]

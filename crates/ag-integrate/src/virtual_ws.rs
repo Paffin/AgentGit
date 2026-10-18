@@ -194,11 +194,7 @@ impl Repository {
 
         let mut result = merged.tree.clone();
         if !merged.is_clean() {
-            let infos: Vec<ConflictInfo> = merged
-                .conflicts
-                .iter()
-                .map(|c| ConflictInfo { path: c.path.to_string(), kind: c.kind.to_string() })
-                .collect();
+            let infos: Vec<ConflictInfo> = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
             let mut wanted: BTreeMap<RepoPath, Option<ag_tree::Entry>> = BTreeMap::new();
             for r in resolutions {
                 wanted.insert(r.path().clone(), self.change_to_target(r)?);

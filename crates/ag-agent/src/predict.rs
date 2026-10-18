@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ag_dag::{Graph, ancestors};
+use ag_dag::{Graph, ancestors, divergence};
 use ag_policy::PathMatcher;
 use ag_storage::Meta;
 use ag_storage::meta::Tx;
@@ -25,7 +25,7 @@ pub struct Overlap {
     pub b: String,
     /// What kind of overlap.
     pub kind: String,
-    /// Shared paths or scopes (sorted, truncated to 20).
+    /// Shared paths or scopes (sorted, at most [`MAX_OVERLAP_PATHS`]; a longer list is cut without a signal).
     pub paths: Vec<String>,
 }
 
@@ -36,7 +36,13 @@ pub struct Prediction {
     pub overlaps: Vec<Overlap>,
 }
 
-const WALK_LIMIT: usize = 50_000;
+/// The most paths listed in one [`Overlap`].
+pub const MAX_OVERLAP_PATHS: usize = 20;
+
+/// The most changesets one proposal may be ahead of, or behind, the stream for it to be predicted. This bounds
+/// the *divergence* (what exists on one side only), never the history underneath it: a repository with millions
+/// of changesets is fine as long as proposals are not millions of changesets away from their stream.
+pub const DIVERGENCE_LIMIT: usize = 50_000;
 
 fn paths_of(tx: &Tx<'_>, ids: &[ag_types::ChangesetId]) -> Result<BTreeSet<String>, AgentError> {
     let mut out = BTreeSet::new();
@@ -49,35 +55,33 @@ fn paths_of(tx: &Tx<'_>, ids: &[ag_types::ChangesetId]) -> Result<BTreeSet<Strin
 }
 
 fn clip(set: impl IntoIterator<Item = String>) -> Vec<String> {
-    set.into_iter().take(20).collect()
+    set.into_iter().take(MAX_OVERLAP_PATHS).collect()
 }
 
 /// Predicts overlaps among the open proposals of `stream`, the stream's own
 /// recent history, active leases and in-progress tasks.
 pub fn predict(meta: &Meta, stream: &str) -> Result<Prediction, AgentError> {
+    predict_within(meta, stream, DIVERGENCE_LIMIT)
+}
+
+/// Like [`predict`], giving up with [`AgentError::Invalid`] when one proposal is more than `divergence_limit`
+/// changesets away from the stream's head (see [`DIVERGENCE_LIMIT`]).
+pub fn predict_within(meta: &Meta, stream: &str, divergence_limit: usize) -> Result<Prediction, AgentError> {
+    let too_far = |e: ag_dag::DagError| ag_storage::meta::MetaError::Invalid(e.to_string());
     meta.read(|tx| {
         let mut overlaps: BTreeSet<Overlap> = BTreeSet::new();
         let head = tx.stream(stream)?.and_then(|s| s.state.head);
-        let head_ancestors: BTreeSet<_> = match head {
-            Some(h) => ancestors(tx as &dyn Graph, &[h], WALK_LIMIT)
-                .map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?
-                .into_iter()
-                .collect(),
-            None => BTreeSet::new(),
-        };
 
         // Per-proposal touched paths (changes not yet in the stream) and the
-        // stream's own changes since the proposal diverged.
-        let proposals: Vec<_> =
-            tx.proposals_list(Some("open"), 1000)?.into_iter().filter(|p| p.stream == stream).collect();
+        // stream's own changes since the proposal diverged. Only that divergence is walked, never the shared
+        // history under it.
+        let proposals = tx.proposals_open_for_stream(stream)?;
         let mut touched: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for p in &proposals {
-            let anc: BTreeSet<_> = ancestors(tx as &dyn Graph, &[p.head], WALK_LIMIT)
-                .map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?
-                .into_iter()
-                .collect();
-            let mine: Vec<_> = anc.difference(&head_ancestors).copied().collect();
-            let theirs: Vec<_> = head_ancestors.difference(&anc).copied().collect();
+            let (mine, theirs) = match head {
+                Some(h) => divergence(tx as &dyn Graph, &p.head, &h, divergence_limit).map_err(too_far)?,
+                None => (ancestors(tx as &dyn Graph, &[p.head], divergence_limit).map_err(too_far)?, Vec::new()),
+            };
             let my_paths = paths_of(tx, &mine).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?;
             let stream_paths =
                 paths_of(tx, &theirs).map_err(|e| ag_storage::meta::MetaError::Invalid(e.to_string()))?;

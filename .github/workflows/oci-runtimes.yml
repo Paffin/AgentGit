@@ -15,7 +15,7 @@ name: OCI runtimes and cgroup v2
 
 on:
   push:
-    branches: [main, wip/policy-cli-execution]
+    branches: [main, wip/policy-cli-execution-2]
     paths:
       - "crates/ag-sandbox/**"
       - "crates/ag-worker/**"
@@ -104,6 +104,30 @@ jobs:
           podman info --format '{{json .Host.Security}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
           cat "/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers" || true
           echo "AG_OCI_RUNTIME=podman" >> "$GITHUB_ENV"
+      # What this runtime writes down for the flags the sandbox passes: the evidence behind the record check
+      # (crates/ag-sandbox/src/oci_record.rs), and the fixture to extend when a runtime spells something new.
+      - name: What the runtime records for the sandbox's flags
+        run: |
+          rt="${AG_OCI_RUNTIME}"
+          mkdir -p "$RUNNER_TEMP/rec" && chmod 0777 "$RUNNER_TEMP/rec"
+          "$rt" rm -f ag-diag > /dev/null 2>&1 || true
+          "$rt" run --name ag-diag --pull never --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 65534:65534 --pids-limit 32 --memory 67108864 \
+            --memory-swap 67108864 --cpus 1 --ulimit nofile=1024:1024 --ulimit cpu=60:61 --ulimit core=0:0 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=1048576 --mount "type=bind,src=$RUNNER_TEMP/rec,dst=/work" \
+            --workdir /work --entrypoint true "$OCI_TEST_IMAGE"
+          "$rt" inspect --type container ag-diag > "$RUNNER_TEMP/ag-diag.json"
+          python3 - <<'PY'
+          import json, os
+          d = json.load(open(os.environ["RUNNER_TEMP"] + "/ag-diag.json"))[0]
+          h = d.get("HostConfig", {})
+          keys = ["ReadonlyRootfs", "NetworkMode", "PidsLimit", "Memory", "MemorySwap", "NanoCpus", "CapDrop", "CapAdd",
+                  "SecurityOpt", "Privileged", "Devices", "PidMode", "IpcMode", "UTSMode", "UsernsMode", "Ulimits"]
+          print("HOSTCONFIG", json.dumps({k: h.get(k) for k in keys}, sort_keys=True))
+          print("TOP", json.dumps({k: d.get(k) for k in ["EffectiveCaps", "BoundingCaps", "Mounts"]}, sort_keys=True))
+          print("STATE", json.dumps(d.get("State"), sort_keys=True), "USER", json.dumps(d.get("Config", {}).get("User")))
+          PY
+          "$rt" rm -f ag-diag > /dev/null
       - name: Build the tests
         run: cargo test -p ag-sandbox --test oci_real -p ag-worker --test oci_e2e --no-run
       - name: The sandbox against the real runtime, checked from inside the container

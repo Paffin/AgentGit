@@ -868,7 +868,11 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 print(cli, &p, || {
                     let mut t = format!("strategy: {}\ncandidate tree: {}\n", p.strategy, p.candidate_tree);
                     for cf in &p.conflicts {
-                        t.push_str(&format!("conflict: {} ({})\n", cf.path, cf.kind));
+                        t.push_str(&format!(
+                            "conflict: {} ({})\n",
+                            cf.path,
+                            if cf.message.is_empty() { &cf.kind } else { &cf.message }
+                        ));
                     }
                     if !p.problem.is_empty() {
                         t.push_str(&format!("problem: {}\n", p.problem));

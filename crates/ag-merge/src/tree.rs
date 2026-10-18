@@ -60,6 +60,26 @@ pub enum ConflictKind {
     },
 }
 
+impl ConflictKind {
+    /// The stable, machine-readable name of the kind, as it appears on the wire (`Conflict.kind` of the
+    /// protocol) and in the Web UI: `content`, `both_added`, `delete_modify`, `binary`, `type_change`,
+    /// `too_large`, `file_directory`, `rename_rename` or `rename_delete`. Unlike the [`Display`](std::fmt::Display)
+    /// text, which is for people and carries details (region counts, paths), these never change.
+    pub fn code(&self) -> &'static str {
+        match self {
+            ConflictKind::Content { .. } => "content",
+            ConflictKind::BothAdded => "both_added",
+            ConflictKind::DeleteModify { .. } => "delete_modify",
+            ConflictKind::Binary => "binary",
+            ConflictKind::TypeChange => "type_change",
+            ConflictKind::TooLarge => "too_large",
+            ConflictKind::FileDirectory { .. } => "file_directory",
+            ConflictKind::RenameRename { .. } => "rename_rename",
+            ConflictKind::RenameDelete { .. } => "rename_delete",
+        }
+    }
+}
+
 impl std::fmt::Display for ConflictKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

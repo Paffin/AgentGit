@@ -722,3 +722,30 @@ fn algorithm_version_embeds_the_diff_version() {
         ag_diff::ALGORITHM_VERSION
     );
 }
+
+#[test]
+fn every_conflict_kind_has_its_own_stable_code() {
+    let all = [
+        (ConflictKind::Content { regions: 2 }, "content"),
+        (ConflictKind::BothAdded, "both_added"),
+        (ConflictKind::DeleteModify { ours_deleted: true }, "delete_modify"),
+        (ConflictKind::DeleteModify { ours_deleted: false }, "delete_modify"),
+        (ConflictKind::Binary, "binary"),
+        (ConflictKind::TypeChange, "type_change"),
+        (ConflictKind::TooLarge, "too_large"),
+        (ConflictKind::FileDirectory { inside: RepoPath::new("a/b").unwrap() }, "file_directory"),
+        (
+            ConflictKind::RenameRename { ours: RepoPath::new("x").unwrap(), theirs: RepoPath::new("y").unwrap() },
+            "rename_rename",
+        ),
+        (ConflictKind::RenameDelete { ours_renamed: true }, "rename_delete"),
+        (ConflictKind::RenameDelete { ours_renamed: false }, "rename_delete"),
+    ];
+    for (kind, code) in &all {
+        assert_eq!(kind.code(), *code);
+        assert!(code.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'), "{code}");
+        assert_ne!(kind.to_string(), *code, "the prose is separate from the code");
+    }
+    let distinct: std::collections::BTreeSet<_> = all.iter().map(|(_, c)| *c).collect();
+    assert_eq!(distinct.len(), 9, "nine kinds, nine codes");
+}

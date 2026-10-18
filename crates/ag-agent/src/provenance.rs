@@ -75,6 +75,24 @@ impl ProvenanceRecord {
         }
     }
 
+    /// Checks the record's own shape before it is stored: the schema, and that `prompt_digest`, when given, is
+    /// what its documentation says it is, 64 lowercase hexadecimal digits (a SHA-256), not the prompt itself or
+    /// anything else: the record is stored and shown to people, and "the prompt is not stored" must hold.
+    pub fn validate(&self) -> Result<(), AgentError> {
+        if self.schema != SCHEMA {
+            return Err(AgentError::Invalid(format!("unsupported schema '{}'", self.schema)));
+        }
+        if let Some(d) = &self.prompt_digest
+            && !(d.len() == 64 && d.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        {
+            return Err(AgentError::Invalid(
+                "prompt_digest must be the SHA-256 of the prompt as 64 lowercase hex digits (the prompt itself is never stored)"
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// The canonical bytes that are signed: compact JSON with sorted keys.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, AgentError> {
         let value = serde_json::to_value(self).map_err(|e| AgentError::Invalid(e.to_string()))?;
@@ -84,9 +102,7 @@ impl ProvenanceRecord {
 
 /// Signs `record` with the key of agent `agent_name` and stores it.
 pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &ProvenanceRecord) -> Result<u64, AgentError> {
-    if record.schema != SCHEMA {
-        return Err(AgentError::Invalid(format!("unsupported schema '{}'", record.schema)));
-    }
+    record.validate()?;
     let agent =
         meta.read(|tx| tx.agent(agent_name))?.ok_or_else(|| AgentError::NotFound(format!("agent '{agent_name}'")))?;
     if record.agent.principal().as_str() != agent.identity {
@@ -125,9 +141,7 @@ pub fn attach(meta: &Meta, keys: &KeyStore, agent_name: &str, record: &Provenanc
 /// private key). The signature must verify under the agent's *registered*
 /// public key, so only the holder of that key can speak for the agent.
 pub fn attach_signed(meta: &Meta, record: &ProvenanceRecord, signature: &Signature) -> Result<u64, AgentError> {
-    if record.schema != SCHEMA {
-        return Err(AgentError::Invalid(format!("unsupported schema '{}'", record.schema)));
-    }
+    record.validate()?;
     let principal = record.agent.principal();
     let agent = meta
         .read(|tx| tx.agent_by_identity(principal.as_str()))?

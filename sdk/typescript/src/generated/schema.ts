@@ -1521,7 +1521,9 @@ export interface components {
         };
         Blocker: {
             /**
-             * @description e.g. missing_validation, approvals, missing_provenance, lease, not_allowed.
+             * @description A stable code: missing_validation, failed_validation, insufficient_approvals, changes_requested,
+             *     missing_provenance, too_many_changed_files, actor_not_allowed, author_not_allowed, or lease (an exclusive
+             *     lease held by someone else covers a changed path).
              * @default
              */
             code: string;
@@ -1566,6 +1568,7 @@ export interface components {
             kinds: string[];
             /**
              * Format: int64
+             * @description How long the claim lasts without a heartbeat (\<= 0 = 120000; at most 3600000, larger values are lowered).
              * @default 0
              */
             lease_ms: number;
@@ -1576,7 +1579,7 @@ export interface components {
             repo: string;
             /**
              * Format: int32
-             * @description Long-poll for up to this many ms when nothing is queued.
+             * @description Long-poll for up to this many ms when nothing is queued (at most 30000, larger values are lowered).
              * @default 0
              */
             wait_ms: number;
@@ -1681,11 +1684,18 @@ export interface components {
         };
         Conflict: {
             /**
-             * @description "content", "both_added", "delete_modify", "binary", "type_change",
-             *     "too_large", "file_directory".
+             * @description A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
+             *     "too_large", "file_directory", "rename_rename" or "rename_delete". Clients may switch on it;
+             *     `message` is for people.
              * @default
              */
             kind: string;
+            /**
+             * @description The conflict in words, with the details the code leaves out (e.g. "content conflict (2 region(s))").
+             *     Empty for outcomes stored before the field existed. Do not parse it.
+             * @default
+             */
+            message: string;
             /** @default  */
             path: string;
         };
@@ -1840,6 +1850,8 @@ export interface components {
         DiffRequest: {
             /**
              * Format: int32
+             * @description Lines of context around each hunk: 0 = the default of 3, at most 100 (larger values are lowered); a diff
+             *     with no context lines cannot be asked for.
              * @default 0
              */
             context: number;
@@ -1943,8 +1955,10 @@ export interface components {
              */
             timestamp_ms: number;
             /**
-             * @description e.g. "stream.updated", "proposal.created", "integration.completed",
-             *     "publication.published", "job.queued", "lease.acquired", "audit.appended".
+             * @description The audit action the event is a view of, e.g. "stream.integrate", "proposal.create", "proposal.review",
+             *     "changeset.publish", "lease.acquire", "run.start", "job.enqueue", "policy.set". SubscribeRequest.topics
+             *     matches by exact name, by dotted prefix ("proposal" matches "proposal.create" and "proposal.review") or
+             *     "\*" (everything).
              * @default
              */
             topic: string;
@@ -2272,6 +2286,7 @@ export interface components {
             job_id: string;
             /**
              * Format: int64
+             * @description The new lease (\<= 0 = 120000; at most 3600000, larger values are lowered).
              * @default 0
              */
             lease_ms: number;
@@ -2927,7 +2942,11 @@ export interface components {
             b: string;
             /** @default  */
             kind: string;
-            /** @default [] */
+            /**
+             * @description The overlapping paths, sorted, at most 20: a longer list is cut and the cut is not signalled, so treat the
+             *     list as a sample. The overlap itself (the entry's existence) is what matters.
+             * @default []
+             */
             paths: string[];
         };
         Pin: {
@@ -3289,6 +3308,7 @@ export interface components {
             stream: string;
             /**
              * Format: int32
+             * @description At most 30000; larger values are lowered.
              * @default 0
              */
             wait_ms: number;

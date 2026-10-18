@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterView, START_LOCATION, useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/shell/AppHeader.vue'
+import VersionBanner from '@/shell/VersionBanner.vue'
 import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
 import Alert from '@/ui/Alert.vue'
@@ -41,12 +42,16 @@ router.afterEach(async (to, from) => {
   main.value?.focus({ preventScroll: true })
 })
 
-// When the session ends (expiry, revocation, sign-out elsewhere) go to the sign-in page.
+// When the session ends while it is in use (the server answered 401, or the credential ran out) say so on a page
+// of its own; a sign-out the person chose goes to the sign-in page.
 watch(
   () => auth.isAuthenticated,
   (ok, was) => {
     if (was && !ok && !route.meta.public) {
-      void router.replace({ name: 'signin', query: { next: route.fullPath } })
+      void router.replace({
+        name: auth.endedBecause === 'expired' ? 'unauthorized' : 'signin',
+        query: { next: route.fullPath },
+      })
     }
   },
 )
@@ -55,6 +60,7 @@ watch(
 <template>
   <a class="skip-link" href="#main" @click.prevent="main?.focus()">Skip to content</a>
   <AppHeader />
+  <VersionBanner />
   <div v-if="auth.isAuthenticated && auth.expiryWarned" class="expiry">
     <Alert tone="warn" live="status" title="Your credential is about to expire">
       You will be signed out in {{ expiresIn }}.

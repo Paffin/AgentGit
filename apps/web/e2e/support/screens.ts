@@ -3,6 +3,7 @@
 import type { Page } from '@playwright/test'
 import { expect } from '../fixtures.ts'
 import { waitLive } from './ui.ts'
+import { EMPTY_REPO } from './seed.ts'
 import type { State } from './state.ts'
 
 /** A desktop-sized window: every column of a table is shown. */
@@ -121,6 +122,11 @@ export const screens: Screen[] = [
       await p.getByRole('tab', { name: 'Audit log' }).click()
       await expect(p.getByRole('table').last()).toContainText('proposal.create')
     },
+  },
+  {
+    name: 'connect your first agent (empty repository)',
+    path: () => `/repos/${EMPTY_REPO}`,
+    ready: async (p) => expect(p.getByTestId('connect-cmd-work')).toBeVisible(),
   },
   {
     name: 'credentials and roles',

@@ -36,7 +36,7 @@ file serves the app, so a bookmarked URL works after a reload. Missing assets ar
 
 Hashed assets are sent `Cache-Control: public, max-age=31536000, immutable`; the page and everything else is
 `no-cache` with an `ETag` (304 on revalidation); brotli or gzip is chosen by `Accept-Encoding`. Every UI response
-carries `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;
+carries `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
 font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors
 'none'` (no inline script and no eval; inline style attributes are allowed because WebKit refuses the app's styles
 under a stricter `style-src`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
@@ -190,22 +190,38 @@ indicator. State is never colour alone: states have icons and words, diffs have 
 colour scheme and `prefers-reduced-motion`. Below 820 px wide (or on a touch screen) every control is at least 44 px and
 the header, tab strips and tables adapt: tables that do not fit scroll sideways as a labelled region the keyboard can reach.
 
-What is tested, and what is not (honestly):
+## First run, version check, ended sessions
 
-- **axe-core** (WCAG 2.x A and AA plus best practices) runs on every main screen in the light and the dark theme, at
-  desktop, tablet (768) and phone (390) size, plus the error screens and the main dialogs; serious or critical findings
-  fail the build. Findings fixed on the way: a table that scrolls without keyboard access, an account button with no
-  name on a phone, a tab-strip that hid its current tab.
-- **Layout** is asserted at 768 and 390 px in Chromium (no page-wide horizontal scroll on any route, header and menus fit,
-  every repository tab reachable, dialogs fit and keep their action in reach, controls at least 40 px).
-- **Browsers:** CI runs the suite in Chromium (plus the tablet and phone layouts, also Chromium). Firefox and WebKit
-  projects exist in `playwright.config.ts`; their first CI runs found a WebKit CSP incompatibility (fixed) and a few
-  Firefox-only failures that are not yet fixed (`dev/handoff/web.md`), so those two engines are **not** claimed to work
-  and are not in the required matrix yet.
-- Automated checks find only part of the problems. Keyboard-only flows of the proposal page and the dialogs are tested
-  (`keyboard.spec.ts`); a pass with a real screen reader (NVDA, VoiceOver, TalkBack) and on real phones has **not** been
-  done. There is no command palette. Known minor issues: the tab strips of a repository have no scroll hint other than the
-  cut-off tab; the diff and blame views are read-only on a phone (they scroll sideways inside their own box).
+- **Connect your first agent.** A repository nobody has pushed to (the server reports zero changesets, no open
+  proposals) shows a panel with three steps and this server's address and repository filled in: grant the agent a role,
+  mint its credential, run `ag clone` / `ag snapshot` / `ag push` with it. The commands are built in
+  `src/lib/onboarding.ts` and the end-to-end test takes them **from the page and runs them** with the real `curl` and
+  the real `ag` against the real server (`e2e/onboarding.spec.ts`); the proposal the agent pushes then appears on the
+  board. An agent identity that could not be put safely into a shell line is refused instead of printed.
+- **Version banner.** The build writes its version (`apps/web/package.json`, kept equal to the workspace version by a
+  Rust test) to `ui-version.json`; the page compares it with `server_version` from `GET /v1/capabilities` at start, when
+  the tab becomes visible again and when the browser comes back online. A different major or minor version, or a
+  protocol other than `agwp.v1`, shows a banner with a Reload button (`e2e/version.spec.ts` serves a copy of the build
+  with another version from a second real server).
+- **Session ended.** A 401 while you work (or a credential that ran out) leads to `/unauthorized`: it says the session
+  ended, shows what the server answered and its request id, and leads to the sign-in with the way back.
+
+## Verified where
+
+| Claim | Evidence |
+| --- | --- |
+| Whole end-to-end suite (about 300 tests) against a real `ag-server` with the UI embedded | CI job "end-to-end (chromium)" |
+| Same suite in Firefox and WebKit | CI jobs "end-to-end (firefox)", "end-to-end (webkit)"; engine differences, if any, are named in the spec that handles them |
+| Layout and axe at 768 and 390 px | CI jobs "tablet", "phone" (Chromium with touch emulation, not a real device) |
+| axe (WCAG 2.x A/AA + best practice), light and dark, every main screen, dialogs, error pages | `accessibility.spec.ts`; the scroll-region race that once made it flaky is pinned by `scrollregion.spec.ts` |
+| Redirect sign-in against a **real** identity provider (Keycloak, pinned image): login, groups to roles, silent re-authentication, token expiry after the provider revoked the session, sign-out at the provider | CI job "real identity provider (Keycloak)", `e2e/keycloak.spec.ts` |
+| The server's own OIDC validation with tokens Keycloak issued (discovery, signature, audience, expiry, tampering) | same job, `crates/ag-server/tests/oidc_keycloak.rs` (`--ignored`) |
+| Failure modes a real provider will not produce on request (wrong state, bad nonce, forged signature, denied) | `e2e/oidc.spec.ts` with the fake provider `e2e/support/idp.ts`, and `crates/ag-server/tests/security.rs`: **test doubles**, in test code only |
+
+Not verified: a pass with a real screen reader (NVDA, VoiceOver, TalkBack) and keyboard-only use on real devices;
+real phones; identity providers other than Keycloak (Entra, Okta, Auth0). Automated checks find only part of the
+problems. There is no command palette. Known minor issues: the tab strips of a repository have no scroll hint other
+than the cut-off tab; the diff and blame views are read-only on a phone (they scroll sideways inside their own box).
 
 ## Security notes
 

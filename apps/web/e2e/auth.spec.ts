@@ -162,11 +162,15 @@ test.describe('signing in', () => {
       .click({ timeout: 3000 })
       .catch(() => undefined)
 
-    await expect(page).toHaveURL(/\/signin/)
-    await expect(
-      page.getByText(/Your session ended: the credential expired or was revoked/),
-    ).toBeVisible()
+    // A page of its own says what happened, with what the server answered, and leads back to the sign-in.
+    await expect(page).toHaveURL(/\/unauthorized/)
+    await expect(page.getByRole('heading', { name: 'Your session ended', level: 1 })).toBeVisible()
+    await expect(page.getByText(/expired or was revoked/)).toBeVisible()
+    await expect(page.getByTestId('unauthorized-detail')).toContainText('The server said:')
     expect(await page.evaluate((k) => sessionStorage.getItem(k), TOKEN_KEY)).toBeNull()
+    await page.getByTestId('sign-in-again').click()
+    await expect(page).toHaveURL(/\/signin/)
+    await expect(page.getByLabel('Access token')).toBeVisible()
   })
 })
 

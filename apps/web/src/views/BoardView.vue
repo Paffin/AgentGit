@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ConnectAgentPanel from '@/components/ConnectAgentPanel.vue'
 import ProposalCard from '@/components/ProposalCard.vue'
 import ActivityFeed from '@/components/board/ActivityFeed.vue'
 import BoardSummary from '@/components/board/BoardSummary.vue'
@@ -12,6 +13,7 @@ import TaskGraph from '@/components/board/TaskGraph.vue'
 import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { shortId } from '@/lib/format'
+import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import Card from '@/ui/Card.vue'
 import EmptyState from '@/ui/EmptyState.vue'
@@ -21,8 +23,21 @@ import RelativeTime from '@/ui/RelativeTime.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
 const board = useBoard()
+const auth = useAuth()
 const { repo } = useRepoName()
 usePageTitle(() => `Live board · ${repo.value}`)
+
+// A repository nobody has pushed to: the first thing to do is to connect an agent. Only shown when the server said
+// the counts are real (never on a guess) and nothing is open or running.
+const untouched = computed(
+  () =>
+    board.repo !== null &&
+    !board.repo.counts_error &&
+    board.repo.changeset_count === 0 &&
+    board.load.proposals.status === 'ready' &&
+    board.cards.length === 0 &&
+    board.recent.length === 0,
+)
 
 const loadingProposals = computed(
   () => board.load.proposals.status !== 'ready' && board.cards.length === 0,
@@ -59,6 +74,7 @@ onBeforeUnmount(() => clearTimeout(giveUp))
   <div class="board">
     <h1 class="sr-only">Live board for {{ repo }}</h1>
     <BoardSummary />
+    <ConnectAgentPanel v-if="untouched" :repo="repo" :admin="auth.hasRole(repo, 'admin')" />
 
     <div class="grid">
       <div class="col main">

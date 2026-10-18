@@ -31,7 +31,7 @@ test.describe('no screen scrolls the page sideways', () => {
   test('the sign-in page and the error pages', async ({ page, state, openAs, allowConsole }) => {
     allowConsole(/status of 404/)
     const signedOut = await openAs(null)
-    for (const path of ['/signin', '/offline', '/nowhere/at/all']) {
+    for (const path of ['/signin', '/offline', '/unauthorized?next=/access', '/nowhere/at/all']) {
       await signedOut.goto(path)
       await expect(signedOut.locator('main')).toBeVisible()
       const o = await measureOverflow(signedOut)

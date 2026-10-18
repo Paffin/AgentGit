@@ -9,6 +9,7 @@
 | get a quick answer | [FAQ](faq.md) |
 | see how it differs from Git, GitHub, Gerrit and Jujutsu | [AgentGit compared](comparison.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
+| give an agent AgentGit through MCP (Claude Code, Claude Desktop, the Agent SDKs) | [MCP guide](guides/mcp.md): install, configuration, what the allow-list protects and what it does not, troubleshooting, a recorded run with a real model |
 | call the server from TypeScript or Python | [Client SDKs](guides/sdks.md) and the [AGWP v1 reference](protocol/agwp-v1.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
 | work against a server (clone, pull, push) and offline | [Remote guide](guides/remote.md) |

@@ -176,7 +176,7 @@ POST /v1/credentials
   `GET /v1/capabilities`) would mint an ordinary credential and say nothing, so the orchestrator and `ag-mcp` refuse
   a credential whose scope does not echo the run.
 
-The Go orchestrator mints a run-bound credential for every session it starts. `ag-mcp` does the same for every run
+The Go orchestrator mints a run-bound credential for every session it starts. `ag-mcp` ([MCP guide](mcp.md)) does the same for every run
 it starts (`--run-credentials auto|required|off`, default `auto`: bound when the server supports it and the credential
 is an agent's, otherwise carry on with the agent's own credential and say so in the result). Name-bound credentials
 keep working; nothing forces a client to bind.

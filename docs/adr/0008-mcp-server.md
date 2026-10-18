@@ -52,7 +52,7 @@ endpoint and no decision of its own about what may land.
    re-read after a `401`, so an operator can rotate an expired credential without restarting the agent session.
 6. **A second, explicit allow-list inside `ag-mcp`.** Tools belong to groups: `read`, `workspace`, `propose`,
    `coordinate`, `review`, `integrate`. The default is `read,workspace,propose,coordinate`. `review` must be
-   named. `integrate` additionally needs `--i-know-integrate-lands-code`, and then logs a warning at startup
+   named. `integrate` can only be switched on with the separate flag `--enable-integrate` (it is refused through `--allow`), and then logs a warning at startup
    and on every call. There is no `admin` group: policy, roles and credentials are not reachable through MCP,
    and `--allow admin` is rejected with that explanation. Tools outside the allow-list are not listed; calling
    one anyway returns an *explained* refusal (not "unknown tool"). Further narrowing: `--repo` (repositories
@@ -65,7 +65,7 @@ endpoint and no decision of its own about what may land.
    stripped and counted in the result; output is bounded (`--max-output-bytes`, default 64 KiB) with an explicit
    truncation marker and `truncated: true`; server error messages are quoted, sanitized and bounded. This
    makes injected text inert as *markup* and clearly labelled as *data*; it cannot make a model ignore it, which
-   is why the allow-list, scope and policy exist (see the MCP guide, to be added).
+   is why the allow-list, scope and policy exist (see the [MCP guide](../guides/mcp.md)).
 8. **Identity is explicit.** MCP 2026-07-28 has no sessions, so no tool relies on process state: a run started
    with `task_claim` returns `run_id`, and later calls pass it (`ag-run`) to act as `agent:name#run`.
 9. **Provenance signing is out of scope.** Signing needs the agent's private key, which must not live in a
@@ -78,8 +78,9 @@ endpoint and no decision of its own about what may land.
   that run a real `ag-server` and a real `ag-mcp` over stdio, and a scripted client in `examples/agents/`.
 - The wire contract of the tools (names, schemas, annotations) is public: renaming a tool is a breaking change
   and is tracked in the changelog.
-- No server change: every tool maps to an existing AGWP operation (see the table in the guide).
+- No server change: every tool maps to an existing AGWP operation (the guide lists the tools by group).
 - Cancellation is best effort: a `tools/call` already sent to the server is not undone, the response is simply
   not delivered; the guide tells agents to re-read state.
-- Not verified against live models or the hosts' real clients here; the configuration snippets are checked only
-  by the stdio conformance tests (see the guide).
+- Verified with one live model (a recorded run, in the [guide](../guides/mcp.md#run-it-with-a-real-model)) and by the
+  scripted client in CI; not verified in the hosts' own clients: the configuration snippets follow their documented
+  formats and are exercised only through the stdio conformance tests.

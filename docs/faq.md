@@ -156,7 +156,7 @@ record.
 
 Through the CLI (stable exit codes and `--json` output: [shapes](reference/cli-json.md)), the HTTP/JSON and gRPC protocol
 ([AGWP v1](protocol/agwp-v1.md), [`openapi.json`](protocol/openapi.json)), the TypeScript and Python
-[SDKs](guides/sdks.md) (not published to a registry yet), or the MCP server `ag-mcp` ([ADR-0008](adr/0008-mcp-server.md)).
+[SDKs](guides/sdks.md) (not published to a registry yet), or the MCP server `ag-mcp` ([guide](guides/mcp.md), [ADR-0008](adr/0008-mcp-server.md)).
 
 ### Are these docs tested?
 

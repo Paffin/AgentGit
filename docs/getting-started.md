@@ -21,7 +21,7 @@ ag --version                              # ag 0.1.0 (a1b2c3d4e5f6 2026-10-17): 
 
 It works out your platform, downloads `agentgit-<version>-<target>.tar.gz` and `SHA256SUMS`, refuses to install
 anything if the checksum differs, additionally verifies the build-provenance attestation when the GitHub CLI is
-installed and logged in, and installs `ag`, `ag-server` and `ag-worker` into `~/.local/bin` (no root). Options:
+installed and logged in, and installs `ag`, `ag-server`, `ag-worker` and `ag-mcp` into `~/.local/bin` (no root). Options:
 `--version X.Y.Z`, `--prefix DIR`, `--dry-run` (print what it would do), `--require-attestation`. Read it first
 if you like: [`scripts/install.sh`](../scripts/install.sh) is short and `shellcheck`-clean. The Linux binaries
 need glibc (Alpine/musl is not supported; use the container image or build from source). Doing it by hand:

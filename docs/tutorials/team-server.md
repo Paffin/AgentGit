@@ -230,7 +230,7 @@ blocked: approvals (default): 0 of 1 required
 
 How to give such an agent leases, provenance and an autonomy envelope is the subject of
 [Your first agent-safe repository](first-agent-safe-repo.md); the same policy documents work on a server.
-For the agent's own tool interface see the [MCP server](../protocol/README.md) and the [SDKs](../guides/sdks.md).
+For the agent's own tool interface see the [MCP server](../guides/mcp.md) and the [SDKs](../guides/sdks.md).
 
 ## 8. Watch what happened
 

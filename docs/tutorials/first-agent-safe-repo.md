@@ -9,7 +9,7 @@ against what the commands print.
 
 You need `ag` ([install](../getting-started.md#install)) and a shell. Nothing else: no server, no network, no
 model. The "agent" is just an identity that runs commands; in real use it is your coding agent, calling the same
-commands (or the [MCP server](../protocol/README.md), or an [SDK](../guides/sdks.md)).
+commands (or the [MCP server](../guides/mcp.md), or an [SDK](../guides/sdks.md)).
 
 Three identities take part: **alice** (a human, the maintainer), **bob** (a human reviewer) and **refactor-bot**
 (the agent). `service:ci` is the identity of your CI system.

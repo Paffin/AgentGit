@@ -37,7 +37,13 @@ Supersedes the "NOT done" list of `dev/handoff/web.md`.
 
 ## Evidence
 
-See the final report for run links (filled in after the last push).
+- Web UI at `9598a7a` (all 7 jobs: checks, chromium, firefox, webkit, tablet, phone, Keycloak):
+  https://github.com/Paffin/AgentGit/actions/runs/39136540471 . Earlier iterations on branch `web-tail-ci` (red to green):
+  39129846258, 39130490754, 39131891385.
+- CI, Windows, Security, Docs, CodeQL at `cb60df1` (contains all of this): CI https://github.com/Paffin/AgentGit/actions/runs/39136844190 ,
+  Windows .../39136844173 , Security .../39136844273 , CodeQL .../39136844255 , Docs .../39136844285.
+- Keycloak server tests: 3 passed against Keycloak 26.0.7 in the job above; browser spec 6 tests.
+- Branch `web-tail-ci` on the remote is a leftover of the iteration (delete it).
 
 ## NOT verified
 

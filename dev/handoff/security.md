@@ -1,5 +1,7 @@
 # Security, supply chain and quality gates - handoff
 
+> **Superseded by [security_tail.md](security_tail.md)** (the work finished after this was written). Kept for history; where the two differ, the later file is right.
+
 State at the checkpoint. Everything below is either on `main` (marked **main**) or on branch
 `wip/security-track` (marked **wip**). Nothing is claimed as working that was not run; unverified items say so.
 

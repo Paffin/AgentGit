@@ -1,7 +1,7 @@
 # Handoff: ha_tail (the multi-replica server, finished)
 
 Design: [ADR-0007](../../docs/adr/0007-multi-replica-server.md). Operator's guide: [high-availability.md](../../docs/operations/high-availability.md).
-Earlier state: [ha.md](ha.md) (part 1).
+Part 1 (control plane on PostgreSQL, ADR-0007) landed earlier; its handoff is folded into this one and the ADR.
 
 ## State
 

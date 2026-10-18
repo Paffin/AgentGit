@@ -10,6 +10,7 @@
 | see how it differs from Git, GitHub, Gerrit and Jujutsu | [AgentGit compared](comparison.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
 | give an agent AgentGit through MCP (Claude Code, Claude Desktop, the Agent SDKs) | [MCP guide](guides/mcp.md): install, configuration, what the allow-list protects and what it does not, troubleshooting, a recorded run with a real model |
+| run the Go agent platform (scheduler, sessions, advisor, reviewers, semantic index; optional model mode) | [Orchestrator guide](guides/orchestrator.md) |
 | call the server from TypeScript or Python | [Client SDKs](guides/sdks.md) and the [AGWP v1 reference](protocol/agwp-v1.md) |
 | decide what must be true before code lands | [Policy reference](guides/policy.md) and [Validation](guides/validation.md) |
 | work against a server (clone, pull, push) and offline | [Remote guide](guides/remote.md) |
@@ -19,7 +20,8 @@
 | move to or from Git | [Git bridge](guides/git-bridge.md) |
 | look up a command, a help topic or a `--json` shape | [CLI reference](reference/cli.md), [help topics](reference/help-topics.md), [`--json` shapes](reference/cli-json.md) *(all generated)* |
 | find out where `ag` reads its configuration, or install shell completions and man pages | [Configuration](reference/configuration.md), [Completions and man pages](reference/completions.md) |
-| understand how it works and why it is safe | [Architecture overview](architecture/overview.md) |
+| understand how it works and why it is safe | [Architecture overview](architecture/overview.md), [Merge semantics](architecture/merge-semantics.md), [Storage](architecture/storage.md) |
+| see how each promise of the architecture decision maps to code and tests, and what is not built | [ADR traceability](architecture/adr-traceability.md) |
 | check a guarantee against the code and the test that proves it | [Publication & integration](architecture/publication-and-integration.md), [Security](architecture/security.md) (with what fuzzing found), [Testing](architecture/testing.md) (what runs where, coverage, mutation scores, test doubles) |
 | implement a compatible reader/writer | [Object formats](architecture/object-format.md), [Compatibility](architecture/compatibility.md) (what a newer build promises about old data, the fixtures that prove it) |
 | see what the engine and the server cost, with the numbers and how they were taken | [Performance of the engine](architecture/performance.md) (1k/10k/100k files), [Performance under load](operations/performance.md) (HTTP/JSON, gRPC, SSE, rate limits) |

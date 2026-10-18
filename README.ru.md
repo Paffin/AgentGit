@@ -7,6 +7,11 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Paffin/AgentGit/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Rust 1.89+](https://img.shields.io/badge/rust-1.89%2B-orange?style=flat-square)](Cargo.toml)
+[![Security](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/security.yml?branch=main&style=flat-square&label=security)](https://github.com/Paffin/AgentGit/actions/workflows/security.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/codeql.yml?branch=main&style=flat-square&label=CodeQL)](https://github.com/Paffin/AgentGit/actions/workflows/codeql.yml)
+[![Fuzz](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/fuzz.yml?branch=main&style=flat-square&label=fuzz)](https://github.com/Paffin/AgentGit/actions/workflows/fuzz.yml)
+[![Quality](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/quality.yml?branch=main&style=flat-square&label=coverage%20%2F%20mutation)](https://github.com/Paffin/AgentGit/actions/workflows/quality.yml)
+[![Windows](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/windows.yml?branch=main&style=flat-square&label=Windows)](https://github.com/Paffin/AgentGit/actions/workflows/windows.yml)
 [![Protocol: AGWP v1](https://img.shields.io/badge/protocol-AGWP%20v1-5b6cff?style=flat-square)](docs/protocol/agwp-v1.md)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-yellow?style=flat-square)](#статус-и-честные-ограничения)
 
@@ -128,7 +133,8 @@ conflict: src/main.rs (content conflict (1 region(s)))                   # ко�
 #### 🧱 Изолированное исполнение
 
 `ag-worker` забирает задания на валидацию, запускает команду из политики в песочнице `ag-sandbox`
-(rootless-namespaces или контейнер) и подписывает результат для точного дерева.
+(rootless-namespaces или контейнер; изнутри проверено в CI на настоящих Docker и Podman) и подписывает результат
+для точного дерева.
 
 </td>
 </tr>
@@ -164,8 +170,9 @@ GC, который не удаляет достижимое и не теряет
 #### 🌐 Сетевой сервер
 
 Один протокол (AGWP v1) по gRPC и HTTP/JSON на **одном порту**: OIDC или scoped-credentials с коротким сроком
-жизни, RBAC на репозиторий, квоты, живые события (SSE). Политика действует и против клиентов, которых вы не
-контролируете.
+жизни, RBAC на репозиторий, квоты, живые события (SSE). Credentials можно привязать к одному *запуску* агента. Политика
+действует и против клиентов, которых вы не контролируете. Несколько реплик на PostgreSQL и S3 поддерживаются и
+протестированы.
 
 </td>
 <td valign="top">
@@ -180,7 +187,8 @@ GC, который не удаляет достижимое и не теряет
 
 #### 🧩 Клиенты
 
-[Web UI](docs/guides/web-ui.md) вокруг живой работы агентов, SDK на [TypeScript и Python](docs/guides/sdks.md) и
+[Web UI](docs/guides/web-ui.md), который раздаёт сам `ag-server`, SDK на [TypeScript и Python](docs/guides/sdks.md),
+[MCP-сервер](docs/guides/mcp.md) (`ag-mcp`), дающий агенту AgentGit как набор инструментов, и
 [платформа агентов](docs/guides/orchestrator.md) на Go, которая может предлагать, но не интегрировать.
 
 </td>
@@ -218,12 +226,18 @@ GC, который не удаляет достижимое и не теряет
 
 ## Установка
 
-Нужен Rust **1.89+** и C-компилятор (SQLite собирается внутри). `git` и `python3` — по желанию.
+Нужен Rust **1.89+** и C-компилятор (SQLite собирается внутри). `git` и `python3` — по желанию. Linux, macOS и
+Windows собираются и тестируются в CI (песочница и `ag-worker` — только Linux; см. [Windows](docs/operations/windows.md)).
 
 ```bash
 git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # установит бинарник `ag`
 ```
+
+Релизные архивы (`ag`, `ag-server`, `ag-worker`, `ag-mcp`; Linux и macOS), `scripts/install.sh`, образы контейнеров
+и формула Homebrew существуют как файлы и **прогнаны релизным workflow целиком в режиме репетиции, но пока ничего
+не опубликовано**: релизного тега нет, скачать их нельзя. Что именно доказано, сказано на странице
+[Install](docs/getting-started.md#install) (на английском).
 
 ## Быстрый старт
 
@@ -254,10 +268,12 @@ ag clone http://127.0.0.1:8080/acme/web web && cd web      # дальше: пр�
 
 | Хочу… | Читать |
 |---|---|
-| 🚢 **Развернуть** | [Развёртывание](docs/operations/deployment.md): Docker, Compose (с PostgreSQL и MinIO), Kubernetes, TLS, секреты · [Наблюдаемость](docs/operations/observability.md): метрики, алерты, дашборды, трейсы |
-| 🔌 **Пользоваться** | [Работа с сервером из CLI](docs/guides/remote.md) · [справочник AGWP](docs/protocol/agwp-v1.md) · [`openapi.json`](docs/protocol/openapi.json) |
+| 🚢 **Развернуть** | [Развёртывание](docs/operations/deployment.md): Docker, Compose (с PostgreSQL и SeaweedFS), Kubernetes, TLS, секреты · [Наблюдаемость](docs/operations/observability.md): метрики, алерты, дашборды, трейсы · [Чек-лист укрепления](docs/operations/hardening.md) |
+| 🧬 **Несколько реплик** | [Высокая доступность](docs/operations/high-availability.md): контрольная база в PostgreSQL, гарантии с тестами, которые их доказывают, сбои, обновление |
+| 🔌 **Пользоваться** | [Работа с сервером из CLI](docs/guides/remote.md) · [справочник AGWP](docs/protocol/agwp-v1.md) · [`openapi.json`](docs/protocol/openapi.json) · [MCP](docs/guides/mcp.md) (дать агенту AgentGit как инструменты) |
 
-Что из этого проверено в реальном развёртывании, а что нет, сказано на странице про развёртывание (на английском).
+Сервер раздаёт и [Web UI](docs/guides/web-ui.md) на том же порту. Что из этого проверено в реальном развёртывании, а
+что нет, сказано на странице про развёртывание (на английском).
 
 ## Как это работает
 
@@ -333,18 +349,19 @@ Mergeable, а интегратор, пытающийся влить заблок
 | Checkout не выходит за свой каталог и не подсаживает `.git` | `checkout_refuses_to_write_through_symlinked_directories`, `hostile_git_content_cannot_escape_or_plant_dot_git` |
 | Подмена аудита или объектов обнаруживается | `audit_chain_detects_tampering`, `fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage` |
 
-Всё вместе: `cargo test --workspace` (около 550 тестов, несколько минут), плюс наборы SDK, Web UI и
-оркестратора, которые идут против настоящего `ag-server`. Модель угроз, меры защиты и известные ограничения:
+Всё вместе: `cargo test --workspace` (более 1000 тестов), плюс наборы SDK, Web UI и оркестратора, которые идут
+против настоящего `ag-server`, плюс гейты фаззинга, покрытия и мутационного тестирования
+([Testing](docs/architecture/testing.md)). Модель угроз, меры защиты и известные ограничения:
 [Security](docs/architecture/security.md).
 
 ## Документация
 
 | Хочу… | Начать отсюда |
 |---|---|
-| 🧪 **Попробовать** | [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) · [Агенты](docs/guides/agents.md) · [Политики](docs/guides/policy.md) |
-| 🚢 **Развернуть** | [Развёртывание](docs/operations/deployment.md) · [Наблюдаемость](docs/operations/observability.md) · [PostgreSQL и S3](docs/operations/postgres-and-s3.md) · [Надёжность и бэкап](docs/operations/durability.md) · [Диагностика](docs/operations/troubleshooting.md) |
-| 🧩 **Строить поверх** | [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [SDK](docs/guides/sdks.md) · [Оркестратор](docs/guides/orchestrator.md) · [Web UI](docs/guides/web-ui.md) |
-| 🔬 **Разобраться** | [Архитектура](docs/architecture/overview.md) · [ADR](docs/adr/) · [Соответствие ADR реализации](docs/architecture/adr-traceability.md) · [Форматы объектов](docs/architecture/object-format.md) · [Security](docs/architecture/security.md) |
+| 🧪 **Попробовать** | [Getting started](docs/getting-started.md) · [Туториалы](docs/tutorials/README.md) · [Concepts](docs/concepts.md) · [FAQ](docs/faq.md) · [Агенты](docs/guides/agents.md) · [Политики](docs/guides/policy.md) |
+| 🚢 **Развернуть** | [Развёртывание](docs/operations/deployment.md) · [Высокая доступность](docs/operations/high-availability.md) · [Наблюдаемость](docs/operations/observability.md) · [PostgreSQL и S3](docs/operations/postgres-and-s3.md) · [Надёжность и бэкап](docs/operations/durability.md) · [Укрепление](docs/operations/hardening.md) · [Диагностика](docs/operations/troubleshooting.md) |
+| 🧩 **Строить поверх** | [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [SDK](docs/guides/sdks.md) · [MCP](docs/guides/mcp.md) · [Оркестратор](docs/guides/orchestrator.md) · [Web UI](docs/guides/web-ui.md) |
+| 🔬 **Разобраться** | [Архитектура](docs/architecture/overview.md) · [ADR](docs/adr/) · [Соответствие ADR реализации](docs/architecture/adr-traceability.md) · [Форматы объектов](docs/architecture/object-format.md) · [Security](docs/architecture/security.md) · [Testing](docs/architecture/testing.md) · [Сравнение с Git и другими](docs/comparison.md) |
 
 <details>
 <summary><b>Все страницы по темам</b></summary>
@@ -353,18 +370,21 @@ Mergeable, а интегратор, пытающийся влить заблок
 
 | Тема | Страницы |
 |---|---|
-| Начало | [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) |
+| Начало | [Getting started](docs/getting-started.md) · [Туториалы](docs/tutorials/README.md) · [Concepts](docs/concepts.md) · [Глоссарий](docs/glossary.md) · [FAQ](docs/faq.md) · [Сравнение](docs/comparison.md) |
 | Руководства | [Агенты](docs/guides/agents.md) · [Политики](docs/guides/policy.md) · [Валидация](docs/guides/validation.md) · [Воркеры](docs/guides/workers.md) · [Сервер из CLI](docs/guides/remote.md) · [История](docs/guides/history.md) · [Git-мост](docs/guides/git-bridge.md) |
-| Клиенты | [Web UI](docs/guides/web-ui.md) · [SDK](docs/guides/sdks.md) · [Оркестратор](docs/guides/orchestrator.md) |
-| Справочник | [CLI](docs/reference/cli.md) *(генерируется)* · [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [Форматы объектов](docs/architecture/object-format.md) |
-| Эксплуатация | [Развёртывание](docs/operations/deployment.md) · [Наблюдаемость](docs/operations/observability.md) · [Релизы](docs/operations/releasing.md) · [PostgreSQL и S3](docs/operations/postgres-and-s3.md) · [Надёжность и бэкап](docs/operations/durability.md) · [GC и хранение](docs/operations/gc-and-retention.md) · [Диагностика](docs/operations/troubleshooting.md) |
-| Дизайн | [Обзор](docs/architecture/overview.md) · [ADR](docs/adr/) · [Соответствие ADR реализации](docs/architecture/adr-traceability.md) |
+| Клиенты | [Web UI](docs/guides/web-ui.md) · [SDK](docs/guides/sdks.md) · [MCP](docs/guides/mcp.md) · [Оркестратор](docs/guides/orchestrator.md) |
+| Справочник | [CLI](docs/reference/cli.md), [темы help](docs/reference/help-topics.md), [формы `--json`](docs/reference/cli-json.md), [автодополнение](docs/reference/completions.md) *(генерируются)* · [Конфигурация](docs/reference/configuration.md) · [AGWP v1](docs/protocol/agwp-v1.md) · [OpenAPI](docs/protocol/openapi.json) · [Форматы объектов](docs/architecture/object-format.md) |
+| Эксплуатация | [Развёртывание](docs/operations/deployment.md) · [Высокая доступность](docs/operations/high-availability.md) · [Наблюдаемость](docs/operations/observability.md) · [Производительность](docs/operations/performance.md) · [Релизы](docs/operations/releasing.md) · [PostgreSQL и S3](docs/operations/postgres-and-s3.md) · [Надёжность и бэкап](docs/operations/durability.md) · [GC и хранение](docs/operations/gc-and-retention.md) · [Укрепление](docs/operations/hardening.md) · [Цепочка поставки](docs/operations/supply-chain.md) · [Windows](docs/operations/windows.md) · [Диагностика](docs/operations/troubleshooting.md) |
+| Дизайн | [Обзор](docs/architecture/overview.md) · [ADR](docs/adr/) · [Соответствие ADR реализации](docs/architecture/adr-traceability.md) · [Security](docs/architecture/security.md) · [Песочница](docs/architecture/sandbox.md) · [Testing](docs/architecture/testing.md) · [Совместимость](docs/architecture/compatibility.md) · [Производительность](docs/architecture/performance.md) |
 
 </details>
 
-Документацию не только пишут, но и проверяют: справочник CLI генерируется из `--help`, демо выше выполняется
-в CI, имена тестов и команд из документов сверяются с кодом (`scripts/check_docs.py`), документ OpenAPI
-сверяется с роутером, а утверждения о байтовых форматах подкреплены conformance-векторами.
+Документацию не только пишут, но и проверяют: справочник CLI, темы help, формы `--json`, автодополнение и man-страницы
+генерируются из бинарника (устаревшие ломают CI); демо выше выполняется в CI и сверяется построчно; каждая команда
+из туториалов запускается на настоящих бинарниках (кроме Windows); имена тестов, команды `ag` и переменные `AG_*`
+из документов сверяются с кодом (`scripts/check_docs.py`); сайт собирается с `mkdocs build --strict` (битая ссылка
+или якорь ломают сборку); документ OpenAPI сверяется с роутером, а утверждения о байтовых форматах подкреплены
+conformance-векторами. Сайт ни разу не публиковался: GitHub Pages для репозитория не включён.
 
 <details>
 <summary><b>Состав проекта</b></summary>
@@ -373,11 +393,12 @@ Mergeable, а интегратор, пытающийся влить заблок
 
 | Крейт | Роль |
 |---|---|
-| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` | детерминированное ядро: форматы, content ID, история, merge с учётом переименований |
+| `ag-types` `ag-object` `ag-changeset` `ag-tree` `ag-dag` `ag-diff` `ag-merge` `ag-crypto` | детерминированное ядро: форматы, content ID, история, merge с учётом переименований, подписи |
 | `ag-storage` | хранилище объектов (файлы или S3) + транзакционные метаданные (SQLite или PostgreSQL) |
 | `ag-policy` · `ag-agent` | вычисление политик и подписанные аттестации · координация агентов |
 | `ag-integrate` | движок: публикация, интеграция, workspaces, очередь, GC, verify, backup, blame |
-| `ag-protocol` · `ag-server` · `ag-client` | AGWP v1 (protobuf + JSON-отображение) · сетевой сервер · gRPC-клиент на Rust |
+| `ag-protocol` · `ag-server` · `ag-client` · `ag-ui-assets` | AGWP v1 (protobuf + JSON-отображение) · сетевой сервер · gRPC-клиент на Rust · встроенный Web UI |
+| `ag-mcp` · `ag-bench` | MCP-сервер для агентов (stdio) · бенчмарки движка и сервера |
 | `ag-sandbox` · `ag-worker` | изолированное исполнение недоверенных проверок · воркер, который их запускает и подписывает результат |
 | `ag-git` · `ag-cli` | Git-мост · бинарник `ag` (локальный и удалённый режим) |
 
@@ -400,13 +421,17 @@ Mergeable, а интегратор, пытающийся влить заблок
 | Область | Честная картина |
 |---|---|
 | 🔓 **Локальный режим** | Доверяет локальному пользователю. Идентичности — метки, а не аутентификация; кто может писать в `.ag/`, тот может обойти политику (подмена *обнаруживается* через `ag verify` и цепочку аудита). Против клиентов, которых вы не контролируете, запускайте `ag-server`: он аутентифицирует каждый запрос, и политика действует там. |
-| 🖥️ **Один процесс сервера** | Контрольная база (credentials, роли, реестр репозиториев) — один файл SQLite, поэтому `ag-server` работает в одной реплике. PostgreSQL и S3 дают репозиториям надёжное, независимо масштабируемое хранилище, но не active-active сервер. Высокой доступности пока нет. |
-| 🪪 **Credentials ↔ *имя* агента** | Credentials привязаны к имени агента, а не к одному запуску: два параллельных запуска одного агента могут действовать друг за друга. Оркестратор предупреждает об этом; исправление есть в [roadmap](ROADMAP.md). |
-| 🚢 **Файлы развёртывания** | Проверены инструментами, но не боем. Манифесты, правила и конфиги проверяются инструментами и тестами в CI; образы контейнеров, `docker compose up`, настоящий кластер и релизный workflow на момент написания автором не запускались. [Страница про развёртывание](docs/operations/deployment.md) перечисляет, что именно проверено, а что нет. |
-| 🧱 **Песочница** | `ag validate run` — **не** песочница: только для доверенного кода. Недоверенный код запускается через [`ag-worker`](docs/guides/workers.md) и его [песочницу](docs/architecture/sandbox.md): она делит ядро с хостом (это не виртуальная машина), и часть её не проверена (контейнерный бэкенд, лимиты cgroup v2, macOS) — прочитайте эту страницу (на английском) до того, как на неё полагаться. |
-| 📏 **Масштаб** | Плоские манифесты деревьев: на 100 000 файлов интеграция занимает несколько сотен миллисекунд; иерархические деревья отложены с явными условиями ([ADR-0006](docs/adr/0006-flat-trees-measured.md)). Определение переименований — по файлам (без переименований каталогов и копий). |
-| 🖼️ **Клиенты** | Web UI проверен только в Chromium на Linux при десктопной ширине. SDK ещё не опубликованы в npm и PyPI. Советник, ревьюеры и семантический индекс оркестратора — детерминированные эвристики, а не модели. |
-| 🔒 **Аудит** | Внешнего аудита безопасности не было. |
+| 🖥️ **Реплики сервера** | По умолчанию — один процесс с контрольной базой SQLite. Несколько реплик на одном PostgreSQL и одном S3-бакете поддерживаются и **протестированы настоящими процессами в CI** (нет потерянных обновлений, `kill -9`, ровно одна выдача задания, события и replay между репликами, отзыв credentials за ограниченное время, rolling restart; [руководство](docs/operations/high-availability.md), на английском). Не доказано: смешанные сборки при rolling-обновлении, отказоустойчивость PostgreSQL (он остаётся единой точкой отказа, пока вы не сделаете его HA), нагрузка, оверлей `ha` для Kubernetes на кластере. Лимиты запросов — на реплику; `remote` в логах — адрес прокси за ним (`X-Forwarded-For` не поддерживается). |
+| 🪪 **Credentials и запуски** | Credential можно привязать к одному запуску, и он умирает вместе с ним (`scope.run_id`, [ADR-0010](docs/adr/0010-run-bound-credentials.md)); оркестратор и `ag-mcp` делают это для каждого запуска. Это включается клиентом: выданный вручную токен агента по-прежнему действует как агент во всех запусках, а writer всё ещё может стартовать, продлевать и завершать чужой запуск (это попадает в аудит с атрибуцией, но не предотвращается). |
+| 📊 **Лимиты сервера** | Байты объектов учитываются атомарно на каждом пути записи. Число открытых потоков и proposals проверяется прямо перед вставкой, поэтому параллельные запросы могут превысить лимит на число запросов «в полёте». У записей идемпотентности нет TTL. Общего бюджета байт запросов «в полёте» нет; худший случай описан в [Security](docs/architecture/security.md). |
+| 🚢 **Развёртывание и релиз** | Образ контейнера, Compose (PostgreSQL + SeaweedFS) и развёртывание в kind целиком проходят в workflow `Containers`, а релизный workflow прогнан до конца в режиме репетиции с рабочей ветки (архивы, SBOM, оба архитектурных образа, `install.sh` на трёх ОС). **Ничего не опубликовано**: нет тега, нет релиза в реестрах, npm, PyPI и crates.io. Не запускалось: настоящий кластер (ingress, storage class), оверлеи `ha` и Prometheus Operator на нём, репетиция с `main`. [Развёртывание](docs/operations/deployment.md) и [Releasing](docs/operations/releasing.md) перечисляют, что именно доказано. |
+| 🧱 **Песочница** | `ag validate run` — **не** песочница: только для доверенного кода. Недоверенный код запускается через [`ag-worker`](docs/guides/workers.md) и его [песочницу](docs/architecture/sandbox.md): она делит ядро с хостом (это не виртуальная машина). В CI изнутри доказано: настоящие Docker и Podman (rootful и rootless) и делегированный cgroup v2. **Не проверено**: microVM-бэкенды (gVisor, Kata), Windows (воркер отказывается запускаться), macOS кроме запасного варианта «только лимиты», рантаймы кроме Docker 28.0.4 и Podman 4.9.3, образы кроме BusyBox, хосты с SELinux enforcing. |
+| 🗄️ **Бэкенды хранилищ** | Метаданные PostgreSQL и объекты S3 тестируются в CI на настоящем PostgreSQL и настоящем S3-сервере (SeaweedFS с проверкой подписей, HTTP и HTTPS с приватным CA) и на moto. **Не** тестировались на Amazon S3, MinIO, Ceph, R2 и других версиях PostgreSQL. |
+| 📏 **Масштаб и скорость** | Плоские манифесты деревьев: на 100 000 файлов интеграция занимает несколько сотен миллисекунд ([ADR-0006](docs/adr/0006-flat-trees-measured.md)). Цифры получены на одной общей VM с 4 vCPU и не являются целями ([движок](docs/architecture/performance.md), [сервер под нагрузкой](docs/operations/performance.md)): запись на SQLite по умолчанию упирается в fsync (около 80 интеграций/с на 16 потоках), а конкуренция за один поток даёт повторяемые ответы `aborted` (около 11–14% при 16 писателях). Цифр по PostgreSQL, S3, TLS и нескольким репликам нет. Определение переименований — по файлам (без переименований каталогов и копий). |
+| 🪟 **Платформы** | Linux и macOS тестируются в CI; Windows собирается и проходит набор тестов и демо из README (PowerShell 7 и 5.1) в CI. На Windows нет песочницы и воркера, нет релизного архива, а ACL «только владелец» на файлах ключей выставляется при создании, но не читается обратно. Нужны ли чистой машине Windows NASM или среда выполнения VC++, не проверено. |
+| 🖼️ **Клиенты** | Web UI раздаёт `ag-server`; он проверен в Chromium, Firefox и WebKit (CI), а планшетная и телефонная раскладки — эмуляцией; вход через OIDC проверен на настоящем Keycloak 26 (dev-режим, HTTP), но не на Entra, Okta или Auth0. Проверки со скринридером и на реальных телефонах не было. `ag-mcp` — только stdio; конфигурации для хостов (Claude Code, Claude Desktop, Agent SDK) написаны по документации хостов и в самих хостах не запускались; настоящая модель управляла им один раз вручную. SDK не опубликованы в npm и PyPI. |
+| 🧠 **Оркестратор** | Советник, ревьюеры и семантический индекс по умолчанию — детерминированные эвристики; необязательный режим `model` обращается к любому OpenAI-совместимому эндпоинту, который вы настроите (ничего не поставляется, модели только предлагают комментарии). Он запускался вживую один раз с одной дешёвой моделью через одного провайдера; необязательный live-шаг CI в Actions ни разу не выполнялся. Имитирующего агента в поставке нет. |
+| 🛡️ **Гейты безопасности** | В CI идут сканирование цепочки поставки, CodeQL (четыре языка), 20 fuzz-целей, пороги покрытия (79,1% строк) и мутационное тестирование пяти базовых крейтов; локальный фаззинг шёл 4,3 часа без падений. Ночной fuzz и еженедельный прогон мутаций **ни разу не запускались на GitHub**; граф зависимостей репозитория выключен, а состояние приватных сообщений об уязвимостях неизвестно (настройки владельца); 18 pull request'ов Dependabot не разобраны. **Внешнего аудита безопасности не было.** |
 
 <table>
 <tr>
@@ -414,7 +439,7 @@ Mergeable, а интегратор, пытающийся влить заблок
 
 **✅ Подходит для**
 
-- команды и её агентов на одной машине, одном сервере или общем томе
+- команды и её агентов на одной машине, одном сервере (или нескольких репликах на PostgreSQL и S3) или общем томе
 - процессов с CI-гейтами
 - экспериментов с автономностью агентов под политикой
 - разработки на небольшом детерминированном ядре
@@ -425,7 +450,7 @@ Mergeable, а интегратор, пытающийся влить заблок
 **⛔ Пока не подходит для**
 
 - хостинга многих недоверяющих друг другу арендаторов
-- высокой доступности
+- настройки высокой доступности с доказанным failover (реплики протестированы, отказоустойчивость PostgreSQL — нет)
 - роли единственной копии незаменимых данных. Делайте `ag backup` и держите Git-зеркало.
 
 </td>

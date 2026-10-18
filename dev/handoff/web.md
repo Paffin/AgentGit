@@ -1,5 +1,7 @@
 # Handoff: Web UI to product level
 
+> **Superseded by [web_tail.md](web_tail.md)** (the work finished after this was written). Kept for history; where the two differ, the later file is right.
+
 State at the checkpoint. Branches on the remote: `web-product-ci` (CI sandbox: its `web.yml` has the full five-project matrix and also
 triggers on pushes to that branch) and `wip/web-track` (same head, based on an older main). `main` has the work merged
 with the latest main; there `web.yml` runs chromium, tablet and phone only (the firefox/webkit entries are described in

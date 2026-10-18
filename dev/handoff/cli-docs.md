@@ -1,5 +1,7 @@
 # Handoff: the `ag` CLI as a product, and the documentation site
 
+> **Superseded by [docs_site.md](docs_site.md)** (the work finished after this was written). Kept for history; where the two differ, the later file is right.
+
 > **Update 2026-10-18:** the second half (docs site, tutorials, generated reference pages, snippet harness, the
 > `shells` job) is done: see `dev/handoff/docs_site.md`. The "Not done" list below is history.
 

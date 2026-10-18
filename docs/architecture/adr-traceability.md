@@ -46,7 +46,8 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Derived workers: trees ✅; path history ✅ (path index); blame ✅ (computed on demand, follows renames) | ✅ | [History guide](../guides/history.md); renames in merge: [ADR-0005](../adr/0005-rename-aware-merge.md) |
 | Outbox | ✅ | at-least-once; the one in-process consumer is tree derivation, run inline after each commit (no background dispatcher; failures are recorded and retried by the next pass) |
 | Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). The OCI backend is checked against real Docker and Podman in CI. Not yet: VM-level isolation, Windows workers, worker pools/labels |
-| Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Heuristic, not model-backed, advisors |
+| Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Advisor, reviewers and semantic index are deterministic heuristics by default and can be switched to a model (any OpenAI-compatible endpoint you configure); models only propose comments. No simulated agent ships; the optional live path was run once, by hand, with one model |
+| MCP server for agents (`ag-mcp`) | ✅ | stdio, 31 tools, `integrate` only behind `--enable-integrate`, no administration; protocol, CLI and end-to-end suites against a real in-process server ([ADR-0008](../adr/0008-mcp-server.md), [guide](../guides/mcp.md)). Not run inside Claude Code, Claude Desktop or the Agent SDKs |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |
 | Crash recovery, object availability, unknown commit outcome | ✅ | tests above |
 | GC by generations | 🟡 | age-based grace period + roots; no separate generations |
@@ -72,7 +73,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Conflict prediction | ✅ | `ag predict` (path level) |
 | Integration queue | ✅ | `ag queue` |
 | Provenance | ✅ | signed, separate from changesets |
-| Autonomous review | 🔜 | reviews by agents are possible; policy decides whether they count |
+| Autonomous review | 🟡 | reviews by agents are possible and policy decides whether they count; the orchestrator's reviewers (heuristic or model-backed) only post comments, never approve |
 | Policy-bound autonomy | ✅ | `agent_autonomy` |
 | Replay & trace | 🟡 | `ag trace`, audit chain, `events.replay` and the SSE subscription (`api_contract` tests) |
 | Soft leases; fencing tokens for exclusivity | ✅ | |
@@ -88,6 +89,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Signed CI attestations | ✅ |
 | Prompt-injection hardening | ✅ data is never interpreted; terminal output sanitized |
 | Limits on blobs, ops, DAG depth, requests | ✅ request size (HTTP and gRPC alike), concurrency, per-credential rate limits and repository quotas on the server: total bytes charged on every write path (`quota.rs`; `quotas.rs`, `api_honesty.rs`), bytes per object, streams, open proposals. Stream and proposal counts are checked just before the insert, so concurrent creates can overshoot by the number in flight |
+| Supply-chain and testing gates | ✅ cargo-deny, npm audit, pip-audit, govulncheck, CodeQL, pinned actions, SBOMs; 20 fuzz targets, coverage floors, mutation testing of five core crates ([Testing](testing.md), [supply chain](../operations/supply-chain.md)). The nightly fuzz and weekly mutation runs have not yet run on GitHub; no external audit |
 | Independent, tamper-evident audit | ✅ hash chain (not yet externally anchored) |
 | Path traversal, symlink escape, zip bombs, object substitution | ✅ (no archive handling exists) |
 | Separate powers for agent, reviewer, admin | ✅ (and a delegator that hands out agent credentials without administrator rights; a test fails if a new administrator-only capability is delegable) |
@@ -98,5 +100,5 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 
 ## §10–§11 — stack and UI
 
-Rust core ✅ · CLI (clap) ✅ · Vue Web UI ✅ ([guide](../guides/web-ui.md)) · Go orchestrator ✅ · SDKs ✅ (TypeScript, Python; unpublished) · OpenTelemetry (traces) / Prometheus ✅ ·
+Rust core ✅ · CLI (clap) ✅ (Linux, macOS and Windows in CI) · Vue Web UI ✅ (served by `ag-server`; Chromium, Firefox, WebKit in CI; [guide](../guides/web-ui.md)) · Go orchestrator ✅ · SDKs ✅ (TypeScript, Python; unpublished) · OpenTelemetry (traces) / Prometheus ✅ ·
 NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (the image, the Compose stack and a kind deployment run end to end in the `Containers` workflow; no real cluster, ingress or storage class, the HA overlay and the Prometheus Operator overlay are not applied to one — [deployment](../operations/deployment.md)). The ADR's text is cut off at §11 (Web UI); the rest was never received.

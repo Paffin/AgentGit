@@ -1,5 +1,7 @@
 # Handoff: ag-mcp (MCP server track)
 
+> **Superseded by [mcp_tail.md](mcp_tail.md)** (the work finished after this was written). Kept for history; where the two differ, the later file is right.
+
 Status when this was written: the crate, ADR and three end-to-end suites are done and green locally; the guide, the
 protocol/CLI conformance suites, the example client and the CI job are not.
 

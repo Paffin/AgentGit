@@ -73,7 +73,7 @@ transaction runs), and garbage collection that cannot delete an object a writer 
 - ⚠️ SQLite metadata with S3 objects is single-host; cross-host needs PostgreSQL metadata (the lock).
 - ⚠️ No tool yet moves an existing repository between backends, and PostgreSQL behind a transaction-pooling proxy is
   unsupported (session state is used).
-- ⚠️ Verified against PostgreSQL 16 and moto; not yet against Amazon S3 or MinIO themselves (see
+- ⚠️ Verified against PostgreSQL 16, a real S3 server (SeaweedFS) and moto; not yet against Amazon S3 or MinIO themselves (see
   [the operations guide](../operations/postgres-and-s3.md#honest-limits)).
 - ⚠️ The `migrations/` directory sits outside the crate, so `cargo package` for `ag-storage` needs the files copied
   or symlinked in before publishing.

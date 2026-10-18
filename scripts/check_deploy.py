@@ -94,6 +94,22 @@ if unknown:
 else:
     ok(f"{len(referenced)} metrics used by alerts and dashboard are all exported")
 
+# ---- the S3 server the tests use is the one the stack runs ---------------------------------------
+# scripts/s3-test.sh downloads a pinned SeaweedFS release and runs the object-store suites against it; the Compose
+# stack runs an image of SeaweedFS. If the two drift apart, "SeaweedFS passes our S3 suites" stops being true of
+# what is deployed.
+compose_versions = set(re.findall(r"chrislusf/seaweedfs:([\w.]+)", (DEPLOY / "compose/compose.yaml").read_text()))
+m = re.search(r'^SEAWEEDFS_VERSION="([\w.]+)"', (ROOT / "scripts/s3-test.sh").read_text(), re.M)
+if not m:
+    fail("scripts/s3-test.sh does not pin SEAWEEDFS_VERSION")
+elif compose_versions != {m.group(1)}:
+    fail(
+        f"scripts/s3-test.sh tests SeaweedFS {m.group(1)} but deploy/compose/compose.yaml runs "
+        f"{', '.join(sorted(compose_versions)) or 'no SeaweedFS image'}"
+    )
+else:
+    ok(f"the S3 suites run against the SeaweedFS release the Compose stack uses ({m.group(1)})")
+
 # ---- generated rule ----------------------------------------------------------------------------
 r = run([sys.executable, str(ROOT / "scripts/gen_prometheusrule.py"), "--check"])
 if r.returncode:

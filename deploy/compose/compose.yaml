@@ -30,8 +30,9 @@ services:
 
   # The S3-compatible object store. SeaweedFS (Apache-2.0) rather than MinIO: MinIO stopped publishing container
   # images, so the pinned MinIO tag this file used to name no longer exists on any registry. Any S3-compatible
-  # service works if it supports path-style addressing, SigV4, ListObjectsV2 and CopyObject; SeaweedFS passes
-  # AgentGit's S3 suites (crates/ag-storage/tests/s3.rs). The S3 credentials are the ones from .env.
+  # service works if it supports path-style addressing, SigV4, ListObjectsV2 and CopyObject; the same SeaweedFS
+  # release runs AgentGit's S3 suites in CI (scripts/s3-test.sh with AG_S3_SERVER=seaweedfs; crates/ag-storage/tests/s3.rs
+  # among them). The S3 credentials are the ones from .env.
   seaweedfs:
     <<: *restart
     image: chrislusf/seaweedfs:4.48

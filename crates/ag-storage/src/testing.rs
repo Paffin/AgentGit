@@ -9,6 +9,7 @@
 //! |---|---|
 //! | `AG_TEST_POSTGRES_URL` | metadata in PostgreSQL (a fresh schema per test, dropped afterwards) |
 //! | `AG_TEST_S3_ENDPOINT` (+ `AG_TEST_S3_BUCKET`, `AG_TEST_S3_REGION`, `AG_TEST_S3_ACCESS_KEY_ID`, `AG_TEST_S3_SECRET_ACCESS_KEY`) | objects in an S3-compatible bucket (a fresh key prefix per test, emptied afterwards) |
+//! | `AG_TEST_S3_TLS_ENDPOINT` + `AG_TEST_S3_CA` | optional: an `https://` endpoint of the same server, and the PEM file of the private CA that signed its certificate (the TLS tests of the S3 client; `scripts/s3-test.sh` provides them for SeaweedFS) |
 //! | `AG_REQUIRE_BACKENDS=1` | a test that needs a backend whose variable is unset **fails** instead of silently running on the default |
 //!
 //! `scripts/pg-test.sh` and `scripts/s3-test.sh` start throwaway servers and
@@ -216,20 +217,41 @@ impl TestMeta {
 
 /// Settings of the S3 server under test (the `AG_TEST_S3_*` variables) with every
 /// key under `prefix`. `None` when no server is configured (and `AG_REQUIRE_BACKENDS` is off).
+///
+/// The credentials have no defaults: a server is only ever started by `scripts/s3-test.sh`, which creates them,
+/// and a test that guessed them would not be testing the authentication it claims to.
 #[cfg(feature = "s3")]
 pub fn s3_config(prefix: &str) -> Option<crate::S3Config> {
     let endpoint = s3_endpoint()?;
-    let env =
+    let optional =
         |k: &str, default: &str| std::env::var(k).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| default.to_string());
-    let creds =
-        crate::Credentials::new(env("AG_TEST_S3_ACCESS_KEY_ID", "test"), env("AG_TEST_S3_SECRET_ACCESS_KEY", "test"));
+    let required = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| panic!("{ENV_S3_ENDPOINT} is set but {k} is not (scripts/s3-test.sh exports both)"))
+    };
+    let creds = crate::Credentials::new(required("AG_TEST_S3_ACCESS_KEY_ID"), required("AG_TEST_S3_SECRET_ACCESS_KEY"));
     let mut cfg = crate::S3Config::new(
         endpoint,
-        env("AG_TEST_S3_REGION", "us-east-1"),
-        env("AG_TEST_S3_BUCKET", "ag-test"),
+        optional("AG_TEST_S3_REGION", "us-east-1"),
+        optional("AG_TEST_S3_BUCKET", "ag-test"),
         creds,
     );
     cfg.prefix = prefix.to_string();
+    Some(cfg)
+}
+
+/// Like [`s3_config`], but against the server's `https://` endpoint, trusting only the private CA named by
+/// `AG_TEST_S3_CA`. `None` unless the server under test offers TLS (`AG_TEST_S3_TLS_ENDPOINT` and `AG_TEST_S3_CA`
+/// are both set); this one is never required, as not every S3 server used for testing can serve TLS.
+#[cfg(feature = "s3")]
+pub fn s3_tls_config(prefix: &str) -> Option<crate::S3Config> {
+    let var = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
+    let (endpoint, ca) = (var("AG_TEST_S3_TLS_ENDPOINT")?, var("AG_TEST_S3_CA")?);
+    let mut cfg = s3_config(prefix)?;
+    cfg.endpoint = endpoint;
+    cfg.ca_bundle = Some(PathBuf::from(ca));
     Some(cfg)
 }
 

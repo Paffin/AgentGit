@@ -41,9 +41,9 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | SCM engine in Rust, deterministic | ✅ | |
 | Object store, changeset DAG, tree resolver, diff/merge, integration/CAS, integrity/GC | ✅ | |
 | PostgreSQL metadata | ✅ | per repository, same transactional surface as SQLite; the whole suite runs on both ([guide](../operations/postgres-and-s3.md), [ADR-0004](../adr/0004-postgres-and-s3-backends.md)). The server's own control database is still one SQLite file |
-| S3 / MinIO object storage | ✅ | `S3ObjectStore` behind the same trait; tested against a signature-checking S3 server (moto), not against AWS or MinIO |
+| S3 / MinIO object storage | ✅ | `S3ObjectStore` behind the same trait; the store's suite runs in CI against a real S3 server (SeaweedFS, signature-checking) and against moto (a signature-checking re-implementation), not against Amazon S3 or MinIO itself |
 | Derived workers: trees ✅; path history ✅ (path index); blame ✅ (computed on demand, follows renames) | ✅ | [History guide](../guides/history.md); renames in merge: [ADR-0005](../adr/0005-rename-aware-merge.md) |
-| Outbox dispatcher | ✅ | at-least-once; in-process consumer (tree derivation) |
+| Outbox | ✅ | at-least-once; the one in-process consumer is tree derivation, run inline after each commit (no background dispatcher; failures are recorded and retried by the next pass) |
 | Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). Not yet: VM-level isolation, a verified OCI backend, worker pools/labels |
 | Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Heuristic, not model-backed, advisors |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |

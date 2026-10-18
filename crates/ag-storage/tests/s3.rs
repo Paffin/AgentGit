@@ -312,3 +312,38 @@ fn durability_is_stated_honestly() {
     assert!(d.does_not_survive.iter().any(|s| s.contains("not evidence of replication")));
     let _ = (hash_blob(b"x"), s3_endpoint());
 }
+
+#[test]
+fn https_works_with_the_private_ca_and_no_other_certificate_is_trusted() {
+    // The production configuration is TLS; everything above ran over plain HTTP. Only a server that can serve TLS
+    // with a private CA takes part (scripts/s3-test.sh with AG_S3_SERVER=seaweedfs).
+    let Some(cfg) = ag_storage::testing::s3_tls_config(&unique("agtest")) else {
+        eprintln!("skipped: the S3 server under test offers no TLS (AG_TEST_S3_TLS_ENDPOINT, AG_TEST_S3_CA)");
+        return;
+    };
+    assert!(cfg.endpoint.starts_with("https://"), "{}", cfg.endpoint);
+
+    // With the CA that signed the certificate: a whole round trip over TLS, signatures still checked by the server.
+    let f = Fixture::with(cfg.clone(), Arc::new(InProcessLock::new())).unwrap();
+    let obj = blob("over tls");
+    let id = f.store.put(&obj).unwrap();
+    assert_eq!(f.store.get(&id).unwrap().unwrap(), obj);
+    assert_eq!(f.store.list().unwrap().len(), 1);
+    assert!(f.store.delete(&id).unwrap());
+
+    // Without it, the certificate does not chain to anything the built-in web roots trust: refused outright, not
+    // retried into success and not downgraded to plain HTTP.
+    let mut untrusted = cfg.clone();
+    untrusted.ca_bundle = None;
+    untrusted.max_retries = 0;
+    let err =
+        S3ObjectStore::open(untrusted, Arc::new(InProcessLock::new())).expect_err("unknown certificate authority");
+    assert!(matches!(err, StoreError::Remote { status: None, .. }), "{err}");
+
+    // A bundle without certificates is an error that names the file, not an empty trust store.
+    let empty = tempfile::NamedTempFile::new().unwrap();
+    let mut no_certs = cfg;
+    no_certs.ca_bundle = Some(empty.path().to_path_buf());
+    let err = S3ObjectStore::open(no_certs, Arc::new(InProcessLock::new())).expect_err("no certificates");
+    assert!(err.to_string().contains("contains no certificates"), "{err}");
+}

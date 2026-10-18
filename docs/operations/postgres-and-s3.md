@@ -172,13 +172,17 @@ Unknown keys are errors, so a typo does not silently select a default.
 | `objects.access_key_id_env`, `objects.secret_access_key_env`, `objects.session_token_env` | names of the credential variables | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` |
 | `objects.ca_bundle` | PEM file with the CA(s) of a private endpoint | built-in web roots |
 | `objects.lock` | `auto`, `postgres_advisory`, `file`, `in_process` | `auto` |
+| `objects.request_timeout_secs` | deadline of one request, body included (1 to 86400); a blob up to the blob limit is one request, so raise it on a slow uplink | 300 |
+| `objects.max_retries` | retries after the first attempt for transient failures (0 to 20; backoff 50 ms doubling to 3 s, with jitter) | 5 |
+| `objects.list_page_size` | keys per listing page (1 to 1000) | 1000 |
 
 Pass the section to `ag init` with `--storage <file>`; the file holds just the object shown in the quick start.
 
 Environment variables read by `ag`: the ones named above (`AG_PG_URL`, `AWS_*`), and `AG_KEY_DIR` as before.
 Used only by the test scripts: `AG_TEST_POSTGRES_URL`, `AG_TEST_POSTGRES_CA`, `AG_TEST_S3_ENDPOINT`,
 `AG_TEST_S3_BUCKET`, `AG_TEST_S3_REGION`, `AG_TEST_S3_ACCESS_KEY_ID`, `AG_TEST_S3_SECRET_ACCESS_KEY`,
-`AG_REQUIRE_BACKENDS`.
+`AG_TEST_S3_TLS_ENDPOINT`, `AG_TEST_S3_CA`, `AG_REQUIRE_BACKENDS`, and for `scripts/s3-test.sh` `AG_S3_SERVER`,
+`AG_S3_VENV`, `AG_S3_CACHE`, `AG_SEAWEEDFS_BIN`, `AG_S3_BUCKET`.
 
 ## Operating it
 
@@ -204,13 +208,34 @@ with connections. Every object operation on S3 is a network round trip: a new ob
 object that already exists costs a `PUT` (412), a `GET` and a `CopyObject`; `ag verify` reads every
 object. Keep the database and the bucket in the same region as the `ag` processes.
 
+### What is verified against what
+
+| Backend | Server | What runs against it | Where |
+|---|---|---|---|
+| metadata | **PostgreSQL 16**, a throwaway cluster from `scripts/pg-test.sh` (a private CA, so `sslmode=require` and `verify-full` are exercised) | every suite of the workspace | CI job *PostgreSQL + S3 backends* |
+| objects | **SeaweedFS 4.48**, the real S3 server the Compose stack runs (Go, a different implementation from the client's author): one identity is configured so the gateway verifies every SigV4 signature, and it serves HTTP and HTTPS (a private CA) | the object-store suite (`crates/ag-storage/tests/s3.rs`: conditional create, damage and repair, paging, concurrent puts, the GC/writer race with the lock, blocked GC, signature enforcement, TLS with and without the CA), the engine's suites (`ag-integrate`: GC, backup, verify, lifecycle on S3 objects) and the server's backend suite | same job, second step |
+| objects | **moto 5.2.4**, a Python re-implementation of the S3 API that recomputes every request's signature | every suite of the workspace | same job, first step |
+| objects, protocol | SeaweedFS in the Compose stack | the end-to-end smoke (repositories created over the API, objects in the bucket, a restart that loses nothing) | Containers workflow, job *docker compose* |
+
+Observed on SeaweedFS 4.48 (and relied upon): a second conditional create answers `412 PreconditionFailed`,
+`CopyObject` of an object onto itself with `MetadataDirective=REPLACE` moves `LastModified`, unsigned and
+wrongly signed requests are refused with `403`.
+
+Two test doubles remain, both because the thing they stand in for cannot be provoked on demand: the unit tests of the
+S3 client (`crates/ag-storage/src/s3/tests.rs`) talk to a scripted local HTTP server (to answer `503`, drop the
+connection or send a damaged listing, exactly when the test says), and the failpoints of the engine
+(`Failpoints`, to lose a response at a chosen step). They test the client's retry and error handling and the
+engine's recovery, not S3's behaviour.
+
 ### Honest limits
 
-- Verified against **PostgreSQL 16** and **moto** (a Python S3 implementation that checks request signatures).
-  Not yet run against Amazon S3, MinIO or other PostgreSQL versions; the S3 behaviours relied upon (conditional
-  create, `CopyObject` onto itself with `REPLACE`, `ListObjectsV2`) are standard, but your service's edge
-  cases are yours to confirm. The scripts below make that a one-command exercise against a server of your
-  choice.
+- **Not verified**: Amazon S3 itself, MinIO, Ceph RGW, Cloudflare R2 or any other S3 service; PostgreSQL versions
+  other than 16; a transaction-pooling proxy in front of PostgreSQL (unsupported). The S3 behaviours relied upon
+  (conditional create, `CopyObject` onto itself with `REPLACE`, `ListObjectsV2`) are standard and two independent
+  servers agree on them, but your service's edge cases are yours to confirm. `scripts/s3-test.sh` starts only the
+  two servers above; to test another service run the suites by hand with the `AG_TEST_S3_*` variables pointing at
+  it (see [Testing each backend](#testing-each-backend)).
+- A single SeaweedFS node proves behaviour, not durability: see [Durability](durability.md).
 - If the object lock's PostgreSQL connection dies while a guard is held, protection is lost for that guard (the
   next acquisition reconnects). The collector holds its guard for one object's check-then-delete, a few
   milliseconds.
@@ -232,12 +257,23 @@ and local files and needs nothing else.
 cargo test --workspace                                         # SQLite + files (default)
 scripts/pg-test.sh cargo test --workspace                      # metadata on a throwaway PostgreSQL cluster
 scripts/s3-test.sh cargo test --workspace                      # objects on a throwaway S3 server (moto)
+AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p ag-storage -p ag-integrate   # … on a real one (SeaweedFS)
 AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace   # both, and fail if either is missing
 ```
 
 `scripts/pg-test.sh` needs the PostgreSQL server binaries (`initdb`, `pg_ctl`, `postgres`; as root it runs them as
 the `postgres` user) and starts a private cluster with a private CA so the TLS tests run too.
-`scripts/s3-test.sh` needs `python3` with `venv`/`pip` (it installs moto into `~/.cache/agentgit/s3-venv` the first
-time) and switches signature checking on, so the server independently verifies every request our signer produces.
+
+`scripts/s3-test.sh` starts one of two S3 servers, chosen by `AG_S3_SERVER`:
+
+- `moto` (the default) needs `python3` with `venv`/`pip` (it installs moto into `~/.cache/agentgit/s3-venv` the first
+  time) and switches on IAM enforcement, so the server recomputes every request's signature.
+- `seaweedfs` downloads the release pinned in the script (the one the Compose stack runs; the download is checked
+  against a pinned SHA-256 and cached under `~/.cache/agentgit`, or point `AG_SEAWEEDFS_BIN` at a `weed` binary),
+  starts it as one process on loopback with a single configured identity, creates the bucket, and refuses to go on
+  if an unsigned request is answered, so signature verification is demonstrably on. It also serves HTTPS with a
+  certificate from a private CA (needs `openssl`) for the TLS tests.
+
 Each test gets its own schema and key prefix and removes it afterwards. With `AG_REQUIRE_BACKENDS=1`, a test that
-needs a backend whose variable is unset **fails** rather than quietly using the default.
+needs a backend whose variable is unset **fails** rather than quietly using the default. CI runs both S3 servers in
+the *PostgreSQL + S3 backends* job.

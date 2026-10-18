@@ -20,6 +20,18 @@ orchestrator, deploy files, observability, README redesign (EN+RU, generated SVG
 Verified at last full run: 76 Rust suites / 554 tests green; clippy clean; TS SDK 156, Python SDK 176, Web 309 unit +
 e2e, Go suite green.
 
+## 2026-10-18 update (session resumed after the usage limit reset)
+* **`main` is RED** at `c69526d` (merging seven parallel tracks without waiting for CI): CI jobs MSRV 1.89, rustdoc,
+  macOS tests (`ag-sandbox` `the_child_never_touches_the_allocator`), client SDKs (TypeScript step), agent orchestrator
+  (Go), container images build; plus the Windows, Containers and Packaging workflows. Web UI and ubuntu tests,
+  PG+S3 backends, docs+demo, deployment files are green. Rule from now on: **no further feature work until main is
+  green**, and every landing waits for its CI.
+* Fix workflow running: `dev/workflows/restore-green-main.js` (3 fixers: rust / sdk-go / containers, then a CI
+  verifier that polls Actions; up to 3 rounds).
+* Audit resumed (`dev/workflows/audit-no-stubs-mocks-hardcodes.js`): first pass gave 126 confirmed / 65 contested /
+  100 refuted / 98 unverified findings (the unverified ones hit the usage limit); the resume re-runs only the failed
+  verifiers. Results are saved into `dev/audit/` when it completes.
+
 ## Product-readiness tracks (7 parallel agents; briefs in `dev/tracks/tracks.md`)
 | # | Track | Owner files | State at snapshot |
 |---|---|---|---|

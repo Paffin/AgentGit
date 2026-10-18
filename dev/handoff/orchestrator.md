@@ -62,7 +62,15 @@ live, and fixes the confirmed audit items of the area.
 - CI of `9f2dd17`, all six workflows green, including "the worked example runs end to end" and "the image builds
   and starts": https://github.com/Paffin/AgentGit/actions/runs/39139989404 (CI), .../39139989365 (CodeQL),
   .../39139989381 (Windows), .../39139989398 (Security), .../39139989406 (Packaging), .../39139989367 (Docs).
-- CI of the last pushed commit: CI_PLACEHOLDER
+- CI of `f49fbd8` (code, docs, handoff; all 10 workflows green): CI https://github.com/Paffin/AgentGit/actions/runs/39144037391,
+  Windows .../39144037404, Docs .../39144037386, Security .../39144037412, CodeQL .../39144037407, Quality
+  .../39144037394, Containers .../39144037368, Web UI .../39144037433, Packaging .../39144037364, Performance
+  .../39144037390. The previous commit `d455ece` had one red run: Windows, `an_operator_reaps_stale_runs_their_leases_and_their_credentials`
+  (a Rust server test of another package, timing: the live run went stale on the slow runner between its heartbeat
+  and the reap). Not orchestrator code; `f49fbd8` makes the test beat again right before each reap, and the rerun passed.
+  If it recurs, the test's 1.3 s sleep and 1 s threshold are the knobs.
+- This handoff's own text was written before `f49fbd8`'s run finished; the commit that adds these links changes only
+  this file (`git log -1 -- dev/handoff/orchestrator.md`), and its runs are not claimed here.
 - Local gates before each push: `go vet ./...`, `gofmt -l .` (empty), `AG_SERVER_BIN=... go test -race -count=1 ./...`
   (all packages ok), `python3 scripts/check_no_stubs.py --strict`, `python3 scripts/check_docs.py`.
 - **Live model run, 2026-10-18** (`AG_LLM_LIVE=1 AG_LLM_LIVE_MODEL=openai/gpt-4o-mini`, endpoint

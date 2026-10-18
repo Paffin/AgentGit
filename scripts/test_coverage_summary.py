@@ -103,12 +103,22 @@ class Floors(unittest.TestCase):
         self.assertTrue(text.startswith("existing\n### Coverage by crate"))
         self.assertIn("| ag-diff |", text)
 
-    def test_the_floors_of_the_repository_hold_for_the_recorded_report(self):
-        # The recorded run is the core crates with their own tests only, so every floor the repository sets for one of
-        # them must already hold for it (the CI run, with the whole workspace's tests, can only be higher).
-        floors = cov.tomllib.loads((pathlib.Path(__file__).parent / "coverage_floors.toml").read_text())["lines"]
-        core = {k: v for k, v in floors.items() if k in self.crates()}
-        self.assertEqual(cov.check_floors(self.crates(), core), [])
+    def test_the_floors_of_the_repository_are_well_formed(self):
+        # What the CI run enforces is checked there, against the whole workspace; here: the file names crates that
+        # exist, in whole multiples of five, and every crate of the deterministic core has one.
+        root = pathlib.Path(__file__).parent.parent
+        floors = cov.tomllib.loads((root / "scripts" / "coverage_floors.toml").read_text())["lines"]
+        crates = {p.parent.name for p in (root / "crates").glob("*/Cargo.toml")}
+        self.assertEqual(sorted(set(floors) - crates), [], "a floor for a crate that does not exist")
+        self.assertTrue(all(isinstance(v, int) and 0 < v <= 100 and v % 5 == 0 for v in floors.values()), floors)
+        core = ["ag-types", "ag-crypto", "ag-object", "ag-changeset", "ag-dag", "ag-diff", "ag-tree", "ag-merge", "ag-policy"]
+        self.assertEqual([c for c in core if c not in floors], [])
+
+    def test_the_recorded_report_has_the_core_crates_with_their_figures(self):
+        crates = self.crates()
+        self.assertIn("ag-merge", crates)
+        self.assertEqual(crates["ag-diff"]["lines"], (183, 189))
+        self.assertEqual(round(cov.pct(crates["ag-diff"]["lines"]), 1), 96.8)
 
     def crates(self):
         return cov.per_crate(json.loads(REPORT.read_text()))

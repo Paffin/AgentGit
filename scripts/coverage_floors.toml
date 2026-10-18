@@ -8,15 +8,33 @@
 # Measured by `cargo llvm-cov --workspace`: the tests of the whole workspace count for every crate (the ones of
 # ag-cli, ag-server and ag-integrate exercise the core crates too). Files under tests/, examples/ and benches/ are
 # not part of a crate's measured source.
+#
+# The numbers each floor was set from are those of the first green Quality run on main (commit 43fb349, 2026-10-18).
 
 [lines]
 # The deterministic core: a bug here corrupts data silently.
-ag-types = 75
-ag-crypto = 80
-ag-object = 90
+ag-types = 85
+ag-crypto = 85
+ag-object = 95
 ag-changeset = 85
-ag-dag = 85
+ag-dag = 90
 ag-diff = 90
 ag-tree = 90
 ag-merge = 90
-ag-policy = 85
+ag-policy = 90
+
+# The rest of the product. These are lower because they are mostly glue to the operating system, the network and
+# other processes, and those paths are exercised by suites that run only where the dependency exists.
+ag-agent = 80
+ag-git = 85
+ag-protocol = 80
+ag-client = 80
+ag-integrate = 80
+ag-server = 80
+ag-cli = 80
+ag-sandbox = 75
+ag-storage = 65
+ag-worker = 65
+# ag-mcp is the least covered crate by a wide margin (see docs/architecture/testing.md); its floor is where it is
+# today, not where it should be. ag-ui-assets is four lines of generated glue and has none.
+ag-mcp = 40

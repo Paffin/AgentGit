@@ -77,7 +77,7 @@ jobs:
       - name: Commit date (build argument)
         id: meta
         run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the server image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -232,7 +232,7 @@ jobs:
       - name: Commit date (build argument)
         id: meta
         run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       # Makes ACTIONS_CACHE_URL / ACTIONS_RUNTIME_TOKEN visible to the plain `docker buildx` CLI below.
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Rebuild on a fresh runner from the gha cache only

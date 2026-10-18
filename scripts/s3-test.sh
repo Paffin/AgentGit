@@ -92,6 +92,12 @@ cleanup() {
     local status=$?
     if [ -n "$SERVER" ]; then
         kill "$SERVER" >/dev/null 2>&1 || true
+        # A server that does not stop within ten seconds is killed: a stuck shutdown must not hang the test run.
+        for _ in $(seq 1 50); do
+            kill -0 "$SERVER" >/dev/null 2>&1 || break
+            sleep 0.2
+        done
+        kill -9 "$SERVER" >/dev/null 2>&1 || true
         wait "$SERVER" >/dev/null 2>&1 || true
     fi
     if [ "$status" -ne 0 ] && [ -s "$LOG" ]; then
@@ -200,7 +206,10 @@ start_seaweedfs() {
 JSON
     mkdir -p "$WORK/data"
     # One process: master + volume server + filer + S3 gateway, everything on loopback. The small volume size keeps
-    # the data directory small; -volume.max=0 sizes the number of volumes from the free disk. The gateway's extra
+    # the data directory small; -volume.max=0 sizes the number of volumes from the free disk. By default the volume
+    # server turns read-only when less than 1 % of the *file system* is free, which on a big, nearly full disk is
+    # gigabytes; every PUT then waits for capacity that never comes and fails minutes later. A throwaway store needs
+    # an absolute margin instead. The gateway's extra
     # listeners (Iceberg, Lance) have fixed default ports that would collide between runs: off. Credentials from the
     # caller's AWS_* variables would add a second identity to the gateway: removed, so the only identity is ours.
     env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
@@ -209,7 +218,7 @@ JSON
         -s3 -s3.port="$s3" -s3.ip.bind=127.0.0.1 -s3.config="$WORK/s3.json" \
         -s3.port.https="$s3_tls" -s3.cert.file="$WORK/server.pem" -s3.key.file="$WORK/server.key" \
         -s3.port.iceberg=0 -s3.port.lance=0 \
-        -master.volumeSizeLimitMB=64 -volume.max=0 >"$LOG" 2>&1 &
+        -master.volumeSizeLimitMB=64 -volume.max=0 -volume.minFreeSpace=100MiB >"$LOG" 2>&1 &
     SERVER=$!
 
     local ready=""
@@ -228,6 +237,17 @@ JSON
         sleep 0.2
     done
     [ -n "$created" ] || die "could not create bucket $BUCKET: $out"
+
+    # The gateway and the bucket exist before the volume server has registered capacity with the master, and an object
+    # can only be stored once it has. Ask the master for a file id: that succeeds when (and only when) a PUT would.
+    # (When there is no capacity the master itself waits up to 30 s for some before it answers: bound each attempt.)
+    local assigned="" assign_out=""
+    for _ in $(seq 1 12); do
+        assign_out="$(curl -s -m 10 "http://127.0.0.1:$master/dir/assign?collection=$BUCKET" || true)"
+        case "$assign_out" in *'"fid"'*) assigned=1; break ;; esac
+        sleep 0.5
+    done
+    [ -n "$assigned" ] || die "SeaweedFS cannot store data (the master offers no volume capacity: $assign_out); look at the free disk space and at the server log"
 
     # Signature verification must really be on, or a green run would say nothing about our signer.
     local anonymous

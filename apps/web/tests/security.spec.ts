@@ -113,7 +113,9 @@ describe('source hygiene', () => {
     expect(found.map((s) => s.body.trim())).toEqual(['alert(1)', '', 'x'])
     expect(found[1]?.attrs).toMatch(/\bsrc=/)
     // an end tag may carry anything up to its `>`, after whitespace or a slash; `</scripts>` ends nothing
-    const odd = scriptsOf('<script>one</script\t\n bar><script>two</script/x><script>three</scripts>four</script>')
+    const odd = scriptsOf(
+      '<script>one</script\t\n bar><script>two</script/x><script>three</scripts>four</script>',
+    )
     expect(odd.map((s) => s.body)).toEqual(['one', 'two', 'three</scripts>four'])
     expect(scriptsOf('<p>no scripts</p>')).toEqual([])
   })

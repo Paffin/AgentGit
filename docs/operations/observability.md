@@ -55,6 +55,10 @@ otlp_headers_env = "OTEL_EXPORTER_OTLP_HEADERS" # name=value,name2=value2 — a 
 * **Propagation.** An incoming W3C `traceparent` is continued: same trace id, the caller's span as parent.
   If the caller's `sampled` flag is off, nothing is recorded. Without a `traceparent` a new trace starts and
   `otlp_sample_ratio` applies.
+* **Logs.** Every log line written while a request is served carries, in its `request{...}` span, `request_id`,
+  `transport`, `remote` (the peer address of the connection - the proxy's, behind one) and `trace_id` (the
+  exported trace's id, or the caller's own if nothing is exported for it, including a `sampled=0` trace), so a
+  log line can be found from a trace and the other way round. A failed authentication logs the `remote` too.
 * **Attributes.** `agwp.operation`, `agwp.transport`, `agwp.result` (`ok` or the error code),
   `agwp.request_id` and, if the client set one, `agwp.deadline_ms`. Credentials, request bodies and identities
   are never recorded. A span is marked as an error only for server-side faults (`internal`, `unavailable`,

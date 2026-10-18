@@ -25,7 +25,12 @@ say what was run and where. Written 2026-10-18.
   tools), Docs https://github.com/Paffin/AgentGit/actions/runs/39103713014 (green: strict site build, the tutorials against
   freshly built `ag` and `ag-server`, the cookbook parser test; the `deploy` job **succeeded with "Pages is not enabled,
   nothing is published"**, which is the guard working: `configure-pages` failed inside `continue-on-error`, every later step was
-  skipped).
+  skipped), Containers .../39103713026, Packaging .../39103713004, Windows .../39103713024: all green.
+* CI at `94c3ddc` (README transcript check, cross-links, handoff): CI .../runs/39104231011, Docs .../39104231032, Containers
+  .../39104231009, Packaging .../39104231045, Windows .../39104231027: all green.
+* CI at `36db3e1` (`AG_REQUIRE_DOC_SNIPPETS=1` in the `test` job, so a skipped tutorial test is a failure; `check_docs` also checks
+  that the `docs/*.md` pages named by `ag`'s help and messages exist): CI .../runs/39104741823, Docs .../39104741909, Packaging
+  .../39104741932, Windows .../39104741865: all green (Containers is path-filtered and did not run).
 * Local (this worktree, Linux): `cargo test -p ag-cli -p ag-policy` all green; `cargo clippy -p ag-cli -p ag-policy -p ag-sandbox
   --all-targets -D warnings`; `cargo fmt --all --check`; `python3 scripts/doc_snippets.py` (five pages, 275 statements, 48
   expectations) run several times, also against a Linux `ag-server`; `scripts/test_doc_snippets.py` (29 tests),

@@ -11,8 +11,11 @@ const DOMAIN: &[u8] = b"agentgit.sandbox.environment.v1\0";
 /// The digest covers, in a fixed canonical encoding:
 ///
 /// * the sandbox implementation's name and the host OS and architecture;
-/// * every field of the [`IsolationReport`] except the free-text `notes` — so the same spec run with and
-///   without a seccomp filter, or with and without a cgroup, has different digests;
+/// * the [`IsolationReport`]'s `verified` flag and every protection flag (namespaces, private and read-only
+///   root, `no_new_privs`, capabilities, seccomp, rlimits, `host_root`), the cgroup that was used, the network
+///   mode, the image and the runtime — so the same spec run with and without a seccomp filter, or with and
+///   without a cgroup, has different digests. Not covered: the free-text `notes`, and `memory` and `tasks`
+///   (*how* a limit was enforced: the limits themselves, and whether a cgroup held them, are covered);
 /// * all [`crate::Limits`], the network mode and the size of `/tmp`;
 /// * the environment variables of the command (names and values; keep secrets out of them);
 /// * the read-only mounts, sorted by sandbox path, each by its [`crate::Mount::identity`] when it has one
@@ -23,8 +26,13 @@ const DOMAIN: &[u8] = b"agentgit.sandbox.environment.v1\0";
 /// It deliberately does **not** cover `argv`, `stdin` or the working tree: those identify *what* was
 /// checked (the check name and the tree id are signed separately); this digest identifies *where*.
 ///
+/// It records **which** protections were in place, not how strong each one is: a release that changes the
+/// seccomp deny-list or the masked `/proc` paths, or a different kernel, gives the same digest. A policy that
+/// needs to notice that pins the worker's version separately.
+///
 /// Returns `sha256:<64 hex digits>`, the format `ag validate run` already uses for environment digests.
-/// The encoding is versioned by its domain string; a change to it would change every digest.
+/// The encoding is versioned by its domain string; a change to it would change every digest, and every
+/// `required_environment_digest` a policy has pinned, so it needs an ADR.
 pub fn environment_digest(sandbox: &str, report: &IsolationReport, spec: &SandboxSpec) -> String {
     let mut h = Sha256::new();
     h.update(DOMAIN);

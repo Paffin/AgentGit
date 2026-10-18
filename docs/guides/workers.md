@@ -20,7 +20,7 @@ policy decides whether that attestation counts. This page is for the person runn
 | An identity | e.g. `service:ci-1`, with the **`runner`** role on the repositories it serves. The role lets it claim jobs and submit attestations; it grants nothing else beyond read access. |
 | A credential | a token for that identity (`ag-server admin mint --subject service:ci-1`). Give it to the worker through an environment variable or a file, never on a command line. |
 | A signing key | created with `ag-worker keygen`. Its public half must be listed in the policy's `trusted_issuers` under the same identity — **otherwise the worker runs checks that count for nothing**. |
-| A sandbox | the namespace sandbox on Linux, or a container runtime. `ag-worker doctor` tells you which work on this machine. |
+| A sandbox | the namespace sandbox on Linux, or a container runtime (Docker or Podman) with a **digest-pinned image already pulled** on the worker's machine. `ag-worker doctor` tells you which work on this machine. |
 
 ## Setting it up
 
@@ -88,9 +88,11 @@ worker can try, and the merge is not blocked by a broken machine:
 |---|---|
 | sandbox unavailable, toolchain not mounted (`cannot execute …`), disk full | job fails, returned to the queue (10 s delay) |
 | the policy asks for more than the worker's ceilings, for network, or for an image | same; the message says what and why |
-| the policy pins an `environment_digest` this worker does not produce | same; the message shows both digests |
+| the policy pins an `environment_digest` this worker does not produce | same; the message shows both digests (the check has run by then: the digest describes the run, so it cannot be known before it) |
+| the candidate has content the worker will not materialize (a symlink that points outside the checkout, an invalid path) | job fails **permanently** with the reason, because no worker can ever check that tree; the proposal stays blocked until the tree changes |
+| the runtime did not create the container as asked (it recorded a privilege, a network or a missing limit the sandbox did not request) | job fails, returned to the queue, nothing is signed |
 | the candidate moved on (`stale_candidate`) | job completes as `stale`, no attestation |
-| the claim was lost (lease expired, job reassigned) | the result is dropped; the server hands the job out again |
+| the claim was lost (lease expired, job reassigned) | the running check is killed (a container is stopped and removed), the result is dropped; the server hands the job out again |
 | the server rejects the credential | the worker stops with the error instead of retrying forever |
 
 A job has a limited number of attempts (five by default); after that it stays failed and `GET …/jobs` shows
@@ -105,8 +107,16 @@ stops and does not.
 | Flag | Meaning |
 |---|---|
 | `--sandbox namespace` | rootless user/mount/PID/IPC/UTS/network namespaces, seccomp, dropped capabilities. Linux. |
-| `--sandbox oci --oci-runtime docker --oci-image repo/img@sha256:…` | a container runtime; the policy's `image` is used if it names one. **Not verified against a real Docker or Podman yet** (see the sandbox page). |
+| `--sandbox oci --oci-runtime docker --oci-image repo/img@sha256:…` | a container runtime (`docker` or `podman`); the policy's `image` is used if it names one. The image must be pinned by digest and **already in the runtime's local store** (`docker pull repo/img@sha256:…` on the worker's machine): the worker never pulls. At start-up the daemon is asked and `--oci-image` is looked for, and the worker refuses to start without them; it also removes containers a killed predecessor left behind. Verified against real Docker and real Podman, rootful and rootless, in CI (see [the sandbox page](../architecture/sandbox.md#what-was-tested-and-where)). |
 | `--sandbox process --insecure-allow-process-sandbox` | limits only. **Not isolation**: the check runs with the worker's user's file and network access. For code you already trust, on a machine you do not mind losing. |
+
+For `--sandbox oci`, `--oci-user` (numeric `uid[:gid]`) chooses who the check is inside the container. The default is the user that can write the checked-out tree: 65534 when the worker is root (it gives the tree to that user), the worker's own ids with a rootful runtime, `0:0` with a rootless one (container root is then the worker's user). `--oci-timeout-secs` bounds each housekeeping call to the runtime.
+
+Kernel-exact memory and task limits for `--sandbox namespace` need a cgroup v2 directory the worker may write, with
+the `memory` and `pids` controllers enabled and no processes in it: `--cgroup-base DIR` (or
+`AG_SANDBOX_CGROUP_BASE`). Without one the limits are sampled and rlimit-based, which the job's `result_json` says
+(`memory_enforcement` and `task_enforcement`: `sampled`, `rlimit` or `cgroup`). How to prepare the directory is in [the sandbox
+page](../architecture/sandbox.md#resource-limits); `ag-worker doctor --cgroup-base DIR` says whether it works.
 
 ### Running as root
 
@@ -122,7 +132,9 @@ The sandbox starts empty. `--mount HOST[:SANDBOX][=IDENTITY]` adds read-only pat
 `/usr`, `/bin`, `/sbin`, `/lib*`, `/etc/alternatives`, `/etc/ld.so.cache` and `/etc/ssl/certs` are mounted
 (`--no-system-mounts` turns that off). Give each mount an **identity** that names what it is —
 `--mount /opt/rust=rust-1.89.0` — because the environment digest records the identity when there is one and
-only the host *path* when there is not, which says nothing about the content.
+only the host *path* when there is not, which says nothing about the content. `--system-mounts-identity ID`
+does the same for the default system mounts (an OS release, an image digest); without it the worker warns at
+start-up and `doctor` lists the mounts that carry no identity.
 
 ## The environment digest
 
@@ -149,12 +161,18 @@ configuration can satisfy the check. To learn the digest of a worker, run one jo
 * `--allow-network` lets policies request the host's network, unrestricted. Leave it off unless the checks need
   dependencies fetched at run time; better, vendor them.
 * Resource ceilings (`--max-timeout-secs`, `--max-memory-mb`, `--max-cpu-secs`, `--max-pids`) are what a
-  policy author cannot exceed. Set them to what the machine can afford to lose to a runaway check.
+  policy author cannot exceed. Set them to what the machine can afford to lose to a runaway check. The values
+  used when a policy leaves a limit at 0 are `--default-memory-mb`, `--default-pids` and `--default-cpu-secs`. The
+  limits that are the same for every check are flags too: `--output-mb` (8; a check that prints more is ended),
+  `--tmp-mb` (512, held in memory per check: size it for `--concurrency` lanes), `--result-tail-kb` (8, what is
+  stored of each stream), `--open-files` (1024) and `--file-size-mb` (1024, the largest file a check may write).
 
 ## Operating it
 
-* **Stopping.** SIGINT or SIGTERM finishes the current job, then exits; a second signal exits immediately (the
-  job's lease then runs out and the job is handed out again).
+* **Stopping.** SIGINT or SIGTERM finishes the current job, then exits. A second signal kills the running checks
+  (their containers are stopped and removed), hands the jobs back to the queue and exits, waiting at most
+  `--shutdown-grace-secs` (15) for that; if the worker is killed outright, the lease runs out and the job is
+  handed out again, and the next worker on that host removes the containers it left.
 * **Concurrency.** `--concurrency N` runs N jobs at once, each as its own worker name (`label-1`, `label-2`, …),
   so one lane cannot complete another's job. Memory limits are per check; size the machine for N of them.
 * **Logs** go to stderr (`RUST_LOG` selects verbosity). Each job logs one line with its outcome.
@@ -162,6 +180,11 @@ configuration can satisfy the check. To learn the digest of a worker, run one jo
   topics (`job.enqueue`, `job.claim`, `job.fail`, `job.complete`, and `job.expire` for a job taken back because its worker's lease ran out) are in the audit feed.
 * **Several workers** can serve the same repositories; the server hands each job to one at a time. Give each a
   distinct `--label`.
+* **Timings.** `--lease-secs` (120, at least 5), `--wait-secs` (20, at most 30: the server's own limit), `--retry-after-secs`
+  (10: how long a job this worker could not run waits before it is offered again), `--backoff-max-secs` (30: the
+  longest wait between failed claim requests, which starts at 1 s and doubles) and `--client-timeout-secs` (120:
+  one call to the server, including downloading one file of the tree). A lease or wait outside its range is
+  corrected with a warning in the log.
 
 ## Limits worth knowing
 
@@ -169,5 +192,6 @@ configuration can satisfy the check. To learn the digest of a worker, run one jo
 * Output is bounded (8 MiB per stream by default; the run ends if exceeded) and only the tail is stored.
 * A tree larger than `--max-checkout-mb` (4 GiB) is refused. The manifest does not carry sizes, so the limit is
   enforced while downloading.
-* If the claim is lost while a check runs, the check is not interrupted: it runs to its own time limit and its
-  result is discarded.
+* A job whose environment digest is pinned runs to the end before the worker can compare digests (the digest
+  describes the run); a worker that can never produce the pinned digest burns the job's time on every attempt
+  until the attempt limit. Pin digests only for workers you have run one job on.

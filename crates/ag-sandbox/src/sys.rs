@@ -184,6 +184,19 @@ pub(crate) struct Reaped {
     pub rusage: libc::rusage,
 }
 
+#[cfg(test)]
+impl Reaped {
+    /// A reaped process with the given raw wait status that used `cpu_ms` of CPU time, for the tests of how a
+    /// run is classified.
+    pub(crate) fn for_test(status: c_int, cpu_ms: u64) -> Self {
+        // SAFETY: an all-zero rusage is a valid value.
+        let mut rusage: libc::rusage = unsafe { std::mem::zeroed() };
+        rusage.ru_utime.tv_sec = (cpu_ms / 1000) as libc::time_t;
+        rusage.ru_utime.tv_usec = ((cpu_ms % 1000) * 1000) as libc::suseconds_t;
+        Reaped { status, rusage }
+    }
+}
+
 /// Reap `pid` with `wait4`. `None` means it has not exited yet (only with `nohang`).
 pub(crate) fn wait4(pid: pid_t, nohang: bool) -> io::Result<Option<Reaped>> {
     // SAFETY: an all-zero rusage is a valid value to pass for wait4 to fill.

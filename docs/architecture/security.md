@@ -69,9 +69,10 @@ that a hijacked agent can still only *propose*.
 - **`ag validate run` is not a sandbox.** It executes the command on your machine with a cleared environment
   and a temporary directory — that is hygiene, not isolation. For untrusted code use an
   [execution-plane worker](../guides/workers.md), which runs the check in the [sandbox](sandbox.md). That
-  sandbox shares the host kernel (it is not a virtual machine), its OCI backend and cgroup limits have not
-  been verified against a real container runtime or delegated cgroup, and macOS has no namespace sandbox;
-  all of this is spelled out on its page.
+  sandbox shares the host kernel (it is not a virtual machine, and no microVM boundary has been exercised), its
+  OCI backend is verified against Docker 28 and Podman 4.9 (rootful and rootless) and its cgroup limits against
+  a delegated cgroup v2, both only on the CI runner's versions; macOS has a limits-only fallback and Windows
+  has no sandbox. All of this is spelled out, claim by claim, on its page.
 - **Keys are not encrypted at rest** and live in the repository by default. Put them elsewhere with
   `AG_KEY_DIR`, and keep them out of environments that run untrusted code: whoever can read an agent's key
   can forge its provenance; whoever can read an issuer key can forge validations.

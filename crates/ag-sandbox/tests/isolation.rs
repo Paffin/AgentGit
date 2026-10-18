@@ -249,8 +249,20 @@ fn read_only_mounts_reject_writes_and_cannot_be_remounted() {
     assert_eq!(probe_line(&sb, w.path(), &["mount", "/tmp"]), "err EPERM");
     assert_eq!(probe_line(&sb, w.path(), &["umount", "/usr"]), "err EPERM");
     // a shell cannot do it either
-    let o = sh(&sb, w.path(), "mount -o remount,rw /usr 2>&1; echo > /usr/x 2>&1; true");
-    assert!(!o.stdout_lossy().is_empty());
+    let o = sh(
+        &sb,
+        w.path(),
+        "mount -o remount,rw /usr >/dev/null 2>&1; echo \"mount=$?\"; echo > /usr/x 2>/dev/null; echo \"write=$?\"; true",
+    );
+    let out = o.stdout_lossy();
+    let code = |key: &str| -> i32 {
+        out.lines()
+            .find_map(|l| l.strip_prefix(key)?.strip_prefix('=')?.trim().parse().ok())
+            .unwrap_or_else(|| panic!("no `{key}=` in {out:?} ({})", o.stderr_lossy()))
+    };
+    // 127 would mean there is no `mount` to try: that is not a refusal
+    assert!(code("mount") != 0 && code("mount") != 127, "the remount is refused: {out:?}");
+    assert!(code("write") != 0, "the write is refused: {out:?}");
     // ... and the host's /usr is untouched
     assert!(!std::path::Path::new("/usr/ag-sandbox-test").exists() && !std::path::Path::new("/usr/x").exists());
 }
@@ -630,23 +642,20 @@ fn setuid_programs_cannot_gain_privilege() {
 fn what_the_command_leaves_in_the_namespace_dies_with_its_init() {
     let Some(sb) = namespace("what_the_command_leaves_in_the_namespace_dies_with_its_init") else { return };
     let w = workdir();
-    let marker = unique_marker("lingerer");
+    // Two background processes whose command lines no other process on the machine has.
+    let m = sleep_marker();
     // the main command exits at once; a double-forked, session-leading background process would outlive it
     // anywhere else
-    let script = format!("(setsid sleep 4{n} >/dev/null 2>&1 &) ; (sleep 5{n} &) ; exit 3", n = marker.len() % 10);
+    let script = format!("(setsid sleep 4{m} >/dev/null 2>&1 &) ; (sleep 5{m} &) ; exit 3");
     let o = sh(&sb, w.path(), &script);
     assert_eq!(o.status, ExitStatus::Exited(3));
     assert!(o.wall_ms < 2000, "the run must not wait for background processes ({} ms)", o.wall_ms);
-    let sleepers: Vec<_> = host_processes_matching("sleep 4")
-        .into_iter()
-        .chain(host_processes_matching("sleep 5"))
-        .filter(|(_, c)| c.contains(&format!("{}", marker.len() % 10)))
-        .collect();
-    // `sleep 4N`/`sleep 5N` are not unique across tests, so only assert that none belongs to *this* run's
-    // sandbox: its processes would be children of nothing we own once the init is gone.
-    let _ = sleepers;
-    let still = children_of_this_process();
-    assert!(still.iter().all(|(_, d)| !d.contains("sleep")), "{still:?}");
+    // from the outside, on the host's process table: neither is left, not even as a zombie
+    for id in [format!("4{m}"), format!("5{m}")] {
+        wait_until(&format!("`sleep {id}` to be gone"), std::time::Duration::from_secs(2), || {
+            host_processes_matching(&format!("sleep {id}")).is_empty()
+        });
+    }
 }
 
 #[test]

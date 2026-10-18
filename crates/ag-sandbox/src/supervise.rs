@@ -370,6 +370,15 @@ fn drain(out: &mut Stream, err: &mut Stream) {
     }
 }
 
+/// A death by a signal while the sampler saw the sandbox at or above this fraction (`NUM / DEN`) of its memory
+/// limit is taken to be the limit's doing (an allocation failed under `RLIMIT_DATA`, or the OOM killer struck).
+const NEAR_MEMORY_NUM: u64 = 9;
+const NEAR_MEMORY_DEN: u64 = 10;
+
+/// A `SIGKILL` this close to the CPU budget (milliseconds) is taken to be the kernel's hard `RLIMIT_CPU` kill:
+/// the process's accounted time is read after it died, and a tick or two of it may not have been added yet.
+const CPU_KILL_SLACK_MS: u64 = 50;
+
 /// Map how the process ended, plus what the supervisor did, to the public [`ExitStatus`].
 ///
 /// `relayed` is the namespace init's record of the command's own status (`None` for a plain process, whose
@@ -389,18 +398,22 @@ pub(crate) fn classify(f: &Finished, relayed: Option<(u32, i32)>, limits: &Limit
         None => {}
     }
     let (cpu_ms, _) = sys::usage(&f.reaped.rusage);
-    let abnormal = !natural.success();
     // The command ran into its CPU budget: the kernel sends SIGXCPU at the soft limit and SIGKILL at the hard one.
     match natural {
         ExitStatus::Signaled(s) if s == libc::SIGXCPU => return ExitStatus::CpuLimit,
-        ExitStatus::Signaled(s) if s == libc::SIGKILL && cpu_ms + 50 >= limits.cpu_s.saturating_mul(1000) => {
+        ExitStatus::Signaled(s)
+            if s == libc::SIGKILL && cpu_ms + CPU_KILL_SLACK_MS >= limits.cpu_s.saturating_mul(1000) =>
+        {
             return ExitStatus::CpuLimit;
         }
         _ => {}
     }
-    // A command that died while the sampler saw it near the memory limit most likely died of it (an allocation
-    // failed under RLIMIT_DATA, or the OOM killer struck). Best effort: see the docs.
-    if abnormal && f.peak_sampled.is_some_and(|p| p >= limits.memory_bytes / 10 * 9) {
+    // A command that was killed by a signal while the sampler saw it near the memory limit most likely died of
+    // it. Best effort: see the docs. A command that merely *exits* with a non-zero status (a failing test that
+    // happened to use a lot of memory) is the command's own result and is never reclassified.
+    let killed = matches!(natural, ExitStatus::Signaled(_));
+    let near = limits.memory_bytes / NEAR_MEMORY_DEN * NEAR_MEMORY_NUM;
+    if killed && f.peak_sampled.is_some_and(|p| p >= near) {
         return ExitStatus::MemoryLimit;
     }
     natural
@@ -414,5 +427,79 @@ pub(crate) fn wait_status(status: libc::c_int) -> ExitStatus {
         ExitStatus::Signaled(libc::WTERMSIG(status))
     } else {
         ExitStatus::Exited(-1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A raw wait status: exited with code 1 / killed by SIGKILL.
+    const EXITED_1: libc::c_int = 1 << 8;
+    const KILLED: libc::c_int = libc::SIGKILL;
+
+    fn finished(status: libc::c_int, cpu_ms: u64, peak: Option<u64>, verdict: Option<Verdict>) -> Finished {
+        Finished {
+            reaped: sys::Reaped::for_test(status, cpu_ms),
+            verdict,
+            failure: None,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            stdout_truncated: false,
+            stderr_truncated: false,
+            peak_sampled: peak,
+            wall: Duration::ZERO,
+        }
+    }
+
+    fn limits() -> Limits {
+        Limits { memory_bytes: 1000, cpu_s: 10, ..Limits::default() }
+    }
+
+    #[test]
+    fn a_command_that_exits_non_zero_is_never_blamed_on_memory() {
+        // 95% of the limit was in use, and the command exited with an ordinary failure status: its own result
+        assert_eq!(classify(&finished(EXITED_1, 0, Some(950), None), None, &limits()), ExitStatus::Exited(1));
+        assert_eq!(classify(&finished(0, 0, Some(999), None), None, &limits()), ExitStatus::Exited(0));
+        // the relayed status of a namespace init is treated the same way
+        assert_eq!(classify(&finished(0, 0, Some(950), None), Some((1, 3)), &limits()), ExitStatus::Exited(3));
+    }
+
+    #[test]
+    fn a_command_killed_by_a_signal_near_the_memory_limit_is_taken_to_have_hit_it() {
+        assert_eq!(classify(&finished(KILLED, 0, Some(900), None), None, &limits()), ExitStatus::MemoryLimit);
+        assert_eq!(classify(&finished(KILLED, 0, Some(950), None), None, &limits()), ExitStatus::MemoryLimit);
+        // below the threshold, or never sampled, the signal is just the signal
+        assert_eq!(classify(&finished(KILLED, 0, Some(899), None), None, &limits()), ExitStatus::Signaled(KILLED));
+        assert_eq!(classify(&finished(KILLED, 0, None, None), None, &limits()), ExitStatus::Signaled(KILLED));
+        assert_eq!(
+            classify(&finished(0, 0, Some(950), None), Some((2, libc::SIGSEGV)), &limits()),
+            ExitStatus::MemoryLimit
+        );
+    }
+
+    #[test]
+    fn the_cpu_budget_is_read_from_the_time_the_command_used() {
+        let l = limits();
+        assert_eq!(classify(&finished(libc::SIGXCPU, 0, None, None), None, &l), ExitStatus::CpuLimit);
+        // SIGKILL at the budget (within the slack) is the kernel's hard limit; well before it, it is not
+        assert_eq!(classify(&finished(KILLED, 10_000, None, None), None, &l), ExitStatus::CpuLimit);
+        assert_eq!(classify(&finished(KILLED, 10_000 - CPU_KILL_SLACK_MS, None, None), None, &l), ExitStatus::CpuLimit);
+        assert_eq!(
+            classify(&finished(KILLED, 10_000 - CPU_KILL_SLACK_MS - 1, None, None), None, &l),
+            ExitStatus::Signaled(KILLED)
+        );
+    }
+
+    #[test]
+    fn what_the_supervisor_did_wins_over_how_the_process_ended() {
+        for (verdict, status) in [
+            (Verdict::TimedOut, ExitStatus::TimedOut),
+            (Verdict::OutputLimit, ExitStatus::OutputLimit),
+            (Verdict::MemoryLimit, ExitStatus::MemoryLimit),
+            (Verdict::PidsLimit, ExitStatus::PidsLimit),
+        ] {
+            assert_eq!(classify(&finished(KILLED, 0, None, Some(verdict)), None, &limits()), status);
+        }
     }
 }

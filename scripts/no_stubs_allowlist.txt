@@ -37,8 +37,8 @@ crates/ag-storage/src/meta/mod.rs | test-double | tests that simulate | #[doc(hi
 crates/ag-storage/src/s3/mod.rs | test-double | damage simulation | #[doc(hidden)] hook that the S3 integration tests use to corrupt a stored object on purpose; product code never calls it
 
 # -- documentation inside source that honestly describes how something is tested -------------------------------------
-crates/ag-sandbox/src/cgroup.rs | test-double | fake cgroup directory | module doc: the unit tests of the cgroup v2 file protocol run against a scratch directory laid out like cgroupfs; docs/architecture/sandbox.md says what is verified where
-crates/ag-sandbox/src/oci.rs | test-double | fake runtime | module doc: the OCI backend's argument construction is tested with a stand-in runtime and NOT against a real Docker or Podman; docs/architecture/sandbox.md says so (open audit item, dev/audit/CONFIRMED.md execution-plane)
+crates/ag-sandbox/src/cgroup.rs | test-double | fake directory | module doc: the unit tests of the cgroup v2 file handling run against a scratch directory laid out like cgroupfs, and say so; the kernel-facing behaviour is tested against a real delegated cgroup v2 (tests/cgroup_real.rs, the `OCI runtimes and cgroup v2` workflow); docs/architecture/sandbox.md says what is verified where
+crates/ag-sandbox/src/oci.rs | test-double | fake runtime | module doc: says that tests/oci.rs runs a fake runtime script for argument construction and supervision and proves nothing about a real runtime; the real runtimes are tests/oci_real.rs (Docker and Podman in the `OCI runtimes and cgroup v2` workflow); docs/architecture/sandbox.md says what is verified where
 
 # -- other legitimate uses ---------------------------------------------------------------------------------------
 crates/ag-server/src/auth/mod.rs | test-double | Compare against a dummy | constant-time authentication: when the credential does not exist the code still compares against a dummy hash so that timing does not reveal which credentials exist

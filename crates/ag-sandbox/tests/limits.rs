@@ -14,24 +14,6 @@ use std::io::Write as _;
 use ag_sandbox::{Enforcement, ExitStatus, Limits, Sandbox, SandboxError, SandboxSpec};
 use common::*;
 
-/// A decimal string that identifies one `sleep` among all processes on the machine.
-fn sleep_marker() -> String {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static N: AtomicU32 = AtomicU32::new(0);
-    format!("{}{:03}", std::process::id(), N.fetch_add(1, Ordering::Relaxed))
-}
-
-fn wait_until(what: &str, limit: Duration, mut done: impl FnMut() -> bool) {
-    let end = Instant::now() + limit;
-    while Instant::now() < end {
-        if done() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!("timed out waiting for {what}");
-}
-
 #[test]
 fn the_wall_clock_budget_kills_the_command_and_every_descendant() {
     let Some(sb) = namespace("the_wall_clock_budget_kills_the_command_and_every_descendant") else { return };

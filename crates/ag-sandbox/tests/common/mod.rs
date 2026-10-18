@@ -130,6 +130,26 @@ pub fn host_processes_matching(marker: &str) -> Vec<(u32, String)> {
     found
 }
 
+/// A decimal string that identifies one `sleep` among all processes on the machine: `sleep 1{m}` appears in
+/// the command line of no other process.
+pub fn sleep_marker() -> String {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static N: AtomicU32 = AtomicU32::new(0);
+    format!("{}{:03}", std::process::id(), N.fetch_add(1, Ordering::Relaxed))
+}
+
+/// Waits for `done`, polling every 10 ms, and fails with `what` if it does not hold within `limit`.
+pub fn wait_until(what: &str, limit: std::time::Duration, mut done: impl FnMut() -> bool) {
+    let end = std::time::Instant::now() + limit;
+    while std::time::Instant::now() < end {
+        if done() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(done(), "{what} (waited {limit:?})");
+}
+
 /// A string that appears in no other process's command line.
 pub fn unique_marker(prefix: &str) -> String {
     use std::sync::atomic::{AtomicU32, Ordering};

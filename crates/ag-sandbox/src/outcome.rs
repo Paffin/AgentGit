@@ -87,16 +87,21 @@ pub struct CgroupReport {
 ///
 /// For [`crate::NamespaceSandbox`] and [`crate::ProcessSandbox`] each flag is `true` only if the step was
 /// performed successfully (a required step that fails aborts the run instead of being skipped), and the
-/// integration tests read the kernel's own view from inside to confirm it. For [`crate::OciSandbox`] the
-/// flags describe what was *requested* from the runtime ([`verified`](Self::verified) is `false`).
+/// integration tests read the kernel's own view from inside to confirm it. For [`crate::OciSandbox`] a flag is
+/// `true` only if the runtime's own record of the container (and, for seccomp and user namespaces, its
+/// description of itself) says so: a property the record does not contain is not claimed
+/// ([`verified`](Self::verified) is then `false`), and one it records differently fails the run. The kernel's
+/// enforcement of what the runtime recorded is not observed per run; `tests/oci_real.rs` checks it from inside
+/// real containers in CI.
 ///
 /// The report feeds [`crate::environment_digest`]; attestations bound to that digest therefore state which
 /// protections their check ran under.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct IsolationReport {
-    /// `true` if this crate set the mechanisms up and could observe the result; `false` if they were only
-    /// requested from an external runtime.
+    /// `true` if this crate set the mechanisms up and could observe the result (namespace and process
+    /// sandboxes), or read every protection back from the container runtime's own record of the container
+    /// (OCI); `false` if some of them could not be confirmed.
     pub verified: bool,
     /// New user namespace (the command is not the host user, and has no host capabilities).
     pub user_ns: bool,

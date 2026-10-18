@@ -64,6 +64,21 @@ pub fn acquire(
     ttl_ms: i64,
     task_id: Option<&str>,
 ) -> Result<Acquired, AgentError> {
+    acquire_with(meta, scope, holder, exclusive, ttl_ms, task_id, |_, _| Ok(())).map(|(got, ())| got)
+}
+
+/// Like [`acquire`], and runs `also` in the very transaction that grants the lease: whatever it writes (an
+/// idempotency record, say) is committed with the lease or not at all. `also` may run again if the transaction
+/// is retried, and its error rolls the lease back.
+pub fn acquire_with<R>(
+    meta: &Meta,
+    scope: &str,
+    holder: &str,
+    exclusive: bool,
+    ttl_ms: i64,
+    task_id: Option<&str>,
+    also: impl Fn(&Tx<'_>, &Acquired) -> Result<R, MetaError>,
+) -> Result<(Acquired, R), AgentError> {
     PathMatcher::new(&[scope.to_string()]).map_err(AgentError::Invalid)?;
     if !(1..=MAX_TTL_MS).contains(&ttl_ms) {
         return Err(AgentError::Invalid(format!("ttl must be between 1 ms and {MAX_TTL_MS} ms")));
@@ -100,7 +115,9 @@ pub fn acquire(
             &id,
             &json!({"scope": scope, "exclusive": exclusive, "token": token}),
         )?;
-        Ok(Acquired { lease, overlaps })
+        let acquired = Acquired { lease, overlaps };
+        let extra = also(tx, &acquired)?;
+        Ok((acquired, extra))
     });
     result.map_err(|e| match e {
         MetaError::Invalid(m) => AgentError::Conflict(m),

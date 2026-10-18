@@ -218,7 +218,8 @@ async fn expired_leases_requeue_and_failures_can_retry() {
     assert_eq!(jobs.json["jobs"].as_array().unwrap().len(), 1);
     // The same story as counters.
     let m = String::from_utf8(srv.client("").get("/metrics").await.body).unwrap();
-    for (event, n) in [("enqueued", 1), ("claimed", 3), ("retried", 1), ("failed", 1)] {
+    // "retried" counts the lease that ran out as well as the explicit retry.
+    for (event, n) in [("enqueued", 1), ("claimed", 3), ("retried", 2), ("failed", 1)] {
         assert!(m.contains(&format!("agwp_job_events_total{{event=\"{event}\"}} {n}")), "{event}: {m}");
     }
     assert!(m.contains("agwp_jobs_queued 0"), "{m}");
@@ -230,5 +231,99 @@ async fn expired_leases_requeue_and_failures_can_retry() {
         topics.contains(&"job.enqueue") && topics.contains(&"job.claim") && topics.contains(&"job.fail"),
         "{topics:?}"
     );
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_runner_that_dies_on_its_last_attempt_is_counted_and_audited() {
+    let srv = TestServer::start().await;
+    let ci_key = KeyPair::generate().unwrap();
+    let (alice, _carol, pid) = seed(&srv, "acme/web", &ci_key).await;
+    let ci = user_with_role(&srv, "service:ci-1", "acme/web", "runner").await;
+    alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+
+    // The runner claims the job with a tiny lease and crashes, again and again, until the attempts are used up.
+    // Nothing ever calls `fail`: the server itself has to notice.
+    let mut claims = 0;
+    loop {
+        let r = ci.post("/v1/jobs/claim", json!({"worker": "crashy", "lease_ms": 20})).await;
+        if r.json["job"].is_object() {
+            claims += 1;
+            assert!(claims <= 20, "the job is handed out for ever");
+            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+        } else {
+            break;
+        }
+    }
+    let jobs = alice.get("/v1/repos/acme/web/jobs?state=failed").await;
+    let failed = jobs.json["jobs"].as_array().unwrap();
+    assert_eq!(failed.len(), 1, "{}", jobs.json);
+    assert_eq!(failed[0]["attempts"], claims);
+    assert!(failed[0]["error"].as_str().unwrap().contains("lease expired"), "{}", failed[0]);
+
+    // The failure is visible where operators look for it: the counter behind the AgentGitJobsFailing alert ...
+    let m = String::from_utf8(srv.client("").get("/metrics").await.body).unwrap();
+    assert!(m.contains("agwp_job_events_total{event=\"failed\"} 1"), "{m}");
+    assert!(m.contains(&format!("agwp_job_events_total{{event=\"retried\"}} {}", claims - 1)), "{m}");
+    // ... and the audit feed, with a record of every time a job was taken back.
+    let ev = alice.get("/v1/repos/acme/web/events/replay?topics=job.expire&limit=100").await;
+    let states: Vec<&str> = ev.json["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["payload"]["details"]["state"].as_str().unwrap())
+        .collect();
+    assert_eq!(states.len() as i64, claims, "{states:?}");
+    assert_eq!(states.last(), Some(&"failed"));
+    assert!(states[..states.len() - 1].iter().all(|s| *s == "queued"));
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn jobs_are_deduplicated_by_key_however_many_jobs_came_later_and_errors_are_bounded() {
+    let srv = TestServer::start().await;
+    let ci_key = KeyPair::generate().unwrap();
+    let (alice, _carol, pid) = seed(&srv, "acme/web", &ci_key).await;
+    let ci = user_with_role(&srv, "service:ci-1", "acme/web", "runner").await;
+    let first = alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+    let job_id = first.json["jobs"][0]["id"].as_str().unwrap().to_string();
+
+    // 1100 jobs enqueued later push the first one out of the 1000 newest, the window the old code searched.
+    let handle = srv.app.repos.handle("acme/web").unwrap();
+    handle
+        .meta()
+        .write(|tx| {
+            for i in 0..1100 {
+                tx.job_enqueue("other", &json!({"i": i}), Some(&format!("other:{i}")), Timestamp::from_millis(0))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let audit_before = handle.meta().read(|tx| tx.audit_latest_seq()).unwrap();
+    let again = alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+    assert_eq!(again.json["jobs"][0]["id"], job_id.as_str(), "the same job, not another: {}", again.json);
+    assert_eq!(
+        handle.meta().read(|tx| tx.audit_latest_seq()).unwrap(),
+        audit_before,
+        "nothing was enqueued or audited again"
+    );
+    let prep =
+        alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/prepare"), json!({"enqueue_validations": true})).await;
+    assert_eq!(prep.status, 200, "{}", prep.json);
+    let queued = srv.client(ADMIN_TOKEN).get("/metrics").await;
+    let m = String::from_utf8(queued.body).unwrap();
+    assert!(m.contains("agwp_job_events_total{event=\"enqueued\"} 1"), "{m}");
+
+    // An error text of any size is stored - and audited - at the same bounded length.
+    let claim = ci.post("/v1/jobs/claim", json!({"worker": "w", "kinds": ["validate"], "wait_ms": 1000})).await;
+    assert_eq!(claim.json["job"]["id"], job_id.as_str(), "{}", claim.json);
+    let huge = "e".repeat(500_000);
+    let r = ci.post(&format!("/v1/repos/acme/web/jobs/{job_id}/fail"), json!({"worker": "w", "error": huge})).await;
+    assert_eq!(r.json["state"], "failed", "{}", r.json);
+    let stored = r.json["error"].as_str().unwrap().len();
+    assert_eq!(stored, 2000);
+    let ev = alice.get("/v1/repos/acme/web/events/replay?topics=job.fail&limit=10").await;
+    let audited = ev.json["events"][0]["payload"]["details"]["error"].as_str().unwrap().len();
+    assert_eq!(audited, stored, "the audit entry is bounded like the job");
     srv.stop().await;
 }

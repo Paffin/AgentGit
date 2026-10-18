@@ -121,6 +121,85 @@ async fn replaying_after_the_end_returns_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn requests_racing_on_one_idempotency_key_create_one_object() {
+    let srv = TestServer::start().await;
+    srv.admin().post("/v1/repos", json!({"name": "acme/web"})).await;
+    let bot = user_with_role(&srv, "agent:bot", "acme/web", "writer").await;
+    bot.post(
+        "/v1/repos/acme/web/agents",
+        json!({"name": "bot", "public_key": ag_crypto::KeyPair::generate().unwrap().public().to_hex()}),
+    )
+    .await;
+
+    // Sixteen identical requests at once, for each of the three keyed creations. The record is part of the
+    // creating transaction, so exactly one wins and the others replay its answer - no matter how they interleave.
+    for (path, body, id_field) in [
+        ("/v1/repos/acme/web/tasks", json!({"title": "extract module"}), "id"),
+        ("/v1/repos/acme/web/runs", json!({"agent": "bot"}), "run_id"),
+        ("/v1/repos/acme/web/leases", json!({"scope": "src/**", "exclusive": true, "ttl_ms": 60000}), "lease"),
+    ] {
+        let mut calls = Vec::new();
+        for _ in 0..16 {
+            let (bot, body) = (bot.clone(), body.clone());
+            calls.push(tokio::spawn(async move {
+                bot.call("POST", path, Some(body), &[("idempotency-key", "race-1")]).await
+            }));
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        for c in calls {
+            let r = c.await.unwrap();
+            assert_eq!(r.status, 200, "{path}: {}", r.json);
+            let id = if id_field == "lease" { r.json["lease"]["id"].clone() } else { r.json[id_field].clone() };
+            ids.insert(id.to_string());
+        }
+        assert_eq!(ids.len(), 1, "{path}: every answer is the one object: {ids:?}");
+    }
+    assert_eq!(bot.get("/v1/repos/acme/web/tasks").await.json["tasks"].as_array().unwrap().len(), 1);
+    assert_eq!(bot.get("/v1/repos/acme/web/runs").await.json["runs"].as_array().unwrap().len(), 1);
+    assert_eq!(bot.get("/v1/repos/acme/web/leases").await.json["leases"].as_array().unwrap().len(), 1);
+
+    // A task with dependencies is created with them or not at all.
+    let missing = bot
+        .call(
+            "POST",
+            "/v1/repos/acme/web/tasks",
+            Some(json!({"title": "needs nothing real", "depends_on": ["task_nope"]})),
+            &[("idempotency-key", "dep-1")],
+        )
+        .await;
+    assert_eq!(missing.status, 404, "{}", missing.json);
+    assert_eq!(
+        bot.get("/v1/repos/acme/web/tasks").await.json["tasks"].as_array().unwrap().len(),
+        1,
+        "no half-made task"
+    );
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_lease_history_says_when_it_is_cut_short() {
+    let srv = TestServer::start().await;
+    srv.admin().post("/v1/repos", json!({"name": "acme/web"})).await;
+    let bot = user_with_role(&srv, "agent:bot", "acme/web", "writer").await;
+    for i in 0..5 {
+        let r = bot.post("/v1/repos/acme/web/leases", json!({"scope": format!("dir{i}/**"), "ttl_ms": 60000})).await;
+        assert_eq!(r.status, 200, "{}", r.json);
+    }
+    let few = bot.get("/v1/repos/acme/web/leases?limit=3").await;
+    assert_eq!(
+        (few.json["leases"].as_array().unwrap().len(), few.json["truncated"].as_bool()),
+        (3, Some(true)),
+        "{}",
+        few.json
+    );
+    let all = bot.get("/v1/repos/acme/web/leases?limit=5").await;
+    assert_eq!((all.json["leases"].as_array().unwrap().len(), all.json["truncated"].as_bool()), (5, Some(false)));
+    let active = bot.get("/v1/repos/acme/web/leases?active_only=true&limit=1").await;
+    assert_eq!(active.json["leases"].as_array().unwrap().len(), 5, "active leases are never cut");
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn creations_with_an_idempotency_key_happen_once() {
     let srv = TestServer::start().await;
     let admin = srv.admin();

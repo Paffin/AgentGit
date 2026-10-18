@@ -181,3 +181,45 @@ fn concurrent_claimers_never_receive_the_same_job() {
     assert_eq!(ids.len(), JOBS, "…exactly once");
     assert_eq!(setup.read(|tx| tx.job_list(Some(JobState::Succeeded), 100)).unwrap().len(), JOBS);
 }
+
+#[test]
+fn expired_leases_are_reported_when_they_are_reaped_and_jobs_are_found_by_key_and_counted() {
+    let clock = clock();
+    let m = TestMeta::new(clock.clone());
+    let payload = json!({});
+    let new = |attempts: u32, key: &'static str| NewJob {
+        kind: "k",
+        payload: &payload,
+        dedupe_key: Some(key),
+        run_after: t(0),
+        max_attempts: attempts,
+    };
+    let retried = m.write(|tx| tx.job_enqueue_with(&new(3, "retried"))).unwrap();
+    let last_try = m.write(|tx| tx.job_enqueue_with(&new(1, "last-try"))).unwrap();
+    let healthy = m.write(|tx| tx.job_enqueue_with(&new(3, "healthy"))).unwrap();
+    // Claimed in enqueue order: the first two with short leases, the third with a long one.
+    for lease_ms in [100, 100, 60_000] {
+        m.write(|tx| tx.job_claim(&["k"], "w", lease_ms)).unwrap().unwrap();
+    }
+    assert_eq!(m.read(|tx| tx.job_count(JobState::Claimed)).unwrap(), 3);
+    assert_eq!(m.read(|tx| tx.job_by_key("healthy")).unwrap().unwrap().id, healthy.id);
+    assert!(m.read(|tx| tx.job_by_key("nobody")).unwrap().is_none());
+
+    assert!(m.write(|tx| tx.job_reap_expired()).unwrap().is_empty(), "nothing has expired yet");
+    clock.advance_ms(101);
+    // Two leases ran out: one job has attempts left, one has not. The caller learns of both - it is how a
+    // crashed worker's permanent failure becomes visible at all.
+    let mut reaped = m.write(|tx| tx.job_reap_expired()).unwrap();
+    reaped.sort_by(|a, b| a.dedupe_key.cmp(&b.dedupe_key));
+    let seen: Vec<_> = reaped.iter().map(|j| (j.dedupe_key.as_deref().unwrap(), j.state)).collect();
+    assert_eq!(seen, [("last-try", JobState::Failed), ("retried", JobState::Queued)]);
+    assert!(m.write(|tx| tx.job_reap_expired()).unwrap().is_empty(), "reaped once, reported once");
+    assert_eq!(m.read(|tx| tx.job_get(&last_try.id)).unwrap().unwrap().state, JobState::Failed);
+    assert_eq!(m.read(|tx| tx.job_get(&retried.id)).unwrap().unwrap().state, JobState::Queued);
+    let counts = m
+        .read(|tx| {
+            Ok((tx.job_count(JobState::Queued)?, tx.job_count(JobState::Claimed)?, tx.job_count(JobState::Failed)?))
+        })
+        .unwrap();
+    assert_eq!(counts, (1, 1, 1));
+}

@@ -89,6 +89,40 @@ async fn a_blob_the_tree_names_but_the_store_lost_is_an_error_not_an_empty_file(
         assert_eq!(r.status, 422, "{path}: {}", r.json);
         assert_eq!(r.json["error"]["code"], "object_missing", "{path}");
     }
+    // fsck names the object (the field used to be an empty string whatever was wrong).
+    let fsck = srv.admin().post("/v1/repos/acme/web/fsck", json!({})).await;
+    assert_eq!(fsck.json["ok"], false, "{}", fsck.json);
+    let issue = fsck.json["issues"].as_array().unwrap().iter().find(|i| i["kind"] == "bad_blob").expect("bad_blob");
+    assert_eq!(issue["object"], objs[0].id().to_string(), "{issue}");
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_queue_counts_every_outcome_not_just_success() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+    // Landing needs an approval nobody gives: the queued proposal stays blocked.
+    let r = admin
+        .call(
+            "PUT",
+            "/v1/repos/acme/web/policy",
+            Some(json!({"stream": "main", "document": r#"{"approvals":{"min":1}}"#})),
+            &[],
+        )
+        .await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let alice = user_with_role(&srv, "user:alice", "acme/web", "writer").await;
+    let carol = user_with_role(&srv, "user:carol", "acme/web", "integrator").await;
+    let (pid, _) = propose(&alice, "acme/web", ("a.txt", b"a")).await;
+    let q = carol.post("/v1/repos/acme/web/queue", json!({"proposal": pid})).await;
+    assert_eq!(q.status, 200, "{}", q.json);
+    let run = carol.post("/v1/repos/acme/web/queue/run", json!({"stream": "main"})).await;
+    assert_eq!(run.status, 200, "{}", run.json);
+    assert_eq!(run.json["processed"][0]["state"], "blocked", "{}", run.json);
+    let m = String::from_utf8(srv.client("").get("/metrics").await.body).unwrap();
+    assert!(m.contains("agwp_integrations_total{outcome=\"blocked\"} 1"), "blocked entries are counted: {m}");
+    assert!(!m.contains("outcome=\"integrated\""), "{m}");
     srv.stop().await;
 }
 

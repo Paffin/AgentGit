@@ -35,6 +35,8 @@ const KIND_VALIDATE: &str = "validate";
 const DEFAULT_LEASE_MS: i64 = 120_000;
 const MAX_LEASE_MS: i64 = 3_600_000;
 const MAX_WAIT_MS: u32 = 30_000;
+/// The longest error text a job keeps - and the audit log with it: a worker's message is untrusted input.
+const MAX_JOB_ERROR_CHARS: usize = 2000;
 
 fn run_to_wire(r: &RunSpec) -> v1::RunSpec {
     v1::RunSpec {
@@ -130,8 +132,9 @@ impl App {
                     });
                     let key = dedupe_key(&proposal, &v.check, &tree.to_string(), policy_version);
                     let job = r.meta().write(|tx| {
-                        let existing = tx.job_list(None, 1000)?.into_iter().find(|j| j.dedupe_key.as_deref() == Some(&key));
-                        if let Some(j) = existing {
+                        // An indexed lookup, however many jobs the repository has seen: a job that exists is not
+                        // enqueued, counted or audited a second time.
+                        if let Some(j) = tx.job_by_key(&key)? {
                             return Ok(j);
                         }
                         let j = tx.job_enqueue(KIND_VALIDATE, &payload, Some(&key), Timestamp::from_millis(0))?;
@@ -162,19 +165,22 @@ impl App {
     ) -> ApiResult<Vec<v1::Job>> {
         let Some(tree) = prep.preview.candidate_tree else { return Ok(Vec::new()) };
         let (proposal, tree, pv) = (prep.proposal.clone(), tree.to_string(), prep.policy_version);
+        let checks: Vec<String> =
+            prep.validations.iter().filter(|v| v.run.is_some()).map(|v| v.check.clone()).collect();
         let name = repo.to_string();
         self.with_repo(call, repo, Cap::JobsRead, None, move |r, _| {
-            let jobs = r.meta().read(|tx| tx.job_list(None, 500))?;
-            Ok(jobs
-                .iter()
-                .filter(|j| {
-                    j.kind == KIND_VALIDATE
-                        && j.payload["proposal"] == proposal.as_str()
-                        && j.payload["tree_id"] == tree.as_str()
-                        && j.payload["policy_version"] == pv
+            // One indexed lookup per check that has a runner configuration - the key a job is enqueued under.
+            r.meta()
+                .read(|tx| {
+                    let mut out = Vec::new();
+                    for check in &checks {
+                        out.extend(
+                            tx.job_by_key(&dedupe_key(&proposal, check, &tree, pv))?.map(|j| job_to_wire(&name, &j)),
+                        );
+                    }
+                    Ok(out)
                 })
-                .map(|j| job_to_wire(&name, j))
-                .collect())
+                .map_err(Into::into)
         })
         .await
     }
@@ -211,25 +217,47 @@ impl App {
     /// Finds repositories with queued jobs (called at startup; a job queued by another replica is announced
     /// to this one with a cluster notice, and the periodic rescan picks up whatever the notice missed).
     pub fn rebuild_job_index(&self) {
-        let Ok(repos) = self.control.repos("", "", 100_000) else { return };
+        let repos = match self.control.all_repos() {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(error = %e.0.message, "job index rescan: cannot list the repositories; trying again later");
+                return;
+            }
+        };
         for row in repos {
-            if let Ok(h) = self.repos.handle(&row.name)
-                && h.meta().read(|tx| tx.job_list(Some(JobState::Queued), 1)).map(|v| !v.is_empty()).unwrap_or(false)
-            {
-                self.note_jobs_queued(&row.name);
+            // A repository that cannot be opened or read right now is reported, not taken for "no jobs": its
+            // work stays invisible to claimers until a later rescan succeeds.
+            match self.repos.handle(&row.name) {
+                Ok(h) => match h.meta().read(|tx| tx.job_count(JobState::Queued)) {
+                    Ok(n) if n > 0 => self.note_jobs_queued(&row.name),
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!(repo = %row.name, error = %e, "job index rescan: cannot read the jobs"),
+                },
+                Err(e) => {
+                    tracing::warn!(repo = %row.name, error = %e.0.message, "job index rescan: cannot open the repository")
+                }
             }
         }
     }
 
-    /// Queued jobs across the repositories known to have work (blocking).
+    /// Queued jobs across the repositories known to have work (blocking). A repository that cannot be read is
+    /// logged and left out of the sum; it does not turn the whole figure into 0.
     pub fn count_queued_jobs(&self) -> i64 {
         let repos: Vec<String> =
             self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
-        repos
-            .iter()
-            .filter_map(|name| self.repos.handle(name).ok())
-            .map(|h| h.meta().read(|tx| tx.job_list(Some(JobState::Queued), 1000)).map(|v| v.len() as i64).unwrap_or(0))
-            .sum()
+        let mut total = 0i64;
+        for name in &repos {
+            let counted = self
+                .repos
+                .handle(name)
+                .map_err(|e| e.0.message)
+                .and_then(|h| h.meta().read(|tx| tx.job_count(JobState::Queued)).map_err(|e| e.to_string()));
+            match counted {
+                Ok(n) => total += i64::try_from(n).unwrap_or(i64::MAX),
+                Err(why) => tracing::warn!(repo = %name, error = %why, "queued-jobs gauge: cannot count"),
+            }
+        }
+        total
     }
 
     // ---- worker API ----------------------------------------------------------------------
@@ -241,12 +269,25 @@ impl App {
         kinds: Vec<String>,
         worker: String,
         lease_ms: i64,
-    ) -> ApiResult<Option<v1::Job>> {
+    ) -> ApiResult<(Option<v1::Job>, bool)> {
         let name = repo.to_string();
         let events = self.metrics.job_events.clone();
         self.with_repo_mut(call, repo, Cap::JobsClaim, None, move |r, actor| {
             let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();
-            let job = r.meta().write(|tx| {
+            let (job, queued_left) = r.meta().write(|tx| {
+                // Jobs whose worker vanished are taken back first. Nobody asked for that, so it is recorded
+                // here: the metric and the audit entry are the only trace of a runner crash that exhausted a
+                // job's attempts (and what the `AgentGitJobsFailing` alert counts).
+                for j in tx.job_reap_expired()? {
+                    let outcome = if j.state == JobState::Queued { "retried" } else { "failed" };
+                    events.with_label_values(&[outcome]).inc();
+                    tx.audit_append(
+                        "system:jobs",
+                        "job.expire",
+                        &j.id,
+                        &json!({"state": j.state.as_str(), "attempts": j.attempts, "error": j.error}),
+                    )?;
+                }
                 let j = tx.job_claim(&kinds, &worker, lease_ms)?;
                 if let Some(j) = &j {
                     events.with_label_values(&["claimed"]).inc();
@@ -257,9 +298,12 @@ impl App {
                         &json!({"worker": worker, "attempt": j.attempts}),
                     )?;
                 }
-                Ok(j)
+                // Read in the same transaction as the claim: a job enqueued meanwhile, or one waiting for its
+                // retry delay, keeps the repository on the list of places that have work.
+                let queued_left = tx.job_count(JobState::Queued)? > 0;
+                Ok((j, queued_left))
             })?;
-            Ok(job.map(|j| job_to_wire(&name, &j)))
+            Ok((job.map(|j| job_to_wire(&name, &j)), queued_left))
         })
         .await
     }
@@ -292,10 +336,13 @@ impl App {
                 vec![req.repo.clone()]
             };
             for repo in candidates {
-                if let Some(job) = self.try_claim(call, &repo, req.kinds.clone(), worker.clone(), lease_ms).await? {
+                let (job, queued_left) =
+                    self.try_claim(call, &repo, req.kinds.clone(), worker.clone(), lease_ms).await?;
+                if let Some(job) = job {
                     return Ok(v1::ClaimJobResponse { job: Some(job) });
                 }
-                if req.repo.is_empty() {
+                // Forget a repository only once it has no queued job at all (a delayed retry still counts).
+                if req.repo.is_empty() && !queued_left {
                     self.local.job_repos.lock().unwrap_or_else(|e| e.into_inner()).remove(&repo);
                 }
             }
@@ -417,18 +464,20 @@ impl App {
         let repo = require(&req.repo, "repo")?.to_string();
         let name = repo.clone();
         let events = self.metrics.job_events.clone();
+        // What a worker reports is untrusted and as large as a request: the job keeps - and the append-only,
+        // hash-chained audit log records - the same bounded text.
+        let error: String = req.error.chars().take(MAX_JOB_ERROR_CHARS).collect();
         let out = self
             .with_repo_mut(call, &repo, Cap::JobsClaim, None, move |r, actor| {
                 let retry = (req.retry_after_ms > 0).then_some(req.retry_after_ms);
                 let j = r.meta().write(|tx| {
-                    let j =
-                        tx.job_fail(&req.job_id, &worker, &req.error.chars().take(2000).collect::<String>(), retry)?;
+                    let j = tx.job_fail(&req.job_id, &worker, &error, retry)?;
                     events.with_label_values(&[if j.state == JobState::Queued { "retried" } else { "failed" }]).inc();
                     tx.audit_append(
                         actor.as_str(),
                         "job.fail",
                         &j.id,
-                        &json!({"error": req.error, "state": j.state.as_str()}),
+                        &json!({"error": error, "state": j.state.as_str()}),
                     )?;
                     Ok(j)
                 })?;

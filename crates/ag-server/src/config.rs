@@ -228,6 +228,34 @@ pub struct OidcProvider {
     /// Maps provider groups to roles.
     #[serde(default)]
     pub group_roles: Vec<GroupRole>,
+    /// Timeout for the discovery and JWKS requests to the provider (seconds).
+    #[serde(default = "default_oidc_http_timeout_secs")]
+    pub http_timeout_secs: u64,
+    /// A token signed with a key the server does not know triggers a JWKS refresh, at most this often (seconds).
+    #[serde(default = "default_oidc_refresh_secs")]
+    pub jwks_refresh_secs: u64,
+    /// How long fetched keys are trusted before they are fetched again (seconds).
+    #[serde(default = "default_oidc_max_age_secs")]
+    pub jwks_max_age_secs: u64,
+    /// Clock skew tolerated between the provider and this server when checking `exp` and `nbf` (seconds).
+    #[serde(default = "default_oidc_leeway_secs")]
+    pub leeway_secs: u64,
+}
+
+fn default_oidc_http_timeout_secs() -> u64 {
+    10
+}
+
+fn default_oidc_refresh_secs() -> u64 {
+    30
+}
+
+fn default_oidc_max_age_secs() -> u64 {
+    3600
+}
+
+fn default_oidc_leeway_secs() -> u64 {
+    30
 }
 
 fn default_username_claim() -> String {
@@ -462,6 +490,12 @@ impl ServerConfig {
             return bad("limits.max_concurrent_requests must be at least 1");
         }
         let l = &self.limits;
+        if l.requests_per_second > 0 && l.burst == 0 {
+            return bad("limits.burst must be at least 1 when limits.requests_per_second is set");
+        }
+        if l.repo_requests_per_second > 0 && l.repo_burst == 0 {
+            return bad("limits.repo_burst must be at least 1 when limits.repo_requests_per_second is set");
+        }
         if l.max_request_bytes == 0 {
             return bad("limits.max_request_bytes must be positive");
         }
@@ -512,6 +546,9 @@ impl ServerConfig {
         for p in &self.auth.oidc {
             if p.issuer.is_empty() || p.audience.is_empty() {
                 return bad("every [[auth.oidc]] needs issuer and audience");
+            }
+            if p.http_timeout_secs == 0 || p.jwks_max_age_secs == 0 {
+                return bad("[[auth.oidc]] http_timeout_secs and jwks_max_age_secs must be positive");
             }
             for g in &p.group_roles {
                 if crate::authz::Role::parse(&g.role).is_none() {
@@ -581,6 +618,20 @@ mod tests {
             "the error names the engine's limit"
         );
         assert!(invalid(|c| c.auth.max_ttl_secs = 0).contains("positive"));
+        assert!(
+            invalid(|c| {
+                c.limits.requests_per_second = 5;
+                c.limits.burst = 0;
+            })
+            .contains("burst")
+        );
+        assert!(
+            invalid(|c| {
+                c.limits.repo_requests_per_second = 5;
+                c.limits.repo_burst = 0;
+            })
+            .contains("repo_burst")
+        );
         for bad in ["ag.example", "https://", "https://ag.example/ui", "ftp://ag.example", "*", "https://u@ag.example"]
         {
             assert!(invalid(|c| c.server.cors_origins = vec![bad.into()]).contains("cors_origins"), "{bad}");

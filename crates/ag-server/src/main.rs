@@ -50,10 +50,12 @@ enum Command {
         /// Data directory of the server (default: `server.data_dir` of the configuration, else `./ag-data`).
         #[arg(long, env = "AG_DATA_DIR")]
         data_dir: Option<PathBuf>,
-        /// The server's configuration. `[control]` (a PostgreSQL control database), `[repos.storage]` and
-        /// `server.data_dir` are used: a repository created here gets the same PostgreSQL schema and S3 prefix as
-        /// one created through the API. Without it, the control database is `<data-dir>/control.db` and
-        /// `create-repo` makes a local SQLite repository. The container images set it for you.
+        /// The server's configuration. `[control]` (a PostgreSQL control database), `[repos]` (storage and the
+        /// default stream), `[limits]` (the quota a new repository starts with), `[auth]` (credential lifetimes)
+        /// and `server.data_dir` are used: a repository created here gets the same PostgreSQL schema, S3 prefix,
+        /// default stream and quota as one created through the API, and a minted credential obeys the same
+        /// lifetime caps. Without it, the control database is `<data-dir>/control.db` and `create-repo` makes a
+        /// local SQLite repository with built-in defaults. The container images set it for you.
         #[arg(short, long, env = "AG_SERVER_CONFIG")]
         config: Option<PathBuf>,
         #[command(subcommand)]
@@ -89,9 +91,9 @@ enum AdminAction {
         /// Identity the credential authenticates as.
         #[arg(long)]
         subject: String,
-        /// Lifetime in seconds.
-        #[arg(long, default_value_t = 3600)]
-        ttl: u32,
+        /// Lifetime in seconds (default and maximum: `[auth]` of the configuration, per kind of identity).
+        #[arg(long)]
+        ttl: Option<u32>,
         /// Restrict to these repository patterns (repeatable).
         #[arg(long = "repo")]
         repos: Vec<String>,
@@ -109,9 +111,9 @@ enum AdminAction {
     CreateRepo {
         /// owner/name
         name: String,
-        /// First stream.
-        #[arg(long, default_value = "main")]
-        default_stream: String,
+        /// First stream (default: `repos.default_stream` of the configuration).
+        #[arg(long)]
+        default_stream: Option<String>,
     },
     /// List repositories.
     Repos,
@@ -253,6 +255,8 @@ async fn main() -> Result<()> {
                 let loaded = ServerConfig::load(path)?;
                 cfg.repos = loaded.repos;
                 cfg.control = loaded.control;
+                cfg.limits = loaded.limits;
+                cfg.auth = loaded.auth;
                 cfg.server.data_dir = loaded.server.data_dir;
             }
             if let Some(dir) = data_dir {
@@ -418,6 +422,15 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
         }
         AdminAction::Mint { subject, ttl, repos, streams, operations, description } => {
             let identity = ag_types::Identity::new(subject.clone())?;
+            if identity.kind() == ag_types::IdentityKind::System {
+                bail!("credentials cannot be minted for system identities");
+            }
+            // The same rule as `POST /v1/credentials`: the configured default, and never past the cap.
+            let ttl = app
+                .cfg
+                .auth
+                .credential_ttl(identity.kind(), ttl.unwrap_or(0))
+                .map_err(|e| anyhow::anyhow!("--ttl: {e}"))?;
             let minted = ag_server::auth::mint_token().map_err(|e| anyhow::anyhow!("{e}"))?;
             let scope = v1::CredentialScope { repos, streams, operations };
             ag_server::authz::Scope::from_wire(&scope).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -442,14 +455,15 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
         }
         AdminAction::CreateRepo { name, default_stream } => {
             let actor = ag_types::Identity::new(by)?;
+            let default_stream = default_stream.unwrap_or_else(|| app.cfg.repos.default_stream.clone());
             let row = app
                 .repos
-                .create(&name, &default_stream, "", &actor, v1::Quota::default())
+                .create(&name, &default_stream, "", &actor, app.default_quota())
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             println!("created {} (namespace {})", row.name, row.namespace);
         }
         AdminAction::Repos => {
-            for r in app.control.repos("", "", 10_000).map_err(|e| anyhow::anyhow!("{e}"))? {
+            for r in app.control.all_repos().map_err(|e| anyhow::anyhow!("{e}"))? {
                 println!("{}\t{}", r.name, r.description);
             }
         }

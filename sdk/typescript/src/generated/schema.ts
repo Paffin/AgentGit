@@ -2038,7 +2038,10 @@ export interface components {
             detail: string;
             /** @default  */
             kind: string;
-            /** @default  */
+            /**
+             * @description The object or changeset id the problem is about; empty when it is about a stream or the audit chain.
+             * @default
+             */
             object: string;
         };
         FsckRequest: {
@@ -2541,14 +2544,28 @@ export interface components {
             jobs: components["schemas"]["Job"][];
         };
         ListLeasesRequest: {
-            /** @default false */
+            /**
+             * @description Only the leases that are in force now. Without it the newest leases of any state are listed, up to `limit`.
+             * @default false
+             */
             active_only: boolean;
+            /**
+             * Format: int32
+             * @description At most this many leases when `active_only` is not set (0 = 100, maximum 1000). Active leases are all returned.
+             * @default 0
+             */
+            limit: number;
             /** @default  */
             repo: string;
         };
         ListLeasesResponse: {
             /** @default [] */
             leases: components["schemas"]["Lease"][];
+            /**
+             * @description True if more leases matched than `limit` allowed.
+             * @default false
+             */
+            truncated: boolean;
         };
         ListPinsRequest: {
             /** @default  */
@@ -5039,6 +5056,7 @@ export interface operations {
         parameters: {
             query?: {
                 active_only?: boolean;
+                limit?: number;
             };
             header?: never;
             path: {

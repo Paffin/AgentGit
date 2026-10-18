@@ -59,6 +59,10 @@ code is exchanged at the provider's token endpoint. The server still verifies ev
 issuer = "https://idp.example.com/realms/acme"
 audience = "agentgit-web"                      # = the UI's client_id when the ID token is presented
 group_roles = [{ group = "platform", role = "admin", repo = "acme/*" }]
+# http_timeout_secs = 10        # discovery and key-set requests to the provider
+# jwks_refresh_secs = 30        # an unknown signing key refreshes the key set at most this often
+# jwks_max_age_secs = 3600      # how long fetched keys are trusted
+# leeway_secs = 30              # clock skew tolerated for exp / nbf
 
 [[ui.login]]                                   # makes the UI offer the button
 issuer = "https://idp.example.com/realms/acme"

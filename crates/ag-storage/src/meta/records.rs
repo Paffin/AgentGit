@@ -233,6 +233,12 @@ impl Tx<'_> {
         }
     }
 
+    /// How many proposals are in `state` (a count, not a scan of the rows).
+    pub fn proposals_count(&self, state: &str) -> Result<u64, MetaError> {
+        let rows = self.conn.query("SELECT COUNT(*) FROM proposals WHERE state = ?1", &params![state])?;
+        Ok(rows.first().map(|r| r.i64(0)).transpose()?.unwrap_or(0).max(0) as u64)
+    }
+
     fn proposals_where(&self, clause: &str, p: &[Param<'_>]) -> Result<Vec<ProposalRow>, MetaError> {
         let rows = self.conn.query(&format!("SELECT {PROPOSAL_COLS} FROM proposals WHERE {clause}"), p)?;
         rows.iter().map(proposal_row).collect()

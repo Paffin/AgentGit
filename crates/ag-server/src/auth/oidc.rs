@@ -21,21 +21,24 @@ use crate::authz::{Role, Scope};
 use crate::config::OidcProvider;
 use crate::error::{ApiError, ApiResult};
 
-const KEY_REFRESH_MIN_INTERVAL: Duration = Duration::from_secs(30);
-const KEY_MAX_AGE: Duration = Duration::from_secs(3600);
-
 struct KeyCache {
     keys: HashMap<String, DecodingKey>,
     /// Keys without a `kid` (single-key sets).
     anonymous: Vec<DecodingKey>,
     fetched: Option<Instant>,
+    /// The last time a fetch was started, successful or not: an unreachable provider is asked once per
+    /// `jwks_refresh_secs`, not once per request.
+    attempted: Option<Instant>,
 }
 
 /// Validates tokens of one provider.
 pub struct OidcValidator {
     cfg: OidcProvider,
     algorithms: Vec<Algorithm>,
+    /// The keys. Held only to read or to install them - never across a network call.
     cache: Mutex<KeyCache>,
+    /// Lets one request at a time fetch the key set; the others wait for its result instead of fetching too.
+    refresh_gate: Mutex<()>,
 }
 
 fn parse_alg(s: &str) -> Option<Algorithm> {
@@ -67,7 +70,8 @@ impl OidcValidator {
         Ok(Self {
             cfg,
             algorithms,
-            cache: Mutex::new(KeyCache { keys: HashMap::new(), anonymous: Vec::new(), fetched: None }),
+            cache: Mutex::new(KeyCache { keys: HashMap::new(), anonymous: Vec::new(), fetched: None, attempted: None }),
+            refresh_gate: Mutex::new(()),
         })
     }
 
@@ -77,7 +81,8 @@ impl OidcValidator {
                 .map_err(|e| ApiError::internal(format!("cannot read JWKS file {}: {e}", path.display())))?;
             return serde_json::from_str(&text).map_err(|e| ApiError::internal(format!("bad JWKS file: {e}")));
         }
-        let agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(10))).build().new_agent();
+        let timeout = Duration::from_secs(self.cfg.http_timeout_secs);
+        let agent = ureq::Agent::config_builder().timeout_global(Some(timeout)).build().new_agent();
         let uri = match &self.cfg.jwks_uri {
             Some(u) => u.clone(),
             None => {
@@ -109,8 +114,9 @@ impl OidcValidator {
             .map_err(|e| ApiError::internal(format!("JWKS is not valid JSON: {e}")))
     }
 
-    fn refresh(&self, cache: &mut KeyCache) -> ApiResult<()> {
-        let set = self.load_jwks()?;
+    /// Replaces the cached keys with a freshly fetched set.
+    fn install(&self, set: &JwkSet) {
+        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         cache.keys.clear();
         cache.anonymous.clear();
         for jwk in &set.keys {
@@ -123,14 +129,16 @@ impl OidcValidator {
             }
         }
         cache.fetched = Some(Instant::now());
-        Ok(())
     }
 
-    /// Looks up the verification key for `kid`, refreshing the key set when
-    /// the key is unknown (rate limited) or the cache is old.
+    /// Looks up the verification key for `kid`, refreshing the key set when the key is unknown (rate limited by
+    /// `jwks_refresh_secs`) or the cache is older than `jwks_max_age_secs`.
+    ///
+    /// The provider is contacted without holding the cache: a slow or unreachable identity provider delays the
+    /// requests that need a refresh (one fetch at a time), but never those that find their key in the cache.
     fn key_for(&self, kid: Option<&str>) -> ApiResult<DecodingKey> {
-        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        let stale = cache.fetched.is_none_or(|t| t.elapsed() > KEY_MAX_AGE);
+        let (max_age, min_interval) =
+            (Duration::from_secs(self.cfg.jwks_max_age_secs), Duration::from_secs(self.cfg.jwks_refresh_secs));
         let lookup = |c: &KeyCache| match kid {
             Some(k) => c.keys.get(k).cloned(),
             None => c
@@ -139,14 +147,34 @@ impl OidcValidator {
                 .cloned()
                 .or_else(|| (c.keys.len() == 1).then(|| c.keys.values().next().cloned()).flatten()),
         };
-        if !stale && let Some(k) = lookup(&cache) {
-            return Ok(k);
-        }
-        let may_refresh = cache.fetched.is_none_or(|t| t.elapsed() > KEY_REFRESH_MIN_INTERVAL);
+        // Returns the key if it is cached and fresh, else whether a refresh is allowed now.
+        let cached = || {
+            let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+            let stale = cache.fetched.is_none_or(|t| t.elapsed() > max_age);
+            match lookup(&cache) {
+                Some(k) if !stale => Ok(k),
+                _ => Err(cache.attempted.is_none_or(|t| t.elapsed() > min_interval)),
+            }
+        };
+        let may_refresh = match cached() {
+            Ok(k) => return Ok(k),
+            Err(may) => may,
+        };
         if may_refresh {
-            self.refresh(&mut cache)?;
+            let _gate = self.refresh_gate.lock().unwrap_or_else(|e| e.into_inner());
+            // Someone else may have refreshed while this request waited for the gate.
+            match cached() {
+                Ok(k) => return Ok(k),
+                Err(true) => {
+                    self.cache.lock().unwrap_or_else(|e| e.into_inner()).attempted = Some(Instant::now());
+                    let set = self.load_jwks()?;
+                    self.install(&set);
+                }
+                Err(false) => {}
+            }
         }
-        lookup(&cache).ok_or_else(|| ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "unknown signing key"))
+        lookup(&self.cache.lock().unwrap_or_else(|e| e.into_inner()))
+            .ok_or_else(|| ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "unknown signing key"))
     }
 
     /// Verifies `token`. `Ok(None)` means the token was issued by someone
@@ -182,7 +210,7 @@ impl OidcValidator {
         validation.set_audience(&[self.cfg.audience.as_str()]);
         validation.set_required_spec_claims(&["exp", "iss", "aud"]);
         validation.validate_nbf = true;
-        validation.leeway = 30;
+        validation.leeway = self.cfg.leeway_secs;
         let data = decode::<Value>(token, &key, &validation).map_err(|e| bad(&e.to_string()))?;
         let claims = data.claims;
 
@@ -219,5 +247,88 @@ impl OidcValidator {
             groups,
             group_roles,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::TcpListener;
+    use std::sync::Arc;
+
+    use jsonwebtoken::EncodingKey;
+    use jsonwebtoken::jwk::Jwk;
+
+    use super::*;
+
+    /// A provider whose key endpoint accepts connections and never answers (a hung identity provider), with
+    /// one key already cached under "k1". Returns the validator and how many connections the endpoint saw.
+    fn hung_provider(http_timeout_secs: u64) -> (Arc<OidcValidator>, Arc<std::sync::atomic::AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/jwks", listener.local_addr().unwrap());
+        let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = seen.clone();
+        std::thread::spawn(move || {
+            let mut held = Vec::new();
+            for conn in listener.incoming().flatten() {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                held.push(conn); // never answered, never closed
+            }
+        });
+        let validator = OidcValidator::new(OidcProvider {
+            issuer: "https://idp.example".into(),
+            audience: "agentgit".into(),
+            jwks_uri: Some(url),
+            jwks_file: None,
+            username_claim: "preferred_username".into(),
+            groups_claim: "groups".into(),
+            algorithms: vec!["EdDSA".into()],
+            group_roles: vec![],
+            http_timeout_secs,
+            jwks_refresh_secs: 30,
+            jwks_max_age_secs: 3600,
+            leeway_secs: 30,
+        })
+        .unwrap();
+        let pem = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/oidc-test-ed25519.pem")).unwrap();
+        let mut jwk = Jwk::from_encoding_key(&EncodingKey::from_ed_pem(&pem).unwrap(), Algorithm::EdDSA).unwrap();
+        jwk.common.key_id = Some("k1".into());
+        validator.install(&JwkSet { keys: vec![jwk] });
+        (Arc::new(validator), seen)
+    }
+
+    #[test]
+    fn a_hung_identity_provider_does_not_stall_requests_whose_key_is_cached() {
+        let (validator, seen) = hung_provider(2);
+        // A token with an unknown key id makes this thread fetch the key set - and wait for the provider.
+        let fetching = {
+            let v = validator.clone();
+            std::thread::spawn(move || v.key_for(Some("rotated")).is_err())
+        };
+        while seen.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // While it waits, a request with a cached key is answered at once (it used to queue behind the lock).
+        let started = Instant::now();
+        assert!(validator.key_for(Some("k1")).is_ok());
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "waited {:?} for a provider it did not need",
+            started.elapsed()
+        );
+        assert!(fetching.join().unwrap(), "the request that needed a fresh key set gets the provider's failure");
+    }
+
+    #[test]
+    fn an_unreachable_provider_is_asked_once_per_interval_not_once_per_request() {
+        let (validator, seen) = hung_provider(1);
+        let started = Instant::now();
+        assert!(validator.key_for(Some("rotated")).is_err());
+        assert!(started.elapsed() >= Duration::from_millis(900), "the first request really asked the provider");
+        let second = Instant::now();
+        for _ in 0..5 {
+            assert!(validator.key_for(Some("rotated")).is_err());
+        }
+        assert!(second.elapsed() < Duration::from_millis(500), "later requests did not queue for the provider again");
+        assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 1, "one attempt in the interval");
     }
 }

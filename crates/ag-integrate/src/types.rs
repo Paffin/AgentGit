@@ -94,6 +94,19 @@ pub enum Outcome {
     },
 }
 
+impl Outcome {
+    /// The outcome's name on the wire and in metrics: `integrated`, `blocked`, `conflict`, `denied` or `invalid`.
+    pub fn status(&self) -> &'static str {
+        match self {
+            Outcome::Integrated { .. } => "integrated",
+            Outcome::Blocked { .. } => "blocked",
+            Outcome::Conflict { .. } => "conflict",
+            Outcome::Denied { .. } => "denied",
+            Outcome::Invalid { .. } => "invalid",
+        }
+    }
+}
+
 /// What a client gets back (and can ask for again by operation id).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IntegrationResult {

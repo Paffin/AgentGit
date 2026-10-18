@@ -303,3 +303,49 @@ fn prediction_finds_overlapping_proposals_leases_and_tasks() {
     assert!(kinds.iter().any(|k| k.2 == "proposal_inside_foreign_lease" && k.0 == "proposal:prop_3"), "{kinds:?}");
     assert!(!kinds.iter().any(|k| k.0 == "proposal:prop_3" && k.2 == "proposals_touch_same_paths"));
 }
+
+/// A creation and whatever the caller records with it (an idempotency record) are one transaction: when the
+/// second part fails, the first never happened - no run, lease or task, and no audit entry for it either.
+#[test]
+fn what_is_recorded_with_a_creation_commits_or_rolls_back_with_it() {
+    use ag_storage::meta::MetaError;
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let audit = |e: &Env| e.meta.read(|tx| tx.audit_latest_seq()).unwrap();
+    let refuse = |_: &ag_storage::meta::Tx<'_>, _: &dyn std::fmt::Debug| -> Result<(), MetaError> {
+        Err(MetaError::AlreadyExists("the idempotency record".into()))
+    };
+    let before = audit(&e);
+
+    let run = registry::start_run_with(&e.meta, "bot", None, |tx, r| refuse(tx, r));
+    assert!(matches!(run, Err(AgentError::Meta(MetaError::AlreadyExists(_)))), "{run:?}");
+    let lease = leases::acquire_with(&e.meta, "src/**", "agent:bot", true, 60_000, None, |tx, a| refuse(tx, a));
+    assert!(matches!(lease, Err(AgentError::Meta(MetaError::AlreadyExists(_)))), "{lease:?}");
+    let task = tasks::create_task_with(&e.meta, "design", "", &[], &[], "user:t", |tx, t| refuse(tx, t));
+    assert!(matches!(task, Err(AgentError::Meta(MetaError::AlreadyExists(_)))), "{task:?}");
+
+    assert!(e.meta.read(|tx| tx.runs(None, 10)).unwrap().is_empty(), "no run");
+    assert!(e.meta.read(|tx| tx.leases_active()).unwrap().is_empty(), "no lease");
+    assert!(e.meta.read(|tx| tx.tasks(None)).unwrap().is_empty(), "no task");
+    assert_eq!(audit(&e), before, "and nothing was audited");
+
+    // When the second part succeeds, both are there - and the recorder saw the committed-to-be object.
+    let (run, seen) =
+        registry::start_run_with(&e.meta, "bot", None, |tx, r| Ok(tx.run(&r.run_id)?.map(|row| row.run_id))).unwrap();
+    assert_eq!(seen.as_deref(), Some(run.run_id.as_str()));
+    let (got, token) =
+        leases::acquire_with(&e.meta, "docs/**", run.identity.as_str(), true, 60_000, None, |_, a| Ok(a.lease.token))
+            .unwrap();
+    assert_eq!(got.lease.token, token);
+    // A task is created with its dependencies in the same transaction: a missing one means no task at all.
+    let (a, ()) = tasks::create_task_with(&e.meta, "a", "", &[], &[], "user:t", |_, _| Ok(())).unwrap();
+    let (b, deps) = tasks::create_task_with(&e.meta, "b", "", &[], std::slice::from_ref(&a.id), "user:t", |tx, t| {
+        tx.task_deps(&t.id)
+    })
+    .unwrap();
+    assert_eq!(deps, vec![a.id.clone()], "the dependency is already in place when the recorder runs");
+    let missing = tasks::create_task_with(&e.meta, "c", "", &[], &["task_nope".into()], "user:t", |_, _| Ok(()));
+    assert!(matches!(missing, Err(AgentError::NotFound(_))), "{missing:?}");
+    let titles: Vec<String> = e.meta.read(|tx| tx.tasks(None)).unwrap().into_iter().map(|t| t.title).collect();
+    assert_eq!(titles.len(), 2, "{titles:?} - a failed creation left no task behind (b = {})", b.id);
+}

@@ -17,6 +17,22 @@ pub fn create_task(
     scope: &[String],
     actor: &str,
 ) -> Result<TaskRow, AgentError> {
+    create_task_with(meta, title, description, scope, &[], actor, |_, _| Ok(())).map(|(t, ())| t)
+}
+
+/// Creates a task that depends on `depends_on` — all in one transaction — and runs `also` in it too: whatever it
+/// writes (an idempotency record, say) is committed with the task or not at all. `also` may run again if the
+/// transaction is retried, and its error rolls the task back. A dependency that does not exist is
+/// [`AgentError::NotFound`].
+pub fn create_task_with<R>(
+    meta: &Meta,
+    title: &str,
+    description: &str,
+    scope: &[String],
+    depends_on: &[String],
+    actor: &str,
+    also: impl Fn(&Tx<'_>, &TaskRow) -> Result<R, MetaError>,
+) -> Result<(TaskRow, R), AgentError> {
     if title.trim().is_empty() {
         return Err(AgentError::Invalid("task title is empty".into()));
     }
@@ -24,11 +40,20 @@ pub fn create_task(
         ag_policy::PathMatcher::new(std::slice::from_ref(g)).map_err(AgentError::Invalid)?;
     }
     let id = random_id("task")?;
-    Ok(meta.write(|tx| {
+    meta.write(|tx| {
         let t = tx.task_create(&id, title, description, scope, actor)?;
         tx.audit_append(actor, "task.create", &id, &json!({"title": title}))?;
-        Ok(t)
-    })?)
+        for d in depends_on {
+            add_dependency_in_tx(tx, &id, d, actor)?;
+        }
+        let extra = also(tx, &t)?;
+        Ok((t, extra))
+    })
+    .map_err(|e| match e {
+        MetaError::Invalid(m) => AgentError::Conflict(m),
+        MetaError::NotFound(m) => AgentError::NotFound(m),
+        other => AgentError::Meta(other),
+    })
 }
 
 /// Makes `task` depend on `depends_on`, refusing self-dependencies and cycles.
@@ -36,25 +61,26 @@ pub fn add_dependency(meta: &Meta, task: &str, depends_on: &str, actor: &str) ->
     if task == depends_on {
         return Err(AgentError::Invalid("a task cannot depend on itself".into()));
     }
-    meta.write(|tx| {
-        for t in [task, depends_on] {
-            if tx.task(t)?.is_none() {
-                return Err(MetaError::NotFound(format!("task '{t}'")));
-            }
-        }
-        // Adding task -> depends_on creates a cycle iff depends_on already reaches task.
-        if reaches(tx, depends_on, task)? {
-            return Err(MetaError::Invalid(format!("dependency {task} -> {depends_on} would create a cycle")));
-        }
-        tx.task_dep_add(task, depends_on)?;
-        tx.audit_append(actor, "task.depend", task, &json!({"on": depends_on}))?;
-        Ok(())
-    })
-    .map_err(|e| match e {
+    meta.write(|tx| add_dependency_in_tx(tx, task, depends_on, actor)).map_err(|e| match e {
         MetaError::Invalid(m) => AgentError::Conflict(m),
         MetaError::NotFound(m) => AgentError::NotFound(m),
         other => AgentError::Meta(other),
     })
+}
+
+fn add_dependency_in_tx(tx: &Tx<'_>, task: &str, depends_on: &str, actor: &str) -> Result<(), MetaError> {
+    for t in [task, depends_on] {
+        if tx.task(t)?.is_none() {
+            return Err(MetaError::NotFound(format!("task '{t}'")));
+        }
+    }
+    // Adding task -> depends_on creates a cycle iff depends_on already reaches task.
+    if reaches(tx, depends_on, task)? {
+        return Err(MetaError::Invalid(format!("dependency {task} -> {depends_on} would create a cycle")));
+    }
+    tx.task_dep_add(task, depends_on)?;
+    tx.audit_append(actor, "task.depend", task, &json!({"on": depends_on}))?;
+    Ok(())
 }
 
 fn reaches(tx: &Tx<'_>, from: &str, to: &str) -> Result<bool, MetaError> {

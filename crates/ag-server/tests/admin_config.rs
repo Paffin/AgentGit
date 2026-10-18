@@ -86,3 +86,53 @@ fn a_missing_configuration_file_is_an_error_not_a_silent_default() {
     let o = admin(Some(&tmp.path().join("nope.toml")), &["repos"]);
     assert!(!o.status.success());
 }
+
+#[test]
+fn offline_administration_applies_the_configured_quota_defaults_stream_and_credential_lifetimes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let cfg = write_config(
+        tmp.path(),
+        &data,
+        "[repos]\ndefault_stream = \"trunk\"\n\n[limits]\nmax_total_object_bytes = 123456\nrepo_max_streams = 4\n\
+         max_open_proposals = 9\n\n[auth]\nmax_ttl_secs = 600\ndefault_ttl_secs = 300\nmax_agent_ttl_secs = 60\ndefault_agent_ttl_secs = 30\n",
+    );
+
+    // A repository created here is the one the API would create: same default stream, same starting quota.
+    let o = admin(Some(&cfg), &["create-repo", "acme/web"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let db = rusqlite::Connection::open(data.join("control.db")).unwrap();
+    let (stream, quota): (String, String) = db
+        .query_row("SELECT default_stream, quota_json FROM repos WHERE name = 'acme/web'", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(stream, "trunk", "repos.default_stream, not a hardcoded main");
+    let quota: serde_json::Value = serde_json::from_str(&quota).unwrap();
+    assert_eq!(
+        (quota["max_total_object_bytes"].as_u64(), quota["max_streams"].as_u64(), quota["max_open_proposals"].as_u64()),
+        (Some(123456), Some(4), Some(9)),
+        "{quota}"
+    );
+    // An explicit flag still wins.
+    let o = admin(Some(&cfg), &["create-repo", "acme/api", "--default-stream", "dev"]);
+    assert!(o.status.success(), "{}", text(&o));
+
+    // A minted credential gets the configured default lifetime and cannot pass the configured cap.
+    let o = admin(Some(&cfg), &["mint", "--subject", "user:alice"]);
+    assert!(o.status.success() && text(&o).contains("expires in 300s"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["mint", "--subject", "agent:bot"]);
+    assert!(o.status.success() && text(&o).contains("expires in 30s"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["mint", "--subject", "user:alice", "--ttl", "601"]);
+    assert!(!o.status.success() && text(&o).contains("at most 600"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["mint", "--subject", "agent:bot", "--ttl", "61"]);
+    assert!(!o.status.success() && text(&o).contains("at most 60"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["mint", "--subject", "user:alice", "--ttl", "120"]);
+    assert!(o.status.success() && text(&o).contains("expires in 120s"), "{}", text(&o));
+
+    // A role is granted on patterns that compile, like through the API.
+    let o = admin(Some(&cfg), &["grant", "--subject", "user:alice", "--repo", "acme/[", "--role", "writer"]);
+    assert!(!o.status.success() && text(&o).contains("bad pattern"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["grant", "--subject", "user:alice", "--repo", "acme/*", "--role", "writer"]);
+    assert!(o.status.success(), "{}", text(&o));
+}

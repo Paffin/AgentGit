@@ -24,9 +24,9 @@ impl App {
             Cap::ProposalCreate,
             Some(&stream_s),
             move |repo, actor| {
-                if max_open > 0
-                    && repo.meta().read(|tx| tx.proposals_list(Some("open"), 100_000))?.len() as u32 >= max_open
-                {
+                // Checked just before the create (the engine creates in its own transaction), so concurrent creates
+                // can overshoot by the number in flight.
+                if max_open > 0 && repo.meta().read(|tx| tx.proposals_count("open"))? >= u64::from(max_open) {
                     return Err(ApiError::new(
                         ag_protocol::ErrorCode::QuotaExceeded,
                         format!("this repository is limited to {max_open} open proposals"),

@@ -20,6 +20,10 @@ pub struct QueueRunReport {
     pub rejected: Vec<String>,
     /// Entries that errored.
     pub failed: Vec<(String, String)>,
+    /// The [`Outcome::status`] of every entry that was decided, in order (errored entries have none). For
+    /// in-process callers (metrics); not part of the JSON the CLI prints.
+    #[serde(skip)]
+    pub outcomes: Vec<&'static str>,
 }
 
 impl Repository {
@@ -55,6 +59,9 @@ impl Repository {
                 idempotency_key: None,
                 fencing_tokens: vec![],
             });
+            if let Ok(r) = &result {
+                report.outcomes.push(r.outcome.status());
+            }
             let (state, text) = match result {
                 Ok(r) => match (&r.state, &r.outcome) {
                     (IntentState::Integrated, _) => {

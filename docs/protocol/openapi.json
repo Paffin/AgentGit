@@ -1320,6 +1320,7 @@
           },
           "object": {
             "default": "",
+            "description": "The object or changeset id the problem is about; empty when it is about a stream or the audit chain.",
             "type": "string"
           }
         },
@@ -2170,7 +2171,15 @@
         "properties": {
           "active_only": {
             "default": false,
+            "description": "Only the leases that are in force now. Without it the newest leases of any state are listed, up to `limit`.",
             "type": "boolean"
+          },
+          "limit": {
+            "default": 0,
+            "description": "At most this many leases when `active_only` is not set (0 = 100, maximum 1000). Active leases are all returned.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           },
           "repo": {
             "default": "",
@@ -2187,6 +2196,11 @@
               "$ref": "#/components/schemas/Lease"
             },
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True if more leases matched than `limit` allowed.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -6537,7 +6551,20 @@
             "required": false,
             "schema": {
               "default": false,
+              "description": "Only the leases that are in force now. Without it the newest leases of any state are listed, up to `limit`.",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "At most this many leases when `active_only` is not set (0 = 100, maximum 1000). Active leases are all returned.",
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
             }
           }
         ],

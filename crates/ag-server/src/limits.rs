@@ -1,6 +1,6 @@
 //! Rate limiting and concurrency control.
 //!
-//! Each caller (credential, falling back to identity) has a token bucket;
+//! Each caller - a credential, or for OIDC sign-ins the identity (see `app::bucket_key`) - has a token bucket;
 //! repositories may carry their own quota. Exceeding a limit yields
 //! `rate_limited` with the exact delay after which a retry can succeed, which
 //! is the backpressure signal clients and SDKs honour.

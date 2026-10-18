@@ -215,8 +215,15 @@ impl Tx<'_> {
         self.jobs_where("id = ?1", &params![id]).map(|mut v| v.pop())
     }
 
-    fn job_by_key(&self, key: &str) -> Result<Option<JobRow>, MetaError> {
+    /// The job enqueued under `dedupe_key`, in whatever state it is in (an indexed lookup).
+    pub fn job_by_key(&self, key: &str) -> Result<Option<JobRow>, MetaError> {
         self.jobs_where("dedupe_key = ?1", &params![key]).map(|mut v| v.pop())
+    }
+
+    /// How many jobs are in `state` (a count, not a scan of the rows).
+    pub fn job_count(&self, state: JobState) -> Result<u64, MetaError> {
+        let rows = self.conn.query("SELECT COUNT(*) FROM jobs WHERE state = ?1", &params![state.as_str()])?;
+        Ok(rows.first().map(|r| r.i64(0)).transpose()?.unwrap_or(0).max(0) as u64)
     }
 
     /// Jobs in `state` (or all), newest first.
@@ -235,6 +242,31 @@ impl Tx<'_> {
         rows.iter().map(job_row).collect()
     }
 
+    /// Takes back the jobs whose lease ran out: a job with attempts left goes back to the queue, one without
+    /// fails for good. Returns the jobs reaped (in their new state), so a caller can record that they happened -
+    /// they are nobody's request, and the worker that held them is gone. [`Tx::job_claim`] does this first.
+    pub fn job_reap_expired(&self) -> Result<Vec<JobRow>, MetaError> {
+        let now = self.now().as_millis();
+        // RETURNING names exactly the rows this statement changed, so two claimers racing on one expired job
+        // cannot both report it.
+        let failed = self.conn.query(
+            "UPDATE jobs SET state = 'failed', error = ?2, claimed_until = NULL, updated_at = ?1
+             WHERE state = 'claimed' AND claimed_until < ?1 AND attempts >= max_attempts RETURNING id",
+            &params![now, LEASE_EXPIRED],
+        )?;
+        let requeued = self.conn.query(
+            "UPDATE jobs SET state = 'queued', error = ?2, claimed_by = NULL, claimed_until = NULL, updated_at = ?1
+             WHERE state = 'claimed' AND claimed_until < ?1 RETURNING id",
+            &params![now, LEASE_EXPIRED],
+        )?;
+        let mut out = Vec::with_capacity(failed.len() + requeued.len());
+        for row in failed.iter().chain(requeued.iter()) {
+            let id = row.string(0)?;
+            out.extend(self.job_get(&id)?);
+        }
+        Ok(out)
+    }
+
     /// Claims the next runnable job of one of `kinds` (any kind if the slice is
     /// empty) for `worker`, with a lease of `lease_ms`. Returns `None` when
     /// nothing is runnable.
@@ -250,16 +282,7 @@ impl Tx<'_> {
             return Err(MetaError::Invalid("lease_ms must be positive".into()));
         }
         let now = self.now().as_millis();
-        self.conn.execute(
-            "UPDATE jobs SET state = 'failed', error = ?2, claimed_until = NULL, updated_at = ?1
-             WHERE state = 'claimed' AND claimed_until < ?1 AND attempts >= max_attempts",
-            &params![now, LEASE_EXPIRED],
-        )?;
-        self.conn.execute(
-            "UPDATE jobs SET state = 'queued', error = ?2, claimed_by = NULL, claimed_until = NULL, updated_at = ?1
-             WHERE state = 'claimed' AND claimed_until < ?1",
-            &params![now, LEASE_EXPIRED],
-        )?;
+        self.job_reap_expired()?;
 
         let mut args: Vec<Param<'_>> = vec![Param::Int(now)];
         let mut filter = String::new();

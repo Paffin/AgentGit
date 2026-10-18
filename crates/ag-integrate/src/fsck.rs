@@ -13,6 +13,9 @@ use crate::{Repository, Result};
 pub struct FsckIssue {
     /// Short category, e.g. `corrupt_object`.
     pub kind: String,
+    /// The object or changeset the problem is about, when it is about one (not for a stream or the audit chain).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object: Option<String>,
     /// What is wrong.
     pub detail: String,
 }
@@ -41,7 +44,11 @@ impl FsckReport {
     }
 
     fn issue(&mut self, kind: &str, detail: String) {
-        self.issues.push(FsckIssue { kind: kind.into(), detail });
+        self.issues.push(FsckIssue { kind: kind.into(), object: None, detail });
+    }
+
+    fn object_issue(&mut self, kind: &str, object: impl ToString, detail: String) {
+        self.issues.push(FsckIssue { kind: kind.into(), object: Some(object.to_string()), detail });
     }
 }
 
@@ -56,8 +63,8 @@ impl Repository {
             r.objects_checked += 1;
             match self.objects.verify(&info.id)? {
                 ObjectStatus::Ok { .. } => {}
-                ObjectStatus::Corrupt(why) => r.issue("corrupt_object", format!("{}: {why}", info.id)),
-                ObjectStatus::Missing => r.issue("missing_object", info.id.to_string()),
+                ObjectStatus::Corrupt(why) => r.object_issue("corrupt_object", info.id, format!("{}: {why}", info.id)),
+                ObjectStatus::Missing => r.object_issue("missing_object", info.id, info.id.to_string()),
             }
         }
 
@@ -68,21 +75,25 @@ impl Repository {
                 Ok(cs) => {
                     let parents = self.meta.read(|tx| tx.parents(id))?;
                     if parents != cs.parents {
-                        r.issue("index_mismatch", format!("{id}: indexed parents differ from the changeset object"));
+                        r.object_issue(
+                            "index_mismatch",
+                            id,
+                            format!("{id}: indexed parents differ from the changeset object"),
+                        );
                     }
                     for b in cs.blobs() {
                         match self.objects.verify(&b.object_id())? {
                             ObjectStatus::Ok { .. } => {}
-                            other => r.issue("bad_blob", format!("{id} references blob {b}: {other:?}")),
+                            other => r.object_issue("bad_blob", b, format!("{id} references blob {b}: {other:?}")),
                         }
                     }
                     for p in &cs.parents {
                         if !self.meta.read(|tx| tx.is_ready(p))? {
-                            r.issue("dangling_parent", format!("{id} has unpublished parent {p}"));
+                            r.object_issue("dangling_parent", id, format!("{id} has unpublished parent {p}"));
                         }
                     }
                 }
-                Err(e) => r.issue("unreadable_changeset", format!("{id}: {e}")),
+                Err(e) => r.object_issue("unreadable_changeset", id, format!("{id}: {e}")),
             }
         }
 

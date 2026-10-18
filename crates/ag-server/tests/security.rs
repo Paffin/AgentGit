@@ -61,6 +61,15 @@ async fn minted_credentials_can_only_narrow_and_always_expire() {
     // Secrets are never listed.
     let list = alice.get("/v1/credentials").await;
     assert!(!list.json.to_string().contains("agt_"), "tokens must never be listed");
+
+    // Nobody learns about another subject's credentials without administering them: the answer is an empty list,
+    // the same as for a subject that has none.
+    let bob = user_with_role(&srv, "user:bob", "acme/*", "writer").await;
+    let theirs = bob.get("/v1/credentials?subject=user:alice").await;
+    assert_eq!(theirs.status, 200, "{}", theirs.json);
+    assert!(theirs.json["credentials"].as_array().unwrap().is_empty(), "{}", theirs.json);
+    assert!(!alice.get("/v1/credentials").await.json["credentials"].as_array().unwrap().is_empty());
+    assert!(bob.get("/v1/credentials?subject=user:nobody").await.json["credentials"].as_array().unwrap().is_empty());
     srv.stop().await;
 }
 
@@ -201,6 +210,10 @@ async fn oidc_tokens_are_validated_strictly_and_groups_map_to_roles() {
             groups_claim: "groups".into(),
             algorithms: vec!["EdDSA".into()],
             group_roles: vec![GroupRole { group: "platform".into(), role: "admin".into(), repo: "*".into() }],
+            http_timeout_secs: 10,
+            jwks_refresh_secs: 30,
+            jwks_max_age_secs: 3600,
+            leeway_secs: 30,
         });
     })
     .await;

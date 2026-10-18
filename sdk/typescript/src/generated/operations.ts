@@ -688,7 +688,7 @@ export const OPERATIONS = {
     name: 'list',
     summary: 'List leases',
     pathParams: ['owner', 'rname'],
-    queryParams: ['active_only'],
+    queryParams: ['active_only', 'limit'],
     body: 'none',
     response: 'json',
     retry: 'read',

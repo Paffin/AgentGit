@@ -767,10 +767,11 @@ class LeasesApi:
         *,
         repo: str,
         active_only: bool | None = None,
+        limit: int | None = None,
         options: CallOptions | None = None,
     ) -> ListLeasesResponse:
         """List leases (`GET /v1/repos/{owner}/{rname}/leases`, operation `lease.list`)."""
-        return self._c._call("lease.list", {"repo": repo, "active_only": active_only}, options, ListLeasesResponse)
+        return self._c._call("lease.list", {"repo": repo, "active_only": active_only, "limit": limit}, options, ListLeasesResponse)
 
     def release(
         self,
@@ -2017,10 +2018,11 @@ class AsyncLeasesApi:
         *,
         repo: str,
         active_only: bool | None = None,
+        limit: int | None = None,
         options: CallOptions | None = None,
     ) -> ListLeasesResponse:
         """List leases (`GET /v1/repos/{owner}/{rname}/leases`, operation `lease.list`)."""
-        return await self._c._call("lease.list", {"repo": repo, "active_only": active_only}, options, ListLeasesResponse)
+        return await self._c._call("lease.list", {"repo": repo, "active_only": active_only, "limit": limit}, options, ListLeasesResponse)
 
     async def release(
         self,

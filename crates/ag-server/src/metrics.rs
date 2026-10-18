@@ -30,9 +30,10 @@ pub struct Metrics {
     pub open_repos: IntGauge,
     /// Open event subscriptions.
     pub subscriptions: IntGauge,
-    /// Execution-plane job events since start: enqueued, claimed, succeeded, retried, failed.
+    /// Execution-plane job events since start: enqueued, claimed, succeeded, retried, failed. `retried` and
+    /// `failed` also count the jobs taken back because a worker's lease ran out (see `job.expire`).
     pub job_events: IntCounterVec,
-    /// Queued jobs in repositories known to have work (refreshed on scrape; at most 1000 per repository).
+    /// Queued jobs in repositories known to have work (refreshed on scrape).
     pub jobs_queued: IntGauge,
     /// Seconds since the server started.
     pub uptime: IntGauge,

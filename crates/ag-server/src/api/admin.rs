@@ -168,7 +168,11 @@ impl App {
                 issues: r
                     .issues
                     .iter()
-                    .map(|i| v1::FsckIssue { kind: i.kind.clone(), object: String::new(), detail: i.detail.clone() })
+                    .map(|i| v1::FsckIssue {
+                        kind: i.kind.clone(),
+                        object: i.object.clone().unwrap_or_default(),
+                        detail: i.detail.clone(),
+                    })
                     .collect(),
                 objects_checked: r.objects_checked as u64,
             })

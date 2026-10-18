@@ -183,6 +183,7 @@ impl App {
         let out = self
             .with_repo_mut(call, require(&req.repo, "repo")?, Cap::QueueRun, Some(&stream), move |repo, actor| {
                 let report = repo.run_queue(&s, actor)?;
+                let outcomes = report.outcomes.clone();
                 let queue = repo.queue(&s)?;
                 let mut processed = Vec::new();
                 let all: Vec<&String> = report
@@ -204,13 +205,13 @@ impl App {
                     .or(report.failed.first().map(|(p, _)| p))
                     .cloned()
                     .unwrap_or_default();
-                Ok(v1::RunQueueResponse { processed, stopped_at })
+                Ok((v1::RunQueueResponse { processed, stopped_at }, outcomes))
             })
             .await?;
-        for p in &out.processed {
-            if p.state == "done" {
-                self.metrics.integrations.with_label_values(&["integrated"]).inc();
-            }
+        // Every entry the run decided counts under its own outcome, like an integrate call does.
+        let (out, outcomes) = out;
+        for status in outcomes {
+            self.metrics.integrations.with_label_values(&[status]).inc();
         }
         Ok(out)
     }

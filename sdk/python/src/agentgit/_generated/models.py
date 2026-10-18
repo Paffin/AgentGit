@@ -973,6 +973,7 @@ class ListJobsResponse:
 class ListLeasesRequest:
     """The `ListLeasesRequest` message."""
     active_only: bool = field(default=False)
+    limit: int = field(default=0)
     repo: str = field(default="")
 
 
@@ -980,6 +981,7 @@ class ListLeasesRequest:
 class ListLeasesResponse:
     """The `ListLeasesResponse` message."""
     leases: list[Lease] = field(default_factory=list)
+    truncated: bool = field(default=False)
 
 
 @dataclass(kw_only=True)

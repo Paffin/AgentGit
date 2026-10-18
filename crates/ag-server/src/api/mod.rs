@@ -30,28 +30,79 @@ mod workspaces;
 pub use events::EventBatch;
 pub use objects::ObjectSink;
 
-/// Serializes keyed creations so two requests with the same key cannot both create.
-static KEYED_CREATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-/// Runs `create` at most once per `(scope, key)` in a repository, recording the response.
+/// A keyed creation whose first answer has not been recorded yet.
 ///
-/// A repeat of the same request returns the recorded response (what the first call answered, not a fresh
-/// view of the object); the same key with a different request is `idempotency_key_reused`. An empty key
-/// means "no idempotency": `create` simply runs. The record lives in the repository's own metadata.
-pub(crate) fn idempotent_create<T: serde::Serialize + serde::de::DeserializeOwned>(
+/// The record belongs in the transaction that creates the object ([`Claim::record`], called from the engine's
+/// `*_with` functions): either the object and its idempotency record are both committed or neither is, so a
+/// crash or a write error can never leave an object that a retry with the same key would create again - on this
+/// replica or another.
+pub(crate) struct Claim {
+    slot: String,
+    hash: String,
+    keyed: bool,
+}
+
+impl Claim {
+    /// Records `response` as the answer to this key. Call it inside the creating transaction. If somebody else
+    /// recorded the key first, the creation is rolled back with `AlreadyExists` and [`keyed`] replays theirs.
+    pub(crate) fn record<T: serde::Serialize>(
+        &self,
+        tx: &ag_storage::meta::Tx<'_>,
+        response: &T,
+    ) -> Result<(), ag_storage::meta::MetaError> {
+        if !self.keyed {
+            return Ok(());
+        }
+        if tx.meta_get(&self.slot)?.is_some() {
+            return Err(ag_storage::meta::MetaError::AlreadyExists(format!("idempotency record {}", self.slot)));
+        }
+        let json = serde_json::to_string(response)?;
+        tx.meta_set(&self.slot, &format!("{}\n{json}", self.hash))
+    }
+}
+
+/// Runs a creation at most once per `(scope, key)` in a repository, recording the response.
+///
+/// A repeat of the same request returns the recorded response (what the first call answered, not a fresh view of
+/// the object); the same key with a different request is `idempotency_key_reused`. An empty key means "no
+/// idempotency": `create` simply runs. `create` receives the [`Claim`] and must call [`Claim::record`] in the
+/// transaction that creates the object. The record lives in the repository's own metadata.
+pub(crate) fn keyed<T: serde::Serialize + serde::de::DeserializeOwned>(
     repo: &ag_integrate::Repository,
     scope: &str,
     key: &str,
     request: &str,
-    create: impl FnOnce() -> ApiResult<T>,
+    create: impl FnOnce(&Claim) -> ApiResult<T>,
 ) -> ApiResult<T> {
-    use sha2::{Digest, Sha256};
-    if key.is_empty() {
-        return create();
+    let claim = match lookup::<T>(repo, scope, key, request)? {
+        Ok(recorded) => return Ok(recorded),
+        Err(claim) => claim,
+    };
+    match create(&claim) {
+        // Two requests with one key raced; the other one committed first. Its answer is the answer.
+        Err(e) if claim.keyed && e.code() == ag_protocol::ErrorCode::AlreadyExists => {
+            match lookup::<T>(repo, scope, key, request)? {
+                Ok(recorded) => Ok(recorded),
+                Err(_) => Err(e),
+            }
+        }
+        other => other,
     }
-    let _serial = KEYED_CREATE.lock().unwrap_or_else(|e| e.into_inner());
+}
+
+/// The recorded response for the key, or the claim to create under it.
+fn lookup<T: serde::de::DeserializeOwned>(
+    repo: &ag_integrate::Repository,
+    scope: &str,
+    key: &str,
+    request: &str,
+) -> ApiResult<Result<T, Claim>> {
+    use sha2::{Digest, Sha256};
     let slot = format!("idem:{scope}:{key}");
     let hash = hex::encode(Sha256::digest(request.as_bytes()));
+    if key.is_empty() {
+        return Ok(Err(Claim { slot, hash, keyed: false }));
+    }
     if let Some(stored) = repo.meta().read(|tx| tx.meta_get(&slot))?
         && let Some((h, json)) = stored.split_once('\n')
     {
@@ -61,12 +112,9 @@ pub(crate) fn idempotent_create<T: serde::Serialize + serde::de::DeserializeOwne
                 format!("idempotency key '{key}' was already used for a different request"),
             ));
         }
-        return serde_json::from_str(json).map_err(ApiError::internal);
+        return serde_json::from_str(json).map(Ok).map_err(ApiError::internal);
     }
-    let out = create()?;
-    let json = serde_json::to_string(&out).map_err(ApiError::internal)?;
-    repo.meta().write(|tx| tx.meta_set(&slot, &format!("{hash}\n{json}")))?;
-    Ok(out)
+    Ok(Err(Claim { slot, hash, keyed: true }))
 }
 
 /// Parses a typed identifier, naming what it was in the error.

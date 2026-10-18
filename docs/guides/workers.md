@@ -159,7 +159,7 @@ configuration can satisfy the check. To learn the digest of a worker, run one jo
   so one lane cannot complete another's job. Memory limits are per check; size the machine for N of them.
 * **Logs** go to stderr (`RUST_LOG` selects verbosity). Each job logs one line with its outcome.
 * **Reading the queue.** `GET /v1/repos/{repo}/jobs?state=queued|claimed|failed` (or `ListJobs`); the job event
-  topics (`job.enqueue`, `job.claim`, `job.fail`, `job.complete`) are in the audit feed.
+  topics (`job.enqueue`, `job.claim`, `job.fail`, `job.complete`, and `job.expire` for a job taken back because its worker's lease ran out) are in the audit feed.
 * **Several workers** can serve the same repositories; the server hands each job to one at a time. Give each a
   distinct `--label`.
 

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use ag_crypto::{KeyPair, PublicKey, random_id};
 use ag_storage::Meta;
-use ag_storage::meta::{AgentRow, MetaError, RunRow};
+use ag_storage::meta::{AgentRow, MetaError, RunRow, Tx};
 use ag_types::{Identity, IdentityKind};
 use serde_json::json;
 
@@ -137,6 +137,18 @@ pub struct Run {
 
 /// Starts a run of an agent, optionally bound to a task (which must be ready).
 pub fn start_run(meta: &Meta, agent: &str, task_id: Option<&str>) -> Result<Run, AgentError> {
+    start_run_with(meta, agent, task_id, |_, _| Ok(())).map(|(run, ())| run)
+}
+
+/// Like [`start_run`], and runs `also` in the very transaction that starts the run: whatever it writes (an
+/// idempotency record, say) is committed with the run or not at all. `also` may run again if the transaction is
+/// retried, and its error rolls the run back.
+pub fn start_run_with<R>(
+    meta: &Meta,
+    agent: &str,
+    task_id: Option<&str>,
+    also: impl Fn(&Tx<'_>, &Run) -> Result<R, MetaError>,
+) -> Result<(Run, R), AgentError> {
     let run_id = random_id("run")?;
     let agent_row = meta.read(|tx| tx.agent(agent))?.ok_or_else(|| AgentError::NotFound(format!("agent '{agent}'")))?;
     if agent_row.disabled {
@@ -144,15 +156,16 @@ pub fn start_run(meta: &Meta, agent: &str, task_id: Option<&str>) -> Result<Run,
     }
     let identity =
         Identity::new(format!("{}#{}", agent_row.identity, run_id)).map_err(|e| AgentError::Invalid(e.to_string()))?;
-    meta.write(|tx| {
+    let run = Run { run_id, agent: agent.to_string(), identity };
+    let extra = meta.write(|tx| {
         if let Some(t) = task_id {
             crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;
         }
-        tx.run_start(&run_id, agent, task_id)?;
-        tx.audit_append(identity.as_str(), "run.start", &run_id, &json!({"task": task_id}))?;
-        Ok(())
+        tx.run_start(&run.run_id, agent, task_id)?;
+        tx.audit_append(run.identity.as_str(), "run.start", &run.run_id, &json!({"task": task_id}))?;
+        also(tx, &run)
     })?;
-    Ok(Run { run_id, agent: agent.to_string(), identity })
+    Ok((run, extra))
 }
 
 /// Records a heartbeat.

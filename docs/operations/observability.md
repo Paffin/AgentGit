@@ -20,8 +20,8 @@ wires them up under `--profile observability`.
 | `agwp_integrations_total` | counter | `outcome` | `integrated`, `blocked`, `conflict`, `denied`, `invalid` |
 | `agwp_object_bytes_received_total`, `agwp_object_bytes_sent_total` | counter | | object traffic |
 | `agwp_open_repositories`, `agwp_event_subscriptions` | gauge | | |
-| `agwp_job_events_total` | counter | `event` | execution plane since start: `enqueued`, `claimed`, `succeeded`, `retried`, `failed` |
-| `agwp_jobs_queued` | gauge | | queued validation jobs in repositories known to have work (at most 1000 counted per repository; computed at scrape time) |
+| `agwp_job_events_total` | counter | `event` | execution plane since start: `enqueued`, `claimed`, `succeeded`, `retried`, `failed` (`retried` and `failed` include the jobs taken back when a worker died holding them: a runner that crashes on its last attempt shows up here, not only a runner that reports the failure) |
+| `agwp_jobs_queued` | gauge | | queued validation jobs in repositories known to have work (counted, not listed, at scrape time; a repository that cannot be read at that moment is logged and left out of the sum) |
 | `agwp_trace_spans_exported_total`, `agwp_trace_spans_dropped_total`, `agwp_trace_export_failures_total` | counter | | trace exporter health |
 | `agwp_uptime_seconds` | gauge | | |
 

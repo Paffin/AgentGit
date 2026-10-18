@@ -1,16 +1,16 @@
 //! Agents: identities, runs, tasks, leases, provenance, conflict prediction.
 
-use ag_agent::leases::{acquire, extend, release};
+use ag_agent::leases::{acquire_with, extend, release};
 use ag_agent::predict::predict;
 use ag_agent::provenance::{ProvenanceRecord, SCHEMA, attach_signed, verify};
-use ag_agent::registry::{finish_run, heartbeat, register_agent_with_key, start_run};
-use ag_agent::tasks::{add_dependency, create_task, finish_task, unfinished_dependencies};
+use ag_agent::registry::{finish_run, heartbeat, register_agent_with_key, start_run_with};
+use ag_agent::tasks::{add_dependency, create_task_with, finish_task, unfinished_dependencies};
 use ag_crypto::{PublicKey, Signature};
 use ag_protocol::v1;
-use ag_storage::meta::TaskRow;
+use ag_storage::meta::{MetaError, TaskRow, Tx};
 use ag_types::{ChangesetId, Identity, IdentityKind, Timestamp};
 
-use super::{convert, idempotent_create, parse_id, require};
+use super::{convert, keyed, page_size, parse_id, require};
 use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
@@ -25,10 +25,14 @@ fn check_agent_scope(actor: &Identity, agent_name: &str) -> ApiResult<()> {
     Ok(())
 }
 
-fn task_view(repo: &ag_integrate::Repository, t: &TaskRow) -> ApiResult<v1::Task> {
-    let (deps, ready) =
-        repo.meta().read(|tx| Ok((tx.task_deps(&t.id)?, unfinished_dependencies(tx, &t.id)?.is_empty())))?;
+/// A task with its dependencies, read in the caller's transaction.
+fn task_view_in(tx: &Tx<'_>, t: &TaskRow) -> Result<v1::Task, MetaError> {
+    let (deps, ready) = (tx.task_deps(&t.id)?, unfinished_dependencies(tx, &t.id)?.is_empty());
     Ok(convert::task(t, deps, ready))
+}
+
+fn task_view(repo: &ag_integrate::Repository, t: &TaskRow) -> ApiResult<v1::Task> {
+    Ok(repo.meta().read(|tx| task_view_in(tx, t))?)
 }
 
 fn record_from_wire(r: &v1::ProvenanceRecord) -> ApiResult<ProvenanceRecord> {
@@ -87,11 +91,14 @@ impl App {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
             check_agent_scope(actor, &agent)?;
             let request = format!("start_run\0{actor}\0{agent}\0{}", task.as_deref().unwrap_or(""));
-            idempotent_create(repo, "run.start", &key, &request, || {
-                let run = start_run(repo.meta(), &agent, task.as_deref())?;
-                let row =
-                    repo.meta().read(|tx| tx.run(&run.run_id))?.ok_or_else(|| ApiError::internal("run vanished"))?;
-                Ok(convert::run(&row))
+            keyed(repo, "run.start", &key, &request, |claim| {
+                let (_, response) = start_run_with(repo.meta(), &agent, task.as_deref(), |tx, run| {
+                    let row = tx.run(&run.run_id)?.ok_or_else(|| MetaError::Corrupt("run vanished".into()))?;
+                    let response = convert::run(&row);
+                    claim.record(tx, &response)?;
+                    Ok(response)
+                })?;
+                Ok(response)
             })
         })
         .await
@@ -157,17 +164,22 @@ impl App {
                 req.scope.join(","),
                 req.depends_on.join(",")
             );
-            idempotent_create(repo, "task.create", &req.idempotency_key, &request, || {
-                for d in &req.depends_on {
-                    if repo.meta().read(|tx| tx.task(d))?.is_none() {
-                        return Err(ApiError::not_found(format!("dependency task '{d}' not found")));
-                    }
-                }
-                let t = create_task(repo.meta(), &req.title, &req.description, &req.scope, actor.as_str())?;
-                for d in &req.depends_on {
-                    add_dependency(repo.meta(), &t.id, d, actor.as_str())?;
-                }
-                task_view(repo, &t)
+            keyed(repo, "task.create", &req.idempotency_key, &request, |claim| {
+                // The task, its dependencies and the idempotency record are one transaction.
+                let (_, response) = create_task_with(
+                    repo.meta(),
+                    &req.title,
+                    &req.description,
+                    &req.scope,
+                    &req.depends_on,
+                    actor.as_str(),
+                    |tx, t| {
+                        let response = task_view_in(tx, t)?;
+                        claim.record(tx, &response)?;
+                        Ok(response)
+                    },
+                )?;
+                Ok(response)
             })
         })
         .await
@@ -237,20 +249,28 @@ impl App {
                 req.ttl_ms,
                 task.unwrap_or("")
             );
-            idempotent_create(repo, "lease.acquire", &req.idempotency_key, &request, || {
-                let got =
-                    acquire(repo.meta(), &req.scope, actor.as_str(), req.exclusive, req.ttl_ms, task).map_err(|e| {
-                        match e {
-                            ag_agent::AgentError::Conflict(m) => {
-                                ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m)
-                            }
-                            other => other.into(),
-                        }
-                    })?;
-                Ok(v1::AcquireLeaseResponse {
-                    lease: Some(convert::lease(&got.lease)),
-                    overlapping: got.overlaps.iter().map(convert::lease).collect(),
-                })
+            keyed(repo, "lease.acquire", &req.idempotency_key, &request, |claim| {
+                let (_, response) = acquire_with(
+                    repo.meta(),
+                    &req.scope,
+                    actor.as_str(),
+                    req.exclusive,
+                    req.ttl_ms,
+                    task,
+                    |tx, got| {
+                        let response = v1::AcquireLeaseResponse {
+                            lease: Some(convert::lease(&got.lease)),
+                            overlapping: got.overlaps.iter().map(convert::lease).collect(),
+                        };
+                        claim.record(tx, &response)?;
+                        Ok(response)
+                    },
+                )
+                .map_err(|e| match e {
+                    ag_agent::AgentError::Conflict(m) => ApiError::new(ag_protocol::ErrorCode::LeaseConflict, m),
+                    other => other.into(),
+                })?;
+                Ok(response)
             })
         })
         .await
@@ -275,13 +295,21 @@ impl App {
 
     /// Lists leases.
     pub async fn list_leases(&self, call: &Call, req: v1::ListLeasesRequest) -> ApiResult<v1::ListLeasesResponse> {
+        let limit = page_size(req.limit);
         self.with_repo(call, require(&req.repo, "repo")?, Cap::LeaseRead, None, move |repo, _| {
+            let mut truncated = false;
             let leases = if req.active_only {
                 repo.meta().read(|tx| tx.leases_active())?
             } else {
-                repo.meta().read(|tx| tx.leases_all(500))?
+                // One more than asked for, to learn whether the history goes on.
+                let mut all = repo.meta().read(|tx| tx.leases_all(limit + 1))?;
+                if all.len() > limit {
+                    all.truncate(limit);
+                    truncated = true;
+                }
+                all
             };
-            Ok(v1::ListLeasesResponse { leases: leases.iter().map(convert::lease).collect() })
+            Ok(v1::ListLeasesResponse { leases: leases.iter().map(convert::lease).collect(), truncated })
         })
         .await
     }
@@ -321,14 +349,25 @@ impl App {
     ) -> ApiResult<v1::ListProvenanceResponse> {
         let cs: ChangesetId = parse_id(&req.changeset, "changeset id")?;
         self.with_repo(call, require(&req.repo, "repo")?, Cap::ProvenanceRead, None, move |repo, _| {
-            let entries = repo.meta().read(|tx| {
+            let checked = repo.meta().read(|tx| {
                 let mut out = Vec::new();
                 for row in tx.provenance_for(&cs)? {
-                    let verified = verify(tx, &row).ok();
-                    out.push(convert::provenance_entry(&row, verified.as_ref()));
+                    let verdict = verify(tx, &row);
+                    out.push((row, verdict));
                 }
                 Ok(out)
             })?;
+            let mut entries = Vec::new();
+            for (row, verdict) in checked {
+                let verified = match verdict {
+                    Ok(record) => Some(record),
+                    // A record that fails verification (bad signature, unknown key, ...) is listed as unverified.
+                    Err(ag_agent::AgentError::Verification(_)) => None,
+                    // A fault of the store is not a verdict about the record: say so.
+                    Err(other) => return Err(other.into()),
+                };
+                entries.push(convert::provenance_entry(&row, verified.as_ref()));
+            }
             Ok(v1::ListProvenanceResponse { entries })
         })
         .await

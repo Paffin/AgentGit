@@ -28,9 +28,7 @@ e2e, Go suite green.
   green**, and every landing waits for its CI.
 * Fix workflow running: `dev/workflows/restore-green-main.js` (3 fixers: rust / sdk-go / containers, then a CI
   verifier that polls Actions; up to 3 rounds).
-* Audit resumed (`dev/workflows/audit-no-stubs-mocks-hardcodes.js`): first pass gave 126 confirmed / 65 contested /
-  100 refuted / 98 unverified findings (the unverified ones hit the usage limit); the resume re-runs only the failed
-  verifiers. Results are saved into `dev/audit/` when it completes.
+* Audit finished (see the Audit section).
 
 ## Product-readiness tracks (7 parallel agents; briefs in `dev/tracks/tracks.md`)
 | # | Track | Owner files | State at snapshot |
@@ -46,40 +44,23 @@ Each agent was told (at snapshot time) to commit, land what passes the gates on 
 `wip/<track>-track`, and write `dev/handoff/<track>.md`. **Check those files and branches first** — they are the
 authoritative per-track state.
 
-## Audit: no mocks / stubs / hardcodes (`dev/audit/`)
-Read-only workflow (`dev/workflows/audit-no-stubs-mocks-hardcodes.js`, 13 area scanners + 2 adversarial verifiers per
-area + coverage critic). The scan phase finished: **389 candidate findings** (11 high, 129 medium, 249 low) — candidates,
-NOT verified; verification was partway done (core, merge, engine, policy verified). Raw data: `dev/audit/audit-snapshot.json`.
-Re-run/resume: `Workflow({scriptPath: "dev/workflows/audit-no-stubs-mocks-hardcodes.js"})`; to triage cheaply, filter the
-JSON by severity/production_path and verify only high+medium production findings.
-High-severity candidates (verify, then fix with a test each):
-1. `ag-merge/src/tree.rs:304` — `merge_full` swallows `TreeError::TooManyEntries` (merged tree larger than the limit).
-2. `ag-server/src/control.rs:218` — unparsable credential `scope_json` silently becomes the UNRESTRICTED default scope
-   (must fail closed; add test with garbage scope).
-3. `ag-server/src/api/objects.rs:125` — object quota enforced only on the upload path, not for blobs/changesets written
-   via virtual workspaces.
-4. `ag-server/src/api/events.rs:137` — SSE topic filter applied after reading 1024 rows; non-matching windows advance the
-   cursor and skip matching events permanently (filter in SQL / loop until limit).
-5. `ag-server/src/api/events.rs:119` — stream claims to end on credential revocation but only re-checks the connect-time
-   snapshot; re-validate on each batch.
-6. `ag-sandbox/tests/oci.rs` — OCI backend verified only against a canned shell-script runtime; add tests against real
-   docker/podman in CI (digest-pinned image).
-7. `services/agent-orchestrator/internal/session/scripted.go` — a simulated agent (`type: scripted`) ships in the product
-   binary; remove from the shipped binary, keep as a test-only executable.
-8. `services/agent-orchestrator/internal/testutil/fakeagwp` (~2000 lines) — in-memory fake of the AGWP server backs most
-   unit tests; replace with a harness that starts the real `ag-server`.
-9. `ag-storage/tests/s3.rs` — "real S3" suite actually talks to moto; add MinIO (signature checks, versioning) in the
-   backends job.
-10. `deploy/kubernetes/base/deployment.yaml:36` (+ compose/docs) — default image tag `latest` is never published; no tag
-    or release exists → `ImagePullBackOff`. Publish a real `-rc` and make the default resolvable.
-Also known: the orchestrator's advisor/reviewers/semantic index are deterministic heuristics → replace/augment with
-model-backed implementations behind the existing interfaces; **no API keys in code** — the session had OpenRouter
-reachable with proxy-injected authorization, so a provider (OpenAI-compatible chat API) can be verified live.
-
-Release-track findings not yet fixed: `repo.create`/list responses hardcode sqlite/fs backends (ag-server; fold into the
-HA track/audit); `deployment.md` verified-table still says MinIO and "nothing was run" (Compose now uses SeaweedFS);
-`ci.yml`'s `images` job duplicates `containers.yml`; drop `continue-on-error` in `containers.yml` once the observability
-step is green.
+## Audit: no mocks / stubs / hardcodes (`dev/audit/`) — COMPLETE
+Read-only workflow (`dev/workflows/audit-no-stubs-mocks-hardcodes.js`: 13 area scanners, 2 adversarial verifiers per
+area, coverage critic). Result: 389 candidates → **93 confirmed** (both verifiers: 6 high, 58 medium, 29 low; 87 on
+production paths), **105 contested** (one verifier agreed — triage individually), 191 refuted. The critic reports 65
+source files no scanner read (list in the JSON). Files: `dev/audit/CONFIRMED.md` (the work list, with the verifier-refined
+fix for each), `dev/audit/audit-final.json` (everything incl. contested + reasons).
+Confirmed HIGH items (fix each with a test): `ag-merge/src/tree.rs:304` merge_full swallows `TooManyEntries`;
+`ag-server/src/control.rs:218` unparsable credential scope becomes UNRESTRICTED (fail closed); `ag-server/src/api/objects.rs:125`
+object quota not enforced on virtual-workspace writes; `ag-server/src/api/events.rs:137` SSE topic filter after a 1024-row
+window skips events permanently; `services/agent-orchestrator/internal/session/scripted.go` simulated agent ships in the
+production binary. Earlier candidates still worth verifying from the first pass: SSE stream does not re-check revocation
+(`events.rs:119`); OCI sandbox tests use a canned shell runtime (`ag-sandbox/tests/oci.rs`); orchestrator tests run against an
+in-memory `fakeagwp` instead of the real server; S3 tests use moto (add MinIO/SeaweedFS); `deploy/kubernetes` default image
+tag `latest` is never published.
+Also known: the orchestrator's advisor/reviewers/semantic index are deterministic heuristics → model-backed
+implementations behind the existing interfaces; **no API keys in code** — OpenRouter was reachable with proxy-injected
+authorization in the session, so an OpenAI-compatible provider can be verified live.
 
 ## Next wave (after the tracks land)
 1. Fold agent reports into `README.md`, `README.ru.md`, `CHANGELOG.md`, `ROADMAP.md`, `docs/architecture/adr-traceability.md`

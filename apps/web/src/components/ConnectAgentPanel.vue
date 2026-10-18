@@ -74,13 +74,19 @@ const steps = computed(() =>
 <style scoped>
 .body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--s-4);
 }
 .intro {
   margin: 0;
   color: var(--text-2);
 }
+.steps > li {
+  min-width: 0;
+}
 .steps {
+  grid-template-columns: minmax(0, 1fr);
   list-style: none;
   margin: 0;
   padding: 0;

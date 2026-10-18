@@ -31,15 +31,19 @@ test.describe('keyboard use', () => {
     await expect(page.getByTestId('board-summary')).toBeVisible()
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press('Tab')
-      const visible = await page.evaluate(() => {
+      const shown = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null
-        if (!el || el === document.body) return true
+        if (!el || el === document.body) return { ok: true, what: 'body' }
         const cs = getComputedStyle(el)
         const outline = parseFloat(cs.outlineWidth) > 0 && cs.outlineStyle !== 'none'
         const ring = cs.boxShadow !== 'none'
-        return outline || ring
+        return {
+          ok: outline || ring,
+          what: `${el.tagName.toLowerCase()}.${el.className} ${el.getAttribute('data-testid') ?? ''} outline=${cs.outlineStyle}/${cs.outlineWidth} shadow=${cs.boxShadow} focus-visible=${el.matches(':focus-visible')}`,
+        }
       })
-      expect(visible, `element ${i + 1} in tab order shows focus`).toBe(true)
+      const visible = shown.ok
+      expect(visible, `element ${i + 1} in tab order shows focus: ${shown.what}`).toBe(true)
     }
   })
 

@@ -4,7 +4,6 @@
 mod common;
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 
 use ag_server::authz::Role;
 use common::{Ag, Server, run_in};
@@ -68,8 +67,13 @@ fn doctor_flags_an_invalid_identity_and_a_damaged_user_file() {
     assert!(check(&j, "user_config")["summary"].as_str().unwrap().contains("not valid JSON"));
 }
 
+// Unix only: Windows has no mode bits (keys get an owner-only ACL from `ag-crypto::private_file`, which `std` cannot
+// read back), so `ag doctor` has no permission check there; the test of that ACL is in ag-crypto.
+#[cfg(unix)]
 #[test]
 fn doctor_warns_about_keys_other_users_can_read_and_strict_turns_warnings_into_failures() {
+    use std::os::unix::fs::PermissionsExt;
+
     let a = Ag::new();
     a.ag(&["agent", "register", "bot"]).ok();
     assert_eq!(check(&a.ag(&["--json", "doctor"]).ok().json(), "keys")["status"], "ok");
@@ -82,9 +86,14 @@ fn doctor_warns_about_keys_other_users_can_read_and_strict_turns_warnings_into_f
     assert_eq!(j["summary"]["warn"], 1);
     let strict = a.ag(&["doctor", "--strict"]).code_is(1);
     assert!(strict.stdout().contains("warn"), "{}", strict.stdout());
-    // A registered agent whose key file is gone is reported too.
-    fs::set_permissions(&key, fs::Permissions::from_mode(0o600)).unwrap();
-    fs::remove_file(&key).unwrap();
+}
+
+#[test]
+fn doctor_reports_a_registered_agent_whose_key_file_is_gone() {
+    let a = Ag::new();
+    a.ag(&["agent", "register", "bot"]).ok();
+    assert_eq!(check(&a.ag(&["--json", "doctor"]).ok().json(), "keys")["status"], "ok");
+    fs::remove_file(a.dir.path().join(".ag/keys/bot.json")).unwrap();
     let j = a.ag(&["--json", "doctor"]).ok().json();
     assert_eq!(check(&j, "keys")["status"], "warn");
     assert!(check(&j, "keys")["summary"].as_str().unwrap().contains("bot"));

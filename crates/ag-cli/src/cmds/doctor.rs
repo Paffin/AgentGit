@@ -308,19 +308,13 @@ fn keys_check(repo: &Repository) -> Check {
         };
     }
     let mut files = 0usize;
-    let mut open_perms = Vec::new();
+    let mut open_perms: Vec<String> = Vec::new();
     if let Ok(rd) = std::fs::read_dir(&dir) {
         for e in rd.flatten() {
             if e.path().extension().is_some_and(|x| x == "json") {
                 files += 1;
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    if let Ok(m) = e.metadata()
-                        && m.permissions().mode() & 0o077 != 0
-                    {
-                        open_perms.push(e.file_name().to_string_lossy().into_owned());
-                    }
+                if readable_by_others(&e) {
+                    open_perms.push(e.file_name().to_string_lossy().into_owned());
                 }
             }
         }
@@ -348,7 +342,23 @@ fn keys_check(repo: &Repository) -> Check {
             Some("these agents cannot sign provenance; restore their keys or re-register them"),
         );
     }
-    check("keys", Status::Ok, format!("{files} key file(s) in {}, permissions private", dir.display()), None)
+    // Only claim what was looked at: modes are checked on Unix, ACLs are not read back on Windows.
+    let perms = if cfg!(unix) { ", permissions private" } else { "" };
+    check("keys", Status::Ok, format!("{files} key file(s) in {}{perms}", dir.display()), None)
+}
+
+/// Whether group or world can read or write the file (mode `go+rwx`).
+#[cfg(unix)]
+fn readable_by_others(entry: &std::fs::DirEntry) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    entry.metadata().is_ok_and(|m| m.permissions().mode() & 0o077 != 0)
+}
+
+/// Windows has no mode bits: `ag-crypto::private_file` writes keys with an owner-only ACL, which `std` cannot
+/// read back, so there is nothing to compare here (and nothing to claim).
+#[cfg(not(unix))]
+fn readable_by_others(_entry: &std::fs::DirEntry) -> bool {
+    false
 }
 
 fn integrity_check(repo: &Repository) -> Check {

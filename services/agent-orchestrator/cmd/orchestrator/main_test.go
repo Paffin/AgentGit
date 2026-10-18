@@ -11,7 +11,7 @@ import (
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/app"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
 func writeConfig(t *testing.T, url string) string {
@@ -25,10 +25,8 @@ repos:
   - name: acme/web
 executors:
   - name: docs-bot
-    type: scripted
-    scripted:
-      files:
-        docs/a.md: "hi\n"
+    type: command
+    command: ["/bin/true"]
 `, url, t.TempDir())
 	p := filepath.Join(t.TempDir(), "orchestrator.yaml")
 	if err := os.WriteFile(p, []byte(doc), 0o600); err != nil {
@@ -170,19 +168,17 @@ func TestRunAndCheckStillRequireTheCredential(t *testing.T) {
 }
 
 func TestCheckExitCodeFollowsTheReport(t *testing.T) {
-	fake := fakeagwp.New()
-	t.Cleanup(fake.Close)
-	fake.AddRepo("acme/web")
-	fake.SetHead("acme/web", "main", fake.Commit("acme/web", nil, map[string]string{"README.md": "x\n"}, "user:root", "seed"))
-	p := writeConfig(t, fake.URL)
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	p := writeConfig(t, w.Srv.URL)
 	cfg, err := config.Load(p, env(map[string]string{"AG_ORCH_TOKEN": "x"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	good := env(map[string]string{
-		"AG_ORCH_TOKEN":     fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator", Ops: app.OrchestratorOps(cfg)}),
-		"AG_REVIEWER_TOKEN": fake.AddToken(fakeagwp.TokenSpec{Identity: "service:reviewer", Role: "reviewer", Ops: app.ReviewerOps()}),
-		"AG_ADVISOR_TOKEN":  fake.AddToken(fakeagwp.TokenSpec{Identity: "service:advisor", Role: "reviewer", Ops: app.AdvisorOps()}),
+		"AG_ORCH_TOKEN":     w.Mint("service:orchestrator", app.OrchestratorOps(cfg)),
+		"AG_REVIEWER_TOKEN": w.Mint("service:reviewer", app.ReviewerOps()),
+		"AG_ADVISOR_TOKEN":  w.Mint("service:advisor", app.AdvisorOps()),
 	})
 	code, out, errs := exec(t, good, "check", "-config", p)
 	if code != 0 {

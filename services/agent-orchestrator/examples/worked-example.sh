@@ -25,6 +25,15 @@ rm -rf "$W/data" "$W/state" "$W/logs" "$W/server.pid" "$W/orch.pid"
 mkdir -p "$W/logs"
 sed -e "s|/var/lib/orchestrator|$W/state|" -e "s|/opt/orchestrator|$W|" "$HERE/orchestrator.yaml" > "$CONF"
 cp "$HERE/shell-bot.sh" "$W/shell-bot.sh"
+# docs-bot is the test-only demo agent (internal/testutil/testagent): not a model, it writes the files the task
+# description names, signs provenance with its own key and opens a proposal, as any agent program would.
+(cd "$HERE/.." && go build -o "$W/testagent" ./internal/testutil/testagent)
+cat > "$W/docs-bot" <<EOF
+#!/bin/sh
+export TESTAGENT_TASK_FILES=1 TESTAGENT_MODEL=demo-agent TESTAGENT_RATIONALE="demonstration run"
+exec "$W/testagent"
+EOF
+chmod +x "$W/docs-bot"
 export AG_BOOTSTRAP_TOKEN=$BOOT
 cleanup() {
   for p in server orch; do [ -f "$W/$p.pid" ] && kill "$(cat "$W/$p.pid")" 2>/dev/null || true; done

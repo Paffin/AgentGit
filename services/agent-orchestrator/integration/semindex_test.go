@@ -64,7 +64,7 @@ func (o *orchestrator) symbols(q string) symbolsReply {
 // open proposals that change the same definition are reported as overlapping.
 func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.T) {
 	w := newWorld(t, worldOptions{})
-	w.seed(map[string]string{"internal/config/config.go": configGo, "cmd/web/main.go": mainGo, "README.md": "# web\n"})
+	w.Seed(map[string]string{"internal/config/config.go": configGo, "cmd/web/main.go": mainGo, "README.md": "# web\n"})
 
 	o := w.startOrchestrator(orchConfig{
 		Repo: "    schedule: {enabled: false}\n    advisor: {enabled: false}\n    review: {enabled: false}\n",
@@ -74,7 +74,7 @@ func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.
 	// The initial index covers the seeded stream.
 	eventually(t, "the initial index", 30*time.Second, func() bool { return len(o.symbols("ParseConfig").Symbols) == 1 })
 	r := o.symbols("ParseConfig")
-	if head, err := w.alice.ResolveRev(context.Background(), w.repo, "main"); err != nil || r.Head != head {
+	if head, err := w.Alice.ResolveRev(context.Background(), w.Repo, "main"); err != nil || r.Head != head {
 		t.Fatalf("the index is at %s, the stream at %s (%v)", r.Head, head, err)
 	}
 	def := r.Symbols[0].Definition
@@ -99,9 +99,9 @@ func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.
 	}
 
 	// An integration event: a person lands a change that adds a symbol.
-	add, _ := w.propose("ws-mail", "Add email normalisation",
+	add, _ := w.Propose("ws-mail", "Add email normalisation",
 		put("internal/mail/mail.go", "package mail\n\nimport \"strings\"\n\n// NormalizeEmail lower-cases an address.\nfunc NormalizeEmail(addr string) string {\n\treturn strings.ToLower(strings.TrimSpace(addr))\n}\n"))
-	w.land(add)
+	w.Land(add)
 	eventually(t, "the new symbol to be indexed", 30*time.Second, func() bool { return len(o.symbols("NormalizeEmail").Symbols) == 1 })
 	nr := o.symbols("NormalizeEmail")
 	nd := nr.Symbols[0].Definition
@@ -113,9 +113,9 @@ func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.
 	}
 
 	// A rename: the old definition goes, the new one appears; the caller still mentions the old name.
-	rename, _ := w.propose("ws-rename", "Rename ParseConfig to LoadConfig",
+	rename, _ := w.Propose("ws-rename", "Rename ParseConfig to LoadConfig",
 		put("internal/config/config.go", strings.ReplaceAll(configGo, "ParseConfig", "LoadConfig")))
-	w.land(rename)
+	w.Land(rename)
 	eventually(t, "the rename to be indexed", 30*time.Second, func() bool { return len(o.symbols("LoadConfig").Symbols) == 1 })
 	if len(o.symbols("ParseConfig").Symbols) != 0 {
 		t.Fatalf("the old name is still defined: %+v", o.symbols("ParseConfig"))
@@ -140,11 +140,11 @@ func TestSemanticIndexFollowsIntegrationsAndSeesOverlappingProposals(t *testing.
 	variant := func(edit func(string) string) string {
 		return edit(strings.ReplaceAll(configGo, "ParseConfig", "LoadConfig"))
 	}
-	one, _ := w.propose("ws-name", "Trim the name",
+	one, _ := w.Propose("ws-name", "Trim the name",
 		put("internal/config/config.go", variant(func(s string) string {
 			return strings.Replace(s, "c.Name = text", "c.Name = strings.TrimSpace(text)", 1)
 		})))
-	two, _ := w.propose("ws-level", "Raise the default level",
+	two, _ := w.Propose("ws-level", "Raise the default level",
 		put("internal/config/config.go", variant(func(s string) string { return strings.Replace(s, "c.Level = 1", "c.Level = 3", 1) })))
 	var ov []semindex.Overlap
 	eventually(t, "the overlap to be reported", 30*time.Second, func() bool {

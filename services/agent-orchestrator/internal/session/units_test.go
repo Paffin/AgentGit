@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
@@ -47,77 +46,6 @@ func TestTailDoesNotSplitUTF8(t *testing.T) {
 		if r == '�' {
 			t.Fatalf("split a rune: %q", got)
 		}
-	}
-}
-
-func TestParseTaskScript(t *testing.T) {
-	desc := "Please do the thing.\nag-script: {\"files\": {\"a.txt\": \"A\\n\"}, \"delete\": [\"old.txt\"], \"title\": \"T\", \"message\": \"M\"}\nthanks"
-	ts, ok := parseTaskScript(desc)
-	if !ok || ts.Files["a.txt"] != "A\n" || len(ts.Delete) != 1 || ts.Title != "T" || ts.Message != "M" {
-		t.Fatalf("ts = %+v ok=%v", ts, ok)
-	}
-	for _, bad := range []string{"", "no marker here", "ag-script: not json", "ag-script: {\"unknown\": 1}"} {
-		if _, ok := parseTaskScript(bad); ok {
-			t.Errorf("%q must not parse", bad)
-		}
-	}
-}
-
-func TestTaskDescriptionsOnlyDriveTheScriptedExecutorWhenEnabled(t *testing.T) {
-	e := newEnv(t)
-	e.fake.SetHead(repo, "main", e.fake.Commit(repo, nil, map[string]string{"old.txt": "old"}, "user:root", "seed"))
-	script := `ag-script: {"files": {"new.txt": "from the task"}, "delete": ["old.txt"], "title": "From task"}`
-	mkTask := func() agwp.Task {
-		id := e.fake.AddTask(repo, "scripted task", []string{"**"})
-		e.fake.SetTaskDescription(repo, id, script)
-		return e.fake.Task(repo, id)
-	}
-
-	// Disabled: the description is untrusted text and is ignored; with no files configured nothing happens.
-	off := scriptedExec("quiet-bot", nil)
-	off.Script.TaskFiles = false
-	if _, err := e.mgr.Start(context.Background(), e.request(mkTask(), off, Keep)); err != nil {
-		t.Fatal(err)
-	}
-	res := e.wait(10 * time.Second)
-	e.idle()
-	if res.Outcome != OutcomeFailed || len(res.Proposals) != 0 || !strings.Contains(res.Summary, "nothing to do") {
-		t.Fatalf("task descriptions must be ignored by default: %+v", res)
-	}
-
-	on := scriptedExec("script-bot", nil)
-	on.Script.TaskFiles = true
-	if _, err := e.mgr.Start(context.Background(), e.request(mkTask(), on, Keep)); err != nil {
-		t.Fatal(err)
-	}
-	res = e.wait(10 * time.Second)
-	e.idle()
-	if res.Outcome != OutcomeCompleted || len(res.Proposals) != 1 || res.Proposals[0].Title != "From task" {
-		t.Fatalf("result = %+v", res)
-	}
-	head := res.Proposals[0].Head
-	if b, ok := e.fake.File(repo, head, "new.txt"); !ok || string(b) != "from the task" {
-		t.Fatalf("new.txt = %q %v", b, ok)
-	}
-	if _, ok := e.fake.File(repo, head, "old.txt"); ok {
-		t.Fatal("old.txt should be deleted")
-	}
-}
-
-func TestScriptedExecutorReportsServerRefusals(t *testing.T) {
-	e := newEnv(t)
-	e.fake.SetHead(repo, "main", e.fake.Commit(repo, nil, map[string]string{"a": "b"}, "user:root", "seed"))
-	// An agent credential without workspace.write cannot even start.
-	ex := scriptedExec("weak-bot", map[string]string{"x": "y"}, func(c *config.Executor) {
-		c.Ops = []string{"repo.read", "task.read", "agent.run", "lease.read", "lease.write"}
-	})
-	if _, err := e.mgr.Start(context.Background(), e.request(e.task("t"), ex, Keep)); err != nil {
-		t.Fatal(err)
-	}
-	res := e.wait(10 * time.Second)
-	e.idle()
-	if res.Outcome != OutcomeFailed || !strings.Contains(res.Summary, "create workspace") || !strings.Contains(res.Summary, "permission_denied") {
-		t.Fatalf("result = %+v", res)
 	}
 }
 

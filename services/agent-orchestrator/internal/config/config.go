@@ -142,7 +142,7 @@ type Index struct {
 // Executor describes one way of running an agent.
 type Executor struct {
 	Name    string            `yaml:"name"`
-	Type    string            `yaml:"type"` // command | scripted
+	Type    string            `yaml:"type"` // command
 	Agent   string            `yaml:"agent"`
 	Slots   int               `yaml:"slots"`
 	Timeout time.Duration     `yaml:"timeout"`
@@ -155,19 +155,6 @@ type Executor struct {
 	Env     map[string]string `yaml:"env"`
 	Pass    []string          `yaml:"pass_env"`
 	Output  int               `yaml:"output_bytes"`
-	Script  Scripted          `yaml:"scripted"`
-}
-
-// Scripted is the built-in demo/test executor: it edits a virtual workspace,
-// signs provenance and opens a proposal.
-type Scripted struct {
-	Files     map[string]string `yaml:"files"`
-	Message   string            `yaml:"message"`
-	Title     string            `yaml:"title"`
-	Model     string            `yaml:"model"`
-	Rationale string            `yaml:"rationale"`
-	TaskFiles bool              `yaml:"task_files"` // let task descriptions carry their own file set
-	Delay     time.Duration     `yaml:"delay"`
 }
 
 // Default operations granted to an agent credential (capabilities of the
@@ -359,8 +346,6 @@ func (c *Config) applyDefaults() {
 		if e.Pass == nil {
 			e.Pass = []string{"PATH", "LANG", "TZ"}
 		}
-		setStr(&e.Script.Message, "Scripted change")
-		setStr(&e.Script.Title, "Scripted change")
 	}
 }
 
@@ -469,11 +454,9 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 				add(p+".command", "required for type command (an argv list, run without a shell)")
 			}
 		case "scripted":
-			if len(e.Script.Files) == 0 && !e.Script.TaskFiles {
-				add(p+".scripted", "needs files, or task_files: true to read them from the task description")
-			}
+			add(p+".type", "executor type \"scripted\" was removed: executors run real programs (type: command)")
 		default:
-			add(p+".type", "must be command or scripted (got %q)", e.Type)
+			add(p+".type", "must be command (got %q)", e.Type)
 		}
 		if e.Slots < 1 {
 			add(p+".slots", "must be at least 1")

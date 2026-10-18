@@ -12,42 +12,70 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/execsched"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil): the conflicts
+// the advisor looks at are the ones the server's merge engine reports for real
+// proposals, and the three versions of a file are fetched from the real server.
+
+const repo = testutil.RepoName
+
+// The default scenario: a base, a change that lands on the stream ("ours") and a proposal made from the
+// same base ("theirs") that now conflicts with it.
+var (
+	baseFiles   = map[string]string{"a.txt": "1\n2\n3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n)\n", "img.bin": "x"}
+	oursFiles   = map[string]string{"a.txt": "1\nO2\n3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n\t\"os\"\n)\n"}
+	theirsFiles = map[string]string{"a.txt": "1\n2\nT3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n"}
+)
 
 type harness struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
-	client  *agwp.Client
+	w       *testutil.World
+	px      *testutil.Proxy
+	client  *agwp.Client // the advisor's credential, through the proxy
 	comp    *Component
 	metrics *metrics.Service
-	base    string
-	ours    string
-	theirs  string
+	base    string // head of main before "ours" landed
+	ours    string // head of main now
+	theirs  string // head of the conflicting proposal
 	prop    agwp.Proposal
 }
 
 func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
+	return newScenario(t, mut, baseFiles, oursFiles, theirsFiles, nil, nil)
+}
+
+// newScenario seeds base, opens "theirs" and "ours" from it, lands "ours" and leaves "theirs" conflicting.
+// A nil file value in ours/theirs deletes the file.
+func newScenario(t *testing.T, mut func(*config.Repo), base, ours, theirs map[string]string, oursDel, theirsDel []string) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: fakeagwp.New(), metrics: metrics.NewService(metrics.NewRegistry())}
-	t.Cleanup(h.fake.Close)
-	h.fake.AddRepo(repo)
-	h.base = h.fake.Commit(repo, nil, map[string]string{"a.txt": "1\n2\n3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n)\n", "img.bin": "x"}, "user:root", "base")
-	h.ours = h.fake.Commit(repo, []string{h.base}, map[string]string{"a.txt": "1\nO2\n3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n\t\"os\"\n)\n", "img.bin": "x"}, "user:alice", "stream change")
-	h.theirs = h.fake.Commit(repo, []string{h.base}, map[string]string{"a.txt": "1\n2\nT3\n4\n", "lib.go": "package lib\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n", "img.bin": "x"}, "agent:bot#run_1", "proposal change")
-	h.fake.SetHead(repo, "main", h.ours)
-	pid := h.fake.AddProposal(repo, "agent:bot#run_1", "main", h.theirs, "change", "")
-	h.prop = h.fake.Proposals(repo)[0]
-	_ = pid
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:advisor", Role: "reviewer"})
-	var err error
-	h.client, err = agwp.New(h.fake.URL, secret.New(tok))
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	h := &harness{t: t, w: w, metrics: metrics.NewService(metrics.NewRegistry())}
+	h.base = w.Seed(base)
+	changes := func(files map[string]string, del []string) []agwp.FileChange {
+		var ch []agwp.FileChange
+		for p, c := range files {
+			ch = append(ch, testutil.Put(p, c))
+		}
+		for _, p := range del {
+			ch = append(ch, testutil.Delete(p))
+		}
+		return ch
+	}
+	// both are made from the same base, before either lands
+	theirsP, _ := w.Propose("ws-theirs", "change", changes(theirs, theirsDel)...)
+	oursP, _ := w.Propose("ws-ours", "stream change", changes(ours, oursDel)...)
+	w.Land(oursP)
+	h.ours = w.Head("main")
+	d, err := w.Alice.GetProposal(context.Background(), repo, theirsP.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	h.prop, h.theirs = d.Proposal, d.Proposal.Head
+
+	h.px = testutil.NewProxy(t, w.Srv.URL)
+	h.client = w.Srv.ClientAt(h.px.URL, w.Mint("service:advisor", nil), "advisor")
 	rc := config.Repo{Name: repo, Stream: "main", Advisor: config.Advisor{Inline: 4096, MaxFile: 1 << 20, MaxPaths: 20}}
 	if mut != nil {
 		mut(&rc)
@@ -56,16 +84,47 @@ func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
 	return h
 }
 
-func (h *harness) prepared(conflicts ...agwp.Conflict) execsched.Prepared {
-	return execsched.Prepared{Repo: repo, Proposal: h.prop, StreamHead: h.ours,
-		Prep: agwp.Preparation{Base: h.base, Conflicts: conflicts, Strategy: "merge"}}
+// prepared asks the real server what integrating the proposal would do now (the
+// merge base and the conflicts are its answer) and keeps only the conflicts at
+// the given paths. No path: no conflicts.
+func (h *harness) prepared(paths ...string) execsched.Prepared {
+	h.t.Helper()
+	prep, err := h.w.Orch.Prepare(context.Background(), repo, h.prop.ID, false)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	keep := map[string]bool{}
+	for _, p := range paths {
+		keep[p] = true
+	}
+	var cs []agwp.Conflict
+	for _, c := range prep.Conflicts {
+		if keep[c.Path] {
+			cs = append(cs, c)
+		}
+	}
+	if len(cs) != len(paths) {
+		h.t.Fatalf("the server reported conflicts %+v, wanted exactly %v", prep.Conflicts, paths)
+	}
+	prep.Conflicts = cs
+	return execsched.Prepared{Repo: repo, Proposal: h.prop, StreamHead: h.w.Head("main"), Prep: *prep}
 }
 
-func (h *harness) reviews() []agwp.Review { return h.fake.Reviews(repo, h.prop.ID) }
+func (h *harness) reviews() []agwp.Review {
+	h.t.Helper()
+	d, err := h.w.Alice.GetProposal(context.Background(), repo, h.prop.ID)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return d.Reviews
+}
 
 func TestPostsOneCommentWithAnInlineSuggestion(t *testing.T) {
 	h := newHarness(t, nil)
-	p := h.prepared(agwp.Conflict{Path: "a.txt", Kind: "content conflict (1 region(s))"}, agwp.Conflict{Path: "lib.go", Kind: "content conflict (1 region(s))"})
+	p := h.prepared("a.txt", "lib.go")
+	if p.Prep.Base != h.base {
+		t.Fatalf("merge base = %s, want %s", p.Prep.Base, h.base)
+	}
 	if err := h.comp.Process(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +148,8 @@ func TestPostsOneCommentWithAnInlineSuggestion(t *testing.T) {
 	}
 	// The three versions were fetched from the right revisions.
 	fetched := map[string]int{}
-	for _, rq := range h.fake.Requests() {
-		if rq.Op == "tree.file" {
+	for _, rq := range h.px.Requests() {
+		if rq.Method == "GET" && strings.Contains(rq.Path, "/files/") {
 			fetched[rq.Query]++
 		}
 	}
@@ -106,25 +165,32 @@ func TestPostsOneCommentWithAnInlineSuggestion(t *testing.T) {
 
 func TestOnlyEverComments(t *testing.T) {
 	h := newHarness(t, nil)
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
-	for _, rq := range h.fake.Requests() {
-		if rq.Op == "proposal.review" && !strings.Contains(rq.Body, `"decision":"comment"`) {
-			t.Fatalf("a review that is not a comment was sent: %s", rq.Body)
+	posted := 0
+	for _, rq := range h.px.Requests() {
+		if rq.Method == "POST" && strings.HasSuffix(rq.Path, "/reviews") {
+			posted++
+			if !strings.Contains(rq.Body, `"decision":"comment"`) {
+				t.Fatalf("a review that is not a comment was sent: %s", rq.Body)
+			}
 		}
 		if strings.Contains(rq.Body, "approve") || strings.Contains(rq.Body, "request_changes") {
-			t.Fatalf("approval-related decision in %s %s", rq.Op, rq.Body)
+			t.Fatalf("approval-related decision in %s %s", rq.Path, rq.Body)
 		}
-		if rq.Method != "GET" && rq.Op != "proposal.review" {
-			t.Fatalf("unexpected mutation %s", rq.Op)
+		if rq.Method != "GET" && !strings.HasSuffix(rq.Path, "/reviews") {
+			t.Fatalf("unexpected mutation %s %s", rq.Method, rq.Path)
 		}
+	}
+	if posted != 1 {
+		t.Fatalf("%d comments posted", posted)
 	}
 }
 
 func TestTheSameAdviceIsPostedOnce(t *testing.T) {
 	h := newHarness(t, nil)
-	p := h.prepared(agwp.Conflict{Path: "a.txt"})
+	p := h.prepared("a.txt")
 	for i := 0; i < 3; i++ {
 		if err := h.comp.Process(context.Background(), p); err != nil {
 			t.Fatal(err)
@@ -149,10 +215,10 @@ func TestTheSameAdviceIsPostedOnce(t *testing.T) {
 
 func TestNewConflictsGetNewAdvice(t *testing.T) {
 	h := newHarness(t, nil)
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"}, agwp.Conflict{Path: "lib.go"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt", "lib.go")); err != nil {
 		t.Fatal(err)
 	}
 	if len(h.reviews()) != 2 {
@@ -162,7 +228,7 @@ func TestNewConflictsGetNewAdvice(t *testing.T) {
 
 func TestNoConflictsMeansNoAdviceAndForgetsOldRecords(t *testing.T) {
 	h := newHarness(t, nil)
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := h.comp.Suggestions(h.prop.ID); !ok {
@@ -182,10 +248,10 @@ func TestNoConflictsMeansNoAdviceAndForgetsOldRecords(t *testing.T) {
 
 func TestForgetDropsEverythingAboutAProposal(t *testing.T) {
 	h := newHarness(t, nil)
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
-	h.comp.OnPrepared(h.prepared(agwp.Conflict{Path: "a.txt"})) // queued again
+	h.comp.OnPrepared(h.prepared("a.txt")) // queued again
 	h.comp.Forget(h.prop.ID)
 	if _, ok := h.comp.Suggestions(h.prop.ID); ok {
 		t.Fatal("advice kept for a proposal that is gone")
@@ -195,21 +261,18 @@ func TestForgetDropsEverythingAboutAProposal(t *testing.T) {
 	}
 	h.comp.Forget("nonexistent") // harmless
 	// If the same id came back (it cannot, but the memory must not suppress advice), advice would be given again.
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestBinaryAndHugeFilesAreNotAnalysed(t *testing.T) {
-	h := newHarness(t, func(r *config.Repo) { r.Advisor.MaxFile = 2048 })
-	h.fake.Commit(repo, nil, nil, "x", "unused")
 	big := strings.Repeat("line\n", 1000)
-	b := h.fake.Commit(repo, nil, map[string]string{"big.txt": "x\n", "bin.dat": "a\x00b"}, "u", "b")
-	o := h.fake.Commit(repo, []string{b}, map[string]string{"big.txt": big + "o\n", "bin.dat": "a\x00c"}, "u", "o")
-	th := h.fake.Commit(repo, []string{b}, map[string]string{"big.txt": big + "t\n", "bin.dat": "a\x00d"}, "u", "t")
-	p := execsched.Prepared{Repo: repo, Proposal: agwp.Proposal{ID: h.prop.ID, Head: th, Stream: "main"}, StreamHead: o,
-		Prep: agwp.Preparation{Base: b, Conflicts: []agwp.Conflict{{Path: "big.txt"}, {Path: "bin.dat"}}}}
-	if err := h.comp.Process(context.Background(), p); err != nil {
+	h := newScenario(t, func(r *config.Repo) { r.Advisor.MaxFile = 2048 },
+		map[string]string{"big.txt": "x\n", "bin.dat": "a\x00b"},
+		map[string]string{"big.txt": big + "o\n", "bin.dat": "a\x00c"},
+		map[string]string{"big.txt": big + "t\n", "bin.dat": "a\x00d"}, nil, nil)
+	if err := h.comp.Process(context.Background(), h.prepared("big.txt", "bin.dat")); err != nil {
 		t.Fatal(err)
 	}
 	rec, _ := h.comp.Suggestions(h.prop.ID)
@@ -219,15 +282,12 @@ func TestBinaryAndHugeFilesAreNotAnalysed(t *testing.T) {
 }
 
 func TestMissingVersionsMeanDeleteOrBothAdded(t *testing.T) {
-	h := newHarness(t, nil)
-	b := h.fake.Commit(repo, nil, map[string]string{"gone.txt": "keep\n"}, "u", "b")
-	o := h.fake.Commit(repo, []string{b}, map[string]string{}, "u", "ours deleted it")
-	th := h.fake.Commit(repo, []string{b}, map[string]string{"gone.txt": "changed\n", "new.txt": "t\n"}, "u", "theirs edited it")
-	o2 := h.fake.Commit(repo, []string{b}, map[string]string{"new.txt": "o\n"}, "u", "ours added new")
-	_ = o2
-	p := execsched.Prepared{Repo: repo, Proposal: agwp.Proposal{ID: h.prop.ID, Head: th, Stream: "main"}, StreamHead: o,
-		Prep: agwp.Preparation{Base: b, Conflicts: []agwp.Conflict{{Path: "gone.txt", Kind: "deleted on our side, modified on theirs"}}}}
-	if err := h.comp.Process(context.Background(), p); err != nil {
+	h := newScenario(t, nil,
+		map[string]string{"gone.txt": "keep\n"},
+		map[string]string{"new.txt": "o\n"},
+		map[string]string{"gone.txt": "changed\n", "new.txt": "t\n"},
+		[]string{"gone.txt"}, nil) // ours deleted gone.txt and added new.txt; theirs edited gone.txt and added another new.txt
+	if err := h.comp.Process(context.Background(), h.prepared("gone.txt")); err != nil {
 		t.Fatal(err)
 	}
 	rec, _ := h.comp.Suggestions(h.prop.ID)
@@ -237,10 +297,8 @@ func TestMissingVersionsMeanDeleteOrBothAdded(t *testing.T) {
 	if !strings.Contains(h.reviews()[0].Body, "deleted on one side, changed on the other") {
 		t.Fatal("the comment does not explain the delete/modify conflict")
 	}
-	// "both added": no base at all
-	p2 := execsched.Prepared{Repo: repo, Proposal: agwp.Proposal{ID: h.prop.ID, Head: th, Stream: "main"}, StreamHead: o2,
-		Prep: agwp.Preparation{Base: "", Conflicts: []agwp.Conflict{{Path: "new.txt", Kind: "both sides added different content"}}}}
-	if err := h.comp.Process(context.Background(), p2); err != nil {
+	// "both added": the file is missing from the base
+	if err := h.comp.Process(context.Background(), h.prepared("new.txt")); err != nil {
 		t.Fatal(err)
 	}
 	rec, _ = h.comp.Suggestions(h.prop.ID)
@@ -250,8 +308,11 @@ func TestMissingVersionsMeanDeleteOrBothAdded(t *testing.T) {
 }
 
 func TestLimitsTheNumberOfFilesAnalysed(t *testing.T) {
-	h := newHarness(t, func(r *config.Repo) { r.Advisor.MaxPaths = 2 })
-	p := h.prepared(agwp.Conflict{Path: "a.txt"}, agwp.Conflict{Path: "lib.go"}, agwp.Conflict{Path: "img.bin"})
+	h := newScenario(t, func(r *config.Repo) { r.Advisor.MaxPaths = 2 },
+		map[string]string{"a.txt": "1\n2\n3\n4\n", "b.txt": "1\n2\n3\n4\n", "c.txt": "1\n2\n3\n4\n"},
+		map[string]string{"a.txt": "1\nO2\n3\n4\n", "b.txt": "1\nO2\n3\n4\n", "c.txt": "1\nO2\n3\n4\n"},
+		map[string]string{"a.txt": "1\nT2\n3\n4\n", "b.txt": "1\nT2\n3\n4\n", "c.txt": "1\nT2\n3\n4\n"}, nil, nil)
+	p := h.prepared("a.txt", "b.txt", "c.txt")
 	if err := h.comp.Process(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -263,8 +324,11 @@ func TestLimitsTheNumberOfFilesAnalysed(t *testing.T) {
 
 func TestClosedProposalsGetNoComment(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.CloseProposalFixture(repo, h.prop.ID)
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	p := h.prepared("a.txt")
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, h.prop.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.comp.Process(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 	if len(h.reviews()) != 0 {
@@ -274,8 +338,9 @@ func TestClosedProposalsGetNoComment(t *testing.T) {
 
 func TestFetchFailuresAreReportedAndRetried(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.FailNext("tree.file", 1, 500, "internal", false, 0)
-	p := h.prepared(agwp.Conflict{Path: "a.txt"})
+	// The proxy fails one file request without involving the server.
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/files/", Times: 1, Status: 500, Code: "internal"})
+	p := h.prepared("a.txt")
 	if err := h.comp.Process(context.Background(), p); err == nil {
 		t.Fatal("expected the fetch failure")
 	}
@@ -292,8 +357,8 @@ func TestFetchFailuresAreReportedAndRetried(t *testing.T) {
 
 func TestPostFailuresAreRecordedAndRetried(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.FailNext("proposal.review", 1, 500, "internal", false, 0)
-	p := h.prepared(agwp.Conflict{Path: "a.txt"})
+	h.px.Inject(testutil.Fault{Method: "POST", Path: "/reviews", Times: 1, Status: 500, Code: "internal"})
+	p := h.prepared("a.txt")
 	if err := h.comp.Process(context.Background(), p); err == nil {
 		t.Fatal("expected the post failure")
 	}
@@ -337,7 +402,7 @@ func TestAdviceIsReadableAsSoonAsItsCommentIsVisible(t *testing.T) {
 	h := newHarness(t, nil)
 	w := &watcher{API: h.client, comp: h.comp, got: make(chan watched, 1)}
 	h.comp.o.API = w
-	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+	if err := h.comp.Process(context.Background(), h.prepared("a.txt")); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -358,7 +423,7 @@ func TestRunLoopWorksThroughQueuedPreparations(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go h.comp.Run(ctx)
-	h.comp.OnPrepared(h.prepared(agwp.Conflict{Path: "a.txt"}))
+	h.comp.OnPrepared(h.prepared("a.txt"))
 	deadline := time.Now().Add(5 * time.Second)
 	for len(h.reviews()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(2 * time.Millisecond)
@@ -374,11 +439,7 @@ func TestRunLoopWorksThroughQueuedPreparations(t *testing.T) {
 
 func TestEndToEndThroughTheExecutionScheduler(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetPreparation(repo, h.prop.ID, agwp.Preparation{Base: h.base, CandidateTree: "", Strategy: "merge",
-		Conflicts: []agwp.Conflict{{Path: "a.txt", Kind: "content conflict (1 region(s))"}}})
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer"})
-	orch, _ := agwp.New(h.fake.URL, secret.New(tok))
-	sched := execsched.New(execsched.Options{Repo: config.Repo{Name: repo, Stream: "main"}, API: orch, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	sched := execsched.New(execsched.Options{Repo: config.Repo{Name: repo, Stream: "main"}, API: h.w.Orch, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	sched.Subscribe(h.comp.OnPrepared)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -131,13 +131,13 @@ repos:
       max_lines: 1500
 
 executors:
-  # Built-in stand-in for an agent: edits a virtual workspace, signs provenance, opens a proposal.
+  # Your agent: any program that edits a workspace and opens a proposal (see the executor contract in the README).
+  # In the worked example this is a demo program that is not a model: it writes the files named in the task.
   - name: docs-bot
-    type: scripted
+    type: command
+    command: ["/opt/orchestrator/docs-bot"]
+    pass_env: [PATH]
     heartbeat: 5s
-    scripted:
-      task_files: true                   # the task description carries the files to write
-      model: scripted-demo
 
   # Any program. It gets AG_SERVER, AG_TOKEN, AG_RUN, AG_REPO, AG_TASK, AG_KEY_FILE, ... in its environment.
   - name: shell-bot
@@ -153,8 +153,9 @@ executors:
 Choices that matter:
 
 - **Executors are the agents.** A `command` executor runs any program with a documented environment (the
-  [executor contract](../../services/agent-orchestrator/README.md#executor-contract)); the `scripted`
-  executor is a built-in stand-in that exercises the whole path without a model. `routes` send tasks to an
+  [executor contract](../../services/agent-orchestrator/README.md#executor-contract)); there is no
+  built-in simulated agent: an executor runs a real program (the demo agent of the worked example is a
+  test-only program, `internal/testutil/testagent`, that the example script builds). `routes` send tasks to an
   executor by title (a regular expression) and/or scope (a glob); `default_executor` catches the rest.
 - **One agent per executor, and prefer one session per agent.** The server binds a credential to an agent
   name, not to a run, so concurrent sessions of the same agent (`slots` above 1) could act as each other's
@@ -221,7 +222,7 @@ ok    reviewer                 the credential's scope covers the 6 operations th
 ok    advisor                  authenticates as service:advisor (token), roles acme/web:reviewer
 ok    advisor                  the credential's scope covers the 4 operations this configuration needs
 ok    acme/web                 stream "main" at version 1
-ok    executor docs-bot        built-in scripted executor, agent "docs-bot"
+ok    executor docs-bot        command "/tmp/orchestrator-example/docs-bot" found, agent "docs-bot"
 ok    executor shell-bot       command "/bin/sh" found, agent "shell-bot"
 ok    state_dir                .../state is usable
 
@@ -244,7 +245,7 @@ prop_9b911d00157a8a10fc2c agent:docs-bot mergeable=yes validated=na approved=no 
 $ # what the server records about A: its author and the signed provenance
 author: agent:docs-bot#run_ffa8b55567a1ee9192e7
 reviews: []
-provenance: agent:docs-bot#run_ffa8b55567a1ee9192e7 model=scripted-demo verified=True
+provenance: agent:docs-bot#run_ffa8b55567a1ee9192e7 model=demo-agent verified=True
 ```
 
 Each open proposal has the four states the orchestrator tracks independently (mergeable, validated,
@@ -370,7 +371,7 @@ now exist:
 
 - `require_provenance_for_agents: true` makes the signed account of what an agent did a condition of
   landing. Agents the orchestrator runs sign with the key it keeps in the state directory (the same file
-  format as the CLI's), and the server verifies the signature; the `scripted` executor does this, a `command`
+  format as the CLI's), and the server verifies the signature; every `command`
   executor must (the key path is `AG_KEY_FILE`).
 - `approvals.min_for_agents` makes a person approve what an agent proposes. The orchestrator's reviews are
   always comments; the policy's `approvers` decides who counts, and by default only people do.

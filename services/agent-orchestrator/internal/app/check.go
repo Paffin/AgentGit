@@ -165,7 +165,7 @@ func (a *App) Check(ctx context.Context) CheckReport {
 				rep.add("ok", "executor "+e.Name, "command %q found, agent %q", e.Command[0], e.Agent)
 			}
 		default:
-			rep.add("ok", "executor "+e.Name, "built-in scripted executor, agent %q", e.Agent)
+			rep.add("error", "executor "+e.Name, "unknown executor type %q", e.Type)
 		}
 	}
 	if err := os.MkdirAll(a.cfg.State, 0o700); err != nil {

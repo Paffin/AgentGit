@@ -40,13 +40,13 @@ repos:
       max_lines: 1500
 
 executors:
-  # Built-in stand-in for an agent: edits a virtual workspace, signs provenance, opens a proposal.
+  # Your agent: any program that edits a workspace and opens a proposal (see the executor contract in the README).
+  # In the worked example this is a demo program that is not a model: it writes the files named in the task.
   - name: docs-bot
-    type: scripted
+    type: command
+    command: ["/opt/orchestrator/docs-bot"]
+    pass_env: [PATH]
     heartbeat: 5s
-    scripted:
-      task_files: true                   # the task description carries the files to write
-      model: scripted-demo
 
   # Any program. It gets AG_SERVER, AG_TOKEN, AG_RUN, AG_REPO, AG_TASK, AG_KEY_FILE, ... in its environment.
   - name: shell-bot

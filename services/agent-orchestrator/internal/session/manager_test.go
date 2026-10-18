@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,14 +19,20 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil). Agents are real
+// programs: shell scripts, or the test-only agent program (internal/testutil/testagent)
+// that writes files, signs provenance and opens a proposal. A forwarding proxy in front
+// of the server records what the manager asks (heartbeats, registrations).
+
+const repo = testutil.RepoName
 
 type env struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
+	w       *testutil.World
+	px      *testutil.Proxy
 	orch    *agwp.Client
 	orchTok string
 	mgr     *Manager
@@ -33,26 +40,23 @@ type env struct {
 	metrics *metrics.Service
 	dir     string
 	results chan Result
+	granted map[string]bool
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	fake := fakeagwp.New()
-	t.Cleanup(fake.Close)
-	fake.AddRepo(repo)
-	e := &env{t: t, fake: fake, dir: t.TempDir(), results: make(chan Result, 16), metrics: metrics.NewService(metrics.NewRegistry())}
-	e.orchTok = fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator"})
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	e := &env{t: t, w: w, dir: t.TempDir(), results: make(chan Result, 16), metrics: metrics.NewService(metrics.NewRegistry()), granted: map[string]bool{}}
+	e.px = testutil.NewProxy(t, w.Srv.URL)
+	e.orchTok = w.OrchT
+	e.orch = w.Srv.ClientAt(e.px.URL, e.orchTok, "orchestrator", agwp.WithObserver(e.metrics))
 	var err error
-	e.orch, err = agwp.New(fake.URL, secret.New(e.orchTok), agwp.WithIdentityLabel("orchestrator"), agwp.WithObserver(e.metrics))
-	if err != nil {
-		t.Fatal(err)
-	}
 	e.keys, err = agentkey.OpenStore(filepath.Join(e.dir, "keys"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	e.mgr, err = NewManager(Options{
-		Orch: e.orch, ServerURL: fake.URL, Keys: e.keys, WorkRoot: filepath.Join(e.dir, "work"), Metrics: e.metrics,
+		Orch: e.orch, ServerURL: w.Srv.URL, Keys: e.keys, WorkRoot: filepath.Join(e.dir, "work"), Metrics: e.metrics,
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 		ParentEnv: func(k string) string { return map[string]string{"PATH": os.Getenv("PATH"), "LEAKY": "parent-value"}[k] },
 	})
@@ -63,18 +67,22 @@ func newEnv(t *testing.T) *env {
 	return e
 }
 
-// Observe adapts metrics for the client observer in tests.
+// request builds a session request; the executor's agent gets the writer role first (the operator of a real
+// deployment grants it before an agent can be given credentials).
 func (e *env) request(task agwp.Task, ex config.Executor, decide Disposition) Request {
+	if !e.granted[ex.Agent] {
+		if err := e.w.Srv.Admin.GrantRole(context.Background(), "agent:"+ex.Agent, repo, "writer"); err != nil {
+			e.t.Fatalf("grant role: %v", err)
+		}
+		e.granted[ex.Agent] = true
+	}
 	return Request{
 		Repo: repo, Stream: "main", Task: task, Executor: ex, Attempt: 1, Lease: "soft", LeaseTTL: 5 * time.Minute,
 		Decide: func(r Result) Disposition { e.results <- r; return decide },
 	}
 }
 
-func (e *env) task(title string, scope ...string) agwp.Task {
-	id := e.fake.AddTask(repo, title, scope)
-	return e.fake.Task(repo, id)
-}
+func (e *env) task(title string, scope ...string) agwp.Task { return *e.w.Task(title, "", scope) }
 
 func (e *env) wait(d time.Duration) Result {
 	e.t.Helper()
@@ -98,6 +106,44 @@ func (e *env) idle() {
 	}
 }
 
+func (e *env) runs() []agwp.Run {
+	e.t.Helper()
+	rs, err := e.w.Alice.ListRuns(context.Background(), repo, "", false, 100)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return rs
+}
+
+func (e *env) leases() []agwp.Lease {
+	e.t.Helper()
+	ls, err := e.w.Alice.ListLeases(context.Background(), repo, false)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return ls
+}
+
+// whoami asks the server who a token is (an error: nobody, it is revoked or unknown).
+func (e *env) whoami(token string) (*agwp.Principal, error) {
+	c := e.w.Srv.Client(token, "probe", agwp.WithRetry(agwp.RetryPolicy{MaxAttempts: 1}))
+	return c.Whoami(context.Background())
+}
+
+// waitFile waits until a file written by an executor exists and returns its content.
+func (e *env) waitFile(path string) string {
+	e.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
+			return strings.TrimSpace(string(b))
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	e.t.Fatalf("%s never appeared", path)
+	return ""
+}
+
 func commandExec(t *testing.T, name, script string, mut ...func(*config.Executor)) config.Executor {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name+".sh")
@@ -113,28 +159,36 @@ func commandExec(t *testing.T, name, script string, mut ...func(*config.Executor
 	return ex
 }
 
-func scriptedExec(name string, files map[string]string, mut ...func(*config.Executor)) config.Executor {
-	ex := config.Executor{Name: name, Type: "scripted", Agent: name, Slots: 2, Timeout: 20 * time.Second, Grace: time.Second,
+// agentExec is an executor that runs the test-only agent program.
+func agentExec(t *testing.T, name string, files map[string]string, mut ...func(*config.Executor)) config.Executor {
+	t.Helper()
+	b, err := json.Marshal(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ex := config.Executor{Name: name, Type: "command", Agent: name, Slots: 2, Timeout: 20 * time.Second, Grace: time.Second,
 		Beat: 50 * time.Millisecond, Cred: 10 * time.Minute, Ops: append([]string(nil), config.DefaultAgentOps...), Output: 64 << 10,
-		Script: config.Scripted{Files: files, Message: "scripted change", Title: "Scripted change", Model: "demo-model", Rationale: "because"}}
+		Command: []string{testutil.BuildTestAgent(t)}, Pass: []string{"PATH"},
+		Env: map[string]string{"TESTAGENT_FILES": string(b), "TESTAGENT_MESSAGE": "test agent change", "TESTAGENT_TITLE": "Test agent change",
+			"TESTAGENT_MODEL": "test-agent", "TESTAGENT_RATIONALE": "because"}}
 	for _, f := range mut {
 		f(&ex)
 	}
 	return ex
 }
 
-func TestScriptedSessionProposesSignsAndCompletes(t *testing.T) {
+func TestAgentSessionProposesSignsAndCompletes(t *testing.T) {
 	e := newEnv(t)
-	e.fake.SetHead(repo, "main", e.fake.Commit(repo, nil, map[string]string{"README.md": "hi\n"}, "user:root", "seed"))
+	e.w.Seed(map[string]string{"README.md": "hi\n"})
 	task := e.task("Add docs", "docs/**")
-	info, err := e.mgr.Start(context.Background(), e.request(task, scriptedExec("docs-bot", map[string]string{"docs/guide.md": "# Guide\n"}), Keep))
+	info, err := e.mgr.Start(context.Background(), e.request(task, agentExec(t, "docs-bot", map[string]string{"docs/guide.md": "# Guide\n"}), Keep))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info.State != "running" || info.Agent != "docs-bot" || len(info.Leases) != 1 || info.Leases[0].Scope != "docs/**" || info.Leases[0].Exclusive {
 		t.Fatalf("info = %+v", info)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeCompleted || len(res.Proposals) != 1 {
 		t.Fatalf("result = %+v", res)
@@ -143,30 +197,33 @@ func TestScriptedSessionProposesSignsAndCompletes(t *testing.T) {
 	if p.Author != "agent:docs-bot#"+res.RunID || p.TaskID != task.ID || p.State != agwp.ProposalOpen {
 		t.Fatalf("proposal = %+v", p)
 	}
-	// provenance was submitted by the agent for exactly the proposed head, and the file is in the workspace head
-	prov := e.fake.Provenance(repo)
-	if len(prov) != 1 || prov[0].Record.Changeset != p.Head || prov[0].Record.TaskID != task.ID || prov[0].Record.Agent != p.Author || len(prov[0].Signature) != 128 {
+	// provenance was submitted by the agent for exactly the proposed head, the server verified its signature,
+	// and the file is in the workspace head
+	prov, err := e.w.Alice.ListProvenance(context.Background(), repo, p.Head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prov) != 1 || !prov[0].Verified || prov[0].Record.Changeset != p.Head || prov[0].Record.TaskID != task.ID || prov[0].Record.Agent != p.Author || len(prov[0].Signature) != 128 {
 		t.Fatalf("provenance = %+v", prov)
 	}
-	if b, ok := e.fake.File(repo, p.Head, "docs/guide.md"); !ok || string(b) != "# Guide\n" {
+	if b, ok := e.w.File(p.Head, "docs/guide.md"); !ok || b != "# Guide\n" {
 		t.Fatalf("file = %q %v", b, ok)
 	}
 	// run completed, lease released by the run's completion, credential revoked, task left in progress
-	runs := e.fake.Runs(repo)
+	runs := e.runs()
 	if len(runs) != 1 || runs[0].Status != "completed" || !strings.Contains(runs[0].Summary, p.ID) {
 		t.Fatalf("runs = %+v", runs)
 	}
-	for _, l := range e.fake.Leases(repo) {
+	for _, l := range e.leases() {
 		if l.ReleasedAtMs == 0 {
 			t.Fatalf("lease %+v still held", l)
 		}
 	}
-	for _, m := range e.fake.MintedTokens() {
-		if !m.Revoked {
-			t.Fatalf("credential %+v was not revoked", m)
-		}
+	creds := e.w.Srv.Credentials("agent:docs-bot")
+	if len(creds) != 1 || creds[0].RevokedAtMs == 0 {
+		t.Fatalf("the session credential must be revoked: %+v", creds)
 	}
-	if got := e.fake.Task(repo, task.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:docs-bot" {
+	if got := e.w.GetTask(task.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:docs-bot" {
 		t.Fatalf("task = %+v", got)
 	}
 	if e.metrics.SessionsStarted.With(repo, "docs-bot").Value() != 1 || e.metrics.SessionsFinished.With(repo, "docs-bot", "completed").Value() != 1 {
@@ -179,59 +236,69 @@ func TestScriptedSessionProposesSignsAndCompletes(t *testing.T) {
 
 func TestAgentCredentialIsNarrowAndShortLived(t *testing.T) {
 	e := newEnv(t)
-	e.fake.SetHead(repo, "main", e.fake.Commit(repo, nil, map[string]string{"a": "b"}, "user:root", "seed"))
-	ex := scriptedExec("scoped-bot", map[string]string{"x.txt": "x"}, func(c *config.Executor) { c.Cred = 7 * time.Minute })
+	e.w.Seed(map[string]string{"a": "b"})
+	ex := agentExec(t, "scoped-bot", map[string]string{"x.txt": "x"}, func(c *config.Executor) { c.Cred = 7 * time.Minute })
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("t"), ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 	e.idle()
-	minted := e.fake.MintedTokens()
+	minted := e.w.Srv.Credentials("agent:scoped-bot")
 	if len(minted) != 1 {
 		t.Fatalf("minted = %+v", minted)
 	}
 	m := minted[0]
-	if m.Identity != "agent:scoped-bot" || len(m.Repos) != 1 || m.Repos[0] != repo || len(m.Streams) != 1 || m.Streams[0] != "main" {
+	if m.Subject != "agent:scoped-bot" || len(m.Scope.Repos) != 1 || m.Scope.Repos[0] != repo || len(m.Scope.Streams) != 1 || m.Scope.Streams[0] != "main" || m.Scope.RunID == "" {
 		t.Fatalf("scope = %+v", m)
 	}
-	for _, op := range m.Ops {
+	for _, op := range m.Scope.Operations {
 		if config.ForbiddenAgentOps[op] {
 			t.Fatalf("the agent credential carries %q", op)
 		}
 	}
-	if ttl := time.Until(m.ExpiresAt); ttl <= 0 || ttl > 7*time.Minute+5*time.Second {
+	if ttl := time.Duration(m.ExpiresAtMs-m.CreatedAtMs) * time.Millisecond; ttl < 7*time.Minute-5*time.Second || ttl > 7*time.Minute+5*time.Second {
 		t.Fatalf("ttl = %v", ttl)
 	}
 }
 
 func TestCommandExecutorGetsExactlyTheDocumentedEnvironment(t *testing.T) {
 	e := newEnv(t)
-	dump := filepath.Join(t.TempDir(), "env.txt")
-	ex := commandExec(t, "env-bot", `env | sort > "$DUMP"; cat "$AG_TASK_FILE" > "$DUMP.task"; ls -l "$AG_KEY_FILE" | cut -c1-10 > "$DUMP.keymode"; echo '{"summary":"dumped the environment"}' > "$AG_RESULT_FILE"`,
+	dir := t.TempDir()
+	dump, release := filepath.Join(dir, "env.txt"), filepath.Join(dir, "release")
+	ex := commandExec(t, "env-bot", `env | sort > "$DUMP.tmp"; cat "$AG_TASK_FILE" > "$DUMP.task"; ls -l "$AG_KEY_FILE" | cut -c1-10 > "$DUMP.keymode"; echo '{"summary":"dumped the environment"}' > "$AG_RESULT_FILE"; mv "$DUMP.tmp" "$DUMP"
+while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
 		func(c *config.Executor) {
-			c.Env = map[string]string{"DUMP": dump}
+			c.Env = map[string]string{"DUMP": dump, "RELEASE": release}
 			c.Pass = []string{"PATH", "LEAKY_NOT_LISTED"}
 		})
 	task := e.task("env check", "src/**")
 	if _, err := e.mgr.Start(context.Background(), e.request(task, ex, Done)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	raw := e.waitFile(dump)
+	vars := map[string]string{}
+	for _, line := range strings.Split(raw, "\n") {
+		k, v, _ := strings.Cut(line, "=")
+		vars[k] = v
+	}
+	// While the session runs, the executor's token is the agent's own run-bound credential on the server.
+	p, err := e.whoami(vars["AG_TOKEN"])
+	if err != nil {
+		t.Fatalf("the executor's token does not work: %v", err)
+	}
+	if p.Identity != "agent:env-bot" || p.Scope.RunID != vars["AG_RUN"] || len(p.Scope.Repos) != 1 || p.Scope.Repos[0] != repo {
+		t.Fatalf("the executor's token is %+v", p)
+	}
+	if err := os.WriteFile(release, []byte("go"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeCompleted || !strings.Contains(res.Summary, "dumped the environment") {
 		t.Fatalf("result = %+v", res)
 	}
-	raw, err := os.ReadFile(dump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	vars := map[string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
-		k, v, _ := strings.Cut(line, "=")
-		vars[k] = v
-	}
 	for k, want := range map[string]string{
-		"AG_SERVER": e.fake.URL, "AG_RUN": res.RunID, "AG_REPO": repo, "AG_STREAM": "main", "AG_TASK": task.ID,
+		"AG_SERVER": e.w.Srv.URL, "AG_RUN": res.RunID, "AG_REPO": repo, "AG_STREAM": "main", "AG_TASK": task.ID,
 		"AG_AGENT": "env-bot", "AG_IDENTITY": "agent:env-bot#" + res.RunID, "DUMP": dump,
 	} {
 		if vars[k] != want {
@@ -250,25 +317,24 @@ func TestCommandExecutorGetsExactlyTheDocumentedEnvironment(t *testing.T) {
 		t.Error("an environment variable that was not passed through reached the executor")
 	}
 	// The token the executor got is the agent's, not the orchestrator's.
-	if strings.Contains(string(raw), e.orchTok) {
+	if strings.Contains(raw, e.orchTok) {
 		t.Fatal("the orchestrator's own credential reached the executor")
-	}
-	minted := e.fake.MintedTokens()
-	if len(minted) != 1 || vars["AG_TOKEN"] != minted[0].Secret {
-		t.Fatalf("AG_TOKEN is not the minted session credential")
 	}
 	if mode, _ := os.ReadFile(dump + ".keymode"); !strings.HasPrefix(string(mode), "-rw-------") {
 		t.Errorf("key file mode = %q", mode)
 	}
-	if task, _ := os.ReadFile(dump + ".task"); !strings.Contains(string(task), "env check") {
-		t.Errorf("task file = %s", task)
+	if tf, _ := os.ReadFile(dump + ".task"); !strings.Contains(string(tf), "env check") {
+		t.Errorf("task file = %s", tf)
 	}
 	// Done disposition: the owner (the agent) finished the task.
-	if got := e.fake.Task(repo, task.ID); got.State != agwp.TaskDone {
+	if got := e.w.GetTask(task.ID); got.State != agwp.TaskDone {
 		t.Fatalf("task = %+v", got)
 	}
 	if _, err := os.Stat(filepath.Join(e.dir, "work", res.RunID)); !os.IsNotExist(err) {
 		t.Fatal("the session work directory was not removed")
+	}
+	if _, err := e.whoami(vars["AG_TOKEN"]); err == nil {
+		t.Fatal("the credential of a finished session still works")
 	}
 }
 
@@ -279,23 +345,23 @@ func TestFailingExecutorFailsTheRunAndCancelsTheTask(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(task, ex, Cancel)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeFailed || res.ExitCode != 3 || res.Signal != "" {
 		t.Fatalf("result = %+v", res)
 	}
-	runs := e.fake.Runs(repo)
+	runs := e.runs()
 	if len(runs) != 1 || runs[0].Status != "failed" || !strings.Contains(runs[0].Summary, "exited with code 3") || !strings.Contains(runs[0].Summary, "boom: could not compile") {
 		t.Fatalf("run = %+v", runs)
 	}
-	if got := e.fake.Task(repo, task.ID); got.State != agwp.TaskCancelled {
+	if got := e.w.GetTask(task.ID); got.State != agwp.TaskCancelled {
 		t.Fatalf("task = %+v", got)
 	}
 	if e.metrics.SessionsFinished.With(repo, "bad-bot", "failed").Value() != 1 {
 		t.Fatal("failure not counted")
 	}
-	for _, m := range e.fake.MintedTokens() {
-		if !m.Revoked {
+	for _, c := range e.w.Srv.Credentials("agent:bad-bot") {
+		if c.RevokedAtMs == 0 {
 			t.Fatal("the credential of a failed session must be revoked")
 		}
 	}
@@ -303,14 +369,15 @@ func TestFailingExecutorFailsTheRunAndCancelsTheTask(t *testing.T) {
 
 func TestSecretsAreScrubbedFromSummaries(t *testing.T) {
 	e := newEnv(t)
-	ex := commandExec(t, "chatty-bot", `echo "my token is $AG_TOKEN" >&2; exit 1`)
+	tokFile := filepath.Join(t.TempDir(), "token")
+	ex := commandExec(t, "chatty-bot", `echo "$AG_TOKEN" > "$OUT"; echo "my token is $AG_TOKEN" >&2; exit 1`, func(c *config.Executor) { c.Env = map[string]string{"OUT": tokFile} })
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("leak"), ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
-	token := e.fake.MintedTokens()[0].Secret
-	if strings.Contains(res.Summary, token) || strings.Contains(e.fake.Runs(repo)[0].Summary, token) || !strings.Contains(res.Summary, secret.Redacted) {
+	token := e.waitFile(tokFile)
+	if strings.Contains(res.Summary, token) || strings.Contains(e.runs()[0].Summary, token) || !strings.Contains(res.Summary, secret.Redacted) {
 		t.Fatalf("summary leaks the session token: %q", res.Summary)
 	}
 }
@@ -318,42 +385,48 @@ func TestSecretsAreScrubbedFromSummaries(t *testing.T) {
 func TestSessionsDoNotShareCredentials(t *testing.T) {
 	e := newEnv(t)
 	d := t.TempDir()
+	release := filepath.Join(d, "release")
 	mk := func(name string) config.Executor {
-		return commandExec(t, name, `echo "$AG_TOKEN" > "$OUT"; sleep 0.3`, func(c *config.Executor) { c.Env = map[string]string{"OUT": filepath.Join(d, name)} })
+		return commandExec(t, name, `echo "$AG_TOKEN" > "$OUT.tmp"; mv "$OUT.tmp" "$OUT"; while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
+			func(c *config.Executor) { c.Env = map[string]string{"OUT": filepath.Join(d, name), "RELEASE": release} })
 	}
 	for _, name := range []string{"bot-a", "bot-b"} {
 		if _, err := e.mgr.Start(context.Background(), e.request(e.task("t-"+name), mk(name), Keep)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	e.wait(10 * time.Second)
-	e.wait(10 * time.Second)
-	e.idle()
-	a, _ := os.ReadFile(filepath.Join(d, "bot-a"))
-	b, _ := os.ReadFile(filepath.Join(d, "bot-b"))
-	ta, tb := strings.TrimSpace(string(a)), strings.TrimSpace(string(b))
-	if ta == "" || tb == "" || ta == tb || ta == e.orchTok || tb == e.orchTok {
+	ta, tb := e.waitFile(filepath.Join(d, "bot-a")), e.waitFile(filepath.Join(d, "bot-b"))
+	if ta == tb || ta == e.orchTok || tb == e.orchTok {
 		t.Fatalf("tokens: a=%q b=%q", ta, tb)
 	}
-	// Each token is bound to its own agent: A's token cannot act as B's run.
-	cl, _ := agwp.New(e.fake.URL, secret.New(ta), agwp.WithRetry(agwp.RetryPolicy{MaxAttempts: 1}))
-	runs := e.fake.Runs(repo)
-	var runOfB string
-	for _, r := range runs {
-		if r.Agent == "bot-b" {
+	// Each token is bound to its own agent's run: A's token works for A's run and cannot act as B's run.
+	var runOfA, runOfB string
+	for _, r := range e.runs() {
+		switch r.Agent {
+		case "bot-a":
+			runOfA = r.RunID
+		case "bot-b":
 			runOfB = r.RunID
 		}
 	}
-	if _, err := cl.WithRun(runOfB).Whoami(context.Background()); err == nil {
-		// whoami ignores ag-run in the fake; prove the boundary through an endpoint that honours it
-		_, err = cl.WithRun(runOfB).ListTasks(context.Background(), repo, "", false)
-		if err == nil {
-			t.Fatal("agent A's credential was accepted for agent B's run")
-		}
+	cl := e.w.Srv.Client(ta, "agent-a", agwp.WithRetry(agwp.RetryPolicy{MaxAttempts: 1}))
+	if _, err := cl.WithRun(runOfA).ListTasks(context.Background(), repo, "", false); err != nil {
+		t.Fatalf("A's credential does not work for A's run: %v", err)
 	}
+	if _, err := cl.WithRun(runOfB).ListTasks(context.Background(), repo, "", false); err == nil {
+		t.Fatal("agent A's credential was accepted for agent B's run")
+	}
+	if err := os.WriteFile(release, []byte("go"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.wait(20 * time.Second)
+	e.wait(20 * time.Second)
+	e.idle()
 	// And both are revoked now.
-	if _, err := cl.Whoami(context.Background()); err == nil {
-		t.Fatal("a finished session's credential still works")
+	for _, tok := range []string{ta, tb} {
+		if _, err := e.whoami(tok); err == nil {
+			t.Fatal("a finished session's credential still works")
+		}
 	}
 }
 
@@ -366,32 +439,26 @@ func TestKilledExecutorIsReportedAsAbandonedAndLeasesAreReleased(t *testing.T) {
 		t.Fatal(err)
 	}
 	var pid int
-	deadline := time.Now().Add(5 * time.Second)
-	for pid == 0 && time.Now().Before(deadline) {
-		if b, err := os.ReadFile(pidFile); err == nil {
-			_, _ = fmt.Sscan(strings.TrimSpace(string(b)), &pid)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	_, _ = fmt.Sscan(e.waitFile(pidFile), &pid)
 	if pid == 0 {
 		t.Fatal("the executor never started")
 	}
-	if got := e.fake.Leases(repo); len(got) != 1 || got[0].ReleasedAtMs != 0 {
+	if got := e.leases(); len(got) != 1 || got[0].ReleasedAtMs != 0 {
 		t.Fatalf("leases while running = %+v", got)
 	}
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil { // not us: someone kills the executor from outside
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeFailed || res.Signal != "SIGKILL" {
 		t.Fatalf("result = %+v", res)
 	}
-	run := e.fake.Runs(repo)[0]
+	run := e.runs()[0]
 	if run.Status != "failed" || !strings.HasPrefix(run.Summary, "abandoned: the executor was killed by signal SIGKILL") {
 		t.Fatalf("run = %+v", run)
 	}
-	for _, l := range e.fake.Leases(repo) {
+	for _, l := range e.leases() {
 		if l.ReleasedAtMs == 0 {
 			t.Fatalf("lease %+v is still held after the executor died", l)
 		}
@@ -414,7 +481,7 @@ func TestTimeoutStopsTheWholeProcessGroup(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("slow"), ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeTimeout || !strings.Contains(res.Summary, "timeout") {
 		t.Fatalf("result = %+v", res)
@@ -435,7 +502,7 @@ func TestTimeoutStopsTheWholeProcessGroup(t *testing.T) {
 	if syscall.Kill(pid, 0) == nil {
 		t.Fatalf("background child %d survived the session", pid)
 	}
-	if run := e.fake.Runs(repo)[0]; run.Status != "failed" || !strings.Contains(run.Summary, "timeout") {
+	if run := e.runs()[0]; run.Status != "failed" || !strings.Contains(run.Summary, "timeout") {
 		t.Fatalf("run = %+v", run)
 	}
 }
@@ -446,12 +513,12 @@ func TestHeartbeatsKeepTheRunAliveAndExtendLeases(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("steady", "lib/**"), ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 	e.idle()
-	if n := e.fake.CountRequests("agent.heartbeat"); n < 3 {
+	if n := e.px.Count("POST", "/heartbeat"); n < 3 {
 		t.Fatalf("heartbeats = %d, want several at 50ms over 0.5s", n)
 	}
-	if n := e.fake.CountRequests("lease.extend"); n < 3 {
+	if n := e.px.Count("POST", "/extend"); n < 3 {
 		t.Fatalf("lease extensions = %d", n)
 	}
 }
@@ -470,12 +537,12 @@ func TestCancelStopsAGracefulExecutor(t *testing.T) {
 	if !e.mgr.Cancel(info.RunID, "task cancelled by a person") {
 		t.Fatal("Cancel did not find the session")
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeCancelled || res.Reason != "task cancelled by a person" || res.ExitCode != 0 {
 		t.Fatalf("result = %+v", res)
 	}
-	if run := e.fake.Runs(repo)[0]; run.Status != "failed" || !strings.HasPrefix(run.Summary, "cancelled: task cancelled by a person") {
+	if run := e.runs()[0]; run.Status != "failed" || !strings.HasPrefix(run.Summary, "cancelled: task cancelled by a person") {
 		t.Fatalf("run = %+v", run)
 	}
 }
@@ -487,12 +554,12 @@ func TestOutputIsCappedAndNotForwarded(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("noisy"), ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeFailed {
 		t.Fatalf("result = %+v", res)
 	}
-	if run := e.fake.Runs(repo)[0]; len(run.Summary) > 1500 || !strings.Contains(run.Summary, "line 3999") {
+	if run := e.runs()[0]; len(run.Summary) > 1500 || !strings.Contains(run.Summary, "line 3999") {
 		t.Fatalf("summary length %d, want a bounded tail ending at the last line: %q", len(run.Summary), run.Summary)
 	}
 }
@@ -510,34 +577,36 @@ func TestSlotLimitsAreEnforced(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(t2, ex, Keep)); !errors.Is(err, ErrNoSlot) {
 		t.Fatalf("err = %v", err)
 	}
-	if got := e.fake.Task(repo, t2.ID); got.State != agwp.TaskOpen {
+	if got := e.w.GetTask(t2.ID); got.State != agwp.TaskOpen {
 		t.Fatalf("a refused start must not claim the task: %+v", got)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 	e.idle()
 	if _, err := e.mgr.Start(context.Background(), e.request(t2, ex, Keep)); err != nil {
 		t.Fatalf("slot not freed: %v", err)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 }
 
 func TestStartRefusesTasksTheServerWillNotRun(t *testing.T) {
 	e := newEnv(t)
 	ex := commandExec(t, "bot", `true`)
-	dep := e.fake.AddTask(repo, "dependency", nil)
-	blocked := e.fake.AddTask(repo, "blocked", nil, dep)
-	_, err := e.mgr.Start(context.Background(), e.request(e.fake.Task(repo, blocked), ex, Keep))
+	dep := e.w.Task("dependency", "", nil)
+	blocked := e.w.Task("blocked", "", nil, dep.ID)
+	_, err := e.mgr.Start(context.Background(), e.request(*blocked, ex, Keep))
 	if !errors.Is(err, ErrTaskUnavailable) {
 		t.Fatalf("err = %v", err)
 	}
-	if len(e.fake.Runs(repo)) != 0 || len(e.mgr.Active()) != 0 || e.mgr.FreeSlots(ex) != ex.Slots {
+	if len(e.runs()) != 0 || len(e.mgr.Active()) != 0 || e.mgr.FreeSlots(ex) != ex.Slots {
 		t.Fatal("a refused start left state behind")
 	}
 }
 
 func TestExclusiveLeaseConflictDefersAndLeavesNothingRunning(t *testing.T) {
 	e := newEnv(t)
-	e.fake.AddLease(repo, "user:alice", "src/**", true, time.Hour)
+	if _, err := e.w.Alice.AcquireLease(context.Background(), repo, "src/**", true, time.Hour, ""); err != nil {
+		t.Fatal(err)
+	}
 	ex := commandExec(t, "bot", `true`)
 	task := e.task("needs src", "src/auth/**")
 	req := e.request(task, ex, Keep)
@@ -546,15 +615,15 @@ func TestExclusiveLeaseConflictDefersAndLeavesNothingRunning(t *testing.T) {
 	if !errors.Is(err, ErrLeaseConflict) {
 		t.Fatalf("err = %v", err)
 	}
-	runs := e.fake.Runs(repo)
+	runs := e.runs()
 	if len(runs) != 1 || runs[0].Status != "failed" || !strings.HasPrefix(runs[0].Summary, "deferred:") {
 		t.Fatalf("the run started for the failed lease must be completed: %+v", runs)
 	}
 	if len(e.mgr.Active()) != 0 || e.mgr.FreeSlots(ex) != ex.Slots {
 		t.Fatal("state left behind")
 	}
-	for _, m := range e.fake.MintedTokens() {
-		if !m.Revoked {
+	for _, c := range e.w.Srv.Credentials("agent:bot") {
+		if c.RevokedAtMs == 0 {
 			t.Fatal("credential not revoked after the failed start")
 		}
 	}
@@ -572,14 +641,17 @@ func TestExclusiveLeasesExposeTheirFencingToken(t *testing.T) {
 	if len(info.Leases) != 1 || !info.Leases[0].Exclusive || info.Leases[0].Token == 0 {
 		t.Fatalf("leases = %+v", info.Leases)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 }
 
 func TestMismatchedAgentKeyIsRefused(t *testing.T) {
 	e := newEnv(t)
 	// someone registered "bot" with another key
-	other := e.fake.AddToken(fakeagwp.TokenSpec{Identity: "agent:bot"})
-	cl, _ := agwp.New(e.fake.URL, secret.New(other))
+	if err := e.w.Srv.Admin.GrantRole(context.Background(), "agent:bot", repo, "writer"); err != nil {
+		t.Fatal(err)
+	}
+	e.granted["bot"] = true
+	cl := e.w.Srv.Client(e.w.Mint("agent:bot", nil), "agent")
 	otherKey, _ := agentkey.Generate()
 	if _, err := cl.RegisterAgent(context.Background(), repo, "bot", otherKey.PublicHex()); err != nil {
 		t.Fatal(err)
@@ -588,7 +660,7 @@ func TestMismatchedAgentKeyIsRefused(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "different public key") {
 		t.Fatalf("err = %v", err)
 	}
-	if len(e.fake.Runs(repo)) != 0 {
+	if len(e.runs()) != 0 {
 		t.Fatal("no run may start for an agent whose key does not match")
 	}
 }
@@ -600,10 +672,13 @@ func TestAgentIsRegisteredOnceWithTheStoredKey(t *testing.T) {
 		if _, err := e.mgr.Start(context.Background(), e.request(e.task(fmt.Sprint("t", i)), ex, Keep)); err != nil {
 			t.Fatal(err)
 		}
-		e.wait(10 * time.Second)
+		e.wait(20 * time.Second)
 		e.idle()
 	}
-	agents := e.fake.Agents(repo)
+	agents, err := e.w.Alice.ListAgents(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(agents) != 1 || agents[0].Name != "newbie-bot" {
 		t.Fatalf("agents = %+v", agents)
 	}
@@ -615,8 +690,8 @@ func TestAgentIsRegisteredOnceWithTheStoredKey(t *testing.T) {
 	if st.Mode().Perm() != 0o600 {
 		t.Fatalf("key mode = %v", st.Mode().Perm())
 	}
-	if e.fake.CountRequests("agent.register") != 1 {
-		t.Fatalf("register calls = %d", e.fake.CountRequests("agent.register"))
+	if n := e.px.Count("POST", "/agents"); n != 1 {
+		t.Fatalf("register calls = %d", n)
 	}
 }
 
@@ -635,7 +710,7 @@ func TestShutdownWaitLetsShortSessionsFinishAndCancelStopsLongOnes(t *testing.T)
 	e.mgr.Shutdown(ctx, true)
 	var shortRes, longRes Result
 	for i := 0; i < 2; i++ {
-		r := e.wait(5 * time.Second)
+		r := e.wait(10 * time.Second)
 		if r.Executor == "short-bot" {
 			shortRes = r
 		} else {
@@ -651,7 +726,7 @@ func TestShutdownWaitLetsShortSessionsFinishAndCancelStopsLongOnes(t *testing.T)
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("late"), short, Keep)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("err = %v", err)
 	}
-	for _, r := range e.fake.Runs(repo) {
+	for _, r := range e.runs() {
 		if r.Status == "running" {
 			t.Fatalf("run %s left running after shutdown", r.RunID)
 		}
@@ -666,7 +741,7 @@ func TestShutdownCancelStopsEverythingImmediately(t *testing.T) {
 	}
 	start := time.Now()
 	e.mgr.Shutdown(context.Background(), false)
-	if r := e.wait(5 * time.Second); r.Outcome != OutcomeCancelled {
+	if r := e.wait(10 * time.Second); r.Outcome != OutcomeCancelled {
 		t.Fatalf("result = %+v", r)
 	}
 	if time.Since(start) > 5*time.Second {
@@ -681,31 +756,30 @@ func TestAnOperatorFinishesTheTaskOfAnAgentWithoutMintingAnything(t *testing.T) 
 	if _, err := e.mgr.Start(context.Background(), e.request(task, ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 	e.idle()
-	minted := len(e.fake.MintedTokens())
+	minted := len(e.w.Srv.Credentials(""))
 	// The service is an operator (the delegator role): it finishes the agent's task itself ...
 	if err := e.mgr.FinishTask(context.Background(), repo, task.ID, "done"); err != nil {
 		t.Fatal(err)
 	}
-	if got := e.fake.Task(repo, task.ID); got.State != agwp.TaskDone {
+	if got := e.w.GetTask(task.ID); got.State != agwp.TaskDone {
 		t.Fatalf("task = %+v", got)
 	}
 	// ... without a credential made for the occasion (it used to mint one for the owner and revoke it again).
-	if n := len(e.fake.MintedTokens()); n != minted {
+	if n := len(e.w.Srv.Credentials("")); n != minted {
 		t.Fatalf("finishing a task minted %d credential(s)", n-minted)
 	}
 	// A service that is no operator still may not.
-	plain := e.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:plain", Role: "writer"})
-	c, err := agwp.New(e.fake.URL, secret.New(plain), agwp.WithIdentityLabel("plain"))
-	if err != nil {
+	if err := e.w.Srv.Admin.GrantRole(context.Background(), "service:plain", repo, "writer"); err != nil {
 		t.Fatal(err)
 	}
+	c := e.w.Srv.Client(e.w.Mint("service:plain", nil), "plain")
 	other := e.task("someone else's")
 	if _, err := e.mgr.Start(context.Background(), e.request(other, ex, Keep)); err != nil {
 		t.Fatal(err)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 	e.idle()
 	if _, err := c.FinishTask(context.Background(), repo, other.ID, "done"); err == nil {
 		t.Fatal("a writer must not finish an agent's task")
@@ -714,39 +788,50 @@ func TestAnOperatorFinishesTheTaskOfAnAgentWithoutMintingAnything(t *testing.T) 
 
 func TestEachSessionGetsACredentialBoundToItsRunThatEndsWithIt(t *testing.T) {
 	e := newEnv(t)
-	ex := commandExec(t, "bound-bot", `sleep 0.3`)
+	dir := t.TempDir()
+	tokFile, release := filepath.Join(dir, "token"), filepath.Join(dir, "release")
+	ex := commandExec(t, "bound-bot", `echo "$AG_TOKEN" > "$OUT.tmp"; mv "$OUT.tmp" "$OUT"; while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
+		func(c *config.Executor) { c.Env = map[string]string{"OUT": tokFile, "RELEASE": release} })
 	info, err := e.mgr.Start(context.Background(), e.request(e.task("t", "x/**"), ex, Keep))
 	if err != nil {
 		t.Fatal(err)
 	}
-	minted := e.fake.MintedTokens()
+	token := e.waitFile(tokFile)
+	minted := e.w.Srv.Credentials("agent:bound-bot")
 	if len(minted) != 1 {
 		t.Fatalf("minted = %+v", minted)
 	}
-	if minted[0].RunID != info.RunID || len(minted[0].Repos) != 1 || minted[0].Repos[0] != repo {
+	if minted[0].Scope.RunID != info.RunID || len(minted[0].Scope.Repos) != 1 || minted[0].Scope.Repos[0] != repo {
 		t.Fatalf("the session credential is not bound to run %s in %s: %+v", info.RunID, repo, minted[0])
 	}
-	e.wait(10 * time.Second)
+	if _, err := e.whoami(token); err != nil {
+		t.Fatalf("the credential does not work while the run is running: %v", err)
+	}
+	if err := os.WriteFile(release, []byte("go"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.wait(20 * time.Second)
 	e.idle()
-	if !e.fake.Revoked(minted[0].Secret) {
+	if _, err := e.whoami(token); err == nil {
 		t.Fatal("the credential of a finished session must be dead")
 	}
 }
 
 func TestInfoNeverContainsCredentials(t *testing.T) {
 	e := newEnv(t)
-	ex := commandExec(t, "info-bot", `echo "token=$AG_TOKEN" >&2; sleep 0.5`)
+	tokFile := filepath.Join(t.TempDir(), "token")
+	ex := commandExec(t, "info-bot", `echo "$AG_TOKEN" > "$OUT"; echo "token=$AG_TOKEN" >&2; sleep 0.5`, func(c *config.Executor) { c.Env = map[string]string{"OUT": tokFile} })
 	info, err := e.mgr.Start(context.Background(), e.request(e.task("t", "x/**"), ex, Keep))
 	if err != nil {
 		t.Fatal(err)
 	}
+	token := e.waitFile(tokFile)
 	time.Sleep(200 * time.Millisecond)
 	snap := fmt.Sprintf("%+v %+v", info, e.mgr.Active())
-	token := e.fake.MintedTokens()[0].Secret
 	if strings.Contains(snap, token) || strings.Contains(snap, e.orchTok) {
 		t.Fatalf("snapshot leaks a credential: %s", snap)
 	}
-	e.wait(10 * time.Second)
+	e.wait(20 * time.Second)
 }
 
 func TestExecutorThatCannotLaunchFailsCleanly(t *testing.T) {
@@ -755,9 +840,26 @@ func TestExecutorThatCannotLaunchFailsCleanly(t *testing.T) {
 	if _, err := e.mgr.Start(context.Background(), e.request(e.task("t"), ex, Cancel)); err != nil {
 		t.Fatal(err)
 	}
-	res := e.wait(10 * time.Second)
+	res := e.wait(20 * time.Second)
 	e.idle()
 	if res.Outcome != OutcomeFailed || !strings.Contains(res.Summary, "cannot start") {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+// An agent credential without workspace.write cannot even start a change: the server's refusal reaches the run summary.
+func TestAgentReportsServerRefusals(t *testing.T) {
+	e := newEnv(t)
+	e.w.Seed(map[string]string{"a": "b"})
+	ex := agentExec(t, "weak-bot", map[string]string{"x": "y"}, func(c *config.Executor) {
+		c.Ops = []string{"repo.read", "task.read", "agent.run", "lease.read", "lease.write"}
+	})
+	if _, err := e.mgr.Start(context.Background(), e.request(e.task("t"), ex, Keep)); err != nil {
+		t.Fatal(err)
+	}
+	res := e.wait(20 * time.Second)
+	e.idle()
+	if res.Outcome != OutcomeFailed || !strings.Contains(res.Summary, "create workspace") || !strings.Contains(res.Summary, "permission_denied") {
 		t.Fatalf("result = %+v", res)
 	}
 }

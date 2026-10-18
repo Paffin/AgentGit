@@ -17,17 +17,21 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil).
+
+const repo = testutil.RepoName
 
 var skipDefaults = []string{"vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", "**/*.min.js", "**/testdata/**"}
 
 type harness struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
+	w       *testutil.World
+	px      *testutil.Proxy
+	cur     map[string]string // what main holds now
+	n       int
 	client  *agwp.Client
 	comp    *Component
 	store   *Store
@@ -38,15 +42,11 @@ type harness struct {
 
 func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: fakeagwp.New(), metrics: metrics.NewService(metrics.NewRegistry()), dir: t.TempDir()}
-	t.Cleanup(h.fake.Close)
-	h.fake.AddRepo(repo)
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer"})
+	h := &harness{t: t, w: testutil.NewWorld(t, testutil.WorldOptions{}), metrics: metrics.NewService(metrics.NewRegistry()), dir: t.TempDir(), cur: map[string]string{}}
+	// The proxy forwards to the real server, records what the index asks for and can fail one request.
+	h.px = testutil.NewProxy(t, h.w.Srv.URL)
+	h.client = h.w.Srv.ClientAt(h.px.URL, h.w.OrchT, "orchestrator")
 	var err error
-	h.client, err = agwp.New(h.fake.URL, secret.New(tok))
-	if err != nil {
-		t.Fatal(err)
-	}
 	h.cfg = config.Repo{Name: repo, Stream: "main", Index: config.Index{MaxBytes: 4096, MaxFiles: 100, Skip: skipDefaults}}
 	if mut != nil {
 		mut(&h.cfg)
@@ -67,11 +67,31 @@ func (h *harness) newComponent() *Component {
 	return c
 }
 
-func (h *harness) commit(parents []string, files map[string]string) string {
-	return h.fake.Commit(repo, parents, files, "user:alice", "c")
+// setTree lands a real change that makes main hold exactly files, and returns the new head.
+func (h *harness) setTree(files map[string]string) string {
+	h.t.Helper()
+	var ch []agwp.FileChange
+	for p, c := range files {
+		if old, ok := h.cur[p]; !ok || old != c {
+			ch = append(ch, testutil.Put(p, c))
+		}
+	}
+	for p := range h.cur {
+		if _, ok := files[p]; !ok {
+			ch = append(ch, testutil.Delete(p))
+		}
+	}
+	h.n++
+	p, _ := h.w.Propose(fmt.Sprintf("tree-%d", h.n), "set tree", ch...)
+	h.w.Land(p)
+	h.cur = map[string]string{}
+	for k, v := range files {
+		h.cur[k] = v
+	}
+	return h.w.Head("main")
 }
 
-func (h *harness) fileFetches() int { return h.fake.CountRequests("tree.file") }
+func (h *harness) fileFetches() int { return h.px.Count("GET", "/files/") }
 
 var baseFiles = map[string]string{
 	"cmd/main.go":          "package main\n\nfunc main() {\n\tserver.Serve()\n}\n",
@@ -88,7 +108,7 @@ var baseFiles = map[string]string{
 
 func TestInitialSyncIndexesSupportedFilesAndCountsWhatItSkips(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +130,7 @@ func TestInitialSyncIndexesSupportedFilesAndCountsWhatItSkips(t *testing.T) {
 
 func TestSymbolQueries(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +185,7 @@ func TestSymbolQueries(t *testing.T) {
 
 func TestFilesForASymbol(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -183,8 +203,7 @@ func TestFilesForASymbol(t *testing.T) {
 
 func TestIncrementalSyncFetchesOnlyChangedFiles(t *testing.T) {
 	h := newHarness(t, nil)
-	first := h.commit(nil, baseFiles)
-	h.fake.SetHead(repo, "main", first)
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +221,7 @@ func TestIncrementalSyncFetchesOnlyChangedFiles(t *testing.T) {
 	next["pkg/server/server.go"] += "\nfunc Added() {}\n"
 	delete(next, "src/lib.rs")
 	next["pkg/server/extra.go"] = "package server\n\nfunc Extra() {}\n"
-	h.fake.SetHead(repo, "main", h.commit([]string{first}, next))
+	h.setTree(next)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +242,7 @@ func TestIncrementalSyncFetchesOnlyChangedFiles(t *testing.T) {
 
 func TestIndexSurvivesARestartWithoutRefetching(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +276,7 @@ func TestIndexSurvivesARestartWithoutRefetching(t *testing.T) {
 
 func TestCorruptStoredEntriesAreRebuilt(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +295,12 @@ func TestCorruptStoredEntriesAreRebuilt(t *testing.T) {
 		t.Fatalf("files after losing one entry = %d", got)
 	}
 	// the head is considered unchanged, but a different head forces a diff by blob and restores the file
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	moved := map[string]string{}
+	for k, v := range baseFiles {
+		moved[k] = v
+	}
+	moved["README.md"] = "# readme, edited\n"
+	h.setTree(moved)
 	if err := again.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +311,7 @@ func TestCorruptStoredEntriesAreRebuilt(t *testing.T) {
 
 func TestLimitsBoundTheIndex(t *testing.T) {
 	h := newHarness(t, func(r *config.Repo) { r.Index.MaxFiles = 2 })
-	h.fake.SetHead(repo, "main", h.commit(nil, baseFiles))
+	h.setTree(baseFiles)
 	if err := h.comp.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -302,8 +326,8 @@ func TestLimitsBoundTheIndex(t *testing.T) {
 
 func TestFetchErrorsKeepTheOldHeadSoTheyAreRetried(t *testing.T) {
 	h := newHarness(t, nil)
-	h.fake.SetHead(repo, "main", h.commit(nil, map[string]string{"a.go": "package a\n\nfunc A() {}\n", "b.go": "package b\n\nfunc B() {}\n"}))
-	h.fake.FailNext("tree.file", 1, 500, "internal", false, 0)
+	h.setTree(map[string]string{"a.go": "package a\n\nfunc A() {}\n", "b.go": "package b\n\nfunc B() {}\n"})
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/files/", Times: 1, Status: 500, Code: "internal"})
 	if err := h.comp.Sync(context.Background()); err == nil {
 		t.Fatal("expected the fetch error")
 	}
@@ -321,13 +345,12 @@ func TestFetchErrorsKeepTheOldHeadSoTheyAreRetried(t *testing.T) {
 
 func TestAnIntegrationEventUpdatesTheIndexThroughTheLoop(t *testing.T) {
 	h := newHarness(t, nil)
-	first := h.commit(nil, map[string]string{"a.go": "package a\n\nfunc Old() {}\n"})
-	h.fake.SetHead(repo, "main", first)
+	h.setTree(map[string]string{"a.go": "package a\n\nfunc Old() {}\n"})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go h.comp.Run(ctx)
 	waitFor(t, "the first pass", func() bool { return len(h.comp.Index().Symbols(Query{Q: "Old", Exact: true})) == 1 })
-	h.fake.SetHead(repo, "main", h.commit([]string{first}, map[string]string{"a.go": "package a\n\nfunc Old() {}\nfunc BrandNew() {}\n"}))
+	h.setTree(map[string]string{"a.go": "package a\n\nfunc Old() {}\nfunc BrandNew() {}\n"})
 	h.comp.OnEvent(agwp.Event{Topic: "stream.integrate"})
 	waitFor(t, "the new symbol", func() bool { return len(h.comp.Index().Symbols(Query{Q: "BrandNew", Exact: true})) == 1 })
 }
@@ -355,30 +378,28 @@ func TestEmptyStreamsAreFine(t *testing.T) {
 
 // ---- semantic overlap ------------------------------------------------------------------
 
-func overlapHarness(t *testing.T) (*harness, string) {
-	h := newHarness(t, nil)
-	seed := h.commit(nil, map[string]string{
-		"pkg/api/api.go":   "package api\n\nfunc Fetch(id string) string {\n\treturn id\n}\n\nfunc Store(v string) {\n\t_ = v\n}\n",
-		"pkg/api/other.go": "package api\n\nfunc Unrelated() {}\n",
-		"cmd/tool/main.go": "package main\n\nfunc main() {\n\tapi.Fetch(\"x\")\n}\n",
-		"pkg/util/util.go": "package util\n\nfunc Fetch(a, b int) int { return a }\n",
-	})
-	h.fake.SetHead(repo, "main", seed)
-	return h, seed
+var overlapBase = map[string]string{
+	"pkg/api/api.go":   "package api\n\nfunc Fetch(id string) string {\n\treturn id\n}\n\nfunc Store(v string) {\n\t_ = v\n}\n",
+	"pkg/api/other.go": "package api\n\nfunc Unrelated() {}\n",
+	"cmd/tool/main.go": "package main\n\nfunc main() {\n\tapi.Fetch(\"x\")\n}\n",
+	"pkg/util/util.go": "package util\n\nfunc Fetch(a, b int) int { return a }\n",
 }
 
-func (h *harness) propose(seed, title string, files map[string]string) string {
-	snap := map[string]string{
-		"pkg/api/api.go":   "package api\n\nfunc Fetch(id string) string {\n\treturn id\n}\n\nfunc Store(v string) {\n\t_ = v\n}\n",
-		"pkg/api/other.go": "package api\n\nfunc Unrelated() {}\n",
-		"cmd/tool/main.go": "package main\n\nfunc main() {\n\tapi.Fetch(\"x\")\n}\n",
-		"pkg/util/util.go": "package util\n\nfunc Fetch(a, b int) int { return a }\n",
-	}
+func overlapHarness(t *testing.T) (*harness, string) {
+	h := newHarness(t, nil)
+	return h, h.setTree(overlapBase)
+}
+
+// propose opens a real proposal from the seed that changes the given files.
+func (h *harness) propose(_, title string, files map[string]string) string {
+	h.t.Helper()
+	h.n++
+	var ch []agwp.FileChange
 	for k, v := range files {
-		snap[k] = v
+		ch = append(ch, testutil.Put(k, v))
 	}
-	head := h.commit([]string{seed}, snap)
-	return h.fake.AddProposal(repo, "agent:bot#r", "main", head, title, "")
+	p, _ := h.w.Propose(fmt.Sprintf("ws-%d", h.n), title, ch...)
+	return p.ID
 }
 
 func TestProposalsChangingTheSameFunctionOverlapEvenWhenTheTextMerges(t *testing.T) {
@@ -512,11 +533,13 @@ func TestAnalysesFollowProposalHeadsAndDisappearWithTheProposal(t *testing.T) {
 	if len(h.comp.Changes()) != 1 {
 		t.Fatal("not analysed")
 	}
-	calls := h.fake.CountRequests("tree.diff")
-	if err := h.comp.Reconcile(context.Background()); err != nil || h.fake.CountRequests("tree.diff") != calls {
+	calls := h.px.Count("POST", "/diff")
+	if err := h.comp.Reconcile(context.Background()); err != nil || h.px.Count("POST", "/diff") != calls {
 		t.Fatal("an unchanged proposal head must not be analysed again")
 	}
-	h.fake.CloseProposalFixture(repo, id)
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, id); err != nil {
+		t.Fatal(err)
+	}
 	if err := h.comp.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}

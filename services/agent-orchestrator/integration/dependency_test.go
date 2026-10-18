@@ -4,25 +4,37 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
 const requireProvenanceAndApproval = `{"require_provenance_for_agents": true, "approvals": {"min": 0, "min_for_agents": 1}}`
 
-const scriptedDocsBot = `  - name: docs-bot
-    type: scripted
+// testAgentExecutor is the YAML of a command executor that runs the test-only
+// agent program (internal/testutil/testagent): it writes the files the task
+// description declares, signs provenance and opens a proposal.
+func testAgentExecutor(t *testing.T, name string) string {
+	t.Helper()
+	return fmt.Sprintf(`  - name: %s
+    type: command
+    command: [%q]
+    pass_env: [PATH]
     heartbeat: 1s
-    scripted:
-      task_files: true
-      model: scripted-demo
-      rationale: demonstration run
-`
+    timeout: 2m
+    grace: 2s
+    env:
+      TESTAGENT_TASK_FILES: "1"
+      TESTAGENT_MODEL: test-agent
+      TESTAGENT_RATIONALE: integration test run
+`, name, testutil.BuildTestAgent(t))
+}
 
-// Dependency-ordered tasks are run by the scripted executor through a virtual
+// Dependency-ordered tasks are run by the test agent through a virtual
 // workspace; its provenance is signed with the agent's own key and verified by
 // the real server; the proposal is subject to the stream's policy, which the
 // orchestrator cannot bypass: only a human approval and a human integrator
@@ -33,26 +45,26 @@ func TestDependencyOrderedTasksLandThroughPolicy(t *testing.T) {
 		Agents: []string{"docs-bot"},
 	})
 	ctx := context.Background()
-	w.seed(map[string]string{"README.md": "# web\n"})
-	a := w.task("Write A", script("Add a.md", map[string]string{"docs/a.md": "A\n"}), []string{"docs/**"})
-	b := w.task("Write B", script("Add b.md", map[string]string{"docs/b.md": "B\n"}), []string{"docs/**"}, a.ID)
+	w.Seed(map[string]string{"README.md": "# web\n"})
+	a := w.Task("Write A", script("Add a.md", map[string]string{"docs/a.md": "A\n"}), []string{"docs/**"})
+	b := w.Task("Write B", script("Add b.md", map[string]string{"docs/b.md": "B\n"}), []string{"docs/**"}, a.ID)
 
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      default_executor: docs-bot\n",
-		Executors: scriptedDocsBot,
+		Executors: testAgentExecutor(t, "docs-bot"),
 	})
 	o.waitReady()
 
 	// A runs and proposes; B must not have started.
-	eventually(t, "a proposal for task A", 30*time.Second, func() bool { return len(w.proposalsOfTask(a.ID)) == 1 })
-	pa := w.proposalsOfTask(a.ID)[0]
-	if got := w.getTask(a.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:docs-bot" {
+	eventually(t, "a proposal for task A", 30*time.Second, func() bool { return len(w.ProposalsOfTask(a.ID)) == 1 })
+	pa := w.ProposalsOfTask(a.ID)[0]
+	if got := w.GetTask(a.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:docs-bot" {
 		t.Fatalf("task A = %+v", got)
 	}
-	if got := w.getTask(b.ID); got.State != agwp.TaskOpen || got.Ready {
+	if got := w.GetTask(b.ID); got.State != agwp.TaskOpen || got.Ready {
 		t.Fatalf("task B must wait for A: %+v", got)
 	}
-	runs, err := w.alice.ListRuns(ctx, w.repo, "", false, 100)
+	runs, err := w.Alice.ListRuns(ctx, w.Repo, "", false, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,45 +78,45 @@ func TestDependencyOrderedTasksLandThroughPolicy(t *testing.T) {
 	if !strings.HasPrefix(pa.Author, "agent:docs-bot#") {
 		t.Fatalf("proposal author = %q", pa.Author)
 	}
-	prov, err := w.alice.ListProvenance(ctx, w.repo, pa.Head)
+	prov, err := w.Alice.ListProvenance(ctx, w.Repo, pa.Head)
 	if err != nil || len(prov) != 1 {
 		t.Fatalf("provenance = %+v, %v", prov, err)
 	}
-	if !prov[0].Verified || prov[0].Record.TaskID != a.ID || prov[0].Record.Agent != pa.Author || prov[0].Record.Model != "scripted-demo" {
+	if !prov[0].Verified || prov[0].Record.TaskID != a.ID || prov[0].Record.Agent != pa.Author || prov[0].Record.Model != "test-agent" {
 		t.Fatalf("provenance entry = %+v", prov[0])
 	}
-	agents, err := w.alice.ListAgents(ctx, w.repo)
+	agents, err := w.Alice.ListAgents(ctx, w.Repo)
 	if err != nil || len(agents) != 1 || agents[0].Name != "docs-bot" || agents[0].PublicKey != prov[0].PublicKey {
 		t.Fatalf("registered agents = %+v, %v (provenance key %s)", agents, err, prov[0].PublicKey)
 	}
 
 	// Policy decides, not the orchestrator: without a human approval the integrator is blocked.
-	res, err := w.carol.Integrate(ctx, w.repo, pa.ID, nil)
+	res, err := w.Carol.Integrate(ctx, w.Repo, pa.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Outcome.Status != "blocked" || !hasBlocker(res.Outcome.Blockers, agwp.BlockerInsufficientApproval) {
 		t.Fatalf("an unapproved agent proposal must be blocked: %+v", res.Outcome)
 	}
-	if got := w.getTask(b.ID); got.State != agwp.TaskOpen {
+	if got := w.GetTask(b.ID); got.State != agwp.TaskOpen {
 		t.Fatalf("B started although A has not landed: %+v", got)
 	}
-	if _, err := w.bob.ReviewProposal(ctx, w.repo, pa.ID, agwp.DecisionApprove, "looks good"); err != nil {
+	if _, err := w.Bob.ReviewProposal(ctx, w.Repo, pa.ID, agwp.DecisionApprove, "looks good"); err != nil {
 		t.Fatal(err)
 	}
-	w.land(&pa)
-	eventually(t, "task A to be finished by its owner", 30*time.Second, func() bool { return w.getTask(a.ID).State == agwp.TaskDone })
+	w.Land(&pa)
+	eventually(t, "task A to be finished by its owner", 30*time.Second, func() bool { return w.GetTask(a.ID).State == agwp.TaskDone })
 
 	// Now B becomes ready, runs, and goes through the same gates.
-	eventually(t, "a proposal for task B", 30*time.Second, func() bool { return len(w.proposalsOfTask(b.ID)) == 1 })
-	pb := w.proposalsOfTask(b.ID)[0]
-	if _, err := w.bob.ReviewProposal(ctx, w.repo, pb.ID, agwp.DecisionApprove, "ok"); err != nil {
+	eventually(t, "a proposal for task B", 30*time.Second, func() bool { return len(w.ProposalsOfTask(b.ID)) == 1 })
+	pb := w.ProposalsOfTask(b.ID)[0]
+	if _, err := w.Bob.ReviewProposal(ctx, w.Repo, pb.ID, agwp.DecisionApprove, "ok"); err != nil {
 		t.Fatal(err)
 	}
-	w.land(&pb)
-	eventually(t, "task B to be finished", 30*time.Second, func() bool { return w.getTask(b.ID).State == agwp.TaskDone })
+	w.Land(&pb)
+	eventually(t, "task B to be finished", 30*time.Second, func() bool { return w.GetTask(b.ID).State == agwp.TaskDone })
 
-	runs, _ = w.alice.ListRuns(ctx, w.repo, "", false, 100)
+	runs, _ = w.Alice.ListRuns(ctx, w.Repo, "", false, 100)
 	var aRun, bRun *agwp.Run
 	for i := range runs {
 		switch runs[i].TaskID {
@@ -117,13 +129,13 @@ func TestDependencyOrderedTasksLandThroughPolicy(t *testing.T) {
 	if aRun == nil || bRun == nil || aRun.Status != "completed" || bRun.Status != "completed" {
 		t.Fatalf("runs = %+v", runs)
 	}
-	if bRun.StartedAtMs < w.getTask(a.ID).UpdatedAtMs {
-		t.Fatalf("B started (%d) before A was finished (%d)", bRun.StartedAtMs, w.getTask(a.ID).UpdatedAtMs)
+	if bRun.StartedAtMs < w.GetTask(a.ID).UpdatedAtMs {
+		t.Fatalf("B started (%d) before A was finished (%d)", bRun.StartedAtMs, w.GetTask(a.ID).UpdatedAtMs)
 	}
 
 	// The landed tree has both files.
 	for path, want := range map[string]string{"docs/a.md": "A\n", "docs/b.md": "B\n", "README.md": "# web\n"} {
-		if got, ok := w.file("main", path); !ok || got != want {
+		if got, ok := w.File("main", path); !ok || got != want {
 			t.Errorf("main:%s = %q (%v), want %q", path, got, ok, want)
 		}
 	}
@@ -135,7 +147,7 @@ func TestDependencyOrderedTasksLandThroughPolicy(t *testing.T) {
 	}
 
 	// Everything that moved the stream was a human: the audit trail names no service.
-	events, _, err := w.alice.ReplayEvents(ctx, w.repo, 0, 1000, []string{"stream"})
+	events, _, err := w.Alice.ReplayEvents(ctx, w.Repo, 0, 1000, []string{"stream"})
 	if err != nil {
 		t.Fatal(err)
 	}

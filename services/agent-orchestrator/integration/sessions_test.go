@@ -45,19 +45,19 @@ func fileExists(path string) bool {
 }
 
 func (w *world) activeLeases() []agwp.Lease {
-	w.t.Helper()
-	l, err := w.alice.ListLeases(context.Background(), w.repo, true)
+	w.T.Helper()
+	l, err := w.Alice.ListLeases(context.Background(), w.Repo, true)
 	if err != nil {
-		w.t.Fatalf("list leases: %v", err)
+		w.T.Fatalf("list leases: %v", err)
 	}
 	return l
 }
 
 func (w *world) runOfTask(id string) *agwp.Run {
-	w.t.Helper()
-	runs, err := w.alice.ListRuns(context.Background(), w.repo, "", false, 200)
+	w.T.Helper()
+	runs, err := w.Alice.ListRuns(context.Background(), w.Repo, "", false, 200)
 	if err != nil {
-		w.t.Fatalf("list runs: %v", err)
+		w.T.Fatalf("list runs: %v", err)
 	}
 	for i := range runs {
 		if runs[i].TaskID == id {
@@ -68,10 +68,10 @@ func (w *world) runOfTask(id string) *agwp.Run {
 }
 
 func (w *world) runsOfTask(id string) []agwp.Run {
-	w.t.Helper()
-	runs, err := w.alice.ListRuns(context.Background(), w.repo, "", false, 200)
+	w.T.Helper()
+	runs, err := w.Alice.ListRuns(context.Background(), w.Repo, "", false, 200)
 	if err != nil {
-		w.t.Fatalf("list runs: %v", err)
+		w.T.Fatalf("list runs: %v", err)
 	}
 	var out []agwp.Run
 	for _, r := range runs {
@@ -103,13 +103,13 @@ func TestOverlappingTaskIsDeferredWhileTheLeaseIsHeld(t *testing.T) {
 	dir := t.TempDir()
 	record, release := filepath.Join(dir, "record"), filepath.Join(dir, "release")
 	sh := writeScript(t, "holder.sh", fmt.Sprintf("echo \"$AG_TASK $AG_RUN\" >> %s\nwhile [ ! -f %s ]; do sleep 0.1; done\n", record, release))
-	w.seed(map[string]string{"README.md": "x\n"})
+	w.Seed(map[string]string{"README.md": "x\n"})
 
-	t1 := w.task("Rework auth", "", []string{"src/auth/**"})
+	t1 := w.Task("Rework auth", "", []string{"src/auth/**"})
 	time.Sleep(5 * time.Millisecond)
-	t2 := w.task("Touch the login handler", "", []string{"src/auth/login.go"})
+	t2 := w.Task("Touch the login handler", "", []string{"src/auth/login.go"})
 	time.Sleep(5 * time.Millisecond)
-	t3 := w.task("Update docs", "", []string{"docs/**"})
+	t3 := w.Task("Update docs", "", []string{"docs/**"})
 
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      slots: 4\n      default_executor: holder\n",
@@ -154,7 +154,7 @@ func TestOverlappingTaskIsDeferredWhileTheLeaseIsHeld(t *testing.T) {
 	if strings.Contains(started(), t2.ID) {
 		t.Fatal("task 2 started while the lease on the overlapping scope was held")
 	}
-	if got := w.getTask(t2.ID); got.State != agwp.TaskOpen {
+	if got := w.GetTask(t2.ID); got.State != agwp.TaskOpen {
 		t.Fatalf("task 2 = %+v", got)
 	}
 
@@ -165,7 +165,7 @@ func TestOverlappingTaskIsDeferredWhileTheLeaseIsHeld(t *testing.T) {
 	eventually(t, "task 2 to start after the lease was released", 30*time.Second, func() bool { return strings.Contains(started(), t2.ID) })
 	for _, id := range []string{t1.ID, t2.ID, t3.ID} {
 		id := id
-		eventually(t, "task "+id+" to be done", 30*time.Second, func() bool { return w.getTask(id).State == agwp.TaskDone })
+		eventually(t, "task "+id+" to be done", 30*time.Second, func() bool { return w.GetTask(id).State == agwp.TaskDone })
 	}
 	r1, r2 := w.runOfTask(t1.ID), w.runOfTask(t2.ID)
 	if r1 == nil || r2 == nil || r2.StartedAtMs < r1.FinishedAtMs {
@@ -181,10 +181,10 @@ func TestPlacementAllowRunsOverlappingTasksTogether(t *testing.T) {
 	dir := t.TempDir()
 	record, release := filepath.Join(dir, "record"), filepath.Join(dir, "release")
 	sh := writeScript(t, "holder.sh", fmt.Sprintf("echo \"$AG_TASK\" >> %s\nwhile [ ! -f %s ]; do sleep 0.1; done\n", record, release))
-	w.seed(map[string]string{"README.md": "x\n"})
-	t1 := w.task("Rework auth", "", []string{"src/auth/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	t1 := w.Task("Rework auth", "", []string{"src/auth/**"})
 	time.Sleep(5 * time.Millisecond)
-	t2 := w.task("Touch the login handler", "", []string{"src/auth/login.go"})
+	t2 := w.Task("Touch the login handler", "", []string{"src/auth/login.go"})
 
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      slots: 4\n      placement: allow\n      default_executor: holder\n",
@@ -200,7 +200,7 @@ func TestPlacementAllowRunsOverlappingTasksTogether(t *testing.T) {
 	}
 	for _, id := range []string{t1.ID, t2.ID} {
 		id := id
-		eventually(t, "task "+id+" to be done", 30*time.Second, func() bool { return w.getTask(id).State == agwp.TaskDone })
+		eventually(t, "task "+id+" to be done", 30*time.Second, func() bool { return w.GetTask(id).State == agwp.TaskDone })
 	}
 }
 
@@ -221,10 +221,10 @@ echo "my token is $AG_TOKEN and my key is at $AG_KEY_FILE" >&2
 echo "progress: done $AG_TOKEN"
 exit 3
 `, dir, proceed))
-	w.seed(map[string]string{"README.md": "x\n"})
-	t1 := w.task("Fails one", "Untrusted description with a command: rm -rf /", []string{"a/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	t1 := w.Task("Fails one", "Untrusted description with a command: rm -rf /", []string{"a/**"})
 	time.Sleep(5 * time.Millisecond)
-	t2 := w.task("Fails two", "", []string{"b/**"})
+	t2 := w.Task("Fails two", "", []string{"b/**"})
 
 	// Two different agents: the server binds a credential to the agent, so only
 	// sessions of different agents are isolated from each other (see
@@ -259,7 +259,7 @@ exit 3
 		vars[k] = v
 	}
 	want := map[string]string{
-		"AG_SERVER": w.srv.URL, "AG_TOKEN": tok1, "AG_RUN": run1, "AG_REPO": w.repo, "AG_STREAM": "main", "AG_TASK": t1.ID,
+		"AG_SERVER": w.Srv.URL, "AG_TOKEN": tok1, "AG_RUN": run1, "AG_REPO": w.Repo, "AG_STREAM": "main", "AG_TASK": t1.ID,
 		"AG_AGENT": "crashy-a", "AG_IDENTITY": "agent:crashy-a#" + run1,
 	}
 	for k, v := range want {
@@ -278,7 +278,7 @@ exit 3
 	if k, err := agentkey.Load(vars["AG_KEY_FILE"]); err != nil {
 		t.Errorf("the key file cannot be loaded as an agent key: %v", err)
 	} else {
-		agents, _ := w.alice.ListAgents(context.Background(), w.repo)
+		agents, _ := w.Alice.ListAgents(context.Background(), w.Repo)
 		found := false
 		for _, a := range agents {
 			if a.Name == "crashy-a" && a.PublicKey == k.PublicHex() {
@@ -313,7 +313,7 @@ exit 3
 	}
 
 	// The credential is a narrow agent credential for exactly this run's repository.
-	c1, c2 := w.srv.client(tok1, "agent-1"), w.srv.client(tok2, "agent-2")
+	c1, c2 := w.Srv.Client(tok1, "agent-1"), w.Srv.Client(tok2, "agent-2")
 	p1, err := c1.Whoami(context.Background())
 	if err != nil {
 		t.Fatalf("the agent's credential does not work during its run: %v", err)
@@ -321,7 +321,7 @@ exit 3
 	if p1.Kind != "agent" || p1.Identity != "agent:crashy-a" {
 		t.Errorf("principal = %+v", p1)
 	}
-	if len(p1.Scope.Repos) != 1 || p1.Scope.Repos[0] != w.repo {
+	if len(p1.Scope.Repos) != 1 || p1.Scope.Repos[0] != w.Repo {
 		t.Errorf("scope repos = %v", p1.Scope.Repos)
 	}
 	if len(p1.Scope.Operations) == 0 {
@@ -345,24 +345,24 @@ exit 3
 		body         any
 		headers      []string
 	}{
-		"borrowing another run":        {"POST", "/v1/repos/" + w.repo + "/workspaces", map[string]any{"name": "stolen", "stream": "main"}, []string{"ag-run", run2}},
-		"heartbeat for another run":    {"POST", "/v1/repos/" + w.repo + "/runs/" + run2 + "/heartbeat", map[string]any{}, nil},
-		"completing another run":       {"POST", "/v1/repos/" + w.repo + "/runs/" + run2 + "/complete", map[string]any{"status": "completed", "summary": "x"}, nil},
+		"borrowing another run":        {"POST", "/v1/repos/" + w.Repo + "/workspaces", map[string]any{"name": "stolen", "stream": "main"}, []string{"ag-run", run2}},
+		"heartbeat for another run":    {"POST", "/v1/repos/" + w.Repo + "/runs/" + run2 + "/heartbeat", map[string]any{}, nil},
+		"completing another run":       {"POST", "/v1/repos/" + w.Repo + "/runs/" + run2 + "/complete", map[string]any{"status": "completed", "summary": "x"}, nil},
 		"minting credentials":          {"POST", "/v1/credentials", map[string]any{"subject": "agent:crashy-a", "ttl_secs": 600}, nil},
-		"changing the policy":          {"PUT", "/v1/repos/" + w.repo + "/policy", map[string]any{"stream": "main", "document": "{}"}, nil},
-		"granting itself a role":       {"POST", "/v1/roles", map[string]any{"subject": "agent:crashy-a", "repo": w.repo, "role": "admin"}, nil},
+		"changing the policy":          {"PUT", "/v1/repos/" + w.Repo + "/policy", map[string]any{"stream": "main", "document": "{}"}, nil},
+		"granting itself a role":       {"POST", "/v1/roles", map[string]any{"subject": "agent:crashy-a", "repo": w.Repo, "role": "admin"}, nil},
 		"creating a repository":        {"POST", "/v1/repos", map[string]any{"name": "evil/repo"}, nil},
-		"finishing another agent task": {"POST", "/v1/repos/" + w.repo + "/tasks/" + t2.ID + "/finish", map[string]any{"state": "done"}, nil},
+		"finishing another agent task": {"POST", "/v1/repos/" + w.Repo + "/tasks/" + t2.ID + "/finish", map[string]any{"state": "done"}, nil},
 	} {
-		code, body := w.srv.call(tok1, req.method, req.path, req.body, req.headers...)
+		code, body := w.Srv.Call(tok1, req.method, req.path, req.body, req.headers...)
 		if code < 400 {
 			t.Errorf("%s: the server answered %d %s", name, code, body)
 		}
 	}
-	if got := w.getTask(t2.ID); got.State != agwp.TaskInProgress {
+	if got := w.GetTask(t2.ID); got.State != agwp.TaskInProgress {
 		t.Errorf("session 1 changed task 2: %+v", got)
 	}
-	if code, _ := w.srv.call(tok1, "GET", "/v1/repos/"+w.repo+"/tasks", nil); code != 200 {
+	if code, _ := w.Srv.Call(tok1, "GET", "/v1/repos/"+w.Repo+"/tasks", nil); code != 200 {
 		t.Errorf("the credential should still work for what it is for: %d", code)
 	}
 
@@ -378,7 +378,7 @@ exit 3
 	}
 	for _, id := range []string{t1.ID, t2.ID} {
 		id := id
-		eventually(t, "task "+id+" to be given up", 30*time.Second, func() bool { return w.getTask(id).State == agwp.TaskCancelled })
+		eventually(t, "task "+id+" to be given up", 30*time.Second, func() bool { return w.GetTask(id).State == agwp.TaskCancelled })
 	}
 	for _, c := range []struct {
 		task, run, tok string
@@ -434,10 +434,10 @@ func TestConcurrentSessionsOfOneAgentCannotActForEachOther(t *testing.T) {
 printf '%%s' "$AG_RUN" > %[1]s/run-$AG_TASK.txt
 while [ ! -f %[2]s ]; do sleep 0.1; done
 `, dir, release))
-	w.seed(map[string]string{"README.md": "x\n"})
-	t1 := w.task("Twin one", "", []string{"a/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	t1 := w.Task("Twin one", "", []string{"a/**"})
 	time.Sleep(5 * time.Millisecond)
-	t2 := w.task("Twin two", "", []string{"b/**"})
+	t2 := w.Task("Twin two", "", []string{"b/**"})
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      slots: 2\n      default_executor: twin\n",
 		Executors: commandExecutor("twin", sh, "    slots: 2\n"),
@@ -452,14 +452,14 @@ while [ ! -f %[2]s ]; do sleep 0.1; done
 		t.Fatalf("the two sessions share a run or a credential: %s %s", run1, run2)
 	}
 	// Each credential is bound to its own run, in this repository, and says so.
-	me := w.srv.client(tok1, "twin-1")
+	me := w.Srv.Client(tok1, "twin-1")
 	who, err := me.Whoami(context.Background())
-	if err != nil || who.Scope.RunID != run1 || len(who.Scope.Repos) != 1 || who.Scope.Repos[0] != w.repo {
+	if err != nil || who.Scope.RunID != run1 || len(who.Scope.Repos) != 1 || who.Scope.Repos[0] != w.Repo {
 		t.Fatalf("whoami = %+v, %v (want a credential bound to run %s)", who, err, run1)
 	}
 	// Its own run: fine. The other session's run: refused by the server, by name.
 	beat := func(token, run string, headers ...string) (int, string) {
-		code, body := w.srv.call(token, "POST", "/v1/repos/"+w.repo+"/runs/"+run+"/heartbeat", map[string]any{}, headers...)
+		code, body := w.Srv.Call(token, "POST", "/v1/repos/"+w.Repo+"/runs/"+run+"/heartbeat", map[string]any{}, headers...)
 		return code, string(body)
 	}
 	if code, body := beat(tok1, run1); code != 200 {
@@ -471,14 +471,14 @@ while [ ! -f %[2]s ]; do sleep 0.1; done
 	if code, body := beat(tok2, run1); code != 403 {
 		t.Fatalf("session 2 acted on session 1's run (%d %s)", code, body)
 	}
-	if code, _ := w.srv.call(tok1, "POST", "/v1/repos/"+w.repo+"/runs/"+run1+"/complete", map[string]any{"status": "completed"}, "ag-run", run2); code != 403 {
+	if code, _ := w.Srv.Call(tok1, "POST", "/v1/repos/"+w.Repo+"/runs/"+run1+"/complete", map[string]any{"status": "completed"}, "ag-run", run2); code != 403 {
 		t.Fatalf("session 1 completed its run while acting as session 2's (%d)", code)
 	}
 	// It cannot make itself a wider credential, nor one for the other run.
-	if code, _ := w.srv.call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.repo}, "run_id": run2, "operations": []string{"agent.run"}}}); code != 403 {
+	if code, _ := w.Srv.Call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.Repo}, "run_id": run2, "operations": []string{"agent.run"}}}); code != 403 {
 		t.Fatalf("session 1 minted a credential for session 2's run (%d)", code)
 	}
-	if code, _ := w.srv.call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.repo}, "operations": []string{"agent.run"}}}); code != 403 {
+	if code, _ := w.Srv.Call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.Repo}, "operations": []string{"agent.run"}}}); code != 403 {
 		t.Fatalf("session 1 minted a credential that is not bound to its run (%d)", code)
 	}
 	if err := os.WriteFile(release, nil, 0o600); err != nil {
@@ -500,7 +500,7 @@ func TestTheOrchestratorIsADelegatorNotAnAdministrator(t *testing.T) {
 	o.waitReady()
 	tok := o.tokens["AG_ORCH_TOKEN"]
 	ctx := context.Background()
-	orch := w.srv.client(tok, "orchestrator")
+	orch := w.Srv.Client(tok, "orchestrator")
 	who, err := orch.Whoami(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -512,32 +512,32 @@ func TestTheOrchestratorIsADelegatorNotAnAdministrator(t *testing.T) {
 	}
 	// It cannot mint for people, services or administrators, nor wider than it holds, nor grant roles.
 	for _, subject := range []string{"user:alice", "service:reviewer", "user:bootstrap-admin"} {
-		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: subject, TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{"repo.read"}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: subject, TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.Repo}, Operations: []string{"repo.read"}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
 			t.Errorf("minting for %s: %v", subject, err)
 		}
 	}
 	for _, op := range []string{"integrate.run", "proposal.review", "credentials.mint", "roles.manage", "agent.operate"} {
-		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{op}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.Repo}, Operations: []string{op}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
 			t.Errorf("minting an agent credential with %s: %v", op, err)
 		}
 	}
-	if err := orch.GrantRole(ctx, "agent:bot", w.repo, "admin"); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+	if err := orch.GrantRole(ctx, "agent:bot", w.Repo, "admin"); !agwp.IsCode(err, agwp.CodePermissionDenied) {
 		t.Errorf("granting a role: %v", err)
 	}
 	// What it does need works: an agent credential, and the operator calls.
-	m, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{"repo.read", "task.read"}}})
+	m, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.Repo}, Operations: []string{"repo.read", "task.read"}}})
 	if err != nil {
 		t.Fatalf("an agent credential: %v", err)
 	}
 	if err := orch.RevokeCredential(ctx, m.Credential.ID); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := orch.ReapRuns(ctx, w.repo, time.Hour, true)
+	rep, err := orch.ReapRuns(ctx, w.Repo, time.Hour, true)
 	if err != nil || !rep.DryRun {
 		t.Fatalf("reap: %+v, %v", rep, err)
 	}
 	// And a plain writer is not an operator.
-	if _, err := w.alice.ReapRuns(ctx, w.repo, time.Hour, true); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+	if _, err := w.Alice.ReapRuns(ctx, w.Repo, time.Hour, true); !agwp.IsCode(err, agwp.CodePermissionDenied) {
 		t.Errorf("a writer reaping runs: %v", err)
 	}
 }
@@ -553,8 +553,8 @@ touch %[2]s
 echo $$ > %[1]s.tmp && mv %[1]s.tmp %[1]s
 exec sleep 600
 `, pidfile, marker))
-	w.seed(map[string]string{"README.md": "x\n"})
-	tk := w.task("Fragile work", "", []string{"lib/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	tk := w.Task("Fragile work", "", []string{"lib/**"})
 
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      default_executor: fragile\n      attempts: 2\n      backoff: 1s\n",
@@ -604,7 +604,7 @@ exec sleep 600
 	}
 
 	// The retry (a second run) succeeds and the task is done.
-	eventually(t, "the retry to finish the task", 45*time.Second, func() bool { return w.getTask(tk.ID).State == agwp.TaskDone })
+	eventually(t, "the retry to finish the task", 45*time.Second, func() bool { return w.GetTask(tk.ID).State == agwp.TaskDone })
 	runs := w.runsOfTask(tk.ID)
 	if len(runs) != 2 {
 		t.Fatalf("runs = %+v", runs)
@@ -619,7 +619,7 @@ exec sleep 600
 func TestOrphanedRunIsReapedAndItsLeaseReleased(t *testing.T) {
 	w := newWorld(t, worldOptions{Agents: []string{"ghost"}})
 	ctx := context.Background()
-	w.seed(map[string]string{"README.md": "x\n"})
+	w.Seed(map[string]string{"README.md": "x\n"})
 	idle := writeScript(t, "idle.sh", "exit 0\n")
 	clk := &skewClock{}
 	o := w.startOrchestrator(orchConfig{
@@ -634,20 +634,20 @@ func TestOrphanedRunIsReapedAndItsLeaseReleased(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := w.srv.admin.MintCredential(ctx, agwp.MintRequest{Subject: "agent:ghost", TTLSecs: 600, Scope: agwp.CredentialScope{Repos: []string{w.repo}}})
+	m, err := w.Srv.Admin.MintCredential(ctx, agwp.MintRequest{Subject: "agent:ghost", TTLSecs: 600, Scope: agwp.CredentialScope{Repos: []string{w.Repo}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ghost := w.srv.client(m.Token.Reveal(), "ghost")
-	if _, err := ghost.RegisterAgent(ctx, w.repo, "ghost", key.PublicHex()); err != nil {
+	ghost := w.Srv.Client(m.Token.Reveal(), "ghost")
+	if _, err := ghost.RegisterAgent(ctx, w.Repo, "ghost", key.PublicHex()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	run, err := ghost.StartRun(ctx, w.repo, "ghost", "")
+	run, err := ghost.StartRun(ctx, w.Repo, "ghost", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	asRun := ghost.WithRun(run.RunID)
-	if _, err := asRun.AcquireLease(ctx, w.repo, "lost/**", false, 30*time.Minute, ""); err != nil {
+	if _, err := asRun.AcquireLease(ctx, w.Repo, "lost/**", false, 30*time.Minute, ""); err != nil {
 		t.Fatalf("lease: %v", err)
 	}
 	if len(w.activeLeases()) != 1 {
@@ -676,10 +676,10 @@ func TestOrphanedRunIsReapedAndItsLeaseReleased(t *testing.T) {
 }
 
 func (w *world) runOfTaskless(runID string) *agwp.Run {
-	w.t.Helper()
-	runs, err := w.alice.ListRuns(context.Background(), w.repo, "", false, 200)
+	w.T.Helper()
+	runs, err := w.Alice.ListRuns(context.Background(), w.Repo, "", false, 200)
 	if err != nil {
-		w.t.Fatal(err)
+		w.T.Fatal(err)
 	}
 	for i := range runs {
 		if runs[i].RunID == runID {

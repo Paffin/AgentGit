@@ -76,12 +76,7 @@ func NewManager(o Options) (*Manager, error) {
 	return &Manager{o: o, root: root, stop: stop, sessions: map[string]*Session{}, slots: map[string]int{}, agents: map[string]string{}}, nil
 }
 
-func newExecutor(c config.Executor) Executor {
-	if c.Type == "scripted" {
-		return scriptedExecutor{cfg: c.Script}
-	}
-	return commandExecutor{cfg: c}
-}
+func newExecutor(c config.Executor) Executor { return commandExecutor{cfg: c} }
 
 // FreeSlots is how many more sessions the executor may start.
 func (m *Manager) FreeSlots(c config.Executor) int {

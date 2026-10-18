@@ -3,6 +3,7 @@ package execsched
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"sort"
@@ -11,41 +12,61 @@ import (
 	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/clock"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeclock"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil). The scheduler's
+// own clock is fake so refresh intervals can be crossed instantly; the server's
+// clock is the wall clock.
+
+const repo = testutil.RepoName
+
+const seedA = "package a\n\nvar X = 1\n"
 
 type harness struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
+	w       *testutil.World
+	px      *testutil.Proxy
 	s       *Scheduler
-	clk     *clock.Fake
+	clk     *fakeclock.Fake
 	metrics *metrics.Service
 	seed    string
+	n       int
+}
+
+// checksPolicy requires the named checks (runnable by the trusted CI worker) and minApprovals reviews.
+func checksPolicy(ciKey string, minApprovals int, checks ...string) string {
+	var req []string
+	for _, c := range checks {
+		req = append(req, fmt.Sprintf(`{"check": %q, "run": {"argv": ["true"], "timeout_secs": 60, "memory_mb": 128}}`, c))
+	}
+	return fmt.Sprintf(`{"trusted_issuers": [{"identity": "service:ci-1", "public_key": %q}], "required_validations": [%s], "approvals": {"min": %d}}`,
+		ciKey, strings.Join(req, ","), minApprovals)
 }
 
 func newHarness(t *testing.T, enqueue bool) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: fakeagwp.New(), clk: clock.NewFake(time.Time{}), metrics: metrics.NewService(metrics.NewRegistry())}
-	t.Cleanup(h.fake.Close)
-	h.fake.SetClock(h.clk.Now)
-	h.fake.AddRepo(repo)
-	h.seed = h.fake.Commit(repo, nil, map[string]string{"README.md": "hi\n", "src/a.go": "package a\n"}, "user:root", "seed")
-	h.fake.SetHead(repo, "main", h.seed)
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer"})
-	c, err := agwp.New(h.fake.URL, secret.New(tok), agwp.WithClock(h.clk))
-	if err != nil {
-		t.Fatal(err)
-	}
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	h := &harness{t: t, w: w, clk: fakeclock.New(time.Time{}), metrics: metrics.NewService(metrics.NewRegistry())}
+	h.seed = w.Seed(map[string]string{"README.md": "hi\n", "src/a.go": seedA}) // before any policy
+	// The proxy forwards to the real server and records what the scheduler asks (and can fail one request).
+	h.px = testutil.NewProxy(t, w.Srv.URL)
+	c := w.Srv.ClientAt(h.px.URL, w.OrchT, "orchestrator", agwp.WithClock(h.clk))
 	rc := config.Repo{Name: repo, Stream: "main", ExecSched: config.ExecSched{Enqueue: &enqueue}}
 	h.s = New(Options{Repo: rc, API: c, Clock: h.clk, Metrics: h.metrics, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Loop: config.Loop{Reconcile: time.Minute}, Refresh: 15 * time.Second})
 	return h
+}
+
+// policy installs a stream policy on main.
+func (h *harness) policy(minApprovals int, checks ...string) {
+	h.t.Helper()
+	if err := h.w.Srv.Admin.SetPolicy(context.Background(), repo, "main", checksPolicy(h.w.CI.PublicKey(), minApprovals, checks...)); err != nil {
+		h.t.Fatalf("set policy: %v", err)
+	}
 }
 
 func (h *harness) pass() {
@@ -55,10 +76,21 @@ func (h *harness) pass() {
 	}
 }
 
-// propose adds an open proposal that changes src/a.go.
+// propose opens a real proposal that changes src/a.go.
 func (h *harness) propose(title string) string {
-	head := h.fake.Commit(repo, []string{h.seed}, map[string]string{"README.md": "hi\n", "src/a.go": "package a // " + title + "\n"}, "agent:bot#run_1", title)
-	return h.fake.AddProposal(repo, "agent:bot#run_1", "main", head, title, "")
+	h.t.Helper()
+	h.n++
+	p, _ := h.w.Propose(fmt.Sprintf("ws-%d", h.n), title, testutil.Put("src/a.go", "package a // "+title+"\n"))
+	return p.ID
+}
+
+func (h *harness) proposal(id string) *agwp.Proposal {
+	h.t.Helper()
+	d, err := h.w.Alice.GetProposal(context.Background(), repo, id)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return &d.Proposal
 }
 
 func (h *harness) status(id string) ProposalStatus {
@@ -72,11 +104,19 @@ func (h *harness) status(id string) ProposalStatus {
 	return ProposalStatus{}
 }
 
-func (h *harness) prepares() int { return h.fake.CountRequests("integration.prepare") }
+func (h *harness) prepares() int { return h.px.Count("POST", "/prepare") }
+
+func codes(bs []Blocker) string {
+	var out []string
+	for _, b := range bs {
+		out = append(out, b.Code)
+	}
+	return strings.Join(out, ",")
+}
 
 func TestFourStatesWithoutAnyJobs(t *testing.T) {
-	h := newHarness(t, true)
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{RequiredChecks: []string{"tests"}, MinApprovals: 1})
+	h := newHarness(t, false)
+	h.policy(1, "tests")
 	id := h.propose("add feature")
 	h.pass()
 	st := h.status(id)
@@ -84,14 +124,10 @@ func TestFourStatesWithoutAnyJobs(t *testing.T) {
 		t.Fatalf("states = %+v", st)
 	}
 	if len(st.Jobs) != 0 {
-		t.Fatal("the real server answers with no jobs when it cannot queue any; that must be tolerated")
+		t.Fatal("with enqueueing off no job is queued")
 	}
-	codes := []string{}
-	for _, b := range st.Blockers {
-		codes = append(codes, b.Code)
-	}
-	if strings.Join(codes, ",") != "missing_validation,insufficient_approvals" {
-		t.Fatalf("blockers = %v", codes)
+	if got := codes(st.Blockers); got != agwp.BlockerMissingValidation+","+agwp.BlockerInsufficientApproval {
+		t.Fatalf("blockers = %v", got)
 	}
 	if len(st.Validations) != 1 || st.Validations[0].Check != "tests" || st.Validations[0].State != "missing" {
 		t.Fatalf("validations = %+v", st.Validations)
@@ -103,8 +139,7 @@ func TestFourStatesWithoutAnyJobs(t *testing.T) {
 
 func TestQueuedJobsMakeValidationPendingAndAreCountedOnce(t *testing.T) {
 	h := newHarness(t, true)
-	h.fake.StubJobs = true
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{RequiredChecks: []string{"tests", "lint"}})
+	h.policy(0, "tests", "lint")
 	id := h.propose("x")
 	h.pass()
 	st := h.status(id)
@@ -119,42 +154,58 @@ func TestQueuedJobsMakeValidationPendingAndAreCountedOnce(t *testing.T) {
 	if got := h.metrics.ValidationsQueued.With(repo).Value(); got != 2 {
 		t.Fatalf("the same jobs were counted again: %v", got)
 	}
+	jobs, err := h.w.Alice.ListJobs(context.Background(), repo, "", 100)
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("the server holds %d jobs (%v); asking again must not queue more", len(jobs), err)
+	}
 }
 
 func TestEnqueueCanBeDisabled(t *testing.T) {
 	h := newHarness(t, false)
+	h.policy(0, "tests")
 	h.propose("x")
 	h.pass()
-	var sawFalse bool
-	for _, r := range h.fake.Requests() {
-		if r.Op == "integration.prepare" {
+	var saw bool
+	for _, r := range h.px.Requests() {
+		if r.Method == "POST" && strings.HasSuffix(r.Path, "/prepare") {
 			var body map[string]any
 			_ = json.Unmarshal([]byte(r.Body), &body)
 			if body["enqueue_validations"] != false {
 				t.Fatalf("prepare body = %s", r.Body)
 			}
-			sawFalse = true
+			saw = true
 		}
 	}
-	if !sawFalse {
+	if !saw {
 		t.Fatal("no prepare call seen")
+	}
+	if jobs, _ := h.w.Alice.ListJobs(context.Background(), repo, "", 100); len(jobs) != 0 {
+		t.Fatalf("jobs were queued although enqueueing is off: %+v", jobs)
 	}
 }
 
 func TestStatesFollowAttestationsAndApprovalsThroughEvents(t *testing.T) {
 	h := newHarness(t, true)
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{RequiredChecks: []string{"tests"}, MinApprovals: 1})
+	h.policy(1, "tests")
 	id := h.propose("x")
 	h.pass()
-	tree := h.status(id).CandidateTree
+	if st := h.status(id); st.Validated != Pending || st.Approved != No {
+		t.Fatalf("before: %+v", st)
+	}
 
-	h.fake.Attest(repo, tree, "tests")
+	job := h.w.CI.Claim()
+	if job == nil || job.Validation.Proposal != id {
+		t.Fatalf("claimed %+v", job)
+	}
+	h.w.CI.Complete(job, "pass")
 	h.s.OnEvent(agwp.Event{Topic: "attestation.submit"})
 	h.pass()
 	if st := h.status(id); st.Validated != Yes || st.Approved != No || st.Ready {
 		t.Fatalf("after the attestation: %+v", st)
 	}
-	h.fake.Approve(repo, id, "user:bob")
+	if _, err := h.w.Bob.ReviewProposal(context.Background(), repo, id, agwp.DecisionApprove, "fine"); err != nil {
+		t.Fatal(err)
+	}
 	h.s.OnEvent(agwp.Event{Topic: "proposal.review", Payload: agwp.EventPayload{Target: id}})
 	h.pass()
 	st := h.status(id)
@@ -162,7 +213,7 @@ func TestStatesFollowAttestationsAndApprovalsThroughEvents(t *testing.T) {
 		t.Fatalf("after the approval: %+v", st)
 	}
 	// an integrated proposal moves to the history
-	h.fake.IntegrateProposal(repo, id)
+	h.w.Land(h.proposal(id))
 	h.pass()
 	if len(h.s.Status().Open) != 0 {
 		t.Fatalf("open = %+v", h.s.Status().Open)
@@ -187,22 +238,23 @@ func TestSettledProposalsArePreparedAgainOnlyWhenTheStreamMoves(t *testing.T) {
 	if h.prepares() != n {
 		t.Fatalf("a settled proposal was prepared again without a reason (%d -> %d)", n, h.prepares())
 	}
-	// the stream moves: every proposal must be prepared against the new head
-	other := h.fake.Commit(repo, []string{h.seed}, map[string]string{"README.md": "changed\n", "src/a.go": "package a\n"}, "user:alice", "readme")
-	h.fake.SetHead(repo, "main", other)
+	// the stream moves (someone else's change lands): every open proposal must be prepared against the new head
+	other, _ := h.w.Propose("ws-readme", "readme", testutil.Put("README.md", "changed\n"))
+	h.w.Land(other)
+	moved := h.w.Head("main")
 	h.s.OnEvent(agwp.Event{Topic: "stream.integrate"})
 	h.pass()
 	if h.prepares() != n+1 {
 		t.Fatalf("expected one more preparation, %d -> %d", n, h.prepares())
 	}
-	if st := h.status(id); st.StreamHead != other {
-		t.Fatalf("prepared against %q, want %q", st.StreamHead, other)
+	if st := h.status(id); st.StreamHead != moved {
+		t.Fatalf("prepared against %q, want %q", st.StreamHead, moved)
 	}
 }
 
 func TestUnsettledProposalsAreRefreshedOnATimer(t *testing.T) {
 	h := newHarness(t, true)
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{MinApprovals: 1})
+	h.policy(1)
 	h.propose("x")
 	h.pass()
 	n := h.prepares()
@@ -218,36 +270,72 @@ func TestUnsettledProposalsAreRefreshedOnATimer(t *testing.T) {
 	}
 }
 
-func TestConflictsAndProblemsMakeAProposalUnmergeable(t *testing.T) {
+// conflicting opens two proposals that change the same line differently and lands the first.
+func (h *harness) conflicting() (landed, conflicted string) {
+	h.t.Helper()
+	p1, _ := h.w.Propose("ws-c1", "x = 2", testutil.Put("src/a.go", "package a\n\nvar X = 2\n"))
+	p2, _ := h.w.Propose("ws-c2", "x = 3", testutil.Put("src/a.go", "package a\n\nvar X = 3\n"))
+	h.w.Land(p1)
+	return p1.ID, p2.ID
+}
+
+func TestConflictsMakeAProposalUnmergeable(t *testing.T) {
 	h := newHarness(t, true)
-	id := h.propose("x")
-	h.fake.SetPreparation(repo, id, agwp.Preparation{
-		Strategy: "merge", Base: "base1", Conflicts: []agwp.Conflict{{Path: "src/a.go", Kind: "content conflict (1 region(s))"}},
-	})
+	_, id := h.conflicting()
 	h.pass()
 	st := h.status(id)
-	if st.Mergeable != No || len(st.Conflicts) != 1 || st.Conflicts[0].Path != "src/a.go" || st.Ready || st.Base != "base1" {
+	if st.Mergeable != No || len(st.Conflicts) != 1 || st.Conflicts[0].Path != "src/a.go" || st.Ready || st.Base == "" {
 		t.Fatalf("status = %+v", st)
 	}
-	h.fake.SetPreparation(repo, id, agwp.Preparation{Problem: "stream 'main' has no changesets yet"})
-	h.clk.Advance(time.Minute)
-	h.pass()
-	if st := h.status(id); st.Mergeable != No || st.Problem == "" {
-		t.Fatalf("status = %+v", st)
+}
+
+func TestAProposalIntoAnEmptyStreamIsHandled(t *testing.T) {
+	// a repository without any changeset: the very first proposal is prepared against an empty stream
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	clk := fakeclock.New(time.Time{})
+	c := w.Srv.ClientAt(w.Srv.URL, w.OrchT, "orchestrator", agwp.WithClock(clk))
+	enq := true
+	s := New(Options{Repo: config.Repo{Name: repo, Stream: "main", ExecSched: config.ExecSched{Enqueue: &enq}}, API: c, Clock: clk, Metrics: metrics.NewService(metrics.NewRegistry()),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute}, Refresh: 15 * time.Second})
+	p, _ := w.Propose("ws-first", "first", testutil.Put("README.md", "hi\n"))
+	if err := s.Reconcile(context.Background()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var st ProposalStatus
+	for _, o := range s.Status().Open {
+		if o.ID == p.ID {
+			st = o
+		}
+	}
+	if st.ID == "" || st.Error != "" {
+		t.Fatalf("status = %+v", s.Status().Open)
+	}
+	if st.Mergeable == Unknown {
+		t.Fatalf("the proposal into an empty stream is not classified: %+v", st)
 	}
 }
 
 func TestFailedValidationIsReported(t *testing.T) {
 	h := newHarness(t, true)
+	h.policy(0, "tests")
 	id := h.propose("x")
-	h.fake.SetPreparation(repo, id, agwp.Preparation{
-		CandidateTree: "tree-1",
-		Validations:   []agwp.ValidationStatus{{Check: "tests", State: "failed", AttestationID: "att_1"}},
-		Blockers:      []agwp.Blocker{{Code: agwp.BlockerFailedValidation, Message: "check 'tests' failed"}},
-	})
 	h.pass()
-	if st := h.status(id); st.Validated != No || st.Ready {
+	job := h.w.CI.Claim()
+	if job == nil {
+		t.Fatal("no job was queued")
+	}
+	h.w.CI.Complete(job, "fail")
+	h.s.OnEvent(agwp.Event{Topic: "attestation.submit"})
+	h.pass()
+	st := h.status(id)
+	if st.Validated != No || st.Ready {
 		t.Fatalf("status = %+v", st)
+	}
+	if len(st.Validations) != 1 || st.Validations[0].State != "failed" || st.Validations[0].AttestationID == "" {
+		t.Fatalf("validations = %+v", st.Validations)
+	}
+	if !strings.Contains(codes(st.Blockers), agwp.BlockerFailedValidation) {
+		t.Fatalf("blockers = %+v", st.Blockers)
 	}
 }
 
@@ -255,7 +343,8 @@ func TestPrepareFailuresAreIsolatedAndRecorded(t *testing.T) {
 	h := newHarness(t, true)
 	a := h.propose("a")
 	b := h.propose("b")
-	h.fake.FailNext("integration.prepare", 1, 500, "internal", false, 0)
+	// The proxy answers one prepare with a 500 without involving the server; the other goes through.
+	h.px.Inject(testutil.Fault{Method: "POST", Path: "/prepare", Times: 1, Status: 500, Code: "internal"})
 	err := h.s.Reconcile(context.Background())
 	if err == nil {
 		t.Fatal("the failing preparation must be reported")
@@ -293,7 +382,9 @@ func TestClosedProposalsDisappearWithoutBeingCountedAsIntegrated(t *testing.T) {
 	h := newHarness(t, true)
 	id := h.propose("x")
 	h.pass()
-	h.fake.CloseProposalFixture(repo, id)
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, id); err != nil {
+		t.Fatal(err)
+	}
 	h.pass()
 	st := h.s.Status()
 	if len(st.Open) != 0 || len(st.Integrated) != 0 {
@@ -305,13 +396,17 @@ func TestForgetListenersHearOfClosedAndIntegratedProposals(t *testing.T) {
 	h := newHarness(t, true)
 	var gone []string
 	h.s.SubscribeForget(func(id string) { gone = append(gone, id) })
-	closed, landed, open := h.propose("closed"), h.propose("landed"), h.propose("open")
+	closed := h.propose("closed")
+	landedP, _ := h.w.Propose("ws-landed", "landed", testutil.Put("docs/landed.md", "landed\n"))
+	open := h.propose("open")
 	h.pass()
-	h.fake.CloseProposalFixture(repo, closed)
-	h.fake.IntegrateProposal(repo, landed)
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, closed); err != nil {
+		t.Fatal(err)
+	}
+	h.w.Land(landedP)
 	h.pass()
 	sort.Strings(gone)
-	want := []string{closed, landed}
+	want := []string{closed, landedP.ID}
 	sort.Strings(want)
 	if len(gone) != 2 || gone[0] != want[0] || gone[1] != want[1] {
 		t.Fatalf("forgotten = %v, want %v (and not %s)", gone, want, open)
@@ -326,10 +421,10 @@ func TestListenersSeeEveryPreparation(t *testing.T) {
 	h := newHarness(t, true)
 	var got []Prepared
 	h.s.Subscribe(func(p Prepared) { got = append(got, p) })
-	id := h.propose("x")
-	h.fake.SetPreparation(repo, id, agwp.Preparation{Base: "b", CandidateTree: "t", Conflicts: []agwp.Conflict{{Path: "p", Kind: "k"}}})
+	_, id := h.conflicting()
+	head := h.w.Head("main")
 	h.pass()
-	if len(got) != 1 || got[0].Proposal.ID != id || got[0].Prep.Base != "b" || len(got[0].Prep.Conflicts) != 1 || got[0].Repo != repo || got[0].StreamHead != h.seed {
+	if len(got) != 1 || got[0].Proposal.ID != id || got[0].Prep.Base == "" || len(got[0].Prep.Conflicts) != 1 || got[0].Repo != repo || got[0].StreamHead != head {
 		t.Fatalf("got = %+v", got)
 	}
 }
@@ -346,23 +441,32 @@ func TestOpenProposalPathsFeedTheTaskScheduler(t *testing.T) {
 
 func TestReadsOnlyAndNeverIntegrates(t *testing.T) {
 	h := newHarness(t, true)
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{})
 	h.propose("x")
 	h.pass()
-	for _, r := range h.fake.Requests() {
-		if strings.Contains(r.Op, "integrate") && r.Op != "integration.prepare" {
-			t.Fatalf("unexpected call %s", r.Op)
+	if len(h.px.Requests()) == 0 {
+		t.Fatal("the scheduler made no request")
+	}
+	for _, r := range h.px.Requests() {
+		if strings.Contains(r.Path, "integrate") {
+			t.Fatalf("unexpected call %s %s", r.Method, r.Path)
 		}
-		if r.Method != "GET" && r.Op != "integration.prepare" {
+		if r.Method != "GET" && !(r.Method == "POST" && strings.HasSuffix(r.Path, "/prepare")) {
 			t.Fatalf("unexpected mutation %s %s", r.Method, r.Path)
+		}
+	}
+	for _, p := range func() []agwp.Proposal {
+		ps, _ := h.w.Alice.ListProposals(context.Background(), repo, agwp.ProposalFilter{})
+		return ps
+	}() {
+		if p.Title == "x" && p.State != agwp.ProposalOpen {
+			t.Fatalf("the proposal must still be open: %+v", p)
 		}
 	}
 }
 
 func TestStatusReportsTheValidationAndIntegrationQueues(t *testing.T) {
 	h := newHarness(t, true)
-	h.fake.StubJobs = true
-	h.fake.SetPolicy(repo, "main", fakeagwp.Policy{RequiredChecks: []string{"tests"}})
+	h.policy(0, "tests")
 	h.propose("x")
 	h.pass()
 	st := h.s.Status()

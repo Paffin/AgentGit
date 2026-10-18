@@ -9,6 +9,7 @@ import (
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/clock"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeclock"
 )
 
 func waitFor(t *testing.T, what string, cond func() bool) {
@@ -23,7 +24,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 }
 
 func TestRunsImmediatelyThenOnTickAndKick(t *testing.T) {
-	fake := clock.NewFake(time.Time{})
+	fake := fakeclock.New(time.Time{})
 	var calls atomic.Int32
 	r := &Runner{Name: "x", Repo: "a/b", Interval: time.Minute, Clock: fake}
 	kick := NewKicker()
@@ -45,7 +46,7 @@ func TestRunsImmediatelyThenOnTickAndKick(t *testing.T) {
 }
 
 func TestBurstsOfKicksCollapseAfterTheDebounce(t *testing.T) {
-	fake := clock.NewFake(time.Time{})
+	fake := fakeclock.New(time.Time{})
 	var calls atomic.Int32
 	r := &Runner{Name: "x", Repo: "a/b", Debounce: time.Second, Clock: fake}
 	kick := NewKicker()
@@ -71,7 +72,7 @@ func TestBurstsOfKicksCollapseAfterTheDebounce(t *testing.T) {
 
 func TestErrorsAndPanicsAreContainedAndCounted(t *testing.T) {
 	m := metrics.NewService(metrics.NewRegistry())
-	fake := clock.NewFake(time.Time{})
+	fake := fakeclock.New(time.Time{})
 	var calls atomic.Int32
 	r := &Runner{Name: "sched", Repo: "a/b", Interval: time.Second, Clock: fake, Metrics: m}
 	kick := NewKicker()

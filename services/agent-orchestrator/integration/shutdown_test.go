@@ -30,10 +30,10 @@ printf '%%s' "$AG_TOKEN" > %[1]s/token-$AG_TASK
 sleep 2
 touch %[1]s/finished-$AG_TASK
 `, dir))
-	w.seed(map[string]string{"README.md": "x\n"})
-	t1 := w.task("First", "", []string{"a/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	t1 := w.Task("First", "", []string{"a/**"})
 	time.Sleep(5 * time.Millisecond)
-	t2 := w.task("Second", "", []string{"b/**"})
+	t2 := w.Task("Second", "", []string{"b/**"})
 
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      slots: 1\n      default_executor: steady\n",
@@ -76,17 +76,17 @@ touch %[1]s/finished-$AG_TASK
 	if fileExists(filepath.Join(dir, "started-"+t2.ID)) || len(w.runsOfTask(t2.ID)) != 0 {
 		t.Error("a new session was started during shutdown")
 	}
-	if got := w.getTask(t1.ID); got.State != agwp.TaskDone {
+	if got := w.GetTask(t1.ID); got.State != agwp.TaskDone {
 		t.Errorf("task 1 = %+v", got)
 	}
-	if got := w.getTask(t2.ID); got.State != agwp.TaskOpen || got.Owner != "" {
+	if got := w.GetTask(t2.ID); got.State != agwp.TaskOpen || got.Owner != "" {
 		t.Errorf("task 2 must be left alone: %+v", got)
 	}
 	runs := w.runsOfTask(t1.ID)
 	if len(runs) != 1 || runs[0].Status != "completed" {
 		t.Errorf("runs of task 1 = %+v", runs)
 	}
-	if _, err := w.srv.client(readFile(t, filepath.Join(dir, "token-"+t1.ID)), "late").Whoami(context.Background()); !agwp.IsCode(err, agwp.CodeUnauthenticated) {
+	if _, err := w.Srv.Client(readFile(t, filepath.Join(dir, "token-"+t1.ID)), "late").Whoami(context.Background()); !agwp.IsCode(err, agwp.CodeUnauthenticated) {
 		t.Errorf("the session's credential still works after shutdown: %v", err)
 	}
 	if len(w.activeLeases()) != 0 {
@@ -116,8 +116,8 @@ touch %[1]s/started
 printf '%%s' "$AG_TOKEN" > %[1]s/token
 while true; do sleep 0.1; done
 `, dir, marker))
-	w.seed(map[string]string{"README.md": "x\n"})
-	tk := w.task("Long job", "", []string{"lib/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	tk := w.Task("Long job", "", []string{"lib/**"})
 	state := t.TempDir()
 	cfg := orchConfig{
 		Repo:      "    schedule:\n      default_executor: patient\n",
@@ -150,10 +150,10 @@ while true; do sleep 0.1; done
 	if !strings.Contains(strings.ToLower(r.Summary), "cancel") && !strings.Contains(strings.ToLower(r.Summary), "shutdown") {
 		t.Errorf("the run's summary should say why it ended: %q", r.Summary)
 	}
-	if got := w.getTask(tk.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:patient" {
+	if got := w.GetTask(tk.ID); got.State != agwp.TaskInProgress || got.Owner != "agent:patient" {
 		t.Errorf("an interrupted task stays with its agent, got %+v", got)
 	}
-	if _, err := w.srv.client(readFile(t, filepath.Join(dir, "token")), "late").Whoami(context.Background()); !agwp.IsCode(err, agwp.CodeUnauthenticated) {
+	if _, err := w.Srv.Client(readFile(t, filepath.Join(dir, "token")), "late").Whoami(context.Background()); !agwp.IsCode(err, agwp.CodeUnauthenticated) {
 		t.Errorf("the credential survived the shutdown: %v", err)
 	}
 	if len(w.activeLeases()) != 0 {
@@ -163,7 +163,7 @@ while true; do sleep 0.1; done
 	// A new orchestrator (same state directory, so the same agent key) adopts the task.
 	o2 := w.startOrchestrator(cfg)
 	o2.waitReady()
-	eventually(t, "the restarted orchestrator to finish the task", 45*time.Second, func() bool { return w.getTask(tk.ID).State == agwp.TaskDone })
+	eventually(t, "the restarted orchestrator to finish the task", 45*time.Second, func() bool { return w.GetTask(tk.ID).State == agwp.TaskDone })
 	if !fileExists(filepath.Join(dir, "second-run-done")) {
 		t.Error("the second run did not happen")
 	}
@@ -183,8 +183,8 @@ echo $! > %[1]s/child-pid
 echo $$ > %[1]s/pid
 while true; do sleep 0.1; done
 `, dir))
-	w.seed(map[string]string{"README.md": "x\n"})
-	tk := w.task("Stubborn job", "", []string{"lib/**"})
+	w.Seed(map[string]string{"README.md": "x\n"})
+	tk := w.Task("Stubborn job", "", []string{"lib/**"})
 	o := w.startOrchestrator(orchConfig{
 		Repo:      "    schedule:\n      default_executor: stubborn\n",
 		Executors: strings.Replace(commandExecutor("stubborn", sh, ""), "grace: 2s", "grace: 1s", 1),

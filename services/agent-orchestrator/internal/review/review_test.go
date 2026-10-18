@@ -12,42 +12,41 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil).
+
+const repo = testutil.RepoName
 
 func on(b bool) *bool { return &b }
 
 type harness struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
+	w       *testutil.World
+	px      *testutil.Proxy
 	c       *Component
 	client  *agwp.Client
 	metrics *metrics.Service
 	seed    string
+	n       int
+	ws      map[string]string // proposal id -> workspace name
 }
 
 func newHarness(t *testing.T, emptyStream bool) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: fakeagwp.New(), metrics: metrics.NewService(metrics.NewRegistry())}
-	t.Cleanup(h.fake.Close)
-	h.fake.AddRepo(repo)
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	h := &harness{t: t, w: w, metrics: metrics.NewService(metrics.NewRegistry()), ws: map[string]string{}}
 	if !emptyStream {
-		h.seed = h.fake.Commit(repo, nil, map[string]string{"README.md": "hello\n", "pkg/a.go": "package pkg\n"}, "user:root", "seed")
-		h.fake.SetHead(repo, "main", h.seed)
+		h.seed = w.Seed(map[string]string{"README.md": "hello\n", "pkg/a.go": "package pkg\n"})
 	}
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:reviewer", Role: "reviewer"})
-	var err error
-	h.client, err = agwp.New(h.fake.URL, secret.New(tok))
-	if err != nil {
-		t.Fatal(err)
-	}
+	h.px = testutil.NewProxy(t, w.Srv.URL)
+	h.client = w.Srv.ClientAt(h.px.URL, w.Mint("service:reviewer", nil), "reviewer")
 	rc := config.Repo{Name: repo, Stream: "main", Review: config.Review{
 		Enabled: on(true), MaxFiles: 40, MaxLines: 1500, Secrets: on(true), Tests: on(true),
 		Protected: []string{".github/**", "**/.env"}, Generated: []string{"**/*.lock"}, Sources: []string{"**/*.go"},
 	}}
+	var err error
 	h.c, err = New(Options{Repo: rc, API: h.client, Reviewer: "service:reviewer", Metrics: h.metrics, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Loop: config.Loop{Reconcile: time.Minute}})
 	if err != nil {
@@ -56,22 +55,39 @@ func newHarness(t *testing.T, emptyStream bool) *harness {
 	return h
 }
 
-// propose opens a proposal whose head changes/adds the given files on top of the seed.
+// propose opens a real proposal whose head changes/adds the given files on top of the seed.
 func (h *harness) propose(title string, files map[string]string) (id, head string) {
-	snapshot := map[string]string{"README.md": "hello\n", "pkg/a.go": "package pkg\n"}
-	for k, v := range files {
-		snapshot[k] = v
+	h.t.Helper()
+	h.n++
+	var ch []agwp.FileChange
+	for p, c := range files {
+		ch = append(ch, testutil.Put(p, c))
 	}
-	var parents []string
-	if h.seed != "" {
-		parents = []string{h.seed}
-	}
-	head = h.fake.Commit(repo, parents, snapshot, "agent:bot#run_1", title)
-	id = h.fake.AddProposal(repo, "agent:bot#run_1", "main", head, title, "")
-	return id, head
+	name := fmt.Sprintf("ws-%d", h.n)
+	p, ws := h.w.Propose(name, title, ch...)
+	h.ws[p.ID] = name
+	return p.ID, ws.Head
 }
 
-func (h *harness) reviews(id string) []agwp.Review { return h.fake.Reviews(repo, id) }
+// amend adds a commit to the proposal's workspace and moves the proposal to it.
+func (h *harness) amend(id, message string, changes ...agwp.FileChange) string {
+	h.t.Helper()
+	ws, err := h.w.Alice.ModifyWorkspace(context.Background(), repo, h.ws[id], message, "", changes)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	h.w.UpdateProposal(id, ws.Head)
+	return ws.Head
+}
+
+func (h *harness) reviews(id string) []agwp.Review {
+	h.t.Helper()
+	d, err := h.w.Alice.GetProposal(context.Background(), repo, id)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return d.Reviews
+}
 
 func (h *harness) reconcile() {
 	h.t.Helper()
@@ -139,7 +155,7 @@ func TestCleanCodeGetsNoComment(t *testing.T) {
 
 func TestOneCommentPerHeadAndANewHeadGetsItsOwn(t *testing.T) {
 	h := newHarness(t, false)
-	id, head := h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
+	id, _ := h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
 	h.reconcile()
 	h.reconcile()
 	h.reconcile()
@@ -155,8 +171,7 @@ func TestOneCommentPerHeadAndANewHeadGetsItsOwn(t *testing.T) {
 		t.Fatalf("a restart repeated the comment: %d", len(h.reviews(id)))
 	}
 	// the author pushes a fix that still has a different secret: new head, new comment
-	head2 := h.fake.Commit(repo, []string{head}, map[string]string{"README.md": "hello\n", "pkg/a.go": "package pkg\n", "pkg/k2.go": "package pkg\n\nvar k2 = \"" + ghToken() + "\"\n"}, "agent:bot#run_1", "second")
-	h.fake.MoveProposal(repo, id, head2)
+	head2 := h.amend(id, "second", testutil.Put("pkg/k2.go", "package pkg\n\nvar k2 = \""+ghToken()+"\"\n"))
 	h.reconcile()
 	rs := h.reviews(id)
 	if len(rs) != 2 || rs[1].Head != head2 || !strings.Contains(rs[1].Body, "GitHub token") {
@@ -166,10 +181,9 @@ func TestOneCommentPerHeadAndANewHeadGetsItsOwn(t *testing.T) {
 
 func TestFixedProposalsStopGettingComments(t *testing.T) {
 	h := newHarness(t, false)
-	id, head := h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
+	id, _ := h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
 	h.reconcile()
-	clean := h.fake.Commit(repo, []string{head}, map[string]string{"README.md": "hello\n", "pkg/a.go": "package pkg\n", "pkg/k.go": "package pkg\n\nvar k = os.Getenv(\"K\")\n", "pkg/k_test.go": "package pkg\n"}, "agent:bot#run_1", "fix")
-	h.fake.MoveProposal(repo, id, clean)
+	h.amend(id, "fix", testutil.Put("pkg/k.go", "package pkg\n\nvar k = os.Getenv(\"K\")\n"), testutil.Put("pkg/k_test.go", "package pkg\n"))
 	h.reconcile()
 	// the diff is against the merge base, which is the seed: the file is still "added" but without the key
 	if len(h.reviews(id)) != 1 {
@@ -179,9 +193,7 @@ func TestFixedProposalsStopGettingComments(t *testing.T) {
 
 func TestInitialImportIntoAnEmptyStreamIsReviewed(t *testing.T) {
 	h := newHarness(t, true)
-	files := map[string]string{"README.md": "hello\n", "app/.env": "TOKEN=x\n", "app/main.go": "package main\n\nvar key = \"" + awsKey() + "\"\n"}
-	head := h.fake.Commit(repo, nil, files, "user:alice", "initial import")
-	id := h.fake.AddProposal(repo, "user:alice", "main", head, "import", "")
+	id, _ := h.propose("import", map[string]string{"README.md": "hello\n", "app/.env": "TOKEN=x\n", "app/main.go": "package main\n\nvar key = \"" + awsKey() + "\"\n"})
 	h.reconcile()
 	rs := h.reviews(id)
 	if len(rs) != 1 || !strings.Contains(rs[0].Body, "app/main.go:3") || !strings.Contains(rs[0].Body, "app/.env") {
@@ -193,30 +205,38 @@ func TestReviewersNeverApproveOrRequestChanges(t *testing.T) {
 	h := newHarness(t, false)
 	h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
 	h.reconcile()
-	for _, rq := range h.fake.Requests() {
-		if rq.Op == "proposal.review" && !strings.Contains(rq.Body, `"decision":"comment"`) {
-			t.Fatalf("not a comment: %s", rq.Body)
+	posted := 0
+	for _, rq := range h.px.Requests() {
+		if rq.Method == "POST" && strings.HasSuffix(rq.Path, "/reviews") {
+			posted++
+			if !strings.Contains(rq.Body, `"decision":"comment"`) {
+				t.Fatalf("not a comment: %s", rq.Body)
+			}
 		}
 		if strings.Contains(rq.Body, `"approve"`) || strings.Contains(rq.Body, "request_changes") {
 			t.Fatalf("approval-related decision sent: %s", rq.Body)
 		}
-		if rq.Method != "GET" && rq.Op != "proposal.review" && rq.Op != "tree.diff" {
-			t.Fatalf("unexpected mutation %s", rq.Op)
+		if rq.Method != "GET" && !strings.HasSuffix(rq.Path, "/reviews") && !strings.HasSuffix(rq.Path, "/diff") {
+			t.Fatalf("unexpected mutation %s %s", rq.Method, rq.Path)
 		}
+	}
+	if posted != 1 {
+		t.Fatalf("%d comments posted", posted)
 	}
 }
 
 func TestFailuresAreRetriedOnTheNextPass(t *testing.T) {
 	h := newHarness(t, false)
 	id, _ := h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
-	h.fake.FailNext("tree.diff", 1, 500, "internal", false, 0)
+	// The proxy fails one request without involving the server.
+	h.px.Inject(testutil.Fault{Method: "POST", Path: "/diff", Times: 1, Status: 500, Code: "internal"})
 	if err := h.c.Reconcile(context.Background()); err == nil {
 		t.Fatal("expected the diff failure")
 	}
 	if len(h.reviews(id)) != 0 {
 		t.Fatal("nothing may be posted on failure")
 	}
-	h.fake.FailNext("proposal.review", 1, 500, "internal", false, 0)
+	h.px.Inject(testutil.Fault{Method: "POST", Path: "/reviews", Times: 1, Status: 500, Code: "internal"})
 	if err := h.c.Reconcile(context.Background()); err == nil {
 		t.Fatal("expected the post failure")
 	}
@@ -233,7 +253,9 @@ func TestClosedProposalsAreForgotten(t *testing.T) {
 	h := newHarness(t, false)
 	id, _ := h.propose("x", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})
 	h.reconcile()
-	h.fake.CloseProposalFixture(repo, id)
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, id); err != nil {
+		t.Fatal(err)
+	}
 	h.reconcile()
 	h.c.mu.Lock()
 	n := len(h.c.reviewed)

@@ -8,8 +8,7 @@ import (
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
 func wait(t *testing.T, what string, cond func() bool) {
@@ -59,14 +58,8 @@ func TestTopicsAreTheUnionOrEverything(t *testing.T) {
 }
 
 func TestFollowDispatchesToMatchingSubscribersAndSurvivesPanics(t *testing.T) {
-	fake := fakeagwp.New()
-	defer fake.Close()
-	fake.AddRepo("acme/web")
-	tok := fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer"})
-	c, err := agwp.New(fake.URL, secret.New(tok))
-	if err != nil {
-		t.Fatal(err)
-	}
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	c := w.Orch
 	m := metrics.NewService(metrics.NewRegistry())
 	h := NewHub(nil, m, nil)
 	var mu sync.Mutex
@@ -84,14 +77,16 @@ func TestFollowDispatchesToMatchingSubscribersAndSurvivesPanics(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go h.Follow(ctx, c, "acme/web", 0)
+	go h.Follow(ctx, c, w.Repo, 0)
 	wait(t, "connection", func() bool {
 		s := h.Statuses()
 		return len(s) == 1 && s[0].Connected
 	})
-	fake.AddTask("acme/web", "t1", nil)
-	fake.Emit("acme/web", "lease.acquire", "agent:x", "l1", nil)
-	fake.Emit("acme/web", "proposal.create", "agent:x", "p1", nil) // nobody subscribed
+	w.Task("t1", "", nil)
+	if _, err := w.Alice.AcquireLease(context.Background(), w.Repo, "docs/**", false, time.Minute, ""); err != nil {
+		t.Fatal(err)
+	}
+	w.Propose("ws-1", "nobody subscribed to proposals", testutil.Put("a.txt", "a\n"))
 	wait(t, "events", func() bool { mu.Lock(); defer mu.Unlock(); return len(all) == 2 })
 	mu.Lock()
 	if len(tasks) != 1 || tasks[0] != "task.create" || all[0] != "acme/web:task.create" || all[1] != "acme/web:lease.acquire" {
@@ -102,17 +97,16 @@ func TestFollowDispatchesToMatchingSubscribersAndSurvivesPanics(t *testing.T) {
 	if st.LastSeq == 0 || st.LastEventAt.IsZero() {
 		t.Fatalf("status = %+v", st)
 	}
-	if got := m.EventsReceived.With("acme/web", "task").Value(); got != 1 {
+	if got := m.EventsReceived.With(w.Repo, "task").Value(); got != 1 {
 		t.Fatalf("task events counted = %v", got)
 	}
 }
 
 func TestReconnectsAreCounted(t *testing.T) {
-	fake := fakeagwp.New()
-	defer fake.Close()
-	fake.AddRepo("acme/web")
-	tok := fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator"})
-	c, _ := agwp.New(fake.URL, secret.New(tok))
+	w := testutil.NewWorld(t, testutil.WorldOptions{})
+	// The proxy forwards to the real server and can cut the event stream, which a healthy server never does.
+	px := testutil.NewProxy(t, w.Srv.URL)
+	c := w.Srv.ClientAt(px.URL, w.OrchT, "orchestrator")
 	m := metrics.NewService(metrics.NewRegistry())
 	h := NewHub(nil, m, nil)
 	var mu sync.Mutex
@@ -120,14 +114,14 @@ func TestReconnectsAreCounted(t *testing.T) {
 	h.Subscribe("x", nil, func(string, agwp.Event) { mu.Lock(); n++; mu.Unlock() })
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go h.Follow(ctx, c, "acme/web", 0)
-	wait(t, "connection", func() bool { return fake.OpenEventStreams() == 1 })
-	fake.AddTask("acme/web", "before", nil)
+	go h.Follow(ctx, c, w.Repo, 0)
+	wait(t, "connection", func() bool { return px.OpenEventStreams() == 1 })
+	w.Task("before", "", nil)
 	wait(t, "first event", func() bool { mu.Lock(); defer mu.Unlock(); return n == 1 })
-	fake.DropEventStreams()
-	fake.AddTask("acme/web", "while-away", nil)
+	px.DropEventStreams()
+	w.Task("while-away", "", nil)
 	wait(t, "event delivered after the reconnect", func() bool { mu.Lock(); defer mu.Unlock(); return n == 2 })
-	if got := m.SSEReconnects.With("acme/web").Value(); got < 1 {
+	if got := m.SSEReconnects.With(w.Repo).Value(); got < 1 {
 		t.Fatalf("reconnects counted = %v", got)
 	}
 	if h.Statuses()[0].Reconnects < 1 {

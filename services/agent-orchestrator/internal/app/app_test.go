@@ -3,14 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	golog "log"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,12 +16,31 @@ import (
 	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
 )
 
-const repoName = "acme/web"
+// These tests run the whole orchestrator against the real ag-server (internal/testutil).
+// The agent is the test-only agent program (internal/testutil/testagent), run as an
+// ordinary command executor.
 
-func configDoc(url, state string, extra string) string {
+const repoName = testutil.RepoName
+
+// agentExecutor is the YAML of a command executor that runs the program at bin.
+func agentExecutor(bin string) string {
+	return fmt.Sprintf(`  - name: docs-bot
+    type: command
+    command: [%q]
+    pass_env: [PATH]
+    heartbeat: 1s
+    timeout: 30s
+    env:
+      TESTAGENT_FILES: '{"docs/notes.md": "hello\n"}'
+      TESTAGENT_TITLE: Add notes
+      TESTAGENT_MODEL: test-agent
+`, bin)
+}
+
+func configDoc(url, state, executors, extra string) string {
 	return fmt.Sprintf(`
 server:
   url: %s
@@ -42,21 +58,13 @@ repos:
     schedule:
       slots: 2
 executors:
-  - name: docs-bot
-    type: scripted
-    heartbeat: 1s
-    timeout: 30s
-    scripted:
-      files:
-        docs/notes.md: "hello\n"
-      title: Add notes
-%s`, url, state, repoName, extra)
+%s%s`, url, state, repoName, executors, extra)
 }
 
-// testRig is an App wired to a fake AGWP server, listening on an ephemeral port.
+// testRig is an App wired to a real ag-server, listening on an ephemeral port.
 type testRig struct {
 	t    *testing.T
-	fake *fakeagwp.Server
+	w    *testutil.World
 	app  *App
 	cfg  *config.Config
 	base string
@@ -72,19 +80,18 @@ func (r *testRig) getenv(k string) string {
 
 func newRig(t *testing.T, mutate func(r *testRig)) *testRig {
 	t.Helper()
-	r := &testRig{t: t, fake: fakeagwp.New(), envv: map[string]string{"AG_ORCH_TOKEN": "placeholder"}}
-	t.Cleanup(r.fake.Close)
-	r.fake.AddRepo(repoName)
-	r.fake.SetHead(repoName, "main", r.fake.Commit(repoName, nil, map[string]string{"README.md": "hi\n"}, "user:root", "seed"))
-	cfg, err := config.Parse(strings.NewReader(configDoc(r.fake.URL, t.TempDir(), "")), r.getenv)
+	r := &testRig{t: t, w: testutil.NewWorld(t, testutil.WorldOptions{Agents: []string{"docs-bot"}}), envv: map[string]string{"AG_ORCH_TOKEN": "placeholder"}}
+	w := r.w
+	w.Seed(map[string]string{"README.md": "hi\n"})
+	cfg, err := config.Parse(strings.NewReader(configDoc(w.Srv.URL, t.TempDir(), agentExecutor(testutil.BuildTestAgent(t)), "")), r.getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r.cfg = cfg
 	// the orchestrator's credential is scoped to exactly what the configuration needs
-	r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator", Ops: OrchestratorOps(cfg)})
-	r.envv["AG_REVIEWER_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:reviewer", Role: "reviewer", Ops: ReviewerOps()})
-	r.envv["AG_ADVISOR_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:advisor", Role: "reviewer", Ops: AdvisorOps()})
+	r.envv["AG_ORCH_TOKEN"] = w.Mint("service:orchestrator", OrchestratorOps(cfg))
+	r.envv["AG_REVIEWER_TOKEN"] = w.Mint("service:reviewer", ReviewerOps())
+	r.envv["AG_ADVISOR_TOKEN"] = w.Mint("service:advisor", AdvisorOps())
 	if mutate != nil {
 		mutate(r)
 	}
@@ -266,35 +273,25 @@ func TestMethodsOtherThanGetAreRefused(t *testing.T) {
 
 func TestATaskFlowsThroughTheWholeWiring(t *testing.T) {
 	r := newRig(t, nil)
-	task := r.fake.AddTask(repoName, "Write the notes", []string{"docs/**"})
+	task := r.w.Task("Write the notes", "", []string{"docs/**"})
 	r.start(t)
-	eventually(t, "a proposal for the task", 20*time.Second, func() bool {
-		for _, p := range r.fake.Proposals(repoName) {
-			if p.TaskID == task {
-				return true
-			}
-		}
-		return false
+	eventually(t, "a proposal for the task", 30*time.Second, func() bool { return len(r.w.ProposalsOfTask(task.ID)) == 1 })
+	eventually(t, "the run to complete", 20*time.Second, func() bool {
+		runs, err := r.w.Alice.ListRuns(context.Background(), repoName, "", false, 10)
+		return err == nil && len(runs) == 1 && runs[0].Status == "completed"
 	})
-	eventually(t, "the run to complete", 10*time.Second, func() bool {
-		runs := r.fake.Runs(repoName)
-		return len(runs) == 1 && runs[0].Status == "completed"
-	})
-	if got := r.fake.Task(repoName, task); got.Owner != "agent:docs-bot" {
+	if got := r.w.GetTask(task.ID); got.Owner != "agent:docs-bot" {
 		t.Fatalf("task = %+v", got)
 	}
 	// the agent's credential was narrow and is revoked again
 	eventually(t, "the agent credential to be revoked", 10*time.Second, func() bool {
 		minted := 0
-		for _, m := range r.fake.MintedTokens() {
-			if m.Identity != "agent:docs-bot" {
-				continue
-			}
+		for _, c := range r.w.Srv.Credentials("agent:docs-bot") {
 			minted++
-			if !m.Revoked {
+			if c.RevokedAtMs == 0 {
 				return false
 			}
-			for _, op := range m.Ops {
+			for _, op := range c.Scope.Operations {
 				if config.ForbiddenAgentOps[op] {
 					t.Errorf("agent credential carries %s", op)
 				}
@@ -316,39 +313,33 @@ func TestShutdownIsGracefulAndClosesTheListener(t *testing.T) {
 	}
 }
 
-// server.ca_file: an HTTPS server with a private CA is reachable only when the CA is configured.
+// server.ca_file: a real ag-server with a certificate from a private CA is reachable only when the CA is configured.
 func TestCAFileMakesAPrivateHTTPSServerReachable(t *testing.T) {
-	tls := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `{"protocol_version":"agwp.v1","server_version":"t","features":["events.replay","auth.scoped_credentials"]}`)
-	}))
-	tls.Config.ErrorLog = golog.New(io.Discard, "", 0) // the refused handshake of the untrusted case is expected
-	tls.StartTLS()
-	defer tls.Close()
+	srv := testutil.StartServerWith(t, testutil.ServerOptions{TLS: true})
 	dir := t.TempDir()
-	caPath := filepath.Join(dir, "ca.pem")
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tls.Certificate().Raw})
-	if err := os.WriteFile(caPath, pemBytes, 0o600); err != nil {
-		t.Fatal(err)
-	}
 	build := func(ca string) (*App, error) {
-		cfg, err := config.Parse(strings.NewReader(configDoc(tls.URL, dir, "")), func(k string) string {
+		getenv := func(k string) string {
 			if k == "AG_ORCH_TOKEN" {
-				return "x"
+				return srv.Token
 			}
 			return ""
-		})
+		}
+		cfg, err := config.Parse(strings.NewReader(configDoc(srv.URL, dir, agentExecutor("/bin/true"), "")), getenv)
 		if err != nil {
 			t.Fatal(err)
 		}
 		cfg.Server.CAFile = ca
-		return New(Options{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		return New(Options{Config: cfg, Getenv: getenv, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	}
-	trusted, err := build(caPath)
+	trusted, err := build(srv.CAFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if caps, err := trusted.orch.Negotiate(context.Background()); err != nil || !caps.Has("events.replay") {
 		t.Fatalf("with the CA configured: %v %+v", err, caps)
+	}
+	if p, err := trusted.orch.Whoami(context.Background()); err != nil || p.Identity == "" {
+		t.Fatalf("an authenticated call over TLS: %v %+v", err, p)
 	}
 	untrusted, err := build("")
 	if err != nil {
@@ -416,7 +407,7 @@ func TestCheckExplainsAFallbackToTheOrchestratorCredential(t *testing.T) {
 
 func TestCheckFlagsAScopeThatLacksOperations(t *testing.T) {
 	r := newRig(t, func(r *testRig) {
-		r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin", Ops: []string{"repo.read", "events.read"}})
+		r.envv["AG_ORCH_TOKEN"] = r.w.Mint("service:orchestrator", []string{"repo.read", "events.read"})
 	})
 	rep := newCheckApp(t, r).Check(context.Background())
 	if rep.OK() || !rep.find("error", "lacks: ") || !rep.find("error", "credentials.delegate") {
@@ -426,7 +417,7 @@ func TestCheckFlagsAScopeThatLacksOperations(t *testing.T) {
 
 func TestCheckWarnsAboutAnUnrestrictedCredential(t *testing.T) {
 	r := newRig(t, func(r *testRig) {
-		r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin"})
+		r.envv["AG_ORCH_TOKEN"] = r.w.Mint("service:orchestrator", nil)
 	})
 	rep := newCheckApp(t, r).Check(context.Background())
 	if !rep.OK() || !rep.find("warn", "unrestricted") {
@@ -437,7 +428,10 @@ func TestCheckWarnsAboutAnUnrestrictedCredential(t *testing.T) {
 func TestCheckRequiresTheDelegatorRoleOnEveryRepositoryAndNoMore(t *testing.T) {
 	// A writer cannot mint credentials for agents or operate their tasks: reported.
 	r := newRig(t, func(r *testRig) {
-		r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer", Ops: OrchestratorOps(r.cfg)})
+		if err := r.w.Srv.Admin.GrantRole(context.Background(), "service:writer-orch", repoName, "writer"); err != nil {
+			t.Fatal(err)
+		}
+		r.envv["AG_ORCH_TOKEN"] = r.w.Mint("service:writer-orch", OrchestratorOps(r.cfg))
 	})
 	rep := newCheckApp(t, r).Check(context.Background())
 	if rep.OK() || !rep.find("error", "no delegator or admin role on "+repoName) {
@@ -451,7 +445,22 @@ func TestCheckRequiresTheDelegatorRoleOnEveryRepositoryAndNoMore(t *testing.T) {
 }
 
 func TestCheckRefusesAServerThatCannotBindCredentialsToRuns(t *testing.T) {
-	r := newRig(t, func(r *testRig) { r.fake.SetFeatures("events.replay", "workspaces.virtual", "auth.scoped_credentials") })
+	r := newRig(t, nil)
+	// An older server version answers the capability negotiation without the run-bound credential features. The proxy
+	// forwards every request to the real server and edits only that answer.
+	px := testutil.NewProxy(t, r.w.Srv.URL)
+	px.RewriteJSON("/v1/capabilities", func(o map[string]any) {
+		var keep []any
+		for _, f := range o["features"].([]any) {
+			switch f {
+			case "auth.run_credentials", "auth.delegation", "agents.operate":
+			default:
+				keep = append(keep, f)
+			}
+		}
+		o["features"] = keep
+	})
+	r.cfg.Server.URL = px.URL
 	rep := newCheckApp(t, r).Check(context.Background())
 	if rep.OK() || !rep.find("error", "run-bound credentials are not advertised") || !rep.find("error", "delegator role") {
 		t.Fatalf("an old server must be an error, not a silent downgrade:\n%s", rep)
@@ -460,7 +469,7 @@ func TestCheckRefusesAServerThatCannotBindCredentialsToRuns(t *testing.T) {
 
 func TestCheckReportsAnUnreachableServer(t *testing.T) {
 	r := newRig(t, nil)
-	r.fake.Close()
+	r.w.Srv.Stop()
 	rep := newCheckApp(t, r).Check(context.Background())
 	if rep.OK() || !rep.find("error", "server") {
 		t.Fatalf("an unreachable server must fail the check:\n%s", rep)
@@ -571,7 +580,7 @@ func TestReviewerAndAdvisorOperationsAreMinimal(t *testing.T) {
 
 func minimalConfig(t *testing.T) *config.Config {
 	t.Helper()
-	cfg, err := config.Parse(strings.NewReader(configDoc("http://127.0.0.1:1", t.TempDir(), "")), func(k string) string {
+	cfg, err := config.Parse(strings.NewReader(configDoc("http://127.0.0.1:1", t.TempDir(), agentExecutor("/bin/true"), "")), func(k string) string {
 		if k == "AG_ORCH_TOKEN" {
 			return "x"
 		}

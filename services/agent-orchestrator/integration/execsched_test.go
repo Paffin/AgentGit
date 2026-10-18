@@ -50,10 +50,10 @@ func (o *orchestrator) integratedStatus(id string) bool {
 }
 
 func (w *world) jobsFor(proposal string) []agwp.Job {
-	w.t.Helper()
-	jobs, err := w.alice.ListJobs(context.Background(), w.repo, "", 100)
+	w.T.Helper()
+	jobs, err := w.Alice.ListJobs(context.Background(), w.Repo, "", 100)
 	if err != nil {
-		w.t.Fatalf("list jobs: %v", err)
+		w.T.Fatalf("list jobs: %v", err)
 	}
 	var out []agwp.Job
 	for _, j := range jobs {
@@ -71,8 +71,8 @@ func (w *world) jobsFor(proposal string) []agwp.Job {
 func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	w := newWorld(t, worldOptions{})
 	ctx := context.Background()
-	w.seed(map[string]string{"README.md": "# web\n"}) // before the policy: the seed needs no validation
-	if err := w.srv.admin.SetPolicy(ctx, w.repo, "main", validationPolicy(w.ci.key.PublicHex())); err != nil {
+	w.Seed(map[string]string{"README.md": "# web\n"}) // before the policy: the seed needs no validation
+	if err := w.Srv.Admin.SetPolicy(ctx, w.Repo, "main", validationPolicy(w.CI.PublicKey())); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,7 +81,7 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	})
 	o.waitReady()
 
-	p1, _ := w.propose("ws-one", "Add page one", put("docs/one.md", "one\n"))
+	p1, _ := w.Propose("ws-one", "Add page one", put("docs/one.md", "one\n"))
 
 	// A job is queued for the exact candidate; validation is pending, approval is missing, the change merges.
 	var st execsched.ProposalStatus
@@ -104,7 +104,7 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	}
 
 	// The four states move independently. First an approval (by a person) ...
-	if _, err := w.bob.ReviewProposal(ctx, w.repo, p1.ID, agwp.DecisionApprove, "fine by me"); err != nil {
+	if _, err := w.Bob.ReviewProposal(ctx, w.Repo, p1.ID, agwp.DecisionApprove, "fine by me"); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the approval to show", 30*time.Second, func() bool {
@@ -114,19 +114,19 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	if s, _ := o.proposalStatus(p1.ID); s.Validated != execsched.Pending || s.Ready {
 		t.Fatalf("approved but not validated: %+v", s)
 	}
-	if res, err := w.carol.Integrate(ctx, w.repo, p1.ID, nil); err != nil || res.Outcome.Status != "blocked" {
+	if res, err := w.Carol.Integrate(ctx, w.Repo, p1.ID, nil); err != nil || res.Outcome.Status != "blocked" {
 		t.Fatalf("integrating before the validation ran: %+v %v", res, err)
 	}
 
 	// ... then the trusted worker claims the job and attests the exact tree.
-	job := w.ci.claim()
+	job := w.CI.Claim()
 	if job == nil || job.ID != jobs[0].ID {
 		t.Fatalf("claimed %+v, want job %s", job, jobs[0].ID)
 	}
-	if again := w.ci.claim(); again != nil {
+	if again := w.CI.Claim(); again != nil {
 		t.Fatalf("a second claim got a job: %+v", again)
 	}
-	w.ci.complete(job, "pass")
+	w.CI.Complete(job, "pass")
 	eventually(t, "validation to be passed and the proposal ready", 30*time.Second, func() bool {
 		s, ok := o.proposalStatus(p1.ID)
 		return ok && s.Validated == execsched.Yes && s.Ready
@@ -134,23 +134,23 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 
 	// The orchestrator never integrates: the proposal is still open until a person does it.
 	time.Sleep(1500 * time.Millisecond)
-	if d, _ := w.alice.GetProposal(ctx, w.repo, p1.ID); d.Proposal.State != agwp.ProposalOpen {
+	if d, _ := w.Alice.GetProposal(ctx, w.Repo, p1.ID); d.Proposal.State != agwp.ProposalOpen {
 		t.Fatalf("proposal state = %s", d.Proposal.State)
 	}
-	w.land(p1)
+	w.Land(p1)
 	eventually(t, "the landed proposal to move to the recent list", 30*time.Second, func() bool { return o.integratedStatus(p1.ID) })
 	if _, open := o.proposalStatus(p1.ID); open {
 		t.Fatal("an integrated proposal is still listed as open")
 	}
 
 	// A failing attestation: validated = no, with the server's reason, and nothing can land.
-	p2, ws2 := w.propose("ws-two", "Add page two", put("docs/two.md", "two\n"))
+	p2, ws2 := w.Propose("ws-two", "Add page two", put("docs/two.md", "two\n"))
 	eventually(t, "a job for the second proposal", 30*time.Second, func() bool { return len(w.jobsFor(p2.ID)) == 1 })
-	failing := w.ci.claim()
+	failing := w.CI.Claim()
 	if failing == nil || failing.Validation.Proposal != p2.ID {
 		t.Fatalf("claimed %+v", failing)
 	}
-	w.ci.complete(failing, "fail")
+	w.CI.Complete(failing, "fail")
 	// integration.prepare is not read-consistent around a job's completion (it computes the
 	// preparation, then lists the jobs), so for a moment a response can show the validation as
 	// missing while its job is already done. The scheduler re-prepares on the job and attestation
@@ -172,16 +172,16 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	if s2.Ready || len(s2.Validations) != 1 || s2.Validations[0].State != "failed" || s2.Validations[0].AttestationID == "" {
 		t.Fatalf("a failed validation must block and name the attestation: %+v", s2)
 	}
-	if res, err := w.carol.Integrate(ctx, w.repo, p2.ID, nil); err != nil || res.Outcome.Status == "integrated" || !hasBlocker(res.Outcome.Blockers, agwp.BlockerFailedValidation) {
+	if res, err := w.Carol.Integrate(ctx, w.Repo, p2.ID, nil); err != nil || res.Outcome.Status == "integrated" || !hasBlocker(res.Outcome.Blockers, agwp.BlockerFailedValidation) {
 		t.Fatalf("the server must refuse a proposal with a failed validation: %+v %v", res, err)
 	}
 
 	// Moving the head makes a new candidate; the old verdict does not carry over and a new job is queued.
-	moved, err := w.alice.ModifyWorkspace(ctx, w.repo, ws2.Name, "fix page two", "", []agwp.FileChange{put("docs/two.md", "two, fixed\n")})
+	moved, err := w.Alice.ModifyWorkspace(ctx, w.Repo, ws2.Name, "fix page two", "", []agwp.FileChange{put("docs/two.md", "two, fixed\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.updateProposal(p2.ID, moved.Head)
+	w.UpdateProposal(p2.ID, moved.Head)
 	eventually(t, "a new job for the moved head", 30*time.Second, func() bool { return len(w.jobsFor(p2.ID)) == 2 })
 	eventually(t, "validation to be pending again", 30*time.Second, func() bool {
 		s, ok := o.proposalStatus(p2.ID)
@@ -200,7 +200,7 @@ func TestExecutionSchedulerTracksRealValidationJobs(t *testing.T) {
 	if !strings.Contains(metrics, `orchestrator_validations_queued_total{repo="acme/web"}`) {
 		t.Errorf("queued validations are not counted:\n%s", metrics)
 	}
-	events, _, err := w.alice.ReplayEvents(ctx, w.repo, 0, 1000, []string{"job"})
+	events, _, err := w.Alice.ReplayEvents(ctx, w.Repo, 0, 1000, []string{"job"})
 	if err != nil {
 		t.Fatal(err)
 	}

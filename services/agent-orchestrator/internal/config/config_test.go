@@ -134,7 +134,7 @@ executors:
 		"server.url", "server.token_env", "listen", "state_dir", "log.format", "log.level", "repos[0].name",
 		"repos[1].schedule.slots", "repos[1].schedule.placement", "repos[1].schedule.lease", "repos[1].schedule.attempts",
 		"routes[0].executor", "routes[0].title", "executors[0].type", "executors[0].agent", "executors[1].command",
-		"executors[2].scripted", "executors[3].agent", "executors[3].timeout",
+		"executors[2].type", "was removed", "executors[3].agent", "executors[3].timeout",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error message does not mention %q:\n%s", want, msg)
@@ -235,8 +235,8 @@ func TestOneAgentPerExecutor(t *testing.T) {
 
 func TestRoutesAndDefaults(t *testing.T) {
 	doc := minimal + `  - name: second
-    type: scripted
-    scripted: {files: {a.txt: hi}}
+    type: command
+    command: [x]
 `
 	doc = strings.Replace(doc, "  - name: acme/web", `  - name: acme/web
     schedule:
@@ -254,7 +254,7 @@ func TestRoutesAndDefaults(t *testing.T) {
 		t.Fatal("Executor lookup broken")
 	}
 	// With two executors and no default there is no implicit default.
-	doc2 := minimal + "  - name: second\n    type: scripted\n    scripted: {files: {a: b}}\n"
+	doc2 := minimal + "  - name: second\n    type: command\n    command: [x]\n"
 	c2, err := parse(t, doc2, goodEnv)
 	if err != nil || c2.Repos[0].Schedule.Default != "" {
 		t.Fatalf("default = %q err=%v", c2.Repos[0].Schedule.Default, err)
@@ -292,5 +292,15 @@ func TestEmptyAndInvalidFiles(t *testing.T) {
 	}
 	if _, err := Load("/definitely/not/here.yaml", nil); err == nil {
 		t.Fatal("missing file accepted")
+	}
+}
+
+// The simulated "scripted" executor was removed from the product: neither its type nor its settings are accepted.
+func TestTheSimulatedExecutorIsGone(t *testing.T) {
+	if _, err := parse(t, minimal+"  - name: sim\n    type: scripted\n    scripted: {files: {a: b}}\n", goodEnv); err == nil {
+		t.Fatal("a scripted executor was accepted")
+	}
+	if _, err := parse(t, minimal+"    scripted: {files: {a: b}}\n", goodEnv); err == nil || !strings.Contains(err.Error(), "scripted") {
+		t.Fatalf("the scripted settings of a command executor were accepted: %v", err)
 	}
 }

@@ -49,14 +49,13 @@ flowchart LR
         admin["admin API<br/>healthz readyz metrics status"]
     end
     ex1["executor: command<br/>(any program)"]
-    ex2["executor: scripted<br/>(built in)"]
 
     api -- events --> hub
     hub --> sched & exec & rev & idx
     sched --> sess
     sess -- "mint scoped credential,<br/>start run, leases" --> api
-    sess -- "AG_* environment" --> ex1 & ex2
-    ex1 & ex2 -- "agent credential:<br/>workspace, provenance, proposal" --> api
+    sess -- "AG_* environment" --> ex1
+    ex1 -- "agent credential:<br/>workspace, provenance, proposal" --> api
     exec -- "prepare (enqueue validations)" --> api
     exec --> adv
     adv -- "comment review" --> api
@@ -84,10 +83,11 @@ services/agent-orchestrator/
     app/                   wiring, admin/observability API, check, required operations
     config/                YAML/JSON configuration, validation
     events/                per-repository event hub (replay + SSE, resume by sequence number)
-    scheduler/ session/    task scheduling and agent sessions (command and scripted executors)
+    scheduler/ session/    task scheduling and agent sessions (command executors)
     execsched/ advisor/ review/ semindex/
     textdiff/ glob/ secret/ metrics/ clock/ loop/   small support packages
-    testutil/fakeagwp/     in-memory fake AGWP server used by the unit tests
+    testutil/              shared test harness: the REAL ag-server, a world on it (repository, people, CI worker),
+                           a fault-injecting forwarding proxy; testutil/testagent is a test-only agent program
   integration/             end-to-end tests against the real ag-server binary
   Dockerfile  go.mod  go.sum
 ```
@@ -190,7 +190,7 @@ repos:
 
 executors:
   - name: docs-bot                         # also the default agent name (agent:docs-bot); one agent per executor
-    type: command                          # command | scripted
+    type: command                          # the only kind: any program, run directly
     agent: docs-bot
     slots: 1                               # concurrent sessions of this executor (see the security model before raising it)
     timeout: 30m                           # at most 55m: agent credentials last at most an hour and cannot be renewed in a running process
@@ -203,7 +203,6 @@ executors:
     dir: "{workdir}"                       # working directory; default the session's private work directory
     env: {MODE: batch}                     # fixed variables (AG_* is reserved)
     pass_env: [PATH, LANG, TZ]             # variables copied from the orchestrator's environment (default)
-    scripted: {}                           # for type scripted: files, task_files, message, title, model, rationale, delay
 ```
 
 The default agent operations (capabilities of the server's authorization model) are
@@ -217,7 +216,9 @@ variables cannot be passed to executors either.
 
 ## Executor contract
 
-An executor is how an agent runs. Two kinds exist.
+An executor is how an agent runs: a real program. (There is no built-in simulated agent: it was removed from the
+product; tests and demos use the test-only agent program `internal/testutil/testagent`, which is never part of
+the shipped binary or image.)
 
 **`command`**: any program, started directly (no shell) in its own process group, in a private working
 directory, with an environment built from scratch: `HOME` (the work directory), the `pass_env` variables, the
@@ -237,7 +238,7 @@ configured `env`, and:
 | `AG_RESULT_FILE` | optional: write `{"summary": "..."}` here to put a line in the run record |
 
 The credential's scope is the repository and stream of the task and the configured operations. What a
-well-behaved agent does is what the scripted executor does: create a workspace on the stream, change files,
+well-behaved agent does: create a workspace on the stream, change files,
 sign a provenance record with its key, and open a proposal for the task. It never integrates; policy and
 people decide what lands.
 
@@ -259,10 +260,6 @@ completes the run (`completed` or `failed` with a summary), finishes the task if
 revokes the credential. A run whose supervisor is gone (orchestrator crash) is found by its stale heartbeat
 and ended by the server (`agent.reap_runs`, audited under the orchestrator) as abandoned; the server
 releases its leases and revokes its credentials when a run ends.
-
-**`scripted`**: a built-in stand-in for an agent for tests and demos. It writes the files given in the
-configuration (or, with `task_files: true`, in a line `ag-script:{"files":{...},"title":"..."}` of the task
-description), signs provenance and opens a proposal.
 
 ## Security model
 
@@ -319,13 +316,19 @@ go vet ./...
 go test -race ./...            # unit tests for every package, plus the integration suite
 ```
 
-- **Unit tests** are table-driven, use a fake clock and an in-memory fake AGWP server
-  (`internal/testutil/fakeagwp`) that mimics the real error model, injected failures, SSE and dedup of
-  validation jobs.
+- **No imitation of the server.** Every package's tests run against the **real `ag-server` binary**
+  (`internal/testutil`: a real server per test, a real repository, real roles and credentials, a CI worker that
+  signs real attestations). Two kinds of test double remain, both named here: the **test-only agent program**
+  (`internal/testutil/testagent`, built by the tests and run as an ordinary `type: command` executor; it is not a
+  model and is never shipped) and a **forwarding proxy** in front of the real server that records requests and
+  injects the failures a healthy server cannot produce on demand (a 500, a dropped connection, a cut event
+  stream, an older server's capability answer). Everything the proxy does not break reaches the real server.
+  The fake clock (for backoff and refresh timers) is the only other substitute.
 - **Integration suite** (`integration/`, Linux): starts the **real `ag-server` binary** for every test on a
   free loopback port in a temporary directory (`AG_BOOTSTRAP_TOKEN=... ag-server serve --data-dir ... --listen
   ...`), always kills it, and drives the orchestrator through it. The binary is taken from `$AG_SERVER_BIN`, then
-  `PATH`, then `/home/user/bin/ag-server`; the tests skip with a message when there is none. Scenarios:
+  `PATH`, then `target/{debug,release}/ag-server` of the checkout (`cargo build -p ag-server`); without one the
+  tests skip with a message, and fail instead when `$CI` or `$AG_REQUIRE_SERVER` is set. Scenarios:
   dependency-ordered tasks under a provenance-plus-approval policy (the real server verifies the agent's
   signature), overlap deferral and `allow` placement, a failing shell executor (environment, credential
   isolation and revocation, no secret in logs, status or run records), a killed executor and an orphaned run,

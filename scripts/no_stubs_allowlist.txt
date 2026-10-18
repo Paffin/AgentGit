@@ -42,4 +42,3 @@ crates/ag-sandbox/src/oci.rs | test-double | fake runtime | module doc: says tha
 
 # -- other legitimate uses ---------------------------------------------------------------------------------------
 crates/ag-server/src/auth/mod.rs | test-double | Compare against a dummy | constant-time authentication: when the credential does not exist the code still compares against a dummy hash so that timing does not reveal which credentials exist
-services/agent-orchestrator/internal/clock/clock.go | test-double | * | a manually advanced Clock that the orchestrator's tests use (Go cannot share _test.go code across packages). Test support in a production package: to move under internal/testutil (tracked in dev/handoff/docs_site.md)

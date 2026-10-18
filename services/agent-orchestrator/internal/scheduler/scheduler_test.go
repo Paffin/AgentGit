@@ -2,34 +2,41 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agentkey"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/clock"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/session"
-	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeagwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/testutil/fakeclock"
 )
 
-const repo = "acme/web"
+// These tests run against the real ag-server (internal/testutil). Agents are real
+// programs: shell scripts, or the test-only agent program that writes files, signs
+// provenance and opens a proposal. The scheduler's clock is a fake that starts at
+// the wall clock, so backoffs and "stale" heartbeats can be crossed instantly.
+
+const repo = testutil.RepoName
 
 type harness struct {
 	t       *testing.T
-	fake    *fakeagwp.Server
+	w       *testutil.World
+	px      *testutil.Proxy
 	orch    *agwp.Client
 	mgr     *session.Manager
 	sched   *Scheduler
-	clk     *clock.Fake
+	clk     *fakeclock.Fake
 	metrics *metrics.Service
 	dir     string
 }
@@ -38,10 +45,17 @@ type paths map[string][]string
 
 func (p paths) OpenProposalPaths(string) map[string][]string { return p }
 
-func scripted(name string, files map[string]string) config.Executor {
-	return config.Executor{Name: name, Type: "scripted", Agent: name, Slots: 4, Timeout: 20 * time.Second, Grace: time.Second,
+// agent is an executor that runs the test-only agent program: it writes files, signs provenance and opens a proposal.
+func agent(t *testing.T, name string, files map[string]string) config.Executor {
+	t.Helper()
+	b, err := json.Marshal(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config.Executor{Name: name, Type: "command", Agent: name, Slots: 4, Timeout: 20 * time.Second, Grace: time.Second,
 		Beat: 50 * time.Millisecond, Cred: 10 * time.Minute, Ops: append([]string(nil), config.DefaultAgentOps...), Output: 64 << 10,
-		Script: config.Scripted{Files: files, Message: "change", Title: "Change " + name, Model: "demo"}}
+		Command: []string{testutil.BuildTestAgent(t)}, Pass: []string{"PATH"},
+		Env: map[string]string{"TESTAGENT_FILES": string(b), "TESTAGENT_MESSAGE": "change", "TESTAGENT_TITLE": "Change " + name, "TESTAGENT_MODEL": "test-agent"}}
 }
 
 func command(t *testing.T, name, script string) config.Executor {
@@ -56,23 +70,22 @@ func command(t *testing.T, name, script string) config.Executor {
 
 func newHarness(t *testing.T, repoCfg func(*config.Repo), pathSrc PathSource, execs ...config.Executor) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: fakeagwp.New(), clk: clock.NewFake(time.Time{}), metrics: metrics.NewService(metrics.NewRegistry()), dir: t.TempDir()}
-	t.Cleanup(h.fake.Close)
-	h.fake.SetClock(h.clk.Now)
-	h.fake.AddRepo(repo)
-	h.fake.SetHead(repo, "main", h.fake.Commit(repo, nil, map[string]string{"README.md": "hi\n"}, "user:root", "seed"))
-	tok := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin"})
-	var err error
-	h.orch, err = agwp.New(h.fake.URL, secret.New(tok), agwp.WithIdentityLabel("orchestrator"))
-	if err != nil {
-		t.Fatal(err)
+	var names []string
+	for _, e := range execs {
+		names = append(names, e.Agent)
 	}
+	w := testutil.NewWorld(t, testutil.WorldOptions{Agents: names})
+	h := &harness{t: t, w: w, clk: fakeclock.New(time.Now()), metrics: metrics.NewService(metrics.NewRegistry()), dir: t.TempDir()}
+	w.Seed(map[string]string{"README.md": "hi\n"})
+	// The proxy forwards to the real server, records what the scheduler asks and can fail one request.
+	h.px = testutil.NewProxy(t, w.Srv.URL)
+	h.orch = w.Srv.ClientAt(h.px.URL, w.OrchT, "orchestrator")
 	keys, err := agentkey.OpenStore(filepath.Join(h.dir, "keys"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h.mgr, err = session.NewManager(session.Options{Orch: h.orch, ServerURL: h.fake.URL, Keys: keys, WorkRoot: filepath.Join(h.dir, "work"),
+	h.mgr, err = session.NewManager(session.Options{Orch: h.orch, ServerURL: w.Srv.URL, Keys: keys, WorkRoot: filepath.Join(h.dir, "work"),
 		Metrics: h.metrics, Log: log, ParentEnv: func(k string) string { return os.Getenv(k) }, OnDone: func(string) { h.sched.Kick() }})
 	if err != nil {
 		t.Fatal(err)
@@ -93,12 +106,12 @@ func newHarness(t *testing.T, repoCfg func(*config.Repo), pathSrc PathSource, ex
 	return h
 }
 
-// addTask creates a task and moves the fake clock on, so creation times differ
-// and "oldest first" is deterministic.
+// addTask files a real task. A few real milliseconds pass so creation times
+// differ and "oldest first" is deterministic.
 func (h *harness) addTask(title string, scope []string, deps ...string) string {
-	id := h.fake.AddTask(repo, title, scope, deps...)
-	h.clk.Advance(time.Second)
-	return id
+	tk := h.w.Task(title, "", scope, deps...)
+	time.Sleep(5 * time.Millisecond)
+	return tk.ID
 }
 
 func (h *harness) reconcile() {
@@ -110,7 +123,7 @@ func (h *harness) reconcile() {
 
 func (h *harness) waitIdle() {
 	h.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for len(h.mgr.Active()) != 0 {
 		if time.Now().After(deadline) {
 			h.t.Fatalf("sessions still running: %+v", h.mgr.Active())
@@ -119,7 +132,25 @@ func (h *harness) waitIdle() {
 	}
 }
 
-func (h *harness) state(id string) string { return h.fake.Task(repo, id).State }
+func (h *harness) task(id string) *agwp.Task { return h.w.GetTask(id) }
+
+func (h *harness) state(id string) string { return h.task(id).State }
+
+// runs lists every run, oldest first.
+func (h *harness) runs() []agwp.Run {
+	h.t.Helper()
+	rs, err := h.w.Alice.ListRuns(context.Background(), repo, "", false, 200)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	sort.Slice(rs, func(i, j int) bool {
+		if rs[i].StartedAtMs != rs[j].StartedAtMs {
+			return rs[i].StartedAtMs < rs[j].StartedAtMs
+		}
+		return rs[i].RunID < rs[j].RunID
+	})
+	return rs
+}
 
 func (h *harness) deferral(id string) (Deferral, bool) {
 	for _, d := range h.sched.Status().Deferred {
@@ -132,13 +163,23 @@ func (h *harness) deferral(id string) (Deferral, bool) {
 
 func (h *harness) eventually(what string, cond func() bool) {
 	h.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			h.t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
+}
+
+// proposalOf is the one proposal a task's agent opened.
+func (h *harness) proposalOf(task string) agwp.Proposal {
+	h.t.Helper()
+	ps := h.w.ProposalsOfTask(task)
+	if len(ps) != 1 {
+		h.t.Fatalf("proposals of task %s = %+v", task, ps)
+	}
+	return ps[0]
 }
 
 func TestReadyTasksStartOldestFirstWithinTheRepoLimit(t *testing.T) {
@@ -177,7 +218,7 @@ func TestReadyTasksStartOldestFirstWithinTheRepoLimit(t *testing.T) {
 }
 
 func TestDependenciesAreRespectedAndWorkWaitsToLand(t *testing.T) {
-	h := newHarness(t, nil, nil, scripted("dev", map[string]string{"x.txt": "x"}))
+	h := newHarness(t, nil, nil, agent(t, "dev", map[string]string{"x.txt": "x"}))
 	a := h.addTask("A", []string{"api/**"})
 	b := h.addTask("B depends on A", []string{"api/**"}, a)
 
@@ -196,15 +237,17 @@ func TestDependenciesAreRespectedAndWorkWaitsToLand(t *testing.T) {
 		t.Fatalf("status = %+v", st)
 	}
 	// A human integrates the proposal; the next pass finishes A as its owner and unblocks B.
-	h.fake.IntegrateProposal(repo, st.Waiting[0].Proposals[0])
-	starts := h.fake.CountRequests("agent.start_run")
+	pa := h.proposalOf(a)
+	h.w.Approve(pa.ID) // the default policy wants one approval for proposals of agents
+	h.w.Land(&pa)
+	starts := h.px.Count("POST", "/runs")
 	h.reconcile()
 	if h.state(a) != agwp.TaskDone {
 		t.Fatalf("A = %s, want done once its proposal landed", h.state(a))
 	}
 	// A task finished in this very pass must not be offered for adoption in the same pass
 	// (the task list was read before it was finished).
-	if n := h.fake.CountRequests("agent.start_run"); n != starts {
+	if n := h.px.Count("POST", "/runs"); n != starts {
 		t.Fatalf("the pass that finished A also tried to start a session (%d start requests, was %d)", n, starts)
 	}
 	if d, ok := h.deferral(a); ok {
@@ -218,7 +261,7 @@ func TestDependenciesAreRespectedAndWorkWaitsToLand(t *testing.T) {
 }
 
 func TestAClosedUnmergedProposalCancelsTheTask(t *testing.T) {
-	h := newHarness(t, nil, nil, scripted("dev", map[string]string{"x.txt": "x"}))
+	h := newHarness(t, nil, nil, agent(t, "dev", map[string]string{"x.txt": "x"}))
 	a := h.addTask("A", nil)
 	h.reconcile()
 	h.waitIdle()
@@ -227,7 +270,9 @@ func TestAClosedUnmergedProposalCancelsTheTask(t *testing.T) {
 	if len(w) != 1 {
 		t.Fatalf("waiting = %+v", w)
 	}
-	h.fake.CloseProposalFixture(repo, w[0].Proposals[0])
+	if _, err := h.w.Carol.CloseProposal(context.Background(), repo, w[0].Proposals[0]); err != nil {
+		t.Fatal(err)
+	}
 	h.reconcile()
 	if h.state(a) != agwp.TaskCancelled {
 		t.Fatalf("A = %s", h.state(a))
@@ -255,14 +300,18 @@ func TestOverlappingScopesAreDeferredWhileTheFirstTaskHoldsTheLease(t *testing.T
 		t.Fatalf("t2 deferral = %+v", d)
 	}
 	// the soft lease of the first task is visible on the server
+	leases, err := h.w.Alice.ListLeases(context.Background(), repo, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var held bool
-	for _, l := range h.fake.Leases(repo) {
+	for _, l := range leases {
 		if l.Scope == "docs/**" && l.ReleasedAtMs == 0 && l.TaskID == t1 {
 			held = true
 		}
 	}
 	if !held {
-		t.Fatalf("leases = %+v", h.fake.Leases(repo))
+		t.Fatalf("leases = %+v", leases)
 	}
 	h.eventually("t1 to finish and its session to be gone", func() bool {
 		for _, i := range h.mgr.Active() {
@@ -279,17 +328,17 @@ func TestOverlappingScopesAreDeferredWhileTheFirstTaskHoldsTheLease(t *testing.T
 
 func TestAllowPolicyStartsOverlappingTasksButRespectsExclusiveLeases(t *testing.T) {
 	h := newHarness(t, func(r *config.Repo) { r.Schedule.Slots = 3; r.Schedule.Placement = "allow" }, nil, command(t, "bot", `sleep 0.3`))
-	t1 := h.addTask("docs", []string{"docs/**"})
-	t2 := h.addTask("api docs", []string{"docs/api/**"})
+	h.addTask("docs", []string{"docs/**"})
+	h.addTask("api docs", []string{"docs/api/**"})
 	h.reconcile()
 	if len(h.mgr.Active()) != 2 {
 		t.Fatalf("allow must start both, got %+v", h.mgr.Active())
 	}
 	h.waitIdle()
-	_ = t1
-	_ = t2
 	t3 := h.addTask("locked", []string{"locked/**"})
-	h.fake.AddLease(repo, "user:alice", "locked/**", true, time.Hour)
+	if _, err := h.w.Alice.AcquireLease(context.Background(), repo, "locked/**", true, time.Hour, ""); err != nil {
+		t.Fatal(err)
+	}
 	h.reconcile()
 	if d, ok := h.deferral(t3); !ok || d.Reason != ReasonExclusiveLease {
 		t.Fatalf("an exclusive foreign lease defers even under allow: %+v %v", d, ok)
@@ -300,20 +349,20 @@ func TestAllowPolicyStartsOverlappingTasksButRespectsExclusiveLeases(t *testing.
 }
 
 func TestOpenProposalsOnTheScopeDeferNewWork(t *testing.T) {
-	src := paths{"prop_other": {"docs/index.md"}}
+	src := paths{}
 	h := newHarness(t, nil, src, command(t, "bot", `true`))
-	h.fake.AddProposal(repo, "user:alice", "main", h.fake.Commit(repo, nil, map[string]string{"a": "b"}, "user:alice", "x"), "alice's change", "")
-	// the fake assigns its own proposal id: rewrite the path map to it
-	id := h.fake.Proposals(repo)[0].ID
-	delete(src, "prop_other")
-	src[id] = []string{"docs/index.md"}
+	p, _ := h.w.Propose("ws-alice", "alice's change", testutil.Put("docs/index.md", "alice\n"))
+	src[p.ID] = []string{"docs/index.md"} // what the execution scheduler reports for the open proposal
 	tk := h.addTask("docs", []string{"docs/**"})
 	h.reconcile()
 	d, ok := h.deferral(tk)
 	if !ok || d.Reason != ReasonOpenProposal {
 		t.Fatalf("deferral = %+v %v", d, ok)
 	}
-	h.fake.CloseProposalFixture(repo, id)
+	if _, err := h.w.Alice.CloseProposal(context.Background(), repo, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	delete(src, p.ID)
 	h.reconcile()
 	h.eventually("the task to run", func() bool { return h.state(tk) == agwp.TaskDone })
 }
@@ -341,7 +390,7 @@ func TestFailedAttemptsAreRetriedWithBackoffThenCancelled(t *testing.T) {
 	h.reconcile()
 	h.waitIdle()
 	h.eventually("the task to be cancelled after the last attempt", func() bool { return h.state(tk) == agwp.TaskCancelled })
-	runs := h.fake.Runs(repo)
+	runs := h.runs()
 	if len(runs) != 2 || runs[0].Status != "failed" || runs[1].Status != "failed" {
 		t.Fatalf("runs = %+v", runs)
 	}
@@ -363,29 +412,37 @@ func TestTempFailDoesNotSpendTheAttemptBudget(t *testing.T) {
 	h.eventually("done after two temporary failures", func() bool { return h.state(tk) == agwp.TaskDone })
 }
 
-func TestOrphanedRunsAreCompletedAndTheirTasksAdopted(t *testing.T) {
-	h := newHarness(t, nil, nil, command(t, "bot", `true`))
-	// A previous orchestrator process started a run for our agent and died.
-	cl := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "agent:bot"})
-	agent, _ := agwp.New(h.fake.URL, secret.New(cl))
-	k, _ := agentkey.Generate()
-	if _, err := agent.RegisterAgent(context.Background(), repo, "bot", k.PublicHex()); err != nil {
-		t.Fatal(err)
+// registerOrphan plays a previous orchestrator process: it registers the agent with a key kept in the key store,
+// then starts a run for it that is never heartbeated or completed.
+func (h *harness) registerOrphan(agentName, task string) *agwp.Run {
+	h.t.Helper()
+	ag := h.w.Srv.Client(h.w.Mint("agent:"+agentName, nil), "agent")
+	k, err := agentkey.Generate()
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	if _, err := ag.RegisterAgent(context.Background(), repo, agentName, k.PublicHex()); err != nil {
+		h.t.Fatal(err)
 	}
 	// store the same key so the manager accepts the registered agent
-	keysDir := filepath.Join(h.dir, "keys")
-	if err := k.Save(filepath.Join(keysDir, "bot.json")); err != nil {
-		t.Fatal(err)
+	if err := k.Save(filepath.Join(h.dir, "keys", agentName+".json")); err != nil {
+		h.t.Fatal(err)
 	}
-	tk := h.addTask("interrupted", nil)
-	run, err := h.orch.StartRun(context.Background(), repo, "bot", tk)
+	run, err := h.orch.StartRun(context.Background(), repo, agentName, task)
 	if err != nil {
-		t.Fatal(err)
+		h.t.Fatal(err)
 	}
+	return run
+}
+
+func TestOrphanedRunsAreCompletedAndTheirTasksAdopted(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "bot", `true`))
+	tk := h.addTask("interrupted", nil)
+	run := h.registerOrphan("bot", tk)
 	h.clk.Advance(10 * time.Minute) // its heartbeats stopped long ago
 
 	h.reconcile()
-	runs := h.fake.Runs(repo)
+	runs := h.runs()
 	if runs[0].RunID != run.RunID || runs[0].Status != "failed" || !strings.HasPrefix(runs[0].Summary, "abandoned:") {
 		t.Fatalf("the orphan must be completed as abandoned: %+v", runs[0])
 	}
@@ -397,30 +454,24 @@ func TestOrphanedRunsAreCompletedAndTheirTasksAdopted(t *testing.T) {
 
 func TestFreshRunsOfOurAgentsAreNotReaped(t *testing.T) {
 	h := newHarness(t, nil, nil, command(t, "bot", `true`))
-	cl := h.fake.AddToken(fakeagwp.TokenSpec{Identity: "agent:bot"})
-	agent, _ := agwp.New(h.fake.URL, secret.New(cl))
-	k, _ := agentkey.Generate()
-	_, _ = agent.RegisterAgent(context.Background(), repo, "bot", k.PublicHex())
-	if _, err := h.orch.StartRun(context.Background(), repo, "bot", ""); err != nil {
-		t.Fatal(err)
-	}
+	h.registerOrphan("bot", "")
 	h.clk.Advance(20 * time.Second) // within 3 heartbeat intervals / a minute
 	h.reconcile()
-	if h.fake.Runs(repo)[0].Status != "running" {
+	if h.runs()[0].Status != "running" {
 		t.Fatal("a recently heartbeating run must not be reaped")
 	}
 }
 
 func TestRestartRediscoversWorkThatIsWaitingToLand(t *testing.T) {
-	h := newHarness(t, nil, nil, scripted("dev", map[string]string{"x.txt": "x"}))
+	h := newHarness(t, nil, nil, agent(t, "dev", map[string]string{"x.txt": "x"}))
 	tk := h.addTask("A", nil)
 	h.reconcile()
 	h.waitIdle()
-	pid := h.fake.Proposals(repo)[0].ID
+	pa := h.proposalOf(tk)
 
 	// A new scheduler instance (the orchestrator restarted) knows nothing.
 	restarted, err := New(Options{Repo: config.Repo{Name: repo, Stream: "main", Schedule: config.Schedule{Slots: 2, Placement: "avoid", Lease: "soft", LeaseTTL: time.Minute, Attempts: 1, Backoff: time.Second, Default: "dev"}},
-		Execs: []config.Executor{scripted("dev", map[string]string{"x.txt": "x"})}, API: h.orch, Sessions: h.mgr, Clock: h.clk, Metrics: h.metrics,
+		Execs: []config.Executor{agent(t, "dev", map[string]string{"x.txt": "x"})}, API: h.orch, Sessions: h.mgr, Clock: h.clk, Metrics: h.metrics,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute}})
 	if err != nil {
 		t.Fatal(err)
@@ -431,10 +482,11 @@ func TestRestartRediscoversWorkThatIsWaitingToLand(t *testing.T) {
 	if len(h.mgr.Active()) != 0 {
 		t.Fatal("work that already produced a proposal must not be redone")
 	}
-	if w := restarted.Status().Waiting; len(w) != 1 || w[0].Task != tk || w[0].Proposals[0] != pid {
+	if w := restarted.Status().Waiting; len(w) != 1 || w[0].Task != tk || w[0].Proposals[0] != pa.ID {
 		t.Fatalf("waiting = %+v", w)
 	}
-	h.fake.IntegrateProposal(repo, pid)
+	h.w.Approve(pa.ID) // the default policy wants one approval for proposals of agents
+	h.w.Land(&pa)
 	if err := restarted.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -450,21 +502,21 @@ func TestATaskCancelledByAPersonStopsItsSession(t *testing.T) {
 	if len(h.mgr.Active()) != 1 {
 		t.Fatal("not started")
 	}
-	// a person cancels the task (the fake lets us act as the unowned/any principal via the owner path)
+	// someone other than the owner cancels the task
 	if err := h.mgr.FinishTask(context.Background(), repo, tk, "cancelled"); err != nil {
 		t.Fatal(err)
 	}
 	h.reconcile()
 	h.waitIdle()
-	runs := h.fake.Runs(repo)
+	runs := h.runs()
 	if len(runs) != 1 || runs[0].Status != "failed" || !strings.Contains(runs[0].Summary, "cancelled: task cancelled by someone else") {
 		t.Fatalf("runs = %+v", runs)
 	}
 }
 
 func TestRoutesPickTheExecutorAndUnroutedTasksAreLeftAlone(t *testing.T) {
-	docs := scripted("docs-bot", map[string]string{"docs/x.md": "x"})
-	code := scripted("code-bot", map[string]string{"src/x.go": "x"})
+	docs := agent(t, "docs-bot", map[string]string{"docs/x.md": "x"})
+	code := agent(t, "code-bot", map[string]string{"src/x.go": "x"})
 	h := newHarness(t, func(r *config.Repo) {
 		r.Schedule.Routes = []config.Route{{Executor: "docs-bot", Title: "^docs:"}, {Executor: "code-bot", Scope: "src/**"}}
 	}, nil, docs, code)
@@ -473,7 +525,7 @@ func TestRoutesPickTheExecutorAndUnroutedTasksAreLeftAlone(t *testing.T) {
 	other := h.addTask("unrelated", []string{"ops/**"})
 	h.reconcile()
 	h.waitIdle()
-	owner := func(id string) string { return h.fake.Task(repo, id).Owner }
+	owner := func(id string) string { return h.task(id).Owner }
 	if owner(d) != "agent:docs-bot" || owner(c) != "agent:code-bot" {
 		t.Fatalf("owners: %q %q", owner(d), owner(c))
 	}
@@ -492,7 +544,7 @@ func TestExecutorSlotsAreSharedAcrossTasks(t *testing.T) {
 	if len(h.mgr.Active()) != 1 {
 		t.Fatalf("active = %d", len(h.mgr.Active()))
 	}
-	waiting := a // whichever of the two is not running is deferred (their creation times are equal)
+	waiting := a // whichever of the two is not running is deferred
 	if h.mgr.Active()[0].TaskID == a {
 		waiting = b
 	}
@@ -523,7 +575,8 @@ func TestRunLoopReactsToKicks(t *testing.T) {
 
 func TestServerErrorsSurfaceInStatusAndDoNotCrash(t *testing.T) {
 	h := newHarness(t, nil, nil, command(t, "bot", `true`))
-	h.fake.FailNext("task.list", 1, 500, "internal", false, 0)
+	// The proxy answers one task listing with a 500 without involving the server.
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/tasks", Times: 1, Status: 500, Code: "internal"})
 	if err := h.sched.Reconcile(context.Background()); err == nil {
 		t.Fatal("expected the listing failure")
 	}

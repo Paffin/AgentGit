@@ -14,9 +14,9 @@ import (
 )
 
 func reviewerComments(w *world, proposal string) []agwp.Review {
-	d, err := w.alice.GetProposal(context.Background(), w.repo, proposal)
+	d, err := w.Alice.GetProposal(context.Background(), w.Repo, proposal)
 	if err != nil {
-		w.t.Fatal(err)
+		w.T.Fatal(err)
 	}
 	var out []agwp.Review
 	for _, r := range d.Reviews {
@@ -66,7 +66,7 @@ func TestAdd(t *testing.T) {
 func TestReviewersFlagRiskyChangesAndLeaveCleanCodeAlone(t *testing.T) {
 	w := newWorld(t, worldOptions{})
 	ctx := context.Background()
-	w.seed(map[string]string{"README.md": "# web\n"})
+	w.Seed(map[string]string{"README.md": "# web\n"})
 
 	// A token-shaped value assembled at run time, so this file holds no secret-looking text.
 	fakeToken := "ghp" + "_" + randHex(18)
@@ -74,8 +74,8 @@ func TestReviewersFlagRiskyChangesAndLeaveCleanCodeAlone(t *testing.T) {
 		t.Fatalf("test token has the wrong shape: %q", fakeToken)
 	}
 
-	clean, _ := w.propose("ws-clean", "Add Add with its test", put("pkg/add.go", goAdd), put("pkg/add_test.go", goAddTest))
-	leaky, _ := w.propose("ws-leaky", "Wire up the deploy settings",
+	clean, _ := w.Propose("ws-clean", "Add Add with its test", put("pkg/add.go", goAdd), put("pkg/add_test.go", goAddTest))
+	leaky, _ := w.Propose("ws-leaky", "Wire up the deploy settings",
 		put("deploy/settings.txt", "region = eu-west-1\nreleaser = "+fakeToken+"\nreplicas = 3\n"))
 
 	o := w.startOrchestrator(orchConfig{
@@ -119,13 +119,13 @@ func TestReviewersFlagRiskyChangesAndLeaveCleanCodeAlone(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		many = append(many, put(fmt.Sprintf("docs/page-%d.md", i), fmt.Sprintf("# Page %d\n", i)))
 	}
-	big, _ := w.propose("ws-big", "Eight small pages", many...)
+	big, _ := w.Propose("ws-big", "Eight small pages", many...)
 	var src strings.Builder
 	src.WriteString("package pkg\n\n")
 	for i := 0; i < 12; i++ {
 		fmt.Fprintf(&src, "func F%d() int { return %d }\n", i, i)
 	}
-	risky, _ := w.propose("ws-risky", "Tweak the pipeline and add helpers",
+	risky, _ := w.Propose("ws-risky", "Tweak the pipeline and add helpers",
 		put(".github/workflows/ci.yml", "name: ci\non: push\n"), put("pkg/helpers.go", src.String()))
 
 	for name, p := range map[string]*agwp.Proposal{"oversized": big, "protected": risky} {
@@ -148,7 +148,7 @@ func TestReviewersFlagRiskyChangesAndLeaveCleanCodeAlone(t *testing.T) {
 	// Nobody approved anything, the clean change is still unreviewed, and each comment was posted once.
 	time.Sleep(2500 * time.Millisecond)
 	for _, p := range []*agwp.Proposal{clean, leaky, big, risky} {
-		d, err := w.alice.GetProposal(ctx, w.repo, p.ID)
+		d, err := w.Alice.GetProposal(ctx, w.Repo, p.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

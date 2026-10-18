@@ -25,9 +25,9 @@ func Hello() { fmt.Println("hi") }
 const configBase = "package lib\n\nconst Timeout = 30\n"
 
 func advisorReviews(w *world, proposal string) []agwp.Review {
-	d, err := w.alice.GetProposal(context.Background(), w.repo, proposal)
+	d, err := w.Alice.GetProposal(context.Background(), w.Repo, proposal)
 	if err != nil {
-		w.t.Fatal(err)
+		w.T.Fatal(err)
 	}
 	var out []agwp.Review
 	for _, r := range d.Reviews {
@@ -46,13 +46,13 @@ func advisorReviews(w *world, proposal string) []agwp.Review {
 func TestAdvisorSuggestsResolutionsForConflictingWorkspaces(t *testing.T) {
 	w := newWorld(t, worldOptions{})
 	ctx := context.Background()
-	w.seed(map[string]string{"src/lib.go": libBase, "src/config.go": configBase})
+	w.Seed(map[string]string{"src/lib.go": libBase, "src/config.go": configBase})
 
-	one, _ := w.propose("ws-one", "Add os and a longer timeout",
+	one, _ := w.Propose("ws-one", "Add os and a longer timeout",
 		put("src/lib.go", strings.Replace(libBase, "\t\"fmt\"\n", "\t\"fmt\"\n\t\"os\"\n", 1)),
 		put("src/config.go", strings.Replace(configBase, "30", "60", 1)))
 	// two is made from the same base, before one lands
-	two, wsTwo := w.propose("ws-two", "Add strings and another timeout",
+	two, wsTwo := w.Propose("ws-two", "Add strings and another timeout",
 		put("src/lib.go", strings.Replace(libBase, "\t\"fmt\"\n", "\t\"fmt\"\n\t\"strings\"\n", 1)),
 		put("src/config.go", strings.Replace(configBase, "30", "90", 1)))
 
@@ -66,7 +66,7 @@ func TestAdvisorSuggestsResolutionsForConflictingWorkspaces(t *testing.T) {
 	if rs := advisorReviews(w, two.ID); len(rs) != 0 {
 		t.Fatalf("advice without a conflict: %+v", rs)
 	}
-	w.land(one)
+	w.Land(one)
 
 	var review agwp.Review
 	eventually(t, "the advisor to comment on the conflicting proposal", 30*time.Second, func() bool {
@@ -118,11 +118,11 @@ func TestAdvisorSuggestsResolutionsForConflictingWorkspaces(t *testing.T) {
 	}
 
 	// The advisor changed nothing: the proposal is untouched, the stream is where one left it, and the advice is posted once.
-	got, err := w.alice.GetProposal(ctx, w.repo, two.ID)
+	got, err := w.Alice.GetProposal(ctx, w.Repo, two.ID)
 	if err != nil || got.Proposal.State != agwp.ProposalOpen || got.Proposal.Head != two.Head {
 		t.Fatalf("proposal after advice: %+v %v", got, err)
 	}
-	if res, err := w.carol.Integrate(ctx, w.repo, two.ID, nil); err != nil || res.Outcome.Status == "integrated" {
+	if res, err := w.Carol.Integrate(ctx, w.Repo, two.ID, nil); err != nil || res.Outcome.Status == "integrated" {
 		t.Fatalf("a conflicted proposal must not integrate on its own: %+v %v", res, err)
 	}
 	time.Sleep(2500 * time.Millisecond)
@@ -131,19 +131,19 @@ func TestAdvisorSuggestsResolutionsForConflictingWorkspaces(t *testing.T) {
 	}
 
 	// A person (here: alice) applies the suggestion and decides the rest, through the normal path.
-	res, err := w.alice.SyncWorkspace(ctx, w.repo, wsTwo.Name, []agwp.FileChange{
+	res, err := w.Alice.SyncWorkspace(ctx, w.Repo, wsTwo.Name, []agwp.FileChange{
 		put("src/lib.go", merged),
 		put("src/config.go", "package lib\n\nconst Timeout = 75\n"),
 	})
 	if err != nil || res.Status != "merged" {
 		t.Fatalf("sync = %+v %v", res, err)
 	}
-	w.updateProposal(two.ID, res.Head)
-	w.land(two)
-	if got, _ := w.file("main", "src/lib.go"); got != merged {
+	w.UpdateProposal(two.ID, res.Head)
+	w.Land(two)
+	if got, _ := w.File("main", "src/lib.go"); got != merged {
 		t.Errorf("main:src/lib.go =\n%s\nwant the advisor's suggestion", got)
 	}
-	if got, _ := w.file("main", "src/config.go"); got != "package lib\n\nconst Timeout = 75\n" {
+	if got, _ := w.File("main", "src/config.go"); got != "package lib\n\nconst Timeout = 75\n" {
 		t.Errorf("main:src/config.go = %q", got)
 	}
 

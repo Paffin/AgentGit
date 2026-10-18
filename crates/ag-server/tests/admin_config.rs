@@ -136,3 +136,50 @@ fn offline_administration_applies_the_configured_quota_defaults_stream_and_crede
     let o = admin(Some(&cfg), &["grant", "--subject", "user:alice", "--repo", "acme/*", "--role", "writer"]);
     assert!(o.status.success(), "{}", text(&o));
 }
+
+#[test]
+fn reap_runs_works_offline_and_says_what_it_did() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let cfg = tmp.path().join("ag-server.toml");
+    std::fs::write(
+        &cfg,
+        format!(
+            "[server]\ndata_dir = {:?}\n\n[agents]\nmin_stale_after_secs = 1\nrun_stale_after_secs = 1\n",
+            data.display().to_string()
+        ),
+    )
+    .unwrap();
+    let o = admin(Some(&cfg), &["create-repo", "acme/web"]);
+    assert!(o.status.success(), "{}", text(&o));
+
+    // A run that starts and goes silent (made through the engine, as the server would).
+    let run = {
+        let repo = ag_integrate::Repository::open(&data.join("repos/acme/web")).unwrap();
+        let key = ag_crypto::KeyPair::generate().unwrap();
+        ag_agent::registry::register_agent_with_key(repo.meta(), "bot", &key.public(), "agent", "user:root").unwrap();
+        ag_agent::registry::start_run(repo.meta(), "bot", None).unwrap()
+    };
+    std::thread::sleep(std::time::Duration::from_millis(1300));
+
+    // Nothing is stale yet for a threshold of an hour; a dry run changes nothing.
+    let o = admin(Some(&cfg), &["reap-runs", "acme/web", "--stale-after-secs", "3600"]);
+    assert!(o.status.success() && text(&o).contains("0 run(s)"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["reap-runs", "acme/web", "--dry-run"]);
+    assert!(text(&o).contains(&format!("would abandon {}", run.run_id)), "{}", text(&o));
+    assert!(text(&o).contains("dry run: nothing changed"), "{}", text(&o));
+    // A threshold below the configured minimum is refused, as it is through the API.
+    let o = admin(Some(&cfg), &["reap-runs", "acme/web", "--stale-after-secs", "0"]);
+    assert!(!o.status.success() && text(&o).contains("at least 1"), "{}", text(&o));
+    let o = admin(Some(&cfg), &["reap-runs", "acme/nowhere"]);
+    assert!(!o.status.success() && text(&o).contains("not found"), "{}", text(&o));
+
+    let o = admin(Some(&cfg), &["reap-runs", "acme/web"]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains(&format!("abandoned {}", run.run_id)) && text(&o).contains("1 run(s)"), "{}", text(&o));
+    // It is on record, under the administrator command line.
+    let repo = ag_integrate::Repository::open(&data.join("repos/acme/web")).unwrap();
+    assert_eq!(repo.meta().read(|tx| tx.run(&run.run_id)).unwrap().unwrap().status, "abandoned");
+    let audit = repo.meta().read(|tx| tx.audit_list(Some("run.abandon"), 10)).unwrap();
+    assert_eq!((audit[0].actor.as_str(), audit[0].target.as_str()), ("system:cli-admin", run.run_id.as_str()));
+}

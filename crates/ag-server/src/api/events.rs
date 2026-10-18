@@ -225,6 +225,8 @@ impl FeedState {
         if expires > 0 && self.app.clock.now().as_millis() >= expires {
             return Err(ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "the credential expired"));
         }
+        // (A stream opened with a run-bound credential ends with the run without a check here: every poll of the
+        // log is an operation of its own and refuses a credential whose run is over, see `effective_actor`.)
         self.app.auth.still_active(&self.call.principal).await
     }
 }

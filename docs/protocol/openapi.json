@@ -660,6 +660,7 @@
         "type": "object"
       },
       "CompleteRunRequest": {
+        "description": "A run is finished by its own agent (a run-bound credential: by that run alone) or by an operator\n(`agent.operate`), whose action is recorded in the audit log as an operator's.",
         "properties": {
           "idempotency_key": {
             "default": "",
@@ -946,6 +947,11 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "run_id": {
+            "default": "",
+            "description": "Binds the credential to one run of one agent (ADR-0010). `repos` must then name exactly one literal\nrepository (the one that holds the run). A run-bound credential acts only as that run, only in that\nrepository, and stops working when the run is no longer running (completed, failed, abandoned). Minting\nneeds the run to be running and to belong to the credential's subject. Empty = bound to the agent's\nname only (every run of the agent).",
+            "type": "string"
           },
           "streams": {
             "default": [],
@@ -1286,6 +1292,7 @@
         "type": "object"
       },
       "FinishTaskRequest": {
+        "description": "Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit\nlog as an operator's, with the owner it overrode.",
         "properties": {
           "id": {
             "default": "",
@@ -2600,7 +2607,7 @@
           },
           "subject": {
             "default": "",
-            "description": "Identity the credential authenticates as. A caller may mint credentials\nfor itself or, with `credentials.mint`, for agents and services.",
+            "description": "Identity the credential authenticates as. A caller may mint credentials\nfor itself, with `credentials.mint` (administrators) for anybody, or with `credentials.delegate`\n(the `delegator` role) for `agent:<name>` only - and then only with the capabilities the caller itself\nholds on the scope's repositories (ADR-0010).",
             "type": "string"
           },
           "ttl_secs": {
@@ -3488,6 +3495,60 @@
         },
         "type": "object"
       },
+      "ReapRunsRequest": {
+        "description": "Ends the runs of a repository that stopped heartbeating, releases the leases they (and finished runs) still\nhold, and revokes the credentials bound to them. An operator action (capability `agent.operate`); every\nrun it ends is recorded in the audit log under the operator's identity.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "description": "Report what would be reaped without changing anything.",
+            "type": "boolean"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stale_after_ms": {
+            "default": 0,
+            "description": "A running run whose last heartbeat is older than this is abandoned. 0 = the server's\n`\\[agents\\] run_stale_after_secs`. Values below the server's `\\[agents\\] min_stale_after_secs` are refused, so\nthat a typo cannot end every live run.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ReapRunsResponse": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "type": "boolean"
+          },
+          "released_leases": {
+            "default": [],
+            "description": "Ids of the leases that were (or would be) released: those of the reaped runs and any active lease whose\nholder is a run that is no longer running.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revoked_credentials": {
+            "default": 0,
+            "description": "How many credentials bound to the reaped runs were revoked (0 with `dry_run`).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "runs": {
+            "default": [],
+            "description": "The runs that were (or, with `dry_run`, would be) ended as \"abandoned\".",
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ReflogEntry": {
         "properties": {
           "actor": {
@@ -3643,6 +3704,11 @@
             "minimum": 0,
             "type": "integer"
           },
+          "counts_error": {
+            "default": "",
+            "description": "Empty when `stream_count` and `changeset_count` are exact; otherwise why they could not be read.",
+            "type": "string"
+          },
           "created_at_ms": {
             "default": 0,
             "format": "int64",
@@ -3697,7 +3763,7 @@
           },
           "stream_count": {
             "default": 0,
-            "description": "Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.",
+            "description": "Exact: read from the repository's own metadata by Create, Describe and List alike. When the repository\ncannot be read (its storage is unreachable or damaged), both are 0 and `counts_error` says why.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -3920,7 +3986,7 @@
           },
           "role": {
             "default": "",
-            "description": "reader, writer, reviewer, integrator, runner, admin.",
+            "description": "reader, writer, reviewer, integrator, runner, delegator, admin.",
             "type": "string"
           },
           "subject": {
@@ -3963,7 +4029,7 @@
           },
           "status": {
             "default": "",
-            "description": "\"running\", \"completed\", \"failed\" or \"stale\" (abandoned: no heartbeat).",
+            "description": "\"running\", \"completed\", \"failed\" or \"abandoned\" (ended by a reap: no heartbeat within the operator's\nthreshold; see ReapRuns).",
             "type": "string"
           },
           "summary": {
@@ -8896,6 +8962,67 @@
           }
         },
         "summary": "Start a run (returns the identity to act as)",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/runs/reap": {
+      "post": {
+        "operationId": "agent.reap_runs",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReapRunsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReapRunsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials",
         "tags": [
           "Agent"
         ]

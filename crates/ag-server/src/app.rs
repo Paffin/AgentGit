@@ -27,6 +27,9 @@ use crate::metrics::Metrics;
 use crate::quota::{Budget, MeterGuard, MeteredStore, ObjectMeter};
 use crate::repos::RepoManager;
 
+/// The identity under which the server's own periodic run reaper (`agents.reap_interval_secs`) is audited.
+pub const REAPER_IDENTITY: &str = "system:reaper";
+
 /// The deadline given to long-lived streams (event subscriptions): effectively none. It is a marker, not a time
 /// anyone waits for, and it is left out of the trace attributes.
 pub const NO_DEADLINE_MS: u64 = u64::MAX / 4;
@@ -348,6 +351,18 @@ impl App {
                 "authentication failed"
             );
         })?;
+        // A credential bound to a run is good for as long as the run is running (ADR-0010): checked for every
+        // operation, before it does anything, so that no code path has to remember to.
+        self.ensure_bound_run_alive(&principal).await.inspect_err(|e| {
+            self.metrics.auth_failures.with_label_values(&["run_ended"]).inc();
+            tracing::warn!(
+                remote = ing.remote.as_deref().unwrap_or("-"),
+                op,
+                credential = %principal.credential_id,
+                code = e.code().as_str(),
+                "a run-bound credential was refused"
+            );
+        })?;
         let deadline_ms = ing
             .deadline_ms
             .or((self.cfg.limits.default_deadline_ms > 0).then_some(self.cfg.limits.default_deadline_ms));
@@ -371,6 +386,55 @@ impl App {
                 )
             })?,
             None => fut.await,
+        }
+    }
+
+    // ---- run-bound credentials -------------------------------------------------------
+
+    /// For a credential bound to a run: the run must still be running and must belong to the credential's
+    /// agent. A finished, failed or abandoned run (or one that no longer exists) ends the credential, whether or
+    /// not it was revoked yet; the answer is `unauthenticated`, as for any dead credential. Other credentials
+    /// pass without a lookup.
+    pub async fn ensure_bound_run_alive(&self, principal: &Principal) -> ApiResult<()> {
+        let Some((repo, run_id)) = principal.scope.bound_run() else { return Ok(()) };
+        let (repos, repo, run_id) = (self.0.clone(), repo.to_string(), run_id.to_string());
+        let agent = principal.identity.principal();
+        tokio::task::spawn_blocking(move || {
+            let ended = || {
+                ApiError::new(
+                    ag_protocol::ErrorCode::Unauthenticated,
+                    "the run this credential is bound to is no longer running, so the credential is no longer valid",
+                )
+            };
+            let handle = match repos.repos.handle(&repo) {
+                Ok(h) => h,
+                Err(e) if e.code() == ag_protocol::ErrorCode::NotFound => return Err(ended()),
+                Err(e) => return Err(e),
+            };
+            match handle.meta().read(|tx| tx.run(&run_id))? {
+                Some(run) if run.status == "running" && format!("agent:{}", run.agent) == agent.as_str() => Ok(()),
+                _ => Err(ended()),
+            }
+        })
+        .await
+        .map_err(ApiError::internal)?
+    }
+
+    /// Revokes the credentials bound to a run that has ended; returns how many. A fault here is logged and
+    /// counted as zero: the credentials are dead anyway ([`App::ensure_bound_run_alive`]), this keeps their
+    /// listing and any open event stream honest.
+    pub async fn revoke_run_credentials(&self, repo: &str, run_id: &str) -> u64 {
+        let (control, repo, run_id, now) =
+            (self.control.clone(), repo.to_string(), run_id.to_string(), self.clock.now().as_millis());
+        let revoked = tokio::task::spawn_blocking(move || {
+            control.revoke_run_credentials(&repo, &run_id, now).inspect_err(|e| {
+                tracing::error!(%repo, %run_id, error = %e.0.message, "could not revoke the credentials of an ended run")
+            })
+        })
+        .await;
+        match revoked {
+            Ok(Ok(n)) => n,
+            _ => 0,
         }
     }
 
@@ -560,8 +624,20 @@ impl App {
 /// Resolves the identity requests act as: the principal itself, or for an
 /// agent presenting `ag-run`, `agent:<name>#<run>` after checking that the run
 /// exists, belongs to that agent and is still running.
+///
+/// A credential bound to a run (ADR-0010) always acts as that run - with or without `ag-run` - and as no other:
+/// naming another run is refused, so two runs of one agent cannot act for each other.
 fn effective_actor(call: &Call, repo: &Repository) -> ApiResult<Identity> {
-    let Some(run_id) = call.run.as_deref().filter(|r| !r.is_empty()) else {
+    let bound = call.principal.scope.bound_run().map(|(_, run)| run);
+    let requested = call.run.as_deref().filter(|r| !r.is_empty());
+    if let (Some(bound), Some(asked)) = (bound, requested)
+        && bound != asked
+    {
+        return Err(ApiError::denied(format!(
+            "this credential is bound to run '{bound}'; it may not act as run '{asked}'"
+        )));
+    }
+    let Some(run_id) = bound.or(requested) else {
         return Ok(call.principal.identity.clone());
     };
     let base = call.principal.identity.principal();
@@ -577,10 +653,13 @@ fn effective_actor(call: &Call, repo: &Repository) -> ApiResult<Identity> {
         return Err(ApiError::denied("this run belongs to a different agent"));
     }
     if run.status != "running" {
-        return Err(ApiError::new(
-            ag_protocol::ErrorCode::FailedPrecondition,
-            format!("run '{run_id}' is {}", run.status),
-        ));
+        // The end of a bound run is the end of its credential; `ensure_bound_run_alive` normally answers first.
+        let code = if bound.is_some() {
+            ag_protocol::ErrorCode::Unauthenticated
+        } else {
+            ag_protocol::ErrorCode::FailedPrecondition
+        };
+        return Err(ApiError::new(code, format!("run '{run_id}' is {}", run.status)));
     }
     Ok(Identity::new(format!("{}#{}", base.as_str(), run_id))?)
 }

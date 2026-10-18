@@ -41,10 +41,7 @@ fn changes(list: &[v1::FileChange]) -> ApiResult<Vec<VirtualChange>> {
 /// Workspaces are private to their owner unless the caller administers the repository.
 fn check_owner(repo: &ag_integrate::Repository, name: &str, actor: &ag_types::Identity, admin: bool) -> ApiResult<()> {
     let ws = repo.workspace_row(name)?;
-    if admin
-        || ws.owner == actor.to_string()
-        || ag_types::Identity::new(ws.owner.clone()).map(|o| o.principal() == actor.principal()).unwrap_or(false)
-    {
+    if admin || super::owns(&ws.owner, actor) {
         Ok(())
     } else {
         Err(ApiError::denied(format!("workspace '{name}' belongs to {}", ws.owner)))

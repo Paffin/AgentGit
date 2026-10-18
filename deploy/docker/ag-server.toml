@@ -21,3 +21,9 @@ token_env = "AG_METRICS_TOKEN"
 [telemetry]
 log_format = "json"
 log_filter = "info"
+
+# Silent agent runs are ended by an operator (or the orchestrator) with `POST /v1/repos/{owner}/{name}/runs/reap`.
+# Uncomment to let the server do it itself, for every repository:
+# [agents]
+# run_stale_after_secs = 900
+# reap_interval_secs = 60

@@ -132,6 +132,24 @@ Three kinds of bearer credentials; all end up as an **identity** (`user:alice`, 
 An agent presents its credential plus `ag-run: <run_id>` (gRPC metadata `ag-run`) to act as
 `agent:<name>#<run_id>` — the server checks that the run exists, belongs to that agent and is running.
 
+**Credentials bound to a run** (feature `auth.run_credentials`, [ADR-0010](../adr/0010-run-bound-credentials.md)).
+A credential for `agent:<name>` is bound to the *name* by default: it may name any run of the agent in `ag-run`. A
+scope with `run_id` (and exactly one literal repository in `repos`, the one that holds the run) binds it to **one run**:
+
+* minting needs the run to exist, be `running` and belong to the subject (`not_found`, `failed_precondition`,
+  `invalid_argument`), and the minter to be allowed `agent.run` on the repository;
+* the credential acts as that run - with or without `ag-run` - and only as that run (naming another is
+  `permission_denied`); it cannot start runs, act on the workspaces, proposals and leases of another run, finish a task
+  the run did not claim, or manage other runs' credentials; it can mint credentials only for its own run;
+* when the run is no longer `running` (completed, failed, abandoned, gone) every call answers `unauthenticated`,
+  open event streams end with an `error` event, and finishing the run revokes the credentials bound to it (the check at
+  use time is the guarantee, the revocation is the record).
+
+**Delegation** (feature `auth.delegation`): `POST /v1/credentials` with a subject other than your own needs
+`credentials.mint` (administrators: anyone but a system identity) or `credentials.delegate` (the `delegator` role:
+`agent:*` subjects only, scoped to the capabilities the caller itself holds on every repository of the scope, never the
+administrative ones; an empty `operations` becomes exactly that set, a request for more is `permission_denied`).
+
 ## Authorization
 
 Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per repository pattern; a request needs
@@ -144,6 +162,7 @@ Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per reposito
 | `reviewer` | reader + review proposals |
 | `integrator` | reader + integrate proposals, request validation, run the queue, close proposals |
 | `runner` | reader + claim execution jobs and submit attestations (execution-plane workers) |
+| `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
 | `admin` | everything, including policy, credentials, roles, GC, fsck, stream compare-and-swap |
 
 A caller with no role at all on a repository gets `not_found`. Authorization says *who may call which API*;

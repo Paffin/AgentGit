@@ -41,6 +41,11 @@ pub const MIGRATIONS: Migrations = Migrations {
             name: "0002_repo_config.sql",
             sql: include_str!("../../../../migrations/control/sqlite/0002_repo_config.sql"),
         },
+        Migration {
+            version: 3,
+            name: "0003_credential_runs.sql",
+            sql: include_str!("../../../../migrations/control/sqlite/0003_credential_runs.sql"),
+        },
     ],
     postgres: &[
         Migration {
@@ -52,6 +57,11 @@ pub const MIGRATIONS: Migrations = Migrations {
             version: 2,
             name: "0002_repo_config.sql",
             sql: include_str!("../../../../migrations/control/postgres/0002_repo_config.sql"),
+        },
+        Migration {
+            version: 3,
+            name: "0003_credential_runs.sql",
+            sql: include_str!("../../../../migrations/control/postgres/0003_credential_runs.sql"),
         },
     ],
 };
@@ -310,9 +320,15 @@ impl Control {
     /// Stores a new credential.
     pub fn insert_credential(&self, c: &CredentialRow) -> ApiResult<()> {
         let scope = serde_json::to_string(&c.scope).map_err(ApiError::internal)?;
+        // The run binding is repeated in two indexed columns (see migration 0003).
+        let (run_repo, run_id) = match (c.scope.run_id.as_str(), c.scope.repos.as_slice()) {
+            ("", _) => (String::new(), String::new()),
+            (run, [repo]) => (repo.clone(), run.to_string()),
+            _ => return Err(ApiError::internal("a credential bound to a run must name exactly one repository")),
+        };
         db(self.db.execute(
-            "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10)",
+            "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by, run_repo, run_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, ?11, ?12)",
             &sql_params![
                 &c.id,
                 &c.secret_hash,
@@ -323,7 +339,9 @@ impl Control {
                 c.created_at_ms,
                 c.expires_at_ms,
                 c.last_used_ms,
-                &c.created_by
+                &c.created_by,
+                run_repo,
+                run_id
             ],
         ))?;
         Ok(())
@@ -402,6 +420,14 @@ impl Control {
             &sql_params![id, now_ms],
         ))?;
         Ok(n > 0)
+    }
+
+    /// Revokes every active credential bound to `run_id` of `repo` (the run ended); returns how many.
+    pub fn revoke_run_credentials(&self, repo: &str, run_id: &str, now_ms: i64) -> ApiResult<u64> {
+        db(self.db.execute(
+            "UPDATE credentials SET revoked_at = ?3 WHERE run_repo = ?1 AND run_id = ?2 AND run_id <> '' AND revoked_at IS NULL",
+            &sql_params![repo, run_id, now_ms],
+        ))
     }
 
     // ---- roles -------------------------------------------------------------
@@ -820,7 +846,12 @@ mod tests {
                 subject: subject.into(),
                 kind: "user".into(),
                 description: "d".into(),
-                scope: v1::CredentialScope { repos: vec!["acme/*".into()], streams: vec![], operations: vec![] },
+                scope: v1::CredentialScope {
+                    repos: vec!["acme/*".into()],
+                    streams: vec![],
+                    operations: vec![],
+                    run_id: String::new(),
+                },
                 created_at_ms: at,
                 expires_at_ms: at + 10_000,
                 revoked_at_ms: None,
@@ -870,16 +901,30 @@ mod tests {
                 [],
             )
             .unwrap();
+            conn.execute(
+                "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by)
+                 VALUES ('cred_0000000000000001', 'ab', 'agent:old', 'agent', 'legacy', '{\"repos\":[\"old/repo\"]}', 1, 99999999999999, NULL, 0, 'user:x')",
+                [],
+            )
+            .unwrap();
         }
         let c = Control::open(&path, Arc::new(SystemClock)).unwrap();
-        assert_eq!(c.schema_versions().unwrap(), (2, 2));
+        assert_eq!(c.schema_versions().unwrap(), (3, 3));
         let r = c.repo("old/repo").unwrap().unwrap();
         assert_eq!((r.description.as_str(), r.object_bytes, r.config_json.as_str()), ("legacy", 42, ""));
+        // A credential from before runs could be bound is an ordinary one: bound to no run, and no run's end
+        // touches it.
+        let old = c.credential("cred_0000000000000001").unwrap().unwrap();
+        assert!(old.scope.run_id.is_empty() && old.revoked_at_ms.is_none());
+        assert_eq!(c.revoke_run_credentials("old/repo", "", 5).unwrap(), 0, "an empty run id matches nothing");
+        assert_eq!(c.revoke_run_credentials("old/repo", "run_x", 5).unwrap(), 0);
+        assert!(c.credential("cred_0000000000000001").unwrap().unwrap().revoked_at_ms.is_none());
         drop(c);
-        // A build that only knows schema 1 refuses the migrated file instead of misreading it.
+        // A build that only knows an older schema refuses the migrated file instead of misreading it - a
+        // run-bound credential must never be read as one that is bound to the agent's name only.
         let conn = rusqlite::Connection::open(&path).unwrap();
         let v: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
     }
 
     #[test]

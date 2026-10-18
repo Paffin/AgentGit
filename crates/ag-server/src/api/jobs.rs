@@ -51,7 +51,7 @@ fn run_to_wire(r: &RunSpec) -> v1::RunSpec {
     }
 }
 
-fn job_to_wire(repo: &str, j: &JobRow) -> v1::Job {
+pub(super) fn job_to_wire(repo: &str, j: &JobRow) -> v1::Job {
     let validation = (j.kind == KIND_VALIDATE).then(|| {
         let p = &j.payload;
         v1::ValidationTask {
@@ -82,6 +82,21 @@ fn job_to_wire(repo: &str, j: &JobRow) -> v1::Job {
 
 fn dedupe_key(proposal: &str, check: &str, tree: &str, policy_version: u64) -> String {
     format!("validate:{proposal}:{check}:{tree}:{policy_version}")
+}
+
+/// The jobs that validate the candidate a preparation evaluated, one indexed lookup per check that has a runner
+/// configuration (the key a job is enqueued under), read in the transaction of the preparation itself.
+pub(super) fn validation_jobs_in(
+    tx: &ag_storage::meta::Tx<'_>,
+    ctx: &ag_integrate::PrepareContext<'_>,
+) -> Result<Vec<JobRow>, ag_storage::meta::MetaError> {
+    let Some(tree) = ctx.tree else { return Ok(Vec::new()) };
+    let tree = tree.to_string();
+    let mut out = Vec::new();
+    for v in ctx.required.iter().filter(|v| v.run.is_some()) {
+        out.extend(tx.job_by_key(&dedupe_key(ctx.proposal, &v.check, &tree, ctx.policy_version))?);
+    }
+    Ok(out)
 }
 
 /// `<principal>|<label>`: the label is the worker's own name for this loop.

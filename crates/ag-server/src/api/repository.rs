@@ -26,8 +26,8 @@ impl App {
     }
 
     /// The wire form of a registry row. The storage backends come from the repository's own stored
-    /// configuration, so create and list report what describe reports; the counts and the durability text need
-    /// the repository opened and are filled by describe only.
+    /// configuration, so create and list report what describe reports; the counts need the repository's metadata
+    /// ([`App::fill_counts`]) and the durability text the open object store (describe only).
     fn repo_to_wire(&self, r: &RepoRow) -> v1::Repo {
         let (meta_backend, object_backend) = self.repos.backends_of(r);
         v1::Repo {
@@ -43,6 +43,31 @@ impl App {
             stream_count: 0,
             changeset_count: 0,
             quota: Some(r.quota),
+            counts_error: String::new(),
+        }
+    }
+
+    /// Fills `stream_count` and `changeset_count` from the repository's own metadata (blocking). A repository
+    /// that cannot be opened or read keeps both at 0 and says so in `counts_error` - what went wrong is in the
+    /// server log, not in the response, which any reader of the repository sees.
+    fn fill_counts(&self, wire: &mut v1::Repo) {
+        let counted = self.repos.handle(&wire.name).map_err(|e| e.0.message).and_then(|h| {
+            h.meta().read(|tx| Ok((tx.count_streams()?, tx.count_changesets()?))).map_err(|e| {
+                tracing::error!(repo = %wire.name, error = %e, "cannot count the streams and changesets");
+                "the repository's metadata could not be read (see the server log)".to_string()
+            })
+        });
+        match counted {
+            Ok((streams, changesets)) => {
+                wire.stream_count = u32::try_from(streams).unwrap_or(u32::MAX);
+                wire.changeset_count = changesets;
+                wire.counts_error.clear();
+            }
+            Err(why) => {
+                wire.stream_count = 0;
+                wire.changeset_count = 0;
+                wire.counts_error = why;
+            }
         }
     }
 
@@ -78,16 +103,27 @@ impl App {
                 }
             }
             let row = app.repos.create(&name, &stream, &description, &actor, quota)?;
+            let mut wire = app.repo_to_wire(&row);
+            app.fill_counts(&mut wire);
             app.control.record_idempotent(
                 &scoped_key,
                 &request_hash,
-                &serde_json::to_string(&app.repo_to_wire(&row)).map_err(ApiError::internal)?,
+                &serde_json::to_string(&wire).map_err(ApiError::internal)?,
             )?;
             Ok(row)
         })
         .await
         .map_err(ApiError::internal)??;
-        Ok(self.repo_to_wire(&row))
+        // The answer is read from the repository now, whether this call created it or an earlier one with the
+        // same key did.
+        let app = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut wire = app.repo_to_wire(&row);
+            app.fill_counts(&mut wire);
+            wire
+        })
+        .await
+        .map_err(ApiError::internal)
     }
 
     /// Describes a repository.
@@ -103,8 +139,8 @@ impl App {
         let mut wire = self.repo_to_wire(&row);
         let (streams, changesets, durability, backends) = self
             .with_repo(call, &name, Cap::RepoRead, None, |repo, _| {
-                let streams = repo.meta().read(|tx| tx.list_streams())?.len() as u32;
-                let changesets = repo.meta().read(|tx| tx.count_changesets())?;
+                let (streams, changesets) = repo.meta().read(|tx| Ok((tx.count_streams()?, tx.count_changesets()?)))?;
+                let streams = u32::try_from(streams).unwrap_or(u32::MAX);
                 let d = repo.objects().durability();
                 let backends = crate::repos::config_backends(repo.config());
                 Ok((
@@ -162,7 +198,16 @@ impl App {
             } else {
                 String::new()
             };
-            Ok((out.iter().map(|r| app.repo_to_wire(r)).collect(), next))
+            // One metadata read per repository of the page - the price of exact counts, bounded by the page size.
+            let wires = out
+                .iter()
+                .map(|r| {
+                    let mut w = app.repo_to_wire(r);
+                    app.fill_counts(&mut w);
+                    w
+                })
+                .collect();
+            Ok((wires, next))
         })
         .await
         .map_err(ApiError::internal)??;

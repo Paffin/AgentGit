@@ -70,6 +70,16 @@ async fn exercise(srv: &TestServer, repo: &str, backends: (&str, &str)) {
         (d.json["meta_backend"].as_str(), d.json["object_backend"].as_str()),
         (Some(backends.0), Some(backends.1))
     );
+    // The listing counts what the repository holds, on this backend too, and agrees with describe.
+    let list = admin.get("/v1/repos").await;
+    let listed = list.json["repos"].as_array().unwrap().iter().find(|r| r["name"] == repo).expect("listed");
+    assert_eq!(listed["stream_count"], 1, "{listed}");
+    assert!(listed["changeset_count"].as_u64().unwrap() >= 1, "{listed}");
+    assert_eq!(listed["counts_error"].as_str().unwrap_or(""), "", "{listed}");
+    assert_eq!(
+        (listed["stream_count"].clone(), listed["changeset_count"].clone()),
+        (d.json["stream_count"].clone(), d.json["changeset_count"].clone())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

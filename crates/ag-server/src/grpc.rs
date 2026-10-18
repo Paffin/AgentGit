@@ -438,6 +438,9 @@ impl AgentService for Grpc {
     async fn list_runs(&self, request: Request<v1::ListRunsRequest>) -> Result<Response<v1::ListRunsResponse>, Status> {
         unary!(self, request, "agent.list_runs", list_runs)
     }
+    async fn reap_runs(&self, request: Request<v1::ReapRunsRequest>) -> Result<Response<v1::ReapRunsResponse>, Status> {
+        unary!(self, request, "agent.reap_runs", reap_runs)
+    }
     async fn create_task(&self, request: Request<v1::CreateTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.create", create_task)
     }

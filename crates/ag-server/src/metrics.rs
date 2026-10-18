@@ -35,6 +35,8 @@ pub struct Metrics {
     pub job_events: IntCounterVec,
     /// Queued jobs in repositories known to have work (refreshed on scrape).
     pub jobs_queued: IntGauge,
+    /// Agent runs ended as abandoned by a reap (an operator's `ReapRuns`, or `agents.reap_interval_secs`).
+    pub runs_reaped: IntCounter,
     /// Seconds since the server started.
     pub uptime: IntGauge,
     /// Trace spans delivered to the collector.
@@ -89,6 +91,8 @@ impl Metrics {
         let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
             .expect("metric");
         let jobs_queued = IntGauge::new("jobs_queued", "Queued execution-plane jobs").expect("metric");
+        let runs_reaped =
+            IntCounter::new("agent_runs_reaped_total", "Agent runs ended as abandoned by a reap").expect("metric");
         let uptime = IntGauge::new("uptime_seconds", "Seconds since start").expect("metric");
         let trace_exported =
             IntCounter::new("trace_spans_exported_total", "Trace spans delivered to the collector").expect("metric");
@@ -138,6 +142,7 @@ impl Metrics {
             Box::new(subscriptions.clone()),
             Box::new(job_events.clone()),
             Box::new(jobs_queued.clone()),
+            Box::new(runs_reaped.clone()),
             Box::new(uptime.clone()),
             Box::new(trace_exported.clone()),
             Box::new(trace_dropped.clone()),
@@ -167,6 +172,7 @@ impl Metrics {
             subscriptions,
             job_events,
             jobs_queued,
+            runs_reaped,
             uptime,
             trace_exported,
             trace_dropped,

@@ -82,9 +82,7 @@ impl App {
         let new_head_rev = require(&req.new_head, "new_head")?.to_string();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalUpdate, None, move |repo, actor| {
             let p = repo.find_proposal(&req.id)?;
-            if p.author != actor.to_string()
-                && ag_types::Identity::new(p.author.clone()).map(|a| a.principal() != actor.principal()).unwrap_or(true)
-            {
+            if !super::owns(&p.author, actor) {
                 return Err(ApiError::denied("only the author may update a proposal"));
             }
             let head = repo.resolve_rev(&new_head_rev)?;
@@ -106,6 +104,10 @@ impl App {
     pub async fn close_proposal(&self, call: &Call, req: v1::CloseProposalRequest) -> ApiResult<v1::Proposal> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalClose, None, move |repo, actor| {
             let p = repo.find_proposal(&req.id)?;
+            // One run does not close what another run of its agent proposed.
+            if p.author.contains('#') && actor.as_str().contains('#') && !super::owns(&p.author, actor) {
+                return Err(ApiError::denied(format!("proposal {} was made by {}", p.id, p.author)));
+            }
             repo.close_proposal(&p.id, actor)?;
             Ok(convert::proposal(&repo.find_proposal(&p.id)?))
         })

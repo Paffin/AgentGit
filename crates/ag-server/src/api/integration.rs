@@ -75,24 +75,41 @@ impl App {
     /// Previews an integration and evaluates policy against the exact
     /// candidate tree. With `enqueue_validations`, also queues the checks the
     /// policy knows how to run.
+    ///
+    /// The verdict and the jobs that validate the candidate are read in one transaction
+    /// ([`ag_integrate::Repository::prepare_with`]), so a validation that finishes at that moment is reported
+    /// either as still running or as passed/failed with its attestation - never as missing with nothing in flight.
     pub async fn prepare(&self, call: &Call, req: v1::PrepareRequest) -> ApiResult<v1::Preparation> {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let proposal = require(&req.proposal, "proposal")?.to_string();
         if req.enqueue_validations {
             self.authorize(call, &repo_name, Cap::IntegrateValidate, None).await?;
         }
-        let p = proposal.clone();
-        let prep = self
-            .with_repo(call, &repo_name, Cap::IntegratePrepare, None, move |repo, actor| {
-                Ok(repo.prepare(&p, actor, &[])?)
-            })
-            .await?;
-        let jobs = if req.enqueue_validations {
-            self.enqueue_validation_jobs(call, &repo_name, &prep, &[]).await?
-        } else {
-            self.existing_validation_jobs(call, &repo_name, &prep).await?
-        };
+        // The jobs are part of the answer.
+        self.authorize(call, &repo_name, Cap::JobsRead, None).await?;
+        let (mut prep, mut jobs) = self.prepare_snapshot(call, &repo_name, &proposal).await?;
+        if req.enqueue_validations && prep.validations.iter().any(|v| v.state == "missing" && v.run.is_some()) {
+            self.enqueue_validation_jobs(call, &repo_name, &prep, &[]).await?;
+            // What the answer shows is read again, as a whole: the jobs just queued - or finished by a worker
+            // since the first read - and the attestations they produced belong together.
+            (prep, jobs) = self.prepare_snapshot(call, &repo_name, &proposal).await?;
+        }
         Ok(preparation_to_wire(&prep, jobs))
+    }
+
+    /// One consistent reading of a proposal's preparation and its validation jobs.
+    async fn prepare_snapshot(
+        &self,
+        call: &Call,
+        repo: &str,
+        proposal: &str,
+    ) -> ApiResult<(Preparation, Vec<v1::Job>)> {
+        let (name, p) = (repo.to_string(), proposal.to_string());
+        self.with_repo(call, repo, Cap::IntegratePrepare, None, move |r, actor| {
+            let (prep, rows) = r.prepare_with(&p, actor, &[], super::jobs::validation_jobs_in)?;
+            Ok((prep, rows.iter().map(|j| super::jobs::job_to_wire(&name, j)).collect()))
+        })
+        .await
     }
 
     /// Stores a signed attestation (whether it *counts* is up to the policy).

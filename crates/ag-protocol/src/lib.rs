@@ -42,10 +42,26 @@ pub mod features {
     pub const AUTH_OIDC: &str = "auth.oidc";
     /// Scoped, short-lived credentials can be minted.
     pub const AUTH_SCOPED_CREDENTIALS: &str = "auth.scoped_credentials";
+    /// Credentials can be bound to one run (`CredentialScope.run_id`, ADR-0010): they act only as that run and
+    /// die with it.
+    pub const AUTH_RUN_CREDENTIALS: &str = "auth.run_credentials";
+    /// The `delegator` role: minting credentials for `agent:*` subjects without administrator rights.
+    pub const AUTH_DELEGATION: &str = "auth.delegation";
+    /// Operators can finish tasks and reap stale runs (`agent.operate`, `ReapRuns`).
+    pub const AGENTS_OPERATE: &str = "agents.operate";
 
     /// Every feature this implementation knows.
-    pub const ALL: &[&str] =
-        &[EVENTS_REPLAY, WORKSPACES_VIRTUAL, EXECUTION_JOBS, OBJECTS_CHUNKED, AUTH_OIDC, AUTH_SCOPED_CREDENTIALS];
+    pub const ALL: &[&str] = &[
+        EVENTS_REPLAY,
+        WORKSPACES_VIRTUAL,
+        EXECUTION_JOBS,
+        OBJECTS_CHUNKED,
+        AUTH_OIDC,
+        AUTH_SCOPED_CREDENTIALS,
+        AUTH_RUN_CREDENTIALS,
+        AUTH_DELEGATION,
+        AGENTS_OPERATE,
+    ];
 }
 
 /// Default protocol limits advertised by `Negotiate`.

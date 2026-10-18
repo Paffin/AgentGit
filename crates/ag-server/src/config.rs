@@ -40,6 +40,8 @@ pub struct ServerConfig {
     pub limits: LimitsSection,
     /// Repository handling.
     pub repos: ReposSection,
+    /// Running agents: when a silent run counts as abandoned.
+    pub agents: AgentsSection,
     /// Prometheus metrics.
     pub metrics: MetricsSection,
     /// The Web UI.
@@ -276,7 +278,7 @@ fn default_algs() -> Vec<String> {
 pub struct GroupRole {
     /// Group name as it appears in the groups claim.
     pub group: String,
-    /// One of reader, writer, reviewer, integrator, runner, admin.
+    /// One of reader, writer, reviewer, integrator, runner, delegator, admin.
     pub role: String,
     /// Repository pattern, e.g. `acme/*` or `*`.
     #[serde(default = "star")]
@@ -363,6 +365,29 @@ pub struct ReposSection {
 impl Default for ReposSection {
     fn default() -> Self {
         Self { pool_size: 4, max_open: 256, default_stream: "main".into(), storage: None }
+    }
+}
+
+/// `[agents]` - when a run that stopped heartbeating is given up on (ADR-0010).
+///
+/// An agent run that crashes sends no goodbye. The server never decides that a run is dead by itself unless it
+/// is told to: an operator (a person, or an orchestrator holding the `delegator` role) ends the stale runs of a
+/// repository with `ReapRuns`, or `reap_interval_secs` makes the server do it for every repository.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct AgentsSection {
+    /// A running run whose last heartbeat is older than this is stale. Used by `ReapRuns` when the request names
+    /// no threshold, and by the periodic reaper.
+    pub run_stale_after_secs: u64,
+    /// The shortest threshold `ReapRuns` accepts: a typo (`1` for `1000`) must not end every live run.
+    pub min_stale_after_secs: u64,
+    /// Reap the stale runs of every repository this often (audited as `system:reaper`). 0 = never: only on request.
+    pub reap_interval_secs: u64,
+}
+
+impl Default for AgentsSection {
+    fn default() -> Self {
+        Self { run_stale_after_secs: 900, min_stale_after_secs: 30, reap_interval_secs: 0 }
     }
 }
 
@@ -454,6 +479,16 @@ impl ServerConfig {
         }
         if self.repos.pool_size == 0 || self.repos.max_open == 0 {
             return bad("repos.pool_size and repos.max_open must be at least 1");
+        }
+        let ag = &self.agents;
+        if ag.min_stale_after_secs == 0 {
+            return bad("agents.min_stale_after_secs must be at least 1");
+        }
+        if ag.run_stale_after_secs < ag.min_stale_after_secs {
+            return bad("agents.run_stale_after_secs must not be below agents.min_stale_after_secs");
+        }
+        if ag.run_stale_after_secs > 30 * 24 * 3600 {
+            return bad("agents.run_stale_after_secs must be at most 30 days");
         }
         let c = &self.control;
         if c.url.as_deref().is_some_and(|u| !u.trim().is_empty()) && c.url_env.as_deref().is_some_and(|v| !v.is_empty())

@@ -117,6 +117,17 @@ fn lookup<T: serde::de::DeserializeOwned>(
     Ok(Err(Claim { slot, hash, keyed: true }))
 }
 
+/// Whether `actor` may treat something owned by `owner` - a workspace's owner, a proposal's author, a lease's
+/// holder, written as an identity - as its own. The same principal does (the agent itself, or another run of the
+/// agent, when the owner is not a run); but a run owns what it made: when both name a run, it must be the same
+/// run, so that two runs of one agent cannot touch each other's workspaces, proposals and leases (ADR-0010).
+pub(crate) fn owns(owner: &str, actor: &ag_types::Identity) -> bool {
+    match (owner.contains('#'), actor.as_str().contains('#')) {
+        (true, true) => owner == actor.as_str(),
+        _ => owner.split('#').next() == Some(actor.principal().as_str()),
+    }
+}
+
 /// Parses a typed identifier, naming what it was in the error.
 pub(crate) fn parse_id<T: FromStr>(s: &str, what: &str) -> ApiResult<T> {
     s.parse().map_err(|_| ApiError::invalid(format!("'{s}' is not a valid {what}")))

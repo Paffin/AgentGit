@@ -51,7 +51,7 @@ enum Command {
         #[arg(long, env = "AG_DATA_DIR")]
         data_dir: Option<PathBuf>,
         /// The server's configuration. `[control]` (a PostgreSQL control database), `[repos]` (storage and the
-        /// default stream), `[limits]` (the quota a new repository starts with), `[auth]` (credential lifetimes)
+        /// default stream), `[limits]` (the quota a new repository starts with), `[auth]` (credential lifetimes), `[agents]` (when a run counts as stale)
         /// and `server.data_dir` are used: a repository created here gets the same PostgreSQL schema, S3 prefix,
         /// default stream and quota as one created through the API, and a minted credential obeys the same
         /// lifetime caps. Without it, the control database is `<data-dir>/control.db` and `create-repo` makes a
@@ -74,7 +74,7 @@ enum ControlBackend {
 
 #[derive(Subcommand, Debug)]
 enum AdminAction {
-    /// Grant a role (reader, writer, reviewer, integrator, runner, admin).
+    /// Grant a role (reader, writer, reviewer, integrator, runner, delegator, admin).
     Grant {
         /// Identity or pattern, e.g. user:alice, agent:*, group:platform.
         #[arg(long)]
@@ -117,6 +117,18 @@ enum AdminAction {
     },
     /// List repositories.
     Repos,
+    /// End the runs of a repository that stopped heartbeating, release the leases of ended runs and revoke the
+    /// credentials bound to them (what `POST /v1/repos/{repo}/runs/reap` does; audited as `system:cli-admin`).
+    ReapRuns {
+        /// owner/name
+        repo: String,
+        /// A running run whose last heartbeat is older than this is abandoned (default: `agents.run_stale_after_secs`).
+        #[arg(long)]
+        stale_after_secs: Option<u64>,
+        /// Say what would be reaped without changing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Write a logical backup of the control database (credential hashes, roles, repository registry) to a file.
     /// Works for SQLite and PostgreSQL alike. The file is as sensitive as the database: it is created with mode 0600.
     BackupControl {
@@ -257,6 +269,7 @@ async fn main() -> Result<()> {
                 cfg.control = loaded.control;
                 cfg.limits = loaded.limits;
                 cfg.auth = loaded.auth;
+                cfg.agents = loaded.agents;
                 cfg.server.data_dir = loaded.server.data_dir;
             }
             if let Some(dir) = data_dir {
@@ -432,7 +445,7 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
                 .credential_ttl(identity.kind(), ttl.unwrap_or(0))
                 .map_err(|e| anyhow::anyhow!("--ttl: {e}"))?;
             let minted = ag_server::auth::mint_token().map_err(|e| anyhow::anyhow!("{e}"))?;
-            let scope = v1::CredentialScope { repos, streams, operations };
+            let scope = v1::CredentialScope { repos, streams, operations, run_id: String::new() };
             ag_server::authz::Scope::from_wire(&scope).map_err(|e| anyhow::anyhow!("{e}"))?;
             let now = app.clock.now().as_millis();
             app.control
@@ -466,6 +479,42 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
             for r in app.control.all_repos().map_err(|e| anyhow::anyhow!("{e}"))? {
                 println!("{}\t{}", r.name, r.description);
             }
+        }
+        AdminAction::ReapRuns { repo, stale_after_secs, dry_run } => {
+            let cfg = &app.cfg.agents;
+            let secs = stale_after_secs.unwrap_or(cfg.run_stale_after_secs);
+            if secs < cfg.min_stale_after_secs {
+                bail!("--stale-after-secs must be at least {} (agents.min_stale_after_secs)", cfg.min_stale_after_secs);
+            }
+            let stale_after_ms = i64::try_from(secs.saturating_mul(1000)).context("--stale-after-secs is too large")?;
+            if app.control.repo(&repo).map_err(|e| anyhow::anyhow!("{e}"))?.is_none() {
+                bail!("repository '{repo}' not found");
+            }
+            let handle = app.repos.handle(&repo).map_err(|e| anyhow::anyhow!("{e}"))?;
+            let reaped = ag_agent::registry::reap_runs(handle.meta(), stale_after_ms, by, dry_run)?;
+            let mut revoked = 0;
+            for run in &reaped.runs {
+                println!("{} {}\t{}", if dry_run { "would abandon" } else { "abandoned" }, run.run_id, run.agent);
+                if !dry_run {
+                    revoked += app
+                        .control
+                        .revoke_run_credentials(&repo, &run.run_id, app.clock.now().as_millis())
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                }
+            }
+            for lease in &reaped.released_leases {
+                println!("{} lease {lease}", if dry_run { "would release" } else { "released" });
+            }
+            println!(
+                "{} run(s), {} lease(s){}",
+                reaped.runs.len(),
+                reaped.released_leases.len(),
+                if dry_run {
+                    " (dry run: nothing changed)".to_string()
+                } else {
+                    format!(", {revoked} credential(s) revoked")
+                }
+            );
         }
         AdminAction::BackupControl { .. } | AdminAction::RestoreControl { .. } | AdminAction::MigrateControl { .. } => {
             bail!("handled before an application is built")

@@ -1109,6 +1109,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         meta,
         post,
         "post",
+        "/v1/repos/{owner}/{rname}/runs/reap",
+        "agent.reap_runs",
+        "Agent",
+        "Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials",
+        v1::ReapRunsRequest,
+        v1::ReapRunsResponse,
+        reap_runs
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
         "/v1/repos/{owner}/{rname}/runs/{run_id}/heartbeat",
         "agent.heartbeat",
         "Agent",

@@ -92,11 +92,13 @@ caps! {
     GcRun => "gc.run",
     FsckRun => "fsck.run",
     CredentialsMint => "credentials.mint",
+    CredentialsDelegate => "credentials.delegate",
     CredentialsList => "credentials.list",
     CredentialsRevoke => "credentials.revoke",
     RolesManage => "roles.manage",
     JobsRead => "jobs.read",
     JobsClaim => "jobs.claim",
+    AgentOperate => "agent.operate",
 }
 
 /// A named bundle of capabilities.
@@ -112,6 +114,10 @@ pub enum Role {
     Integrator,
     /// Execution-plane worker: claim jobs and submit attestations.
     Runner,
+    /// Runs agents for others (an orchestrator): everything a writer may do, plus minting credentials for
+    /// `agent:*` subjects - never for people, services or administrators, and never with a capability the
+    /// delegator does not hold itself - and operating other agents' tasks and runs (`agent.operate`).
+    Delegator,
     /// Everything, including policy, credentials, roles, GC.
     Admin,
 }
@@ -119,7 +125,7 @@ pub enum Role {
 impl Role {
     /// Every role.
     pub const ALL: &'static [Role] =
-        &[Role::Reader, Role::Writer, Role::Reviewer, Role::Integrator, Role::Runner, Role::Admin];
+        &[Role::Reader, Role::Writer, Role::Reviewer, Role::Integrator, Role::Runner, Role::Delegator, Role::Admin];
 
     /// Wire name.
     pub fn as_str(self) -> &'static str {
@@ -129,6 +135,7 @@ impl Role {
             Role::Reviewer => "reviewer",
             Role::Integrator => "integrator",
             Role::Runner => "runner",
+            Role::Delegator => "delegator",
             Role::Admin => "admin",
         }
     }
@@ -163,27 +170,33 @@ impl Role {
             PinsRead,
             JobsRead,
         ];
+        let writer: &[Cap] = &[
+            ObjectsWrite,
+            Publish,
+            StreamCreate,
+            WorkspaceWrite,
+            ProposalCreate,
+            ProposalUpdate,
+            ProposalClose,
+            IntegrateValidate,
+            QueueWrite,
+            AgentRegister,
+            AgentRun,
+            TaskWrite,
+            LeaseWrite,
+            ProvenanceWrite,
+        ];
         let mut set: BTreeSet<Cap> = BTreeSet::new();
         match self {
             Role::Reader => set.extend(reader),
             Role::Writer => {
                 set.extend(reader);
-                set.extend([
-                    ObjectsWrite,
-                    Publish,
-                    StreamCreate,
-                    WorkspaceWrite,
-                    ProposalCreate,
-                    ProposalUpdate,
-                    ProposalClose,
-                    IntegrateValidate,
-                    QueueWrite,
-                    AgentRegister,
-                    AgentRun,
-                    TaskWrite,
-                    LeaseWrite,
-                    ProvenanceWrite,
-                ]);
+                set.extend(writer);
+            }
+            Role::Delegator => {
+                set.extend(reader);
+                set.extend(writer);
+                set.extend([CredentialsDelegate, AgentOperate]);
             }
             Role::Reviewer => {
                 set.extend(reader);
@@ -291,6 +304,14 @@ pub struct Scope {
     pub streams: Patterns,
     /// Allowed capabilities (empty = any the roles grant).
     pub operations: BTreeSet<Cap>,
+    /// The run the credential is bound to (ADR-0010), if any. `repos` then holds exactly one literal repository
+    /// name: the one that holds the run.
+    pub run_id: Option<String>,
+}
+
+/// Whether `id` can be a run id (what `ag_crypto::random_id("run")` makes, and what the protocol accepts in a path).
+pub fn is_run_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 80 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 impl Scope {
@@ -300,10 +321,26 @@ impl Scope {
         for op in &s.operations {
             operations.insert(Cap::parse(op).ok_or_else(|| ApiError::invalid(format!("unknown operation '{op}'")))?);
         }
+        let run_id = (!s.run_id.is_empty()).then(|| s.run_id.clone());
+        if let Some(run) = &run_id {
+            if !is_run_id(run) {
+                return Err(ApiError::invalid(format!("'{run}' is not a run id")));
+            }
+            // A run lives in one repository: the credential is pinned to it, by its literal name.
+            match s.repos.as_slice() {
+                [repo] if crate::repos::parse_repo_name(repo).is_ok() => {}
+                _ => {
+                    return Err(ApiError::invalid(
+                        "a credential bound to a run must name exactly one repository (`owner/name`, no wildcards) in `repos`",
+                    ));
+                }
+            }
+        }
         Ok(Self {
             repos: Patterns::new(&s.repos).map_err(ApiError::invalid)?,
             streams: Patterns::new(&s.streams).map_err(ApiError::invalid)?,
             operations,
+            run_id,
         })
     }
 
@@ -313,12 +350,20 @@ impl Scope {
             repos: self.repos.raw().to_vec(),
             streams: self.streams.raw().to_vec(),
             operations: self.operations.iter().map(|c| c.as_str().to_string()).collect(),
+            run_id: self.run_id.clone().unwrap_or_default(),
         }
+    }
+
+    /// The `(repository, run id)` the credential is bound to, if it is bound to a run.
+    pub fn bound_run(&self) -> Option<(&str, &str)> {
+        let run = self.run_id.as_deref()?;
+        // `from_wire` guarantees exactly one literal repository whenever a run is set.
+        Some((self.repos.raw().first()?.as_str(), run))
     }
 
     /// True if this scope puts no restriction at all.
     pub fn is_unrestricted(&self) -> bool {
-        self.repos.is_empty() && self.streams.is_empty() && self.operations.is_empty()
+        self.repos.is_empty() && self.streams.is_empty() && self.operations.is_empty() && self.run_id.is_none()
     }
 
     /// Whether the scope permits `cap` on `repo` / `stream`.
@@ -357,7 +402,9 @@ impl Scope {
         };
         let ops_ok = self.operations.is_empty()
             || (!narrower.operations.is_empty() && narrower.operations.iter().all(|o| self.operations.contains(o)));
-        list_ok(&self.repos, &narrower.repos) && list_ok(&self.streams, &narrower.streams) && ops_ok
+        // A credential bound to a run can only hand out credentials bound to that same run.
+        let run_ok = self.run_id.is_none() || self.run_id == narrower.run_id;
+        list_ok(&self.repos, &narrower.repos) && list_ok(&self.streams, &narrower.streams) && ops_ok && run_ok
     }
 }
 
@@ -415,6 +462,27 @@ impl Binding {
             || principal.groups.iter().any(|g| self.subject.strip_prefix("group:") == Some(g.as_str()))
     }
 }
+
+/// Capabilities a delegator never passes on to the credentials it mints, whatever roles it holds: the ones that
+/// administer the installation (credentials, roles, policy, repositories, maintenance), and the operator powers
+/// over other agents. A test pins that every capability only administrators have is listed here.
+pub const NEVER_DELEGATED: &[Cap] = &[
+    Cap::RepoCreate,
+    Cap::RepoConfigure,
+    Cap::StreamCas,
+    Cap::StreamForce,
+    Cap::PolicyWrite,
+    Cap::PinsWrite,
+    Cap::AuditRead,
+    Cap::GcRun,
+    Cap::FsckRun,
+    Cap::CredentialsMint,
+    Cap::CredentialsDelegate,
+    Cap::CredentialsList,
+    Cap::CredentialsRevoke,
+    Cap::RolesManage,
+    Cap::AgentOperate,
+];
 
 /// Decides whether a principal may do something.
 pub struct Authorizer;
@@ -474,26 +542,46 @@ impl Authorizer {
         Ok(())
     }
 
+    /// The roles `principal` holds on *every* repository `repo_pattern` could match: the bindings whose
+    /// repository pattern provably covers it (see [`pattern_within`]).
+    pub fn roles_covering(principal: &Principal, bindings: &[Binding], repo_pattern: &str) -> BTreeSet<Role> {
+        let mut roles = BTreeSet::new();
+        if principal.bootstrap {
+            roles.insert(Role::Admin);
+            return roles;
+        }
+        for b in bindings {
+            if b.applies_to(principal) && pattern_within(&b.repo, repo_pattern) {
+                roles.insert(b.role);
+            }
+        }
+        for (role, pattern) in &principal.group_roles {
+            if pattern_within(pattern, repo_pattern) {
+                roles.insert(*role);
+            }
+        }
+        roles
+    }
+
+    /// The capabilities `principal` may pass on to an agent credential for `repo_pattern` (ADR-0010): those its
+    /// own roles grant on every repository the pattern covers, and its own credential's scope permits, less
+    /// [`NEVER_DELEGATED`]. A delegator can hand down what it holds, never more.
+    pub fn delegable(principal: &Principal, bindings: &[Binding], repo_pattern: &str) -> BTreeSet<Cap> {
+        let mut caps: BTreeSet<Cap> =
+            Self::roles_covering(principal, bindings, repo_pattern).iter().flat_map(|r| r.caps()).collect();
+        if !principal.scope.operations.is_empty() {
+            caps.retain(|c| principal.scope.operations.contains(c));
+        }
+        caps.retain(|c| !NEVER_DELEGATED.contains(c));
+        caps
+    }
+
     /// Checks `cap` for `principal` on every repository a *pattern* could match: some role the caller holds
     /// must cover the whole pattern (see [`pattern_within`]) and the credential presented must be scoped for it.
     /// Used where a credential is minted or revoked for a set of repositories, where the pattern is not itself
     /// a repository name.
     pub fn check_pattern(principal: &Principal, bindings: &[Binding], repo_pattern: &str, cap: Cap) -> ApiResult<()> {
-        let mut roles = BTreeSet::new();
-        if principal.bootstrap {
-            roles.insert(Role::Admin);
-        } else {
-            for b in bindings {
-                if b.applies_to(principal) && pattern_within(&b.repo, repo_pattern) {
-                    roles.insert(b.role);
-                }
-            }
-            for (role, pattern) in &principal.group_roles {
-                if pattern_within(pattern, repo_pattern) {
-                    roles.insert(*role);
-                }
-            }
-        }
+        let roles = Self::roles_covering(principal, bindings, repo_pattern);
         if roles.is_empty() {
             return Err(ApiError::not_found(format!("repository '{repo_pattern}' not found")));
         }
@@ -688,6 +776,7 @@ mod tests {
             repos: Patterns::new(&["acme/web".into()]).unwrap(),
             streams: Patterns::new(&["agents/*".into()]).unwrap(),
             operations: [Cap::ProposalCreate, Cap::ObjectsWrite].into_iter().collect(),
+            run_id: None,
         };
         assert!(Authorizer::check(&p, &b, "acme/web", Cap::ProposalCreate, Some("agents/a")).is_ok());
         assert!(Authorizer::check(&p, &b, "acme/web", Cap::ProposalCreate, Some("main")).is_err());
@@ -702,6 +791,7 @@ mod tests {
             repos: Patterns::new(&["acme/web".into()]).unwrap(),
             streams: Patterns::default(),
             operations: [Cap::RepoRead].into_iter().collect(),
+            run_id: None,
         };
         assert!(wide.contains(&narrow));
         assert!(!narrow.contains(&wide), "an unrestricted credential cannot be minted from a scoped one");
@@ -711,8 +801,113 @@ mod tests {
             repos: Patterns::new(&["acme/web".into()]).unwrap(),
             streams: Patterns::default(),
             operations: [Cap::RepoRead].into_iter().collect(),
+            run_id: None,
         };
         assert!(narrow.contains(&sub));
+    }
+
+    fn wire(repos: &[&str], run: &str) -> ag_protocol::v1::CredentialScope {
+        ag_protocol::v1::CredentialScope {
+            repos: repos.iter().map(|r| r.to_string()).collect(),
+            run_id: run.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_scope_bound_to_a_run_names_one_literal_repository_and_one_run() {
+        let bound = Scope::from_wire(&wire(&["acme/web"], "run_ab12")).unwrap();
+        assert_eq!(bound.bound_run(), Some(("acme/web", "run_ab12")));
+        assert!(!bound.is_unrestricted());
+        assert_eq!(bound.to_wire().run_id, "run_ab12", "the wire form carries the binding back");
+        assert_eq!(Scope::from_wire(&wire(&["acme/web"], "")).unwrap().bound_run(), None);
+        // The repository must be exactly one name, not a pattern: a run lives in one repository.
+        for repos in [&[][..], &["acme/*"], &["*"], &["acme/web", "acme/api"], &["acme/we?"], &["acme"], &["acme/web*"]]
+        {
+            assert!(Scope::from_wire(&wire(repos, "run_ab12")).is_err(), "{repos:?} cannot hold a run binding");
+        }
+        for run in ["a b", "run/1", "run#1", &"r".repeat(81)] {
+            assert!(Scope::from_wire(&wire(&["acme/web"], run)).is_err(), "{run:?} is not a run id");
+        }
+    }
+
+    #[test]
+    fn a_run_bound_scope_only_contains_scopes_bound_to_the_same_run() {
+        let bound = Scope::from_wire(&wire(&["acme/web"], "run_a")).unwrap();
+        assert!(bound.contains(&Scope::from_wire(&wire(&["acme/web"], "run_a")).unwrap()));
+        // Not the same agent's other run, and not the agent without a run: that would be wider.
+        assert!(!bound.contains(&Scope::from_wire(&wire(&["acme/web"], "run_b")).unwrap()));
+        assert!(!bound.contains(&Scope::from_wire(&wire(&["acme/web"], "")).unwrap()));
+        // An unbound scope contains a bound one (the binding only narrows).
+        let wide = Scope { repos: Patterns::new(&["acme/*".into()]).unwrap(), ..Scope::default() };
+        assert!(wide.contains(&bound));
+    }
+
+    #[test]
+    fn the_delegator_holds_the_writers_powers_plus_delegation_and_nothing_administrative() {
+        let delegator = Role::Delegator.caps();
+        assert!(delegator.is_superset(&Role::Writer.caps()));
+        assert!(delegator.contains(&Cap::CredentialsDelegate) && delegator.contains(&Cap::AgentOperate));
+        for cap in [
+            Cap::CredentialsMint,
+            Cap::CredentialsList,
+            Cap::CredentialsRevoke,
+            Cap::RolesManage,
+            Cap::PolicyWrite,
+            Cap::RepoCreate,
+            Cap::RepoConfigure,
+            Cap::IntegrateRun,
+            Cap::ProposalReview,
+            Cap::GcRun,
+        ] {
+            assert!(!delegator.contains(&cap), "a delegator must not hold {}", cap.as_str());
+        }
+        for role in [Role::Reader, Role::Writer, Role::Reviewer, Role::Integrator, Role::Runner] {
+            assert!(!role.caps().contains(&Cap::CredentialsDelegate) && !role.caps().contains(&Cap::AgentOperate));
+        }
+        assert_eq!(Role::parse("delegator"), Some(Role::Delegator));
+    }
+
+    #[test]
+    fn every_capability_only_administrators_hold_is_never_delegated() {
+        let others: BTreeSet<Cap> = Role::ALL
+            .iter()
+            .filter(|r| **r != Role::Admin)
+            .flat_map(|r| r.caps())
+            .filter(|c| ![Cap::CredentialsDelegate, Cap::AgentOperate].contains(c))
+            .collect();
+        for cap in Cap::ALL {
+            if !others.contains(cap) {
+                assert!(NEVER_DELEGATED.contains(cap), "{} is administrative but could be delegated", cap.as_str());
+            }
+        }
+        // Nothing a plain agent needs is on the list.
+        for cap in Role::Writer.caps() {
+            assert!(!NEVER_DELEGATED.contains(&cap), "{} is a writer's capability", cap.as_str());
+        }
+    }
+
+    #[test]
+    fn a_delegator_can_pass_on_what_it_holds_where_it_holds_it_and_no_more() {
+        let p = Principal::for_tests("service:orchestrator");
+        let b = vec![
+            binding("service:orchestrator", "acme/*", Role::Delegator),
+            binding("service:orchestrator", "acme/web", Role::Integrator),
+        ];
+        let on_web = Authorizer::delegable(&p, &b, "acme/web");
+        assert!(on_web.contains(&Cap::ObjectsWrite) && on_web.contains(&Cap::IntegrateRun), "integrator too, there");
+        assert!(!on_web.contains(&Cap::CredentialsDelegate) && !on_web.contains(&Cap::AgentOperate));
+        let on_api = Authorizer::delegable(&p, &b, "acme/api");
+        assert!(on_api.contains(&Cap::ObjectsWrite) && !on_api.contains(&Cap::IntegrateRun), "only a delegator there");
+        // The pattern covering both repositories is only as strong as the weaker role there.
+        let both = Authorizer::delegable(&p, &b, "acme/*");
+        assert!(both.contains(&Cap::ObjectsWrite) && !both.contains(&Cap::IntegrateRun));
+        // Outside every binding, nothing; and the delegator's own credential scope narrows it further.
+        assert!(Authorizer::delegable(&p, &b, "other/web").is_empty());
+        let mut narrow = p.clone();
+        narrow.scope.operations = [Cap::ObjectsWrite, Cap::Publish, Cap::IntegrateRun].into_iter().collect();
+        let got = Authorizer::delegable(&narrow, &b, "acme/web");
+        assert_eq!(got, [Cap::ObjectsWrite, Cap::Publish, Cap::IntegrateRun].into_iter().collect::<BTreeSet<_>>());
     }
 
     #[test]

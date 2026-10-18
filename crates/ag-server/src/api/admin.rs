@@ -183,6 +183,16 @@ impl App {
     // ---- credentials ------------------------------------------------------------------------
 
     /// Mints a scoped, expiring credential. The secret is returned once.
+    ///
+    /// Who may mint what (ADR-0010):
+    /// * anybody, for themselves, as long as the new scope is inside the scope of the credential they present;
+    /// * `credentials.mint` (administrators), for any identity but a system one;
+    /// * `credentials.delegate` (the `delegator` role), for `agent:<name>` subjects only, and only with the
+    ///   capabilities the delegator itself holds on every repository of the scope (never the administrative
+    ///   ones): the new credential is always explicitly scoped, so what the agent's own roles grant beyond that
+    ///   is not reachable through it.
+    ///
+    /// A scope may bind the credential to one run of the subject; see [`Scope::run_id`].
     pub async fn mint_credential(
         &self,
         call: &Call,
@@ -191,30 +201,72 @@ impl App {
         let me = &call.principal;
         let subject =
             if req.subject.is_empty() { me.identity.principal() } else { Identity::new(req.subject.clone())? };
-        let wanted = Scope::from_wire(&req.scope.clone().unwrap_or_default())?;
-        if !me.scope.contains(&wanted) {
-            return Err(ApiError::denied("a credential cannot grant more than the credential used to mint it"));
+        if subject != subject.principal() {
+            return Err(ApiError::invalid(
+                "a credential authenticates as an identity, not as a run: bind it to a run with `scope.run_id`",
+            ));
+        }
+        let mut wanted = Scope::from_wire(&req.scope.clone().unwrap_or_default())?;
+        let bindings = self.bindings().await?;
+        if matches!(subject.kind(), ag_types::IdentityKind::System) {
+            return Err(ApiError::invalid("credentials cannot be minted for system identities"));
         }
         // Minting for oneself is always allowed: `me.scope.contains(&wanted)` above guarantees it can only narrow.
         // Minting for somebody else needs the capability on every repository the new scope covers.
+        let mut delegated = false;
         if subject != me.identity.principal() {
-            let bindings = self.bindings().await?;
             let patterns: Vec<String> =
                 if wanted.repos.is_empty() { vec!["*".to_string()] } else { wanted.repos.raw().to_vec() };
             for p in &patterns {
-                Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsMint).map_err(|e| {
-                    if e.code() == ag_protocol::ErrorCode::NotFound {
-                        ApiError::denied(format!(
-                            "minting credentials for {subject} on '{p}' requires an administrator"
-                        ))
-                    } else {
-                        e
+                let Err(not_admin) = Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsMint) else {
+                    continue;
+                };
+                if Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsDelegate).is_ok() {
+                    if subject.kind() != ag_types::IdentityKind::Agent {
+                        return Err(ApiError::denied(format!(
+                            "a delegator mints credentials for agents only, not for {subject}"
+                        )));
                     }
-                })?;
+                    delegated = true;
+                } else if not_admin.code() == ag_protocol::ErrorCode::NotFound {
+                    return Err(ApiError::denied(format!(
+                        "minting credentials for {subject} on '{p}' requires an administrator"
+                    )));
+                } else {
+                    return Err(not_admin);
+                }
+            }
+            if delegated {
+                // What may be passed on: the intersection over the repositories of the scope.
+                let mut allowed: Option<std::collections::BTreeSet<Cap>> = None;
+                for p in &patterns {
+                    let here = Authorizer::delegable(me, &bindings, p);
+                    allowed = Some(match allowed {
+                        None => here,
+                        Some(a) => a.intersection(&here).copied().collect(),
+                    });
+                }
+                let allowed = allowed.unwrap_or_default();
+                if wanted.operations.is_empty() {
+                    wanted.operations = allowed;
+                } else if let Some(extra) = wanted.operations.iter().find(|o| !allowed.contains(o)) {
+                    return Err(ApiError::denied(format!(
+                        "a delegator cannot pass on '{}': it does not hold it on every repository of the scope, or it is never delegated",
+                        extra.as_str()
+                    )));
+                }
+                if wanted.operations.is_empty() {
+                    return Err(ApiError::denied("this delegator holds nothing it may pass on for that scope"));
+                }
             }
         }
-        if matches!(subject.kind(), ag_types::IdentityKind::System) {
-            return Err(ApiError::invalid("credentials cannot be minted for system identities"));
+        // Whatever the route, the new scope - with the operations a delegation made explicit - lies inside the
+        // scope of the credential that is minting it.
+        if !me.scope.contains(&wanted) {
+            return Err(ApiError::denied("a credential cannot grant more than the credential used to mint it"));
+        }
+        if let Some((repo, run)) = wanted.bound_run() {
+            self.check_run_binding(call, &bindings, &subject, repo, run).await?;
         }
         let ttl = self.cfg.auth.credential_ttl(subject.kind(), req.ttl_secs).map_err(ApiError::invalid)?;
         let now = self.clock.now().as_millis();
@@ -236,22 +288,79 @@ impl App {
             last_used_ms: 0,
             created_by: me.identity.to_string(),
         };
+        tracing::info!(
+            credential = %row.id, subject = %row.subject, by = %row.created_by, delegated,
+            run = wanted.run_id.as_deref().unwrap_or("-"), "credential minted"
+        );
         let control = self.control.clone();
         let wire = row.to_wire();
         tokio::task::spawn_blocking(move || control.insert_credential(&row)).await.map_err(ApiError::internal)??;
         Ok(v1::MintCredentialResponse { credential: Some(wire), token: minted.token })
     }
 
+    /// A credential bound to a run needs that run: it exists in `repo`, is running, and belongs to `subject`. The
+    /// caller must itself be allowed to run agents there, so that the answer reveals nothing to someone who
+    /// could not have started the run.
+    async fn check_run_binding(
+        &self,
+        call: &Call,
+        bindings: &[crate::authz::Binding],
+        subject: &Identity,
+        repo: &str,
+        run_id: &str,
+    ) -> ApiResult<()> {
+        Authorizer::check(&call.principal, bindings, repo, Cap::AgentRun, None)?;
+        if subject.kind() != ag_types::IdentityKind::Agent {
+            return Err(ApiError::invalid("only an agent's credential can be bound to a run"));
+        }
+        let (repos, repo, run_id, subject) = (self.0.clone(), repo.to_string(), run_id.to_string(), subject.clone());
+        tokio::task::spawn_blocking(move || {
+            let handle = repos.repos.handle(&repo)?;
+            let run = handle
+                .meta()
+                .read(|tx| tx.run(&run_id))?
+                .ok_or_else(|| ApiError::not_found(format!("run '{run_id}' not found in '{repo}'")))?;
+            if run.status != "running" {
+                return Err(ApiError::new(
+                    ag_protocol::ErrorCode::FailedPrecondition,
+                    format!("run '{run_id}' is {}: a credential can only be bound to a running run", run.status),
+                ));
+            }
+            if format!("agent:{}", run.agent) != subject.as_str() {
+                return Err(ApiError::invalid(format!(
+                    "run '{run_id}' belongs to agent '{}', not to {subject}",
+                    run.agent
+                )));
+            }
+            Ok(())
+        })
+        .await
+        .map_err(ApiError::internal)?
+    }
+
     async fn may_manage_credential(&self, call: &Call, cred: &CredentialRow) -> ApiResult<bool> {
         let me = &call.principal;
-        if me.bootstrap || cred.subject == me.identity.principal().to_string() {
+        if me.bootstrap {
+            return Ok(true);
+        }
+        let scope = Scope::from_wire(&cred.scope)?;
+        // A credential bound to a run manages the credentials of that run, and nothing else - not even the
+        // other credentials of its own agent, which may belong to other runs.
+        if let Some(bound) = me.scope.bound_run() {
+            return Ok(scope.bound_run() == Some(bound) && cred.subject == me.identity.principal().to_string());
+        }
+        if cred.subject == me.identity.principal().to_string() {
             return Ok(true);
         }
         let bindings = self.bindings().await?;
-        let scope = Scope::from_wire(&cred.scope)?;
         let patterns: Vec<String> =
             if scope.repos.is_empty() { vec!["*".to_string()] } else { scope.repos.raw().to_vec() };
-        Ok(patterns.iter().all(|p| Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsRevoke).is_ok()))
+        if patterns.iter().all(|p| Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsRevoke).is_ok()) {
+            return Ok(true);
+        }
+        // A delegator manages the agent credentials within its reach (it mints them).
+        Ok(cred.kind == "agent"
+            && patterns.iter().all(|p| Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsDelegate).is_ok()))
     }
 
     /// Lists credentials. By default the caller's own; `subject` names
@@ -321,7 +430,7 @@ impl App {
     pub async fn grant_role(&self, call: &Call, req: v1::GrantRoleRequest) -> ApiResult<v1::RoleBinding> {
         let role = Role::parse(&req.role).ok_or_else(|| {
             ApiError::invalid(format!(
-                "unknown role '{}' (reader, writer, reviewer, integrator, runner, admin)",
+                "unknown role '{}' (reader, writer, reviewer, integrator, runner, delegator, admin)",
                 req.role
             ))
         })?;

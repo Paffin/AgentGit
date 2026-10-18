@@ -3,8 +3,10 @@
 use ag_agent::leases::{acquire_with, extend, release};
 use ag_agent::predict::predict;
 use ag_agent::provenance::{ProvenanceRecord, SCHEMA, attach_signed, verify};
-use ag_agent::registry::{finish_run, heartbeat, register_agent_with_key, start_run_with};
-use ag_agent::tasks::{add_dependency, create_task_with, finish_task, unfinished_dependencies};
+use ag_agent::registry::{finish_run_as, heartbeat, reap_runs, register_agent_with_key, start_run_with};
+use ag_agent::tasks::{
+    add_dependency, create_task_with, finish_task, finish_task_as_operator, unfinished_dependencies,
+};
 use ag_crypto::{PublicKey, Signature};
 use ag_protocol::v1;
 use ag_storage::meta::{MetaError, TaskRow, Tx};
@@ -23,6 +25,25 @@ fn check_agent_scope(actor: &Identity, agent_name: &str) -> ApiResult<()> {
         return Err(ApiError::denied(format!("{p} may not act for agent '{agent_name}'")));
     }
     Ok(())
+}
+
+/// The run an actor acts as (`agent:bot#run_...`), if it acts as one.
+fn acting_run(actor: &Identity) -> Option<&str> {
+    actor.as_str().split_once('#').map(|(_, run)| run)
+}
+
+/// A run keeps its own leases: another run of the same agent may neither release nor extend them. (An actor that
+/// is not a run - the agent itself, an operator - is held to the engine's rule, which compares principals.)
+fn check_lease_run(repo: &ag_integrate::Repository, lease_id: &str, actor: &Identity) -> ApiResult<()> {
+    if acting_run(actor).is_none() {
+        return Ok(());
+    }
+    match repo.meta().read(|tx| tx.lease(lease_id))? {
+        Some(lease) if !super::owns(&lease.holder, actor) => {
+            Err(ApiError::denied(format!("lease '{lease_id}' is held by {}, not by {actor}", lease.holder)))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// A task with its dependencies, read in the caller's transaction.
@@ -90,6 +111,12 @@ impl App {
         let key = req.idempotency_key.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
             check_agent_scope(actor, &agent)?;
+            // A run does not start runs: one acting as a run - a run-bound credential, or `ag-run` - would be
+            // making a second identity for its agent. Runs are started with the agent's own credential, or by
+            // an operator.
+            if let Some(run) = acting_run(actor) {
+                return Err(ApiError::denied(format!("{actor} acts as run '{run}' and may not start another run")));
+            }
             let request = format!("start_run\0{actor}\0{agent}\0{}", task.as_deref().unwrap_or(""));
             keyed(repo, "run.start", &key, &request, |claim| {
                 let (_, response) = start_run_with(repo.meta(), &agent, task.as_deref(), |tx, run| {
@@ -114,6 +141,12 @@ impl App {
             .read(|tx| tx.run(run_id))?
             .ok_or_else(|| ApiError::not_found(format!("run '{run_id}' not found")))?;
         check_agent_scope(actor, &run.agent)?;
+        // Acting as one run is not acting as another: the heartbeat and the end of a run are its own.
+        if let Some(acting) = acting_run(actor)
+            && acting != run_id
+        {
+            return Err(ApiError::denied(format!("{actor} acts as run '{acting}'; it may not act on run '{run_id}'")));
+        }
         Ok(run)
     }
 
@@ -128,16 +161,114 @@ impl App {
         .await
     }
 
-    /// Finishes a run and releases its leases.
+    /// Finishes a run, releases its leases and revokes the credentials bound to it. The audit entry is the
+    /// caller's own: the agent finishing its run, or an operator finishing it for the agent (flagged as such).
     pub async fn complete_run(&self, call: &Call, req: v1::CompleteRunRequest) -> ApiResult<v1::Run> {
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
-            Self::check_run_owner(repo, &req.run_id, actor)?;
-            let summary = (!req.summary.is_empty()).then_some(req.summary.as_str());
-            finish_run(repo.meta(), &req.run_id, &req.status, summary)?;
-            let row = repo.meta().read(|tx| tx.run(&req.run_id))?.ok_or_else(|| ApiError::internal("run vanished"))?;
-            Ok(convert::run(&row))
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let run_id = req.run_id.clone();
+        let out = self
+            .with_repo_mut(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
+                Self::check_run_owner(repo, &req.run_id, actor)?;
+                let summary = (!req.summary.is_empty()).then_some(req.summary.as_str());
+                finish_run_as(repo.meta(), &req.run_id, &req.status, summary, Some(actor.as_str()))?;
+                let row =
+                    repo.meta().read(|tx| tx.run(&req.run_id))?.ok_or_else(|| ApiError::internal("run vanished"))?;
+                Ok(convert::run(&row))
+            })
+            .await?;
+        // The run is over, and so is every credential bound to it (they stop working at once either way).
+        self.revoke_run_credentials(&repo_name, &run_id).await;
+        Ok(out)
+    }
+
+    /// The threshold of a reap: the request's, else `agents.run_stale_after_secs`; never below
+    /// `agents.min_stale_after_secs`.
+    fn reap_threshold_ms(&self, requested_ms: u64) -> ApiResult<i64> {
+        let cfg = &self.cfg.agents;
+        let ms = if requested_ms == 0 { cfg.run_stale_after_secs.saturating_mul(1000) } else { requested_ms };
+        let min = cfg.min_stale_after_secs.saturating_mul(1000);
+        if ms < min {
+            return Err(ApiError::invalid(format!(
+                "stale_after_ms must be at least {min} (agents.min_stale_after_secs); it was {ms}"
+            )));
+        }
+        i64::try_from(ms).map_err(|_| ApiError::invalid("stale_after_ms is too large"))
+    }
+
+    /// Ends the runs of a repository that stopped heartbeating, releases the leases of ended runs and revokes
+    /// the credentials bound to the reaped runs. An operator action, audited under the caller's identity.
+    pub async fn reap_runs(&self, call: &Call, req: v1::ReapRunsRequest) -> ApiResult<v1::ReapRunsResponse> {
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let stale_after = self.reap_threshold_ms(req.stale_after_ms)?;
+        let dry_run = req.dry_run;
+        let reaped = self
+            .with_repo_mut(call, &repo_name, Cap::AgentOperate, None, move |repo, actor| {
+                Ok(reap_runs(repo.meta(), stale_after, actor.as_str(), dry_run)?)
+            })
+            .await?;
+        self.finish_reap(&repo_name, reaped, dry_run).await
+    }
+
+    /// The part of a reap that comes after the repository's own transaction: the credentials of the reaped runs,
+    /// the counter, the response.
+    async fn finish_reap(
+        &self,
+        repo: &str,
+        reaped: ag_agent::registry::Reaped,
+        dry_run: bool,
+    ) -> ApiResult<v1::ReapRunsResponse> {
+        let mut revoked = 0u64;
+        if !dry_run {
+            for run in &reaped.runs {
+                revoked += self.revoke_run_credentials(repo, &run.run_id).await;
+            }
+            self.metrics.runs_reaped.inc_by(reaped.runs.len() as u64);
+        }
+        Ok(v1::ReapRunsResponse {
+            runs: reaped.runs.iter().map(convert::run).collect(),
+            released_leases: reaped.released_leases,
+            revoked_credentials: u32::try_from(revoked).unwrap_or(u32::MAX),
+            dry_run,
         })
-        .await
+    }
+
+    /// Reaps every registered repository on behalf of the server itself (`agents.reap_interval_secs`). A
+    /// repository that cannot be read is logged and skipped; the next pass tries again.
+    pub async fn reap_all_repos(&self) {
+        let Ok(stale_after) = i64::try_from(self.cfg.agents.run_stale_after_secs.saturating_mul(1000)) else {
+            return;
+        };
+        let control = self.control.clone();
+        let names = match tokio::task::spawn_blocking(move || control.all_repos()).await {
+            Ok(Ok(rows)) => rows.into_iter().map(|r| r.name).collect::<Vec<_>>(),
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e.0.message, "run reaper: cannot list the repositories");
+                return;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "run reaper: the listing task failed");
+                return;
+            }
+        };
+        for name in names {
+            let app = self.0.clone();
+            let repo = name.clone();
+            let reaped = tokio::task::spawn_blocking(move || -> ApiResult<_> {
+                let handle = app.repos.handle(&repo)?;
+                Ok(reap_runs(handle.meta(), stale_after, crate::app::REAPER_IDENTITY, false)?)
+            })
+            .await;
+            match reaped {
+                Ok(Ok(r)) if !r.runs.is_empty() || !r.released_leases.is_empty() => {
+                    tracing::info!(repo = %name, runs = r.runs.len(), leases = r.released_leases.len(), "run reaper: ended stale runs");
+                    self.notify(&name);
+                    let _ = self.finish_reap(&name, r, false).await;
+                }
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => tracing::warn!(repo = %name, error = %e.0.message, "run reaper: skipped"),
+                Err(e) => tracing::error!(repo = %name, error = %e, "run reaper: the task failed"),
+            }
+        }
     }
 
     /// Lists runs (newest first).
@@ -224,10 +355,17 @@ impl App {
         .await
     }
 
-    /// Marks a task done or cancelled.
+    /// Marks a task done or cancelled: by its owner, or - with `agent.operate` - by an operator, whatever the
+    /// owner (the audit entry records the override).
     pub async fn finish_task(&self, call: &Call, req: v1::FinishTaskRequest) -> ApiResult<v1::Task> {
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
-            finish_task(repo.meta(), &req.id, &req.state, actor.as_str())?;
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo_mut(call, &repo_name, Cap::TaskWrite, None, move |repo, actor| {
+            if operator {
+                finish_task_as_operator(repo.meta(), &req.id, &req.state, actor.as_str())?;
+            } else {
+                finish_task(repo.meta(), &req.id, &req.state, actor.as_str())?;
+            }
             let t = repo.meta().read(|tx| tx.task(&req.id))?.ok_or_else(|| ApiError::not_found("task not found"))?;
             task_view(repo, &t)
         })
@@ -279,6 +417,7 @@ impl App {
     /// Releases a lease.
     pub async fn release_lease(&self, call: &Call, req: v1::LeaseRef) -> ApiResult<v1::Empty> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::LeaseWrite, None, move |repo, actor| {
+            check_lease_run(repo, &req.lease_id, actor)?;
             release(repo.meta(), &req.lease_id, actor.as_str())?;
             Ok(v1::Empty {})
         })
@@ -288,6 +427,7 @@ impl App {
     /// Extends a lease (the fencing token stays the same).
     pub async fn extend_lease(&self, call: &Call, req: v1::ExtendLeaseRequest) -> ApiResult<v1::Lease> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::LeaseWrite, None, move |repo, actor| {
+            check_lease_run(repo, &req.lease_id, actor)?;
             Ok(convert::lease(&extend(repo.meta(), &req.lease_id, actor.as_str(), req.ttl_ms)?))
         })
         .await
@@ -328,6 +468,14 @@ impl App {
             return Err(ApiError::denied(format!(
                 "this credential authenticates as {}; it may not submit provenance for {}",
                 call.principal.identity, record.agent
+            )));
+        }
+        // A credential bound to a run speaks for that run only.
+        if let Some((_, bound)) = call.principal.scope.bound_run()
+            && record.run_id.as_deref() != Some(bound)
+        {
+            return Err(ApiError::denied(format!(
+                "this credential is bound to run '{bound}'; it may only submit provenance recorded for that run"
             )));
         }
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProvenanceWrite, None, move |repo, _| {

@@ -127,10 +127,13 @@ message Repo {
   // Human-readable durability contract of the object backend. Filled by Describe only (it is a property of the
   // open object store).
   string durability = 9;
-  // Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.
+  // Exact: read from the repository's own metadata by Create, Describe and List alike. When the repository
+  // cannot be read (its storage is unreachable or damaged), both are 0 and `counts_error` says why.
   uint32 stream_count = 10;
   uint64 changeset_count = 11;
   Quota quota = 12;
+  // Empty when `stream_count` and `changeset_count` are exact; otherwise why they could not be read.
+  string counts_error = 13;
 }
 
 message Quota {
@@ -930,7 +933,8 @@ message Run {
   string task_id = 4;
   int64 started_at_ms = 5;
   int64 finished_at_ms = 6;
-  // "running", "completed", "failed" or "stale" (abandoned: no heartbeat).
+  // "running", "completed", "failed" or "abandoned" (ended by a reap: no heartbeat within the operator's
+  // threshold; see ReapRuns).
   string status = 7;
   int64 last_heartbeat_ms = 8;
   string summary = 9;
@@ -950,6 +954,8 @@ message HeartbeatRequest {
 
 message HeartbeatResponse { int64 server_time_ms = 1; }
 
+// A run is finished by its own agent (a run-bound credential: by that run alone) or by an operator
+// (`agent.operate`), whose action is recorded in the audit log as an operator's.
 message CompleteRunRequest {
   string repo = 1;
   string run_id = 2;
@@ -967,6 +973,30 @@ message ListRunsRequest {
 }
 
 message ListRunsResponse { repeated Run runs = 1; }
+
+// Ends the runs of a repository that stopped heartbeating, releases the leases they (and finished runs) still
+// hold, and revokes the credentials bound to them. An operator action (capability `agent.operate`); every
+// run it ends is recorded in the audit log under the operator's identity.
+message ReapRunsRequest {
+  string repo = 1;
+  // A running run whose last heartbeat is older than this is abandoned. 0 = the server's
+  // `[agents] run_stale_after_secs`. Values below the server's `[agents] min_stale_after_secs` are refused, so
+  // that a typo cannot end every live run.
+  uint64 stale_after_ms = 2;
+  // Report what would be reaped without changing anything.
+  bool dry_run = 3;
+}
+
+message ReapRunsResponse {
+  // The runs that were (or, with `dry_run`, would be) ended as "abandoned".
+  repeated Run runs = 1;
+  // Ids of the leases that were (or would be) released: those of the reaped runs and any active lease whose
+  // holder is a run that is no longer running.
+  repeated string released_leases = 2;
+  // How many credentials bound to the reaped runs were revoked (0 with `dry_run`).
+  uint32 revoked_credentials = 3;
+  bool dry_run = 4;
+}
 
 message Task {
   string id = 1;
@@ -1012,6 +1042,8 @@ message AddDependencyRequest {
   string depends_on = 3;
 }
 
+// Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit
+// log as an operator's, with the owner it overrode.
 message FinishTaskRequest {
   string repo = 1;
   string id = 2;
@@ -1303,6 +1335,12 @@ message CredentialScope {
   // Operation capabilities, e.g. "objects.write", "proposal.create"
   // (see docs/protocol/authorization.md).
   repeated string operations = 3;
+  // Binds the credential to one run of one agent (ADR-0010). `repos` must then name exactly one literal
+  // repository (the one that holds the run). A run-bound credential acts only as that run, only in that
+  // repository, and stops working when the run is no longer running (completed, failed, abandoned). Minting
+  // needs the run to be running and to belong to the credential's subject. Empty = bound to the agent's
+  // name only (every run of the agent).
+  string run_id = 4;
 }
 
 message Credential {
@@ -1320,7 +1358,9 @@ message Credential {
 
 message MintCredentialRequest {
   // Identity the credential authenticates as. A caller may mint credentials
-  // for itself or, with `credentials.mint`, for agents and services.
+  // for itself, with `credentials.mint` (administrators) for anybody, or with `credentials.delegate`
+  // (the `delegator` role) for `agent:<name>` only - and then only with the capabilities the caller itself
+  // holds on the scope's repositories (ADR-0010).
   string subject = 1;
   string description = 2;
   CredentialScope scope = 3;
@@ -1356,7 +1396,7 @@ message RoleBinding {
   string subject = 1;
   // Repository pattern, e.g. "acme/webapp", "acme/*", "*".
   string repo = 2;
-  // reader, writer, reviewer, integrator, runner, admin.
+  // reader, writer, reviewer, integrator, runner, delegator, admin.
   string role = 3;
   string created_by = 4;
   int64 created_at_ms = 5;
@@ -1581,6 +1621,7 @@ service AgentService {
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
   rpc Complete(CompleteRunRequest) returns (Run);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc ReapRuns(ReapRunsRequest) returns (ReapRunsResponse);
   rpc CreateTask(CreateTaskRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);

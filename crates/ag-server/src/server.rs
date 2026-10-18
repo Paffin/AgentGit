@@ -151,6 +151,23 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
 }
 
+/// Ends the stale runs of every repository every `agents.reap_interval_secs` until shutdown (ADR-0010). Running it
+/// on several replicas is harmless: a reap that finds nothing stale changes nothing.
+fn spawn_run_reaper(app: App) {
+    let every = std::time::Duration::from_secs(app.cfg.agents.reap_interval_secs);
+    let mut stop = app.shutdown_signal();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(every);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => app.reap_all_repos().await,
+                _ = stop.changed() => break,
+            }
+        }
+    });
+}
+
 /// Serves until `shutdown` completes.
 async fn serve_inner(
     app: App,
@@ -162,6 +179,9 @@ async fn serve_inner(
         // Find work queued before this process started, without delaying the listener.
         let a = app.clone();
         tokio::task::spawn_blocking(move || a.rebuild_job_index());
+    }
+    if app.cfg.agents.reap_interval_secs > 0 {
+        spawn_run_reaper(app.clone());
     }
     let (router, _) = build_router(app.clone());
     let addr = listener.local_addr()?;

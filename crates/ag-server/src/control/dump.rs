@@ -45,6 +45,12 @@ pub struct CredentialDump {
     pub last_used: i64,
     /// Who minted it.
     pub created_by: String,
+    /// Repository of the run the credential is bound to (empty: not bound to a run; ADR-0010).
+    #[serde(default)]
+    pub run_repo: String,
+    /// The run the credential is bound to (empty: not bound to a run).
+    #[serde(default)]
+    pub run_id: String,
 }
 
 /// One role binding.
@@ -237,7 +243,7 @@ impl Control {
         let mut dump = db(self.database().read(|tx| {
             let credentials = tx
                 .query(
-                    "SELECT id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by
+                    "SELECT id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by, run_repo, run_id
                      FROM credentials ORDER BY id",
                     &[],
                 )?
@@ -255,6 +261,8 @@ impl Control {
                         revoked_at: r.opt_i64(8)?,
                         last_used: r.i64(9)?,
                         created_by: r.string(10)?,
+                        run_repo: r.string(11)?,
+                        run_id: r.string(12)?,
                     })
                 })
                 .collect::<Result<Vec<_>, ag_storage::sqldb::MetaError>>()?;
@@ -352,8 +360,8 @@ impl Control {
             }
             for c in &dump.credentials {
                 tx.execute(
-                    "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, revoked_at, last_used, created_by, run_repo, run_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                     &sql_params![
                         &c.id,
                         &c.secret_hash,
@@ -365,7 +373,9 @@ impl Control {
                         c.expires_at,
                         c.revoked_at,
                         c.last_used,
-                        &c.created_by
+                        &c.created_by,
+                        &c.run_repo,
+                        &c.run_id
                     ],
                 )?;
             }
@@ -436,6 +446,7 @@ mod tests {
                 repos: vec!["acme/*".into()],
                 streams: vec!["main".into()],
                 operations: vec![],
+                run_id: String::new(),
             },
             created_at_ms: 10,
             expires_at_ms: 99_999_999_999_999,

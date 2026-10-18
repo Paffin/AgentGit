@@ -328,6 +328,10 @@ async fn an_operator_reaps_stale_runs_their_leases_and_their_credentials() {
     let hb = w.orch.post(&format!("/v1/repos/{REPO}/runs/{alive}/heartbeat"), json!({})).await;
     assert_eq!(hb.status, 200, "{}", hb.json);
 
+    // The live run beats again right before each reap: a slow machine (Windows CI) must not let it go stale
+    // between the heartbeat above and the reaping below.
+    let beat = || async { w.orch.post(&format!("/v1/repos/{REPO}/runs/{alive}/heartbeat"), json!({})).await };
+
     // Only an operator reaps; nobody asks for a threshold below the configured minimum.
     let writer = token_for(&w.srv, &w.admin, "user:alice").await;
     for who in [&writer, &bot] {
@@ -338,6 +342,7 @@ async fn an_operator_reaps_stale_runs_their_leases_and_their_credentials() {
     assert_eq!(r.status, 400, "{}", r.json);
 
     // A dry run reports and changes nothing.
+    assert_eq!(beat().await.status, 200);
     let plan =
         w.orch.post(&format!("/v1/repos/{REPO}/runs/reap"), json!({"stale_after_ms": 1000, "dry_run": true})).await;
     assert_eq!(plan.status, 200, "{}", plan.json);
@@ -348,6 +353,7 @@ async fn an_operator_reaps_stale_runs_their_leases_and_their_credentials() {
     assert_eq!(plan.json["revoked_credentials"], 0);
     assert_eq!(bound.get("/v1/whoami").await.status, 200, "nothing happened yet");
 
+    assert_eq!(beat().await.status, 200);
     let done = w.orch.post(&format!("/v1/repos/{REPO}/runs/reap"), json!({"stale_after_ms": 1000})).await;
     assert_eq!(done.status, 200, "{}", done.json);
     assert_eq!(done.json["runs"][0]["run_id"], stale.as_str());
@@ -375,6 +381,7 @@ async fn an_operator_reaps_stale_runs_their_leases_and_their_credentials() {
     assert_eq!(reaped[0]["actor"], "service:orchestrator");
 
     // The task of a reaped run can be taken again; before, a second run on it was refused.
+    assert_eq!(beat().await.status, 200);
     let again = w.orch.post(&format!("/v1/repos/{REPO}/runs/reap"), json!({"stale_after_ms": 1000})).await;
     assert_eq!(again.json["runs"], json!([]), "{}", again.json);
     w.srv.stop().await;

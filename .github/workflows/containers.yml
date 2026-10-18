@@ -71,13 +71,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Commit date (build argument)
         id: meta
         run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Build the server image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -90,7 +92,7 @@ jobs:
           cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
           cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
       - name: Build the CLI image (shares every layer but the last)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -197,7 +199,7 @@ jobs:
         run: |
           docker save agentgit-server:ci | gzip -1 > artifacts/server-image.tar.gz
           ls -la artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: container-artifacts
           path: artifacts
@@ -211,7 +213,7 @@ jobs:
           docker logs ag > diag/server.log 2>&1 || true
           docker inspect ag > diag/inspect.json 2>&1 || true
           cp -r smoke-work diag/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: image-diagnostics
@@ -224,13 +226,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Commit date (build argument)
         id: meta
         run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       # Makes ACTIONS_CACHE_URL / ACTIONS_RUNTIME_TOKEN visible to the plain `docker buildx` CLI below.
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Rebuild on a fresh runner from the gha cache only
         run: |
           set -o pipefail
@@ -241,7 +245,7 @@ jobs:
           echo "rebuild took $(( $(date +%s) - start )) s"
       - name: The cargo layers were restored, not rebuilt
         run: python3 scripts/check_buildx_cache.py build.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: cache-diagnostics
@@ -254,8 +258,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: container-artifacts
           path: artifacts
@@ -338,7 +344,7 @@ jobs:
           docker compose --profile observability logs --no-color --timestamps > "$RUNNER_TEMP/diag/compose.log" 2>&1 || true
           docker compose --profile observability config 2>/dev/null | sed -E 's/(PASSWORD|TOKEN|SECRET|KEY)([A-Z_]*): .*/\1\2: <redacted>/' > "$RUNNER_TEMP/diag/config.redacted.yaml" || true
           cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: compose-diagnostics
@@ -357,8 +363,10 @@ jobs:
     env:
       KIND_CLUSTER: agentgit
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: container-artifacts
           path: artifacts
@@ -366,7 +374,7 @@ jobs:
         run: |
           docker load < artifacts/server-image.tar.gz
           chmod +x artifacts/ag
-      - uses: helm/kind-action@v1
+      - uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           version: v0.30.0
           node_image: kindest/node:v1.33.4
@@ -427,7 +435,7 @@ jobs:
           kubectl -n agentgit logs deploy/ag-server --previous --tail=-1 > "$RUNNER_TEMP/diag/server-previous.log" 2>&1 || true
           cp "$RUNNER_TEMP"/port-forward*.log "$RUNNER_TEMP/diag/" 2>/dev/null || true
           cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: kubernetes-diagnostics

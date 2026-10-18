@@ -56,7 +56,9 @@ jobs:
       commit_date: ${{ steps.mode.outputs.commit_date }}
       epoch: ${{ steps.mode.outputs.epoch }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: mode
         name: Publish, or rehearse?
         env:
@@ -111,7 +113,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: python3 scripts/test_release_scripts.py
 
   test:
@@ -119,9 +123,13 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # As in ci.yml: Ubuntu 24.04 restricts unprivileged user namespaces; the sandbox suites must run, not skip.
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
@@ -146,16 +154,19 @@ jobs:
       CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
       SOURCE_DATE_EPOCH: ${{ needs.verify.outputs.epoch }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: release-${{ matrix.target }}
       # ag-server serves the Web UI from inside its binary (cargo feature `ui`): the build must exist before cargo
       # compiles it, or the archive's ag-server serves a page that says how to build the UI.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -197,7 +208,7 @@ jobs:
           # The unpacked ag-server carries the Web UI (the server from the smoke above is still running).
           page=$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/)
           case "$page" in *'<div id="app">'*) echo "ag-server serves the embedded Web UI";; *) echo "$page" | head -20; echo "::error::the archive's ag-server has no Web UI"; exit 1;; esac
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: archive-${{ matrix.target }}
           path: dist/*.tar.gz
@@ -211,32 +222,20 @@ jobs:
     env:
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-cyclonedx@0.5.9
+      # The same script the Security workflow runs on every change (so a break shows up there, not at release time).
+      # The web UI SBOM it can also write is not a release asset yet: the release job below expects exactly three.
       - name: One SBOM per shipped binary (from Cargo.lock; build-time dependencies included)
-        run: |
-          set -euo pipefail
-          cargo cyclonedx --format json --spec-version 1.5 --describe binaries --target all
-          mkdir -p dist
-          for pair in ag-cli:ag ag-server:ag-server ag-worker:ag-worker; do
-            crate=${pair%%:*}; bin=${pair##*:}
-            cp "crates/$crate/${bin}_bin.cdx.json" "dist/agentgit-${VERSION}-${bin}.cdx.json"
-          done
-          python3 - <<'PY'
-          import glob, json
-          files = sorted(glob.glob("dist/*.cdx.json"))
-          assert len(files) == 3, files
-          for f in files:
-              d = json.load(open(f))
-              assert d["bomFormat"] == "CycloneDX" and d["specVersion"] == "1.5", f
-              names = {c["name"] for c in d["components"]}
-              assert len(names) > 50 and "ag-types" in names and "tokio" in names, f
-              print(f, len(names), "components")
-          PY
-      - uses: actions/upload-artifact@v4
+        run: scripts/sbom.sh --version "$VERSION" --out dist --no-web
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom
           path: dist/*.cdx.json
@@ -260,9 +259,11 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         if: needs.verify.outputs.publish == 'true'
         with:
           registry: ghcr.io
@@ -272,7 +273,7 @@ jobs:
       # architecture by digest; a rehearsal exports a tarball instead. The manifest job merges them.
       - name: Server image
         id: server
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -295,7 +296,7 @@ jobs:
           outputs: ${{ needs.verify.outputs.publish == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_SERVER) || format('type=docker,dest={0}/server-{1}.tar,name=agentgit-server:{2}', runner.temp, matrix.arch, matrix.arch) }}
       - name: CLI image
         id: cli
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -338,7 +339,7 @@ jobs:
             cp "$RUNNER_TEMP"/server-${{ matrix.arch }}.tar "$RUNNER_TEMP"/cli-${{ matrix.arch }}.tar "$RUNNER_TEMP/handoff/"
           fi
           ls -la "$RUNNER_TEMP/handoff"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: image-${{ matrix.arch }}
           path: ${{ runner.temp }}/handoff
@@ -359,12 +360,12 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: image-*
           path: handoff
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         if: needs.verify.outputs.publish == 'true'
         with:
           registry: ghcr.io
@@ -415,13 +416,13 @@ jobs:
             image=$([ "$kind" = server ] && echo "$REGISTRY_IMAGE_SERVER" || echo "$REGISTRY_IMAGE_CLI")
             echo "$kind=$(docker buildx imagetools inspect "$image:$VERSION" --format '{{json .Manifest.Digest}}' | tr -d '"')" >> "$GITHUB_OUTPUT"
           done
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         if: needs.verify.outputs.publish == 'true'
         with:
           subject-name: ${{ env.REGISTRY_IMAGE_SERVER }}
           subject-digest: ${{ steps.digests.outputs.server }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         if: needs.verify.outputs.publish == 'true'
         with:
           subject-name: ${{ env.REGISTRY_IMAGE_CLI }}
@@ -442,8 +443,10 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           pattern: "{archive-*,sbom}"
@@ -458,7 +461,7 @@ jobs:
           (cd dist && sha256sum -c SHA256SUMS)
           python3 scripts/render_packaging.py --version "$VERSION" --sums dist/SHA256SUMS --out dist --only homebrew
           ruby -c dist/agentgit.rb
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         id: attest
         with:
           subject-path: |
@@ -491,7 +494,7 @@ jobs:
             echo "REHEARSAL - would run: gh release create v$VERSION --title 'AgentGit v$VERSION' --notes-file RELEASE_NOTES.md $flags <files>"
             echo "$files"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-dist
           path: dist
@@ -524,8 +527,10 @@ jobs:
       CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-dist
           path: dist

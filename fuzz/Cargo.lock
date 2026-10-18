@@ -201,6 +201,7 @@ dependencies = [
  "hex",
  "serde",
  "thiserror",
+ "unicode-normalization",
 ]
 
 [[package]]

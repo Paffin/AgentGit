@@ -3,7 +3,7 @@
 use ag_protocol::v1;
 
 /// Number of message types the decoders below cover.
-pub const COUNT: usize = 185;
+pub const COUNT: usize = 187;
 
 /// Name of message type `idx`.
 pub fn name(idx: usize) -> &'static str {
@@ -121,78 +121,80 @@ pub fn name(idx: usize) -> &'static str {
         110 => "CompleteRunRequest",
         111 => "ListRunsRequest",
         112 => "ListRunsResponse",
-        113 => "Task",
-        114 => "CreateTaskRequest",
-        115 => "GetTaskRequest",
-        116 => "ListTasksRequest",
-        117 => "ListTasksResponse",
-        118 => "AddDependencyRequest",
-        119 => "FinishTaskRequest",
-        120 => "Lease",
-        121 => "AcquireLeaseRequest",
-        122 => "AcquireLeaseResponse",
-        123 => "LeaseRef",
-        124 => "ExtendLeaseRequest",
-        125 => "ListLeasesRequest",
-        126 => "ListLeasesResponse",
-        127 => "ProvenanceRecord",
-        128 => "SubmitProvenanceRequest",
-        129 => "ProvenanceEntry",
-        130 => "ListProvenanceRequest",
-        131 => "ListProvenanceResponse",
-        132 => "PredictRequest",
-        133 => "Overlap",
-        134 => "PredictResponse",
-        135 => "Event",
-        136 => "SubscribeRequest",
-        137 => "ReplayRequest",
-        138 => "ReplayResponse",
-        139 => "GetPolicyRequest",
-        140 => "PolicyVersion",
-        141 => "SetPolicyRequest",
-        142 => "PolicyHistoryRequest",
-        143 => "PolicyHistoryResponse",
-        144 => "Pin",
-        145 => "PinRequest",
-        146 => "UnpinRequest",
-        147 => "ListPinsRequest",
-        148 => "ListPinsResponse",
-        149 => "AuditEntry",
-        150 => "ListAuditRequest",
-        151 => "ListAuditResponse",
-        152 => "VerifyAuditRequest",
-        153 => "VerifyAuditResponse",
-        154 => "GcRequest",
-        155 => "GcResponse",
-        156 => "FsckRequest",
-        157 => "FsckIssue",
-        158 => "FsckResponse",
-        159 => "CredentialScope",
-        160 => "Credential",
-        161 => "MintCredentialRequest",
-        162 => "MintCredentialResponse",
-        163 => "ListCredentialsRequest",
-        164 => "ListCredentialsResponse",
-        165 => "RevokeCredentialRequest",
-        166 => "RevokeCredentialResponse",
-        167 => "RoleBinding",
-        168 => "GrantRoleRequest",
-        169 => "RevokeRoleRequest",
-        170 => "ListRolesRequest",
-        171 => "ListRolesResponse",
-        172 => "RunSpec",
-        173 => "Job",
-        174 => "ValidationTask",
-        175 => "ClaimJobRequest",
-        176 => "ClaimJobResponse",
-        177 => "HeartbeatJobRequest",
-        178 => "CompleteJobRequest",
-        179 => "FailJobRequest",
-        180 => "GetJobRequest",
-        181 => "ListJobsRequest",
-        182 => "ListJobsResponse",
-        183 => "GetCandidateRequest",
-        184 => "Empty",
+        113 => "ReapRunsRequest",
+        114 => "ReapRunsResponse",
+        115 => "Task",
+        116 => "CreateTaskRequest",
+        117 => "GetTaskRequest",
+        118 => "ListTasksRequest",
+        119 => "ListTasksResponse",
+        120 => "AddDependencyRequest",
+        121 => "FinishTaskRequest",
+        122 => "Lease",
+        123 => "AcquireLeaseRequest",
+        124 => "AcquireLeaseResponse",
+        125 => "LeaseRef",
+        126 => "ExtendLeaseRequest",
+        127 => "ListLeasesRequest",
+        128 => "ListLeasesResponse",
+        129 => "ProvenanceRecord",
+        130 => "SubmitProvenanceRequest",
+        131 => "ProvenanceEntry",
+        132 => "ListProvenanceRequest",
+        133 => "ListProvenanceResponse",
+        134 => "PredictRequest",
+        135 => "Overlap",
+        136 => "PredictResponse",
+        137 => "Event",
+        138 => "SubscribeRequest",
+        139 => "ReplayRequest",
+        140 => "ReplayResponse",
+        141 => "GetPolicyRequest",
+        142 => "PolicyVersion",
+        143 => "SetPolicyRequest",
+        144 => "PolicyHistoryRequest",
+        145 => "PolicyHistoryResponse",
+        146 => "Pin",
+        147 => "PinRequest",
+        148 => "UnpinRequest",
+        149 => "ListPinsRequest",
+        150 => "ListPinsResponse",
+        151 => "AuditEntry",
+        152 => "ListAuditRequest",
+        153 => "ListAuditResponse",
+        154 => "VerifyAuditRequest",
+        155 => "VerifyAuditResponse",
+        156 => "GcRequest",
+        157 => "GcResponse",
+        158 => "FsckRequest",
+        159 => "FsckIssue",
+        160 => "FsckResponse",
+        161 => "CredentialScope",
+        162 => "Credential",
+        163 => "MintCredentialRequest",
+        164 => "MintCredentialResponse",
+        165 => "ListCredentialsRequest",
+        166 => "ListCredentialsResponse",
+        167 => "RevokeCredentialRequest",
+        168 => "RevokeCredentialResponse",
+        169 => "RoleBinding",
+        170 => "GrantRoleRequest",
+        171 => "RevokeRoleRequest",
+        172 => "ListRolesRequest",
+        173 => "ListRolesResponse",
+        174 => "RunSpec",
+        175 => "Job",
+        176 => "ValidationTask",
+        177 => "ClaimJobRequest",
+        178 => "ClaimJobResponse",
+        179 => "HeartbeatJobRequest",
+        180 => "CompleteJobRequest",
+        181 => "FailJobRequest",
+        182 => "GetJobRequest",
+        183 => "ListJobsRequest",
+        184 => "ListJobsResponse",
+        185 => "GetCandidateRequest",
+        186 => "Empty",
         _ => unreachable!(),
     }
 }
@@ -201,1301 +203,193 @@ pub fn name(idx: usize) -> &'static str {
 pub fn check_proto(idx: usize, data: &[u8]) {
     use prost::Message;
     match idx % COUNT {
-        0 => {
-            if let Ok(m) = v1::ErrorInfo::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ErrorInfo::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        1 => {
-            if let Ok(m) = v1::NegotiateRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::NegotiateRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        2 => {
-            if let Ok(m) = v1::Limits::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Limits::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        3 => {
-            if let Ok(m) = v1::NegotiateResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::NegotiateResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        4 => {
-            if let Ok(m) = v1::WhoamiRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::WhoamiRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        5 => {
-            if let Ok(m) = v1::Principal::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Principal::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        6 => {
-            if let Ok(m) = v1::Repo::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Repo::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        7 => {
-            if let Ok(m) = v1::Quota::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Quota::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        8 => {
-            if let Ok(m) = v1::CreateRepoRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CreateRepoRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        9 => {
-            if let Ok(m) = v1::GetRepoRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetRepoRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        10 => {
-            if let Ok(m) = v1::ListReposRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListReposRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        11 => {
-            if let Ok(m) = v1::ListReposResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListReposResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        12 => {
-            if let Ok(m) = v1::ConfigureRepoRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ConfigureRepoRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        13 => {
-            if let Ok(m) = v1::ObjectChunk::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ObjectChunk::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        14 => {
-            if let Ok(m) = v1::UploadObjectsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::UploadObjectsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        15 => {
-            if let Ok(m) = v1::UploadObjectsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::UploadObjectsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        16 => {
-            if let Ok(m) = v1::GetObjectRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetObjectRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        17 => {
-            if let Ok(m) = v1::MissingObjectsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MissingObjectsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        18 => {
-            if let Ok(m) = v1::MissingObjectsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MissingObjectsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        19 => {
-            if let Ok(m) = v1::VerifyObjectsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::VerifyObjectsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        20 => {
-            if let Ok(m) = v1::ObjectStatus::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ObjectStatus::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        21 => {
-            if let Ok(m) = v1::VerifyObjectsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::VerifyObjectsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        22 => {
-            if let Ok(m) = v1::PublishRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PublishRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        23 => {
-            if let Ok(m) = v1::Publication::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Publication::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        24 => {
-            if let Ok(m) = v1::GetOperationRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetOperationRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        25 => {
-            if let Ok(m) = v1::Operation::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Operation::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        26 => {
-            if let Ok(m) = v1::FileOp::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FileOp::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        27 => {
-            if let Ok(m) = v1::Changeset::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Changeset::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        28 => {
-            if let Ok(m) = v1::GetChangesetRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetChangesetRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        29 => {
-            if let Ok(m) = v1::LogRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::LogRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        30 => {
-            if let Ok(m) = v1::LogResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::LogResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        31 => {
-            if let Ok(m) = v1::BlameRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::BlameRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        32 => {
-            if let Ok(m) = v1::BlameLine::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::BlameLine::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        33 => {
-            if let Ok(m) = v1::BlameResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::BlameResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        34 => {
-            if let Ok(m) = v1::AncestorsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AncestorsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        35 => {
-            if let Ok(m) = v1::AncestorsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AncestorsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        36 => {
-            if let Ok(m) = v1::MergeBaseRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MergeBaseRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        37 => {
-            if let Ok(m) = v1::MergeBaseResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MergeBaseResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        38 => {
-            if let Ok(m) = v1::ResolveRevRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ResolveRevRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        39 => {
-            if let Ok(m) = v1::ResolveRevResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ResolveRevResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        40 => {
-            if let Ok(m) = v1::TreeEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::TreeEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        41 => {
-            if let Ok(m) = v1::ResolvePathRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ResolvePathRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        42 => {
-            if let Ok(m) = v1::ResolvePathResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ResolvePathResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        43 => {
-            if let Ok(m) = v1::DirEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::DirEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        44 => {
-            if let Ok(m) = v1::ListDirectoryRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListDirectoryRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        45 => {
-            if let Ok(m) = v1::ListDirectoryResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListDirectoryResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        46 => {
-            if let Ok(m) = v1::GetTreeRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetTreeRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        47 => {
-            if let Ok(m) = v1::GetTreeResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetTreeResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        48 => {
-            if let Ok(m) = v1::DiffRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::DiffRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        49 => {
-            if let Ok(m) = v1::FileDiff::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FileDiff::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        50 => {
-            if let Ok(m) = v1::DiffResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::DiffResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        51 => {
-            if let Ok(m) = v1::GetFileRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetFileRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        52 => {
-            if let Ok(m) = v1::Stream::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Stream::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        53 => {
-            if let Ok(m) = v1::ListStreamsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListStreamsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        54 => {
-            if let Ok(m) = v1::ListStreamsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListStreamsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        55 => {
-            if let Ok(m) = v1::CreateStreamRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CreateStreamRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        56 => {
-            if let Ok(m) = v1::ReadHeadRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReadHeadRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        57 => {
-            if let Ok(m) = v1::CompareAndSwapRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CompareAndSwapRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        58 => {
-            if let Ok(m) = v1::ReflogRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReflogRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        59 => {
-            if let Ok(m) = v1::ReflogEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReflogEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        60 => {
-            if let Ok(m) = v1::ReflogResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReflogResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        61 => {
-            if let Ok(m) = v1::Workspace::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Workspace::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        62 => {
-            if let Ok(m) = v1::CreateWorkspaceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CreateWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        63 => {
-            if let Ok(m) = v1::GetWorkspaceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        64 => {
-            if let Ok(m) = v1::ListWorkspacesRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListWorkspacesRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        65 => {
-            if let Ok(m) = v1::ListWorkspacesResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListWorkspacesResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        66 => {
-            if let Ok(m) = v1::DeleteWorkspaceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::DeleteWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        67 => {
-            if let Ok(m) = v1::FileChange::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FileChange::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        68 => {
-            if let Ok(m) = v1::ModifyWorkspaceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ModifyWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        69 => {
-            if let Ok(m) = v1::SyncWorkspaceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SyncWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        70 => {
-            if let Ok(m) = v1::SyncWorkspaceResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SyncWorkspaceResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        71 => {
-            if let Ok(m) = v1::Proposal::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Proposal::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        72 => {
-            if let Ok(m) = v1::Review::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Review::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        73 => {
-            if let Ok(m) = v1::CreateProposalRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CreateProposalRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        74 => {
-            if let Ok(m) = v1::GetProposalRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetProposalRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        75 => {
-            if let Ok(m) = v1::ProposalDetail::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ProposalDetail::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        76 => {
-            if let Ok(m) = v1::ListProposalsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListProposalsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        77 => {
-            if let Ok(m) = v1::ListProposalsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListProposalsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        78 => {
-            if let Ok(m) = v1::UpdateProposalRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::UpdateProposalRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        79 => {
-            if let Ok(m) = v1::ReviewProposalRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReviewProposalRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        80 => {
-            if let Ok(m) = v1::CloseProposalRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CloseProposalRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        81 => {
-            if let Ok(m) = v1::Conflict::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Conflict::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        82 => {
-            if let Ok(m) = v1::Blocker::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Blocker::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        83 => {
-            if let Ok(m) = v1::IntegrationOutcome::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::IntegrationOutcome::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        84 => {
-            if let Ok(m) = v1::IntegrationResult::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::IntegrationResult::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        85 => {
-            if let Ok(m) = v1::PrepareRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PrepareRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        86 => {
-            if let Ok(m) = v1::Preparation::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Preparation::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        87 => {
-            if let Ok(m) = v1::ValidationStatus::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ValidationStatus::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        88 => {
-            if let Ok(m) = v1::RequestValidationRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RequestValidationRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        89 => {
-            if let Ok(m) = v1::RequestValidationResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RequestValidationResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        90 => {
-            if let Ok(m) = v1::Attestation::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Attestation::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        91 => {
-            if let Ok(m) = v1::SubmitAttestationRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SubmitAttestationRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        92 => {
-            if let Ok(m) = v1::SubmitAttestationResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SubmitAttestationResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        93 => {
-            if let Ok(m) = v1::ListAttestationsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAttestationsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        94 => {
-            if let Ok(m) = v1::ListAttestationsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAttestationsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        95 => {
-            if let Ok(m) = v1::IntegrateRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::IntegrateRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        96 => {
-            if let Ok(m) = v1::QueueEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::QueueEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        97 => {
-            if let Ok(m) = v1::EnqueueRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::EnqueueRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        98 => {
-            if let Ok(m) = v1::ListQueueRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListQueueRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        99 => {
-            if let Ok(m) = v1::ListQueueResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListQueueResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        100 => {
-            if let Ok(m) = v1::RunQueueRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RunQueueRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        101 => {
-            if let Ok(m) = v1::RunQueueResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RunQueueResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        102 => {
-            if let Ok(m) = v1::Agent::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Agent::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        103 => {
-            if let Ok(m) = v1::RegisterAgentRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RegisterAgentRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        104 => {
-            if let Ok(m) = v1::ListAgentsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAgentsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        105 => {
-            if let Ok(m) = v1::ListAgentsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAgentsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        106 => {
-            if let Ok(m) = v1::Run::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Run::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        107 => {
-            if let Ok(m) = v1::StartRunRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::StartRunRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        108 => {
-            if let Ok(m) = v1::HeartbeatRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::HeartbeatRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        109 => {
-            if let Ok(m) = v1::HeartbeatResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::HeartbeatResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        110 => {
-            if let Ok(m) = v1::CompleteRunRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CompleteRunRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        111 => {
-            if let Ok(m) = v1::ListRunsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListRunsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        112 => {
-            if let Ok(m) = v1::ListRunsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListRunsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        113 => {
-            if let Ok(m) = v1::Task::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Task::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        114 => {
-            if let Ok(m) = v1::CreateTaskRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CreateTaskRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        115 => {
-            if let Ok(m) = v1::GetTaskRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetTaskRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        116 => {
-            if let Ok(m) = v1::ListTasksRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListTasksRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        117 => {
-            if let Ok(m) = v1::ListTasksResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListTasksResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        118 => {
-            if let Ok(m) = v1::AddDependencyRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AddDependencyRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        119 => {
-            if let Ok(m) = v1::FinishTaskRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FinishTaskRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        120 => {
-            if let Ok(m) = v1::Lease::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Lease::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        121 => {
-            if let Ok(m) = v1::AcquireLeaseRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AcquireLeaseRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        122 => {
-            if let Ok(m) = v1::AcquireLeaseResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AcquireLeaseResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        123 => {
-            if let Ok(m) = v1::LeaseRef::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::LeaseRef::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        124 => {
-            if let Ok(m) = v1::ExtendLeaseRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ExtendLeaseRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        125 => {
-            if let Ok(m) = v1::ListLeasesRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListLeasesRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        126 => {
-            if let Ok(m) = v1::ListLeasesResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListLeasesResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        127 => {
-            if let Ok(m) = v1::ProvenanceRecord::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ProvenanceRecord::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        128 => {
-            if let Ok(m) = v1::SubmitProvenanceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SubmitProvenanceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        129 => {
-            if let Ok(m) = v1::ProvenanceEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ProvenanceEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        130 => {
-            if let Ok(m) = v1::ListProvenanceRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListProvenanceRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        131 => {
-            if let Ok(m) = v1::ListProvenanceResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListProvenanceResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        132 => {
-            if let Ok(m) = v1::PredictRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PredictRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        133 => {
-            if let Ok(m) = v1::Overlap::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Overlap::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        134 => {
-            if let Ok(m) = v1::PredictResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PredictResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        135 => {
-            if let Ok(m) = v1::Event::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Event::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        136 => {
-            if let Ok(m) = v1::SubscribeRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SubscribeRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        137 => {
-            if let Ok(m) = v1::ReplayRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReplayRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        138 => {
-            if let Ok(m) = v1::ReplayResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ReplayResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        139 => {
-            if let Ok(m) = v1::GetPolicyRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetPolicyRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        140 => {
-            if let Ok(m) = v1::PolicyVersion::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PolicyVersion::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        141 => {
-            if let Ok(m) = v1::SetPolicyRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::SetPolicyRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        142 => {
-            if let Ok(m) = v1::PolicyHistoryRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PolicyHistoryRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        143 => {
-            if let Ok(m) = v1::PolicyHistoryResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PolicyHistoryResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        144 => {
-            if let Ok(m) = v1::Pin::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Pin::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        145 => {
-            if let Ok(m) = v1::PinRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::PinRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        146 => {
-            if let Ok(m) = v1::UnpinRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::UnpinRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        147 => {
-            if let Ok(m) = v1::ListPinsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListPinsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        148 => {
-            if let Ok(m) = v1::ListPinsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListPinsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        149 => {
-            if let Ok(m) = v1::AuditEntry::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::AuditEntry::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        150 => {
-            if let Ok(m) = v1::ListAuditRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAuditRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        151 => {
-            if let Ok(m) = v1::ListAuditResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListAuditResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        152 => {
-            if let Ok(m) = v1::VerifyAuditRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::VerifyAuditRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        153 => {
-            if let Ok(m) = v1::VerifyAuditResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::VerifyAuditResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        154 => {
-            if let Ok(m) = v1::GcRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GcRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        155 => {
-            if let Ok(m) = v1::GcResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GcResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        156 => {
-            if let Ok(m) = v1::FsckRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FsckRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        157 => {
-            if let Ok(m) = v1::FsckIssue::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FsckIssue::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        158 => {
-            if let Ok(m) = v1::FsckResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FsckResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        159 => {
-            if let Ok(m) = v1::CredentialScope::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CredentialScope::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        160 => {
-            if let Ok(m) = v1::Credential::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Credential::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        161 => {
-            if let Ok(m) = v1::MintCredentialRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MintCredentialRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        162 => {
-            if let Ok(m) = v1::MintCredentialResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::MintCredentialResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        163 => {
-            if let Ok(m) = v1::ListCredentialsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListCredentialsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        164 => {
-            if let Ok(m) = v1::ListCredentialsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListCredentialsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        165 => {
-            if let Ok(m) = v1::RevokeCredentialRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RevokeCredentialRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        166 => {
-            if let Ok(m) = v1::RevokeCredentialResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RevokeCredentialResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        167 => {
-            if let Ok(m) = v1::RoleBinding::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RoleBinding::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        168 => {
-            if let Ok(m) = v1::GrantRoleRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GrantRoleRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        169 => {
-            if let Ok(m) = v1::RevokeRoleRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RevokeRoleRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        170 => {
-            if let Ok(m) = v1::ListRolesRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListRolesRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        171 => {
-            if let Ok(m) = v1::ListRolesResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListRolesResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        172 => {
-            if let Ok(m) = v1::RunSpec::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::RunSpec::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        173 => {
-            if let Ok(m) = v1::Job::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Job::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        174 => {
-            if let Ok(m) = v1::ValidationTask::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ValidationTask::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        175 => {
-            if let Ok(m) = v1::ClaimJobRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ClaimJobRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        176 => {
-            if let Ok(m) = v1::ClaimJobResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ClaimJobResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        177 => {
-            if let Ok(m) = v1::HeartbeatJobRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::HeartbeatJobRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        178 => {
-            if let Ok(m) = v1::CompleteJobRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::CompleteJobRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        179 => {
-            if let Ok(m) = v1::FailJobRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::FailJobRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        180 => {
-            if let Ok(m) = v1::GetJobRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetJobRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        181 => {
-            if let Ok(m) = v1::ListJobsRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListJobsRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        182 => {
-            if let Ok(m) = v1::ListJobsResponse::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::ListJobsResponse::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        183 => {
-            if let Ok(m) = v1::GetCandidateRequest::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::GetCandidateRequest::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
-        184 => {
-            if let Ok(m) = v1::Empty::decode(data) {
-                let bytes = m.encode_to_vec();
-                assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m);
-                assert_eq!(bytes.len(), m.encoded_len());
-            }
-        }
+        0 => if let Ok(m) = v1::ErrorInfo::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ErrorInfo::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        1 => if let Ok(m) = v1::NegotiateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::NegotiateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        2 => if let Ok(m) = v1::Limits::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Limits::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        3 => if let Ok(m) = v1::NegotiateResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::NegotiateResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        4 => if let Ok(m) = v1::WhoamiRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::WhoamiRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        5 => if let Ok(m) = v1::Principal::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Principal::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        6 => if let Ok(m) = v1::Repo::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Repo::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        7 => if let Ok(m) = v1::Quota::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Quota::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        8 => if let Ok(m) = v1::CreateRepoRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateRepoRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        9 => if let Ok(m) = v1::GetRepoRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetRepoRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        10 => if let Ok(m) = v1::ListReposRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListReposRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        11 => if let Ok(m) = v1::ListReposResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListReposResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        12 => if let Ok(m) = v1::ConfigureRepoRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ConfigureRepoRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        13 => if let Ok(m) = v1::ObjectChunk::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ObjectChunk::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        14 => if let Ok(m) = v1::UploadObjectsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UploadObjectsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        15 => if let Ok(m) = v1::UploadObjectsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UploadObjectsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        16 => if let Ok(m) = v1::GetObjectRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetObjectRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        17 => if let Ok(m) = v1::MissingObjectsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MissingObjectsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        18 => if let Ok(m) = v1::MissingObjectsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MissingObjectsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        19 => if let Ok(m) = v1::VerifyObjectsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::VerifyObjectsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        20 => if let Ok(m) = v1::ObjectStatus::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ObjectStatus::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        21 => if let Ok(m) = v1::VerifyObjectsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::VerifyObjectsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        22 => if let Ok(m) = v1::PublishRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PublishRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        23 => if let Ok(m) = v1::Publication::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Publication::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        24 => if let Ok(m) = v1::GetOperationRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetOperationRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        25 => if let Ok(m) = v1::Operation::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Operation::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        26 => if let Ok(m) = v1::FileOp::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FileOp::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        27 => if let Ok(m) = v1::Changeset::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Changeset::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        28 => if let Ok(m) = v1::GetChangesetRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetChangesetRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        29 => if let Ok(m) = v1::LogRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::LogRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        30 => if let Ok(m) = v1::LogResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::LogResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        31 => if let Ok(m) = v1::BlameRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::BlameRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        32 => if let Ok(m) = v1::BlameLine::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::BlameLine::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        33 => if let Ok(m) = v1::BlameResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::BlameResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        34 => if let Ok(m) = v1::AncestorsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AncestorsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        35 => if let Ok(m) = v1::AncestorsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AncestorsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        36 => if let Ok(m) = v1::MergeBaseRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MergeBaseRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        37 => if let Ok(m) = v1::MergeBaseResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MergeBaseResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        38 => if let Ok(m) = v1::ResolveRevRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ResolveRevRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        39 => if let Ok(m) = v1::ResolveRevResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ResolveRevResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        40 => if let Ok(m) = v1::TreeEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::TreeEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        41 => if let Ok(m) = v1::ResolvePathRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ResolvePathRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        42 => if let Ok(m) = v1::ResolvePathResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ResolvePathResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        43 => if let Ok(m) = v1::DirEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::DirEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        44 => if let Ok(m) = v1::ListDirectoryRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListDirectoryRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        45 => if let Ok(m) = v1::ListDirectoryResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListDirectoryResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        46 => if let Ok(m) = v1::GetTreeRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetTreeRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        47 => if let Ok(m) = v1::GetTreeResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetTreeResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        48 => if let Ok(m) = v1::DiffRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::DiffRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        49 => if let Ok(m) = v1::FileDiff::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FileDiff::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        50 => if let Ok(m) = v1::DiffResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::DiffResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        51 => if let Ok(m) = v1::GetFileRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetFileRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        52 => if let Ok(m) = v1::Stream::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Stream::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        53 => if let Ok(m) = v1::ListStreamsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListStreamsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        54 => if let Ok(m) = v1::ListStreamsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListStreamsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        55 => if let Ok(m) = v1::CreateStreamRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateStreamRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        56 => if let Ok(m) = v1::ReadHeadRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReadHeadRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        57 => if let Ok(m) = v1::CompareAndSwapRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CompareAndSwapRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        58 => if let Ok(m) = v1::ReflogRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReflogRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        59 => if let Ok(m) = v1::ReflogEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReflogEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        60 => if let Ok(m) = v1::ReflogResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReflogResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        61 => if let Ok(m) = v1::Workspace::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Workspace::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        62 => if let Ok(m) = v1::CreateWorkspaceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        63 => if let Ok(m) = v1::GetWorkspaceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        64 => if let Ok(m) = v1::ListWorkspacesRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListWorkspacesRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        65 => if let Ok(m) = v1::ListWorkspacesResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListWorkspacesResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        66 => if let Ok(m) = v1::DeleteWorkspaceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::DeleteWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        67 => if let Ok(m) = v1::FileChange::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FileChange::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        68 => if let Ok(m) = v1::ModifyWorkspaceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ModifyWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        69 => if let Ok(m) = v1::SyncWorkspaceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SyncWorkspaceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        70 => if let Ok(m) = v1::SyncWorkspaceResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SyncWorkspaceResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        71 => if let Ok(m) = v1::Proposal::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Proposal::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        72 => if let Ok(m) = v1::Review::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Review::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        73 => if let Ok(m) = v1::CreateProposalRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateProposalRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        74 => if let Ok(m) = v1::GetProposalRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetProposalRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        75 => if let Ok(m) = v1::ProposalDetail::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ProposalDetail::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        76 => if let Ok(m) = v1::ListProposalsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListProposalsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        77 => if let Ok(m) = v1::ListProposalsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListProposalsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        78 => if let Ok(m) = v1::UpdateProposalRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UpdateProposalRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        79 => if let Ok(m) = v1::ReviewProposalRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReviewProposalRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        80 => if let Ok(m) = v1::CloseProposalRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CloseProposalRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        81 => if let Ok(m) = v1::Conflict::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Conflict::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        82 => if let Ok(m) = v1::Blocker::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Blocker::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        83 => if let Ok(m) = v1::IntegrationOutcome::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::IntegrationOutcome::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        84 => if let Ok(m) = v1::IntegrationResult::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::IntegrationResult::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        85 => if let Ok(m) = v1::PrepareRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PrepareRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        86 => if let Ok(m) = v1::Preparation::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Preparation::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        87 => if let Ok(m) = v1::ValidationStatus::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ValidationStatus::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        88 => if let Ok(m) = v1::RequestValidationRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RequestValidationRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        89 => if let Ok(m) = v1::RequestValidationResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RequestValidationResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        90 => if let Ok(m) = v1::Attestation::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Attestation::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        91 => if let Ok(m) = v1::SubmitAttestationRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SubmitAttestationRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        92 => if let Ok(m) = v1::SubmitAttestationResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SubmitAttestationResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        93 => if let Ok(m) = v1::ListAttestationsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAttestationsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        94 => if let Ok(m) = v1::ListAttestationsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAttestationsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        95 => if let Ok(m) = v1::IntegrateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::IntegrateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        96 => if let Ok(m) = v1::QueueEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::QueueEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        97 => if let Ok(m) = v1::EnqueueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::EnqueueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        98 => if let Ok(m) = v1::ListQueueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListQueueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        99 => if let Ok(m) = v1::ListQueueResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListQueueResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        100 => if let Ok(m) = v1::RunQueueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RunQueueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        101 => if let Ok(m) = v1::RunQueueResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RunQueueResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        102 => if let Ok(m) = v1::Agent::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Agent::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        103 => if let Ok(m) = v1::RegisterAgentRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RegisterAgentRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        104 => if let Ok(m) = v1::ListAgentsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAgentsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        105 => if let Ok(m) = v1::ListAgentsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAgentsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        106 => if let Ok(m) = v1::Run::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Run::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        107 => if let Ok(m) = v1::StartRunRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::StartRunRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        108 => if let Ok(m) = v1::HeartbeatRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::HeartbeatRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        109 => if let Ok(m) = v1::HeartbeatResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::HeartbeatResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        110 => if let Ok(m) = v1::CompleteRunRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CompleteRunRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        111 => if let Ok(m) = v1::ListRunsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListRunsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        112 => if let Ok(m) = v1::ListRunsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListRunsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        113 => if let Ok(m) = v1::ReapRunsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReapRunsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        114 => if let Ok(m) = v1::ReapRunsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReapRunsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        115 => if let Ok(m) = v1::Task::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Task::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        116 => if let Ok(m) = v1::CreateTaskRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateTaskRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        117 => if let Ok(m) = v1::GetTaskRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetTaskRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        118 => if let Ok(m) = v1::ListTasksRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListTasksRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        119 => if let Ok(m) = v1::ListTasksResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListTasksResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        120 => if let Ok(m) = v1::AddDependencyRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AddDependencyRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        121 => if let Ok(m) = v1::FinishTaskRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FinishTaskRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        122 => if let Ok(m) = v1::Lease::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Lease::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        123 => if let Ok(m) = v1::AcquireLeaseRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AcquireLeaseRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        124 => if let Ok(m) = v1::AcquireLeaseResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AcquireLeaseResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        125 => if let Ok(m) = v1::LeaseRef::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::LeaseRef::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        126 => if let Ok(m) = v1::ExtendLeaseRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ExtendLeaseRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        127 => if let Ok(m) = v1::ListLeasesRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListLeasesRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        128 => if let Ok(m) = v1::ListLeasesResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListLeasesResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        129 => if let Ok(m) = v1::ProvenanceRecord::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ProvenanceRecord::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        130 => if let Ok(m) = v1::SubmitProvenanceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SubmitProvenanceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        131 => if let Ok(m) = v1::ProvenanceEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ProvenanceEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        132 => if let Ok(m) = v1::ListProvenanceRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListProvenanceRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        133 => if let Ok(m) = v1::ListProvenanceResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListProvenanceResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        134 => if let Ok(m) = v1::PredictRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PredictRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        135 => if let Ok(m) = v1::Overlap::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Overlap::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        136 => if let Ok(m) = v1::PredictResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PredictResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        137 => if let Ok(m) = v1::Event::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Event::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        138 => if let Ok(m) = v1::SubscribeRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SubscribeRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        139 => if let Ok(m) = v1::ReplayRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReplayRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        140 => if let Ok(m) = v1::ReplayResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ReplayResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        141 => if let Ok(m) = v1::GetPolicyRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetPolicyRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        142 => if let Ok(m) = v1::PolicyVersion::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PolicyVersion::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        143 => if let Ok(m) = v1::SetPolicyRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SetPolicyRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        144 => if let Ok(m) = v1::PolicyHistoryRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PolicyHistoryRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        145 => if let Ok(m) = v1::PolicyHistoryResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PolicyHistoryResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        146 => if let Ok(m) = v1::Pin::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Pin::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        147 => if let Ok(m) = v1::PinRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::PinRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        148 => if let Ok(m) = v1::UnpinRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UnpinRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        149 => if let Ok(m) = v1::ListPinsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListPinsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        150 => if let Ok(m) = v1::ListPinsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListPinsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        151 => if let Ok(m) = v1::AuditEntry::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AuditEntry::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        152 => if let Ok(m) = v1::ListAuditRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAuditRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        153 => if let Ok(m) = v1::ListAuditResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListAuditResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        154 => if let Ok(m) = v1::VerifyAuditRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::VerifyAuditRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        155 => if let Ok(m) = v1::VerifyAuditResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::VerifyAuditResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        156 => if let Ok(m) = v1::GcRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GcRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        157 => if let Ok(m) = v1::GcResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GcResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        158 => if let Ok(m) = v1::FsckRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FsckRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        159 => if let Ok(m) = v1::FsckIssue::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FsckIssue::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        160 => if let Ok(m) = v1::FsckResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FsckResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        161 => if let Ok(m) = v1::CredentialScope::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CredentialScope::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        162 => if let Ok(m) = v1::Credential::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Credential::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        163 => if let Ok(m) = v1::MintCredentialRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MintCredentialRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        164 => if let Ok(m) = v1::MintCredentialResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::MintCredentialResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        165 => if let Ok(m) = v1::ListCredentialsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListCredentialsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        166 => if let Ok(m) = v1::ListCredentialsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListCredentialsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        167 => if let Ok(m) = v1::RevokeCredentialRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RevokeCredentialRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        168 => if let Ok(m) = v1::RevokeCredentialResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RevokeCredentialResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        169 => if let Ok(m) = v1::RoleBinding::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RoleBinding::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        170 => if let Ok(m) = v1::GrantRoleRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GrantRoleRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        171 => if let Ok(m) = v1::RevokeRoleRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RevokeRoleRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        172 => if let Ok(m) = v1::ListRolesRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListRolesRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        173 => if let Ok(m) = v1::ListRolesResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListRolesResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        174 => if let Ok(m) = v1::RunSpec::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::RunSpec::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        175 => if let Ok(m) = v1::Job::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Job::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        176 => if let Ok(m) = v1::ValidationTask::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ValidationTask::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        177 => if let Ok(m) = v1::ClaimJobRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ClaimJobRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        178 => if let Ok(m) = v1::ClaimJobResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ClaimJobResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        179 => if let Ok(m) = v1::HeartbeatJobRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::HeartbeatJobRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        180 => if let Ok(m) = v1::CompleteJobRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CompleteJobRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        181 => if let Ok(m) = v1::FailJobRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::FailJobRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        182 => if let Ok(m) = v1::GetJobRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetJobRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        183 => if let Ok(m) = v1::ListJobsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListJobsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        184 => if let Ok(m) = v1::ListJobsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListJobsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        185 => if let Ok(m) = v1::GetCandidateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetCandidateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        186 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         _ => unreachable!(),
     }
 }
@@ -1503,1116 +397,193 @@ pub fn check_proto(idx: usize, data: &[u8]) {
 /// Decodes `data` as the JSON form of message `idx`; whatever decodes must serialise and decode to itself.
 pub fn check_json(idx: usize, data: &[u8]) {
     match idx % COUNT {
-        0 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ErrorInfo>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ErrorInfo>(&s).unwrap(), m);
-            }
-        }
-        1 => {
-            if let Ok(m) = serde_json::from_slice::<v1::NegotiateRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::NegotiateRequest>(&s).unwrap(), m);
-            }
-        }
-        2 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Limits>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Limits>(&s).unwrap(), m);
-            }
-        }
-        3 => {
-            if let Ok(m) = serde_json::from_slice::<v1::NegotiateResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::NegotiateResponse>(&s).unwrap(), m);
-            }
-        }
-        4 => {
-            if let Ok(m) = serde_json::from_slice::<v1::WhoamiRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::WhoamiRequest>(&s).unwrap(), m);
-            }
-        }
-        5 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Principal>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Principal>(&s).unwrap(), m);
-            }
-        }
-        6 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Repo>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Repo>(&s).unwrap(), m);
-            }
-        }
-        7 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Quota>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Quota>(&s).unwrap(), m);
-            }
-        }
-        8 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CreateRepoRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CreateRepoRequest>(&s).unwrap(), m);
-            }
-        }
-        9 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetRepoRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetRepoRequest>(&s).unwrap(), m);
-            }
-        }
-        10 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListReposRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListReposRequest>(&s).unwrap(), m);
-            }
-        }
-        11 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListReposResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListReposResponse>(&s).unwrap(), m);
-            }
-        }
-        12 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ConfigureRepoRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ConfigureRepoRequest>(&s).unwrap(), m);
-            }
-        }
-        13 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ObjectChunk>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ObjectChunk>(&s).unwrap(), m);
-            }
-        }
-        14 => {
-            if let Ok(m) = serde_json::from_slice::<v1::UploadObjectsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::UploadObjectsRequest>(&s).unwrap(), m);
-            }
-        }
-        15 => {
-            if let Ok(m) = serde_json::from_slice::<v1::UploadObjectsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::UploadObjectsResponse>(&s).unwrap(), m);
-            }
-        }
-        16 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetObjectRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetObjectRequest>(&s).unwrap(), m);
-            }
-        }
-        17 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MissingObjectsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MissingObjectsRequest>(&s).unwrap(), m);
-            }
-        }
-        18 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MissingObjectsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MissingObjectsResponse>(&s).unwrap(), m);
-            }
-        }
-        19 => {
-            if let Ok(m) = serde_json::from_slice::<v1::VerifyObjectsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::VerifyObjectsRequest>(&s).unwrap(), m);
-            }
-        }
-        20 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ObjectStatus>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ObjectStatus>(&s).unwrap(), m);
-            }
-        }
-        21 => {
-            if let Ok(m) = serde_json::from_slice::<v1::VerifyObjectsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::VerifyObjectsResponse>(&s).unwrap(), m);
-            }
-        }
-        22 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PublishRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PublishRequest>(&s).unwrap(), m);
-            }
-        }
-        23 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Publication>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Publication>(&s).unwrap(), m);
-            }
-        }
-        24 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetOperationRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetOperationRequest>(&s).unwrap(), m);
-            }
-        }
-        25 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Operation>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Operation>(&s).unwrap(), m);
-            }
-        }
-        26 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FileOp>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FileOp>(&s).unwrap(), m);
-            }
-        }
-        27 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Changeset>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Changeset>(&s).unwrap(), m);
-            }
-        }
-        28 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetChangesetRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetChangesetRequest>(&s).unwrap(), m);
-            }
-        }
-        29 => {
-            if let Ok(m) = serde_json::from_slice::<v1::LogRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::LogRequest>(&s).unwrap(), m);
-            }
-        }
-        30 => {
-            if let Ok(m) = serde_json::from_slice::<v1::LogResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::LogResponse>(&s).unwrap(), m);
-            }
-        }
-        31 => {
-            if let Ok(m) = serde_json::from_slice::<v1::BlameRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::BlameRequest>(&s).unwrap(), m);
-            }
-        }
-        32 => {
-            if let Ok(m) = serde_json::from_slice::<v1::BlameLine>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::BlameLine>(&s).unwrap(), m);
-            }
-        }
-        33 => {
-            if let Ok(m) = serde_json::from_slice::<v1::BlameResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::BlameResponse>(&s).unwrap(), m);
-            }
-        }
-        34 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AncestorsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AncestorsRequest>(&s).unwrap(), m);
-            }
-        }
-        35 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AncestorsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AncestorsResponse>(&s).unwrap(), m);
-            }
-        }
-        36 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MergeBaseRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MergeBaseRequest>(&s).unwrap(), m);
-            }
-        }
-        37 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MergeBaseResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MergeBaseResponse>(&s).unwrap(), m);
-            }
-        }
-        38 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ResolveRevRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ResolveRevRequest>(&s).unwrap(), m);
-            }
-        }
-        39 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ResolveRevResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ResolveRevResponse>(&s).unwrap(), m);
-            }
-        }
-        40 => {
-            if let Ok(m) = serde_json::from_slice::<v1::TreeEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::TreeEntry>(&s).unwrap(), m);
-            }
-        }
-        41 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ResolvePathRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ResolvePathRequest>(&s).unwrap(), m);
-            }
-        }
-        42 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ResolvePathResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ResolvePathResponse>(&s).unwrap(), m);
-            }
-        }
-        43 => {
-            if let Ok(m) = serde_json::from_slice::<v1::DirEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::DirEntry>(&s).unwrap(), m);
-            }
-        }
-        44 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListDirectoryRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListDirectoryRequest>(&s).unwrap(), m);
-            }
-        }
-        45 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListDirectoryResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListDirectoryResponse>(&s).unwrap(), m);
-            }
-        }
-        46 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetTreeRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetTreeRequest>(&s).unwrap(), m);
-            }
-        }
-        47 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetTreeResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetTreeResponse>(&s).unwrap(), m);
-            }
-        }
-        48 => {
-            if let Ok(m) = serde_json::from_slice::<v1::DiffRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::DiffRequest>(&s).unwrap(), m);
-            }
-        }
-        49 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FileDiff>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FileDiff>(&s).unwrap(), m);
-            }
-        }
-        50 => {
-            if let Ok(m) = serde_json::from_slice::<v1::DiffResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::DiffResponse>(&s).unwrap(), m);
-            }
-        }
-        51 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetFileRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetFileRequest>(&s).unwrap(), m);
-            }
-        }
-        52 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Stream>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Stream>(&s).unwrap(), m);
-            }
-        }
-        53 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListStreamsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListStreamsRequest>(&s).unwrap(), m);
-            }
-        }
-        54 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListStreamsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListStreamsResponse>(&s).unwrap(), m);
-            }
-        }
-        55 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CreateStreamRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CreateStreamRequest>(&s).unwrap(), m);
-            }
-        }
-        56 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReadHeadRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReadHeadRequest>(&s).unwrap(), m);
-            }
-        }
-        57 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CompareAndSwapRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CompareAndSwapRequest>(&s).unwrap(), m);
-            }
-        }
-        58 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReflogRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReflogRequest>(&s).unwrap(), m);
-            }
-        }
-        59 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReflogEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReflogEntry>(&s).unwrap(), m);
-            }
-        }
-        60 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReflogResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReflogResponse>(&s).unwrap(), m);
-            }
-        }
-        61 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Workspace>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Workspace>(&s).unwrap(), m);
-            }
-        }
-        62 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CreateWorkspaceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CreateWorkspaceRequest>(&s).unwrap(), m);
-            }
-        }
-        63 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetWorkspaceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetWorkspaceRequest>(&s).unwrap(), m);
-            }
-        }
-        64 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListWorkspacesRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListWorkspacesRequest>(&s).unwrap(), m);
-            }
-        }
-        65 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListWorkspacesResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListWorkspacesResponse>(&s).unwrap(), m);
-            }
-        }
-        66 => {
-            if let Ok(m) = serde_json::from_slice::<v1::DeleteWorkspaceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::DeleteWorkspaceRequest>(&s).unwrap(), m);
-            }
-        }
-        67 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FileChange>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FileChange>(&s).unwrap(), m);
-            }
-        }
-        68 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ModifyWorkspaceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ModifyWorkspaceRequest>(&s).unwrap(), m);
-            }
-        }
-        69 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SyncWorkspaceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SyncWorkspaceRequest>(&s).unwrap(), m);
-            }
-        }
-        70 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SyncWorkspaceResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SyncWorkspaceResponse>(&s).unwrap(), m);
-            }
-        }
-        71 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Proposal>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Proposal>(&s).unwrap(), m);
-            }
-        }
-        72 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Review>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Review>(&s).unwrap(), m);
-            }
-        }
-        73 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CreateProposalRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CreateProposalRequest>(&s).unwrap(), m);
-            }
-        }
-        74 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetProposalRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetProposalRequest>(&s).unwrap(), m);
-            }
-        }
-        75 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ProposalDetail>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ProposalDetail>(&s).unwrap(), m);
-            }
-        }
-        76 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListProposalsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListProposalsRequest>(&s).unwrap(), m);
-            }
-        }
-        77 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListProposalsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListProposalsResponse>(&s).unwrap(), m);
-            }
-        }
-        78 => {
-            if let Ok(m) = serde_json::from_slice::<v1::UpdateProposalRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::UpdateProposalRequest>(&s).unwrap(), m);
-            }
-        }
-        79 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReviewProposalRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReviewProposalRequest>(&s).unwrap(), m);
-            }
-        }
-        80 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CloseProposalRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CloseProposalRequest>(&s).unwrap(), m);
-            }
-        }
-        81 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Conflict>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Conflict>(&s).unwrap(), m);
-            }
-        }
-        82 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Blocker>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Blocker>(&s).unwrap(), m);
-            }
-        }
-        83 => {
-            if let Ok(m) = serde_json::from_slice::<v1::IntegrationOutcome>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::IntegrationOutcome>(&s).unwrap(), m);
-            }
-        }
-        84 => {
-            if let Ok(m) = serde_json::from_slice::<v1::IntegrationResult>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::IntegrationResult>(&s).unwrap(), m);
-            }
-        }
-        85 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PrepareRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PrepareRequest>(&s).unwrap(), m);
-            }
-        }
-        86 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Preparation>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Preparation>(&s).unwrap(), m);
-            }
-        }
-        87 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ValidationStatus>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ValidationStatus>(&s).unwrap(), m);
-            }
-        }
-        88 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RequestValidationRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RequestValidationRequest>(&s).unwrap(), m);
-            }
-        }
-        89 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RequestValidationResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RequestValidationResponse>(&s).unwrap(), m);
-            }
-        }
-        90 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Attestation>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Attestation>(&s).unwrap(), m);
-            }
-        }
-        91 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SubmitAttestationRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SubmitAttestationRequest>(&s).unwrap(), m);
-            }
-        }
-        92 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SubmitAttestationResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SubmitAttestationResponse>(&s).unwrap(), m);
-            }
-        }
-        93 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAttestationsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAttestationsRequest>(&s).unwrap(), m);
-            }
-        }
-        94 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAttestationsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAttestationsResponse>(&s).unwrap(), m);
-            }
-        }
-        95 => {
-            if let Ok(m) = serde_json::from_slice::<v1::IntegrateRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::IntegrateRequest>(&s).unwrap(), m);
-            }
-        }
-        96 => {
-            if let Ok(m) = serde_json::from_slice::<v1::QueueEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::QueueEntry>(&s).unwrap(), m);
-            }
-        }
-        97 => {
-            if let Ok(m) = serde_json::from_slice::<v1::EnqueueRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::EnqueueRequest>(&s).unwrap(), m);
-            }
-        }
-        98 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListQueueRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListQueueRequest>(&s).unwrap(), m);
-            }
-        }
-        99 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListQueueResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListQueueResponse>(&s).unwrap(), m);
-            }
-        }
-        100 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RunQueueRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RunQueueRequest>(&s).unwrap(), m);
-            }
-        }
-        101 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RunQueueResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RunQueueResponse>(&s).unwrap(), m);
-            }
-        }
-        102 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Agent>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Agent>(&s).unwrap(), m);
-            }
-        }
-        103 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RegisterAgentRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RegisterAgentRequest>(&s).unwrap(), m);
-            }
-        }
-        104 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAgentsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAgentsRequest>(&s).unwrap(), m);
-            }
-        }
-        105 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAgentsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAgentsResponse>(&s).unwrap(), m);
-            }
-        }
-        106 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Run>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Run>(&s).unwrap(), m);
-            }
-        }
-        107 => {
-            if let Ok(m) = serde_json::from_slice::<v1::StartRunRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::StartRunRequest>(&s).unwrap(), m);
-            }
-        }
-        108 => {
-            if let Ok(m) = serde_json::from_slice::<v1::HeartbeatRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::HeartbeatRequest>(&s).unwrap(), m);
-            }
-        }
-        109 => {
-            if let Ok(m) = serde_json::from_slice::<v1::HeartbeatResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::HeartbeatResponse>(&s).unwrap(), m);
-            }
-        }
-        110 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CompleteRunRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CompleteRunRequest>(&s).unwrap(), m);
-            }
-        }
-        111 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListRunsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListRunsRequest>(&s).unwrap(), m);
-            }
-        }
-        112 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListRunsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListRunsResponse>(&s).unwrap(), m);
-            }
-        }
-        113 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Task>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Task>(&s).unwrap(), m);
-            }
-        }
-        114 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CreateTaskRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CreateTaskRequest>(&s).unwrap(), m);
-            }
-        }
-        115 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetTaskRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetTaskRequest>(&s).unwrap(), m);
-            }
-        }
-        116 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListTasksRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListTasksRequest>(&s).unwrap(), m);
-            }
-        }
-        117 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListTasksResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListTasksResponse>(&s).unwrap(), m);
-            }
-        }
-        118 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AddDependencyRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AddDependencyRequest>(&s).unwrap(), m);
-            }
-        }
-        119 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FinishTaskRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FinishTaskRequest>(&s).unwrap(), m);
-            }
-        }
-        120 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Lease>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Lease>(&s).unwrap(), m);
-            }
-        }
-        121 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AcquireLeaseRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AcquireLeaseRequest>(&s).unwrap(), m);
-            }
-        }
-        122 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AcquireLeaseResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AcquireLeaseResponse>(&s).unwrap(), m);
-            }
-        }
-        123 => {
-            if let Ok(m) = serde_json::from_slice::<v1::LeaseRef>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::LeaseRef>(&s).unwrap(), m);
-            }
-        }
-        124 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ExtendLeaseRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ExtendLeaseRequest>(&s).unwrap(), m);
-            }
-        }
-        125 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListLeasesRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListLeasesRequest>(&s).unwrap(), m);
-            }
-        }
-        126 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListLeasesResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListLeasesResponse>(&s).unwrap(), m);
-            }
-        }
-        127 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ProvenanceRecord>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ProvenanceRecord>(&s).unwrap(), m);
-            }
-        }
-        128 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SubmitProvenanceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SubmitProvenanceRequest>(&s).unwrap(), m);
-            }
-        }
-        129 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ProvenanceEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ProvenanceEntry>(&s).unwrap(), m);
-            }
-        }
-        130 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListProvenanceRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListProvenanceRequest>(&s).unwrap(), m);
-            }
-        }
-        131 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListProvenanceResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListProvenanceResponse>(&s).unwrap(), m);
-            }
-        }
-        132 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PredictRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PredictRequest>(&s).unwrap(), m);
-            }
-        }
-        133 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Overlap>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Overlap>(&s).unwrap(), m);
-            }
-        }
-        134 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PredictResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PredictResponse>(&s).unwrap(), m);
-            }
-        }
-        135 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Event>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Event>(&s).unwrap(), m);
-            }
-        }
-        136 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SubscribeRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SubscribeRequest>(&s).unwrap(), m);
-            }
-        }
-        137 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReplayRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReplayRequest>(&s).unwrap(), m);
-            }
-        }
-        138 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ReplayResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ReplayResponse>(&s).unwrap(), m);
-            }
-        }
-        139 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetPolicyRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetPolicyRequest>(&s).unwrap(), m);
-            }
-        }
-        140 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PolicyVersion>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PolicyVersion>(&s).unwrap(), m);
-            }
-        }
-        141 => {
-            if let Ok(m) = serde_json::from_slice::<v1::SetPolicyRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::SetPolicyRequest>(&s).unwrap(), m);
-            }
-        }
-        142 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PolicyHistoryRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PolicyHistoryRequest>(&s).unwrap(), m);
-            }
-        }
-        143 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PolicyHistoryResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PolicyHistoryResponse>(&s).unwrap(), m);
-            }
-        }
-        144 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Pin>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Pin>(&s).unwrap(), m);
-            }
-        }
-        145 => {
-            if let Ok(m) = serde_json::from_slice::<v1::PinRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::PinRequest>(&s).unwrap(), m);
-            }
-        }
-        146 => {
-            if let Ok(m) = serde_json::from_slice::<v1::UnpinRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::UnpinRequest>(&s).unwrap(), m);
-            }
-        }
-        147 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListPinsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListPinsRequest>(&s).unwrap(), m);
-            }
-        }
-        148 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListPinsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListPinsResponse>(&s).unwrap(), m);
-            }
-        }
-        149 => {
-            if let Ok(m) = serde_json::from_slice::<v1::AuditEntry>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::AuditEntry>(&s).unwrap(), m);
-            }
-        }
-        150 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAuditRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAuditRequest>(&s).unwrap(), m);
-            }
-        }
-        151 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListAuditResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListAuditResponse>(&s).unwrap(), m);
-            }
-        }
-        152 => {
-            if let Ok(m) = serde_json::from_slice::<v1::VerifyAuditRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::VerifyAuditRequest>(&s).unwrap(), m);
-            }
-        }
-        153 => {
-            if let Ok(m) = serde_json::from_slice::<v1::VerifyAuditResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::VerifyAuditResponse>(&s).unwrap(), m);
-            }
-        }
-        154 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GcRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GcRequest>(&s).unwrap(), m);
-            }
-        }
-        155 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GcResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GcResponse>(&s).unwrap(), m);
-            }
-        }
-        156 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FsckRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FsckRequest>(&s).unwrap(), m);
-            }
-        }
-        157 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FsckIssue>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FsckIssue>(&s).unwrap(), m);
-            }
-        }
-        158 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FsckResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FsckResponse>(&s).unwrap(), m);
-            }
-        }
-        159 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CredentialScope>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CredentialScope>(&s).unwrap(), m);
-            }
-        }
-        160 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Credential>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Credential>(&s).unwrap(), m);
-            }
-        }
-        161 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MintCredentialRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MintCredentialRequest>(&s).unwrap(), m);
-            }
-        }
-        162 => {
-            if let Ok(m) = serde_json::from_slice::<v1::MintCredentialResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::MintCredentialResponse>(&s).unwrap(), m);
-            }
-        }
-        163 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListCredentialsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListCredentialsRequest>(&s).unwrap(), m);
-            }
-        }
-        164 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListCredentialsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListCredentialsResponse>(&s).unwrap(), m);
-            }
-        }
-        165 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RevokeCredentialRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RevokeCredentialRequest>(&s).unwrap(), m);
-            }
-        }
-        166 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RevokeCredentialResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RevokeCredentialResponse>(&s).unwrap(), m);
-            }
-        }
-        167 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RoleBinding>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RoleBinding>(&s).unwrap(), m);
-            }
-        }
-        168 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GrantRoleRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GrantRoleRequest>(&s).unwrap(), m);
-            }
-        }
-        169 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RevokeRoleRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RevokeRoleRequest>(&s).unwrap(), m);
-            }
-        }
-        170 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListRolesRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListRolesRequest>(&s).unwrap(), m);
-            }
-        }
-        171 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListRolesResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListRolesResponse>(&s).unwrap(), m);
-            }
-        }
-        172 => {
-            if let Ok(m) = serde_json::from_slice::<v1::RunSpec>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::RunSpec>(&s).unwrap(), m);
-            }
-        }
-        173 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Job>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Job>(&s).unwrap(), m);
-            }
-        }
-        174 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ValidationTask>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ValidationTask>(&s).unwrap(), m);
-            }
-        }
-        175 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ClaimJobRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ClaimJobRequest>(&s).unwrap(), m);
-            }
-        }
-        176 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ClaimJobResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ClaimJobResponse>(&s).unwrap(), m);
-            }
-        }
-        177 => {
-            if let Ok(m) = serde_json::from_slice::<v1::HeartbeatJobRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::HeartbeatJobRequest>(&s).unwrap(), m);
-            }
-        }
-        178 => {
-            if let Ok(m) = serde_json::from_slice::<v1::CompleteJobRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::CompleteJobRequest>(&s).unwrap(), m);
-            }
-        }
-        179 => {
-            if let Ok(m) = serde_json::from_slice::<v1::FailJobRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::FailJobRequest>(&s).unwrap(), m);
-            }
-        }
-        180 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetJobRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetJobRequest>(&s).unwrap(), m);
-            }
-        }
-        181 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListJobsRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListJobsRequest>(&s).unwrap(), m);
-            }
-        }
-        182 => {
-            if let Ok(m) = serde_json::from_slice::<v1::ListJobsResponse>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::ListJobsResponse>(&s).unwrap(), m);
-            }
-        }
-        183 => {
-            if let Ok(m) = serde_json::from_slice::<v1::GetCandidateRequest>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::GetCandidateRequest>(&s).unwrap(), m);
-            }
-        }
-        184 => {
-            if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) {
-                let s = serde_json::to_string(&m).unwrap();
-                assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m);
-            }
-        }
+        0 => if let Ok(m) = serde_json::from_slice::<v1::ErrorInfo>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ErrorInfo>(&s).unwrap(), m); },
+        1 => if let Ok(m) = serde_json::from_slice::<v1::NegotiateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::NegotiateRequest>(&s).unwrap(), m); },
+        2 => if let Ok(m) = serde_json::from_slice::<v1::Limits>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Limits>(&s).unwrap(), m); },
+        3 => if let Ok(m) = serde_json::from_slice::<v1::NegotiateResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::NegotiateResponse>(&s).unwrap(), m); },
+        4 => if let Ok(m) = serde_json::from_slice::<v1::WhoamiRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::WhoamiRequest>(&s).unwrap(), m); },
+        5 => if let Ok(m) = serde_json::from_slice::<v1::Principal>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Principal>(&s).unwrap(), m); },
+        6 => if let Ok(m) = serde_json::from_slice::<v1::Repo>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Repo>(&s).unwrap(), m); },
+        7 => if let Ok(m) = serde_json::from_slice::<v1::Quota>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Quota>(&s).unwrap(), m); },
+        8 => if let Ok(m) = serde_json::from_slice::<v1::CreateRepoRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateRepoRequest>(&s).unwrap(), m); },
+        9 => if let Ok(m) = serde_json::from_slice::<v1::GetRepoRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetRepoRequest>(&s).unwrap(), m); },
+        10 => if let Ok(m) = serde_json::from_slice::<v1::ListReposRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListReposRequest>(&s).unwrap(), m); },
+        11 => if let Ok(m) = serde_json::from_slice::<v1::ListReposResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListReposResponse>(&s).unwrap(), m); },
+        12 => if let Ok(m) = serde_json::from_slice::<v1::ConfigureRepoRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ConfigureRepoRequest>(&s).unwrap(), m); },
+        13 => if let Ok(m) = serde_json::from_slice::<v1::ObjectChunk>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ObjectChunk>(&s).unwrap(), m); },
+        14 => if let Ok(m) = serde_json::from_slice::<v1::UploadObjectsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UploadObjectsRequest>(&s).unwrap(), m); },
+        15 => if let Ok(m) = serde_json::from_slice::<v1::UploadObjectsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UploadObjectsResponse>(&s).unwrap(), m); },
+        16 => if let Ok(m) = serde_json::from_slice::<v1::GetObjectRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetObjectRequest>(&s).unwrap(), m); },
+        17 => if let Ok(m) = serde_json::from_slice::<v1::MissingObjectsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MissingObjectsRequest>(&s).unwrap(), m); },
+        18 => if let Ok(m) = serde_json::from_slice::<v1::MissingObjectsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MissingObjectsResponse>(&s).unwrap(), m); },
+        19 => if let Ok(m) = serde_json::from_slice::<v1::VerifyObjectsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::VerifyObjectsRequest>(&s).unwrap(), m); },
+        20 => if let Ok(m) = serde_json::from_slice::<v1::ObjectStatus>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ObjectStatus>(&s).unwrap(), m); },
+        21 => if let Ok(m) = serde_json::from_slice::<v1::VerifyObjectsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::VerifyObjectsResponse>(&s).unwrap(), m); },
+        22 => if let Ok(m) = serde_json::from_slice::<v1::PublishRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PublishRequest>(&s).unwrap(), m); },
+        23 => if let Ok(m) = serde_json::from_slice::<v1::Publication>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Publication>(&s).unwrap(), m); },
+        24 => if let Ok(m) = serde_json::from_slice::<v1::GetOperationRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetOperationRequest>(&s).unwrap(), m); },
+        25 => if let Ok(m) = serde_json::from_slice::<v1::Operation>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Operation>(&s).unwrap(), m); },
+        26 => if let Ok(m) = serde_json::from_slice::<v1::FileOp>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FileOp>(&s).unwrap(), m); },
+        27 => if let Ok(m) = serde_json::from_slice::<v1::Changeset>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Changeset>(&s).unwrap(), m); },
+        28 => if let Ok(m) = serde_json::from_slice::<v1::GetChangesetRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetChangesetRequest>(&s).unwrap(), m); },
+        29 => if let Ok(m) = serde_json::from_slice::<v1::LogRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::LogRequest>(&s).unwrap(), m); },
+        30 => if let Ok(m) = serde_json::from_slice::<v1::LogResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::LogResponse>(&s).unwrap(), m); },
+        31 => if let Ok(m) = serde_json::from_slice::<v1::BlameRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::BlameRequest>(&s).unwrap(), m); },
+        32 => if let Ok(m) = serde_json::from_slice::<v1::BlameLine>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::BlameLine>(&s).unwrap(), m); },
+        33 => if let Ok(m) = serde_json::from_slice::<v1::BlameResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::BlameResponse>(&s).unwrap(), m); },
+        34 => if let Ok(m) = serde_json::from_slice::<v1::AncestorsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AncestorsRequest>(&s).unwrap(), m); },
+        35 => if let Ok(m) = serde_json::from_slice::<v1::AncestorsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AncestorsResponse>(&s).unwrap(), m); },
+        36 => if let Ok(m) = serde_json::from_slice::<v1::MergeBaseRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MergeBaseRequest>(&s).unwrap(), m); },
+        37 => if let Ok(m) = serde_json::from_slice::<v1::MergeBaseResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MergeBaseResponse>(&s).unwrap(), m); },
+        38 => if let Ok(m) = serde_json::from_slice::<v1::ResolveRevRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ResolveRevRequest>(&s).unwrap(), m); },
+        39 => if let Ok(m) = serde_json::from_slice::<v1::ResolveRevResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ResolveRevResponse>(&s).unwrap(), m); },
+        40 => if let Ok(m) = serde_json::from_slice::<v1::TreeEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::TreeEntry>(&s).unwrap(), m); },
+        41 => if let Ok(m) = serde_json::from_slice::<v1::ResolvePathRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ResolvePathRequest>(&s).unwrap(), m); },
+        42 => if let Ok(m) = serde_json::from_slice::<v1::ResolvePathResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ResolvePathResponse>(&s).unwrap(), m); },
+        43 => if let Ok(m) = serde_json::from_slice::<v1::DirEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::DirEntry>(&s).unwrap(), m); },
+        44 => if let Ok(m) = serde_json::from_slice::<v1::ListDirectoryRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListDirectoryRequest>(&s).unwrap(), m); },
+        45 => if let Ok(m) = serde_json::from_slice::<v1::ListDirectoryResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListDirectoryResponse>(&s).unwrap(), m); },
+        46 => if let Ok(m) = serde_json::from_slice::<v1::GetTreeRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetTreeRequest>(&s).unwrap(), m); },
+        47 => if let Ok(m) = serde_json::from_slice::<v1::GetTreeResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetTreeResponse>(&s).unwrap(), m); },
+        48 => if let Ok(m) = serde_json::from_slice::<v1::DiffRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::DiffRequest>(&s).unwrap(), m); },
+        49 => if let Ok(m) = serde_json::from_slice::<v1::FileDiff>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FileDiff>(&s).unwrap(), m); },
+        50 => if let Ok(m) = serde_json::from_slice::<v1::DiffResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::DiffResponse>(&s).unwrap(), m); },
+        51 => if let Ok(m) = serde_json::from_slice::<v1::GetFileRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetFileRequest>(&s).unwrap(), m); },
+        52 => if let Ok(m) = serde_json::from_slice::<v1::Stream>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Stream>(&s).unwrap(), m); },
+        53 => if let Ok(m) = serde_json::from_slice::<v1::ListStreamsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListStreamsRequest>(&s).unwrap(), m); },
+        54 => if let Ok(m) = serde_json::from_slice::<v1::ListStreamsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListStreamsResponse>(&s).unwrap(), m); },
+        55 => if let Ok(m) = serde_json::from_slice::<v1::CreateStreamRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateStreamRequest>(&s).unwrap(), m); },
+        56 => if let Ok(m) = serde_json::from_slice::<v1::ReadHeadRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReadHeadRequest>(&s).unwrap(), m); },
+        57 => if let Ok(m) = serde_json::from_slice::<v1::CompareAndSwapRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CompareAndSwapRequest>(&s).unwrap(), m); },
+        58 => if let Ok(m) = serde_json::from_slice::<v1::ReflogRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReflogRequest>(&s).unwrap(), m); },
+        59 => if let Ok(m) = serde_json::from_slice::<v1::ReflogEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReflogEntry>(&s).unwrap(), m); },
+        60 => if let Ok(m) = serde_json::from_slice::<v1::ReflogResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReflogResponse>(&s).unwrap(), m); },
+        61 => if let Ok(m) = serde_json::from_slice::<v1::Workspace>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Workspace>(&s).unwrap(), m); },
+        62 => if let Ok(m) = serde_json::from_slice::<v1::CreateWorkspaceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateWorkspaceRequest>(&s).unwrap(), m); },
+        63 => if let Ok(m) = serde_json::from_slice::<v1::GetWorkspaceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetWorkspaceRequest>(&s).unwrap(), m); },
+        64 => if let Ok(m) = serde_json::from_slice::<v1::ListWorkspacesRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListWorkspacesRequest>(&s).unwrap(), m); },
+        65 => if let Ok(m) = serde_json::from_slice::<v1::ListWorkspacesResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListWorkspacesResponse>(&s).unwrap(), m); },
+        66 => if let Ok(m) = serde_json::from_slice::<v1::DeleteWorkspaceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::DeleteWorkspaceRequest>(&s).unwrap(), m); },
+        67 => if let Ok(m) = serde_json::from_slice::<v1::FileChange>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FileChange>(&s).unwrap(), m); },
+        68 => if let Ok(m) = serde_json::from_slice::<v1::ModifyWorkspaceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ModifyWorkspaceRequest>(&s).unwrap(), m); },
+        69 => if let Ok(m) = serde_json::from_slice::<v1::SyncWorkspaceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SyncWorkspaceRequest>(&s).unwrap(), m); },
+        70 => if let Ok(m) = serde_json::from_slice::<v1::SyncWorkspaceResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SyncWorkspaceResponse>(&s).unwrap(), m); },
+        71 => if let Ok(m) = serde_json::from_slice::<v1::Proposal>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Proposal>(&s).unwrap(), m); },
+        72 => if let Ok(m) = serde_json::from_slice::<v1::Review>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Review>(&s).unwrap(), m); },
+        73 => if let Ok(m) = serde_json::from_slice::<v1::CreateProposalRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateProposalRequest>(&s).unwrap(), m); },
+        74 => if let Ok(m) = serde_json::from_slice::<v1::GetProposalRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetProposalRequest>(&s).unwrap(), m); },
+        75 => if let Ok(m) = serde_json::from_slice::<v1::ProposalDetail>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ProposalDetail>(&s).unwrap(), m); },
+        76 => if let Ok(m) = serde_json::from_slice::<v1::ListProposalsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListProposalsRequest>(&s).unwrap(), m); },
+        77 => if let Ok(m) = serde_json::from_slice::<v1::ListProposalsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListProposalsResponse>(&s).unwrap(), m); },
+        78 => if let Ok(m) = serde_json::from_slice::<v1::UpdateProposalRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UpdateProposalRequest>(&s).unwrap(), m); },
+        79 => if let Ok(m) = serde_json::from_slice::<v1::ReviewProposalRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReviewProposalRequest>(&s).unwrap(), m); },
+        80 => if let Ok(m) = serde_json::from_slice::<v1::CloseProposalRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CloseProposalRequest>(&s).unwrap(), m); },
+        81 => if let Ok(m) = serde_json::from_slice::<v1::Conflict>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Conflict>(&s).unwrap(), m); },
+        82 => if let Ok(m) = serde_json::from_slice::<v1::Blocker>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Blocker>(&s).unwrap(), m); },
+        83 => if let Ok(m) = serde_json::from_slice::<v1::IntegrationOutcome>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::IntegrationOutcome>(&s).unwrap(), m); },
+        84 => if let Ok(m) = serde_json::from_slice::<v1::IntegrationResult>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::IntegrationResult>(&s).unwrap(), m); },
+        85 => if let Ok(m) = serde_json::from_slice::<v1::PrepareRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PrepareRequest>(&s).unwrap(), m); },
+        86 => if let Ok(m) = serde_json::from_slice::<v1::Preparation>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Preparation>(&s).unwrap(), m); },
+        87 => if let Ok(m) = serde_json::from_slice::<v1::ValidationStatus>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ValidationStatus>(&s).unwrap(), m); },
+        88 => if let Ok(m) = serde_json::from_slice::<v1::RequestValidationRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RequestValidationRequest>(&s).unwrap(), m); },
+        89 => if let Ok(m) = serde_json::from_slice::<v1::RequestValidationResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RequestValidationResponse>(&s).unwrap(), m); },
+        90 => if let Ok(m) = serde_json::from_slice::<v1::Attestation>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Attestation>(&s).unwrap(), m); },
+        91 => if let Ok(m) = serde_json::from_slice::<v1::SubmitAttestationRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SubmitAttestationRequest>(&s).unwrap(), m); },
+        92 => if let Ok(m) = serde_json::from_slice::<v1::SubmitAttestationResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SubmitAttestationResponse>(&s).unwrap(), m); },
+        93 => if let Ok(m) = serde_json::from_slice::<v1::ListAttestationsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAttestationsRequest>(&s).unwrap(), m); },
+        94 => if let Ok(m) = serde_json::from_slice::<v1::ListAttestationsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAttestationsResponse>(&s).unwrap(), m); },
+        95 => if let Ok(m) = serde_json::from_slice::<v1::IntegrateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::IntegrateRequest>(&s).unwrap(), m); },
+        96 => if let Ok(m) = serde_json::from_slice::<v1::QueueEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::QueueEntry>(&s).unwrap(), m); },
+        97 => if let Ok(m) = serde_json::from_slice::<v1::EnqueueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::EnqueueRequest>(&s).unwrap(), m); },
+        98 => if let Ok(m) = serde_json::from_slice::<v1::ListQueueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListQueueRequest>(&s).unwrap(), m); },
+        99 => if let Ok(m) = serde_json::from_slice::<v1::ListQueueResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListQueueResponse>(&s).unwrap(), m); },
+        100 => if let Ok(m) = serde_json::from_slice::<v1::RunQueueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RunQueueRequest>(&s).unwrap(), m); },
+        101 => if let Ok(m) = serde_json::from_slice::<v1::RunQueueResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RunQueueResponse>(&s).unwrap(), m); },
+        102 => if let Ok(m) = serde_json::from_slice::<v1::Agent>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Agent>(&s).unwrap(), m); },
+        103 => if let Ok(m) = serde_json::from_slice::<v1::RegisterAgentRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RegisterAgentRequest>(&s).unwrap(), m); },
+        104 => if let Ok(m) = serde_json::from_slice::<v1::ListAgentsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAgentsRequest>(&s).unwrap(), m); },
+        105 => if let Ok(m) = serde_json::from_slice::<v1::ListAgentsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAgentsResponse>(&s).unwrap(), m); },
+        106 => if let Ok(m) = serde_json::from_slice::<v1::Run>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Run>(&s).unwrap(), m); },
+        107 => if let Ok(m) = serde_json::from_slice::<v1::StartRunRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::StartRunRequest>(&s).unwrap(), m); },
+        108 => if let Ok(m) = serde_json::from_slice::<v1::HeartbeatRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::HeartbeatRequest>(&s).unwrap(), m); },
+        109 => if let Ok(m) = serde_json::from_slice::<v1::HeartbeatResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::HeartbeatResponse>(&s).unwrap(), m); },
+        110 => if let Ok(m) = serde_json::from_slice::<v1::CompleteRunRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CompleteRunRequest>(&s).unwrap(), m); },
+        111 => if let Ok(m) = serde_json::from_slice::<v1::ListRunsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListRunsRequest>(&s).unwrap(), m); },
+        112 => if let Ok(m) = serde_json::from_slice::<v1::ListRunsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListRunsResponse>(&s).unwrap(), m); },
+        113 => if let Ok(m) = serde_json::from_slice::<v1::ReapRunsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReapRunsRequest>(&s).unwrap(), m); },
+        114 => if let Ok(m) = serde_json::from_slice::<v1::ReapRunsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReapRunsResponse>(&s).unwrap(), m); },
+        115 => if let Ok(m) = serde_json::from_slice::<v1::Task>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Task>(&s).unwrap(), m); },
+        116 => if let Ok(m) = serde_json::from_slice::<v1::CreateTaskRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateTaskRequest>(&s).unwrap(), m); },
+        117 => if let Ok(m) = serde_json::from_slice::<v1::GetTaskRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetTaskRequest>(&s).unwrap(), m); },
+        118 => if let Ok(m) = serde_json::from_slice::<v1::ListTasksRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListTasksRequest>(&s).unwrap(), m); },
+        119 => if let Ok(m) = serde_json::from_slice::<v1::ListTasksResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListTasksResponse>(&s).unwrap(), m); },
+        120 => if let Ok(m) = serde_json::from_slice::<v1::AddDependencyRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AddDependencyRequest>(&s).unwrap(), m); },
+        121 => if let Ok(m) = serde_json::from_slice::<v1::FinishTaskRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FinishTaskRequest>(&s).unwrap(), m); },
+        122 => if let Ok(m) = serde_json::from_slice::<v1::Lease>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Lease>(&s).unwrap(), m); },
+        123 => if let Ok(m) = serde_json::from_slice::<v1::AcquireLeaseRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AcquireLeaseRequest>(&s).unwrap(), m); },
+        124 => if let Ok(m) = serde_json::from_slice::<v1::AcquireLeaseResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AcquireLeaseResponse>(&s).unwrap(), m); },
+        125 => if let Ok(m) = serde_json::from_slice::<v1::LeaseRef>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::LeaseRef>(&s).unwrap(), m); },
+        126 => if let Ok(m) = serde_json::from_slice::<v1::ExtendLeaseRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ExtendLeaseRequest>(&s).unwrap(), m); },
+        127 => if let Ok(m) = serde_json::from_slice::<v1::ListLeasesRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListLeasesRequest>(&s).unwrap(), m); },
+        128 => if let Ok(m) = serde_json::from_slice::<v1::ListLeasesResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListLeasesResponse>(&s).unwrap(), m); },
+        129 => if let Ok(m) = serde_json::from_slice::<v1::ProvenanceRecord>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ProvenanceRecord>(&s).unwrap(), m); },
+        130 => if let Ok(m) = serde_json::from_slice::<v1::SubmitProvenanceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SubmitProvenanceRequest>(&s).unwrap(), m); },
+        131 => if let Ok(m) = serde_json::from_slice::<v1::ProvenanceEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ProvenanceEntry>(&s).unwrap(), m); },
+        132 => if let Ok(m) = serde_json::from_slice::<v1::ListProvenanceRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListProvenanceRequest>(&s).unwrap(), m); },
+        133 => if let Ok(m) = serde_json::from_slice::<v1::ListProvenanceResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListProvenanceResponse>(&s).unwrap(), m); },
+        134 => if let Ok(m) = serde_json::from_slice::<v1::PredictRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PredictRequest>(&s).unwrap(), m); },
+        135 => if let Ok(m) = serde_json::from_slice::<v1::Overlap>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Overlap>(&s).unwrap(), m); },
+        136 => if let Ok(m) = serde_json::from_slice::<v1::PredictResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PredictResponse>(&s).unwrap(), m); },
+        137 => if let Ok(m) = serde_json::from_slice::<v1::Event>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Event>(&s).unwrap(), m); },
+        138 => if let Ok(m) = serde_json::from_slice::<v1::SubscribeRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SubscribeRequest>(&s).unwrap(), m); },
+        139 => if let Ok(m) = serde_json::from_slice::<v1::ReplayRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReplayRequest>(&s).unwrap(), m); },
+        140 => if let Ok(m) = serde_json::from_slice::<v1::ReplayResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ReplayResponse>(&s).unwrap(), m); },
+        141 => if let Ok(m) = serde_json::from_slice::<v1::GetPolicyRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetPolicyRequest>(&s).unwrap(), m); },
+        142 => if let Ok(m) = serde_json::from_slice::<v1::PolicyVersion>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PolicyVersion>(&s).unwrap(), m); },
+        143 => if let Ok(m) = serde_json::from_slice::<v1::SetPolicyRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SetPolicyRequest>(&s).unwrap(), m); },
+        144 => if let Ok(m) = serde_json::from_slice::<v1::PolicyHistoryRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PolicyHistoryRequest>(&s).unwrap(), m); },
+        145 => if let Ok(m) = serde_json::from_slice::<v1::PolicyHistoryResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PolicyHistoryResponse>(&s).unwrap(), m); },
+        146 => if let Ok(m) = serde_json::from_slice::<v1::Pin>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Pin>(&s).unwrap(), m); },
+        147 => if let Ok(m) = serde_json::from_slice::<v1::PinRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::PinRequest>(&s).unwrap(), m); },
+        148 => if let Ok(m) = serde_json::from_slice::<v1::UnpinRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UnpinRequest>(&s).unwrap(), m); },
+        149 => if let Ok(m) = serde_json::from_slice::<v1::ListPinsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListPinsRequest>(&s).unwrap(), m); },
+        150 => if let Ok(m) = serde_json::from_slice::<v1::ListPinsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListPinsResponse>(&s).unwrap(), m); },
+        151 => if let Ok(m) = serde_json::from_slice::<v1::AuditEntry>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AuditEntry>(&s).unwrap(), m); },
+        152 => if let Ok(m) = serde_json::from_slice::<v1::ListAuditRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAuditRequest>(&s).unwrap(), m); },
+        153 => if let Ok(m) = serde_json::from_slice::<v1::ListAuditResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListAuditResponse>(&s).unwrap(), m); },
+        154 => if let Ok(m) = serde_json::from_slice::<v1::VerifyAuditRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::VerifyAuditRequest>(&s).unwrap(), m); },
+        155 => if let Ok(m) = serde_json::from_slice::<v1::VerifyAuditResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::VerifyAuditResponse>(&s).unwrap(), m); },
+        156 => if let Ok(m) = serde_json::from_slice::<v1::GcRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GcRequest>(&s).unwrap(), m); },
+        157 => if let Ok(m) = serde_json::from_slice::<v1::GcResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GcResponse>(&s).unwrap(), m); },
+        158 => if let Ok(m) = serde_json::from_slice::<v1::FsckRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FsckRequest>(&s).unwrap(), m); },
+        159 => if let Ok(m) = serde_json::from_slice::<v1::FsckIssue>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FsckIssue>(&s).unwrap(), m); },
+        160 => if let Ok(m) = serde_json::from_slice::<v1::FsckResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FsckResponse>(&s).unwrap(), m); },
+        161 => if let Ok(m) = serde_json::from_slice::<v1::CredentialScope>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CredentialScope>(&s).unwrap(), m); },
+        162 => if let Ok(m) = serde_json::from_slice::<v1::Credential>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Credential>(&s).unwrap(), m); },
+        163 => if let Ok(m) = serde_json::from_slice::<v1::MintCredentialRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MintCredentialRequest>(&s).unwrap(), m); },
+        164 => if let Ok(m) = serde_json::from_slice::<v1::MintCredentialResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::MintCredentialResponse>(&s).unwrap(), m); },
+        165 => if let Ok(m) = serde_json::from_slice::<v1::ListCredentialsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListCredentialsRequest>(&s).unwrap(), m); },
+        166 => if let Ok(m) = serde_json::from_slice::<v1::ListCredentialsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListCredentialsResponse>(&s).unwrap(), m); },
+        167 => if let Ok(m) = serde_json::from_slice::<v1::RevokeCredentialRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RevokeCredentialRequest>(&s).unwrap(), m); },
+        168 => if let Ok(m) = serde_json::from_slice::<v1::RevokeCredentialResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RevokeCredentialResponse>(&s).unwrap(), m); },
+        169 => if let Ok(m) = serde_json::from_slice::<v1::RoleBinding>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RoleBinding>(&s).unwrap(), m); },
+        170 => if let Ok(m) = serde_json::from_slice::<v1::GrantRoleRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GrantRoleRequest>(&s).unwrap(), m); },
+        171 => if let Ok(m) = serde_json::from_slice::<v1::RevokeRoleRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RevokeRoleRequest>(&s).unwrap(), m); },
+        172 => if let Ok(m) = serde_json::from_slice::<v1::ListRolesRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListRolesRequest>(&s).unwrap(), m); },
+        173 => if let Ok(m) = serde_json::from_slice::<v1::ListRolesResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListRolesResponse>(&s).unwrap(), m); },
+        174 => if let Ok(m) = serde_json::from_slice::<v1::RunSpec>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::RunSpec>(&s).unwrap(), m); },
+        175 => if let Ok(m) = serde_json::from_slice::<v1::Job>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Job>(&s).unwrap(), m); },
+        176 => if let Ok(m) = serde_json::from_slice::<v1::ValidationTask>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ValidationTask>(&s).unwrap(), m); },
+        177 => if let Ok(m) = serde_json::from_slice::<v1::ClaimJobRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ClaimJobRequest>(&s).unwrap(), m); },
+        178 => if let Ok(m) = serde_json::from_slice::<v1::ClaimJobResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ClaimJobResponse>(&s).unwrap(), m); },
+        179 => if let Ok(m) = serde_json::from_slice::<v1::HeartbeatJobRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::HeartbeatJobRequest>(&s).unwrap(), m); },
+        180 => if let Ok(m) = serde_json::from_slice::<v1::CompleteJobRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CompleteJobRequest>(&s).unwrap(), m); },
+        181 => if let Ok(m) = serde_json::from_slice::<v1::FailJobRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::FailJobRequest>(&s).unwrap(), m); },
+        182 => if let Ok(m) = serde_json::from_slice::<v1::GetJobRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetJobRequest>(&s).unwrap(), m); },
+        183 => if let Ok(m) = serde_json::from_slice::<v1::ListJobsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListJobsRequest>(&s).unwrap(), m); },
+        184 => if let Ok(m) = serde_json::from_slice::<v1::ListJobsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListJobsResponse>(&s).unwrap(), m); },
+        185 => if let Ok(m) = serde_json::from_slice::<v1::GetCandidateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetCandidateRequest>(&s).unwrap(), m); },
+        186 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
         _ => unreachable!(),
     }
 }

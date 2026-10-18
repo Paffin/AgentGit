@@ -9,6 +9,8 @@
 #                   (the directory `cargo fuzz build` wrote them to, e.g. target/x86_64-unknown-linux-gnu/release)
 #   FUZZ_SANITIZER  address (default), none, ... passed to `cargo fuzz -s`
 #   FUZZ_CORPUS     where the working corpora live (default: fuzz/corpus, seeds checked in)
+#   FUZZ_MERGE=1    after a clean run (with FUZZ_BIN_DIR), keep only the inputs that add coverage, so a corpus that
+#                   is cached between nightly runs does not grow without bound
 #
 # A crash, hang (> 20 s on one input) or out-of-memory (> 2 GB) stops the target, leaves the reproducer in
 # fuzz/artifacts/<target>/ and makes this script exit 1 after the remaining targets have run.
@@ -50,6 +52,14 @@ for t in "$@"; do
       -artifact_prefix="$PWD/artifacts/$t/"
   fi
   rc=$?
+  if [ $rc -eq 0 ] && [ "${FUZZ_MERGE:-0}" = 1 ] && [ -n "${FUZZ_BIN_DIR:-}" ]; then
+    merged="$(mktemp -d)"
+    if "$FUZZ_BIN_DIR/$t" -merge=1 "$merged" "$corpus_root/$t" > /dev/null 2>&1; then
+      rm -rf "${corpus_root:?}/$t" && mv "$merged" "$corpus_root/$t"
+    else
+      rm -rf "$merged"
+    fi
+  fi
   echo "::endgroup::"
   if [ $rc -ne 0 ]; then
     echo "::error title=fuzz target $t failed::see fuzz/artifacts/$t/ (reproduce: cargo +nightly fuzz run $t fuzz/artifacts/$t/<file>)"

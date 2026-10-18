@@ -1,0 +1,34 @@
+# cargo-about configuration: which licences the shipped Rust dependencies may carry, and for which platforms.
+# THIRD_PARTY_LICENSES.md is generated from it by scripts/third_party_licenses.sh (the Rust section) and checked
+# for freshness in CI (.github/workflows/security.yml, job "hygiene").
+#
+# The accepted list is the `[licenses] allow` list of deny.toml (less the fuzz-only NCSA): cargo-deny is the gate
+# that fails a build when a dependency brings a licence outside it, cargo-about only collects the texts.
+# scripts/third_party_licenses.sh fails when this list accepts something deny.toml does not allow.
+accepted = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+]
+
+# The platforms the release workflow builds for (same list as deny.toml's [graph]).
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+
+# Test-only and build-time-only crates are not part of any shipped binary.
+ignore-dev-dependencies = true
+ignore-build-dependencies = true

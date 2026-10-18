@@ -1,0 +1,251 @@
+name: Fuzz
+
+# libFuzzer targets for every parser and decoder that touches untrusted bytes (fuzz/; docs/architecture/security.md
+# "Fuzzing"). What runs where:
+#
+#   pull_request / push to main (when the fuzzed crates, the protocol or fuzz/ change)
+#       build every target once with the address sanitizer, then run each for 60 s from the checked-in seeds plus
+#       the corpus the nightly run cached. A smoke test: it catches a regression that a seed or a recently
+#       found input reaches, not a new bug that needs hours.
+#   schedule (every night) and workflow_dispatch
+#       every target for 15 minutes (or `seconds`), four jobs in parallel, starting from the corpus of the last night;
+#       the corpus is minimised and cached for the next run. A crash, a hang over 20 s or 2 GB of memory fails the
+#       job and uploads the reproducer (fuzz/artifacts) as a workflow artifact.
+#
+# Reproduce a failure:  cargo +nightly fuzz run -s address --features heavy <target> <downloaded artifact file>
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fuzz/**"
+      - "proto/**"
+      - "Cargo.lock"
+      - "crates/ag-types/**"
+      - "crates/ag-crypto/**"
+      - "crates/ag-object/**"
+      - "crates/ag-changeset/**"
+      - "crates/ag-dag/**"
+      - "crates/ag-diff/**"
+      - "crates/ag-tree/**"
+      - "crates/ag-merge/**"
+      - "crates/ag-policy/**"
+      - "crates/ag-sandbox/**"
+      - "crates/ag-storage/**"
+      - "crates/ag-agent/**"
+      - "crates/ag-protocol/**"
+      - "crates/ag-client/**"
+      - "crates/ag-worker/**"
+      - "crates/ag-git/**"
+      - "crates/ag-integrate/**"
+      - ".github/workflows/fuzz.yml"
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - "proto/**"
+      - "Cargo.lock"
+      - "crates/ag-types/**"
+      - "crates/ag-crypto/**"
+      - "crates/ag-object/**"
+      - "crates/ag-changeset/**"
+      - "crates/ag-dag/**"
+      - "crates/ag-diff/**"
+      - "crates/ag-tree/**"
+      - "crates/ag-merge/**"
+      - "crates/ag-policy/**"
+      - "crates/ag-sandbox/**"
+      - "crates/ag-storage/**"
+      - "crates/ag-agent/**"
+      - "crates/ag-protocol/**"
+      - "crates/ag-client/**"
+      - "crates/ag-worker/**"
+      - "crates/ag-git/**"
+      - "crates/ag-integrate/**"
+      - ".github/workflows/fuzz.yml"
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds per target (the nightly default is 900)"
+        default: "300"
+      targets:
+        description: "Space-separated target names, or empty for all"
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # A fixed nightly: a new nightly must not break the workflow overnight. Bump it on purpose.
+  FUZZ_NIGHTLY: nightly-2026-10-17
+  CARGO_FUZZ_VERSION: 0.13.2
+
+jobs:
+  build:
+    name: build the targets (address sanitizer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generated files are in step with the protocol and the target list
+        run: |
+          python3 fuzz/gen_agwp_types.py --check
+          python3 fuzz/sync_targets.py --check
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.FUZZ_NIGHTLY }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fuzz
+          key: fuzz-asan
+      - name: cargo-fuzz
+        id: cargo-fuzz
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: cargo-fuzz-${{ env.CARGO_FUZZ_VERSION }}-${{ runner.os }}-${{ env.FUZZ_NIGHTLY }}
+      - if: steps.cargo-fuzz.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+      - name: Build every target
+        working-directory: fuzz
+        run: cargo fuzz build -s address --features heavy
+      - name: Collect the binaries
+        run: |
+          mkdir bins
+          for src in fuzz/fuzz_targets/*.rs; do
+            t="$(basename "$src" .rs)"
+            cp "fuzz/target/x86_64-unknown-linux-gnu/release/$t" "bins/$t"
+          done
+          ls -l bins
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-binaries
+          path: bins/
+          retention-days: 3
+          if-no-files-found: error
+
+  smoke:
+    name: smoke (${{ matrix.group }}, 60 s per target)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: formats
+            targets: object_envelope canon_reader changeset_decode tree_decode repo_path
+          - group: merge-and-diff
+            targets: diff_myers merge_text merge_trees tree_ops rename_detect
+          - group: policy-and-signing
+            targets: policy_eval policy_json signed_json sandbox_spec job_spec
+          - group: protocol-and-git
+            targets: agwp_json agwp_proto git_parse glob_match ignore_rules
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: fuzz-binaries
+          path: bins
+      - run: chmod +x bins/*
+      # The corpora the nightly run grew (cached on the default branch; a pull request may read them).
+      - name: Restore the nightly corpora
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: corpus
+          key: fuzz-corpus-${{ matrix.group }}-none
+          restore-keys: |
+            fuzz-corpus-${{ matrix.group }}-
+      - name: Fuzz 60 s per target (the checked-in seeds are always included)
+        env:
+          FUZZ_BIN_DIR: ${{ github.workspace }}/bins
+          FUZZ_CORPUS: ${{ github.workspace }}/corpus
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          for t in $TARGETS; do
+            mkdir -p "corpus/$t"
+            cp -n fuzz/corpus/"$t"/* "corpus/$t"/
+          done
+          # shellcheck disable=SC2086 # the target list is split on purpose
+          fuzz/run.sh 60 $TARGETS
+      - name: Reproducers
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-crashes-${{ matrix.group }}
+          path: fuzz/artifacts/
+          retention-days: 30
+
+  nightly:
+    name: nightly (${{ matrix.group }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: formats
+            targets: object_envelope canon_reader changeset_decode tree_decode repo_path
+          - group: merge-and-diff
+            targets: diff_myers merge_text merge_trees tree_ops rename_detect
+          - group: policy-and-signing
+            targets: policy_eval policy_json signed_json sandbox_spec job_spec
+          - group: protocol-and-git
+            targets: agwp_json agwp_proto git_parse glob_match ignore_rules
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: fuzz-binaries
+          path: bins
+      - run: chmod +x bins/*
+      - name: Corpora of the last run
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: corpus
+          key: fuzz-corpus-${{ matrix.group }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.group }}-
+      - name: Fuzz
+        env:
+          FUZZ_BIN_DIR: ${{ github.workspace }}/bins
+          FUZZ_CORPUS: ${{ github.workspace }}/corpus
+          FUZZ_MERGE: "1"
+          TARGETS: ${{ matrix.targets }}
+          WANTED: ${{ github.event.inputs.targets }}
+          SECS: ${{ github.event.inputs.seconds || '900' }}
+        run: |
+          run=""
+          for t in $TARGETS; do
+            if [ -n "${WANTED:-}" ]; then
+              case " $WANTED " in *" $t "*) ;; *) continue ;; esac
+            fi
+            mkdir -p "corpus/$t"
+            cp -n fuzz/corpus/"$t"/* "corpus/$t"/
+            run="$run $t"
+          done
+          if [ -z "$run" ]; then echo "no target of this group was selected"; exit 0; fi
+          # shellcheck disable=SC2086 # the target list is split on purpose
+          fuzz/run.sh "$SECS" $run
+      - name: Reproducers
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-crashes-${{ matrix.group }}
+          path: fuzz/artifacts/
+          retention-days: 30

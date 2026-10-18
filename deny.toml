@@ -42,6 +42,9 @@ allow = [
     "BSL-1.0",
     "Unicode-3.0",
     "CDLA-Permissive-2.0",
+    # libfuzzer-sys is "(MIT OR Apache-2.0) AND NCSA"; it is only in fuzz/Cargo.toml, never in a shipped binary
+    # (about.toml, which lists what the binaries carry, does not accept it).
+    "NCSA",
 ]
 unused-allowed-license = "allow"
 confidence-threshold = 0.9

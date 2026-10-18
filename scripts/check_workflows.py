@@ -13,16 +13,20 @@ Checks (offline, no dependencies beyond PyYAML):
   injection     no `${{ ... }}` expression that a pull request, issue or comment author controls
                 (`github.event.pull_request.title`, `head_ref`, `comment.body`, `inputs.*`, ...) written
                 directly into a `run:` script - pass it through `env:` instead.
-  checkout      (warning only) `actions/checkout` in a workflow that uploads artifacts or publishes should set
+  checkout      `actions/checkout` in a workflow that uploads artifacts or publishes should set
                 `persist-credentials: false` (otherwise the token ends up in the uploaded `.git/config`).
+                A warning, unless --strict is given.
 
 Usage:
   scripts/check_workflows.py            check; exit 1 and list every problem
+  scripts/check_workflows.py --strict   also fail on the warnings
   scripts/check_workflows.py --pin      rewrite tag/branch refs to commit SHAs (needs network and `git`)
   scripts/check_workflows.py --pin -n   show what --pin would change
 
-`--pin` resolves `owner/repo@ref` with `git ls-remote` (peeling annotated tags) and appends `# ref` so that
-Dependabot (github-actions ecosystem) keeps both the SHA and the comment current.
+`--pin` resolves `owner/repo@ref` with `git ls-remote` (peeling annotated tags) and appends a comment with the
+exact release the SHA is (`@v4` becomes `@<sha> # v4.3.1`), so that Dependabot (github-actions ecosystem) keeps both
+the SHA and the comment current. `dtolnay/rust-toolchain@stable` (there the ref IS the toolchain) becomes the SHA
+of that action's `master` plus `with: toolchain: stable`, which selects the same toolchain.
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ import pathlib
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 
 try:
     import yaml
@@ -40,6 +45,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.y*ml"))
 SHA = re.compile(r"^[0-9a-f]{40}$")
 USES = re.compile(r"^(\s*-?\s*uses:\s*)([^\s#]+)(\s*#.*)?$")
+SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+RUST_TOOLCHAIN = "dtolnay/rust-toolchain"
 
 # Expressions an outsider can influence. Writing one into a shell script makes the script injectable.
 TAINTED = re.compile(
@@ -119,39 +126,128 @@ def check(path: pathlib.Path) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-def resolve(action: str, ref: str) -> str | None:
+# --- pinning -----------------------------------------------------------------------------------------------------
+
+# The refs of an action repository: "refs/tags/v4" -> commit SHA (annotated tags peeled), "refs/heads/master" -> SHA.
+Refs = dict[str, str]
+
+
+def ls_remote(action: str) -> Refs:
     repo = "/".join(action.split("/")[:2])
-    url = f"https://github.com/{repo}"
     out = subprocess.run(
-        ["git", "ls-remote", url, f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}"],
+        ["git", "ls-remote", "--tags", "--heads", f"https://github.com/{repo}"],
         capture_output=True,
         text=True,
         check=False,
     ).stdout.splitlines()
-    peeled = next((l.split()[0] for l in out if l.endswith("^{}")), None)
-    plain = next((l.split()[0] for l in out if not l.endswith("^{}")), None)
-    return peeled or plain
+    return parse_refs(out)
+
+
+def parse_refs(lines: list[str]) -> Refs:
+    """The refs of `git ls-remote --tags --heads` output (`<sha>\\t<ref>` lines)."""
+    refs: Refs = {}
+    for line in lines:  # plain refs first; the peeled commit of an annotated tag then replaces the tag object
+        sha, _, ref = line.partition("\t")
+        if not ref.endswith("^{}"):
+            refs[ref] = sha
+    for line in lines:
+        sha, _, ref = line.partition("\t")
+        if ref.endswith("^{}"):
+            refs[ref[:-3]] = sha
+    return refs
+
+
+def resolve(refs: Refs, ref: str) -> tuple[str, str] | None:
+    """(commit SHA, comment) for a tag or branch name. The comment is the highest exact release (vX.Y.Z) that
+    points at the same commit, so a floating `v4` is documented as the `v4.3.1` it is today."""
+    sha = refs.get(f"refs/tags/{ref}") or refs.get(f"refs/heads/{ref}")
+    if not sha:
+        return None
+    exact = []
+    for name, commit in refs.items():
+        tag = name.removeprefix("refs/tags/")
+        m = SEMVER.match(tag) if name.startswith("refs/tags/") else None
+        if m and commit == sha:
+            exact.append((tuple(int(x) for x in m.groups()), tag))
+    return sha, (max(exact)[1] if exact else ref)
+
+
+def pin_text(text: str, lookup: Callable[[str], Refs]) -> tuple[str, list[str]]:
+    """The workflow text with every unpinned `uses:` pinned, and a description of each change."""
+    lines = text.splitlines(keepends=True)
+    changes: list[str] = []
+    inserts: list[tuple[int, str]] = []  # (index to insert before, text)
+    for n, line in enumerate(lines):
+        m = USES.match(line.rstrip("\n"))
+        if not m:
+            continue
+        target = m.group(2).strip("'\"")
+        if target.startswith("./") or target.startswith("docker://"):
+            continue
+        action, _, ref = target.partition("@")
+        if SHA.match(ref):
+            continue
+        toolchain = None
+        if action == RUST_TOOLCHAIN:
+            # The ref is the toolchain here: pin the action's code (master) and pass the toolchain as an input.
+            toolchain, lookup_ref = ref, "master"
+        else:
+            lookup_ref = ref
+        found = resolve(lookup(action), lookup_ref)
+        if not found:
+            changes.append(f"line {n + 1}: cannot resolve {action}@{lookup_ref}")
+            continue
+        sha, comment = found
+        lines[n] = f"{m.group(1)}{action}@{sha} # {comment}\n"
+        changes.append(f"line {n + 1}: {action}@{ref} -> {sha[:12]} # {comment}")
+        if toolchain:
+            inserts += _toolchain_input(lines, n, toolchain)
+    for index, extra in sorted(inserts, reverse=True):
+        lines.insert(index, extra)
+    return "".join(lines), changes
+
+
+def _toolchain_input(lines: list[str], n: int, toolchain: str) -> list[tuple[int, str]]:
+    """The line to add so that the step whose `uses:` is line n passes `toolchain: X`, unless it sets one."""
+    first = lines[n].lstrip()
+    key_indent = len(lines[n]) - len(first) + (2 if first.startswith("- ") else 0)
+    pad = " " * key_indent
+    with_at = None
+    for i in range(n + 1, len(lines)):
+        raw = lines[i]
+        if not raw.strip():
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if indent < key_indent or (indent == key_indent and raw.lstrip().startswith("- ")):
+            break  # the step is over
+        if indent == key_indent and raw.strip() == "with:":
+            with_at = i
+        elif with_at is not None and indent > key_indent and raw.strip().startswith("toolchain:"):
+            return []  # the step selects its toolchain already
+    if with_at is not None:
+        return [(with_at + 1, f"{pad}  toolchain: {toolchain}\n")]
+    return [(n + 1, f"{pad}with:\n{pad}  toolchain: {toolchain}\n")]
 
 
 def pin(dry: bool) -> int:
-    changed = 0
+    cache: dict[str, Refs] = {}
+
+    def lookup(action: str) -> Refs:
+        repo = "/".join(action.split("/")[:2])
+        if repo not in cache:
+            cache[repo] = ls_remote(action)
+        return cache[repo]
+
+    status = 0
     for path in WORKFLOWS:
-        lines = path.read_text().splitlines(keepends=True)
-        for n, action, ref, line in uses_refs(path):
-            if SHA.match(ref):
-                continue
-            sha = resolve(action, ref)
-            if not sha:
-                print(f"{path.name}:{n}: cannot resolve {action}@{ref}", file=sys.stderr)
-                continue
-            m = USES.match(line.rstrip("\n"))
-            assert m
-            lines[n - 1] = f"{m.group(1)}{action}@{sha} # {ref}\n"
-            print(f"{path.name}:{n}: {action}@{ref} -> {sha[:12]}")
-            changed += 1
-        if changed and not dry:
-            path.write_text("".join(lines))
-    return 0
+        text = path.read_text()
+        new, changes = pin_text(text, lookup)
+        for c in changes:
+            print(f"{path.name}: {c}")
+            status |= "cannot resolve" in c
+        if new != text and not dry:
+            path.write_text(new)
+    return status
 
 
 def main() -> int:
@@ -159,8 +255,12 @@ def main() -> int:
         return pin("-n" in sys.argv)
     results = [check(w) for w in WORKFLOWS]
     problems = [p for r in results for p in r[0]]
-    for w in (w for r in results for w in r[1]):
-        print(f"warning: {w}", file=sys.stderr)
+    warnings = [w for r in results for w in r[1]]
+    if "--strict" in sys.argv:
+        problems += warnings
+    else:
+        for w in warnings:
+            print(f"warning: {w}", file=sys.stderr)
     for p in problems:
         print(p, file=sys.stderr)
     if problems:

@@ -7,7 +7,7 @@
 //! and a mutated record does not verify under the original signature.
 
 use ag_agent::provenance::ProvenanceRecord;
-use ag_crypto::{PublicKey, Signature};
+use ag_crypto::{KeyPair, PublicKey, Signature};
 use ag_policy::Attestation;
 use libfuzzer_sys::fuzz_target;
 
@@ -48,14 +48,36 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(back.canonical_bytes().unwrap(), bytes, "canonical bytes must be a fixed point");
     }
 
+    // Hex forms of keys and signatures. The input is arbitrary UTF-8, so the split point has to be moved back
+    // to a character boundary (`split_at` panics inside a multi-byte character).
     if let Ok(s) = std::str::from_utf8(data) {
-        let (a, b) = s.split_at(s.len() / 2);
+        let mut mid = s.len() / 2;
+        while !s.is_char_boundary(mid) {
+            mid -= 1;
+        }
+        let (a, b) = s.split_at(mid);
         if let Ok(k) = PublicKey::from_hex(a) {
             assert_eq!(PublicKey::from_hex(&k.to_hex()).unwrap(), k);
             if let Ok(sig) = Signature::from_hex(b) {
-                assert!(k.verify("fuzz", data, &sig).is_err() || k.verify("fuzz", data, &sig).is_ok());
+                // Whatever the verdict is, it is the same every time and never a panic.
+                assert_eq!(k.verify("fuzz", data, &sig).is_ok(), k.verify("fuzz", data, &sig).is_ok());
                 assert_eq!(Signature::from_hex(&sig.to_hex()).unwrap(), sig);
             }
         }
+    }
+
+    // A real signature over fuzzer-chosen bytes: it verifies, it is bound to its domain, and one flipped bit in
+    // the message breaks it. The first 32 bytes are the key seed, the rest the message.
+    if data.len() > 32 {
+        let (seed, message) = data.split_at(32);
+        let pair = KeyPair::from_seed(seed.try_into().expect("32 bytes"));
+        let sig = pair.sign("fuzz", message).expect("signing does not fail");
+        pair.public().verify("fuzz", message, &sig).expect("a fresh signature verifies");
+        assert!(pair.public().verify("other-domain", message, &sig).is_err(), "domain separation");
+        let mut tampered = message.to_vec();
+        tampered[0] ^= 1;
+        assert!(pair.public().verify("fuzz", &tampered, &sig).is_err(), "a changed message must not verify");
+        assert_eq!(Signature::from_hex(&sig.to_hex()).unwrap(), sig);
+        assert_eq!(PublicKey::from_hex(&pair.public().to_hex()).unwrap(), pair.public());
     }
 });

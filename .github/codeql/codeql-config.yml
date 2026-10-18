@@ -1,0 +1,17 @@
+name: AgentGit CodeQL configuration
+
+# Machine-generated sources are excluded: their findings are the generator's, and the generators are covered by
+# their own `--check` gates in CI. Tests are NOT excluded: a test that logs a secret or builds a path from input is
+# still code in the repository.
+paths-ignore:
+  - "**/node_modules/**"
+  - "apps/web/src/api/schema.gen.ts"
+  - "sdk/typescript/src/generated/**"
+  - "sdk/python/src/agentgit/_generated/**"
+  - "fuzz/src/agwp_types.rs"
+  - "docs/assets/**"
+
+# security-extended adds the lower-precision security queries to the default suite; it is what a "security gate"
+# should run. The `security-and-quality` suite (maintainability) is not used.
+queries:
+  - uses: security-extended

@@ -1,0 +1,69 @@
+name: CodeQL
+
+# Static analysis of the code we write, in the four languages of the repository. The findings appear under
+# Security -> Code scanning; the job log prints a summary of what the analysis found, so a run can be read without
+# the Security tab. What runs where and how to triage an alert: docs/operations/supply-chain.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "31 3 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF results
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: rust
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+          - language: go
+            build-mode: manual
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+      # The orchestrator is a Go module in a subdirectory: the autobuilder does not find it, so build it by hand.
+      - if: matrix.language == 'go'
+        name: Build the orchestrator
+        working-directory: services/agent-orchestrator
+        run: go build ./...
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        id: analyze
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: sarif-results
+          upload: always
+      - name: What the analysis found
+        run: python3 scripts/codeql_summary.py sarif-results

@@ -139,6 +139,10 @@ put("signed_json", json.dumps({
     "checks_run": ["cargo test"], "inputs": ["https://example.com"], "rationale": "fix", "created_at": 1760659200000,
 }).encode())
 put("signed_json", (PUB + sig).encode())
+# regression: the hex-split harness once cut a multi-byte character in half (length 3 -> midpoint inside it)
+put("signed_json", "\u20ac".encode(), name="regress-split-multibyte")
+# seed (32 bytes) + message for the real-signature check
+put("signed_json", bytes(range(32)) + b"signed message", name="seed-and-message")
 
 # --- sandbox and jobs ---------------------------------------------------------------------------------------
 put("sandbox_spec", json.dumps({

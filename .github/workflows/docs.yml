@@ -38,7 +38,7 @@ jobs:
     name: site (mkdocs build --strict)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Every dependency is pinned with its hash (docs/requirements.txt); pip refuses anything else.
@@ -50,7 +50,7 @@ jobs:
         run: .venv-docs/bin/mkdocs build --strict
       - name: The hooks that adapt docs/ to the site have tests
         run: .venv-docs/bin/python scripts/test_mkdocs_hooks.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: docs-site
           path: site
@@ -60,11 +60,13 @@ jobs:
     name: tutorials run against the real binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build ag and ag-server
         run: cargo build -p ag-cli -p ag-server
       - name: The harness has tests of its own
@@ -90,14 +92,14 @@ jobs:
       group: pages
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Fails when Pages is not enabled for the repository (or is not set to "GitHub Actions"). That is not an error of
       # this workflow: everything after it is skipped and the job succeeds.
       - name: Is GitHub Pages enabled?
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
         continue-on-error: true
       - name: Pages is not enabled, nothing is published
         if: steps.pages.outcome != 'success'
@@ -114,11 +116,11 @@ jobs:
         env:
           DOCS_SOURCE_REF: ${{ github.sha }}
         run: .venv-docs/bin/mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         if: steps.pages.outcome == 'success'
         with:
           path: site
       - name: Deploy
         id: deployment
         if: steps.pages.outcome == 'success'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

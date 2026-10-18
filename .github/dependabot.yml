@@ -1,5 +1,13 @@
 version: 2
+
+# Every ecosystem the repository has a lock file or manifest for, so that a dependency we ship or build with does
+# not age silently. The pull requests are what the Security workflow (security.yml) and the CI workflows then judge;
+# a green run is the evidence that the update is safe, a maintainer does the merge. Groups keep the number of
+# pull requests down: minor and patch updates of one ecosystem arrive together, major updates one by one.
+# Policy: docs/operations/supply-chain.md.
+
 updates:
+  # --- Rust -------------------------------------------------------------------------------------------------------
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -8,17 +16,78 @@ updates:
     groups:
       rust-minor-and-patch:
         update-types: [minor, patch]
-  - package-ecosystem: github-actions
-    directory: /
+  # The fuzz harness is a workspace of its own with its own Cargo.lock (libfuzzer-sys, arbitrary).
+  - package-ecosystem: cargo
+    directory: /fuzz
     schedule:
       interval: weekly
-  # Base images of the shipped containers (deploy/docker/Dockerfile) and the Compose stack's service images.
-  # A Rust image bump moves the toolchain the release images are built with; the Containers workflow tests it.
+    open-pull-requests-limit: 2
+    groups:
+      fuzz-minor-and-patch:
+        update-types: [minor, patch]
+
+  # --- JavaScript / TypeScript --------------------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /sdk/typescript
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      ts-sdk-minor-and-patch:
+        update-types: [minor, patch]
+
+  # --- Python -------------------------------------------------------------------------------------------------------
+  # The SDK is locked by uv (sdk/python/uv.lock).
+  - package-ecosystem: uv
+    directory: /sdk/python
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      python-sdk-minor-and-patch:
+        update-types: [minor, patch]
+  # docs/requirements.txt (MkDocs and its plugins) is hash-locked by `uv pip compile` and is refreshed by hand with
+  # the command in docs/requirements.in: a Dependabot `pip` update would rewrite versions without their hashes.
+
+  # --- Go -----------------------------------------------------------------------------------------------------------
+  - package-ecosystem: gomod
+    directory: /services/agent-orchestrator
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  # --- Containers ---------------------------------------------------------------------------------------------------
+  # Base images of the shipped containers (deploy/docker/Dockerfile, services/agent-orchestrator/Dockerfile) and the
+  # Compose stack's service images. A Rust or Go image bump moves the toolchain the release images are built with;
+  # the Containers workflow tests it, and the Security workflow's govulncheck scans with the Go of the Dockerfile.
   - package-ecosystem: docker
     directory: /deploy/docker
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /services/agent-orchestrator
     schedule:
       interval: weekly
   - package-ecosystem: docker-compose
     directory: /deploy/compose
     schedule:
       interval: weekly
+
+  # --- CI -----------------------------------------------------------------------------------------------------------
+  # Every action is pinned to a commit SHA with its release in a comment (scripts/check_workflows.py); Dependabot
+  # updates both.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]

@@ -4,7 +4,7 @@ name: Web UI
 # or the server it is tested against change.
 on:
   push:
-    branches: [main, web-tail-ci]
+    branches: [main]
     paths:
       - "apps/web/**"
       - "docs/protocol/openapi.json"

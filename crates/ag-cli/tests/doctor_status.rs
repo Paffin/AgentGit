@@ -325,9 +325,10 @@ fn status_tracks_how_the_local_stream_relates_to_a_remote() {
     // A second change lands on the server; a fetch (not a pull) records it.
     seed.write("two.txt", "2\n");
     seed.run_env("user:alice", &["snapshot", "-m", "two"], &[]).ok();
-    let out = seed.run_env("user:alice", &["push", "-t", "two"], &[("AG_TOKEN", &tok)]).ok().stdout();
-    let prop =
-        out.split_whitespace().find(|w| w.starts_with("prop_")).unwrap().trim_end_matches(['.', ',']).to_string();
+    // With --quiet, `push` prints just the proposal id, like `propose` (the tutorials capture it with `$(...)`).
+    let out = seed.run_env("user:alice", &["-q", "push", "-t", "two"], &[("AG_TOKEN", &tok)]).ok().stdout();
+    let prop = out.trim().to_string();
+    assert!(prop.starts_with("prop_") && !prop.contains(char::is_whitespace), "a bare proposal id: {out:?}");
     seed.run_env("user:alice", &["remote", "integrate", &prop], &[("AG_TOKEN", &tok)]).ok();
     run_in(&dir, cfg.path(), "user:alice", &["fetch"], &[("AG_TOKEN", &tok)]).ok();
     let j = run_in(&dir, cfg.path(), "user:alice", &["--json", "status"], &[]).ok().json();

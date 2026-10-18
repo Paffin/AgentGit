@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that the documentation still matches the code.
 
-    python3 scripts/check_docs.py
+    python3 scripts/check_docs.py [--require-ag]
 
 Checks (all must pass; used by CI):
 
@@ -9,7 +9,17 @@ Checks (all must pass; used by CI):
 2. every `snake_case_identifier` in backticks that looks like a test or code name
    (three or more words) occurs somewhere in the Rust sources, scripts or examples;
 3. every `ag <command>` mentioned in the docs names a real top-level command
-   (taken from `ag --help`, binary from $AG or target/{release,debug}/ag).
+   (taken from `ag --help`, binary from $AG or target/{release,debug}/ag);
+4. every `AG_*` environment variable named in backticks exists in the sources, and every one that the `ag`
+   command line reads is documented in docs/reference/configuration.md;
+5. every ADR is listed in docs/adr/README.md;
+6. every message in a table that follows `<!-- refusals -->` (the troubleshooting tutorial) is a message the code
+   can print: its fixed parts, between the `{placeholders}`, occur in the Rust sources.
+
+The command check needs the `ag` binary. Without one it is skipped with a note, unless `--require-ag` is given or
+the CI environment variable is set: a green run in CI must mean that the commands were checked.
+
+The generated reference pages (docs/reference/*, see gen_cli_docs.py) are checked by that script, not here.
 """
 import os
 import re
@@ -25,7 +35,8 @@ DOC_FILES = sorted(
 )
 # The ADR is a historical record in Russian and is not code-checked.
 SKIP_PREFIXES = ("docs/adr/0001",)
-GENERATED = {"docs/reference/cli.md"}
+GENERATED = {"docs/reference/cli.md", "docs/reference/help-topics.md", "docs/reference/cli-json.md"}
+REQUIRE_AG = "--require-ag" in sys.argv or bool(os.environ.get("CI"))
 
 errors: list[str] = []
 
@@ -124,8 +135,77 @@ if ag:
                 if cmd in commands or cmd in {"is", "the", "and", "to", "or", "for", "a", "in", "can", "has", "does"}:
                     continue
                 errors.append(f"{rel(doc)}: `ag {cmd}` is not a command of this build ({line[:70]!r})")
+elif REQUIRE_AG:
+    errors.append("the ag binary was not found, so the `ag <command>` check could not run "
+                  "(build it with `cargo build -p ag-cli` or set $AG; CI and --require-ag insist on it)")
 else:
     print("note: ag binary not found, skipping command checks (build it or set $AG)", file=sys.stderr)
+
+# 4. environment variables ---------------------------------------------------------------------------
+# The variables named in the docs exist in the code, and the ones the `ag` command line reads are documented.
+CONFIG_PAGE = ROOT / "docs" / "reference" / "configuration.md"
+ENV_VAR = re.compile(r"\bAG_[A-Z][A-Z0-9_]*")
+# Set by the build script for `--version`, not read at run time (AG_BUILD_COMMIT and AG_BUILD_DATE are documented).
+BUILD_INTERNAL = {"AG_LONG_VERSION", "AG_GIT_COMMIT"}
+# The orchestrator is Go, the SDKs are TypeScript and Python, the deployment files are YAML/TOML: variables defined
+# there are real too.
+env_corpus = set(corpus)
+for pattern in ("services/**/*.go", "sdk/python/src/**/*.py", "sdk/typescript/src/**/*.ts", "deploy/**/*.yaml",
+                "deploy/**/*.yml", "deploy/**/*.toml", "deploy/**/*.example", "deploy/docker/*"):
+    for f in ROOT.glob(pattern):
+        if f.is_file():
+            env_corpus.update(ENV_VAR.findall(f.read_text(errors="ignore")))
+for doc in DOC_FILES:
+    if not doc.exists() or rel(doc).startswith(SKIP_PREFIXES) or rel(doc) in GENERATED:
+        continue
+    for tok in re.findall(r"`([^`\n]+)`", doc.read_text()):
+        for var in ENV_VAR.findall(tok):
+            # `AG_TOKEN_<REMOTE>` is written `AG_TOKEN_` in the code
+            if var not in env_corpus and var.rstrip("_") + "_" not in env_corpus:
+                errors.append(f"{rel(doc)}: the environment variable `{var}` is not found in the code")
+cli_vars: set[str] = set()
+for f in (ROOT / "crates" / "ag-cli" / "src").rglob("*.rs"):
+    for m in re.finditer(r'"(AG_[A-Z][A-Z0-9_]*)"', f.read_text()):
+        cli_vars.add(m.group(1))
+for var in sorted(cli_vars - BUILD_INTERNAL):
+    if var not in CONFIG_PAGE.read_text():
+        errors.append(f"{rel(CONFIG_PAGE)}: `ag` reads {var} but the page does not mention it")
+
+# 5. the ADR index -------------------------------------------------------------------------------------
+adr_index = (ROOT / "docs" / "adr" / "README.md").read_text()
+for adr in sorted((ROOT / "docs" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")):
+    if f"]({adr.name})" not in adr_index:
+        errors.append(f"docs/adr/README.md does not list {adr.name}")
+
+# 6. refusal messages ----------------------------------------------------------------------------------
+# A table that follows `<!-- refusals -->` lists messages in its first column, as the code writes them, with
+# `{placeholders}`. The fixed text around the placeholders must occur in the Rust sources.
+rust_text = "\n".join(f.read_text(errors="ignore") for f in (ROOT / "crates").rglob("*.rs"))
+refusal_rows = 0
+for doc in DOC_FILES:
+    if not doc.exists() or rel(doc).startswith(SKIP_PREFIXES):
+        continue
+    lines = doc.read_text().split("\n")
+    for i, ln in enumerate(lines):
+        if ln.strip() != "<!-- refusals -->":
+            continue
+        for row in lines[i + 1:]:
+            if not row.startswith("|"):
+                if refusal_rows or row.strip():
+                    break
+                continue
+            first = row.split("|")[1].strip()
+            m = re.fullmatch(r"`(.+)`", first)
+            if not m or set(first) <= {"-", " ", ":"} or first == "Message":
+                continue
+            refusal_rows += 1
+            for piece in re.split(r"\{[^}]*\}", m.group(1)):
+                piece = piece.strip()
+                if len(piece) >= 6 and piece not in rust_text:
+                    errors.append(f"{rel(doc)}: the refusal message `{m.group(1)}` is not in the code "
+                                  f"(`{piece}` was not found); was it reworded?")
+if refusal_rows == 0:
+    errors.append("no `<!-- refusals -->` table found: the troubleshooting tutorial lost its message table")
 
 if errors:
     print("\n".join(sorted(set(errors))))

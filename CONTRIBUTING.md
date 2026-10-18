@@ -34,12 +34,22 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo build -p ag-cli && python3 scripts/gen_cli_docs.py --check   # CLI reference is generated
+cargo build -p ag-cli && python3 scripts/gen_cli_docs.py --check   # CLI reference, help topics, --json shapes,
+                                                                     # completions and man pages are generated
 python3 scripts/gen_readme_assets.py --check                         # the README's SVG artwork is generated
+python3 scripts/check_docs.py                                        # links, test names, `ag` commands, env vars
+python3 scripts/check_no_stubs.py                                    # no TODO/stub/mock/placeholder in product source
+cargo build -p ag-cli -p ag-server && python3 scripts/doc_snippets.py   # the tutorials' commands really run
 ```
 
 If you change a command or flag, regenerate the reference with `python3 scripts/gen_cli_docs.py`
-(build the binary you want documented first; the script prefers `target/release/ag`, or set `AG=`).
+(build the binary you want documented first; the script prefers `target/release/ag`, or set `AG=`). That one
+command also rewrites the help topics, the `--json` shapes (from `crates/ag-cli/tests/golden/`), the shell
+completions and the man pages under `docs/reference/`. A tutorial that shows output you changed fails
+`scripts/doc_snippets.py`: update the page (the `<!-- expect -->` blocks), not the check.
+`mkdocs build --strict` (see [`docs/README.md`](docs/README.md#building-this-site)) builds the documentation site and
+fails on a broken link or anchor. Product code carries no `TODO`, stub, mock or placeholder: `scripts/check_no_stubs.py`
+enforces it, and the few legitimate uses are listed with a reason in `scripts/no_stubs_allowlist.txt`.
 The README's banner and architecture diagram are generated too: edit `scripts/gen_readme_assets.py` and run it
 (the UI screenshots are refreshed by `npm run test:e2e` in `apps/web`).
 

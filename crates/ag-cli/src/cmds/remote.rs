@@ -573,7 +573,8 @@ pub fn push(ctx: &Ctx, a: &PushArgs) -> Result<u8> {
         Ok::<_, anyhow::Error>((prop, sent.stored.len(), to_send.len()))
     })?;
     let (prop, stored, sent) = outcome;
-    ctx.done(&serde_json::json!({"proposal": prop, "objects_sent": sent, "objects_stored": stored}), || {
+    // With --quiet: just the proposal id, like `ag propose`, so `P=$(ag -q push -t "...")` works.
+    ctx.created(&prop.id, &serde_json::json!({"proposal": prop, "objects_sent": sent, "objects_stored": stored}), || {
         format!(
             "Uploaded {sent} object(s) and opened proposal {} -> '{stream}'.\nNext: `ag remote prepare {}` to see what is missing, `ag remote integrate {}` when it is ready.",
             prop.id, prop.id, prop.id

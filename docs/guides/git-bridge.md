@@ -26,10 +26,21 @@ Imported-From: git 5f2c0e…
 The target stream must not have history yet (`import` never rewrites an existing stream). The whole
 imported history is published in one verified operation.
 
-**Not carried over**, and reported when it happens: submodules (gitlinks), paths AgentGit refuses to record
-(non-UTF-8, control characters, backslashes, and any `.git`/`.ag` component — a repository can contain
-such trees via plumbing, and checking them out would let it plant hooks), tags, notes, signatures,
-committer identity and timezone offsets. The command prints each skipped path.
+**Not carried over:** submodules (gitlinks), paths AgentGit refuses to record (non-UTF-8, control characters,
+backslashes, and any `.git`/`.ag` component — a repository can contain such trees via plumbing, and checking them
+out would let it plant hooks), tags, notes, signatures, committer identity, timezone offsets, and every ref
+other than the one `--rev` names. **What is reported:** each skipped path, the number of submodule entries, and
+the number of commits whose text was not valid UTF-8 (`lossy_commits` in `--json`; git converts a commit that
+names its encoding, anything else that is not UTF-8 is repaired with U+FFFD). The rest is dropped without a
+message: a migration that needs signatures, tags or the committer must keep Git as the record of them.
+
+**What git prints cannot be changed from outside.** The bridge asks `git log` for NUL-separated fields, so a
+commit message may hold any character; it passes `--no-show-signature` and `--encoding=UTF-8`, so
+`log.showSignature` and `i18n.logOutputEncoding` in your configuration change nothing; and it removes `GIT_DIR`,
+`GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR`, `GIT_NAMESPACE`,
+`GIT_ALTERNATE_OBJECT_DIRECTORIES` and `GIT_PREFIX` from the environment of every git process, so `ag git
+import|export` run from a git hook works on the repository it was given and not on the hook's. If `git cat-file`
+fails, the error is git's own message.
 
 ## Export a stream to Git
 
@@ -37,7 +48,8 @@ committer identity and timezone offsets. The command prints each skipped path.
 ag git export main /path/to/new-or-existing/git/repo --branch main
 ```
 
-Uses `git fast-import`. The destination is `git init`-ed if missing. An identity such as `user:alice`
+Uses `git fast-import`. The branch name is checked by `git check-ref-format` before anything is created, so a
+refused name leaves no repository behind. The destination is `git init`-ed if missing. An identity such as `user:alice`
 becomes the author `user:alice <user.alice@agentgit.invalid>`; messages, timestamps, file modes and
 symlinks are preserved.
 

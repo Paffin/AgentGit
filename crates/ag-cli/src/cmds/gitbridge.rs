@@ -49,11 +49,14 @@ pub fn git(ctx: &Ctx, cmd: &GitCmd) -> Result<u8> {
                 },
             )?;
             ctx.done(
-                &json!({"commits": rep.commits, "head": rep.head, "blobs": rep.blobs, "skipped_paths": rep.skipped_paths, "skipped_submodules": rep.skipped_submodules}),
+                &json!({"commits": rep.commits, "head": rep.head, "blobs": rep.blobs, "skipped_paths": rep.skipped_paths, "skipped_submodules": rep.skipped_submodules, "lossy_commits": rep.lossy_commits}),
                 || {
                     let mut s = format!("Imported {} commit(s), {} distinct file content(s) into stream '{stream}' (head {}).", rep.commits, rep.blobs, rep.head.short());
                     if rep.skipped_submodules > 0 {
                         s.push_str(&format!("\n  skipped {} submodule entr{}", rep.skipped_submodules, if rep.skipped_submodules == 1 { "y" } else { "ies" }));
+                    }
+                    if rep.lossy_commits > 0 {
+                        s.push_str(&format!("\n  {} commit(s) had text that is not valid UTF-8; the invalid bytes were replaced by U+FFFD", rep.lossy_commits));
                     }
                     for (p, why) in rep.skipped_paths.iter().take(20) {
                         s.push_str(&format!("\n  skipped path {p:?}: {why}"));

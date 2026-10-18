@@ -1,6 +1,6 @@
 use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use ag_changeset::Op;
 use ag_dag::ancestors;
@@ -8,7 +8,7 @@ use ag_integrate::Repository;
 use ag_types::{ChangesetId, FileType};
 
 use crate::GitError;
-use crate::run::git;
+use crate::run::{git, git_command};
 
 /// Options for [`export`].
 #[derive(Clone, Debug)]
@@ -45,6 +45,22 @@ pub fn fast_import_path(path: &str) -> String {
     if path.starts_with('"') { format!("\"{}\"", path.replace('"', "\\\"")) } else { path.to_string() }
 }
 
+/// Whether `branch` is a branch name git accepts, decided by git itself (`git check-ref-format`) rather than by
+/// a copy of its rules. A name that starts with `-` would be read as an option by the commands that follow, and
+/// an empty one is not a name; both are refused before git is asked.
+fn check_branch_name(branch: &str) -> Result<(), GitError> {
+    let refused = || GitError::Unsupported(format!("'{branch}' is not a usable branch name"));
+    if branch.is_empty() || branch.starts_with('-') {
+        return Err(refused());
+    }
+    // `check-ref-format` needs no repository; any directory will do.
+    match git(Path::new("."), &["check-ref-format", &format!("refs/heads/{branch}")]) {
+        Ok(_) => Ok(()),
+        Err(GitError::Failed { .. }) => Err(refused()),
+        Err(other) => Err(other),
+    }
+}
+
 fn data(buf: &mut Vec<u8>, bytes: &[u8]) {
     buf.extend_from_slice(format!("data {}\n", bytes.len()).as_bytes());
     buf.extend_from_slice(bytes);
@@ -54,17 +70,12 @@ fn data(buf: &mut Vec<u8>, bytes: &[u8]) {
 /// Exports the history of a stream to a Git repository.
 pub fn export(repo: &Repository, opts: &ExportOptions) -> Result<ExportReport, GitError> {
     let head = repo.resolve_rev(&opts.stream)?;
+    // The name is checked before anything is created: a refused export leaves no repository behind.
+    check_branch_name(&opts.branch)?;
     let fresh = !opts.git_dir.join(".git").exists() && !opts.git_dir.join("HEAD").exists();
     if fresh {
         std::fs::create_dir_all(&opts.git_dir)?;
         git(&opts.git_dir, &["init", "-q"])?;
-    }
-    if opts.branch.is_empty()
-        || opts.branch.starts_with('-')
-        || opts.branch.contains(['\n', ' ', '~', '^', ':', '?', '*', '[', '\\'])
-        || opts.branch.contains("..")
-    {
-        return Err(GitError::Unsupported(format!("'{}' is not a usable branch name", opts.branch)));
     }
 
     // Parents before children: ascending generation.
@@ -72,9 +83,7 @@ pub fn export(repo: &Repository, opts: &ExportOptions) -> Result<ExportReport, G
     order.reverse();
     let mut marks: std::collections::HashMap<ChangesetId, usize> = std::collections::HashMap::new();
 
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(&opts.git_dir)
+    let mut child = git_command(&opts.git_dir)
         .args(["fast-import", "--quiet", "--date-format=raw"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -132,12 +141,19 @@ pub fn export(repo: &Repository, opts: &ExportOptions) -> Result<ExportReport, G
     })();
     drop(stdin);
     let out = child.wait_with_output()?;
-    write_all?;
-    if !out.status.success() {
-        return Err(GitError::Failed {
-            args: "fast-import".into(),
-            stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        });
+    let git_failed = || GitError::Failed {
+        args: "fast-import".into(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+    };
+    match write_all {
+        Ok(()) if out.status.success() => {}
+        Ok(()) => return Err(git_failed()),
+        // When git rejects the stream it stops reading and the writer sees a broken pipe: git's own message is the
+        // cause, the broken pipe only the symptom. Any other failure of the writer is the cause itself.
+        Err(GitError::Spawn(e)) if e.kind() == std::io::ErrorKind::BrokenPipe && !out.status.success() => {
+            return Err(git_failed());
+        }
+        Err(e) => return Err(e),
     }
     if fresh {
         git(&opts.git_dir, &["symbolic-ref", "HEAD", &branch_ref])?;

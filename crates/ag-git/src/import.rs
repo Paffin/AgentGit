@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio};
 
 use ag_changeset::{Changeset, Op};
 use ag_integrate::Repository;
 use ag_types::{BlobId, ChangesetId, FileType, Identity, RepoPath, StreamName, Timestamp};
 
 use crate::GitError;
-use crate::run::{git, sanitize_identity_name};
+use crate::run::{git, git_command, sanitize_identity_name};
 
 /// Options for [`import`].
 #[derive(Clone, Debug)]
@@ -36,43 +36,66 @@ pub struct ImportReport {
     pub skipped_submodules: usize,
     /// Distinct file contents stored.
     pub blobs: usize,
+    /// Commits whose author or message was not valid UTF-8 even after git converted it (git does that for a
+    /// commit that names its encoding): the invalid bytes were replaced by U+FFFD in the imported changeset.
+    pub lossy_commits: usize,
 }
 
 struct CatFile {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    stderr: Option<ChildStderr>,
 }
 
 impl CatFile {
     fn start(dir: &Path) -> Result<Self, GitError> {
-        let mut child = Command::new("git")
-            .arg("-C")
-            .arg(dir)
+        let mut child = git_command(dir)
             .args(["cat-file", "--batch"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()?;
         let stdin = child.stdin.take().expect("piped");
         let stdout = BufReader::new(child.stdout.take().expect("piped"));
-        Ok(Self { child, stdin, stdout })
+        let stderr = child.stderr.take();
+        Ok(Self { child, stdin, stdout, stderr })
+    }
+
+    /// `git cat-file` stopped answering: what it wrote to standard error is the reason (a corrupt object, a
+    /// partial clone that cannot fetch), so that is the error, not the empty answer that was read instead.
+    fn died(&mut self, what: String) -> GitError {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let mut said = String::new();
+        if let Some(mut e) = self.stderr.take() {
+            let _ = e.read_to_string(&mut said);
+        }
+        match said.trim() {
+            "" => GitError::Parse(what),
+            reason => GitError::Failed { args: "cat-file --batch".into(), stderr: reason.to_string() },
+        }
     }
 
     fn blob(&mut self, sha: &str) -> Result<Vec<u8>, GitError> {
-        writeln!(self.stdin, "{sha}")?;
-        self.stdin.flush()?;
+        if writeln!(self.stdin, "{sha}").and_then(|()| self.stdin.flush()).is_err() {
+            return Err(self.died(format!("git cat-file stopped before it was asked for {sha}")));
+        }
         let mut header = String::new();
-        self.stdout.read_line(&mut header)?;
+        match self.stdout.read_line(&mut header) {
+            Ok(0) | Err(_) => return Err(self.died(format!("git cat-file ended without an answer for {sha}"))),
+            Ok(_) => {}
+        }
         let parts: Vec<&str> = header.split_whitespace().collect();
         if parts.len() != 3 || parts[1] != "blob" {
             return Err(GitError::Parse(format!("cat-file said '{}' for {sha}", header.trim())));
         }
         let size: usize = parts[2].parse().map_err(|_| GitError::Parse(format!("bad size in '{}'", header.trim())))?;
         let mut data = vec![0u8; size];
-        self.stdout.read_exact(&mut data)?;
         let mut nl = [0u8; 1];
-        self.stdout.read_exact(&mut nl)?;
+        if self.stdout.read_exact(&mut data).and_then(|()| self.stdout.read_exact(&mut nl)).is_err() {
+            return Err(self.died(format!("git cat-file ended in the middle of {sha}")));
+        }
         Ok(data)
     }
 }
@@ -141,35 +164,71 @@ pub struct Commit {
     pub time: i64,
     /// The message, without trailing whitespace.
     pub message: String,
+    /// Some of the text was not valid UTF-8 and has been repaired with U+FFFD.
+    pub lossy: bool,
 }
+
+/// How many fields `git log` prints per commit in the format below.
+const LOG_FIELDS: usize = 6;
 
 fn list_commits(dir: &Path, rev: &str) -> Result<Vec<Commit>, GitError> {
-    let out =
-        git(dir, &["log", "--topo-order", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%B%x1e", rev, "--"])?;
-    parse_log(&String::from_utf8_lossy(&out))
+    // What the user's git configuration says must not change what is printed: `log.showSignature` would put
+    // the output of gpg in front of the record, `i18n.logOutputEncoding` would re-encode it. A NUL ends every
+    // field and every record (`-z`): unlike the control characters used before, git does not let a commit
+    // message contain one.
+    let out = git(
+        dir,
+        &[
+            "log",
+            "-z",
+            "--topo-order",
+            "--reverse",
+            "--no-show-signature",
+            "--encoding=UTF-8",
+            "--format=%H%x00%P%x00%an%x00%ae%x00%at%x00%B",
+            rev,
+            "--",
+        ],
+    )?;
+    parse_log(&out)
 }
 
-/// Parses the records of the `git log` format used by [`import`]: fields separated by U+001F, records ended
-/// by U+001E.
+/// Parses the output of the `git log -z` format used by [`import`]: [`LOG_FIELDS`] NUL-terminated fields per
+/// commit. Text that is not valid UTF-8 is repaired and the commit marked [`Commit::lossy`].
 #[doc(hidden)]
-pub fn parse_log(text: &str) -> Result<Vec<Commit>, GitError> {
-    let mut commits = Vec::new();
-    for rec in text.split('\u{1e}') {
-        let rec = rec.trim_start_matches('\n');
-        if rec.trim().is_empty() {
-            continue;
-        }
-        let f: Vec<&str> = rec.splitn(6, '\u{1f}').collect();
-        if f.len() != 6 {
-            return Err(GitError::Parse(format!("unexpected log record with {} fields", f.len())));
-        }
+pub fn parse_log(out: &[u8]) -> Result<Vec<Commit>, GitError> {
+    if out.is_empty() {
+        return Ok(Vec::new());
+    }
+    let body =
+        out.strip_suffix(&[0]).ok_or_else(|| GitError::Parse("the last record of git log is not terminated".into()))?;
+    let fields: Vec<&[u8]> = body.split(|b| *b == 0).collect();
+    if !fields.len().is_multiple_of(LOG_FIELDS) {
+        return Err(GitError::Parse(format!(
+            "git log printed {} fields, which is not a whole number of {LOG_FIELDS}-field records",
+            fields.len()
+        )));
+    }
+    let mut commits = Vec::with_capacity(fields.len() / LOG_FIELDS);
+    for f in fields.chunks_exact(LOG_FIELDS) {
+        let mut lossy = false;
+        let mut text = |bytes: &[u8]| match std::str::from_utf8(bytes) {
+            Ok(s) => s.to_string(),
+            Err(_) => {
+                lossy = true;
+                String::from_utf8_lossy(bytes).into_owned()
+            }
+        };
+        let (sha, parents, author_name, author_email, time, message) =
+            (text(f[0]), text(f[1]), text(f[2]), text(f[3]), text(f[4]), text(f[5]));
         commits.push(Commit {
-            sha: f[0].to_string(),
-            parents: f[1].split_whitespace().map(str::to_string).collect(),
-            author_name: f[2].to_string(),
-            author_email: f[3].to_string(),
-            time: f[4].parse().map_err(|_| GitError::Parse(format!("bad timestamp '{}'", f[4])))?,
-            message: f[5].trim_end().to_string(),
+            sha,
+            parents: parents.split_whitespace().map(str::to_string).collect(),
+            author_name,
+            author_email,
+            time: time.trim().parse().map_err(|_| GitError::Parse(format!("bad timestamp '{time}'")))?,
+            message: message.trim_end().to_string(),
+            lossy,
         });
     }
     Ok(commits)
@@ -314,5 +373,12 @@ pub fn import(repo: &Repository, opts: &ImportOptions) -> Result<ImportReport, G
         )));
     }
     repo.adopt_history(&opts.stream, &head, &opts.actor, &format!("import of git {}", opts.rev))?;
-    Ok(ImportReport { commits: commits.len(), head, skipped_paths, skipped_submodules, blobs: blob_cache.len() })
+    Ok(ImportReport {
+        commits: commits.len(),
+        head,
+        skipped_paths,
+        skipped_submodules,
+        blobs: blob_cache.len(),
+        lossy_commits: commits.iter().filter(|c| c.lossy).count(),
+    })
 }

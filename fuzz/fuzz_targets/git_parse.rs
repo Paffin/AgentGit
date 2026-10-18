@@ -1,8 +1,8 @@
 #![no_main]
-//! The Git bridge's importer: the parsers for what `git` prints (`diff-tree --raw -z` records, `log` records
-//! with unit/record separators) and the functions that turn a commit into a changeset's message and
+//! The Git bridge's importer: the parsers for what `git` prints (`diff-tree --raw -z` records, `log -z`
+//! records of NUL-terminated fields) and the functions that turn a commit into a changeset's message and
 //! timestamp. The bridge shells out to `git`, so these bytes come from a repository someone else may have
-//! crafted (odd modes, NULs, paths that are not UTF-8, separators inside messages, absurd dates).
+//! crafted (odd modes, NULs, paths and messages that are not UTF-8, absurd dates).
 //!
 //! Invariants: nothing panics; every path the importer would accept is a clean `RepoPath`; an imported message
 //! is bounded and always ends with its `Imported-From` trailer; a timestamp is either exact or refused.
@@ -22,7 +22,7 @@ fuzz_target!(|data: &[u8]| {
             }
         }
         _ => {
-            let Ok(commits) = fuzzing::parse_log(&String::from_utf8_lossy(rest)) else { return };
+            let Ok(commits) = fuzzing::parse_log(rest) else { return };
             for c in commits {
                 let msg = fuzzing::import_message(&c.message, &c.sha);
                 assert!(msg.len() <= 60_000 + 200 + c.sha.len(), "an imported message must stay bounded");

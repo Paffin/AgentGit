@@ -2,9 +2,14 @@ name: Containers
 
 # Proves that "install it and run it" works, with the files in deploy/ and not just with their syntax:
 #
-#   image       builds deploy/docker/Dockerfile (buildx + the gha layer cache), checks size, user, health check and
-#               `--version`, runs it hardened (read-only root, no capabilities) and drives the end-to-end smoke
+#   image       builds deploy/docker/Dockerfile (buildx + the gha layer cache; the `ui` stage builds the Web UI that
+#               ag-server embeds), checks size, user, health check and `--version`, runs it hardened (read-only
+#               root, no capabilities), checks that it serves the Web UI, and drives the end-to-end smoke
 #               (scripts/e2e_smoke.py) against it; its artifacts feed the next two jobs
+#
+# This is the only place images are built on push/PR: ci.yml used to repeat the build in an `images` job (a second
+# cache scope and the same two builds), which is why it is gone. The path filters below are what the image is
+# made of, so a change that cannot alter an image does not build one.
 #   cache       a fresh runner rebuilds from the gha cache and must find the expensive layers CACHED
 #   compose     `docker compose up` of deploy/compose (server + PostgreSQL + SeaweedFS (S3)), the same smoke against it
 #               (repository metadata in PostgreSQL, objects in an S3 bucket), a restart, then the observability profile
@@ -22,8 +27,12 @@ on:
       - "crates/**"
       - "proto/**"
       - "migrations/**"
+      - "apps/web/**"
+      - "scripts/build_ui.sh"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "LICENSE"
+      - "NOTICE"
       - ".dockerignore"
       - "scripts/e2e_*.py"
       - "scripts/check_buildx_cache.py"
@@ -34,8 +43,12 @@ on:
       - "crates/**"
       - "proto/**"
       - "migrations/**"
+      - "apps/web/**"
+      - "scripts/build_ui.sh"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "LICENSE"
+      - "NOTICE"
       - ".dockerignore"
       - "scripts/e2e_*.py"
       - "scripts/check_buildx_cache.py"
@@ -125,6 +138,25 @@ jobs:
           test "$(docker inspect -f '{{.State.Health.Status}}' ag)" = healthy || { docker logs ag; exit 1; }
           curl -fsS http://127.0.0.1:18080/healthz; echo
           curl -fsS http://127.0.0.1:18080/readyz; echo
+
+      - name: The image serves the Web UI that was embedded in it
+        run: |
+          set -euo pipefail
+          # ag-server logs which UI it serves; a binary built without apps/web/dist says "has no Web UI" instead.
+          docker logs ag > "$RUNNER_TEMP/ag-start.log" 2>&1
+          grep -q 'serving the Web UI embedded in this binary' "$RUNNER_TEMP/ag-start.log" \
+            || { cat "$RUNNER_TEMP/ag-start.log"; echo "::error::the server in the image does not embed the Web UI"; exit 1; }
+          page=$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/)
+          case "$page" in *'<div id="app">'*) ;; *) echo "$page" | head -20; echo "::error::/ is not the Web UI"; exit 1;; esac
+          asset=$(printf '%s' "$page" | grep -o '/assets/[^"]*\.js' | head -1)
+          test -n "$asset" || { echo "::error::the page references no script"; exit 1; }
+          # The build is pre-compressed (Brotli next to every compressible file) and the server answers with it.
+          headers=$(curl -fsS -H 'Accept-Encoding: br' -D - -o /dev/null "http://127.0.0.1:18080$asset")
+          echo "$headers"
+          case "$headers" in *[Cc]ontent-[Ee]ncoding:\ br*) ;; *) echo "::error::$asset was not served pre-compressed"; exit 1;; esac
+          # Deep links belong to the app; API paths never fall through to it.
+          case "$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/repos/acme/web)" in *'<div id="app">'*) ;; *) echo "::error::a deep link is not the app"; exit 1;; esac
+          case "$(curl -s -H 'Accept: text/html' http://127.0.0.1:18080/v1/nope)" in *'<div id="app">'*) echo "::error::an API path returned the UI"; exit 1;; *) ;; esac
 
       - name: Extract the ag binary from the CLI image
         run: |

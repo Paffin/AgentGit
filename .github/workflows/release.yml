@@ -153,6 +153,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.target }}
+      # ag-server serves the Web UI from inside its binary (cargo feature `ui`): the build must exist before cargo
+      # compiles it, or the archive's ag-server serves a page that says how to build the UI.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the Web UI (apps/web/dist, embedded by the build below)
+        run: scripts/build_ui.sh
       - name: Build
         env:
           # Do not embed the build directory in the binaries.
@@ -185,6 +194,9 @@ jobs:
           trap 'kill $server 2>/dev/null || true' EXIT
           python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag "$bin/ag" \
             --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" || { tail -50 "$work/server.log"; exit 1; }
+          # The unpacked ag-server carries the Web UI (the server from the smoke above is still running).
+          page=$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/)
+          case "$page" in *'<div id="app">'*) echo "ag-server serves the embedded Web UI";; *) echo "$page" | head -20; echo "::error::the archive's ag-server has no Web UI"; exit 1;; esac
       - uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.target }}

@@ -31,8 +31,11 @@ npm run build
 test -f dist/index.html || { echo "build_ui.sh: the build produced no dist/index.html" >&2; exit 1; }
 
 # Cargo cannot watch a directory that did not exist when the server was last built; touching the build script
-# makes the next cargo build look at dist/ again.
-touch "$root/crates/ag-ui-assets/build.rs"
+# makes the next cargo build look at dist/ again. (Not there when only apps/web was copied, such as in the Node
+# stage of deploy/docker/Dockerfile: that build has no cargo state to refresh.)
+if [ -f "$root/crates/ag-ui-assets/build.rs" ]; then
+  touch "$root/crates/ag-ui-assets/build.rs"
+fi
 
 files="$(find dist -type f ! -name '*.br' ! -name '*.gz' | wc -l | tr -d ' ')"
 echo "Web UI built: apps/web/dist ($files files)."

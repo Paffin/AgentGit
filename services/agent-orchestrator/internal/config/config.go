@@ -186,7 +186,8 @@ var DefaultAgentOps = []string{
 var ForbiddenAgentOps = map[string]bool{
 	"integrate.run": true, "queue.run": true, "queue.write": true, "proposal.review": true, "proposal.close": true,
 	"policy.write": true, "stream.cas": true, "stream.force": true, "stream.create": true, "gc.run": true, "fsck.run": true,
-	"credentials.mint": true, "credentials.list": true, "credentials.revoke": true, "roles.manage": true,
+	"credentials.mint": true, "credentials.delegate": true, "credentials.list": true, "credentials.revoke": true,
+	"roles.manage": true, "agent.operate": true,
 	"attestation.submit": true, "jobs.claim": true, "repo.create": true, "repo.configure": true, "pins.write": true,
 	"agent.register": true, "integrate.validate": true,
 }

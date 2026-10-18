@@ -41,7 +41,7 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(fake.Close)
 	fake.AddRepo(repo)
 	e := &env{t: t, fake: fake, dir: t.TempDir(), results: make(chan Result, 16), metrics: metrics.NewService(metrics.NewRegistry())}
-	e.orchTok = fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin"})
+	e.orchTok = fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator"})
 	var err error
 	e.orch, err = agwp.New(fake.URL, secret.New(e.orchTok), agwp.WithIdentityLabel("orchestrator"), agwp.WithObserver(e.metrics))
 	if err != nil {
@@ -674,7 +674,7 @@ func TestShutdownCancelStopsEverythingImmediately(t *testing.T) {
 	}
 }
 
-func TestFinishTaskAsOwnerUsesAShortLivedNarrowCredential(t *testing.T) {
+func TestAnOperatorFinishesTheTaskOfAnAgentWithoutMintingAnything(t *testing.T) {
 	e := newEnv(t)
 	ex := commandExec(t, "owner-bot", `true`)
 	task := e.task("owned")
@@ -683,25 +683,53 @@ func TestFinishTaskAsOwnerUsesAShortLivedNarrowCredential(t *testing.T) {
 	}
 	e.wait(10 * time.Second)
 	e.idle()
-	// The service identity itself may not finish an agent's task (server rule) ...
-	if _, err := e.orch.FinishTask(context.Background(), repo, task.ID, "done"); err == nil {
-		t.Fatal("the fake should mirror the server: only the owner may finish a task")
-	}
-	// ... the manager does it as the owner.
-	if err := e.mgr.FinishTaskAsOwner(context.Background(), repo, "owner-bot", task.ID, "done"); err != nil {
+	minted := len(e.fake.MintedTokens())
+	// The service is an operator (the delegator role): it finishes the agent's task itself ...
+	if err := e.mgr.FinishTask(context.Background(), repo, task.ID, "done"); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.fake.Task(repo, task.ID); got.State != agwp.TaskDone {
 		t.Fatalf("task = %+v", got)
 	}
-	var last fakeagwp.MintedInfo
-	for _, m := range e.fake.MintedTokens() {
-		if len(m.Ops) == 2 { // the session credential carries the executor's whole operation list
-			last = m
-		}
+	// ... without a credential made for the occasion (it used to mint one for the owner and revoke it again).
+	if n := len(e.fake.MintedTokens()); n != minted {
+		t.Fatalf("finishing a task minted %d credential(s)", n-minted)
 	}
-	if len(last.Ops) != 2 || last.Ops[0] != "task.read" || last.Ops[1] != "task.write" || !last.Revoked || time.Until(last.ExpiresAt) > time.Minute+5*time.Second {
-		t.Fatalf("finishing credential = %+v", last)
+	// A service that is no operator still may not.
+	plain := e.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:plain", Role: "writer"})
+	c, err := agwp.New(e.fake.URL, secret.New(plain), agwp.WithIdentityLabel("plain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := e.task("someone else's")
+	if _, err := e.mgr.Start(context.Background(), e.request(other, ex, Keep)); err != nil {
+		t.Fatal(err)
+	}
+	e.wait(10 * time.Second)
+	e.idle()
+	if _, err := c.FinishTask(context.Background(), repo, other.ID, "done"); err == nil {
+		t.Fatal("a writer must not finish an agent's task")
+	}
+}
+
+func TestEachSessionGetsACredentialBoundToItsRunThatEndsWithIt(t *testing.T) {
+	e := newEnv(t)
+	ex := commandExec(t, "bound-bot", `sleep 0.3`)
+	info, err := e.mgr.Start(context.Background(), e.request(e.task("t", "x/**"), ex, Keep))
+	if err != nil {
+		t.Fatal(err)
+	}
+	minted := e.fake.MintedTokens()
+	if len(minted) != 1 {
+		t.Fatalf("minted = %+v", minted)
+	}
+	if minted[0].RunID != info.RunID || len(minted[0].Repos) != 1 || minted[0].Repos[0] != repo {
+		t.Fatalf("the session credential is not bound to run %s in %s: %+v", info.RunID, repo, minted[0])
+	}
+	e.wait(10 * time.Second)
+	e.idle()
+	if !e.fake.Revoked(minted[0].Secret) {
+		t.Fatal("the credential of a finished session must be dead")
 	}
 }
 

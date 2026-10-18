@@ -43,6 +43,9 @@ type CredentialScope struct {
 	Repos      []string `json:"repos"`
 	Streams    []string `json:"streams"`
 	Operations []string `json:"operations"`
+	// RunID binds the credential to one run of one agent: it then acts only as that run, only in the one
+	// repository named in Repos, and stops working when the run is no longer running.
+	RunID string `json:"run_id,omitempty"`
 }
 
 // Principal is the answer of GET /v1/whoami.
@@ -85,6 +88,9 @@ type Repo struct {
 	Description   string `json:"description"`
 	CreatedBy     string `json:"created_by"`
 	StreamCount   uint32 `json:"stream_count"`
+	// ChangesetCount is exact whenever CountsError is empty.
+	ChangesetCount uint64 `json:"changeset_count"`
+	CountsError    string `json:"counts_error"`
 }
 
 // Stream is a stream and its head.

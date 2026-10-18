@@ -82,7 +82,7 @@ func newRig(t *testing.T, mutate func(r *testRig)) *testRig {
 	}
 	r.cfg = cfg
 	// the orchestrator's credential is scoped to exactly what the configuration needs
-	r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin", Ops: OrchestratorOps(cfg)})
+	r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator", Ops: OrchestratorOps(cfg)})
 	r.envv["AG_REVIEWER_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:reviewer", Role: "reviewer", Ops: ReviewerOps()})
 	r.envv["AG_ADVISOR_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:advisor", Role: "reviewer", Ops: AdvisorOps()})
 	if mutate != nil {
@@ -419,7 +419,7 @@ func TestCheckFlagsAScopeThatLacksOperations(t *testing.T) {
 		r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin", Ops: []string{"repo.read", "events.read"}})
 	})
 	rep := newCheckApp(t, r).Check(context.Background())
-	if rep.OK() || !rep.find("error", "lacks: ") || !rep.find("error", "credentials.mint") {
+	if rep.OK() || !rep.find("error", "lacks: ") || !rep.find("error", "credentials.delegate") {
 		t.Fatalf("a credential that cannot mint must be an error:\n%s", rep)
 	}
 }
@@ -434,13 +434,27 @@ func TestCheckWarnsAboutAnUnrestrictedCredential(t *testing.T) {
 	}
 }
 
-func TestCheckRequiresTheAdminRoleOnEveryRepository(t *testing.T) {
+func TestCheckRequiresTheDelegatorRoleOnEveryRepositoryAndNoMore(t *testing.T) {
+	// A writer cannot mint credentials for agents or operate their tasks: reported.
 	r := newRig(t, func(r *testRig) {
 		r.envv["AG_ORCH_TOKEN"] = r.fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "writer", Ops: OrchestratorOps(r.cfg)})
 	})
 	rep := newCheckApp(t, r).Check(context.Background())
-	if rep.OK() || !rep.find("error", "no admin role on "+repoName) {
+	if rep.OK() || !rep.find("error", "no delegator or admin role on "+repoName) {
 		t.Fatalf("missing role must be reported:\n%s", rep)
+	}
+	// The delegator role is enough: the orchestrator does not need to be an administrator.
+	ok := newRig(t, nil)
+	if rep := newCheckApp(t, ok).Check(context.Background()); !rep.OK() || rep.find("error", "role") {
+		t.Fatalf("a delegator must pass:\n%s", rep)
+	}
+}
+
+func TestCheckRefusesAServerThatCannotBindCredentialsToRuns(t *testing.T) {
+	r := newRig(t, func(r *testRig) { r.fake.SetFeatures("events.replay", "workspaces.virtual", "auth.scoped_credentials") })
+	rep := newCheckApp(t, r).Check(context.Background())
+	if rep.OK() || !rep.find("error", "run-bound credentials are not advertised") || !rep.find("error", "delegator role") {
+		t.Fatalf("an old server must be an error, not a silent downgrade:\n%s", rep)
 	}
 }
 
@@ -461,15 +475,12 @@ func TestCheckReportsARejectedCredential(t *testing.T) {
 	}
 }
 
-func TestCheckWarnsWhenSessionsOfOneAgentRunSideBySide(t *testing.T) {
+func TestSessionsOfOneAgentRunningSideBySideNeedNoWarning(t *testing.T) {
+	// Every session has a credential bound to its run, so slots above 1 are as safe as slots: 1.
 	r := newRig(t, func(r *testRig) { r.cfg.Execs[0].Slots = 3 })
 	rep := newCheckApp(t, r).Check(context.Background())
-	if !rep.OK() || !rep.find("warn", "share one server identity") {
+	if !rep.OK() || rep.find("warn", "share one server identity") || rep.find("warn", "act as each other") {
 		t.Fatalf("%s", rep)
-	}
-	one := newRig(t, nil)
-	if rep := newCheckApp(t, one).Check(context.Background()); rep.find("warn", "share one server identity") {
-		t.Fatalf("one session per agent needs no warning:\n%s", rep)
 	}
 }
 
@@ -496,9 +507,15 @@ func TestOrchestratorOpsNeverCarryTheIntegrationPowers(t *testing.T) {
 			t.Errorf("the orchestrator's operations include %q", forbidden)
 		}
 	}
-	for _, need := range []string{"credentials.mint", "credentials.revoke", "agent.register", "agent.run", "integrate.prepare", "integrate.validate", "events.read"} {
+	for _, need := range []string{"credentials.delegate", "agent.operate", "agent.register", "agent.run", "integrate.prepare", "integrate.validate", "events.read"} {
 		if !ops[need] {
 			t.Errorf("the orchestrator's operations lack %q", need)
+		}
+	}
+	// It needs no administrator power over credentials: it mints for agents only.
+	for _, admin := range []string{"credentials.mint", "credentials.revoke", "credentials.list"} {
+		if ops[admin] {
+			t.Errorf("the orchestrator's operations include the administrator's %q", admin)
 		}
 	}
 }

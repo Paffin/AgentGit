@@ -179,17 +179,28 @@ func (m *Manager) Start(ctx context.Context, req Request) (*Info, error) {
 		return nil, cause
 	}
 
+	// The credential is bound to this run: it acts only as the run, only in this repository, and stops working
+	// when the run is no longer running - so concurrent sessions of one agent cannot act for each other.
 	minted, err := m.o.Orch.MintCredential(ctx, agwp.MintRequest{
 		Subject:     "agent:" + ex.Agent,
 		Description: fmt.Sprintf("session %s task %s", run.RunID, req.Task.ID),
 		TTLSecs:     uint32(ex.Cred / time.Second),
-		Scope:       agwp.CredentialScope{Repos: []string{req.Repo}, Streams: []string{req.Stream}, Operations: ex.Ops},
+		Scope: agwp.CredentialScope{
+			Repos: []string{req.Repo}, Streams: []string{req.Stream}, Operations: ex.Ops, RunID: run.RunID,
+		},
 	})
 	if err != nil {
 		return fail(fmt.Errorf("mint credential: %w", err), "could not mint the session credential: "+err.Error())
 	}
 	m.o.Metrics.CredentialsMinted.With(req.Repo).Inc()
 	s.credID, s.token = minted.Credential.ID, minted.Token
+	// A server that does not know about run binding would mint an ordinary agent credential and say nothing. An
+	// unbound credential is never handed to an executor.
+	if minted.Credential.Scope.RunID != run.RunID {
+		s.revoke()
+		return fail(errors.New("the server minted a credential that is not bound to the run (it predates run-bound credentials); upgrade ag-server"),
+			"the server does not bind credentials to runs")
+	}
 	s.agent = m.o.Orch.WithToken(minted.Token, "agent:"+ex.Agent)
 	s.runClient = s.agent.WithRun(run.RunID)
 
@@ -287,27 +298,11 @@ func (m *Manager) completeRun(runID, repo, status, summary string) {
 	m.o.Log.Error("could not complete the run; it stays running until it is reaped", "repo", repo, "run", runID, "err", err)
 }
 
-// FinishTaskAsOwner marks a task done or cancelled as the agent that owns it.
-// The server only lets the owner do that, so a one-minute credential limited to
-// task.read and task.write is minted for the agent and revoked right after.
-func (m *Manager) FinishTaskAsOwner(ctx context.Context, repo, agent, taskID, state string) error {
-	minted, err := m.o.Orch.MintCredential(ctx, agwp.MintRequest{
-		Subject: "agent:" + agent, Description: "finish task " + taskID, TTLSecs: 60,
-		Scope: agwp.CredentialScope{Repos: []string{repo}, Operations: []string{"task.read", "task.write"}},
-	})
-	if err != nil {
-		return fmt.Errorf("mint credential to finish the task: %w", err)
-	}
-	m.o.Metrics.CredentialsMinted.With(repo).Inc()
-	defer func() {
-		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := m.o.Orch.RevokeCredential(rctx, minted.Credential.ID); err != nil {
-			m.o.Log.Warn("could not revoke a short-lived credential; it expires on its own", "credential", minted.Credential.ID, "err", err)
-		}
-	}()
-	c := m.o.Orch.WithToken(minted.Token, "agent:"+agent)
-	_, err = c.FinishTask(ctx, repo, taskID, state)
+// FinishTask marks a task done or cancelled as an operator. The server lets the orchestrator (the delegator
+// role: capability agent.operate) finish a task that an agent owns, and records in its audit log that an
+// operator did, and whose task it was. No credential is minted for it.
+func (m *Manager) FinishTask(ctx context.Context, repo, taskID, state string) error {
+	_, err := m.o.Orch.FinishTask(ctx, repo, taskID, state)
 	return err
 }
 

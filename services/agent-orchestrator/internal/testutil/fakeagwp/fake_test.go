@@ -113,10 +113,11 @@ func TestTaskOwnershipFollowsTheServer(t *testing.T) {
 	f := fakeagwp.New()
 	defer f.Close()
 	f.AddRepo("acme/web")
-	svc := f.AddToken(fakeagwp.TokenSpec{Identity: "service:orch", Role: "admin"})
+	svc := f.AddToken(fakeagwp.TokenSpec{Identity: "service:orch", Role: "writer"})
+	operator := f.AddToken(fakeagwp.TokenSpec{Identity: "service:operator", Role: "delegator"})
 	agent := f.AddToken(fakeagwp.TokenSpec{Identity: "agent:bot"})
 	ctx := context.Background()
-	c, a := client(t, f, svc), client(t, f, agent)
+	c, a, op := client(t, f, svc), client(t, f, agent), client(t, f, operator)
 	k := "00000000000000000000000000000000000000000000000000000000000000aa"
 	if _, err := a.RegisterAgent(ctx, "acme/web", "bot", k); err != nil {
 		t.Fatal(err)
@@ -136,8 +137,9 @@ func TestTaskOwnershipFollowsTheServer(t *testing.T) {
 	if _, err := c.FinishTask(ctx, "acme/web", dep, "done"); !agwp.IsCode(err, agwp.CodeFailedPrecond) {
 		t.Fatalf("a service may not finish an agent's task: %v", err)
 	}
-	if _, err := a.FinishTask(ctx, "acme/web", dep, "done"); err != nil {
-		t.Fatal(err)
+	// An operator (the delegator role) may, as on the real server; the owner still may too.
+	if _, err := op.FinishTask(ctx, "acme/web", dep, "done"); err != nil {
+		t.Fatalf("an operator finishes any task: %v", err)
 	}
 	if !f.Task("acme/web", blocked).Ready {
 		t.Fatal("finishing the dependency must unblock the task")

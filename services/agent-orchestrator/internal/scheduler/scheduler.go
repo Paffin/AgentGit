@@ -46,7 +46,7 @@ type Sessions interface {
 	FreeSlots(c config.Executor) int
 	Cancel(runID, reason string) bool
 	Has(runID string) bool
-	FinishTaskAsOwner(ctx context.Context, repo, agent, taskID, state string) error
+	FinishTask(ctx context.Context, repo, taskID, state string) error
 }
 
 // PathSource tells which files each open proposal changes (satisfied by
@@ -588,8 +588,8 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 		default:
 			state = agwp.TaskCancelled
 		}
-		if err := s.o.Sessions.FinishTaskAsOwner(ctx, repo, a.Agent, id, state); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
-			s.log.Warn("could not finish the task as its owner", "task", id, "state", state, "err", err)
+		if err := s.o.Sessions.FinishTask(ctx, repo, id, state); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+			s.log.Warn("could not finish the task", "task", id, "state", state, "err", err)
 			continue
 		}
 		s.log.Info("work landed or was closed; task finished", "task", id, "state", state)

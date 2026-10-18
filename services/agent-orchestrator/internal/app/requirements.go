@@ -8,21 +8,24 @@ import (
 
 // OrchestratorOps are the operations (server capabilities) the orchestrator's
 // own credential needs. Everything it hands to agents must be contained in it,
-// because the server refuses to mint a credential wider than the one used to
-// mint it. The list is derived from the configuration.
+// because the server only passes on capabilities the minting credential holds.
+// The list is derived from the configuration.
 //
-// The credential is meant to be minted with exactly these operations: the role
-// bound to service:orchestrator may be broader (the server only lets
-// administrators mint credentials for other identities), but the credential's
-// scope is what actually limits the service. Notably absent: integrate.run,
-// proposal.review, policy.write, stream.cas, gc.run, roles.manage.
+// The orchestrator needs no administrator: the role bound to service:orchestrator
+// is `delegator`, which may mint credentials for agent:* subjects only
+// (credentials.delegate) and operate their tasks and runs (agent.operate). The
+// credential's scope is what limits the service further. Notably absent:
+// integrate.run, proposal.review, policy.write, stream.cas, gc.run, roles.manage,
+// credentials.mint.
 func OrchestratorOps(cfg *config.Config) []string {
 	set := map[string]bool{
 		"repo.read": true, "stream.read": true, "task.read": true, "lease.read": true, "agent.read": true, "agent.register": true,
 		"agent.run": true, "proposal.read": true, "integrate.prepare": true, "predict": true, "events.read": true, "tree.read": true,
-		"history.read": true, "jobs.read": true, "queue.read": true, "credentials.mint": true, "credentials.revoke": true,
-		// the narrow credential used to finish a task as its owner
-		"task.write": true,
+		"history.read": true, "jobs.read": true, "queue.read": true,
+		// mint, list and revoke the credentials of agents (and nobody else's), bound to their runs
+		"credentials.delegate": true,
+		// finish the task of a run that ended, and take over the runs of a session that was lost
+		"agent.operate": true, "task.write": true,
 	}
 	for _, r := range cfg.Repos {
 		if config.On(r.ExecSched.Enqueue) && config.On(r.ExecSched.Enabled) {

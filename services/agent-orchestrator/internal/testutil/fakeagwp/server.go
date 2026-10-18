@@ -35,17 +35,18 @@ import (
 type Server struct {
 	URL string
 
-	mu      sync.Mutex
-	srv     *httptest.Server
-	now     func() time.Time
-	tokens  map[string]*tokenInfo // by secret
-	creds   map[string]*tokenInfo // by credential id
-	repos   map[string]*repoState
-	fails   map[string][]failRule
-	reqLog  []RequestRecord
-	streams int // currently open SSE connections
-	sseLog  []SSEConnect
-	kill    chan struct{} // closed to drop all SSE connections
+	mu       sync.Mutex
+	srv      *httptest.Server
+	now      func() time.Time
+	tokens   map[string]*tokenInfo // by secret
+	creds    map[string]*tokenInfo // by credential id
+	repos    map[string]*repoState
+	fails    map[string][]failRule
+	reqLog   []RequestRecord
+	streams  int // currently open SSE connections
+	sseLog   []SSEConnect
+	kill     chan struct{} // closed to drop all SSE connections
+	features []string      // advertised by negotiate; nil = everything the fake implements
 	// StubJobs makes prepare(enqueue_validations) answer with one queued job per
 	// missing check, instead of the real server's empty list.
 	StubJobs bool
@@ -82,7 +83,8 @@ type tokenInfo struct {
 	id        string
 	secret    string
 	identity  string
-	role      string // reader | writer | reviewer | integrator | admin
+	role      string // reader | writer | reviewer | integrator | delegator | admin
+	runID     string // the run a credential is bound to (empty: bound to the agent's name only)
 	repos     []string
 	ops       map[string]bool
 	streams   []string
@@ -156,6 +158,22 @@ func New() *Server {
 	s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
 	s.URL = s.srv.URL
 	return s
+}
+
+func (s *Server) advertisedFeatures() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.features != nil {
+		return s.features
+	}
+	return []string{"events.replay", "workspaces.virtual", "auth.scoped_credentials", "auth.run_credentials", "auth.delegation", "agents.operate"}
+}
+
+// SetFeatures replaces the features negotiate advertises (a server that predates one of them).
+func (s *Server) SetFeatures(features ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.features = features
 }
 
 // Close shuts the server down.
@@ -252,7 +270,7 @@ func (s *Server) MintedTokens() []MintedInfo {
 	var out []MintedInfo
 	for _, t := range s.creds {
 		if t.parent != "" {
-			out = append(out, MintedInfo{ID: t.id, Secret: t.secret, Identity: t.identity, Repos: t.repos,
+			out = append(out, MintedInfo{ID: t.id, Secret: t.secret, Identity: t.identity, RunID: t.runID, Repos: t.repos,
 				Ops: sortedKeys(t.ops), Streams: t.streams, ExpiresAt: t.expiresAt, Revoked: t.revoked})
 		}
 	}
@@ -263,6 +281,7 @@ func (s *Server) MintedTokens() []MintedInfo {
 // MintedInfo describes a credential minted through POST /v1/credentials.
 type MintedInfo struct {
 	ID, Secret, Identity string
+	RunID                string // the run the credential is bound to, if it is
 	Repos, Ops, Streams  []string
 	ExpiresAt            time.Time
 	Revoked              bool
@@ -805,7 +824,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if op == "session.negotiate" {
-		writeJSON(w, 200, agwp.Capabilities{ProtocolVersion: agwp.ProtocolVersion, ServerVersion: "fake", Features: []string{"events.replay", "workspaces.virtual", "auth.scoped_credentials"}, AuthMethods: []string{"bearer"}})
+		writeJSON(w, 200, agwp.Capabilities{ProtocolVersion: agwp.ProtocolVersion, ServerVersion: "fake", Features: s.advertisedFeatures(), AuthMethods: []string{"bearer"}})
 		return
 	}
 	if tok == nil {
@@ -816,7 +835,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if op == "session.whoami" {
 		s.mu.Lock()
 		p := agwp.Principal{Identity: tok.identity, Kind: kindOf(tok.identity), Method: "token", CredentialID: tok.id, Roles: []string{"*:" + tok.role},
-			Scope: agwp.CredentialScope{Repos: nonNil(tok.repos), Streams: nonNil(tok.streams), Operations: sortedKeys(tok.ops)}}
+			Scope: agwp.CredentialScope{Repos: nonNil(tok.repos), Streams: nonNil(tok.streams), Operations: sortedKeys(tok.ops), RunID: tok.runID}}
 		if !tok.expiresAt.IsZero() {
 			p.ExpiresAtMs = tok.expiresAt.UnixMilli()
 		}
@@ -825,6 +844,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cap := capOf(op)
+	// A delegator mints, lists and revokes the credentials of agents under credentials.delegate.
+	if tok.role == "delegator" && (cap == "credentials.mint" || cap == "credentials.revoke") {
+		cap = "credentials.delegate"
+	}
 	s.mu.Lock()
 	if repoName != "" {
 		c.repo = s.repos[repoName]
@@ -848,8 +871,24 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, reqID, errDenied("'%s' requires a global role", cap))
 		return
 	}
-	// acting as an agent run
-	if run := r.Header.Get("Ag-Run"); run != "" && c.repo != nil {
+	// acting as an agent run - a credential bound to a run always does, and as no other
+	run := r.Header.Get("Ag-Run")
+	if tok.runID != "" && c.repo != nil {
+		if run != "" && run != tok.runID {
+			s.mu.Unlock()
+			s.writeErr(w, reqID, errDenied("this credential is bound to run '%s'; it may not act as run '%s'", tok.runID, run))
+			return
+		}
+		run = tok.runID
+		for _, ru := range c.repo.runs {
+			if ru.RunID == run && ru.Status != "running" {
+				s.mu.Unlock()
+				s.writeErr(w, reqID, errf(401, "unauthenticated", "the run this credential is bound to is no longer running, so the credential is no longer valid"))
+				return
+			}
+		}
+	}
+	if run != "" && c.repo != nil {
 		if kindOf(tok.identity) != "agent" {
 			s.mu.Unlock()
 			s.writeErr(w, reqID, errInvalid("only agent identities may act as a run"))
@@ -1124,6 +1163,8 @@ func roleAllows(role, cap string) bool {
 		return has(readerCaps) || cap == "proposal.review"
 	case "integrator":
 		return has(readerCaps) || cap == "integrate.run" || cap == "queue.run" || cap == "proposal.close"
+	case "delegator":
+		return has(readerCaps) || has(writerCaps) || cap == "credentials.delegate" || cap == "agent.operate"
 	}
 	return false
 }

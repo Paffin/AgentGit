@@ -451,7 +451,7 @@ func TestATaskCancelledByAPersonStopsItsSession(t *testing.T) {
 		t.Fatal("not started")
 	}
 	// a person cancels the task (the fake lets us act as the unowned/any principal via the owner path)
-	if err := h.mgr.FinishTaskAsOwner(context.Background(), repo, "bot", tk, "cancelled"); err != nil {
+	if err := h.mgr.FinishTask(context.Background(), repo, tk, "cancelled"); err != nil {
 		t.Fatal(err)
 	}
 	h.reconcile()

@@ -129,6 +129,12 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 			}
 		}
 		s.emitLocked(r, "run.finish", run.Identity, run.RunID, map[string]any{"status": run.Status})
+		// The credentials bound to the run end with it.
+		for _, t := range s.creds {
+			if t.runID == run.RunID {
+				t.revoked = true
+			}
+		}
 		return run, 0, nil
 	case "agent.list_runs":
 		var out []agwp.Run
@@ -196,7 +202,9 @@ func (s *Server) handle(c *reqCtx) (any, int, *apiErr) {
 		if in["state"] != "done" && in["state"] != "cancelled" {
 			return nil, 0, errInvalid("state must be 'done' or 'cancelled'")
 		}
-		if t.Owner != "" && t.Owner != principalOf(c.identity) {
+		// The owner finishes its task; so does an operator (an administrator, or a delegator holding agent.operate).
+		operator := c.tok.role == "admin" || c.tok.role == "delegator"
+		if t.Owner != "" && t.Owner != principalOf(c.identity) && !operator {
 			return nil, 0, errf(412, "failed_precondition", "task '%s' is owned by %s", t.ID, t.Owner)
 		}
 		t.State, t.UpdatedAtMs = in["state"], s.nowMs()
@@ -789,8 +797,56 @@ func (s *Server) mint(c *reqCtx) (any, int, *apiErr) {
 	if subject == "" {
 		subject = principalOf(c.identity)
 	}
+	delegated := false
 	if subject != principalOf(c.identity) && c.tok.role != "admin" {
-		return nil, 0, errDenied("minting credentials for %s requires an administrator", subject)
+		if c.tok.role != "delegator" {
+			return nil, 0, errDenied("minting credentials for %s requires an administrator", subject)
+		}
+		if kindOf(subject) != "agent" {
+			return nil, 0, errDenied("a delegator mints credentials for agents only, not for %s", subject)
+		}
+		delegated = true
+	}
+	if delegated {
+		// what a delegator passes on is what it holds, never the administrative capabilities
+		held := map[string]bool{}
+		for _, list := range [][]string{readerCaps, writerCaps} {
+			for _, o := range list {
+				if len(c.tok.ops) == 0 || c.tok.ops[o] {
+					held[o] = true
+				}
+			}
+		}
+		if len(in.Scope.Operations) == 0 {
+			in.Scope.Operations = sortedKeys(held)
+		}
+		for _, o := range in.Scope.Operations {
+			if !held[o] {
+				return nil, 0, errDenied("a delegator cannot pass on '%s'", o)
+			}
+		}
+	}
+	if in.Scope.RunID != "" {
+		if len(in.Scope.Repos) != 1 || strings.ContainsAny(in.Scope.Repos[0], "*?[") {
+			return nil, 0, errInvalid("a credential bound to a run must name exactly one repository")
+		}
+		rs := s.repos[in.Scope.Repos[0]]
+		var found *agwp.Run
+		if rs != nil {
+			for _, ru := range rs.runs {
+				if ru.RunID == in.Scope.RunID {
+					found = ru
+				}
+			}
+		}
+		switch {
+		case found == nil:
+			return nil, 0, errNotFound("run '" + in.Scope.RunID + "'")
+		case found.Status != "running":
+			return nil, 0, errPrecond("run '%s' is %s: a credential can only be bound to a running run", found.RunID, found.Status)
+		case "agent:"+found.Agent != subject:
+			return nil, 0, errInvalid("run '%s' belongs to agent '%s', not to %s", found.RunID, found.Agent, subject)
+		}
 	}
 	// scope containment: a child may never exceed its parent
 	if len(c.tok.ops) > 0 {
@@ -836,6 +892,7 @@ func (s *Server) mint(c *reqCtx) (any, int, *apiErr) {
 	}
 	role := "writer"
 	child := s.addTokenLocked(TokenSpec{Identity: subject, Role: role, Repos: in.Scope.Repos, Ops: in.Scope.Operations, Streams: in.Scope.Streams, TTL: ttl}, c.tok.id)
+	child.runID = in.Scope.RunID
 	cred := agwp.Credential{ID: child.id, Subject: subject, Kind: kindOf(subject), Description: in.Description, Scope: in.Scope,
 		CreatedAtMs: s.nowMs(), ExpiresAtMs: child.expiresAt.UnixMilli(), CreatedBy: c.identity}
 	return map[string]any{"credential": cred, "token": child.secret}, 0, nil

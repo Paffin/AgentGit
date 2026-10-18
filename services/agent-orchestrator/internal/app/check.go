@@ -63,6 +63,12 @@ func (a *App) Check(ctx context.Context) CheckReport {
 	if !caps.Has("auth.scoped_credentials") {
 		rep.add("error", "server", "scoped credentials are not advertised: agents could not be given narrow credentials")
 	}
+	if !caps.Has("auth.run_credentials") {
+		rep.add("error", "server", "run-bound credentials are not advertised: concurrent sessions of one agent could act for each other, and the orchestrator refuses to hand an executor a credential that is not bound to its run (upgrade ag-server)")
+	}
+	if !caps.Has("auth.delegation") || !caps.Has("agents.operate") {
+		rep.add("error", "server", "the delegator role and the operator calls (finish a task, reap runs) are not advertised: the orchestrator would need an administrator credential (upgrade ag-server)")
+	}
 
 	type ident struct {
 		label string
@@ -71,7 +77,7 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		roles []string // any of these satisfies the role requirement
 	}
 	for _, id := range []ident{
-		{"orchestrator", a.orch, OrchestratorOps(a.cfg), []string{"admin"}},
+		{"orchestrator", a.orch, OrchestratorOps(a.cfg), []string{"delegator", "admin"}},
 		{"reviewer", a.reviewer, ReviewerOps(), []string{"reviewer", "admin"}},
 		{"advisor", a.advisorClient, AdvisorOps(), []string{"reviewer", "admin"}},
 	} {
@@ -151,9 +157,6 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		}
 	}
 	for _, e := range a.cfg.Execs {
-		if e.Slots > 1 {
-			rep.add("warn", "executor "+e.Name, "%d concurrent sessions of agent %q share one server identity: the server binds a credential to the agent, not to a run, so these sessions can act as each other's run. Use slots: 1 (one session per agent) when sessions must be isolated from each other", e.Slots, e.Agent)
-		}
 		switch e.Type {
 		case "command":
 			if _, err := exec.LookPath(e.Command[0]); err != nil {

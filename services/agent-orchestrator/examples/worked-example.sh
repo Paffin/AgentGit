@@ -35,7 +35,7 @@ trap cleanup EXIT
 A="$SRV admin --data-dir $W/data"
 say "ag-server admin create-repo acme/web"
 $A create-repo acme/web
-for pair in "user:alice writer" "user:bob reviewer" "user:carol integrator" "service:orchestrator admin" \
+for pair in "user:alice writer" "user:bob reviewer" "user:carol integrator" "service:orchestrator delegator" \
             "service:reviewer reviewer" "service:advisor reviewer" "agent:docs-bot writer" "agent:shell-bot writer"; do
   set -- $pair
   say "ag-server admin grant --subject $1 --repo acme/web --role $2"

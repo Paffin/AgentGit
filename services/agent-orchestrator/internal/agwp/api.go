@@ -235,6 +235,30 @@ func (c *Client) Predict(ctx context.Context, repo, stream string) ([]Overlap, e
 	return out.Overlaps, nil
 }
 
+// ReapReport is what a reap did (or, for a dry run, would do).
+type ReapReport struct {
+	// Runs are the runs ended as "abandoned".
+	Runs []Run `json:"runs"`
+	// ReleasedLeases are the ids of the leases released.
+	ReleasedLeases []string `json:"released_leases"`
+	// RevokedCredentials counts the credentials that were bound to the reaped runs.
+	RevokedCredentials int  `json:"revoked_credentials"`
+	DryRun             bool `json:"dry_run"`
+}
+
+// ReapRuns ends the runs of a repository that have not sent a heartbeat for staleAfter (zero: the server's
+// configured default), releases the leases of ended runs and revokes the credentials bound to the reaped runs.
+// It is an operator's call (capability agent.operate, held by the delegator role) and is audited under the
+// caller's identity.
+func (c *Client) ReapRuns(ctx context.Context, repo string, staleAfter time.Duration, dryRun bool) (*ReapReport, error) {
+	var out ReapReport
+	body := map[string]any{"stale_after_ms": uint64(staleAfter / time.Millisecond), "dry_run": dryRun}
+	if err := c.repoCall(ctx, "agent.reap_runs", http.MethodPost, repo, "/runs/reap", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ---- credentials -------------------------------------------------------------------
 
 // MintRequest asks for a scoped, expiring credential for subject.

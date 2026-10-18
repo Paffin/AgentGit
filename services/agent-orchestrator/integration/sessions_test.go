@@ -422,14 +422,11 @@ exit 3
 	}
 }
 
-// A documented limit rather than a feature: the server binds a credential to
-// an agent name, not to a run, so two concurrent sessions of the SAME agent can
-// act as each other's run. The orchestrator cannot fix that (a credential's
-// scope has no run pin); the operator gets isolation by giving concurrent
-// sessions distinct agents. This test pins the observed behaviour so the
-// README's statement stays true; if it fails, the server became stricter and
-// the limitation can be removed from the docs.
-func TestSameAgentRunsShareTheServersIdentity(t *testing.T) {
+// Two concurrent sessions of the SAME agent used to act as each other's run: the
+// server bound a credential to an agent name. Each session's credential is now
+// bound to its own run, and the server refuses everything else - the check is the
+// server's, so this runs against the real ag-server.
+func TestConcurrentSessionsOfOneAgentCannotActForEachOther(t *testing.T) {
 	w := newWorld(t, worldOptions{Agents: []string{"twin"}})
 	dir := t.TempDir()
 	release := filepath.Join(dir, "release")
@@ -449,13 +446,99 @@ while [ ! -f %[2]s ]; do sleep 0.1; done
 	eventually(t, "both sessions to start", 30*time.Second, func() bool {
 		return fileExists(filepath.Join(dir, "run-"+t1.ID+".txt")) && fileExists(filepath.Join(dir, "run-"+t2.ID+".txt"))
 	})
-	tok1, run2 := readFile(t, filepath.Join(dir, "token-"+t1.ID+".txt")), readFile(t, filepath.Join(dir, "run-"+t2.ID+".txt"))
-	code, body := w.srv.call(tok1, "POST", "/v1/repos/"+w.repo+"/runs/"+run2+"/heartbeat", map[string]any{})
-	if code != 200 {
-		t.Fatalf("the server now refuses a run-1 credential for run 2 of the same agent (%d %s): update the security model in the README", code, body)
+	tok1, run1 := readFile(t, filepath.Join(dir, "token-"+t1.ID+".txt")), readFile(t, filepath.Join(dir, "run-"+t1.ID+".txt"))
+	tok2, run2 := readFile(t, filepath.Join(dir, "token-"+t2.ID+".txt")), readFile(t, filepath.Join(dir, "run-"+t2.ID+".txt"))
+	if run1 == run2 || tok1 == tok2 {
+		t.Fatalf("the two sessions share a run or a credential: %s %s", run1, run2)
+	}
+	// Each credential is bound to its own run, in this repository, and says so.
+	me := w.srv.client(tok1, "twin-1")
+	who, err := me.Whoami(context.Background())
+	if err != nil || who.Scope.RunID != run1 || len(who.Scope.Repos) != 1 || who.Scope.Repos[0] != w.repo {
+		t.Fatalf("whoami = %+v, %v (want a credential bound to run %s)", who, err, run1)
+	}
+	// Its own run: fine. The other session's run: refused by the server, by name.
+	beat := func(token, run string, headers ...string) (int, string) {
+		code, body := w.srv.call(token, "POST", "/v1/repos/"+w.repo+"/runs/"+run+"/heartbeat", map[string]any{}, headers...)
+		return code, string(body)
+	}
+	if code, body := beat(tok1, run1); code != 200 {
+		t.Fatalf("a session cannot heartbeat its own run (%d %s)", code, body)
+	}
+	if code, body := beat(tok1, run2); code != 403 || !strings.Contains(body, run1) {
+		t.Fatalf("session 1 acted on session 2's run (%d %s)", code, body)
+	}
+	if code, body := beat(tok2, run1); code != 403 {
+		t.Fatalf("session 2 acted on session 1's run (%d %s)", code, body)
+	}
+	if code, _ := w.srv.call(tok1, "POST", "/v1/repos/"+w.repo+"/runs/"+run1+"/complete", map[string]any{"status": "completed"}, "ag-run", run2); code != 403 {
+		t.Fatalf("session 1 completed its run while acting as session 2's (%d)", code)
+	}
+	// It cannot make itself a wider credential, nor one for the other run.
+	if code, _ := w.srv.call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.repo}, "run_id": run2, "operations": []string{"agent.run"}}}); code != 403 {
+		t.Fatalf("session 1 minted a credential for session 2's run (%d)", code)
+	}
+	if code, _ := w.srv.call(tok1, "POST", "/v1/credentials", map[string]any{"ttl_secs": 60, "scope": map[string]any{"repos": []string{w.repo}, "operations": []string{"agent.run"}}}); code != 403 {
+		t.Fatalf("session 1 minted a credential that is not bound to its run (%d)", code)
 	}
 	if err := os.WriteFile(release, nil, 0o600); err != nil {
 		t.Fatal(err)
+	}
+	// When the sessions end, their credentials are dead.
+	eventually(t, "both credentials to stop working", 20*time.Second, func() bool {
+		c1, _ := beat(tok1, run1)
+		c2, _ := beat(tok2, run2)
+		return c1 == 401 && c2 == 401
+	})
+}
+
+// The orchestrator needs no administrator: as a delegator it hands out credentials to agents - and only to
+// agents, and only what it holds - and operates their runs and tasks. This is the real server's rule.
+func TestTheOrchestratorIsADelegatorNotAnAdministrator(t *testing.T) {
+	w := newWorld(t, worldOptions{Agents: []string{"bot"}})
+	o := w.startOrchestrator(orchConfig{Executors: commandExecutor("bot", writeScript(t, "bot.sh", "true\n"), "")})
+	o.waitReady()
+	tok := o.tokens["AG_ORCH_TOKEN"]
+	ctx := context.Background()
+	orch := w.srv.client(tok, "orchestrator")
+	who, err := orch.Whoami(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range who.Roles {
+		if strings.HasSuffix(r, ":admin") {
+			t.Fatalf("the orchestrator holds an administrator role: %v", who.Roles)
+		}
+	}
+	// It cannot mint for people, services or administrators, nor wider than it holds, nor grant roles.
+	for _, subject := range []string{"user:alice", "service:reviewer", "user:bootstrap-admin"} {
+		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: subject, TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{"repo.read"}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+			t.Errorf("minting for %s: %v", subject, err)
+		}
+	}
+	for _, op := range []string{"integrate.run", "proposal.review", "credentials.mint", "roles.manage", "agent.operate"} {
+		if _, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{op}}}); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+			t.Errorf("minting an agent credential with %s: %v", op, err)
+		}
+	}
+	if err := orch.GrantRole(ctx, "agent:bot", w.repo, "admin"); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+		t.Errorf("granting a role: %v", err)
+	}
+	// What it does need works: an agent credential, and the operator calls.
+	m, err := orch.MintCredential(ctx, agwp.MintRequest{Subject: "agent:bot", TTLSecs: 60, Scope: agwp.CredentialScope{Repos: []string{w.repo}, Operations: []string{"repo.read", "task.read"}}})
+	if err != nil {
+		t.Fatalf("an agent credential: %v", err)
+	}
+	if err := orch.RevokeCredential(ctx, m.Credential.ID); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := orch.ReapRuns(ctx, w.repo, time.Hour, true)
+	if err != nil || !rep.DryRun {
+		t.Fatalf("reap: %+v, %v", rep, err)
+	}
+	// And a plain writer is not an operator.
+	if _, err := w.alice.ReapRuns(ctx, w.repo, time.Hour, true); !agwp.IsCode(err, agwp.CodePermissionDenied) {
+		t.Errorf("a writer reaping runs: %v", err)
 	}
 }
 

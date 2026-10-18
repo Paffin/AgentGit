@@ -258,7 +258,7 @@ func newWorld(t *testing.T, o worldOptions) *world {
 	}
 	for subject, role := range map[string]string{
 		"user:alice": "writer", "user:bob": "reviewer", "user:carol": "integrator",
-		"service:orchestrator": "admin", "service:reviewer": "reviewer", "service:advisor": "reviewer", "service:ci-1": "runner",
+		"service:orchestrator": "delegator", "service:reviewer": "reviewer", "service:advisor": "reviewer", "service:ci-1": "runner",
 	} {
 		grant(subject, role)
 	}

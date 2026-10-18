@@ -119,12 +119,14 @@ variable, never the value):
 
 | Identity | Variable (default) | Role on the repositories | Operations (`orchestrator ops`) |
 |---|---|---|---|
-| `service:orchestrator` | `AG_ORCH_TOKEN` | `admin` (the server lets only administrators mint credentials for other identities) | scoped to exactly what the configuration needs, never integrate, policy, review or stream operations |
+| `service:orchestrator` | `AG_ORCH_TOKEN` | `delegator` (mints credentials for `agent:*` subjects only and operates their tasks and runs; no administrative power) | scoped to exactly what the configuration needs, never integrate, policy, review or stream operations |
 | `service:reviewer` | `AG_REVIEWER_TOKEN` | `reviewer` | read plus `proposal.review` |
 | `service:advisor` | `AG_ADVISOR_TOKEN` | `reviewer` | read plus `proposal.review` |
 
 Agents get their own role bindings (for example `agent:docs-bot` as `writer` on the repository); the
-orchestrator mints their short-lived credentials but cannot grant roles. If the reviewer or advisor variable is
+orchestrator mints their short-lived credentials but cannot grant roles, and what it mints is never more than
+it could do itself (the server clamps a delegated credential to the intersection of the agent's roles, the
+delegator's roles and the orchestrator's own scope). If the reviewer or advisor variable is
 unset those components fall back to the orchestrator's credential, which by design cannot post reviews;
 `check` reports this as an error with the reason.
 
@@ -224,8 +226,8 @@ configured `env`, and:
 | Variable | Meaning |
 |---|---|
 | `AG_SERVER` | base URL of the AGWP server |
-| `AG_TOKEN` | the agent's scoped credential for this session (at most an hour, revoked when the session ends) |
-| `AG_RUN` | the run id: send it as the `ag-run` header so requests act as `agent:<name>#<run>` |
+| `AG_TOKEN` | the agent's credential for this session, **bound to the run** (at most an hour; revoked when the run ends) |
+| `AG_RUN` | the run id. The credential already acts as `agent:<name>#<run>`; sending it as the `ag-run` header is accepted and changes nothing |
 | `AG_REPO`, `AG_STREAM` | the repository (`owner/name`) and stream the work is meant for |
 | `AG_TASK` | the task id |
 | `AG_TASK_FILE` | path of a JSON file with the task (title, description, scope). The text is **untrusted input**: it is written by whoever filed the task |
@@ -255,7 +257,8 @@ refuses to start), starts the run (claiming the task for the agent), takes the l
 renews leases, enforces `timeout`, on stop sends SIGTERM to the process group and SIGKILL after `grace`, then
 completes the run (`completed` or `failed` with a summary), finishes the task if the scheduler decided so, and
 revokes the credential. A run whose supervisor is gone (orchestrator crash) is found by its stale heartbeat
-and completed as abandoned; the server releases its leases when a run completes.
+and ended by the server (`agent.reap_runs`, audited under the orchestrator) as abandoned; the server
+releases its leases and revokes its credentials when a run ends.
 
 **`scripted`**: a built-in stand-in for an agent for tests and demos. It writes the files given in the
 configuration (or, with `task_files: true`, in a line `ag-script:{"files":{...},"title":"..."}` of the task
@@ -265,13 +268,15 @@ description), signs provenance and opens a proposal.
 
 - **Identity.** The service authenticates as `service:orchestrator` (and `service:reviewer`,
   `service:advisor`); every agent action is attributable to `agent:<name>#<run>`. The orchestrator holds the
-  `admin` role on its repositories because the server lets only administrators mint credentials for other
-  subjects; the credential it actually uses is *scoped* to the operations `orchestrator ops` lists, which
-  exclude integration, policy, review, stream and role operations, and `check` warns when the credential is
-  broader than needed.
-- **Agents.** Credentials are minted per session for `agent:<name>`, limited to the task's repository and
-  stream, to the configured operations, and to the lifetime the executor needs (never more than one hour; the
-  server also refuses a credential that outlives its parent). They are revoked as soon as the session ends,
+  `delegator` role on its repositories: it can mint credentials for agents (never for a person, a service or an
+  administrator) and finish or reap their tasks and runs, and nothing administrative. The credential it
+  actually uses is *scoped* to the operations `orchestrator ops` lists, which exclude integration, policy,
+  review, stream and role operations, and `check` warns when the credential is broader than needed (and errors
+  when the role is not `delegator` or `admin`, or the server predates delegation).
+- **Agents.** Credentials are minted per session for `agent:<name>`, **bound to the run of the session**,
+  limited to the task's repository and stream, to the configured operations, and to the lifetime the executor
+  needs (never more than one hour; the server also refuses a credential that outlives its parent). A credential
+  acts only as its own run and stops working the moment the run ends, however it ends. They are revoked as soon as the session ends,
   passed to the executor only in its environment, and scrubbed from captured output, run summaries, logs and
   `/status`. No service credential reaches an executor.
 - **What the orchestrator cannot do.** It cannot land a change, approve one, change a policy, grant a role,
@@ -281,12 +286,14 @@ description), signs provenance and opens a proposal.
 - **Admin API.** `/healthz` and `/readyz` are open; everything else requires the admin bearer token when one is
   configured, and a non-loopback listener refuses to start without one. The configuration refuses plain http to
   non-loopback servers.
-- **Known limit: one agent, one identity.** The server binds a credential to an agent *name*, not to a run.
-  Two concurrent sessions of the same agent (an executor with `slots` above 1) can therefore act as each
-  other's run: `TestSameAgentRunsShareTheServersIdentity` pins this behaviour, and `check` warns about it.
-  Sessions of *different* agents are isolated (`TestFailingCommandExecutorGetsTheContractAndLeaksNothing`
-  shows a credential being refused for another agent's run, task and for administrative operations). When
-  isolation matters, give each concurrent session its own executor and agent, or keep `slots: 1`.
+- **Concurrent sessions of one agent are isolated.** The credential of a session is bound to its run
+  ([ADR-0010](../../docs/adr/0010-run-bound-credentials.md)), so two sessions of the same agent (an executor
+  with `slots` above 1) cannot act as each other's run, finish each other's task or touch each other's
+  workspaces, proposals and leases (`TestConcurrentSessionsOfOneAgentCannotActForEachOther`). Sessions of
+  *different* agents are isolated as before (`TestFailingCommandExecutorGetsTheContractAndLeaksNothing`). The
+  orchestrator refuses a credential the server did not bind to the run (a server that predates the feature
+  would mint a name-bound one and say nothing). Agent credentials the orchestrator does *not* mint (a hand-minted
+  token, `ag-mcp --run-credentials off`) are still bound to the name only.
 - **Untrusted text.** Task titles and descriptions are never interpolated into commands; they reach an
   executor as data in `AG_TASK_FILE`. What the executor does with them is the executor's business.
 
@@ -336,16 +343,16 @@ These are findings, not complaints; each is covered or handled as described.
    mutation and repeats a lost response only for those; for the rest (`stream.create`, credential minting, ...)
    a transport failure is reported as an *unknown outcome* and the callers reconcile instead of repeating
    (an orphaned run is found by heartbeat staleness).
-2. **A credential is bound to an agent, not a run** (see the security model).
-3. **Minting credentials needs the `admin` role.** There is no narrower "delegator" role, so the orchestrator
-   holds `admin` and relies on its credential's scope to stay small. A role that can mint but not administer
-   would reduce what a stolen role binding can do.
-4. **A task can only be finished by its owner.** To finish a task whose proposals landed, the orchestrator
-   mints a 60-second credential for the owning agent that carries only `task.write`.
-5. **`integration.prepare` is not read-consistent around a job's completion**: it computes the preparation and
-   then lists the jobs in a second step, so a response that races with `jobs/{id}/complete` can show a
-   validation as `missing` next to a job that has already succeeded. The execution scheduler re-prepares on the
-   job and attestation events and converges; clients must treat a single prepare as eventually consistent.
+2. **A credential was bound to an agent, not a run.** Fixed: the orchestrator mints run-bound credentials
+   (see the security model).
+3. **Minting credentials needed the `admin` role.** Fixed: the `delegator` role mints for `agent:*` only and
+   cannot escalate; the orchestrator no longer needs `admin`.
+4. **A task could only be finished by its owner.** Fixed: `agent.operate` finishes (and reaps) on the
+   operator's behalf, audited as the orchestrator with the owner it overrode. The orchestrator no longer mints
+   a credential as the owner for this.
+5. **`integration.prepare` was not read-consistent around a job's completion.** Fixed on the server: the
+   verdict, the attestations and the jobs are read in one transaction. The scheduler still re-prepares on the
+   job and attestation events, which is how it learns that something changed.
 6. **Per-credential rate limiting applies to every operation**; the client waits out `rate_limited` using
    `retry_after_ms`.
 

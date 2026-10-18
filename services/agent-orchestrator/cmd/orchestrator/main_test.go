@@ -108,7 +108,7 @@ func TestConfigAndOpsDoNotNeedACredential(t *testing.T) {
 		t.Fatalf("ops document incomplete: %+v", doc)
 	}
 	for _, o := range append(append([]string{}, doc.Orchestrator...), doc.AgentDefault...) {
-		if config.ForbiddenAgentOps[o] && o != "credentials.mint" && o != "credentials.revoke" && o != "agent.register" && o != "integrate.validate" {
+		if config.ForbiddenAgentOps[o] && o != "credentials.delegate" && o != "agent.operate" && o != "agent.register" && o != "integrate.validate" {
 			t.Errorf("ops lists %q", o)
 		}
 	}
@@ -180,7 +180,7 @@ func TestCheckExitCodeFollowsTheReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	good := env(map[string]string{
-		"AG_ORCH_TOKEN":     fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "admin", Ops: app.OrchestratorOps(cfg)}),
+		"AG_ORCH_TOKEN":     fake.AddToken(fakeagwp.TokenSpec{Identity: "service:orchestrator", Role: "delegator", Ops: app.OrchestratorOps(cfg)}),
 		"AG_REVIEWER_TOKEN": fake.AddToken(fakeagwp.TokenSpec{Identity: "service:reviewer", Role: "reviewer", Ops: app.ReviewerOps()}),
 		"AG_ADVISOR_TOKEN":  fake.AddToken(fakeagwp.TokenSpec{Identity: "service:advisor", Role: "reviewer", Ops: app.AdvisorOps()}),
 	})

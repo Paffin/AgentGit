@@ -255,7 +255,8 @@ func (s *Session) finishTask(state string) {
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		_, err = s.agent.FinishTask(ctx, s.req.Repo, s.req.Task.ID, state)
+		// By the orchestrator, as an operator: the run's own credential has just stopped working with the run.
+		_, err = s.m.o.Orch.FinishTask(ctx, s.req.Repo, s.req.Task.ID, state)
 		cancel()
 		if err == nil {
 			return

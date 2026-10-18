@@ -339,6 +339,28 @@ mod tests {
         let _ = (c, id);
     }
 
+    #[tokio::test]
+    async fn a_credential_whose_scope_cannot_be_read_never_authenticates_as_unrestricted() {
+        let (auth, c, token, id) = setup(60_000);
+        let set_scope = |json: &str| {
+            c.database()
+                .execute("UPDATE credentials SET scope_json = ?1 WHERE id = ?2", &ag_storage::sql_params![json, &id])
+                .unwrap();
+        };
+        // A narrow credential authenticates, and stays narrow.
+        set_scope(r#"{"repos":["acme/web"]}"#);
+        let p = auth.authenticate(&token).await.unwrap();
+        assert!(!p.scope.is_unrestricted() && p.scope.permits(Some("acme/web"), crate::authz::Cap::RepoRead, None));
+        assert!(!p.scope.permits(Some("acme/api"), crate::authz::Cap::RepoRead, None));
+        // The same row, damaged: the old code read it as the default scope - no restriction at all - and let the
+        // token do everything its subject's roles allow.
+        for damaged in ["not json", "", r#"{"repos": "acme/web"}"#, r#"{"repos": [1]}"#] {
+            set_scope(damaged);
+            assert!(auth.authenticate(&token).await.is_err(), "scope_json {damaged:?} must not authenticate");
+            assert!(auth.still_active(&p).await.is_err(), "nor keep a stream open");
+        }
+    }
+
     #[test]
     fn minted_tokens_are_unique_and_stored_only_as_hashes() {
         let a = mint_token().unwrap();

@@ -2079,6 +2079,11 @@
               "$ref": "#/components/schemas/Credential"
             },
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True if there were more credentials than one listing returns (the newest are listed first). Narrow the\nrequest with `subject` to see the rest.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -2360,6 +2365,11 @@
               "$ref": "#/components/schemas/RoleBinding"
             },
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True if there were more role bindings than one listing returns. Narrow the request with `subject` or `repo`.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -3405,6 +3415,7 @@
           },
           "max_object_bytes": {
             "default": 0,
+            "description": "Largest single object (envelope included) the repository accepts, on top of the server-wide limit\n(`limits.max_object_bytes`); a larger one fails with `too_large`.",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
@@ -3423,7 +3434,7 @@
           },
           "max_total_object_bytes": {
             "default": 0,
-            "description": "0 = unlimited.",
+            "description": "0 = unlimited.\nTotal bytes of objects the repository may hold. Charged to every write that adds an object (uploads,\nworkspace edits, merges); a write that would pass it fails with `quota_exceeded`. The tracked total is an\nestimate that garbage collection recounts.",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
@@ -3637,12 +3648,12 @@
           },
           "durability": {
             "default": "",
-            "description": "Human-readable durability contract of the object backend.",
+            "description": "Human-readable durability contract of the object backend. Filled by Describe only (it is a property of the\nopen object store).",
             "type": "string"
           },
           "meta_backend": {
             "default": "",
-            "description": "Storage in use: \"sqlite\"/\"postgres\" and \"fs\"/\"s3\".",
+            "description": "Storage in use: \"sqlite\"/\"postgres\" and \"fs\"/\"s3\", as configured for this repository (create, describe\nand list all report the same).",
             "type": "string"
           },
           "name": {
@@ -3672,7 +3683,7 @@
           },
           "stream_count": {
             "default": 0,
-            "description": "Filled by Describe only; listings do not open every repository and leave\nboth counts at 0.",
+            "description": "Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"

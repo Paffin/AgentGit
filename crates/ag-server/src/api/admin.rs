@@ -191,13 +191,14 @@ impl App {
         if !me.scope.contains(&wanted) {
             return Err(ApiError::denied("a credential cannot grant more than the credential used to mint it"));
         }
-        let own = subject == me.identity.principal();
-        if !own {
+        // Minting for oneself is always allowed: `me.scope.contains(&wanted)` above guarantees it can only narrow.
+        // Minting for somebody else needs the capability on every repository the new scope covers.
+        if subject != me.identity.principal() {
             let bindings = self.bindings().await?;
             let patterns: Vec<String> =
                 if wanted.repos.is_empty() { vec!["*".to_string()] } else { wanted.repos.raw().to_vec() };
             for p in &patterns {
-                Authorizer::check(me, &bindings, p, Cap::CredentialsMint, None).map_err(|e| {
+                Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsMint).map_err(|e| {
                     if e.code() == ag_protocol::ErrorCode::NotFound {
                         ApiError::denied(format!(
                             "minting credentials for {subject} on '{p}' requires an administrator"
@@ -207,21 +208,11 @@ impl App {
                     }
                 })?;
             }
-        } else if me.scope.is_unrestricted() && me.method == crate::auth::AuthMethod::Token && !me.bootstrap {
-            // Self-minting is always allowed (it can only narrow); nothing more to check.
         }
         if matches!(subject.kind(), ag_types::IdentityKind::System) {
             return Err(ApiError::invalid("credentials cannot be minted for system identities"));
         }
-        let is_agent = subject.kind() == ag_types::IdentityKind::Agent;
-        let max = if is_agent { self.cfg.auth.max_agent_ttl_secs } else { self.cfg.auth.max_ttl_secs };
-        let ttl = if req.ttl_secs == 0 { max.min(if is_agent { 3600 } else { 24 * 3600 }) } else { req.ttl_secs };
-        if ttl > max {
-            return Err(ApiError::invalid(format!(
-                "ttl_secs may be at most {max} for {} credentials",
-                subject.kind().prefix()
-            )));
-        }
+        let ttl = self.cfg.auth.credential_ttl(subject.kind(), req.ttl_secs).map_err(ApiError::invalid)?;
         let now = self.clock.now().as_millis();
         let mut expires = now + i64::from(ttl) * 1000;
         if me.expires_at_ms > 0 {
@@ -256,7 +247,7 @@ impl App {
         let scope = Scope::from_wire(&cred.scope)?;
         let patterns: Vec<String> =
             if scope.repos.is_empty() { vec!["*".to_string()] } else { scope.repos.raw().to_vec() };
-        Ok(patterns.iter().all(|p| Authorizer::check(me, &bindings, p, Cap::CredentialsRevoke, None).is_ok()))
+        Ok(patterns.iter().all(|p| Authorizer::check_pattern(me, &bindings, p, Cap::CredentialsRevoke).is_ok()))
     }
 
     /// Lists credentials. By default the caller's own; `subject` names
@@ -274,17 +265,15 @@ impl App {
         let all = tokio::task::spawn_blocking(move || control.credentials(filter.as_deref(), include_revoked))
             .await
             .map_err(ApiError::internal)??;
+        // Credentials the caller cannot manage are left out, so listing another subject's credentials without
+        // administering them yields an empty list and reveals nothing about whether there are any.
         let mut out = Vec::new();
-        for c in all {
+        for c in all.rows {
             if self.may_manage_credential(call, &c).await? {
                 out.push(c.to_wire());
             }
         }
-        if out.is_empty() && subject != "*" && subject != me {
-            // Do not reveal whether the subject has credentials to someone who cannot manage them.
-            return Ok(v1::ListCredentialsResponse { credentials: out });
-        }
-        Ok(v1::ListCredentialsResponse { credentials: out })
+        Ok(v1::ListCredentialsResponse { credentials: out, truncated: all.truncated })
     }
 
     /// Revokes a credential immediately.
@@ -368,12 +357,13 @@ impl App {
         let bindings = self.bindings().await?;
         let me = call.principal.identity.principal().to_string();
         let out = all
+            .rows
             .into_iter()
             .filter(|b| {
                 b.subject == me
-                    || Authorizer::check(&call.principal, &bindings, &b.repo, Cap::RolesManage, None).is_ok()
+                    || Authorizer::check_pattern(&call.principal, &bindings, &b.repo, Cap::RolesManage).is_ok()
             })
             .collect();
-        Ok(v1::ListRolesResponse { bindings: out })
+        Ok(v1::ListRolesResponse { bindings: out, truncated: all.truncated })
     }
 }

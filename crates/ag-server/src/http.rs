@@ -22,8 +22,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
 use futures_util::StreamExt;
 use http_body_util::BodyExt;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::app::{App, Call, Ingress};
@@ -57,6 +57,11 @@ fn new_request_id() -> String {
     ag_crypto::random_id("req").unwrap_or_else(|_| "req_unknown".into())
 }
 
+/// The peer address of the connection a request arrived on (set by the server's connect-info service).
+fn remote_addr(request: &Request) -> Option<String> {
+    request.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0.to_string())
+}
+
 /// Builds the transport-independent ingress description from HTTP headers.
 pub fn ingress_from_headers(headers: &HeaderMap, remote: Option<String>) -> Ingress {
     let get = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::trim).filter(|s| !s.is_empty());
@@ -77,6 +82,42 @@ pub fn ingress_from_headers(headers: &HeaderMap, remote: Option<String>) -> Ingr
         traceparent: get("traceparent").map(str::to_string),
         remote,
     }
+}
+
+/// The query string of the two hand-written event routes, typed. A value that does not parse is rejected
+/// (`invalid_argument`) rather than replaced by a default: `after_seq=abc` must not mean "from now" or "from the
+/// start" to a client that believes it is resuming.
+#[derive(Debug, Default, Deserialize)]
+struct EventsQuery {
+    after_seq: Option<u64>,
+    limit: Option<u32>,
+    heartbeat_ms: Option<u32>,
+    topics: Option<String>,
+}
+
+impl EventsQuery {
+    fn parse(query: Option<&str>) -> ApiResult<Self> {
+        serde_urlencoded::from_str(query.unwrap_or("")).map_err(|e| ApiError::invalid(format!("bad query string: {e}")))
+    }
+
+    fn topics(&self) -> Vec<String> {
+        self.topics
+            .as_deref()
+            .map(|t| t.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+}
+
+/// `Last-Event-ID`, if the client sent one. A value that is not a sequence number is rejected.
+fn last_event_id(headers: &HeaderMap) -> ApiResult<Option<u64>> {
+    headers
+        .get("last-event-id")
+        .map(|v| {
+            v.to_str().ok().and_then(|v| v.trim().parse().ok()).ok_or_else(|| {
+                ApiError::invalid("Last-Event-ID must be the sequence number of the last event received")
+            })
+        })
+        .transpose()
 }
 
 fn path_with_repo(mut params: HashMap<String, String>) -> HashMap<String, String> {
@@ -184,7 +225,7 @@ where
     F: FnOnce(App, Call, Req) -> Fut,
     Fut: Future<Output = ApiResult<Resp>>,
 {
-    let ing = ingress_from_headers(&headers, None);
+    let ing = ingress_from_headers(&headers, remote_addr(&request));
     let request_id = ing.request_id.clone();
     let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
     let result = async {
@@ -415,55 +456,62 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
              headers: HeaderMap,
              params: Option<Path<HashMap<String, String>>>,
              request: Request| async move {
-                let ing = ingress_from_headers(&headers, None);
+                let ing = ingress_from_headers(&headers, remote_addr(&request));
                 let id = ing.request_id.clone();
                 let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
-                let limit = app.cfg.limits.max_object_bytes as usize;
-                let result = async {
-                    let body = http_body_util::Limited::new(request.into_body(), limit)
-                        .collect()
-                        .await
-                        .map_err(|e| {
-                            ApiError::new(
-                                ag_protocol::ErrorCode::TooLarge,
-                                format!("object too large or unreadable: {e}"),
-                            )
-                        })?
-                        .to_bytes()
-                        .to_vec();
-                    let (repo, oid) = (
-                        params.get("repo").cloned().unwrap_or_default(),
-                        params.get("object_id").cloned().unwrap_or_default(),
-                    );
-                    let a = app.clone();
-                    app.dispatch(ing, "objects.put", move |call| async move {
+                let (repo, oid) = (
+                    params.get("repo").cloned().unwrap_or_default(),
+                    params.get("object_id").cloned().unwrap_or_default(),
+                );
+                let a = app.clone();
+                // Nothing is buffered for a caller who is not authenticated, rate limited and allowed to write
+                // objects here: the body is read inside the pipeline, after those checks, and no further than the
+                // limit that applies to this repository.
+                let result = app
+                    .dispatch(ing, "objects.put", move |call| async move {
+                        a.authorize(&call, &repo, crate::authz::Cap::ObjectsWrite, None).await?;
+                        let limit = usize::try_from(a.object_limit(&repo).await?).unwrap_or(usize::MAX);
+                        let body = http_body_util::Limited::new(request.into_body(), limit)
+                            .collect()
+                            .await
+                            .map_err(|e| {
+                                ApiError::new(
+                                    ag_protocol::ErrorCode::TooLarge,
+                                    format!("object too large or unreadable: {e}"),
+                                )
+                            })?
+                            .to_bytes()
+                            .to_vec();
                         let newly = a.store_object(&call, &repo, &oid, body).await?;
                         Ok(serde_json::json!({"object_id": oid, "stored": newly}))
                     })
-                    .await
-                }
-                .await;
+                    .await;
                 finish(result, &id)
             },
         )
-        .get(|State(app): State<App>, headers: HeaderMap, params: Option<Path<HashMap<String, String>>>| async move {
-            let ing = ingress_from_headers(&headers, None);
-            let id = ing.request_id.clone();
-            let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
-            let result = async {
-                let req = v1::GetObjectRequest {
-                    repo: params.get("repo").cloned().unwrap_or_default(),
-                    object_id: params.get("object_id").cloned().unwrap_or_default(),
-                };
-                let a = app.clone();
-                app.dispatch(ing, "objects.get", move |call| async move { a.get_object(&call, req).await }).await
-            }
-            .await;
-            match result {
-                Ok(bytes) => octet(bytes, &id),
-                Err(e) => e.with_request_id(&id).into_response(),
-            }
-        })
+        .get(
+            |State(app): State<App>,
+             headers: HeaderMap,
+             params: Option<Path<HashMap<String, String>>>,
+             request: Request| async move {
+                let ing = ingress_from_headers(&headers, remote_addr(&request));
+                let id = ing.request_id.clone();
+                let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
+                let result = async {
+                    let req = v1::GetObjectRequest {
+                        repo: params.get("repo").cloned().unwrap_or_default(),
+                        object_id: params.get("object_id").cloned().unwrap_or_default(),
+                    };
+                    let a = app.clone();
+                    app.dispatch(ing, "objects.get", move |call| async move { a.get_object(&call, req).await }).await
+                }
+                .await;
+                match result {
+                    Ok(bytes) => octet(bytes, &id),
+                    Err(e) => e.with_request_id(&id).into_response(),
+                }
+            },
+        )
         .layer(DefaultBodyLimit::disable()),
     );
     route!(
@@ -643,15 +691,18 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
              headers: HeaderMap,
              params: Option<Path<HashMap<String, String>>>,
              request: Request| async move {
-                let ing = ingress_from_headers(&headers, None);
+                let ing = ingress_from_headers(&headers, remote_addr(&request));
                 let id = ing.request_id.clone();
                 let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
-                let rev = serde_urlencoded::from_str::<Vec<(String, String)>>(request.uri().query().unwrap_or(""))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .find(|(k, _)| k == "rev")
-                    .map(|(_, v)| v)
-                    .unwrap_or_default();
+                let rev = match serde_urlencoded::from_str::<Vec<(String, String)>>(request.uri().query().unwrap_or(""))
+                {
+                    Ok(pairs) => pairs.into_iter().find(|(k, _)| k == "rev").map(|(_, v)| v).unwrap_or_default(),
+                    Err(e) => {
+                        return ApiError::invalid(format!("bad query string: {e}"))
+                            .with_request_id(&id)
+                            .into_response();
+                    }
+                };
                 let req = v1::GetFileRequest {
                     repo: params.get("repo").cloned().unwrap_or_default(),
                     rev,
@@ -1251,19 +1302,18 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
              headers: HeaderMap,
              params: Option<Path<HashMap<String, String>>>,
              request: Request| async move {
-                let ing = ingress_from_headers(&headers, None);
+                let ing = ingress_from_headers(&headers, remote_addr(&request));
                 let id = ing.request_id.clone();
                 let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
-                let q: HashMap<String, String> =
-                    serde_urlencoded::from_str(request.uri().query().unwrap_or("")).unwrap_or_default();
+                let q = match EventsQuery::parse(request.uri().query()) {
+                    Ok(q) => q,
+                    Err(e) => return e.with_request_id(&id).into_response(),
+                };
                 let req = v1::ReplayRequest {
                     repo: params.get("repo").cloned().unwrap_or_default(),
-                    topics: q
-                        .get("topics")
-                        .map(|t| t.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect())
-                        .unwrap_or_default(),
-                    after_seq: q.get("after_seq").and_then(|v| v.parse().ok()).unwrap_or(0),
-                    limit: q.get("limit").and_then(|v| v.parse().ok()).unwrap_or(0),
+                    topics: q.topics(),
+                    after_seq: q.after_seq.unwrap_or(0),
+                    limit: q.limit.unwrap_or(0),
                 };
                 let a = app.clone();
                 finish(
@@ -1297,26 +1347,26 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
              headers: HeaderMap,
              params: Option<Path<HashMap<String, String>>>,
              request: Request| async move {
-                let ing = ingress_from_headers(&headers, None);
+                let ing = ingress_from_headers(&headers, remote_addr(&request));
                 let id = ing.request_id.clone();
                 let params = path_with_repo(params.map(|p| p.0).unwrap_or_default());
-                let q: HashMap<String, String> =
-                    serde_urlencoded::from_str(request.uri().query().unwrap_or("")).unwrap_or_default();
-                let last_event_id: Option<u64> =
-                    headers.get("last-event-id").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok());
+                let (q, last_event_id) = match EventsQuery::parse(request.uri().query())
+                    .and_then(|q| last_event_id(&headers).map(|l| (q, l)))
+                {
+                    Ok(parsed) => parsed,
+                    Err(e) => return e.with_request_id(&id).into_response(),
+                };
                 let req = v1::SubscribeRequest {
                     repo: params.get("repo").cloned().unwrap_or_default(),
-                    topics: q
-                        .get("topics")
-                        .map(|t| t.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect())
-                        .unwrap_or_default(),
-                    after_seq: q.get("after_seq").and_then(|v| v.parse().ok()).or(last_event_id).unwrap_or(u64::MAX),
-                    heartbeat_ms: q.get("heartbeat_ms").and_then(|v| v.parse().ok()).unwrap_or(0),
+                    topics: q.topics(),
+                    // No `after_seq` and no Last-Event-ID: follow from now.
+                    after_seq: q.after_seq.or(last_event_id).unwrap_or(u64::MAX),
+                    heartbeat_ms: q.heartbeat_ms.unwrap_or(0),
                 };
                 let a = app.clone();
                 // Streams are long-lived: authentication happens once up front, then the feed re-checks access on every batch.
                 let mut ing = ing;
-                ing.deadline_ms = Some(u64::MAX / 4);
+                ing.deadline_ms = Some(crate::app::NO_DEADLINE_MS);
                 let stream = app
                     .dispatch(ing, "events.subscribe", move |call| async move { a.subscribe(call, req).await })
                     .await;

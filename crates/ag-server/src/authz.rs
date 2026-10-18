@@ -236,9 +236,50 @@ impl Patterns {
     }
 }
 
-/// Matches a single pattern against a string (`*` wildcards).
+/// Matches a single pattern against a string (`*` wildcards). An invalid pattern matches nothing.
 pub fn glob_match(pattern: &str, value: &str) -> bool {
     Glob::new(pattern).map(|g| g.compile_matcher().is_match(value)).unwrap_or(false)
+}
+
+/// Checks that `pattern` is a glob this server can compile. Role bindings are validated with it when they are
+/// created, so a typo is an error at once and not a permanently inert binding.
+pub fn validate_pattern(pattern: &str) -> Result<(), String> {
+    if pattern.is_empty() {
+        return Err("a pattern must not be empty".into());
+    }
+    Glob::new(pattern).map(|_| ()).map_err(|e| format!("bad pattern '{pattern}': {e}"))
+}
+
+/// A pattern whose set of matches is easy to compare with another's: letters, digits and `._-/`, optionally
+/// ending in one `*`. Containment ([`pattern_within`]) is only decided for these.
+fn is_simple_pattern(p: &str) -> bool {
+    !p.is_empty()
+        && p.bytes()
+            .enumerate()
+            .all(|(i, b)| b.is_ascii_alphanumeric() || b"._-/".contains(&b) || (b == b'*' && i == p.len() - 1))
+}
+
+/// Whether every name `inner` matches is also matched by `outer`.
+///
+/// Deliberately conservative: `true` only when it can be proved — the patterns are equal, `outer` is `*`, or
+/// both are "simple" (see `is_simple_pattern`) and `outer` is a prefix pattern covering `inner`'s prefix.
+/// Anything else (`?`, character classes, alternation, a `*` in the middle) is `false`, so a delegated
+/// credential can never be wider than the one that minted it. (Matching `inner`'s *source text* against
+/// `outer`, which this replaces, is unsound: `acme/*b*` "contains" `acme/[ab]*`, yet the latter also matches
+/// `acme/alpha`.)
+pub fn pattern_within(outer: &str, inner: &str) -> bool {
+    if outer == "*" || outer == inner {
+        return true;
+    }
+    if !is_simple_pattern(outer) || !is_simple_pattern(inner) {
+        return false;
+    }
+    match outer.strip_suffix('*') {
+        // `outer` covers every name starting with its prefix; `inner` (its own `*` dropped) must start with it too.
+        Some(prefix) => inner.trim_end_matches('*').starts_with(prefix),
+        // A literal outer contains only itself, and equality was handled above.
+        None => false,
+    }
 }
 
 /// The narrowing restrictions attached to a credential.
@@ -300,12 +341,19 @@ impl Scope {
         true
     }
 
+    /// Like [`Scope::permits`] for a whole *pattern* of repositories (the repositories a credential being
+    /// minted or revoked is scoped to): every repository the pattern could match must be inside the scope.
+    pub fn permits_pattern(&self, repo_pattern: &str, cap: Cap) -> bool {
+        (self.operations.is_empty() || self.operations.contains(&cap))
+            && (self.repos.is_empty() || self.repos.raw().iter().any(|o| pattern_within(o, repo_pattern)))
+    }
+
     /// True if `narrower` is contained in `self` (a delegated credential must
     /// never exceed the scope of the credential that minted it).
     pub fn contains(&self, narrower: &Scope) -> bool {
         let list_ok = |outer: &Patterns, inner: &Patterns| {
             outer.is_empty()
-                || (!inner.is_empty() && inner.raw().iter().all(|p| outer.matches(p) || outer.raw().contains(p)))
+                || (!inner.is_empty() && inner.raw().iter().all(|p| outer.raw().iter().any(|o| pattern_within(o, p))))
         };
         let ops_ok = self.operations.is_empty()
             || (!narrower.operations.is_empty() && narrower.operations.iter().all(|o| self.operations.contains(o)));
@@ -314,7 +362,11 @@ impl Scope {
 }
 
 /// A role granted on repositories matching `repo`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// The patterns are compiled once, when the binding is loaded, not for every request. A pattern that does not
+/// compile makes the binding inert (it matches nothing, so never more than was granted); bindings are
+/// validated when they are created, so that only happens with a row written by something other than this server.
+#[derive(Clone, Debug)]
 pub struct Binding {
     /// Subject pattern the binding applies to.
     pub subject: String,
@@ -322,6 +374,46 @@ pub struct Binding {
     pub repo: String,
     /// The role.
     pub role: Role,
+    subject_glob: Option<GlobMatcher>,
+    repo_glob: Option<GlobMatcher>,
+}
+
+impl PartialEq for Binding {
+    fn eq(&self, other: &Self) -> bool {
+        (&self.subject, &self.repo, self.role) == (&other.subject, &other.repo, other.role)
+    }
+}
+
+impl Eq for Binding {}
+
+impl Binding {
+    /// A binding with its patterns compiled.
+    pub fn new(subject: impl Into<String>, repo: impl Into<String>, role: Role) -> Self {
+        let (subject, repo) = (subject.into(), repo.into());
+        let compile = |p: &str| Glob::new(p).ok().map(|g| g.compile_matcher());
+        Self { subject_glob: compile(&subject), repo_glob: compile(&repo), subject, repo, role }
+    }
+
+    /// False if one of the patterns does not compile (the binding can never apply).
+    pub fn is_usable(&self) -> bool {
+        self.subject_glob.is_some() && self.repo_glob.is_some()
+    }
+
+    fn subject_matches_text(&self, text: &str) -> bool {
+        self.subject_glob.as_ref().is_some_and(|g| g.is_match(text))
+    }
+
+    fn repo_matches(&self, repo: &str) -> bool {
+        self.repo_glob.as_ref().is_some_and(|g| g.is_match(repo))
+    }
+
+    /// Whether this binding's subject covers `principal`: by identity, by its base principal (a run of an
+    /// agent is covered by the agent's binding), or by a group the identity provider reported.
+    pub fn applies_to(&self, principal: &Principal) -> bool {
+        self.subject_matches_text(principal.identity.as_str())
+            || self.subject_matches_text(principal.identity.principal().as_str())
+            || principal.groups.iter().any(|g| self.subject.strip_prefix("group:") == Some(g.as_str()))
+    }
 }
 
 /// Decides whether a principal may do something.
@@ -336,13 +428,8 @@ impl Authorizer {
             out.insert(Role::Admin);
             return out;
         }
-        let ident = principal.identity.as_str();
-        let base = principal.identity.principal();
         for b in bindings {
-            let subject_ok = glob_match(&b.subject, ident)
-                || glob_match(&b.subject, base.as_str())
-                || principal.groups.iter().any(|g| b.subject == format!("group:{g}"));
-            if subject_ok && glob_match(&b.repo, repo) {
+            if b.applies_to(principal) && b.repo_matches(repo) {
                 out.insert(b.role);
             }
         }
@@ -387,6 +474,46 @@ impl Authorizer {
         Ok(())
     }
 
+    /// Checks `cap` for `principal` on every repository a *pattern* could match: some role the caller holds
+    /// must cover the whole pattern (see [`pattern_within`]) and the credential presented must be scoped for it.
+    /// Used where a credential is minted or revoked for a set of repositories, where the pattern is not itself
+    /// a repository name.
+    pub fn check_pattern(principal: &Principal, bindings: &[Binding], repo_pattern: &str, cap: Cap) -> ApiResult<()> {
+        let mut roles = BTreeSet::new();
+        if principal.bootstrap {
+            roles.insert(Role::Admin);
+        } else {
+            for b in bindings {
+                if b.applies_to(principal) && pattern_within(&b.repo, repo_pattern) {
+                    roles.insert(b.role);
+                }
+            }
+            for (role, pattern) in &principal.group_roles {
+                if pattern_within(pattern, repo_pattern) {
+                    roles.insert(*role);
+                }
+            }
+        }
+        if roles.is_empty() {
+            return Err(ApiError::not_found(format!("repository '{repo_pattern}' not found")));
+        }
+        if !roles.iter().any(|r| r.caps().contains(&cap)) {
+            return Err(ApiError::denied(format!(
+                "this identity ({}) may not perform '{}' on '{repo_pattern}' (roles: {})",
+                principal.identity,
+                cap.as_str(),
+                roles.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(", ")
+            )));
+        }
+        if !principal.scope.permits_pattern(repo_pattern, cap) {
+            return Err(ApiError::denied(format!(
+                "the credential presented is not scoped for '{}' on '{repo_pattern}'",
+                cap.as_str()
+            )));
+        }
+        Ok(())
+    }
+
     /// Checks a capability that is not tied to a repository (listing
     /// credentials, granting global roles): requires the role on pattern `*`.
     pub fn check_global(principal: &Principal, bindings: &[Binding], cap: Cap) -> ApiResult<()> {
@@ -406,7 +533,112 @@ mod tests {
     use crate::auth::Principal;
 
     fn binding(subject: &str, repo: &str, role: Role) -> Binding {
-        Binding { subject: subject.into(), repo: repo.into(), role }
+        Binding::new(subject, repo, role)
+    }
+
+    /// A small universe of repository names, enough to tell prefix patterns apart.
+    fn universe() -> Vec<String> {
+        let mut names = Vec::new();
+        for owner in ["acme", "acme2", "ac", "other", "a"] {
+            names.push(owner.to_string());
+            for name in ["web", "w", "wb", "api", "alpha", "beta", "b", "ab", "web/x", "web.y", ""] {
+                names.push(format!("{owner}/{name}"));
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn containment_never_claims_more_than_is_true() {
+        // Every pair of patterns from a pool: whenever `pattern_within` says yes, no name of the universe may
+        // match the inner pattern without matching the outer one. (The reverse is allowed to be unknown.)
+        let pool = [
+            "*",
+            "acme/*",
+            "acme/web",
+            "acme/web*",
+            "acme/w*",
+            "acme/*b*",
+            "acme/[ab]*",
+            "acme/{web,api}",
+            "acme/?eb",
+            "acme*",
+            "ac*",
+            "acme/",
+            "acme/alpha",
+            "a*",
+            "acme/web/*",
+            "other/*",
+            "acme/web**",
+            "acme/*-x",
+            "ACME/*",
+        ];
+        let names = universe();
+        let mut proved = 0;
+        for outer in pool {
+            for inner in pool {
+                if pattern_within(outer, inner) {
+                    proved += 1;
+                    for n in &names {
+                        assert!(
+                            !glob_match(inner, n) || glob_match(outer, n),
+                            "pattern_within({outer:?}, {inner:?}) is true, but {n:?} matches only the inner pattern"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(proved > pool.len(), "the check must prove something besides reflexivity ({proved})");
+        // The case the old source-text comparison got wrong.
+        assert!(!pattern_within("acme/*b*", "acme/[ab]*"));
+        assert!(pattern_within("acme/*", "acme/web"));
+        assert!(pattern_within("acme/*", "acme/web*"));
+        assert!(!pattern_within("acme/web*", "acme/w*"));
+        assert!(!pattern_within("acme/web", "acme/web*"));
+        assert!(pattern_within("*", "acme/[ab]*"), "everything is within *");
+    }
+
+    #[test]
+    fn a_scoped_credential_cannot_mint_a_wider_one_through_glob_tricks() {
+        let outer = Scope { repos: Patterns::new(&["acme/*b*".into()]).unwrap(), ..Scope::default() };
+        let wider = Scope { repos: Patterns::new(&["acme/[ab]*".into()]).unwrap(), ..Scope::default() };
+        assert!(wider.repos.matches("acme/alpha") && !outer.repos.matches("acme/alpha"));
+        assert!(!outer.contains(&wider));
+        let same = Scope { repos: Patterns::new(&["acme/*b*".into()]).unwrap(), ..Scope::default() };
+        assert!(outer.contains(&same), "a scope always contains itself");
+    }
+
+    #[test]
+    fn pattern_checks_need_a_role_that_covers_the_whole_pattern() {
+        let p = Principal::for_tests("user:alice");
+        let bindings = vec![binding("user:alice", "acme/*", Role::Admin)];
+        assert!(Authorizer::check_pattern(&p, &bindings, "acme/web", Cap::CredentialsMint).is_ok());
+        assert!(Authorizer::check_pattern(&p, &bindings, "acme/web*", Cap::CredentialsMint).is_ok());
+        // `*` and `other/*` are not inside `acme/*`.
+        assert!(Authorizer::check_pattern(&p, &bindings, "*", Cap::CredentialsMint).is_err());
+        assert!(Authorizer::check_pattern(&p, &bindings, "other/*", Cap::CredentialsMint).is_err());
+        // A binding with a clever glob proves nothing about a pattern it does not provably cover.
+        let tricky = vec![binding("user:alice", "acme/*b*", Role::Admin)];
+        assert!(Authorizer::check_pattern(&p, &tricky, "acme/[ab]*", Cap::CredentialsMint).is_err());
+        // A weaker role is not enough.
+        let reader = vec![binding("user:alice", "acme/*", Role::Reader)];
+        assert_eq!(
+            Authorizer::check_pattern(&p, &reader, "acme/web", Cap::CredentialsMint).unwrap_err().code(),
+            ag_protocol::ErrorCode::PermissionDenied
+        );
+    }
+
+    #[test]
+    fn bindings_are_validated_and_an_unusable_one_matches_nothing() {
+        assert!(validate_pattern("acme/*").is_ok());
+        assert!(validate_pattern("user:alice").is_ok());
+        assert!(validate_pattern("acme/[").is_err());
+        assert!(validate_pattern("").is_err());
+        let inert = Binding::new("user:alice", "acme/[", Role::Admin);
+        assert!(!inert.is_usable());
+        let p = Principal::for_tests("user:alice");
+        assert!(Authorizer::roles(&p, &[inert], "acme/web").is_empty());
+        assert!(Binding::new("agent:*", "*", Role::Reader).is_usable());
     }
 
     #[test]

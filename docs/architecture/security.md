@@ -27,6 +27,11 @@ of them being honest.
 | Non-canonical encodings that decode to the same value | strict decoders: minimal varints, no trailing bytes, sorted unique ops | `ag_object::canon`, `Changeset::decode` | `rejects_non_minimal_and_overflowing_varints`, `accepted_varints_reencode_identically`, cross-implementation vectors |
 | Hash confusion between object types | domain-separated IDs (kind and version in the preimage) | `ag_object::object_id` | `domain_separation_by_kind_and_version` |
 | Oversized / pathological input | limits on blob size, ops, parents, message, DAG depth, tree size; length prefixes bounded before allocation | `ag_types::Limits`, `Reader::bounded_varint` | `bounded_reads_do_not_allocate_huge_buffers`, `rejects_duplicate_parents_and_limits` |
+| A damaged or hand-edited control row widening access | a credential whose `scope_json`, or a repository whose `quota_json`, cannot be read is an error (`internal`), never the default — and the default scope is "unrestricted", the default quota "unlimited" | `Control::credential_from`, `repo_from` | `an_unreadable_scope_or_quota_is_an_error_never_a_wider_grant`, `a_credential_whose_scope_cannot_be_read_never_authenticates_as_unrestricted` |
+| A delegated credential wider than its minter | scope containment is decided only where it can be proved (`*`, equal patterns, prefix patterns); anything else is refused | `authz::pattern_within`, `Scope::contains` | `containment_never_claims_more_than_is_true`, `a_scoped_credential_cannot_mint_a_wider_one_with_a_glob_it_only_looks_like_it_contains` |
+| Role bindings that silently never apply | patterns are validated when granted; every binding reaches the authorizer (no row limit) | `Control::grant_role`, `all_bindings` | `a_role_can_only_be_granted_on_patterns_that_compile`, `every_role_binding_reaches_the_authorizer_however_many_there_are` |
+| Filling a repository past its quota | bytes are charged where they enter the object store, atomically across requests and replicas | `quota::MeteredStore` | `workspace_edits_are_counted_and_limited_like_uploads`, `concurrent_workspace_edits_cannot_pass_the_quota_between_them` |
+| Memory pinned by unauthenticated uploads | an object body is read only after authentication, rate limiting and authorization, and no further than the limit for that repository | `PUT …/objects/{id}` | `an_unauthenticated_upload_is_refused_before_its_body_is_read` |
 | Path traversal | `RepoPath` forbids `..`, `.`, absolute paths, empty components, NUL/control chars, `\`; **re-validated on decode** | `ag_types::RepoPath` | `rejects_dangerous_paths`, `decode_rejects_traversal_paths`, property test |
 | Planting `.git` / `.ag` (hook injection) | those components are rejected in any case combination | `RepoPath`, Git importer | `hostile_git_content_cannot_escape_or_plant_dot_git` |
 | Writing through symlinks on checkout | every parent must be a real directory; symlink targets must stay inside the root (no absolute, no `..` climbing above it); temp-file + rename | `workdir::{safe_target,check_link_target}`; also re-checked at publication | `checkout_refuses_to_write_through_symlinked_directories`, `symlink_targets_must_stay_inside_the_root` |
@@ -56,8 +61,8 @@ that a hijacked agent can still only *propose*.
 
 - **Local mode trusts the local user.** `--as` / `AG_IDENTITY` is a label, not authentication. Anyone who
   can write `.ag/` can edit `meta.db` or the object store. Integrity checks and the audit chain make
-  tampering **detectable**, not impossible. Enforcing identities across users requires the planned
-  server mode with authentication and short-lived scoped credentials.
+  tampering **detectable**, not impossible. Enforcing identities across users requires `ag-server`
+  (authentication, short-lived scoped credentials, roles, quotas).
 - **`ag validate run` is not a sandbox.** It executes the command on your machine with a cleared environment
   and a temporary directory — that is hygiene, not isolation. For untrusted code use an
   [execution-plane worker](../guides/workers.md), which runs the check in the [sandbox](sandbox.md). That
@@ -69,6 +74,8 @@ that a hijacked agent can still only *propose*.
   can forge its provenance; whoever can read an issuer key can forge validations.
 - **Case-insensitive filesystems** (macOS/Windows defaults) can fold paths that differ only by case at
   checkout. Not yet detected.
-- **Availability.** Limits bound single inputs, but there is no rate limiting or quota system (those belong
-  to the server).
+- **Availability.** In local mode limits bound single inputs only; rate limits, request-size limits and
+  repository quotas belong to `ag-server` (see the controls above). The server holds an object in memory
+  while it verifies it, so the worst case is on the order of `max_concurrent_requests × max_object_bytes`
+  (by design; not measured): lower either to fit the host.
 - **No external audit** has been performed.

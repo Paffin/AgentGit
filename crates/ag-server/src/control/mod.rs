@@ -14,8 +14,9 @@
 
 mod dump;
 
+use std::collections::HashSet;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ag_protocol::v1;
@@ -23,7 +24,7 @@ use ag_storage::sqldb::{Database, DbKind, Listener, MetaError, Migration, Migrat
 use ag_storage::{Clock, sql_params};
 
 pub use self::dump::{ControlDump, DUMP_FORMAT, ImportMode, ImportSummary};
-use crate::authz::{Binding, Role};
+use crate::authz::{Binding, Role, validate_pattern};
 use crate::config::ServerConfig;
 use crate::error::{ApiError, ApiResult};
 
@@ -127,10 +128,38 @@ pub struct RepoRow {
 /// Which engine holds the control plane.
 pub type ControlKind = DbKind;
 
+/// The most credentials one listing returns (newest first); the response says when there were more.
+pub const MAX_LISTED_CREDENTIALS: usize = 1000;
+/// The most role bindings one listing returns; the response says when there were more. (Authorization itself
+/// always reads every binding.)
+pub const MAX_LISTED_ROLES: usize = 5000;
+
+/// The rows of a capped listing, and whether more existed than were returned.
+#[derive(Debug)]
+pub struct Listing<T> {
+    /// The rows.
+    pub rows: Vec<T>,
+    /// True if the listing was cut at its cap.
+    pub truncated: bool,
+}
+
+/// One page of the repository registry.
+#[derive(Debug)]
+pub struct RepoPage {
+    /// The decodable rows of the page, in name order.
+    pub rows: Vec<RepoRow>,
+    /// The last name the query returned (the cursor for the next page), including rows that were skipped.
+    pub last: Option<String>,
+    /// True if the registry has nothing after `last`.
+    pub exhausted: bool,
+}
+
 /// Handle to the control database.
 pub struct Control {
     db: Database,
     clock: Arc<dyn Clock>,
+    /// Role bindings already reported as unusable, so a bad row is logged once and not at every cache refresh.
+    warned_bindings: Mutex<HashSet<String>>,
 }
 
 /// Maps a storage error: transient trouble becomes a retryable `unavailable`, the rest `internal`.
@@ -168,14 +197,18 @@ fn str_param(s: &str) -> Param<'_> {
 }
 
 impl Control {
+    fn new(db: Database, clock: Arc<dyn Clock>) -> Self {
+        Self { db, clock, warned_bindings: Mutex::new(HashSet::new()) }
+    }
+
     /// Opens (creating and migrating) the SQLite database at `path`.
     pub fn open(path: &Path, clock: Arc<dyn Clock>) -> ApiResult<Self> {
-        Ok(Self { db: db(Database::open_sqlite(path, MIGRATIONS))?, clock })
+        Ok(Self::new(db(Database::open_sqlite(path, MIGRATIONS))?, clock))
     }
 
     /// A private in-memory database (tests).
     pub fn open_in_memory(clock: Arc<dyn Clock>) -> ApiResult<Self> {
-        Ok(Self { db: db(Database::open_sqlite_memory(MIGRATIONS))?, clock })
+        Ok(Self::new(db(Database::open_sqlite_memory(MIGRATIONS))?, clock))
     }
 
     /// Opens (creating and migrating) the PostgreSQL control plane. Replicas starting at the same time are safe:
@@ -217,7 +250,7 @@ impl Control {
                 Err(e) => return Err(startup_error(format!("cannot open the control database: {e}"))),
             }
         };
-        Ok(Self { db: database, clock })
+        Ok(Self::new(database, clock))
     }
 
     /// Opens the control plane the configuration selects: PostgreSQL with `[control] url`/`url_env`, otherwise
@@ -296,19 +329,24 @@ impl Control {
         Ok(())
     }
 
+    /// Decodes a credential row. A scope that does not parse is an error, never "no restriction": an unreadable
+    /// row must not widen what a narrowly scoped credential may do (an empty scope means unrestricted).
     fn credential_from(r: &Row) -> Result<CredentialRow, MetaError> {
+        let id = r.string(0)?;
+        let scope = serde_json::from_str(r.str(5)?)
+            .map_err(|e| MetaError::Corrupt(format!("credential {id}: its scope_json does not parse: {e}")))?;
         Ok(CredentialRow {
-            id: r.string(0)?,
             secret_hash: r.string(1)?,
             subject: r.string(2)?,
             kind: r.string(3)?,
             description: r.string(4)?,
-            scope: serde_json::from_str(r.str(5)?).unwrap_or_default(),
+            scope,
             created_at_ms: r.i64(6)?,
             expires_at_ms: r.i64(7)?,
             revoked_at_ms: r.opt_i64(8)?,
             last_used_ms: r.i64(9)?,
             created_by: r.string(10)?,
+            id,
         })
     }
 
@@ -330,16 +368,31 @@ impl Control {
         Ok(())
     }
 
-    /// Lists credentials, newest first.
-    pub fn credentials(&self, subject: Option<&str>, include_revoked: bool) -> ApiResult<Vec<CredentialRow>> {
+    /// Lists credentials, newest first, at most [`MAX_LISTED_CREDENTIALS`]; `truncated` says there were more.
+    /// A row that cannot be decoded is logged and left out (it can still not authenticate anyone: looking it up
+    /// by id fails), so one damaged row does not hide everybody else's credentials.
+    pub fn credentials(&self, subject: Option<&str>, include_revoked: bool) -> ApiResult<Listing<CredentialRow>> {
         let sql = format!(
             "SELECT {} FROM credentials
              WHERE (CAST(?1 AS TEXT) IS NULL OR subject = CAST(?1 AS TEXT)) AND (CAST(?2 AS BIGINT) <> 0 OR revoked_at IS NULL)
-             ORDER BY created_at DESC, id LIMIT 1000",
-            Self::CRED_COLS
+             ORDER BY created_at DESC, id LIMIT {}",
+            Self::CRED_COLS,
+            MAX_LISTED_CREDENTIALS + 1
         );
         let rows = db(self.db.query(&sql, &sql_params![subject, include_revoked]))?;
-        db(rows.iter().map(Self::credential_from).collect())
+        let truncated = rows.len() > MAX_LISTED_CREDENTIALS;
+        let rows = rows
+            .iter()
+            .take(MAX_LISTED_CREDENTIALS)
+            .filter_map(|r| match Self::credential_from(r) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    tracing::error!(error = %e, "skipping an unreadable credential row");
+                    None
+                }
+            })
+            .collect();
+        Ok(Listing { rows, truncated })
     }
 
     /// Revokes a credential; returns whether it existed and was active.
@@ -353,8 +406,11 @@ impl Control {
 
     // ---- roles -------------------------------------------------------------
 
-    /// Grants a role (idempotent).
+    /// Grants a role (idempotent). Both patterns must be valid globs: a typo is an error here, not a binding
+    /// that is listed but can never apply.
     pub fn grant_role(&self, subject: &str, repo: &str, role: Role, by: &str) -> ApiResult<v1::RoleBinding> {
+        validate_pattern(subject).map_err(|e| ApiError::invalid(format!("subject: {e}")))?;
+        validate_pattern(repo).map_err(|e| ApiError::invalid(format!("repo: {e}")))?;
         let now = self.now_ms();
         db(self.db.execute(
             "INSERT INTO roles (subject, repo, role, created_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -388,36 +444,64 @@ impl Control {
         Ok(n > 0)
     }
 
-    /// Lists role bindings, optionally filtered.
-    pub fn roles(&self, subject: Option<&str>, repo: Option<&str>) -> ApiResult<Vec<v1::RoleBinding>> {
-        let rows = db(self.db.query(
-            "SELECT subject, repo, role, created_by, created_at FROM roles
-             WHERE (CAST(?1 AS TEXT) IS NULL OR subject = CAST(?1 AS TEXT)) AND (CAST(?2 AS TEXT) IS NULL OR repo = CAST(?2 AS TEXT))
-             ORDER BY subject, repo, role LIMIT 5000",
-            &sql_params![subject, repo],
-        ))?;
-        db(rows
-            .iter()
-            .map(|r| {
-                Ok(v1::RoleBinding {
-                    subject: r.string(0)?,
-                    repo: r.string(1)?,
-                    role: r.string(2)?,
-                    created_by: r.string(3)?,
-                    created_at_ms: r.i64(4)?,
-                })
-            })
-            .collect())
+    fn role_binding_from(r: &Row) -> Result<v1::RoleBinding, MetaError> {
+        Ok(v1::RoleBinding {
+            subject: r.string(0)?,
+            repo: r.string(1)?,
+            role: r.string(2)?,
+            created_by: r.string(3)?,
+            created_at_ms: r.i64(4)?,
+        })
     }
 
-    /// Every binding (the authorizer filters by pattern). Bindings are few;
-    /// callers cache the result briefly.
+    /// Lists role bindings, optionally filtered, at most [`MAX_LISTED_ROLES`]; `truncated` says there were more.
+    /// (The authorizer does not use this: [`Control::all_bindings`] reads every binding.)
+    pub fn roles(&self, subject: Option<&str>, repo: Option<&str>) -> ApiResult<Listing<v1::RoleBinding>> {
+        let rows = db(self.db.query(
+            &format!(
+                "SELECT subject, repo, role, created_by, created_at FROM roles
+                 WHERE (CAST(?1 AS TEXT) IS NULL OR subject = CAST(?1 AS TEXT)) AND (CAST(?2 AS TEXT) IS NULL OR repo = CAST(?2 AS TEXT))
+                 ORDER BY subject, repo, role LIMIT {}",
+                MAX_LISTED_ROLES + 1
+            ),
+            &sql_params![subject, repo],
+        ))?;
+        let truncated = rows.len() > MAX_LISTED_ROLES;
+        let rows = db(rows.iter().take(MAX_LISTED_ROLES).map(Self::role_binding_from).collect())?;
+        Ok(Listing { rows, truncated })
+    }
+
+    /// Every binding — the source of every authorization decision, so it has no row limit: a binding the
+    /// authorizer never saw would silently deny its subject. A row that cannot ever apply (an unknown role, a
+    /// pattern that does not compile) is left out and reported once in the log.
     pub fn all_bindings(&self) -> ApiResult<Vec<Binding>> {
-        Ok(self
-            .roles(None, None)?
-            .into_iter()
-            .filter_map(|b| Some(Binding { subject: b.subject, repo: b.repo, role: Role::parse(&b.role)? }))
-            .collect())
+        let rows = db(self.db.query("SELECT subject, repo, role, created_by, created_at FROM roles", &[]))?;
+        let rows: Vec<v1::RoleBinding> = db(rows.iter().map(Self::role_binding_from).collect())?;
+        let mut out = Vec::with_capacity(rows.len());
+        for b in rows {
+            let problem = match Role::parse(&b.role) {
+                None => Some(format!("unknown role '{}'", b.role)),
+                Some(role) => {
+                    let binding = Binding::new(b.subject.clone(), b.repo.clone(), role);
+                    if binding.is_usable() {
+                        out.push(binding);
+                        None
+                    } else {
+                        Some("a pattern that does not compile".to_string())
+                    }
+                }
+            };
+            if let Some(why) = problem {
+                let id = format!("{}\0{}\0{}", b.subject, b.repo, b.role);
+                if self.warned_bindings.lock().unwrap_or_else(|e| e.into_inner()).insert(id) {
+                    tracing::warn!(
+                        subject = %b.subject, repo = %b.repo, role = %b.role,
+                        "ignoring a role binding that can never apply: {why}"
+                    );
+                }
+            }
+        }
+        Ok(out)
     }
 
     // ---- repositories --------------------------------------------------------
@@ -439,17 +523,22 @@ impl Control {
         Ok(())
     }
 
+    /// Decodes a repository row. A quota that does not parse is an error, never "unlimited" (a default quota is
+    /// all zeros, and zero means no limit): a damaged row must not switch every limit of the repository off.
     fn repo_from(r: &Row) -> Result<RepoRow, MetaError> {
+        let name = r.string(0)?;
+        let quota = serde_json::from_str(r.str(6)?)
+            .map_err(|e| MetaError::Corrupt(format!("repository '{name}': its quota_json does not parse: {e}")))?;
         Ok(RepoRow {
-            name: r.string(0)?,
             namespace: r.string(1)?,
             default_stream: r.string(2)?,
             description: r.string(3)?,
             created_at_ms: r.i64(4)?,
             created_by: r.string(5)?,
-            quota: serde_json::from_str(r.str(6)?).unwrap_or_default(),
+            quota,
             object_bytes: r.i64(7)?.max(0) as u64,
             config_json: r.string(8)?,
+            name,
         })
     }
 
@@ -465,13 +554,46 @@ impl Control {
 
     /// Lists repositories with names greater than `after`, in name order.
     pub fn repos(&self, prefix: &str, after: &str, limit: usize) -> ApiResult<Vec<RepoRow>> {
+        Ok(self.repos_page(prefix, after, limit)?.rows)
+    }
+
+    /// One page of the registry. A listing skips (and logs) a row it cannot decode, so one damaged row cannot
+    /// break it for everybody; looking that repository up by name ([`Control::repo`]) still fails loudly. The
+    /// page says where it ended and whether the registry has more, so a skipped row never ends a scan early.
+    pub fn repos_page(&self, prefix: &str, after: &str, limit: usize) -> ApiResult<RepoPage> {
         let sql = format!(
             "SELECT {} FROM repos WHERE name > ?1 AND substr(name, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
              ORDER BY name LIMIT ?3",
             Self::REPO_COLS
         );
-        let rows = db(self.db.query(&sql, &sql_params![after, prefix, limit as i64]))?;
-        db(rows.iter().map(Self::repo_from).collect())
+        let raw = db(self.db.query(&sql, &sql_params![after, prefix, limit as i64]))?;
+        let last = raw.last().map(|r| db(r.string(0))).transpose()?;
+        let rows = raw
+            .iter()
+            .filter_map(|r| match Self::repo_from(r) {
+                Ok(row) => Some(row),
+                Err(e) => {
+                    tracing::error!(error = %e, "skipping an unreadable repository row");
+                    None
+                }
+            })
+            .collect();
+        Ok(RepoPage { rows, last, exhausted: raw.len() < limit })
+    }
+
+    /// Every repository, in name order. Pages through the registry, so there is no hidden cap.
+    pub fn all_repos(&self) -> ApiResult<Vec<RepoRow>> {
+        let mut out: Vec<RepoRow> = Vec::new();
+        let mut after = String::new();
+        loop {
+            let page = self.repos_page("", &after, 500)?;
+            out.extend(page.rows);
+            match page.last {
+                Some(last) if !page.exhausted => after = last,
+                _ => break,
+            }
+        }
+        Ok(out)
     }
 
     /// Updates mutable repository settings.
@@ -493,6 +615,19 @@ impl Control {
             &sql_params![name, delta],
         ))?;
         Ok(())
+    }
+
+    /// Reserves `bytes` of a repository's object budget: adds them to the tracked total unless that would pass
+    /// `max_total` (0 = no limit). One conditional `UPDATE`, so concurrent writers — on this replica or another —
+    /// can never reserve more than the quota between them. Returns whether the reservation was granted.
+    pub fn reserve_object_bytes(&self, name: &str, bytes: u64, max_total: u64) -> ApiResult<bool> {
+        let (bytes, max_total) = (bytes.min(i64::MAX as u64) as i64, max_total.min(i64::MAX as u64) as i64);
+        let n = db(self.db.execute(
+            "UPDATE repos SET object_bytes = object_bytes + CAST(?2 AS BIGINT)
+             WHERE name = ?1 AND (CAST(?3 AS BIGINT) = 0 OR object_bytes + CAST(?2 AS BIGINT) <= CAST(?3 AS BIGINT))",
+            &sql_params![name, bytes, max_total],
+        ))?;
+        Ok(n > 0)
     }
 
     /// Sets the tracked object bytes (after a recount).
@@ -626,10 +761,10 @@ mod tests {
         for (c, extra) in backends() {
             c.grant_role("user:alice", "acme/*", Role::Writer, "user:root").unwrap();
             c.grant_role("user:alice", "acme/*", Role::Writer, "user:other").unwrap();
-            assert_eq!(c.roles(Some("user:alice"), None).unwrap().len(), 1);
-            assert_eq!(c.roles(None, None).unwrap()[0].created_by, "user:root", "the first grant wins");
-            assert_eq!(c.roles(Some("user:nobody"), None).unwrap().len(), 0);
-            assert_eq!(c.roles(None, Some("acme/*")).unwrap().len(), 1);
+            assert_eq!(c.roles(Some("user:alice"), None).unwrap().rows.len(), 1);
+            assert_eq!(c.roles(None, None).unwrap().rows[0].created_by, "user:root", "the first grant wins");
+            assert_eq!(c.roles(Some("user:nobody"), None).unwrap().rows.len(), 0);
+            assert_eq!(c.roles(None, Some("acme/*")).unwrap().rows.len(), 1);
             assert!(c.revoke_role("user:alice", "acme/*", Role::Writer).unwrap());
             assert!(!c.revoke_role("user:alice", "acme/*", Role::Writer).unwrap());
             cleanup(extra);
@@ -698,13 +833,13 @@ mod tests {
             let got = c.credential("cred_1").unwrap().unwrap();
             assert_eq!((got.subject.as_str(), got.scope.repos.as_slice()), ("user:alice", &["acme/*".to_string()][..]));
             assert!(c.credential("cred_x").unwrap().is_none());
-            assert_eq!(c.credentials(None, false).unwrap().len(), 2);
-            assert_eq!(c.credentials(Some("user:bob"), false).unwrap()[0].id, "cred_2");
+            assert_eq!(c.credentials(None, false).unwrap().rows.len(), 2);
+            assert_eq!(c.credentials(Some("user:bob"), false).unwrap().rows[0].id, "cred_2");
             assert!(c.revoke_credential("cred_2", 5).unwrap());
             assert!(!c.revoke_credential("cred_2", 6).unwrap(), "revoking twice does nothing");
             assert_eq!(c.credential("cred_2").unwrap().unwrap().revoked_at_ms, Some(5));
-            assert_eq!(c.credentials(None, false).unwrap().len(), 1);
-            assert_eq!(c.credentials(None, true).unwrap().len(), 2);
+            assert_eq!(c.credentials(None, false).unwrap().rows.len(), 1);
+            assert_eq!(c.credentials(None, true).unwrap().rows.len(), 2);
             // Usage is recorded at most once a minute.
             c.touch_credential("cred_1", 100_000).unwrap();
             c.touch_credential("cred_1", 100_500).unwrap();
@@ -755,5 +890,145 @@ mod tests {
         let e = db::<()>(Err(MetaError::ConnectionLost { during_commit: false, message: "gone".into() })).unwrap_err();
         assert_eq!(e.code(), ag_protocol::ErrorCode::Unavailable);
         assert_eq!(db::<()>(Err(MetaError::Corrupt("x".into()))).unwrap_err().code(), ag_protocol::ErrorCode::Internal);
+    }
+
+    fn credential_row(id: &str, scope: v1::CredentialScope) -> CredentialRow {
+        CredentialRow {
+            id: id.into(),
+            secret_hash: "ab".repeat(32),
+            subject: "agent:bot".into(),
+            kind: "agent".into(),
+            description: String::new(),
+            scope,
+            created_at_ms: 1,
+            expires_at_ms: i64::MAX,
+            revoked_at_ms: None,
+            last_used_ms: 0,
+            created_by: "user:root".into(),
+        }
+    }
+
+    #[test]
+    fn an_unreadable_scope_or_quota_is_an_error_never_a_wider_grant() {
+        let c = control();
+        let narrow = v1::CredentialScope { repos: vec!["acme/web".into()], ..Default::default() };
+        c.insert_credential(&credential_row("cred_1", narrow.clone())).unwrap();
+        c.insert_credential(&credential_row("cred_2", narrow)).unwrap();
+        c.insert_repo(&repo_row("acme/web")).unwrap();
+        c.insert_repo(&repo_row("acme/api")).unwrap();
+        assert_eq!(c.credential("cred_1").unwrap().unwrap().scope.repos, ["acme/web"]);
+
+        // Damage rows the way a bad restore or a hand edit would.
+        let bad_scope = "UPDATE credentials SET scope_json = 'not json' WHERE id = 'cred_1'";
+        c.database().execute(bad_scope, &[]).unwrap();
+        let bad_quota = "UPDATE repos SET quota_json = '{\"max_streams\": \"many\"}' WHERE name = 'acme/web'";
+        c.database().execute(bad_quota, &[]).unwrap();
+
+        // The old code answered with the default scope (= unrestricted) and the default quota (= unlimited).
+        let e = c.credential("cred_1").unwrap_err();
+        assert_eq!(e.code(), ag_protocol::ErrorCode::Internal, "fails closed: {e:?}");
+        assert!(c.repo("acme/web").is_err(), "a repository with an unreadable quota is not served unlimited");
+        // One damaged row does not hide the others from a listing; it is skipped (and logged).
+        let listed = c.credentials(None, false).unwrap();
+        assert_eq!(listed.rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["cred_2"]);
+        assert_eq!(c.repos("", "", 10).unwrap().iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["acme/api"]);
+        assert_eq!(c.all_repos().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn every_role_binding_reaches_the_authorizer_however_many_there_are() {
+        let c = control();
+        let insert = "INSERT INTO roles (subject, repo, role, created_by, created_at) VALUES (?1, ?2, ?3, 'test', 1)";
+        c.database()
+            .write(|tx| {
+                for i in 0..6000 {
+                    tx.execute(insert, &sql_params![format!("user:u{i:05}"), "acme/*", "reader"])?;
+                }
+                // Rows that can never apply: an unknown role, a pattern that does not compile.
+                tx.execute(insert, &sql_params!["user:zed", "acme/*", "overlord"])?;
+                tx.execute(insert, &sql_params!["user:zed", "acme/[", "reader"])?;
+                Ok(())
+            })
+            .unwrap();
+        let all = c.all_bindings().unwrap();
+        assert_eq!(all.len(), 6000, "the old query stopped at 5000 and silently dropped the rest");
+        assert!(all.iter().any(|b| b.subject == "user:u05999"), "the last binding in subject order is honoured");
+        assert!(all.iter().all(|b| b.is_usable()));
+        // Listing is a capped view, and says so.
+        let listed = c.roles(None, None).unwrap();
+        assert_eq!(listed.rows.len(), MAX_LISTED_ROLES);
+        assert!(listed.truncated);
+        let one = c.roles(Some("user:u00001"), None).unwrap();
+        assert_eq!((one.rows.len(), one.truncated), (1, false));
+    }
+
+    #[test]
+    fn a_role_can_only_be_granted_on_patterns_that_compile() {
+        let c = control();
+        c.grant_role("user:alice", "acme/*", Role::Writer, "user:root").unwrap();
+        for (subject, repo) in [("user:alice", "acme/["), ("user:[", "acme/*"), ("", "acme/*"), ("user:alice", "")] {
+            let e = c.grant_role(subject, repo, Role::Writer, "user:root").unwrap_err();
+            assert_eq!(e.code(), ag_protocol::ErrorCode::InvalidArgument, "{subject:?} {repo:?}");
+        }
+        assert_eq!(c.roles(None, None).unwrap().rows.len(), 1, "nothing was stored for the rejected ones");
+    }
+
+    #[test]
+    fn credential_listings_say_when_they_are_cut_short() {
+        let c = control();
+        c.database()
+            .write(|tx| {
+                for i in 0..(MAX_LISTED_CREDENTIALS + 5) {
+                    tx.execute(
+                        "INSERT INTO credentials (id, secret_hash, subject, kind, description, scope_json, created_at, expires_at, last_used, created_by)
+                         VALUES (?1, 'ab', 'user:a', 'user', '', '{}', ?2, 9, 0, 'x')",
+                        &sql_params![format!("cred_{i:05}"), i as i64],
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let all = c.credentials(None, false).unwrap();
+        assert_eq!((all.rows.len(), all.truncated), (MAX_LISTED_CREDENTIALS, true));
+        assert_eq!(all.rows[0].id, format!("cred_{:05}", MAX_LISTED_CREDENTIALS + 4), "newest first");
+        assert!(!c.credentials(Some("user:nobody"), false).unwrap().truncated);
+    }
+
+    #[test]
+    fn the_repository_scan_pages_through_every_row() {
+        let c = control();
+        c.database()
+            .write(|tx| {
+                for i in 0..1203 {
+                    tx.execute(
+                        "INSERT INTO repos (name, namespace, default_stream, description, created_at, created_by, quota_json, object_bytes, config_json)
+                         VALUES (?1, ?1, 'main', '', 1, 'x', '{}', 0, '')",
+                        &sql_params![format!("acme/r{i:05}")],
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        c.database().execute("UPDATE repos SET quota_json = 'oops' WHERE name = 'acme/r00007'", &[]).unwrap();
+        let all = c.all_repos().unwrap();
+        assert_eq!(all.len(), 1202, "all but the damaged row, across three pages");
+        assert_eq!(all.last().unwrap().name, "acme/r01202");
+        // A page that skipped a row is still not "the end": the cursor moves past the skipped name.
+        let page = c.repos_page("", "", 10).unwrap();
+        assert_eq!((page.rows.len(), page.last.as_deref(), page.exhausted), (9, Some("acme/r00009"), false));
+    }
+
+    #[test]
+    fn object_bytes_are_reserved_atomically_against_the_quota() {
+        for (c, extra) in backends() {
+            c.insert_repo(&repo_row("a/one")).unwrap();
+            assert!(c.reserve_object_bytes("a/one", 60, 100).unwrap());
+            assert!(!c.reserve_object_bytes("a/one", 41, 100).unwrap(), "60 + 41 passes the quota of 100");
+            assert!(c.reserve_object_bytes("a/one", 40, 100).unwrap(), "exactly the quota is allowed");
+            assert_eq!(c.repo("a/one").unwrap().unwrap().object_bytes, 100);
+            assert!(c.reserve_object_bytes("a/one", 1_000_000, 0).unwrap(), "0 = unlimited");
+            assert!(!c.reserve_object_bytes("a/missing", 1, 0).unwrap(), "nothing to reserve in");
+            cleanup(extra);
+        }
     }
 }

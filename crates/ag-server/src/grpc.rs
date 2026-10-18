@@ -28,7 +28,23 @@ use tonic::{Request, Response, Status, Streaming};
 use crate::app::{App, Ingress};
 use crate::error::ApiError;
 
-const MAX_MESSAGE: usize = 16 * 1024 * 1024;
+/// The largest message the server will *send*. Responses are produced by the server (a tree page, a diff, a
+/// 1 MiB object chunk), not by the caller, so unlike requests they are not bounded by `limits.max_request_bytes`.
+const MAX_RESPONSE_MESSAGE: usize = 16 * 1024 * 1024;
+
+/// Room for the framing around an object chunk's bytes (ids, flags).
+const CHUNK_OVERHEAD: usize = 64 * 1024;
+
+/// The largest message the server accepts on every service but the object stream: the same
+/// `limits.max_request_bytes` that bounds an HTTP body and that `Negotiate` advertises.
+pub fn max_unary_message(cfg: &crate::config::ServerConfig) -> usize {
+    usize::try_from(cfg.limits.max_request_bytes).unwrap_or(usize::MAX)
+}
+
+/// The largest message the object stream accepts: one chunk always fits, whatever `max_request_bytes` is.
+pub fn max_chunk_message(cfg: &crate::config::ServerConfig) -> usize {
+    max_unary_message(cfg).max(ag_protocol::limits::CHUNK_BYTES + CHUNK_OVERHEAD)
+}
 
 type BoxStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'static>>;
 
@@ -484,7 +500,7 @@ impl EventService for Grpc {
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let mut ing = ingress_of(&request);
         // A subscription is long-lived: the deadline applies to setup only.
-        ing.deadline_ms = Some(u64::MAX / 4);
+        ing.deadline_ms = Some(crate::app::NO_DEADLINE_MS);
         let req = request.into_inner();
         let app = self.app.clone();
         let stream = app
@@ -602,15 +618,19 @@ impl ExecutionService for Grpc {
 
 /// Builds the gRPC services as an axum router (so they share the HTTP port).
 pub fn router(app: App) -> axum::Router {
+    let (unary, chunked) = (max_unary_message(&app.cfg), max_chunk_message(&app.cfg));
     let g = Grpc { app };
     macro_rules! svc {
         ($t:ident) => {
-            $t::new(g.clone()).max_decoding_message_size(MAX_MESSAGE).max_encoding_message_size(MAX_MESSAGE)
+            svc!($t, unary)
+        };
+        ($t:ident, $decode:expr) => {
+            $t::new(g.clone()).max_decoding_message_size($decode).max_encoding_message_size(MAX_RESPONSE_MESSAGE)
         };
     }
     tonic::service::Routes::new(svc!(ProtocolServiceServer))
         .add_service(svc!(RepositoryServiceServer))
-        .add_service(svc!(ObjectServiceServer))
+        .add_service(svc!(ObjectServiceServer, chunked))
         .add_service(svc!(HistoryServiceServer))
         .add_service(svc!(TreeServiceServer))
         .add_service(svc!(StreamServiceServer))

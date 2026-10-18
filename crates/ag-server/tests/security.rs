@@ -64,6 +64,81 @@ async fn minted_credentials_can_only_narrow_and_always_expire() {
     srv.stop().await;
 }
 
+#[tokio::test]
+async fn a_scoped_credential_cannot_mint_a_wider_one_with_a_glob_it_only_looks_like_it_contains() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/alpha"})).await;
+    admin.post("/v1/repos", json!({"name": "acme/beta"})).await;
+    let alice = user_with_role(&srv, "user:alice", "acme/*", "admin").await;
+
+    // Alice narrows herself to repositories with a "b" in their name.
+    let r = alice.post("/v1/credentials", json!({"ttl_secs": 600, "scope": {"repos": ["acme/*b*"]}})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let narrow = srv.client(r.json["token"].as_str().unwrap());
+    assert_eq!(narrow.get("/v1/repos/acme/beta").await.status, 200);
+    assert_eq!(narrow.get("/v1/repos/acme/alpha").await.status, 403, "no b in alpha");
+
+    // `acme/[ab]*` matches "acme/alpha" too. Its source text matches `acme/*b*`, which is what the old check
+    // compared - so the narrow token could mint a credential that reaches alpha.
+    let wider = narrow.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": ["acme/[ab]*"]}})).await;
+    assert_eq!(wider.status, 403, "{}", wider.json);
+    // The same pattern, a pattern it can prove narrower, and not-provable-so-refused:
+    assert_eq!(
+        narrow.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": ["acme/*b*"]}})).await.status,
+        200
+    );
+    assert_eq!(
+        narrow.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": ["acme/beta"]}})).await.status,
+        403
+    );
+
+    // A prefix scope can be narrowed to any longer prefix or name.
+    let r = alice.post("/v1/credentials", json!({"ttl_secs": 600, "scope": {"repos": ["acme/*"]}})).await;
+    let prefix = srv.client(r.json["token"].as_str().unwrap());
+    for ok in ["acme/beta", "acme/b*", "acme/beta/*"] {
+        let r = prefix.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": [ok]}})).await;
+        assert_eq!(r.status, 200, "{ok}: {}", r.json);
+    }
+    for wide in ["*", "other/*", "ac*"] {
+        let r = prefix.post("/v1/credentials", json!({"ttl_secs": 60, "scope": {"repos": [wide]}})).await;
+        assert_eq!(r.status, 403, "{wide}: {}", r.json);
+    }
+
+    // Minting for somebody else needs the capability over the whole pattern, not over its spelling.
+    let for_bob = |repos: Value| json!({"subject": "user:bob", "ttl_secs": 60, "scope": {"repos": repos}});
+    assert_eq!(alice.post("/v1/credentials", for_bob(json!(["acme/web*"]))).await.status, 200);
+    assert_eq!(alice.post("/v1/credentials", for_bob(json!(["*"]))).await.status, 403);
+    assert_eq!(alice.post("/v1/credentials", for_bob(json!(["acme/[ab]*"]))).await.status, 403);
+    srv.stop().await;
+}
+
+#[tokio::test]
+async fn roles_are_validated_when_granted_and_whoami_reports_the_patterns_that_apply() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    // A pattern that does not compile is refused at once, not stored as a binding that never applies.
+    for (subject, repo) in [("user:alice", "acme/["), ("user:[", "acme/*"), ("user:alice", "acme/{web")] {
+        let r = admin.post("/v1/roles", json!({"subject": subject, "repo": repo, "role": "writer"})).await;
+        assert_eq!(r.status, 400, "{subject} {repo}: {}", r.json);
+        assert_eq!(r.json["error"]["code"], "invalid_argument");
+    }
+    assert!(admin.get("/v1/roles").await.json["bindings"].as_array().unwrap().is_empty());
+
+    // whoami lists what applies to the caller even for patterns an invented repository name cannot match.
+    for (repo, role) in [("acme/{web,api}", "reader"), ("acme/?", "writer"), ("acme/*", "reviewer")] {
+        let r = admin.post("/v1/roles", json!({"subject": "user:dana", "repo": repo, "role": role})).await;
+        assert_eq!(r.status, 200, "{}", r.json);
+    }
+    admin.post("/v1/roles", json!({"subject": "user:erin", "repo": "other/*", "role": "admin"})).await;
+    let t = admin.post("/v1/credentials", json!({"subject": "user:dana", "ttl_secs": 600})).await;
+    let dana = srv.client(t.json["token"].as_str().unwrap());
+    let who = dana.get("/v1/whoami").await;
+    let roles: Vec<&str> = who.json["roles"].as_array().unwrap().iter().map(|r| r.as_str().unwrap()).collect();
+    assert_eq!(roles, ["acme/*:reviewer", "acme/?:writer", "acme/{web,api}:reader"], "{}", who.json);
+    srv.stop().await;
+}
+
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }

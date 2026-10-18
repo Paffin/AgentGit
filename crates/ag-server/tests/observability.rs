@@ -121,6 +121,143 @@ async fn server_sent_events_replay_then_follow_and_resume() {
     srv.stop().await;
 }
 
+/// Appends `n` audit entries of a topic nobody asked for, the way a busy repository does (job claims, lease
+/// renewals, ...), straight into the repository's own audit log.
+fn noise(srv: &TestServer, repo: &str, n: usize) {
+    let handle = srv.app.repos.handle(repo).unwrap();
+    handle
+        .meta()
+        .write(|tx| {
+            for i in 0..n {
+                tx.audit_append("system:test", "lease.renew", "lease_x", &json!({ "i": i }))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+fn latest_seq(srv: &TestServer, repo: &str) -> u64 {
+    srv.app.repos.handle(repo).unwrap().meta().read(|tx| tx.audit_latest_seq()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_topic_filtered_feed_never_skips_an_event_behind_a_run_of_other_entries() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+    let start = latest_seq(&srv, "acme/web");
+    // 2600 entries nobody asked for, then the one event the subscriber wants. The old reader looked at 4 x limit
+    // rows (1024 for a live feed, 2000 for a default replay), found nothing, and moved the cursor to the end of
+    // the log: the event behind the run was lost for good.
+    noise(&srv, "acme/web", 2600);
+    let made = admin.post("/v1/repos/acme/web/streams", json!({"name": "dev"})).await;
+    assert_eq!(made.status, 200, "{}", made.json);
+    noise(&srv, "acme/web", 30);
+
+    // Replay: the matching event is returned, and a page that is not full says the log is exhausted.
+    let r = admin.get(&format!("/v1/repos/acme/web/events/replay?topics=stream&after_seq={start}")).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let topics: Vec<&str> = r.json["events"].as_array().unwrap().iter().map(|e| e["topic"].as_str().unwrap()).collect();
+    assert_eq!(topics, ["stream.create"], "{}", r.json);
+    assert_eq!(r.json["latest_seq"], latest_seq(&srv, "acme/web"));
+    // With a small limit the page is full and the next one continues from its last event.
+    admin.post("/v1/repos/acme/web/streams", json!({"name": "dev2"})).await;
+    let first = admin.get(&format!("/v1/repos/acme/web/events/replay?topics=stream&after_seq={start}&limit=1")).await;
+    let events = first.json["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1, "{}", first.json);
+    let next = admin
+        .get(&format!(
+            "/v1/repos/acme/web/events/replay?topics=stream&after_seq={}&limit=1",
+            events[0]["seq"].as_u64().unwrap()
+        ))
+        .await;
+    assert_eq!(next.json["events"][0]["payload"]["target"], "dev2", "{}", next.json);
+
+    // Live: a subscriber that resumes from before the run receives the event behind it.
+    let (tx, rx) = std::sync::mpsc::channel();
+    sse(
+        srv.base.clone(),
+        admin.token.clone(),
+        format!("/v1/repos/acme/web/events?topics=stream&after_seq={start}"),
+        vec![],
+        tx,
+    );
+    let (_, event, _) = rx.recv_timeout(Duration::from_secs(10)).expect("the event behind the run is delivered");
+    assert_eq!(event, "stream.create");
+    // ... and keeps following: noise is skipped quietly, the next matching event arrives.
+    noise(&srv, "acme/web", 1500);
+    admin.post("/v1/repos/acme/web/streams", json!({"name": "dev3"})).await;
+    let mut targets = Vec::new();
+    while let Ok((_, event, data)) = rx.recv_timeout(Duration::from_secs(10)) {
+        assert_eq!(event, "stream.create");
+        let v: serde_json::Value = serde_json::from_str(&data).unwrap();
+        targets.push(v["payload"]["target"].as_str().unwrap().to_string());
+        if targets.contains(&"dev3".to_string()) {
+            break;
+        }
+    }
+    assert_eq!(targets, ["dev2", "dev3"], "nothing lost, nothing repeated");
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_open_event_stream_ends_when_its_credential_is_revoked() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+    let alice = user_with_role(&srv, "user:alice", "acme/web", "writer").await;
+    let minted = alice.post("/v1/credentials", json!({"ttl_secs": 600})).await;
+    assert_eq!(minted.status, 200, "{}", minted.json);
+    let (id, token) = (
+        minted.json["credential"]["id"].as_str().unwrap().to_string(),
+        minted.json["token"].as_str().unwrap().to_string(),
+    );
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    sse(srv.base.clone(), token, "/v1/repos/acme/web/events".into(), vec![], tx);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    // The stream works while the credential does ...
+    alice.post("/v1/repos/acme/web/streams", json!({"name": "one"})).await;
+    let (_, event, _) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(event, "stream.create");
+    // ... and not a moment after it is revoked: the very next batch is withheld and the stream ends with an error,
+    // without waiting for a timer. (The old code looked at the credential every 5 s and delivered whatever came
+    // in between.)
+    let revoked = alice.call("DELETE", &format!("/v1/credentials/{id}"), None, &[]).await;
+    assert_eq!(revoked.status, 200, "{}", revoked.json);
+    admin.post("/v1/repos/acme/web/streams", json!({"name": "two"})).await;
+    let (_, event, data) = rx.recv_timeout(Duration::from_secs(10)).expect("the stream ends with an error event");
+    assert_eq!(event, "error", "no event may be delivered after the revocation: {data}");
+    assert!(data.contains("unauthenticated"), "{data}");
+    assert!(rx.recv_timeout(Duration::from_secs(2)).is_err(), "and then nothing more");
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn malformed_event_queries_are_rejected_not_replaced_by_defaults() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+    for path in [
+        "/v1/repos/acme/web/events/replay?after_seq=abc",
+        "/v1/repos/acme/web/events/replay?after_seq=-5",
+        "/v1/repos/acme/web/events/replay?limit=many",
+        "/v1/repos/acme/web/events?after_seq=undefined",
+        "/v1/repos/acme/web/events?heartbeat_ms=soon",
+    ] {
+        let r = admin.get(path).await;
+        assert_eq!(r.status, 400, "{path}: {}", r.json);
+        assert_eq!(r.json["error"]["code"], "invalid_argument", "{path}");
+    }
+    // A resume position that is not a sequence number must not turn into "follow from now".
+    let r = admin.call("GET", "/v1/repos/acme/web/events", None, &[("last-event-id", "not-a-number")]).await;
+    assert_eq!(r.status, 400, "{}", r.json);
+    // Well-formed queries (and absent ones) still work.
+    assert_eq!(admin.get("/v1/repos/acme/web/events/replay?after_seq=0&limit=5&topics=repo").await.status, 200);
+    assert_eq!(admin.get("/v1/repos/acme/web/events/replay").await.status, 200);
+    srv.stop().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn metrics_count_requests_by_operation_and_outcome() {
     let srv = TestServer::start().await;

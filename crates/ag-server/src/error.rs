@@ -129,6 +129,10 @@ impl From<StoreError> for ApiError {
             StoreError::TooLarge { size, limit } => {
                 Self::new(ErrorCode::TooLarge, format!("object of {size} bytes exceeds the limit of {limit}"))
             }
+            // Raised by the repository's byte meter (`quota`); it also records the full message on the request.
+            StoreError::Io(io) if io.kind() == std::io::ErrorKind::QuotaExceeded => {
+                Self::new(ErrorCode::QuotaExceeded, "this repository's object quota would be exceeded")
+            }
             other => Self::internal(other),
         }
     }

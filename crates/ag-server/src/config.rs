@@ -1,4 +1,5 @@
-//! Server configuration (TOML file + environment overrides).
+//! Server configuration: a TOML file. Secrets (the bootstrap and metrics tokens, database URLs, collector headers,
+//! S3 keys) are never in the file; it names the environment variables that hold them.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -66,8 +67,6 @@ pub struct ServerSection {
     pub web_dir: Option<PathBuf>,
     /// Origins allowed by CORS for browser clients served from elsewhere.
     pub cors_origins: Vec<String>,
-    /// Externally visible base URL (for links in responses and OIDC redirects).
-    pub public_url: Option<String>,
     /// On SIGTERM, report "not ready" for this many seconds before closing the listener, so a load balancer
     /// stops sending new requests first (0 = stop at once). Set it just above the balancer's probe interval
     /// when running several replicas; keep it below the orchestrator's termination grace period.
@@ -86,7 +85,6 @@ impl Default for ServerSection {
             allow_insecure_remote: false,
             web_dir: None,
             cors_origins: Vec::new(),
-            public_url: None,
             drain_secs: 0,
             replica_id: None,
         }
@@ -164,6 +162,10 @@ pub struct AuthSection {
     pub max_agent_ttl_secs: u32,
     /// Longest lifetime of other minted credentials.
     pub max_ttl_secs: u32,
+    /// Lifetime of a minted agent credential when the request names none (capped by `max_agent_ttl_secs`).
+    pub default_agent_ttl_secs: u32,
+    /// Lifetime of any other minted credential when the request names none (capped by `max_ttl_secs`).
+    pub default_ttl_secs: u32,
     /// Trusted OIDC providers.
     pub oidc: Vec<OidcProvider>,
 }
@@ -174,8 +176,29 @@ impl Default for AuthSection {
             bootstrap_token_env: "AG_BOOTSTRAP_TOKEN".into(),
             max_agent_ttl_secs: 3600,
             max_ttl_secs: 30 * 24 * 3600,
+            default_agent_ttl_secs: 3600,
+            default_ttl_secs: 24 * 3600,
             oidc: Vec::new(),
         }
+    }
+}
+
+impl AuthSection {
+    /// The lifetime, in seconds, of a credential minted for an identity of `kind`: `requested` if it is within
+    /// the cap for that kind, the configured default for the kind if `requested` is 0. One rule for the API and
+    /// for `ag-server admin mint`.
+    pub fn credential_ttl(&self, kind: ag_types::IdentityKind, requested: u32) -> Result<u32, String> {
+        let agent = kind == ag_types::IdentityKind::Agent;
+        let (max, default) = if agent {
+            (self.max_agent_ttl_secs, self.default_agent_ttl_secs)
+        } else {
+            (self.max_ttl_secs, self.default_ttl_secs)
+        };
+        let ttl = if requested == 0 { default.min(max) } else { requested };
+        if ttl > max {
+            return Err(format!("ttl_secs may be at most {max} for {} credentials", kind.prefix()));
+        }
+        Ok(ttl)
     }
 }
 
@@ -244,9 +267,9 @@ pub struct LimitsSection {
     pub requests_per_second: u32,
     /// Burst size per caller.
     pub burst: u32,
-    /// Largest non-streaming request body.
+    /// Largest non-streaming request body (HTTP body and gRPC message alike).
     pub max_request_bytes: u64,
-    /// Largest object envelope.
+    /// Largest object envelope. At most what the engine can store (`engine_max_object_bytes`).
     pub max_object_bytes: u64,
     /// Requests handled concurrently; more are shed with `unavailable`.
     pub max_concurrent_requests: usize,
@@ -256,6 +279,20 @@ pub struct LimitsSection {
     pub max_open_proposals: u32,
     /// Per-repository default for total object bytes (0 = unlimited).
     pub max_total_object_bytes: u64,
+    /// Per-repository default for the largest single object (0 = only the server-wide `max_object_bytes`).
+    pub repo_max_object_bytes: u64,
+    /// Per-repository default for the number of streams (0 = unlimited).
+    pub repo_max_streams: u32,
+    /// Per-repository default for requests per second per caller (0 = only the server-wide limit).
+    pub repo_requests_per_second: u32,
+    /// Per-repository default burst for `repo_requests_per_second`.
+    pub repo_burst: u32,
+}
+
+/// The largest object envelope the engine can store: its blob limit plus the envelope header. The one source
+/// of the number the server defaults, validates and advertises as `max_object_bytes`.
+pub fn engine_max_object_bytes() -> u64 {
+    ag_types::Limits::default().max_blob_size + ag_object::ENVELOPE_HEADER_LEN as u64
 }
 
 impl Default for LimitsSection {
@@ -264,11 +301,15 @@ impl Default for LimitsSection {
             requests_per_second: 200,
             burst: 400,
             max_request_bytes: ag_protocol::limits::MAX_REQUEST_BYTES,
-            max_object_bytes: ag_protocol::limits::MAX_OBJECT_BYTES,
+            max_object_bytes: engine_max_object_bytes(),
             max_concurrent_requests: 512,
             default_deadline_ms: 60_000,
             max_open_proposals: 0,
             max_total_object_bytes: 0,
+            repo_max_object_bytes: 0,
+            repo_max_streams: 0,
+            repo_requests_per_second: 0,
+            repo_burst: 0,
         }
     }
 }
@@ -347,6 +388,22 @@ impl Default for TelemetrySection {
     }
 }
 
+/// A CORS origin is `scheme://host[:port]`: http or https, a host, no path, query or credentials. (Browsers send
+/// exactly that in `Origin`, so anything else could never match and would only look like a working setting.)
+fn check_cors_origin(origin: &str) -> Result<(), &'static str> {
+    let rest = origin
+        .strip_prefix("https://")
+        .or_else(|| origin.strip_prefix("http://"))
+        .ok_or("must start with http:// or https:// (list explicit origins; '*' is not supported)")?;
+    if rest.is_empty() || rest.contains(['/', '?', '#', '@', ' ']) {
+        return Err("must be scheme://host[:port] with no path, query or credentials");
+    }
+    if axum::http::HeaderValue::from_str(origin).is_err() {
+        return Err("is not a valid header value");
+    }
+    Ok(())
+}
+
 impl ServerConfig {
     /// Loads a configuration file.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
@@ -403,6 +460,37 @@ impl ServerConfig {
         }
         if self.limits.max_concurrent_requests == 0 {
             return bad("limits.max_concurrent_requests must be at least 1");
+        }
+        let l = &self.limits;
+        if l.max_request_bytes == 0 {
+            return bad("limits.max_request_bytes must be positive");
+        }
+        let engine = engine_max_object_bytes();
+        if l.max_object_bytes == 0 || l.max_object_bytes > engine {
+            return Err(ConfigError::Invalid(format!(
+                "limits.max_object_bytes must be between 1 and {engine} (the largest object the engine can store)"
+            )));
+        }
+        if !matches!(self.telemetry.log_format.as_str(), "text" | "json") {
+            return Err(ConfigError::Invalid(format!(
+                "telemetry.log_format must be 'text' or 'json', not '{}'",
+                self.telemetry.log_format
+            )));
+        }
+        if let Err(e) = ag_types::StreamName::new(&self.repos.default_stream) {
+            return Err(ConfigError::Invalid(format!("repos.default_stream '{}': {e}", self.repos.default_stream)));
+        }
+        for origin in &self.server.cors_origins {
+            if let Err(why) = check_cors_origin(origin) {
+                return Err(ConfigError::Invalid(format!("server.cors_origins entry '{origin}': {why}")));
+            }
+        }
+        let a = &self.auth;
+        if a.max_ttl_secs == 0 || a.max_agent_ttl_secs == 0 || a.default_ttl_secs == 0 || a.default_agent_ttl_secs == 0
+        {
+            return bad(
+                "auth.max_ttl_secs, max_agent_ttl_secs, default_ttl_secs and default_agent_ttl_secs must be positive",
+            );
         }
         if !self.telemetry.otlp_endpoint.is_empty() {
             let e = &self.telemetry.otlp_endpoint;
@@ -466,6 +554,63 @@ mod tests {
         assert!(c.validate().is_err());
         c.server.allow_insecure_remote = true;
         c.validate().unwrap();
+    }
+
+    fn invalid(mutate: impl FnOnce(&mut ServerConfig)) -> String {
+        let mut c = ServerConfig::default();
+        mutate(&mut c);
+        c.validate().unwrap_err().to_string()
+    }
+
+    #[test]
+    fn a_setting_that_does_nothing_is_not_accepted_silently() {
+        // `public_url` was declared, documented and never read; with `deny_unknown_fields` it is now a typo error.
+        let e = toml::from_str::<ServerConfig>("[server]\npublic_url = \"https://ag.example\"").unwrap_err();
+        assert!(e.to_string().contains("public_url"), "{e}");
+    }
+
+    #[test]
+    fn values_that_would_misbehave_are_refused_at_start_up() {
+        assert!(invalid(|c| c.telemetry.log_format = "yaml".into()).contains("log_format"));
+        assert!(invalid(|c| c.repos.default_stream = "bad stream!".into()).contains("default_stream"));
+        assert!(invalid(|c| c.limits.max_request_bytes = 0).contains("max_request_bytes"));
+        assert!(invalid(|c| c.limits.max_object_bytes = 0).contains("max_object_bytes"));
+        let too_big = engine_max_object_bytes() + 1;
+        assert!(
+            invalid(|c| c.limits.max_object_bytes = too_big).contains(&engine_max_object_bytes().to_string()),
+            "the error names the engine's limit"
+        );
+        assert!(invalid(|c| c.auth.max_ttl_secs = 0).contains("positive"));
+        for bad in ["ag.example", "https://", "https://ag.example/ui", "ftp://ag.example", "*", "https://u@ag.example"]
+        {
+            assert!(invalid(|c| c.server.cors_origins = vec![bad.into()]).contains("cors_origins"), "{bad}");
+        }
+        let mut ok = ServerConfig::default();
+        ok.server.cors_origins = vec!["https://ag.example".into(), "http://localhost:5173".into()];
+        ok.validate().unwrap();
+    }
+
+    #[test]
+    fn the_largest_object_is_what_the_engine_can_store() {
+        let engine = ag_types::Limits::default();
+        assert_eq!(engine_max_object_bytes(), engine.max_blob_size + ag_object::ENVELOPE_HEADER_LEN as u64);
+        assert_eq!(LimitsSection::default().max_object_bytes, engine_max_object_bytes());
+        // The protocol crate's constant (what clients may assume at most) must not be below it.
+        assert!(ag_protocol::limits::MAX_OBJECT_BYTES >= engine_max_object_bytes());
+    }
+
+    #[test]
+    fn credential_lifetimes_follow_one_rule_for_every_caller() {
+        use ag_types::IdentityKind::{Agent, User};
+        let a = AuthSection::default();
+        assert_eq!(a.credential_ttl(Agent, 0), Ok(a.default_agent_ttl_secs));
+        assert_eq!(a.credential_ttl(User, 0), Ok(a.default_ttl_secs));
+        assert_eq!(a.credential_ttl(Agent, 60), Ok(60));
+        assert!(a.credential_ttl(Agent, a.max_agent_ttl_secs + 1).unwrap_err().contains("at most"));
+        assert_eq!(a.credential_ttl(User, a.max_ttl_secs), Ok(a.max_ttl_secs));
+        // A default above the cap is brought down to it, not refused.
+        let low = AuthSection { default_ttl_secs: 10_000, max_ttl_secs: 600, ..AuthSection::default() };
+        assert_eq!(low.credential_ttl(User, 0), Ok(600));
     }
 
     #[test]

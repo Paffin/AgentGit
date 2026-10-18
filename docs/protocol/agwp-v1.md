@@ -55,15 +55,24 @@ directory is checked by a test, so it cannot drift from the server.
   The server applies `limits.default_deadline_ms` when the client sets none.
 * **Backpressure.** `429 rate_limited`/`quota_exceeded` and `503 unavailable` carry `retry_after_ms`
   (HTTP: `Retry-After`, whole seconds, at least 1; prefer `retry_after_ms`). Every authenticated operation
-  takes one token from the caller's bucket (`limits.requests_per_second`, per credential), including the ones
-  not tied to a repository; a repository may carry a quota of its own.
+  takes one token from the caller's bucket (`limits.requests_per_second`: per credential, or per identity for
+  OIDC sign-ins, whose tokens are short-lived), including the ones not tied to a repository. A repository may
+  carry a quota of its own: `max_total_object_bytes` is charged to every write that adds an object (uploads,
+  workspace edits, merges — whichever endpoint writes it, atomically across concurrent requests and replicas;
+  the tracked total is an estimate that garbage collection recounts), `max_object_bytes` bounds one object,
+  `max_streams` and `max_open_proposals` bound counts (checked just before the create, so concurrent creates
+  can overshoot by the number in flight), and `requests_per_second`/`burst` add a per-repository rate limit.
+  New repositories start with the `[limits] repo_*` / `max_*` defaults of the server configuration.
 * **`retryable`.** `retryable: true` means that doing the *logical operation* again may succeed — after
   waiting (`rate_limited`, `unavailable`), after re-reading state and redoing the change (`stream_moved`,
   `aborted`), or, for `deadline_exceeded`, after finding out whether the first attempt took effect. It does
   **not** mean that sending the same bytes again is safe: do that only for reads, for naturally idempotent
   operations, and for creations that carried an idempotency key. The SDKs implement exactly these rules.
 * **Correlation.** Send `X-Request-Id` (gRPC metadata `x-request-id`); the server echoes it in
-  `X-Request-Id` and in every error. `traceparent` is propagated into logs and traces.
+  `X-Request-Id` and in every error. A `traceparent` continues the caller's trace (exported when
+  `telemetry.otlp_endpoint` is set) and its trace id is on every log line of the request (`trace_id`) whether
+  or not the trace is sampled; the peer address (`remote`) is on them too, failed authentications included.
+  The server does not forward `traceparent` to anything it calls.
 
 ## Errors
 
@@ -174,4 +183,8 @@ message = "agentgit.sig.v1\0" ‖ len(domain):u8 ‖ domain ‖ payload        d
 Events are the repository's audit log: `seq` is strictly increasing and never reused, `topic` is the audit
 action (`proposal.create`, `stream.integrate`, `lease.acquire`, `run.start`, `policy.set`, …). Resume with
 `Last-Event-ID` or `after_seq`; filter with `topics=a,b` (prefix match on dotted names). Heartbeats are SSE
-comments. A subscriber that was away loses nothing; the stream ends when its credential expires.
+comments. A subscriber that was away loses nothing: a topic filter is applied while paging through the log,
+so a long run of other entries never hides a matching event, and a replay page with fewer than `limit` events is
+the end of the matching events up to `latest_seq`. The stream ends with an `error` event when its credential is
+revoked or expires — checked before every batch is delivered, and every few seconds while idle. A query value
+that is not a number (`after_seq=abc`, a bad `Last-Event-ID`) is `invalid_argument`, never a default.

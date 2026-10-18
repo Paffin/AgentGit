@@ -47,6 +47,16 @@ pub fn config_is_shared(config_json: &str) -> bool {
     })
 }
 
+/// The storage a repository configuration puts its metadata and objects in: (`sqlite` | `postgres`,
+/// `fs` | `s3`). The names `Repo.meta_backend` / `Repo.object_backend` carry.
+pub fn config_backends(config: &RepoConfig) -> (&'static str, &'static str) {
+    let s = config.storage();
+    (
+        if matches!(s.meta, MetaConfig::Postgres { .. }) { "postgres" } else { "sqlite" },
+        if matches!(s.objects, ObjectsConfig::S3 { .. }) { "s3" } else { "fs" },
+    )
+}
+
 /// The registry knows the repository but this host has none of its files and they are not in shared storage.
 fn missing_local_data(name: &str) -> ApiError {
     tracing::error!(
@@ -133,6 +143,37 @@ impl RepoManager {
 
     fn dir(&self, name: &str) -> PathBuf {
         self.root.join(name)
+    }
+
+    /// The configuration of a registered repository without opening it: the one the registry stored at creation;
+    /// for a row registered before the registry kept it, the file this host holds, else what a replica would
+    /// write for it (`ensure_local_marker`). `None` if the stored text does not parse.
+    fn stored_config(&self, row: &RepoRow) -> Option<RepoConfig> {
+        if !row.config_json.is_empty() {
+            return serde_json::from_str(&row.config_json).ok();
+        }
+        if let Ok(text) = std::fs::read_to_string(self.dir(&row.name).join(".ag").join("config.json")) {
+            return serde_json::from_str(&text).ok();
+        }
+        Some(RepoConfig {
+            format: 1,
+            namespace: Namespace::new(&row.namespace).ok()?,
+            default_stream: StreamName::new(&row.default_stream).ok()?,
+            storage: self.storage.as_ref().map(|t| derive_storage(t, &row.name)),
+        })
+    }
+
+    /// The storage backends of a registered repository, as the repository's own configuration names them, so
+    /// that a listing and a description agree. `unknown` only if that configuration is unreadable (which opening
+    /// the repository would report as an error).
+    pub fn backends_of(&self, row: &RepoRow) -> (&'static str, &'static str) {
+        match self.stored_config(row) {
+            Some(c) => config_backends(&c),
+            None => {
+                tracing::error!(repo = %row.name, "the stored repository configuration does not parse");
+                ("unknown", "unknown")
+            }
+        }
     }
 
     /// Creates a repository on disk and registers it.

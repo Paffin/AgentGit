@@ -86,7 +86,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | No standing secrets for untrusted code | 🟡 the worker's key and credential are never visible to the sandboxed check (tested); `validate run` only clears the environment |
 | Signed CI attestations | ✅ |
 | Prompt-injection hardening | ✅ data is never interpreted; terminal output sanitized |
-| Limits on blobs, ops, DAG depth, requests | ✅ request size, concurrency, per-credential rate limits and repository quotas on the server |
+| Limits on blobs, ops, DAG depth, requests | ✅ request size (HTTP and gRPC alike), concurrency, per-credential rate limits and repository quotas on the server: total bytes charged on every write path (`quota.rs`; `quotas.rs`, `api_honesty.rs`), bytes per object, streams, open proposals. Stream and proposal counts are checked just before the insert, so concurrent creates can overshoot by the number in flight |
 | Independent, tamper-evident audit | ✅ hash chain (not yet externally anchored) |
 | Path traversal, symlink escape, zip bombs, object substitution | ✅ (no archive handling exists) |
 | Separate powers for agent, reviewer, admin | ✅ |

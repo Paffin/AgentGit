@@ -16,6 +16,8 @@ pub struct ObjectSink {
     app: App,
     call: Call,
     repo: String,
+    /// Largest object this upload may carry: the server's limit, or the repository's own if that is smaller.
+    max_object: u64,
     current: Option<(String, Vec<u8>)>,
     stored: Vec<String>,
     present: Vec<String>,
@@ -38,7 +40,7 @@ impl ObjectSink {
             }
             None => self.current = Some((chunk.object_id.clone(), chunk.data.clone())),
         }
-        let max = self.app.cfg.limits.max_object_bytes;
+        let max = self.max_object;
         if self.current.as_ref().is_some_and(|(_, b)| b.len() as u64 > max) {
             return Err(ApiError::new(
                 ag_protocol::ErrorCode::TooLarge,
@@ -69,10 +71,12 @@ impl App {
     pub async fn upload_sink(&self, call: &Call, repo: &str) -> ApiResult<ObjectSink> {
         let repo = require(repo, "repo")?.to_string();
         self.authorize(call, &repo, Cap::ObjectsWrite, None).await?;
+        let max_object = self.object_limit(&repo).await?;
         Ok(ObjectSink {
             app: self.clone(),
             call: call.clone(),
             repo,
+            max_object,
             current: None,
             stored: vec![],
             present: vec![],
@@ -80,14 +84,20 @@ impl App {
         })
     }
 
+    /// The largest object an upload to `repo` may carry: the server-wide limit, or the repository's own
+    /// `max_object_bytes` quota if that is set and smaller. Call after authorizing the caller.
+    pub async fn object_limit(&self, repo: &str) -> ApiResult<u64> {
+        let global = self.cfg.limits.max_object_bytes;
+        let own = self.repo_row(repo).await?.map(|r| r.quota.max_object_bytes).unwrap_or(0);
+        Ok(if own > 0 { own.min(global) } else { global })
+    }
+
     /// Stores one object envelope after verifying that it hashes to `expected_id`.
-    /// Returns whether the object was new.
+    /// Returns whether the object was new. The repository's quotas (total bytes, bytes per object) are enforced
+    /// by the repository view `with_repo_mut` provides, like for every other write.
     pub async fn store_object(&self, call: &Call, repo: &str, expected_id: &str, envelope: Vec<u8>) -> ApiResult<bool> {
         let expected: ObjectId = parse_id(expected_id, "object id")?;
         let size = envelope.len() as u64;
-        let quota = self.repo_row(repo).await?.map(|r| (r.quota.max_total_object_bytes, r.object_bytes));
-        let control = self.control.clone();
-        let name = repo.to_string();
         let newly = self
             .with_repo_mut(call, repo, Cap::ObjectsWrite, None, move |r, _| {
                 let raw = RawObject::decode_envelope(&envelope)
@@ -99,16 +109,6 @@ impl App {
                     )
                 })?;
                 let existed = r.objects().contains(&expected)?;
-                if !existed
-                    && let Some((max_total, used)) = quota
-                    && max_total > 0
-                    && used + size > max_total
-                {
-                    return Err(ApiError::new(
-                        ag_protocol::ErrorCode::QuotaExceeded,
-                        format!("this repository's object quota of {max_total} bytes would be exceeded"),
-                    ));
-                }
                 match raw.kind {
                     ObjectKind::Blob => {
                         r.objects().put(&raw)?;
@@ -120,9 +120,6 @@ impl App {
                     ObjectKind::Tree => {
                         return Err(ApiError::invalid("trees are derived by the server and cannot be uploaded"));
                     }
-                }
-                if !existed {
-                    control.add_object_bytes(&name, size as i64)?;
                 }
                 Ok(!existed)
             })
@@ -212,7 +209,7 @@ impl App {
     /// The recorded outcome of an operation, by operation id or idempotency key.
     pub async fn get_operation(&self, call: &Call, req: v1::GetOperationRequest) -> ApiResult<v1::Operation> {
         self.with_repo(call, require(&req.repo, "repo")?, Cap::OperationRead, None, move |r, _| {
-            Ok(convert::operation(&r.operation_row(&req.operation_id, &req.idempotency_key)?))
+            convert::operation(&r.operation_row(&req.operation_id, &req.idempotency_key)?)
         })
         .await
     }

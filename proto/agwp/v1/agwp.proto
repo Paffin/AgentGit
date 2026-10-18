@@ -120,13 +120,14 @@ message Repo {
   string description = 4;
   int64 created_at_ms = 5;
   string created_by = 6;
-  // Storage in use: "sqlite"/"postgres" and "fs"/"s3".
+  // Storage in use: "sqlite"/"postgres" and "fs"/"s3", as configured for this repository (create, describe
+  // and list all report the same).
   string meta_backend = 7;
   string object_backend = 8;
-  // Human-readable durability contract of the object backend.
+  // Human-readable durability contract of the object backend. Filled by Describe only (it is a property of the
+  // open object store).
   string durability = 9;
-  // Filled by Describe only; listings do not open every repository and leave
-  // both counts at 0.
+  // Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.
   uint32 stream_count = 10;
   uint64 changeset_count = 11;
   Quota quota = 12;
@@ -134,7 +135,12 @@ message Repo {
 
 message Quota {
   // 0 = unlimited.
+  // Total bytes of objects the repository may hold. Charged to every write that adds an object (uploads,
+  // workspace edits, merges); a write that would pass it fails with `quota_exceeded`. The tracked total is an
+  // estimate that garbage collection recounts.
   uint64 max_total_object_bytes = 1;
+  // Largest single object (envelope included) the repository accepts, on top of the server-wide limit
+  // (`limits.max_object_bytes`); a larger one fails with `too_large`.
   uint64 max_object_bytes = 2;
   uint32 max_streams = 3;
   uint32 max_open_proposals = 4;
@@ -1327,7 +1333,12 @@ message ListCredentialsRequest {
   bool include_revoked = 2;
 }
 
-message ListCredentialsResponse { repeated Credential credentials = 1; }
+message ListCredentialsResponse {
+  repeated Credential credentials = 1;
+  // True if there were more credentials than one listing returns (the newest are listed first). Narrow the
+  // request with `subject` to see the rest.
+  bool truncated = 2;
+}
 
 message RevokeCredentialRequest { string credential_id = 1; }
 message RevokeCredentialResponse { bool revoked = 1; }
@@ -1360,7 +1371,11 @@ message ListRolesRequest {
   string repo = 2;
 }
 
-message ListRolesResponse { repeated RoleBinding bindings = 1; }
+message ListRolesResponse {
+  repeated RoleBinding bindings = 1;
+  // True if there were more role bindings than one listing returns. Narrow the request with `subject` or `repo`.
+  bool truncated = 2;
+}
 
 message Empty {}
 

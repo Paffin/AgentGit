@@ -84,8 +84,19 @@ fn cors(router: Router, app: &App) -> Router {
     if app.cfg.server.cors_origins.is_empty() {
         return router;
     }
-    let origins: Vec<HeaderValue> =
-        app.cfg.server.cors_origins.iter().filter_map(|o| HeaderValue::from_str(o).ok()).collect();
+    // `ServerConfig::validate` rejects a malformed origin at start-up; a configuration that skipped it still
+    // never drops one silently.
+    let origins: Vec<HeaderValue> = app
+        .cfg
+        .server
+        .cors_origins
+        .iter()
+        .filter_map(|o| {
+            HeaderValue::from_str(o)
+                .inspect_err(|_| tracing::warn!(origin = %o, "ignoring an invalid CORS origin"))
+                .ok()
+        })
+        .collect();
     router.layer(
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(origins))

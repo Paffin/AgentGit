@@ -20,12 +20,20 @@ use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
 
+/// How many audit rows one read examines at a time while looking for events that match the topics.
+const SCAN_PAGE: usize = 1024;
+
 /// A page of events and the newest sequence number at the time it was read.
 pub struct EventBatch {
-    /// Events with `seq` greater than the cursor, oldest first.
+    /// Events with `seq` greater than the cursor, oldest first. Fewer than the limit means there are no more
+    /// matching events up to `latest_seq`; a full page may be followed by more.
     pub events: Vec<v1::Event>,
     /// Highest sequence number in the log.
     pub latest_seq: u64,
+    /// Highest sequence number this read examined. Every event of the requested topics at or below it is in
+    /// `events` (up to the limit), so a follower may safely resume after it - and must not resume after
+    /// anything higher, which would skip events it never looked at.
+    pub scanned_seq: u64,
 }
 
 fn to_event(repo: &str, e: &AuditEntry) -> v1::Event {
@@ -56,17 +64,33 @@ impl App {
         let topics = topics.to_vec();
         let name = repo.to_string();
         self.with_repo(call, repo, Cap::EventsRead, None, move |r, _| {
-            let (entries, latest) = r.meta().read(|tx| {
-                let latest = tx.audit_latest_seq()?;
-                Ok((tx.audit_after(after_seq, limit.saturating_mul(4).max(limit))?, latest))
-            })?;
-            let events: Vec<v1::Event> = entries
-                .iter()
-                .filter(|e| matches_topics(&topics, &e.action))
-                .take(limit)
-                .map(|e| to_event(&name, e))
-                .collect();
-            Ok(EventBatch { events, latest_seq: latest })
+            // The topic filter runs while paging through the log, until `limit` events matched or the log ended:
+            // a run of unrelated entries (job claims, lease renewals...) never hides a matching event behind it.
+            r.meta()
+                .read(|tx| {
+                    let latest_seq = tx.audit_latest_seq()?;
+                    let mut events: Vec<v1::Event> = Vec::new();
+                    let mut cursor = after_seq;
+                    let mut scanned_seq = after_seq;
+                    'scan: loop {
+                        let page = tx.audit_after(cursor, SCAN_PAGE)?;
+                        for e in &page {
+                            scanned_seq = e.seq;
+                            if matches_topics(&topics, &e.action) {
+                                events.push(to_event(&name, e));
+                                if events.len() >= limit {
+                                    break 'scan;
+                                }
+                            }
+                        }
+                        match page.last() {
+                            Some(last) if page.len() == SCAN_PAGE => cursor = last.seq,
+                            _ => break,
+                        }
+                    }
+                    Ok(EventBatch { events, latest_seq, scanned_seq })
+                })
+                .map_err(Into::into)
         })
         .await
     }
@@ -75,6 +99,7 @@ impl App {
     pub async fn replay(&self, call: &Call, req: v1::ReplayRequest) -> ApiResult<v1::ReplayResponse> {
         let limit = if req.limit == 0 { 500 } else { req.limit.min(5000) } as usize;
         let b = self.events_after(call, require(&req.repo, "repo")?, &req.topics, req.after_seq, limit).await?;
+        // A page with fewer than `limit` events is the end of the matching events up to `latest_seq`.
         Ok(v1::ReplayResponse { events: b.events, latest_seq: b.latest_seq })
     }
 
@@ -88,8 +113,9 @@ impl App {
         req: v1::SubscribeRequest,
     ) -> ApiResult<impl Stream<Item = ApiResult<v1::Event>> + Send + 'static> {
         let repo = require(&req.repo, "repo")?.to_string();
-        // Fail early (and authorize) before returning a stream.
-        let first = self.events_after(&call, &repo, &req.topics, 0, 1).await?;
+        // Fail early (and authorize) before returning a stream. Reading after the highest possible sequence number
+        // returns no events and costs nothing; it yields the log's current end.
+        let first = self.events_after(&call, &repo, &req.topics, u64::MAX, 1).await?;
         let start = if req.after_seq == u64::MAX { first.latest_seq } else { req.after_seq };
         let heartbeat =
             Duration::from_millis(u64::from(if req.heartbeat_ms == 0 { 15_000 } else { req.heartbeat_ms.max(1000) }));
@@ -123,22 +149,13 @@ impl App {
                     }
                     return Some((Ok(ev), st));
                 }
-                // A credential revoked while a stream is open ends the stream, on any replica, within seconds.
-                if st.last_credential_check.elapsed() >= CREDENTIAL_RECHECK {
-                    st.last_credential_check = Instant::now();
-                    if let Err(e) = st.app.auth.still_active(&st.call.principal).await {
-                        st.done = true;
-                        return Some((Err(e), st));
-                    }
-                }
-                if st.call.principal.expires_at_ms > 0
-                    && st.app.clock.now().as_millis() >= st.call.principal.expires_at_ms
+                // An idle stream looks at its credential every few seconds; a batch about to be delivered is
+                // preceded by a check of its own (below), so nothing is sent after a revocation the server can see.
+                if st.last_credential_check.elapsed() >= CREDENTIAL_RECHECK
+                    && let Err(e) = st.credential_still_valid().await
                 {
                     st.done = true;
-                    return Some((
-                        Err(ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "the credential expired")),
-                        st,
-                    ));
+                    return Some((Err(e), st));
                 }
                 // Register for wake-ups before reading so nothing is missed in between.
                 let notify = st.app.notifier(&st.repo);
@@ -147,12 +164,15 @@ impl App {
                 notified.as_mut().enable();
                 match st.app.events_after(&st.call, &st.repo, &st.topics, st.cursor, 256).await {
                     Ok(batch) => {
-                        if let Some(last) = batch.events.last() {
-                            st.cursor = last.seq;
-                        } else if batch.latest_seq > st.cursor {
-                            // Only filtered-out events arrived; skip past them.
-                            st.cursor = batch.latest_seq;
+                        if !batch.events.is_empty()
+                            && let Err(e) = st.credential_still_valid().await
+                        {
+                            st.done = true;
+                            return Some((Err(e), st));
                         }
+                        // Resume after what was actually examined - never past it: events beyond a full page of
+                        // matches, or beyond what the scan reached, have not been looked at.
+                        st.cursor = st.cursor.max(batch.scanned_seq);
                         st.buffer.extend(batch.events);
                         if !st.buffer.is_empty() {
                             continue;
@@ -196,6 +216,18 @@ impl Drop for GaugeGuard {
 
 /// How often an open event stream checks that its credential is still valid.
 const CREDENTIAL_RECHECK: Duration = Duration::from_secs(5);
+
+impl FeedState {
+    /// Re-validates the credential the stream was opened with: not revoked (on any replica), not expired.
+    async fn credential_still_valid(&mut self) -> ApiResult<()> {
+        self.last_credential_check = Instant::now();
+        let expires = self.call.principal.expires_at_ms;
+        if expires > 0 && self.app.clock.now().as_millis() >= expires {
+            return Err(ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "the credential expired"));
+        }
+        self.app.auth.still_active(&self.call.principal).await
+    }
+}
 
 struct FeedState {
     app: App,

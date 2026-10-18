@@ -9,6 +9,8 @@ use ag_storage::meta::{
 };
 use ag_types::Timestamp;
 
+use crate::error::{ApiError, ApiResult};
+
 fn ms(t: Timestamp) -> i64 {
     t.as_millis()
 }
@@ -283,7 +285,10 @@ pub fn integration_result(r: &IntegrationResult) -> v1::IntegrationResult {
     }
 }
 
-pub fn operation(i: &IntentRow) -> v1::Operation {
+/// The recorded operation. An integrate operation that has not finished has no outcome yet — the outcome stays
+/// unset and `state` says where it is, so a client that asks after a `deadline_exceeded` is never told "invalid"
+/// about something still in flight. A stored result that cannot be read is an `internal` error, not an outcome.
+pub fn operation(i: &IntentRow) -> ApiResult<v1::Operation> {
     let mut op = v1::Operation {
         operation_id: i.operation_id.clone(),
         kind: i.kind.clone(),
@@ -299,12 +304,16 @@ pub fn operation(i: &IntentRow) -> v1::Operation {
             let outcome = i
                 .result
                 .as_ref()
-                .and_then(|v| serde_json::from_value::<Outcome>(v.clone()).ok())
-                .unwrap_or(Outcome::Invalid { reason: format!("operation is {} and has no result yet", i.state) });
+                .map(|v| {
+                    serde_json::from_value::<Outcome>(v.clone()).map_err(|e| {
+                        ApiError::internal(format!("operation {} has an unreadable stored result: {e}", i.operation_id))
+                    })
+                })
+                .transpose()?;
             op.integration = Some(v1::IntegrationResult {
                 operation_id: i.operation_id.clone(),
                 state: i.state.to_string(),
-                outcome: Some(self::outcome(&outcome)),
+                outcome: outcome.as_ref().map(self::outcome),
             });
         }
         "publish" => {
@@ -320,5 +329,5 @@ pub fn operation(i: &IntentRow) -> v1::Operation {
         }
         _ => {}
     }
-    op
+    Ok(op)
 }

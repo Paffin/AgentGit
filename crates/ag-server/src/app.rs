@@ -24,7 +24,12 @@ use crate::control::Control;
 use crate::error::{ApiError, ApiResult};
 use crate::limits::RateLimiter;
 use crate::metrics::Metrics;
+use crate::quota::{Budget, MeterGuard, MeteredStore, ObjectMeter};
 use crate::repos::RepoManager;
+
+/// The deadline given to long-lived streams (event subscriptions): effectively none. It is a marker, not a time
+/// anyone waits for, and it is left out of the trace attributes.
+pub const NO_DEADLINE_MS: u64 = u64::MAX / 4;
 
 /// What a transport extracted from a request before the operation runs.
 #[derive(Clone, Debug, Default)]
@@ -39,9 +44,10 @@ pub struct Ingress {
     pub request_id: String,
     /// Client-requested deadline in milliseconds.
     pub deadline_ms: Option<u64>,
-    /// W3C `traceparent`, passed through to logs.
+    /// W3C `traceparent`: continues the caller's trace (exported with OTLP) and puts its trace id on the
+    /// request's log lines.
     pub traceparent: Option<String>,
-    /// Peer address, for logs.
+    /// Peer address of the connection. Appears on the request's log lines, including failed authentications.
     pub remote: Option<String>,
 }
 
@@ -135,14 +141,32 @@ fn random_hex() -> String {
     ag_crypto::random_bytes::<4>().map(hex::encode).unwrap_or_else(|_| format!("{:08x}", std::process::id()))
 }
 
-/// Parses `name=value,name2=value2` (the `OTEL_EXPORTER_OTLP_HEADERS` format).
+/// The rate-limit bucket of a caller: its credential - except for OIDC sign-ins, where the "credential" is a
+/// short-lived token whose id changes with every login, so the bucket belongs to the identity instead (signing in
+/// again must not hand out a fresh burst).
+fn bucket_key(p: &Principal) -> String {
+    match p.method {
+        crate::auth::AuthMethod::Oidc => format!("id:{}", p.identity.principal()),
+        _ => format!("cred:{}", p.credential_id),
+    }
+}
+
+/// Parses `name=value,name2=value2` (the `OTEL_EXPORTER_OTLP_HEADERS` format). An entry that cannot be used is
+/// reported by position and name - never by value, which may be a secret - and skipped.
 fn parse_headers(s: &str) -> Vec<(String, String)> {
     s.split(',')
-        .filter_map(|kv| {
-            let (k, v) = kv.split_once('=')?;
-            let (k, v) = (k.trim(), v.trim());
-            (!k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') && !v.is_empty())
-                .then(|| (k.to_ascii_lowercase(), v.to_string()))
+        .enumerate()
+        .filter_map(|(i, kv)| {
+            let parsed = kv.split_once('=').and_then(|(k, v)| {
+                let (k, v) = (k.trim(), v.trim());
+                (!k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') && !v.is_empty())
+                    .then(|| (k.to_ascii_lowercase(), v.to_string()))
+            });
+            if parsed.is_none() && !kv.trim().is_empty() {
+                let name = kv.split_once('=').map(|(k, _)| k.trim()).unwrap_or("(no '=')");
+                tracing::warn!(entry = i, name, "ignoring a malformed entry of the OTLP headers variable");
+            }
+            parsed
         })
         .collect()
 }
@@ -254,7 +278,22 @@ impl App {
         let span = self.tracer.as_ref().and_then(|t| t.begin(ing.traceparent.as_deref()));
         // Every log line written while serving this request — including the cause of an `internal` error,
         // which the response deliberately does not reveal — carries the request id the client was given.
-        let log_span = tracing::info_span!("request", op, request_id = %ing.request_id, transport = ing.transport);
+        let log_span = tracing::info_span!(
+            "request",
+            op,
+            request_id = %ing.request_id,
+            transport = ing.transport,
+            remote = ing.remote.as_deref().unwrap_or("-"),
+            trace_id = tracing::field::Empty,
+        );
+        // The trace id this request belongs to: the one the exporter assigned, else the caller's own.
+        let trace_id = match &span {
+            Some(ctx) => Some(hex::encode(ctx.trace_id)),
+            None => ing.traceparent.as_deref().and_then(crate::trace::trace_id_of),
+        };
+        if let Some(id) = &trace_id {
+            log_span.record("trace_id", id.as_str());
+        }
         let result =
             self.dispatch_inner(&ing, op, f).instrument(log_span).await.map_err(|e| e.with_request_id(&ing.request_id));
         let code = match &result {
@@ -268,7 +307,7 @@ impl App {
                 ("agwp.result", crate::trace::Attr::Str(code.into())),
                 ("agwp.request_id", crate::trace::Attr::Str(ing.request_id.clone())),
             ];
-            if let Some(d) = ing.deadline_ms {
+            if let Some(d) = ing.deadline_ms.filter(|d| *d < NO_DEADLINE_MS) {
                 attrs.push(("agwp.deadline_ms", crate::trace::Attr::Int(d.min(i64::MAX as u64) as i64)));
             }
             // Only server faults mark the span as failed; a caller's 404 or 409 is a normal answer.
@@ -297,10 +336,17 @@ impl App {
 
         let bearer = ing.bearer.as_deref().ok_or_else(|| {
             self.metrics.auth_failures.with_label_values(&["missing"]).inc();
+            tracing::warn!(remote = ing.remote.as_deref().unwrap_or("-"), op, "request without credentials");
             ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "missing, invalid or expired credentials")
         })?;
-        let principal = self.auth.authenticate(bearer).await.inspect_err(|_| {
+        let principal = self.auth.authenticate(bearer).await.inspect_err(|e| {
             self.metrics.auth_failures.with_label_values(&["invalid"]).inc();
+            tracing::warn!(
+                remote = ing.remote.as_deref().unwrap_or("-"),
+                op,
+                code = e.code().as_str(),
+                "authentication failed"
+            );
         })?;
         let deadline_ms = ing
             .deadline_ms
@@ -370,14 +416,13 @@ impl App {
     /// Takes one token from the caller's bucket (`limits.requests_per_second`). Runs once per request, before
     /// the operation, so every operation is covered.
     pub fn rate_limit(&self, call: &Call) -> ApiResult<()> {
-        let key = format!("cred:{}", call.principal.credential_id);
-        self.limiter.check(&key, None).inspect_err(|_| self.metrics.rate_limited.inc())
+        self.limiter.check(&bucket_key(&call.principal), None).inspect_err(|_| self.metrics.rate_limited.inc())
     }
 
     /// A repository's own request quota, if it has one: a separate bucket per (caller, repository).
     pub fn repo_rate_limit(&self, call: &Call, repo: &str, quota: Option<&ag_protocol::v1::Quota>) -> ApiResult<()> {
         let Some(q) = quota.filter(|q| q.requests_per_second > 0) else { return Ok(()) };
-        let key = format!("cred:{}|repo:{repo}", call.principal.credential_id);
+        let key = format!("{}|repo:{repo}", bucket_key(&call.principal));
         self.limiter
             .check(&key, Some((q.requests_per_second, q.burst)))
             .inspect_err(|_| self.metrics.rate_limited.inc())
@@ -412,6 +457,7 @@ impl App {
         let row = self.repo_row(repo).await?;
         let quota = row.as_ref().map(|r| r.quota);
         self.repo_rate_limit(call, repo, quota.as_ref())?;
+        let budget = row.as_ref().map(Budget::of);
         let repos = self.0.clone();
         let name = repo.to_string();
         let call2 = call.clone();
@@ -421,7 +467,13 @@ impl App {
             let handle = repos.repos.handle(&name)?;
             repos.metrics.open_repos.set(repos.repos.open_count() as i64);
             let actor = effective_actor(&call2, &handle)?;
-            f(&handle, &actor)
+            // Whatever the call writes into the repository — an upload, a workspace edit, a merge — is counted
+            // against the repository's quota by the view's object store, not by each endpoint.
+            let Some(budget) = budget else { return f(&handle, &actor) };
+            let meter = ObjectMeter::new(repos.control.clone(), budget);
+            let _settle = MeterGuard(meter.clone());
+            let view = handle.with_object_store(|inner| Arc::new(MeteredStore::new(inner, meter.clone())));
+            f(&view, &actor).map_err(|e| meter.violation().unwrap_or(e))
         })
         .await
         .map_err(ApiError::internal)?
@@ -543,4 +595,121 @@ impl<F: FnMut()> Drop for ScopeGuard<F> {
 
 fn scopeguard<F: FnMut()>(f: F) -> ScopeGuard<F> {
     ScopeGuard(f)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+
+    const TOKEN: &str = "unit-test-bootstrap-token-0123456789";
+
+    /// Collects what the `tracing` subscriber writes.
+    #[derive(Clone, Default)]
+    struct Captured(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Captured {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Captured {
+        fn text(&self) -> String {
+            String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+        }
+    }
+
+    fn app(dir: &tempfile::TempDir) -> App {
+        let mut cfg = ServerConfig::default();
+        cfg.server.data_dir = dir.path().to_path_buf();
+        App::with_options(cfg, Arc::new(SystemClock), Some(TOKEN.to_string())).unwrap()
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn log_lines_of_a_request_carry_its_trace_id_and_the_peer_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app(&dir);
+        let captured = Captured::default();
+        let sink = captured.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || sink.clone())
+            .with_ansi(false)
+            .with_max_level(tracing::Level::INFO)
+            .finish();
+        let _installed = tracing::subscriber::set_default(subscriber);
+
+        let ing = Ingress {
+            transport: "http",
+            bearer: Some(TOKEN.into()),
+            request_id: "req_unit".into(),
+            // Not sampled, no exporter configured: the trace id still reaches the log.
+            traceparent: Some("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00".into()),
+            remote: Some("203.0.113.9:4711".into()),
+            ..Ingress::default()
+        };
+        app.dispatch(ing, "test.op", |_call| async {
+            tracing::info!("inside the operation");
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let line = captured.text();
+        assert!(line.contains("inside the operation"), "{line}");
+        assert!(line.contains(r#"trace_id="0af7651916cd43dd8448eb211c80319c""#), "{line}");
+        assert!(line.contains(r#"remote="203.0.113.9:4711""#), "{line}");
+        assert!(line.contains("request_id=req_unit"), "{line}");
+
+        // A failed authentication says where it came from.
+        let bad = Ingress {
+            transport: "grpc",
+            bearer: Some("not-a-credential".into()),
+            request_id: "req_bad".into(),
+            remote: Some("198.51.100.7:1".into()),
+            ..Ingress::default()
+        };
+        assert!(app.dispatch(bad, "test.op", |_call| async { Ok(()) }).await.is_err());
+        let log = captured.text();
+        let failure = log.lines().find(|l| l.contains("authentication failed")).expect(&log);
+        assert!(failure.contains(r#"remote="198.51.100.7:1""#) && failure.contains("unauthenticated"), "{failure}");
+        let missing = Ingress { remote: Some("198.51.100.8:2".into()), ..Ingress::default() };
+        assert!(app.dispatch(missing, "test.op", |_call| async { Ok(()) }).await.is_err());
+        assert!(captured.text().contains("198.51.100.8:2"));
+    }
+
+    #[test]
+    fn oidc_sign_ins_share_one_rate_limit_bucket_per_identity() {
+        let mut token = Principal::for_tests("user:dana");
+        token.credential_id = "cred_1".into();
+        let mut other = token.clone();
+        other.credential_id = "cred_2".into();
+        assert_ne!(bucket_key(&token), bucket_key(&other), "tokens of ours are limited one by one");
+        token.method = crate::auth::AuthMethod::Oidc;
+        other.method = crate::auth::AuthMethod::Oidc;
+        assert_eq!(bucket_key(&token), bucket_key(&other), "a new OIDC login is not a new bucket");
+        other.identity = ag_types::Identity::new("user:erin").unwrap();
+        assert_ne!(bucket_key(&token), bucket_key(&other));
+    }
+
+    #[test]
+    fn collector_headers_keep_the_good_entries_and_report_the_bad_ones_by_name_only() {
+        let captured = Captured::default();
+        let sink = captured.clone();
+        let subscriber = tracing_subscriber::fmt().with_writer(move || sink.clone()).with_ansi(false).finish();
+        let _installed = tracing::subscriber::set_default(subscriber);
+        let parsed = parse_headers("Authorization=Bearer abc, bad name=secret-value,=nothing,noequals,x-key=v");
+        assert_eq!(
+            parsed,
+            vec![("authorization".to_string(), "Bearer abc".to_string()), ("x-key".to_string(), "v".to_string())]
+        );
+        let log = captured.text();
+        assert_eq!(log.matches("malformed entry").count(), 3, "{log}");
+        assert!(log.contains("bad name"), "the name of a bad entry is reported: {log}");
+        assert!(!log.contains("secret-value") && !log.contains("nothing"), "values never are: {log}");
+    }
 }

@@ -27,10 +27,21 @@ fn s3_template() -> Option<ObjectsConfig> {
     })
 }
 
-async fn exercise(srv: &TestServer, repo: &str) {
+/// Creating and listing a repository report the storage it really has (they used to say sqlite/fs for all).
+async fn exercise(srv: &TestServer, repo: &str, backends: (&str, &str)) {
     let admin = srv.admin();
     let r = admin.post("/v1/repos", json!({"name": repo})).await;
     assert_eq!(r.status, 200, "{}", r.json);
+    assert_eq!(
+        (r.json["meta_backend"].as_str(), r.json["object_backend"].as_str()),
+        (Some(backends.0), Some(backends.1))
+    );
+    let list = admin.get("/v1/repos").await;
+    let listed = list.json["repos"].as_array().unwrap().iter().find(|r| r["name"] == repo).expect("listed");
+    assert_eq!(
+        (listed["meta_backend"].as_str(), listed["object_backend"].as_str()),
+        (Some(backends.0), Some(backends.1))
+    );
     let alice = user_with_role(srv, "user:alice", repo, "writer").await;
     let carol = user_with_role(srv, "user:carol", repo, "integrator").await;
     let c = Client::new(repo);
@@ -52,7 +63,10 @@ async fn exercise(srv: &TestServer, repo: &str) {
     let fsck = admin.post(&format!("/v1/repos/{repo}/fsck"), json!({})).await;
     assert_eq!(fsck.json["ok"], true, "{}", fsck.json);
     let d = admin.get(&format!("/v1/repos/{repo}")).await;
-    println!("backends: {} / {}", d.json["meta_backend"], d.json["object_backend"]);
+    assert_eq!(
+        (d.json["meta_backend"].as_str(), d.json["object_backend"].as_str()),
+        (Some(backends.0), Some(backends.1))
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -70,7 +84,7 @@ async fn the_server_runs_on_postgres() {
         objects: ObjectsConfig::Fs,
     };
     let srv = TestServer::start_with(move |cfg| cfg.repos.storage = Some(template)).await;
-    exercise(&srv, "acme/pg").await;
+    exercise(&srv, "acme/pg", ("postgres", "fs")).await;
     let d = srv.admin().get("/v1/repos/acme/pg").await;
     assert_eq!(d.json["meta_backend"], "postgres");
     srv.stop().await;
@@ -83,7 +97,7 @@ async fn the_server_runs_on_s3_objects() {
     let Some(objects) = s3_template() else { return };
     let template = StorageConfig { meta: MetaConfig::Sqlite, objects };
     let srv = TestServer::start_with(move |cfg| cfg.repos.storage = Some(template)).await;
-    exercise(&srv, "acme/s3").await;
+    exercise(&srv, "acme/s3", ("sqlite", "s3")).await;
     let d = srv.admin().get("/v1/repos/acme/s3").await;
     assert_eq!(d.json["object_backend"], "s3");
     srv.stop().await;

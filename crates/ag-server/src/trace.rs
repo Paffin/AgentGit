@@ -246,11 +246,10 @@ pub struct SpanContext {
     started: u64,
 }
 
-impl SpanContext {
-    /// The `traceparent` value to hand to downstream calls.
-    pub fn traceparent(&self) -> String {
-        format!("00-{}-{}-01", hex::encode(self.trace_id), hex::encode(self.span_id))
-    }
+/// The trace id (32 hex digits) a W3C `traceparent` header names, whether or not the caller sampled the trace:
+/// what a request's log lines carry when the exporter records nothing for it.
+pub fn trace_id_of(traceparent: &str) -> Option<String> {
+    TraceParent::parse(traceparent).map(|p| hex::encode(p.trace_id))
 }
 
 fn now_ns() -> u64 {

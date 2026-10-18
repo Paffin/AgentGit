@@ -934,6 +934,7 @@ class ListCredentialsRequest:
 class ListCredentialsResponse:
     """The `ListCredentialsResponse` message."""
     credentials: list[Credential] = field(default_factory=list)
+    truncated: bool = field(default=False)
 
 
 @dataclass(kw_only=True)
@@ -1063,6 +1064,7 @@ class ListRolesRequest:
 class ListRolesResponse:
     """The `ListRolesResponse` message."""
     bindings: list[RoleBinding] = field(default_factory=list)
+    truncated: bool = field(default=False)
 
 
 @dataclass(kw_only=True)

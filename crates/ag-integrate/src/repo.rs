@@ -160,6 +160,24 @@ impl Repository {
         Self::open_with_clock(self.layout.root(), self.meta.clock().clone())
     }
 
+    /// A view of this repository whose object store is `wrap(<this repository's object store>)`. The metadata
+    /// store, configuration, limits and failpoints are shared with the original, so the view is as cheap as a
+    /// few reference-count bumps and every write the engine makes through it passes through `wrap`'s store:
+    /// the way a host accounts for (or limits) the bytes that enter a repository on behalf of one request,
+    /// whichever operation writes them.
+    pub fn with_object_store(&self, wrap: impl FnOnce(Arc<dyn ObjectStore>) -> Arc<dyn ObjectStore>) -> Self {
+        let objects = wrap(self.objects.clone());
+        Self {
+            layout: self.layout.clone(),
+            config: self.config.clone(),
+            history: StoreHistory::new(objects.clone(), self.limits.clone()),
+            objects,
+            meta: self.meta.clone(),
+            limits: self.limits.clone(),
+            failpoints: self.failpoints.clone(),
+        }
+    }
+
     /// The repository layout.
     pub fn layout(&self) -> &Layout {
         &self.layout

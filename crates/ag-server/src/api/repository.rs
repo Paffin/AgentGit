@@ -10,32 +10,39 @@ use crate::control::RepoRow;
 use crate::error::{ApiError, ApiResult};
 use crate::repos::parse_repo_name;
 
-fn row_to_wire(r: &RepoRow) -> v1::Repo {
-    v1::Repo {
-        name: r.name.clone(),
-        namespace: r.namespace.clone(),
-        default_stream: r.default_stream.clone(),
-        description: r.description.clone(),
-        created_at_ms: r.created_at_ms,
-        created_by: r.created_by.clone(),
-        meta_backend: "sqlite".into(),
-        object_backend: "fs".into(),
-        durability: String::new(),
-        stream_count: 0,
-        changeset_count: 0,
-        quota: Some(r.quota),
-    }
-}
-
 impl App {
-    fn default_quota(&self) -> v1::Quota {
+    /// The quota a new repository starts with: the `[limits]` defaults. (Create, `ag-server admin create-repo`
+    /// and the API all use this one.)
+    pub fn default_quota(&self) -> v1::Quota {
+        let l = &self.cfg.limits;
         v1::Quota {
-            max_total_object_bytes: self.cfg.limits.max_total_object_bytes,
-            max_object_bytes: 0,
-            max_streams: 0,
-            max_open_proposals: self.cfg.limits.max_open_proposals,
-            requests_per_second: 0,
-            burst: 0,
+            max_total_object_bytes: l.max_total_object_bytes,
+            max_object_bytes: l.repo_max_object_bytes,
+            max_streams: l.repo_max_streams,
+            max_open_proposals: l.max_open_proposals,
+            requests_per_second: l.repo_requests_per_second,
+            burst: l.repo_burst,
+        }
+    }
+
+    /// The wire form of a registry row. The storage backends come from the repository's own stored
+    /// configuration, so create and list report what describe reports; the counts and the durability text need
+    /// the repository opened and are filled by describe only.
+    fn repo_to_wire(&self, r: &RepoRow) -> v1::Repo {
+        let (meta_backend, object_backend) = self.repos.backends_of(r);
+        v1::Repo {
+            name: r.name.clone(),
+            namespace: r.namespace.clone(),
+            default_stream: r.default_stream.clone(),
+            description: r.description.clone(),
+            created_at_ms: r.created_at_ms,
+            created_by: r.created_by.clone(),
+            meta_backend: meta_backend.into(),
+            object_backend: object_backend.into(),
+            durability: String::new(),
+            stream_count: 0,
+            changeset_count: 0,
+            quota: Some(r.quota),
         }
     }
 
@@ -74,13 +81,13 @@ impl App {
             app.control.record_idempotent(
                 &scoped_key,
                 &request_hash,
-                &serde_json::to_string(&row_to_wire(&row)).map_err(ApiError::internal)?,
+                &serde_json::to_string(&app.repo_to_wire(&row)).map_err(ApiError::internal)?,
             )?;
             Ok(row)
         })
         .await
         .map_err(ApiError::internal)??;
-        Ok(row_to_wire(&row))
+        Ok(self.repo_to_wire(&row))
     }
 
     /// Describes a repository.
@@ -93,21 +100,13 @@ impl App {
             tokio::task::spawn_blocking(move || control.repo(&n)).await.map_err(ApiError::internal)??
         }
         .ok_or_else(|| ApiError::not_found(format!("repository '{name}' not found")))?;
-        let mut wire = row_to_wire(&row);
+        let mut wire = self.repo_to_wire(&row);
         let (streams, changesets, durability, backends) = self
             .with_repo(call, &name, Cap::RepoRead, None, |repo, _| {
                 let streams = repo.meta().read(|tx| tx.list_streams())?.len() as u32;
                 let changesets = repo.meta().read(|tx| tx.count_changesets())?;
                 let d = repo.objects().durability();
-                let storage = repo.config().storage();
-                let backends = (
-                    if matches!(storage.meta, ag_integrate::MetaConfig::Postgres { .. }) {
-                        "postgres"
-                    } else {
-                        "sqlite"
-                    },
-                    if matches!(storage.objects, ag_integrate::ObjectsConfig::S3 { .. }) { "s3" } else { "fs" },
-                );
+                let backends = crate::repos::config_backends(repo.config());
                 Ok((
                     streams,
                     changesets,
@@ -137,14 +136,13 @@ impl App {
         let control = self.control.clone();
         let prefix = req.prefix.clone();
         let principal = call.principal.clone();
-        let (repos, next) = tokio::task::spawn_blocking(move || -> ApiResult<(Vec<RepoRow>, String)> {
+        let app = self.clone();
+        let (repos, next) = tokio::task::spawn_blocking(move || -> ApiResult<(Vec<v1::Repo>, String)> {
             let mut out: Vec<RepoRow> = Vec::new();
             let mut cursor = after;
             loop {
-                let batch = control.repos(&prefix, &cursor, 200)?;
-                let exhausted = batch.len() < 200;
-                for r in batch {
-                    cursor = r.name.clone();
+                let page = control.repos_page(&prefix, &cursor, 200)?;
+                for r in page.rows {
                     if Authorizer::check(&principal, &bindings, &r.name, Cap::RepoRead, None).is_ok() {
                         out.push(r);
                         if out.len() > size {
@@ -152,8 +150,10 @@ impl App {
                         }
                     }
                 }
-                if out.len() > size || exhausted {
-                    break;
+                // Resume after the last name the page returned, including rows that were skipped.
+                match page.last {
+                    Some(last) if out.len() <= size && !page.exhausted => cursor = last,
+                    _ => break,
                 }
             }
             let next = if out.len() > size {
@@ -162,11 +162,11 @@ impl App {
             } else {
                 String::new()
             };
-            Ok((out, next))
+            Ok((out.iter().map(|r| app.repo_to_wire(r)).collect(), next))
         })
         .await
         .map_err(ApiError::internal)??;
-        Ok(v1::ListReposResponse { repos: repos.iter().map(row_to_wire).collect(), next_page_token: next })
+        Ok(v1::ListReposResponse { repos, next_page_token: next })
     }
 
     /// Changes repository settings.

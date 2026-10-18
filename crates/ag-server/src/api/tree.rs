@@ -28,6 +28,14 @@ fn entry_to_wire(path: &RepoPath, e: &Entry, size: u64) -> v1::TreeEntry {
     }
 }
 
+/// The size of a blob, read from metadata without reading the content. A blob the tree names but the object store
+/// does not hold is damage the caller must hear about (`object_missing`), not an empty file of size 0.
+fn blob_size(repo: &Repository, id: &ag_types::BlobId) -> ApiResult<u64> {
+    repo.blob_len(id)?.ok_or_else(|| {
+        ApiError::new(ag_protocol::ErrorCode::ObjectMissing, format!("blob {id} is missing from the object store"))
+    })
+}
+
 /// One page of a tree manifest. Sizes are filled in for the entries of the page only (a metadata lookup per
 /// entry, never a read of the content).
 pub(crate) fn tree_page(repo: &Repository, tree: &Tree, size: u32, token: &str) -> ApiResult<v1::GetTreeResponse> {
@@ -36,10 +44,7 @@ pub(crate) fn tree_page(repo: &Repository, tree: &Tree, size: u32, token: &str) 
     let (page, next) = paginate("tree", entries, size, token)?;
     let page = page
         .into_iter()
-        .map(|(p, e)| {
-            let len = repo.blob_len(&e.content)?.unwrap_or(0);
-            Ok(entry_to_wire(p, e, len))
-        })
+        .map(|(p, e)| Ok(entry_to_wire(p, e, blob_size(repo, &e.content)?)))
         .collect::<ApiResult<Vec<_>>>()?;
     Ok(v1::GetTreeResponse {
         tree_id: tree.id().to_string(),
@@ -73,7 +78,7 @@ impl App {
             }
             let rp = RepoPath::new(&path).map_err(|e| ApiError::invalid(e.to_string()))?;
             if let Some(e) = tree.get(&rp) {
-                let size = repo.blob(&e.content).map(|b| b.len() as u64).unwrap_or(0);
+                let size = blob_size(repo, &e.content)?;
                 return Ok(v1::ResolvePathResponse {
                     kind: e.file_type.to_string(),
                     entry: Some(entry_to_wire(&rp, e, size)),
@@ -122,7 +127,7 @@ impl App {
             let (mut page, next) = paginate("dir", wire, size, &token)?;
             for e in page.iter_mut().filter(|e| e.kind != "dir") {
                 if let Ok(id) = e.blob_id.parse::<ag_types::BlobId>() {
-                    e.size = repo.blob_len(&id)?.unwrap_or(0);
+                    e.size = blob_size(repo, &id)?;
                 }
             }
             Ok(v1::ListDirectoryResponse { entries: page, next_page_token: next, tree_id: tree.id().to_string() })

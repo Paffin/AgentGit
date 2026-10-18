@@ -21,7 +21,7 @@ name: Containers
 
 on:
   push:
-    branches: [main]
+    branches: [main, wip/containers-ui]
     paths:
       - "deploy/**"
       - "crates/**"

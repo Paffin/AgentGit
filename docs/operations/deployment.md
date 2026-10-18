@@ -10,22 +10,30 @@ Three ready-made ways to run it, all under [`deploy/`](../../deploy):
 | | For | Files |
 |---|---|---|
 | **Binary** | trying it, small teams, systemd | `ag-server serve --config ag-server.toml` |
-| **Docker Compose** | one host with PostgreSQL and MinIO | [`deploy/compose/`](../../deploy/compose) |
+| **Docker Compose** | one host with PostgreSQL and SeaweedFS (S3) | [`deploy/compose/`](../../deploy/compose) |
 | **Kubernetes** | a cluster | [`deploy/kubernetes/`](../../deploy/kubernetes) (kustomize) |
 
 ## What has been verified
 
 Be clear about what "ready-made" means here.
 
-| Checked in CI (`scripts/check_deploy.py --strict`, `cargo test -p ag-server --test deploy_configs`) | **Not yet verified — treat as a starting point** |
+| Checked in CI on every change (`ci.yml`: `scripts/check_deploy.py --strict`, `cargo test -p ag-server --test deploy_configs`) | **Not verified — treat as a starting point** |
 |---|---|
-| Every YAML/JSON file parses | The Dockerfile has not been built by the author (no Docker daemon was available); CI builds it, starts the image and waits for its health check |
-| `kustomize build` of both kustomizations; `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | No manifest has been applied to a real cluster |
-| `promtool check rules` / `check config` | No Prometheus has scraped a server using these files; the alert thresholds are reasoned defaults, not tuned on real traffic |
-| `docker compose config` with and without secrets (it refuses to start without them) | `docker compose up` has not been run end to end |
-| Every shipped `ag-server.toml` loads and validates with this server | The release workflow has never run; the first tag is its first test |
-| Every metric used by alerts and the dashboard is one the server exports | Behaviour under load, upgrades and failover |
+| Every YAML/JSON file parses | The alert thresholds are reasoned defaults, not tuned on real traffic |
+| `kustomize build` of both kustomizations; `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |
+| `promtool check rules` / `check config` | Behaviour under load, upgrades and failover |
+| `docker compose config` with and without secrets (it refuses to start without them) | A cluster other than kind: ingress, TLS termination, a real storage class, a CNI that enforces the NetworkPolicy |
+| Every shipped `ag-server.toml` loads and validates with this server | Published images: nothing has been pushed to GHCR, so the default `ghcr.io/paffin/agentgit-server:latest` does not resolve; build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind) |
+| Every metric used by alerts and the dashboard is one the server exports | The release workflow has only been rehearsed without publishing; the first tag is its first real publish ([releasing.md](releasing.md#what-is-not-proven)) |
 | `ag-server healthcheck`, bearer-protected `/metrics` and trace export are covered by integration tests | |
+
+| Run for real in the [`Containers`](../../.github/workflows/containers.yml) workflow (every change that can alter an image or `deploy/`) | |
+|---|---|
+| `deploy/docker/Dockerfile` builds both targets; the images are under 100 MiB, run as uid 65532 with no shell and a health check, and report the commit they were built from; the server image embeds the Web UI (the log says so, `/` serves the app, its scripts are served pre-compressed) | |
+| The server image runs with a read-only root and no capabilities and passes the end-to-end smoke (`scripts/e2e_smoke.py`: repository, roles, credentials, `ag clone`, snapshot, `ag push`, integrate, read back over HTTP, metrics), again after a restart | |
+| A rebuild on a fresh runner restores the dependency, UI and compile layers from the cache | |
+| `docker compose up` of `deploy/compose` (server, PostgreSQL, SeaweedFS as the S3 store): the same smoke, rows in the repository's PostgreSQL schema and objects in the bucket, a restart that loses nothing, and the `observability` profile (Prometheus scrapes with the token file, rules load, Grafana and the collector answer) | |
+| `deploy/kubernetes` (base through the `ci` overlay) applied to a kind cluster (Kubernetes 1.33): `restricted` Pod Security, no restarts, the same smoke through a port-forward, a rollout restart that keeps the data | |
 
 If something here fails on your cluster, that is a bug in these files — please report it.
 
@@ -62,7 +70,7 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-This starts the server, PostgreSQL 16 and MinIO and creates the bucket. Repositories created on this server
+This starts the server, PostgreSQL 16 and SeaweedFS (an S3-compatible store) and creates the bucket. Repositories created on this server
 keep **metadata in their own PostgreSQL schema** and **objects under their own prefix of the bucket**.
 Create the first user:
 

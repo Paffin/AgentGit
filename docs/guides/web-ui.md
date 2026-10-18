@@ -14,8 +14,11 @@ client. Nothing in the UI can do what the API would refuse.
 
 `ag-server` serves the UI itself: the build of `apps/web` is compiled into the binary (cargo feature `ui`, on by
 default), so one file is the whole product. Release and CI builds run `scripts/build_ui.sh` (Node 22.18 or newer:
-`npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p ag-server`.
-A server built without the UI build still compiles and runs; a browser then sees a page that says how to get the
+`npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p ag-server`. The
+container image (`deploy/docker/Dockerfile`: a Node stage runs the script, the Rust stage embeds its output) is built
+that way, and CI checks that the image's server serves the app. The release workflow builds the UI before its
+binaries too (and its archive smoke test checks the app is served); that part has not been rehearsed since it was
+added. A server built without the UI build still compiles and runs; a browser then sees a page that says how to get the
 UI (and API clients keep their JSON 404). If you built the UI by hand after a first cargo build, `touch
 crates/ag-ui-assets/build.rs` (Cargo cannot watch a directory that did not exist yet; `build_ui.sh` does it for you).
 

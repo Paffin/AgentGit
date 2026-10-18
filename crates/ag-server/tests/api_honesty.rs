@@ -160,6 +160,9 @@ async fn create_and_list_report_the_storage_a_repository_really_has() {
                 session_token_env: None,
                 ca_bundle: None,
                 lock: Default::default(),
+                request_timeout_secs: None,
+                max_retries: None,
+                list_page_size: None,
             },
         }),
     };

@@ -273,7 +273,7 @@ jobs:
       # architecture by digest; a rehearsal exports a tarball instead. The manifest job merges them.
       - name: Server image
         id: server
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -296,7 +296,7 @@ jobs:
           outputs: ${{ needs.verify.outputs.publish == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_SERVER) || format('type=docker,dest={0}/server-{1}.tar,name=agentgit-server:{2}', runner.temp, matrix.arch, matrix.arch) }}
       - name: CLI image
         id: cli
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/docker/Dockerfile

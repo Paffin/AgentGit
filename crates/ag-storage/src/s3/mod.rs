@@ -342,7 +342,9 @@ impl ObjectStore for S3ObjectStore {
                 let modified = xml::first_text(c, "LastModified")
                     .and_then(|s| xml::parse_iso8601_ms(&s))
                     .ok_or_else(|| remote(format!("list: no usable LastModified for {key}")))?;
-                let size = xml::first_text(c, "Size").and_then(|s| s.parse().ok()).unwrap_or(0);
+                let size = xml::first_text(c, "Size")
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| remote(format!("list: no usable Size for {key}")))?;
                 out.push(ObjectInfo { id, size, modified: Timestamp::from_millis(modified) });
             }
             if xml::first_text(&page, "IsTruncated").as_deref() == Some("true") {

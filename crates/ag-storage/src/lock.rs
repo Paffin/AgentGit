@@ -241,6 +241,12 @@ impl PostgresAdvisoryLock {
         lock.0.with_session(|_| Ok(()))?;
         Ok(lock)
     }
+
+    /// Runs SQL on the session that holds the lock (test helper: it lets a test make the session misbehave).
+    #[doc(hidden)]
+    pub fn batch_on_session_for_test(&self, sql: &str) -> Result<(), StoreError> {
+        self.0.with_session(|c| c.batch(sql))
+    }
 }
 
 fn lock_err(e: crate::meta::MetaError) -> StoreError {
@@ -288,8 +294,15 @@ impl PgInner {
         let func = if exclusive { "pg_advisory_unlock" } else { "pg_advisory_unlock_shared" };
         // A dead session needs no unlock: PostgreSQL already released everything it held.
         let mut slot = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(conn) = slot.as_mut().filter(|c| !c.is_dead()) {
-            let _ = conn.batch(&self.sql(func));
+        let Some(conn) = slot.as_mut().filter(|c| !c.is_dead()) else { return };
+        if conn.batch(&self.sql(func)).is_err() {
+            // The unlock failed but the connection lives on (the server answered with an error: a statement
+            // timeout, a cancelled query, an aborted transaction). The session would go on holding the advisory
+            // lock while this process believes it released it, and every other writer or collector would wait for
+            // it until the process exits. Ending the session is the one sure release: PostgreSQL drops all the
+            // advisory locks of a session that ends. The next acquisition connects afresh.
+            conn.mark_broken();
+            *slot = None;
         }
     }
 }

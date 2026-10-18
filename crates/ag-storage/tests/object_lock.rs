@@ -121,3 +121,31 @@ fn locks_with_different_names_are_independent() {
     drop(b.exclusive().unwrap());
     assert!(started.elapsed() < Duration::from_secs(5));
 }
+
+#[test]
+fn an_unlock_the_server_refuses_does_not_leave_the_lock_held() {
+    let Some(url) = url() else { return };
+    let name = unique("lock");
+    let holder = PostgresAdvisoryLock::connect(&url, &name).unwrap();
+    let other = PostgresAdvisoryLock::connect(&url, &name).unwrap();
+    let guard = holder.exclusive().unwrap();
+
+    // Put the lock's session into an aborted transaction: the connection stays up, but the server now answers
+    // every further statement (including the unlock) with an error.
+    holder.batch_on_session_for_test("BEGIN").unwrap();
+    holder.batch_on_session_for_test("SELECT 1/0").expect_err("division by zero aborts the transaction");
+    drop(guard); // the unlock is refused
+
+    // Before the fix the session kept the advisory lock for as long as this process lived, so nobody else could
+    // ever take it. Now the failed unlock ends the session, which releases it.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        drop(other.exclusive().unwrap());
+        tx.send(()).unwrap();
+    });
+    rx.recv_timeout(Duration::from_secs(10)).expect("another process can take the lock after a refused unlock");
+
+    // And the holder itself recovers: its next acquisition connects afresh.
+    drop(holder.shared().unwrap());
+    drop(holder.exclusive().unwrap());
+}

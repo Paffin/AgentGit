@@ -249,12 +249,36 @@ pub struct FsObjectStore {
 }
 
 impl FsObjectStore {
-    /// Opens (creating if needed) a store rooted at `root`.
+    /// Opens (creating if needed) a store rooted at `root`, and removes the staging files a crashed writer left
+    /// behind (see [`FsObjectStore::reap_tmp`]).
     pub fn open(root: impl Into<PathBuf>, limits: Limits) -> Result<Self, StoreError> {
         let root = root.into();
         fs::create_dir_all(root.join("objects"))?;
         fs::create_dir_all(root.join("tmp"))?;
-        Ok(Self { root, limits })
+        let store = Self { root, limits };
+        store.reap_tmp()?;
+        Ok(store)
+    }
+
+    /// Removes the files in `tmp/` and returns how many it removed.
+    ///
+    /// A writer stages an object in `tmp/` and holds the store's lock *shared* until the object is renamed into
+    /// place, so whenever the lock can be taken *exclusively* nobody, in any process, is mid-write and every file
+    /// in `tmp/` was left by a writer that died (a kill or a power loss between creating the file and renaming it;
+    /// a failed write cleans up after itself). While any writer or a backup holds the lock this does nothing.
+    /// A file that cannot be removed is left for the next call.
+    pub fn reap_tmp(&self) -> Result<usize, StoreError> {
+        let lock = self.lock_file()?;
+        if lock.try_lock().is_err() {
+            return Ok(0);
+        }
+        let mut removed = 0;
+        for entry in fs::read_dir(self.root.join("tmp"))? {
+            if crate::fsutil::remove_file(&entry?.path()).is_ok() {
+                removed += 1;
+            }
+        }
+        Ok(removed)
     }
 
     fn path_of(&self, id: &ObjectId) -> PathBuf {
@@ -308,6 +332,19 @@ fn touch(path: &Path) -> std::io::Result<()> {
     file.set_modified(std::time::SystemTime::now())
 }
 
+/// A staging file in `tmp/`, removed when dropped unless it was renamed into place (`.1` is cleared then): every
+/// early return of `put` after the file was created (a failed write, `chmod` or rename) would otherwise leave it
+/// behind. Removal is best effort; what it cannot remove, the next [`FsObjectStore::reap_tmp`] does.
+struct TmpFile(PathBuf, bool);
+
+impl Drop for TmpFile {
+    fn drop(&mut self) {
+        if self.1 {
+            let _ = crate::fsutil::remove_file(&self.0);
+        }
+    }
+}
+
 impl ObjectStore for FsObjectStore {
     fn put(&self, obj: &RawObject) -> Result<ObjectId, StoreError> {
         check_size(obj, &self.limits)?;
@@ -323,22 +360,21 @@ impl ObjectStore for FsObjectStore {
         }
         let dir = path.parent().expect("object path has a parent");
         fs::create_dir_all(dir)?;
-        let tmp = self.root.join("tmp").join(format!(
-            "{}-{}",
-            std::process::id(),
-            ag_crypto::random_id("t").map_err(|e| StoreError::Injected(e.to_string()))?
-        ));
+        let unique = ag_crypto::random_id("t")
+            .map_err(|e| std::io::Error::other(format!("the system's randomness is unavailable: {e}")))?;
+        let mut tmp = TmpFile(self.root.join("tmp").join(format!("{}-{unique}", std::process::id())), true);
         {
-            let mut f = File::create(&tmp)?;
+            let mut f = File::create(&tmp.0)?;
             f.write_all(&obj.encode_envelope())?;
             f.sync_all()?;
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o444))?;
+            fs::set_permissions(&tmp.0, fs::Permissions::from_mode(0o444))?;
         }
-        crate::fsutil::rename_replace(&tmp, &path)?;
+        crate::fsutil::rename_replace(&tmp.0, &path)?;
+        tmp.1 = false; // moved into place: nothing left to remove
         Self::sync_dir(dir)?;
         Ok(id)
     }
@@ -383,13 +419,9 @@ impl ObjectStore for FsObjectStore {
                 let Some(rest) = f.file_name().to_str().map(str::to_owned) else { continue };
                 let Ok(id) = format!("{prefix}{rest}").parse::<ObjectId>() else { continue };
                 let md = f.metadata()?;
-                let modified = md
-                    .modified()
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| Timestamp::from_millis(d.as_millis() as i64))
-                    .unwrap_or_else(|| Timestamp::from_millis(0));
-                out.push(ObjectInfo { id, size: md.len(), modified });
+                // An unreadable modification time is an error, not "the epoch": garbage collection reads an
+                // object whose age it cannot know as ancient and deletes it.
+                out.push(ObjectInfo { id, size: md.len(), modified: Timestamp::from(md.modified()?) });
             }
         }
         out.sort_by_key(|i| i.id);
@@ -413,13 +445,8 @@ impl ObjectStore for FsObjectStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
             Err(e) => return Err(e.into()),
         };
-        let modified = md
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
-        if modified >= cutoff.as_millis() {
+        // See `list`: no modification time means "do not delete", never "infinitely old".
+        if Timestamp::from(md.modified()?) >= cutoff {
             return Ok(false);
         }
         fs::remove_file(&path)?;
@@ -547,6 +574,51 @@ mod tests {
         assert_eq!(s.get(&id).unwrap().unwrap().payload, b"persist");
         assert_eq!(fs::read_dir(dir.path().join("tmp")).unwrap().count(), 0);
         assert_eq!(hash_blob(b"persist").object_id(), id);
+    }
+
+    fn tmp_entries(dir: &Path) -> usize {
+        fs::read_dir(dir.join("tmp")).unwrap().count()
+    }
+
+    #[test]
+    fn staging_files_of_a_dead_writer_are_removed_when_the_store_is_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        let id = s.put(&RawObject::blob(b"kept".to_vec())).unwrap();
+        // What a writer killed between creating the file and renaming it leaves behind.
+        fs::write(dir.path().join("tmp").join("4242-t_orphan"), vec![0u8; 1000]).unwrap();
+        fs::write(dir.path().join("tmp").join("4343-t_other"), b"half").unwrap();
+        assert_eq!(tmp_entries(dir.path()), 2);
+
+        let reopened = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        assert_eq!(tmp_entries(dir.path()), 0, "tmp/ is empty when nobody is writing");
+        assert_eq!(reopened.get(&id).unwrap().unwrap().payload, b"kept", "stored objects are untouched");
+    }
+
+    #[test]
+    fn a_staging_file_is_not_reaped_while_a_writer_or_a_backup_holds_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        fs::write(dir.path().join("tmp").join("1-t_live"), b"being written").unwrap();
+        // A writer (and a backup) holds the lock shared; so does `block_gc`.
+        let guard = s.block_gc().unwrap();
+        assert_eq!(s.reap_tmp().unwrap(), 0);
+        let second = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        assert_eq!(tmp_entries(dir.path()), 1, "a live writer's file survives");
+        drop(guard);
+        assert_eq!(second.reap_tmp().unwrap(), 1);
+        assert_eq!(tmp_entries(dir.path()), 0);
+    }
+
+    #[test]
+    fn a_failed_put_leaves_no_staging_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = FsObjectStore::open(dir.path(), Limits::default()).unwrap();
+        let obj = RawObject::blob(b"cannot be renamed into place".to_vec());
+        // A directory where the object should go: the staging file is written, then the rename fails.
+        fs::create_dir_all(s.path_of(&obj.id()).join("occupied")).unwrap();
+        assert!(s.put(&obj).is_err());
+        assert_eq!(tmp_entries(dir.path()), 0, "the failed put cleaned up after itself");
     }
 
     #[test]

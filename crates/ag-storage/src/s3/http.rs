@@ -1,11 +1,28 @@
 //! The HTTP side of the S3 client: addressing, signing, sending, retrying.
 
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+
+use ag_types::Timestamp;
 
 use super::sigv4::{self, Credentials, SigningInput, uri_encode};
 use super::{S3Config, xml};
 use crate::error::StoreError;
+
+/// How long connecting to the endpoint may take. (The deadline of a whole request, body included, is
+/// [`S3Config::request_timeout`].)
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// The first retry waits this long; every further one waits twice as long as the previous, up to [`BACKOFF_CAP_MS`].
+const BACKOFF_BASE_MS: u64 = 50;
+/// The longest a retry waits (before jitter).
+const BACKOFF_CAP_MS: u64 = 3000;
+/// The doubling stops here: `BACKOFF_BASE_MS << 6` is already above [`BACKOFF_CAP_MS`], and the shift stays small.
+const BACKOFF_MAX_DOUBLINGS: u32 = 6;
+/// A response body is read up to the largest blob this repository allows, but never below this: list pages and
+/// error documents are far smaller.
+const MIN_RESPONSE_LIMIT: u64 = 64 << 20;
+/// Added to the response limit for the object envelope around a maximum-size blob.
+const RESPONSE_SLACK: u64 = 1 << 20;
 
 /// One S3 request. `key` is `None` for bucket-level calls.
 pub(crate) struct Request<'a> {
@@ -126,7 +143,7 @@ impl Client {
             // never follow redirects: they would replay our signed headers somewhere else
             .max_redirects(0)
             .max_redirects_will_error(false)
-            .timeout_connect(Some(Duration::from_secs(10)))
+            .timeout_connect(Some(CONNECT_TIMEOUT))
             .timeout_global(Some(cfg.request_timeout))
             .user_agent(format!("agentgit/{}", env!("CARGO_PKG_VERSION")))
             .tls_config(tls.build())
@@ -143,7 +160,7 @@ impl Client {
             credentials: cfg.credentials.clone(),
             max_retries: cfg.max_retries,
             // The largest answer we expect is an object, whose size the caller bounds.
-            body_limit: cfg.limits.max_blob_size.max(64 << 20) + (1 << 20),
+            body_limit: cfg.limits.max_blob_size.max(MIN_RESPONSE_LIMIT) + RESPONSE_SLACK,
         })
     }
 
@@ -170,8 +187,9 @@ impl Client {
 
     fn once(&self, req: &Request<'_>) -> Result<Response, ureq::Error> {
         let (host, path) = self.address(req.key);
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
-        let date = sigv4::amz_date(now);
+        // The request is signed with the clock's own reading, whatever it is: a clock that is wrong makes the server
+        // answer RequestTimeTooSkewed (which `describe` explains), instead of this signing a made-up 1970.
+        let date = sigv4::amz_date(Timestamp::now().as_millis().div_euclid(1000));
         let payload_sha = sigv4::sha256_hex(req.body);
 
         let mut headers: Vec<(String, String)> = req.headers.clone();
@@ -301,9 +319,10 @@ fn is_transient_error(e: &ureq::Error) -> bool {
     )
 }
 
-/// 50 ms, 100 ms, 200 ms … capped at 3 s, plus up to 50 % jitter.
+/// 50 ms, 100 ms, 200 ms … capped at 3 s, plus up to 50 % jitter (see the `BACKOFF_*` constants). Without
+/// randomness the jitter is skipped: the retry then waits the plain delay.
 fn backoff(attempt: u32) -> Duration {
-    let base = 50u64.saturating_mul(1 << attempt.min(6)).min(3000);
+    let base = BACKOFF_BASE_MS.saturating_mul(1 << attempt.min(BACKOFF_MAX_DOUBLINGS)).min(BACKOFF_CAP_MS);
     let jitter = ag_crypto::random_bytes::<2>().map_or(0, |b| u64::from(u16::from_le_bytes(b)) % (base / 2 + 1));
     Duration::from_millis(base + jitter)
 }

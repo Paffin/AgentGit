@@ -327,3 +327,47 @@ async fn jobs_are_deduplicated_by_key_however_many_jobs_came_later_and_errors_ar
     assert_eq!(audited, stored, "the audit entry is bounded like the job");
     srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn asking_again_finds_the_queued_validation_however_many_jobs_came_after_it() {
+    let srv = TestServer::start().await;
+    let ci_key = KeyPair::generate().unwrap();
+    let (alice, _carol, pid) = seed(&srv, "acme/web", &ci_key).await;
+
+    let prep =
+        alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/prepare"), json!({"enqueue_validations": true})).await;
+    assert_eq!(prep.status, 200, "{}", prep.json);
+    let job_id = prep.json["jobs"][0]["id"].as_str().unwrap().to_string();
+    async fn enqueue_events(alice: &Http) -> usize {
+        let ev = alice.get("/v1/repos/acme/web/events/replay?topics=job.enqueue&limit=1000").await;
+        ev.json["events"].as_array().unwrap().len()
+    }
+    assert_eq!(enqueue_events(&alice).await, 1);
+
+    // More jobs than the first page of the job list holds are queued after it (by other work, straight into the
+    // repository's queue).
+    let repo = ag_integrate::Repository::open(&srv.dir.path().join("repos/acme/web")).unwrap();
+    for i in 0..1100 {
+        let key = format!("noise:{i}");
+        repo.meta()
+            .write(|tx| tx.job_enqueue("unrelated", &json!({"n": i}), Some(&key), Timestamp::from_millis(0)))
+            .unwrap();
+    }
+
+    // The same candidate is requested again: the existing job is found by its key, not by scanning the newest
+    // thousand, so nothing is enqueued, counted or audited a second time.
+    let again = alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+    assert_eq!(again.status, 200, "{}", again.json);
+    assert_eq!(again.json["jobs"].as_array().unwrap().len(), 1, "{}", again.json);
+    assert_eq!(again.json["jobs"][0]["id"], job_id.as_str());
+    assert_eq!(enqueue_events(&alice).await, 1, "no second job.enqueue audit entry for work that was not enqueued");
+    let m = String::from_utf8(srv.client("").get("/metrics").await.body).unwrap();
+    assert!(m.contains("agwp_job_events_total{event=\"enqueued\"} 1"), "{m}");
+
+    // The read-only view of the candidate's jobs sees it too, so the check still reads as pending, not missing.
+    let prep = alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/prepare"), json!({})).await;
+    assert_eq!(prep.json["jobs"].as_array().map_or(0, Vec::len), 1, "{}", prep.json);
+    assert_eq!(prep.json["validations"][0]["state"], "pending", "{}", prep.json);
+    assert_eq!(prep.json["validations"][0]["job_id"], job_id.as_str());
+    srv.stop().await;
+}

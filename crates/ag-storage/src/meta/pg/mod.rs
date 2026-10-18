@@ -280,6 +280,11 @@ impl PgClient {
         self.broken || self.client.is_closed()
     }
 
+    /// Declares the connection unusable, so the pool closes it instead of handing it out again.
+    pub(crate) fn mark_broken(&mut self) {
+        self.broken = true;
+    }
+
     fn fail(&mut self, e: &postgres::Error, during_commit: bool) -> MetaError {
         let mapped = classify(e, during_commit);
         // I/O trouble, or the server ending the session (a FATAL answer such as an

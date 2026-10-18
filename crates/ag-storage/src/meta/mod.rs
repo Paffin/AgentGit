@@ -24,6 +24,12 @@
 //! | read | deferred transaction (snapshot) | `REPEATABLE READ READ ONLY` |
 //! | busy / lock wait | `busy_timeout` 30 s, then [`MetaError::Retriable`] | `lock_timeout` 30 s, then [`MetaError::Retriable`] |
 //!
+//! On SQLite one [`Meta`] handle owns a single connection behind a mutex, so
+//! reads and writes through the *same handle* run one at a time; readers run
+//! concurrently across handles (open a `Meta` per concurrent reader, as the
+//! server's repository pool does) or processes. On PostgreSQL each transaction
+//! takes its own pooled connection.
+//!
 //! The SQL itself is written once in the common subset (see [`db`]); the
 //! backend only decides how a transaction is opened and closed.
 

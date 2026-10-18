@@ -444,6 +444,28 @@ fn listing_follows_continuation_tokens_and_skips_foreign_keys() {
 }
 
 #[test]
+fn a_listing_entry_without_a_usable_size_or_time_is_an_error_not_a_zero() {
+    let id = blob(&[7]).id();
+    let h = id.to_hex();
+    let key = format!("repo/one/objects/{}/{}", &h[..2], &h[2..]);
+    for (what, entry) in [
+        ("Size", format!("<Contents><Key>{key}</Key><LastModified>2026-10-17T13:00:17.000Z</LastModified></Contents>")),
+        (
+            "Size",
+            format!(
+                "<Contents><Key>{key}</Key><LastModified>2026-10-17T13:00:17.000Z</LastModified><Size>lots</Size></Contents>"
+            ),
+        ),
+        ("LastModified", format!("<Contents><Key>{key}</Key><Size>42</Size></Contents>")),
+    ] {
+        let page = format!("<ListBucketResult>{entry}<IsTruncated>false</IsTruncated></ListBucketResult>");
+        let fake = Fake::start(move |n, _| if n == 0 { ok(EMPTY_LISTING) } else { ok(&page) });
+        let err = fake.store().list().expect_err("a damaged listing is not a listing");
+        assert!(err.to_string().contains(&format!("no usable {what}")), "{what}: {err}");
+    }
+}
+
+#[test]
 fn delete_if_older_than_looks_at_the_servers_last_modified_and_holds_the_lock() {
     let lm = "Fri, 24 May 2013 00:00:00 GMT"; // 1_369_353_600_000 ms
     let fake = Fake::start(move |n, r| match (r.method.as_str(), n) {

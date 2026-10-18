@@ -5,7 +5,9 @@
 //!   Objects are immutable and verified on every read. Backends declare what
 //!   durability they actually provide via [`Durability`].
 //! * [`Meta`] is the strongly consistent metadata store (SQLite in WAL mode
-//!   with `synchronous=FULL`): the changeset index, streams, the reflog,
+//!   with `synchronous=FULL`, or PostgreSQL with writers serialized by an
+//!   advisory lock and `REPEATABLE READ` readers; see
+//!   `docs/operations/postgres-and-s3.md`): the changeset index, streams, the reflog,
 //!   publication intents, the outbox, the audit chain, policies, proposals,
 //!   attestations and agent coordination state. Every multi-row state change
 //!   happens inside one SQL transaction, which is what makes the stream

@@ -104,7 +104,11 @@ func (r *testRig) start(t *testing.T) context.CancelFunc {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.app, err = New(Options{Config: r.cfg, Getenv: r.getenv, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Listener: ln})
+	var logw io.Writer = io.Discard
+	if os.Getenv("AG_TEST_LOG") != "" {
+		logw = os.Stderr // for debugging a failing test
+	}
+	r.app, err = New(Options{Config: r.cfg, Getenv: r.getenv, Log: slog.New(slog.NewTextHandler(logw, nil)), Listener: ln})
 	if err != nil {
 		t.Fatal(err)
 	}

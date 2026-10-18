@@ -49,6 +49,10 @@ type ProposalSymbols struct {
 	At      time.Time `json:"at"`
 	// Mentions are the identifiers that occur in the changed files at the proposal's head.
 	Mentions map[string]bool `json:"-"`
+	// Description and Patches are kept for a Judge only (see judge.go): the proposal's text and the diffs of its
+	// changed files, bounded. Neither is served.
+	Description string            `json:"-"`
+	Patches     map[string]string `json:"-"`
 }
 
 // Overlap kinds.
@@ -77,16 +81,26 @@ type Overlap struct {
 	Severity string      `json:"severity"` // high | medium | low
 	Symbols  []SymbolRef `json:"symbols"`
 	Why      string      `json:"why"`
+	// Assessment is a language model's opinion on whether the overlap matters (model mode only). Severity above is
+	// the static analysis's own and is not changed by it.
+	Assessment *Assessment `json:"assessment,omitempty"`
 }
 
 // analyze computes the definitions a proposal changes relative to base.
 func (c *Component) analyze(ctx context.Context, p agwp.Proposal, base string) (*ProposalSymbols, error) {
 	repo := c.o.Repo.Name
-	diff, err := c.o.API.Diff(ctx, repo, base, p.Head, 0)
+	ctxLines := 0
+	if c.o.Judge != nil {
+		ctxLines = 3 // a model reads a change better with the lines around it
+	}
+	diff, err := c.o.API.Diff(ctx, repo, base, p.Head, ctxLines)
 	if err != nil {
 		return nil, fmt.Errorf("diff: %w", err)
 	}
 	ps := &ProposalSymbols{Proposal: p.ID, Title: p.Title, Head: p.Head, Base: base, At: c.o.Clock.Now(), Partial: diff.Truncated, Mentions: map[string]bool{}}
+	if c.o.Judge != nil {
+		ps.Description, ps.Patches = p.Description, map[string]string{}
+	}
 	skipped := map[string]bool{}
 	maxBytes := int64(c.o.Repo.Index.MaxBytes)
 	maxFiles := c.o.Repo.Index.ProposalFiles
@@ -114,6 +128,9 @@ func (c *Component) analyze(ctx context.Context, p agwp.Proposal, base string) (
 			}
 		}
 		skipped[f.Path] = false
+		if ps.Patches != nil && f.Patch != "" {
+			ps.Patches[f.Path] = f.Patch
+		}
 		oldS, newS := Extract(lang, oldB, nil), Extract(lang, newB, nil)
 		ps.Changed = append(ps.Changed, compareDefs(f.Path, oldB, newB, oldS.Defs, newS.Defs)...)
 		for id := range newS.Idents {
@@ -264,8 +281,142 @@ func (c *Component) Changes() []*ProposalSymbols {
 	return out
 }
 
-// Overlaps compares the analysed proposals pairwise.
-func (c *Component) Overlaps() []Overlap { return ComputeOverlaps(c.Changes()) }
+// Overlaps compares the analysed proposals pairwise. In model mode each overlap carries the model's assessment of
+// its pair, when there is one.
+func (c *Component) Overlaps() []Overlap {
+	ps := c.Changes()
+	out := ComputeOverlaps(ps)
+	if c.o.Judge == nil {
+		return out
+	}
+	heads := map[string]string{}
+	for _, p := range ps {
+		heads[p.Proposal] = p.Head
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range out {
+		if a := c.assessments[pairKey(out[i].A, heads[out[i].A], out[i].B, heads[out[i].B])]; a != nil {
+			cp := *a
+			out[i].Assessment = &cp
+		}
+	}
+	return out
+}
+
+// pairKey names a pair of proposals at their current heads, whichever order they are given in.
+func pairKey(a, headA, b, headB string) string {
+	if a > b {
+		a, headA, b, headB = b, headB, a, headA
+	}
+	return a + "@" + headA + "|" + b + "@" + headB
+}
+
+// judgeOverlaps has the model assess the pairs of proposals that the static analysis found overlapping and that it
+// has not assessed at their current heads: at most JudgePerPass pairs per pass, the most severe first. Weak hints
+// (same-named exports in different files) are not worth a request. A failure is recorded and the pair waits before
+// it is tried again; the static findings are unaffected.
+func (c *Component) judgeOverlaps(ctx context.Context) {
+	ps := c.Changes()
+	byID := map[string]*ProposalSymbols{}
+	for _, p := range ps {
+		byID[p.Proposal] = p
+	}
+	type pair struct {
+		a, b     string
+		key      string
+		overlaps []Overlap
+		rank     int
+	}
+	rank := map[string]int{"high": 0, "medium": 1, "low": 2}
+	pairs := map[string]*pair{}
+	for _, o := range ComputeOverlaps(ps) {
+		if o.Kind == KindName {
+			continue
+		}
+		a, b := o.A, o.B
+		if a > b {
+			a, b = b, a
+		}
+		key := pairKey(a, byID[a].Head, b, byID[b].Head)
+		pr := pairs[key]
+		if pr == nil {
+			pr = &pair{a: a, b: b, key: key, rank: rank[o.Severity]}
+			pairs[key] = pr
+		}
+		pr.rank = min(pr.rank, rank[o.Severity])
+		pr.overlaps = append(pr.overlaps, o)
+	}
+	// forget what no longer applies: assessments and failures of pairs that are gone or at other heads
+	c.mu.Lock()
+	for k := range c.assessments {
+		if pairs[k] == nil {
+			delete(c.assessments, k)
+		}
+	}
+	for k := range c.judgeFailed {
+		if pairs[k] == nil {
+			delete(c.judgeFailed, k)
+		}
+	}
+	todo := make([]*pair, 0, len(pairs))
+	now := c.o.Clock.Now()
+	for k, pr := range pairs {
+		if c.assessments[k] != nil {
+			continue
+		}
+		if at, ok := c.judgeFailed[k]; ok && now.Before(at) {
+			continue
+		}
+		todo = append(todo, pr)
+	}
+	c.mu.Unlock()
+	sort.Slice(todo, func(i, j int) bool {
+		if todo[i].rank != todo[j].rank {
+			return todo[i].rank < todo[j].rank
+		}
+		return todo[i].key < todo[j].key
+	})
+	for i, pr := range todo {
+		if ctx.Err() != nil {
+			return
+		}
+		if i >= c.o.JudgePerPass {
+			c.kick.Kick()
+			return
+		}
+		view := func(p *ProposalSymbols) ProposalView {
+			// only the files that carry the overlap are shown to the model
+			relevant := map[string]bool{}
+			for _, o := range pr.overlaps {
+				for _, s := range o.Symbols {
+					relevant[s.PathA], relevant[s.PathB] = true, true
+				}
+			}
+			patches := map[string]string{}
+			for path, patch := range p.Patches {
+				if relevant[path] {
+					patches[path] = patch
+				}
+			}
+			return ProposalView{ID: p.Proposal, Title: p.Title, Description: p.Description, Changed: p.Changed, Patches: patches}
+		}
+		a, err := c.o.Judge.Judge(ctx, Pair{A: view(byID[pr.a]), B: view(byID[pr.b]), Overlaps: pr.overlaps})
+		c.mu.Lock()
+		if err != nil {
+			c.judgeFailed[pr.key] = c.o.Clock.Now().Add(c.o.JudgeRetry)
+			c.judgeErr = err.Error()
+			c.mu.Unlock()
+			c.log.Warn("the model could not assess an overlap", "a", pr.a, "b", pr.b, "err", err)
+			continue
+		}
+		a.At = c.o.Clock.Now()
+		c.assessments[pr.key] = a
+		c.judgeErr = ""
+		c.mu.Unlock()
+		c.log.Info("assessed an overlap", "a", pr.a, "b", pr.b, "verdict", a.Verdict, "severity", a.Severity, "model", a.Model)
+	}
+}
 
 // ComputeOverlaps finds, for every pair of proposals:
 //

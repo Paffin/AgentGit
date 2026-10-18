@@ -13,6 +13,7 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/events"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/execsched"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/llm"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/review"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/scheduler"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/semindex"
@@ -25,6 +26,15 @@ type Status struct {
 	Identity []IdentityStatus `json:"identities"`
 	Repos    []RepoStatus     `json:"repos"`
 	Sessions []session.Info   `json:"sessions"`
+	// LLM is present when a component runs in model mode: the model and what was spent so far (no key, no text).
+	LLM *LLMStatus `json:"llm,omitempty"`
+}
+
+// LLMStatus describes the language-model client.
+type LLMStatus struct {
+	Model   string     `json:"model"`
+	BaseURL string     `json:"base_url"`
+	Totals  llm.Totals `json:"totals"`
 }
 
 // ServiceStatus describes the process.
@@ -61,6 +71,9 @@ func (a *App) Status() Status {
 	ready, reasons := a.readiness()
 	st := Status{Service: ServiceStatus{Version: Version, StartedAt: a.started, Ready: ready, Reasons: reasons}, Sessions: a.mgr.Active(),
 		Identity: []IdentityStatus{}, Repos: []RepoStatus{}}
+	if a.llm != nil {
+		st.LLM = &LLMStatus{Model: a.cfg.LLM.Model, BaseURL: a.cfg.LLM.BaseURL, Totals: a.llm.Totals()}
+	}
 	a.mu.Lock()
 	for _, label := range []string{"orchestrator", "reviewer", "advisor"} {
 		if p := a.principals[label]; p != nil {

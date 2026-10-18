@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/clock"
@@ -36,6 +37,13 @@ type Options struct {
 	Metrics *metrics.Service
 	Log     *slog.Logger
 	Loop    config.Loop
+	// Judge, when set, has a language model assess the overlaps the static analysis finds. The static analysis
+	// itself (symbols, references, overlaps and their severities) is the same with or without it.
+	Judge Judge
+	// JudgePerPass bounds the pairs judged in one pass (default 3); JudgeRetry how long a pair whose judgement
+	// failed waits before it is tried again (default 10m).
+	JudgePerPass int
+	JudgeRetry   time.Duration
 }
 
 // Component keeps one repository's index current.
@@ -49,6 +57,10 @@ type Component struct {
 
 	mu       sync.Mutex
 	analyses map[string]*ProposalSymbols // by proposal id
+	// assessments are the model's opinions, by pair key (proposal ids and heads); judgeFailed the pairs to wait on
+	assessments map[string]*Assessment
+	judgeFailed map[string]time.Time
+	judgeErr    string
 }
 
 // New builds the component and loads whatever was stored earlier.
@@ -72,7 +84,14 @@ func New(o Options) (*Component, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Component{o: o, log: o.Log.With("repo", o.Repo.Name, "component", "semindex"), skip: skip, kick: loop.NewKicker(), analyses: map[string]*ProposalSymbols{}}
+	c := &Component{o: o, log: o.Log.With("repo", o.Repo.Name, "component", "semindex"), skip: skip, kick: loop.NewKicker(), analyses: map[string]*ProposalSymbols{},
+		assessments: map[string]*Assessment{}, judgeFailed: map[string]time.Time{}}
+	if o.JudgePerPass <= 0 {
+		c.o.JudgePerPass = 3
+	}
+	if o.JudgeRetry <= 0 {
+		c.o.JudgeRetry = 10 * time.Minute
+	}
 	c.idx = NewIndex(o.Repo.Name)
 	if o.Store != nil {
 		x, bad, err := o.Store.Load(o.Repo.Name, o.Repo.Index.MaxFiles)
@@ -117,6 +136,9 @@ func (c *Component) Repo() string { return c.o.Repo.Name }
 func (c *Component) Reconcile(ctx context.Context) error {
 	serr := c.Sync(ctx)
 	oerr := c.refreshProposals(ctx)
+	if c.o.Judge != nil {
+		c.judgeOverlaps(ctx)
+	}
 	if serr != nil {
 		return serr
 	}
@@ -254,12 +276,22 @@ func short(s string) string {
 type Status struct {
 	Stats
 	Proposals int `json:"proposals_analysed"`
+	// Judge is the model that assesses overlaps ("" in heuristic mode); Assessed counts the assessments held and
+	// JudgeError is why the last attempt failed.
+	Judge      string `json:"judge,omitempty"`
+	Assessed   int    `json:"overlaps_assessed,omitempty"`
+	JudgeError string `json:"judge_error,omitempty"`
 }
 
 // Status returns a snapshot.
 func (c *Component) Status() Status {
 	c.mu.Lock()
 	n := len(c.analyses)
+	st := Status{Proposals: n, Assessed: len(c.assessments), JudgeError: c.judgeErr}
 	c.mu.Unlock()
-	return Status{Stats: c.idx.Stats(), Proposals: n}
+	if c.o.Judge != nil {
+		st.Judge = c.o.Judge.Name()
+	}
+	st.Stats = c.idx.Stats()
+	return st
 }

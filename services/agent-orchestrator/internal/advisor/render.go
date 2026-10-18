@@ -20,6 +20,10 @@ func Render(advisorName, proposalHead, streamHead, stream string, sugs []Suggest
 	fmt.Fprintf(&b, "The proposal (head `%s`) conflicts with stream `%s` (head `%s`) in %d file(s). ", short(proposalHead), stream, short(streamHead), len(sugs))
 	b.WriteString("Nothing below is applied automatically and none of it is validated: a resolution only enters the repository when an agent or a person submits it " +
 		"(workspace sync with `resolutions`), and then validation, approvals and policy decide whether it lands.\n")
+	if model := modelOf(sugs); model != "" {
+		fmt.Fprintf(&b, "Suggestions marked _language model_ were written by `%s` from the three versions of each file; they are proposals, not facts, and "+
+			"nothing has checked them. The other suggestions come from fixed rules.\n", model)
+	}
 	truncated := false
 	for _, s := range sugs {
 		section := renderOne(s, inline)
@@ -36,9 +40,22 @@ func Render(advisorName, proposalHead, streamHead, stream string, sugs []Suggest
 	return b.String()
 }
 
+// modelOf is the model that wrote any of the suggestions ("" when none was written by a model).
+func modelOf(sugs []Suggestion) string {
+	for _, s := range sugs {
+		if m, ok := strings.CutPrefix(s.Advisor, "model/"); ok {
+			return m
+		}
+	}
+	return ""
+}
+
 func renderOne(s Suggestion, inline int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n### `%s` — %s\n", s.Path, describeClass(s))
+	if strings.HasPrefix(s.Advisor, "model/") {
+		b.WriteString("_language model_\n")
+	}
 	if s.Kind != "" {
 		fmt.Fprintf(&b, "Reported by the server as: %s.\n", s.Kind)
 	}
@@ -84,6 +101,8 @@ func describeClass(s Suggestion) string {
 		return "both sides added the same lines"
 	case ClassMixed:
 		return "several kinds of conflict"
+	case ClassModel:
+		return "resolution proposed by a language model"
 	case ClassBothAdded:
 		return "both sides created the file"
 	case ClassDeleteEdit:

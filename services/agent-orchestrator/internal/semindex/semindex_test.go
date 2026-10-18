@@ -32,12 +32,14 @@ type harness struct {
 	px      *testutil.Proxy
 	cur     map[string]string // what main holds now
 	n       int
+	wsOf    map[string]string // workspace name by proposal id
 	client  *agwp.Client
 	comp    *Component
 	store   *Store
 	metrics *metrics.Service
 	cfg     config.Repo
 	dir     string
+	judge   Judge // model mode: set before the component is built
 }
 
 func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
@@ -60,7 +62,8 @@ func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
 }
 
 func (h *harness) newComponent() *Component {
-	c, err := New(Options{Repo: h.cfg, API: h.client, Store: h.store, Metrics: h.metrics, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute}})
+	c, err := New(Options{Repo: h.cfg, API: h.client, Store: h.store, Metrics: h.metrics, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute},
+		Judge: h.judge, JudgeRetry: 30 * time.Millisecond})
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -398,8 +401,27 @@ func (h *harness) propose(_, title string, files map[string]string) string {
 	for k, v := range files {
 		ch = append(ch, testutil.Put(k, v))
 	}
-	p, _ := h.w.Propose(fmt.Sprintf("ws-%d", h.n), title, ch...)
+	name := fmt.Sprintf("ws-%d", h.n)
+	p, _ := h.w.Propose(name, title, ch...)
+	if h.wsOf == nil {
+		h.wsOf = map[string]string{}
+	}
+	h.wsOf[p.ID] = name
 	return p.ID
+}
+
+// amend moves a proposal to a new head that also changes the given files.
+func (h *harness) amend(id string, files map[string]string) {
+	h.t.Helper()
+	var ch []agwp.FileChange
+	for k, v := range files {
+		ch = append(ch, testutil.Put(k, v))
+	}
+	wsp, err := h.w.Alice.ModifyWorkspace(context.Background(), h.w.Repo, h.wsOf[id], "amend", "", ch)
+	if err != nil {
+		h.t.Fatalf("amend %s: %v", id, err)
+	}
+	h.w.UpdateProposal(id, wsp.Head)
 }
 
 func TestProposalsChangingTheSameFunctionOverlapEvenWhenTheTextMerges(t *testing.T) {

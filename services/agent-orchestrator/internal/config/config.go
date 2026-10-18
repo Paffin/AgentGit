@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -34,6 +35,45 @@ type Config struct {
 	Repos    []Repo     `yaml:"repos"`
 	Execs    []Executor `yaml:"executors"`
 	Shutdown Shutdown   `yaml:"shutdown"`
+	// LLM configures the language-model client used by the components whose mode is "model". Nothing in it is a
+	// default of any vendor: the endpoint, the model and the NAME of the variable that holds the key are yours.
+	LLM LLM `yaml:"llm"`
+}
+
+// Modes of the advisor, the reviewers and the semantic index.
+const (
+	// ModeHeuristic: deterministic rules and keyword matching. Honest about what it is: not understanding.
+	ModeHeuristic = "heuristic"
+	// ModeModel: a language model reads the (bounded, fenced) repository text and PROPOSES; the heuristic checks that
+	// are safety checks (secret scanning, size, protected paths) still run. A model never integrates anything.
+	ModeModel = "model"
+)
+
+// LLM is the OpenAI-compatible chat-completions endpoint of the model-backed components.
+type LLM struct {
+	BaseURL string `yaml:"base_url"` // API root; "/chat/completions" is appended
+	Model   string `yaml:"model"`
+	// APIKeyEnv is the NAME of the environment variable holding the key. Empty: no Authorization header is sent
+	// (right for a gateway or proxy that adds the credential itself, or a local server).
+	APIKeyEnv string `yaml:"api_key_env"`
+	CAFile    string `yaml:"ca_file"`
+	// Retries after the first attempt; nil: 3.
+	Timeout         time.Duration     `yaml:"timeout"`
+	Retries         *int              `yaml:"retries"`
+	MaxOutputTokens int               `yaml:"max_output_tokens"`
+	Temperature     *float64          `yaml:"temperature"` // nil: 0
+	MaxInputBytes   int               `yaml:"max_input_bytes"`
+	JSONMode        bool              `yaml:"json_mode"` // ask for response_format json_object (not every model supports it)
+	Concurrency     int               `yaml:"concurrency"`
+	Headers         map[string]string `yaml:"headers"` // non-secret extra headers
+	Budget          LLMBudget         `yaml:"budget"`
+	AllowInsecure   bool              `yaml:"allow_insecure_remote"`
+}
+
+// LLMBudget caps what the orchestrator may spend. nil: the default; 0: unlimited. The counters restart with the process.
+type LLMBudget struct {
+	RequestsPerHour *int `yaml:"requests_per_hour"` // default 200
+	TokensPerDay    *int `yaml:"tokens_per_day"`    // default 2,000,000
 }
 
 // Server says where the AGWP server is and which environment variables hold
@@ -123,15 +163,20 @@ type ExecSched struct {
 
 // Advisor configures the conflict advisor.
 type Advisor struct {
-	Enabled  *bool `yaml:"enabled"`
-	Inline   int   `yaml:"inline_bytes"`
-	MaxFile  int   `yaml:"max_file_bytes"`
-	MaxPaths int   `yaml:"max_paths"`
+	Enabled  *bool  `yaml:"enabled"`
+	Mode     string `yaml:"mode"` // heuristic (default) | model
+	Inline   int    `yaml:"inline_bytes"`
+	MaxFile  int    `yaml:"max_file_bytes"`
+	MaxPaths int    `yaml:"max_paths"`
+	// ModelFileBytes bounds each of the three versions of a file placed in a model prompt (model mode); a larger file
+	// is left to the rules.
+	ModelFileBytes int `yaml:"model_file_bytes"`
 }
 
 // Review configures the deterministic reviewers.
 type Review struct {
 	Enabled   *bool    `yaml:"enabled"`
+	Mode      string   `yaml:"mode"` // heuristic (default) | model: the model adds a reading of the diff to the checks below
 	MaxFiles  int      `yaml:"max_files"`
 	MaxLines  int      `yaml:"max_lines"`
 	Protected []string `yaml:"protected"`
@@ -145,16 +190,23 @@ type Review struct {
 	// reported as not inspected.
 	ImportFiles int `yaml:"import_files"`
 	ImportBytes int `yaml:"import_file_bytes"`
+	// Model mode: ModelDiffBytes bounds the patch text placed in the prompt, ModelMaxFindings the findings taken from one answer.
+	ModelDiffBytes   int `yaml:"model_diff_bytes"`
+	ModelMaxFindings int `yaml:"model_max_findings"`
 }
 
 // Index configures the semantic index.
 type Index struct {
 	Enabled  *bool    `yaml:"enabled"`
+	Mode     string   `yaml:"mode"` // heuristic (default) | model: the model judges the overlaps the index finds
 	MaxBytes int      `yaml:"max_file_bytes"`
 	MaxFiles int      `yaml:"max_files"`
 	Skip     []string `yaml:"skip"`
 	// Analysing the definitions an open proposal changes is bounded too: the files of one proposal that are read
 	// (each at most MaxBytes), and the proposals analysed in one pass. What the bounds cut is reported as partial.
+	// Model mode: JudgePatchBytes bounds the diff text placed in a prompt, JudgePerPass the pairs judged in one pass.
+	JudgePatchBytes  int `yaml:"judge_patch_bytes"`
+	JudgePerPass     int `yaml:"judge_pairs_per_pass"`
 	ProposalFiles    int `yaml:"proposal_max_files"`
 	ProposalsPerPass int `yaml:"proposals_per_pass"`
 }
@@ -200,11 +252,12 @@ var ForbiddenAgentOps = map[string]bool{
 }
 
 var (
-	nameRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	agentRE  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
-	envRE    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	execRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
-	streamRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
+	nameRE       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	agentRE      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	envRE        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	httpHeaderRE = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+	execRE       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
+	streamRE     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
 )
 
 // Load reads, defaults and validates a configuration file. env supplies the
@@ -311,6 +364,11 @@ func (c *Config) applyDefaults() {
 	setDur(&c.Loop.Debounce, 500*time.Millisecond)
 	setDur(&c.Shutdown.Grace, 30*time.Second)
 	setStr(&c.Shutdown.Mode, "wait")
+	l := &c.LLM
+	setDur(&l.Timeout, 60*time.Second)
+	setInt(&l.MaxOutputTokens, 1500)
+	setInt(&l.MaxInputBytes, 120_000)
+	setInt(&l.Concurrency, 2)
 	for i := range c.Repos {
 		r := &c.Repos[i]
 		setStr(&r.Stream, "main")
@@ -318,6 +376,9 @@ func (c *Config) applyDefaults() {
 		setInt(&r.Schedule.Slots, 2)
 		setStr(&r.Schedule.Placement, "avoid")
 		setStr(&r.Schedule.OnPredictError, "start")
+		setStr(&r.Advisor.Mode, ModeHeuristic)
+		setStr(&r.Review.Mode, ModeHeuristic)
+		setStr(&r.Index.Mode, ModeHeuristic)
 		setStr(&r.Schedule.Lease, "soft")
 		setDur(&r.Schedule.LeaseTTL, 30*time.Minute)
 		setInt(&r.Schedule.Attempts, 1)
@@ -334,6 +395,11 @@ func (c *Config) applyDefaults() {
 		setInt(&r.Advisor.Inline, 16<<10)
 		setInt(&r.Advisor.MaxFile, 1<<20)
 		setInt(&r.Advisor.MaxPaths, 20)
+		setInt(&r.Advisor.ModelFileBytes, 24_000)
+		setInt(&r.Review.ModelDiffBytes, 40_000)
+		setInt(&r.Review.ModelMaxFindings, 8)
+		setInt(&r.Index.JudgePatchBytes, 30_000)
+		setInt(&r.Index.JudgePerPass, 3)
 		boolDefault(&r.Review.Enabled, true)
 		setInt(&r.Review.MaxFiles, 40)
 		setInt(&r.Review.MaxLines, 1500)
@@ -540,6 +606,8 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 		}
 	}
 
+	c.validateLLM(add, getenv, needCredentials)
+
 	// repositories
 	seen := map[string]bool{}
 	for i := range c.Repos {
@@ -627,6 +695,9 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 		if r.Advisor.Inline < 0 || r.Advisor.MaxFile < 1024 || r.Advisor.MaxPaths < 1 {
 			add(p+".advisor", "inline_bytes >= 0, max_file_bytes >= 1024 and max_paths >= 1 are required")
 		}
+		if r.Advisor.ModelFileBytes < 1024 || r.Review.ModelDiffBytes < 1024 || r.Review.ModelMaxFindings < 1 || r.Index.JudgePatchBytes < 1024 || r.Index.JudgePerPass < 1 {
+			add(p, "model_file_bytes, model_diff_bytes and judge_patch_bytes must be at least 1024; model_max_findings and judge_pairs_per_pass at least 1")
+		}
 	}
 	if len(c.Repos) == 0 {
 		add("repos", "at least one repository is required")
@@ -673,11 +744,114 @@ func (c *Config) Executor(name string) *Executor {
 // the secret itself: it carries the prefix of an AgentGit credential, or is longer than any variable name in use.
 // Such a value is never echoed back in an error message or in the effective configuration.
 func LooksLikeCredential(v string) bool {
-	return strings.HasPrefix(v, "agt_") || len(v) > 64
+	if len(v) > 64 {
+		return true
+	}
+	for _, p := range []string{"agt_", "sk-", "sk_", "pk-", "ghp_", "gho_", "ghs_", "github_pat_", "xoxb-", "xoxp-", "AKIA", "Bearer "} {
+		if strings.HasPrefix(v, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // RedactedValue replaces the values of executor environments in the effective configuration.
 const RedactedValue = "<redacted>"
+
+// RetryCount is the number of retries after the first attempt.
+func (l LLM) RetryCount() int {
+	if l.Retries == nil {
+		return 3
+	}
+	return *l.Retries
+}
+
+// Temp is the sampling temperature (default 0).
+func (l LLM) Temp() float64 {
+	if l.Temperature == nil {
+		return 0
+	}
+	return *l.Temperature
+}
+
+// RequestsPerHourLimit is the request budget per hour (0: unlimited).
+func (l LLM) RequestsPerHourLimit() int {
+	if l.Budget.RequestsPerHour == nil {
+		return 200
+	}
+	return *l.Budget.RequestsPerHour
+}
+
+// TokensPerDayLimit is the token budget per day (0: unlimited).
+func (l LLM) TokensPerDayLimit() int {
+	if l.Budget.TokensPerDay == nil {
+		return 2_000_000
+	}
+	return *l.Budget.TokensPerDay
+}
+
+// UsesModel reports whether any component of any repository runs in model mode.
+func (c *Config) UsesModel() bool {
+	for _, r := range c.Repos {
+		if r.Advisor.Mode == ModeModel || r.Review.Mode == ModeModel || r.Index.Mode == ModeModel {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) validateLLM(add func(path, format string, a ...any), getenv func(string) string, needCredentials bool) {
+	for i, r := range c.Repos {
+		for _, m := range []struct{ path, mode string }{{"advisor", r.Advisor.Mode}, {"review", r.Review.Mode}, {"index", r.Index.Mode}} {
+			if m.mode != "" && m.mode != ModeHeuristic && m.mode != ModeModel {
+				add(fmt.Sprintf("repos[%d].%s.mode", i, m.path), "must be %s or %s (got %q)", ModeHeuristic, ModeModel, m.mode)
+			}
+		}
+	}
+	l := c.LLM
+	if l.Timeout < time.Second || l.MaxOutputTokens < 16 || l.MaxInputBytes < 1024 || l.Concurrency < 1 || l.Concurrency > 16 {
+		add("llm", "timeout must be at least 1s, max_output_tokens at least 16, max_input_bytes at least 1024 and concurrency between 1 and 16")
+	}
+	if r := l.RetryCount(); r < 0 || r > 8 {
+		add("llm.retries", "must be between 0 and 8")
+	}
+	if t := l.Temp(); t < 0 || t > 2 {
+		add("llm.temperature", "must be between 0 and 2")
+	}
+	if l.RequestsPerHourLimit() < 0 || l.TokensPerDayLimit() < 0 {
+		add("llm.budget", "limits cannot be negative (0 means unlimited)")
+	}
+	if !c.UsesModel() {
+		return
+	}
+	switch {
+	case l.BaseURL == "":
+		add("llm.base_url", "required when a component runs in model mode")
+	case !strings.HasPrefix(l.BaseURL, "http://") && !strings.HasPrefix(l.BaseURL, "https://"):
+		add("llm.base_url", "must start with http:// or https:// (got %q)", l.BaseURL)
+	case baseURLHasSecretSpot(l.BaseURL):
+		add("llm.base_url", "must not contain credentials or a query string (the key goes in the environment variable named by api_key_env)")
+	case strings.HasPrefix(l.BaseURL, "http://") && !l.AllowInsecure && !isLoopbackURL(l.BaseURL):
+		add("llm.base_url", "plain http to a non-loopback host would send the API key in the clear; use https:// or set llm.allow_insecure_remote")
+	}
+	if strings.TrimSpace(l.Model) == "" {
+		add("llm.model", "required when a component runs in model mode (there is no default: the model is your choice)")
+	}
+	switch {
+	case l.APIKeyEnv == "":
+	case LooksLikeCredential(l.APIKeyEnv):
+		add("llm.api_key_env", "must be the NAME of an environment variable, not a key (this value looks like one and is not shown)")
+	case !envRE.MatchString(l.APIKeyEnv):
+		add("llm.api_key_env", "must be the NAME of an environment variable (letters, digits and underscores); this value is not shown because it may be a key")
+	case needCredentials && getenv(l.APIKeyEnv) == "":
+		add("llm.api_key_env", "environment variable %s is empty or unset: the model API key is required (leave api_key_env empty only behind a gateway that adds the credential)", l.APIKeyEnv)
+	}
+	for k := range l.Headers {
+		if !httpHeaderRE.MatchString(k) || strings.EqualFold(k, "authorization") {
+			add("llm.headers", "%q is not a usable header name (the Authorization header is set from api_key_env only)", k)
+		}
+	}
+}
 
 // Redacted renders the effective configuration for humans. Credentials are only ever named in it, never held; on
 // top of that the values of every executor's `env` (where an operator may paste an API key for the agent) are
@@ -700,4 +874,10 @@ func (c *Config) Redacted() string {
 		return "config: " + err.Error()
 	}
 	return string(b)
+}
+
+// baseURLHasSecretSpot reports a base URL that carries user information or a query: the places a key could be pasted.
+func baseURLHasSecretSpot(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.User != nil || u.RawQuery != "" || u.Fragment != "")
 }

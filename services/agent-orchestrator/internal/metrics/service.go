@@ -1,5 +1,7 @@
 package metrics
 
+import "time"
+
 // Service is the catalogue of metrics the orchestrator exports. Components
 // receive a *Service (never nil; use NewService(NewRegistry()) in tests) and
 // increment what they own.
@@ -11,6 +13,9 @@ type Service struct {
 	SessionsRunning   *GaugeVec   // labels: repo, executor
 	TasksDeferred     *CounterVec // labels: repo, reason
 	PredictErrors     *CounterVec // labels: repo
+	LLMRequests       *CounterVec // labels: purpose, outcome (ok|error|budget|invalid|truncated)
+	LLMTokens         *CounterVec // labels: purpose, kind (prompt|completion)
+	LLMSeconds        *CounterVec // labels: purpose (total time spent waiting for the model)
 	ReconcileLoops    *CounterVec // labels: repo, component
 	ReconcileErrors   *CounterVec // labels: repo, component
 	EventsReceived    *CounterVec // labels: repo, topic
@@ -27,6 +32,18 @@ type Service struct {
 	IndexUpdates      *CounterVec // labels: repo
 	CredentialsMinted *CounterVec // labels: repo
 	CredentialExpiry  *GaugeVec   // labels: identity (unix seconds at which the service token expires)
+}
+
+// ObserveLLM makes *Service an llm.Observer.
+func (s *Service) ObserveLLM(purpose, outcome string, promptTokens, completionTokens int, took time.Duration) {
+	s.LLMRequests.With(purpose, outcome).Inc()
+	if promptTokens > 0 {
+		s.LLMTokens.With(purpose, "prompt").Add(float64(promptTokens))
+	}
+	if completionTokens > 0 {
+		s.LLMTokens.With(purpose, "completion").Add(float64(completionTokens))
+	}
+	s.LLMSeconds.With(purpose).Add(took.Seconds())
 }
 
 // ObserveRequest, ObserveError and ObserveRetry make *Service an agwp.Observer.
@@ -49,6 +66,9 @@ func NewService(r *Registry) *Service {
 		SessionsRunning:   r.NewGaugeVec("orchestrator_sessions_running", "Agent sessions currently running.", "repo", "executor"),
 		TasksDeferred:     r.NewCounterVec("orchestrator_tasks_deferred_total", "Scheduling passes in which a ready task was deferred.", "repo", "reason"),
 		PredictErrors:     r.NewCounterVec("orchestrator_predict_errors_total", "Scheduling passes in which the server's conflict prediction was unavailable.", "repo"),
+		LLMRequests:       r.NewCounterVec("orchestrator_llm_requests_total", "Language-model requests made by the model-backed components, by outcome.", "purpose", "outcome"),
+		LLMTokens:         r.NewCounterVec("orchestrator_llm_tokens_total", "Tokens the language model reported (or that were estimated), by kind.", "purpose", "kind"),
+		LLMSeconds:        r.NewCounterVec("orchestrator_llm_request_seconds_total", "Seconds spent waiting for the language model.", "purpose"),
 		ReconcileLoops:    r.NewCounterVec("orchestrator_reconcile_loops_total", "Completed reconcile loops.", "repo", "component"),
 		ReconcileErrors:   r.NewCounterVec("orchestrator_reconcile_errors_total", "Reconcile loops that ended with an error.", "repo", "component"),
 		EventsReceived:    r.NewCounterVec("orchestrator_events_received_total", "Repository events received over SSE.", "repo", "topic"),

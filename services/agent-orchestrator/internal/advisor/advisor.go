@@ -185,6 +185,25 @@ func (c *Component) Process(ctx context.Context, p execsched.Prepared) error {
 	}
 	c.mu.Unlock()
 
+	// A model's answer differs from run to run, so its comments are recognised by the conflict they answer and by
+	// the advisor's name, not by their text; and a conflict that was already answered is not put to the model again
+	// (after a restart too: the comment on the proposal says so).
+	stable := ""
+	if nd, ok := c.o.Advisor.(interface{ Nondeterministic() bool }); ok && nd.Nondeterministic() {
+		sum := sha256.Sum256([]byte(key + "|" + c.o.Advisor.Name()))
+		stable = "k" + hex.EncodeToString(sum[:])[:15]
+		posted, err := c.alreadyPosted(ctx, p, stable)
+		if err != nil {
+			return fmt.Errorf("read the proposal: %w", err)
+		}
+		if posted {
+			c.mu.Lock()
+			c.done[p.Proposal.ID] = key
+			c.mu.Unlock()
+			return nil
+		}
+	}
+
 	cf := append([]agwp.Conflict(nil), p.Prep.Conflicts...)
 	sort.Slice(cf, func(i, j int) bool { return cf[i].Path < cf[j].Path })
 	omitted := 0
@@ -205,6 +224,9 @@ func (c *Component) Process(ctx context.Context, p execsched.Prepared) error {
 		sugs = append(sugs, s)
 	}
 	digest := digestOf(sugs)
+	if stable != "" {
+		digest = stable
+	}
 	rec := &Record{Proposal: p.Proposal.ID, Head: p.Proposal.Head, StreamHead: p.StreamHead, Base: p.Prep.Base, At: c.o.Clock.Now(), Digest: digest, Suggestions: sugs}
 	if omitted > 0 {
 		rec.Suggestions = append(rec.Suggestions, Suggestion{Path: fmt.Sprintf("(%d more conflicting file(s))", omitted), Advisor: c.o.Advisor.Name(), Class: ClassNeedsPerson,
@@ -260,6 +282,25 @@ func (c *Component) load(ctx context.Context, p execsched.Prepared, conf agwp.Co
 		return in, err
 	}
 	return in, nil
+}
+
+// alreadyPosted reports whether the proposal's current head already carries a comment with this digest (a proposal
+// that is no longer open counts as answered: there is nobody to say it to).
+func (c *Component) alreadyPosted(ctx context.Context, p execsched.Prepared, digest string) (bool, error) {
+	detail, err := c.o.API.GetProposal(ctx, c.o.Repo.Name, p.Proposal.ID)
+	if err != nil {
+		return false, err
+	}
+	if detail.Proposal.State != agwp.ProposalOpen {
+		return true, nil
+	}
+	marker := MarkerPrefix + digest
+	for _, r := range detail.Reviews {
+		if r.Head == detail.Proposal.Head && r.Decision == agwp.DecisionComment && strings.Contains(r.Body, marker) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // post writes the comment unless an equal one is already on the proposal.

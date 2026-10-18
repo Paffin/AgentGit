@@ -25,6 +25,7 @@ import (
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/events"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/execsched"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/llm"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/metrics"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/review"
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/scheduler"
@@ -68,6 +69,7 @@ type App struct {
 	started time.Time
 
 	orch, reviewer, advisorClient *agwp.Client
+	llm                           *llm.Client       // nil unless a component runs in model mode
 	shared                        map[string]string // label -> unset env var, for identities that fall back to the orchestrator's credential
 
 	hub      *events.Hub
@@ -110,6 +112,9 @@ func New(o Options) (*App, error) {
 		a.adminTok = secret.New(getenv(cfg.Admin.TokenEnv))
 	}
 	if err := a.buildClients(); err != nil {
+		return nil, err
+	}
+	if err := a.buildLLM(); err != nil {
 		return nil, err
 	}
 	if err := a.build(); err != nil {
@@ -178,6 +183,41 @@ func (a *App) buildClients() error {
 	return err
 }
 
+// buildLLM creates the one language-model client the model-mode components share (so that its budget and concurrency
+// bounds are global). The key is read from the environment variable the configuration NAMES; it is never logged.
+func (a *App) buildLLM() error {
+	if !a.cfg.UsesModel() {
+		return nil
+	}
+	l := a.cfg.LLM
+	hc := &http.Client{Timeout: 0, Transport: http.DefaultTransport.(*http.Transport).Clone()}
+	if l.CAFile != "" {
+		pem, err := os.ReadFile(l.CAFile)
+		if err != nil {
+			return fmt.Errorf("llm.ca_file: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return fmt.Errorf("llm.ca_file %s holds no PEM certificate", l.CAFile)
+		}
+		hc.Transport.(*http.Transport).TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	}
+	var key secret.Secret
+	if l.APIKeyEnv != "" {
+		key = secret.New(a.getenv(l.APIKeyEnv))
+	}
+	c, err := llm.New(llm.Config{BaseURL: l.BaseURL, Model: l.Model, APIKey: key, Headers: l.Headers, Timeout: l.Timeout, Retries: l.RetryCount(),
+		MaxOutputTokens: l.MaxOutputTokens, Temperature: l.Temp(), MaxInputBytes: l.MaxInputBytes, JSONMode: l.JSONMode, Concurrency: l.Concurrency,
+		Budget:     llm.Budget{RequestsPerHour: l.RequestsPerHourLimit(), TokensPerDay: l.TokensPerDayLimit()},
+		HTTPClient: hc, Clock: a.clk, Observer: a.metrics, Log: a.log.With("component", "llm")})
+	if err != nil {
+		return err
+	}
+	a.llm = c
+	a.log.Info("language-model components enabled", "model", l.Model, "base_url", l.BaseURL, "key_from_env", l.APIKeyEnv != "")
+	return nil
+}
+
 func (a *App) build() error {
 	cfg := a.cfg
 	keys, err := agentkey.OpenStore(filepath.Join(cfg.State, "keys"))
@@ -222,12 +262,20 @@ func (a *App) build() error {
 			}
 		}
 		if config.On(rc.Advisor.Enabled) {
-			rt.advisor = advisor.New(advisor.Options{Repo: rc, API: a.advisorClient, Clock: a.clk, Metrics: a.metrics, Log: a.log})
+			var adv advisor.Advisor // nil: the rules
+			if rc.Advisor.Mode == config.ModeModel {
+				adv = advisor.ModelAdvisor{LLM: a.llm, Rules: advisor.Rules{MaxFileBytes: rc.Advisor.MaxFile}, PromptFileBytes: rc.Advisor.ModelFileBytes}
+			}
+			rt.advisor = advisor.New(advisor.Options{Repo: rc, API: a.advisorClient, Advisor: adv, Clock: a.clk, Metrics: a.metrics, Log: a.log})
 			rt.exec.Subscribe(rt.advisor.OnPrepared)
 			rt.exec.SubscribeForget(rt.advisor.Forget)
 		}
 		if config.On(rc.Review.Enabled) {
-			rt.review, err = review.New(review.Options{Repo: rc, API: a.reviewer, Reviewer: defaultReviewerIdentity, Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop})
+			ro := review.Options{Repo: rc, API: a.reviewer, Reviewer: defaultReviewerIdentity, Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop}
+			if rc.Review.Mode == config.ModeModel {
+				ro.Model = review.LLMReviewer{LLM: a.llm, DiffBytes: rc.Review.ModelDiffBytes, MaxFindings: rc.Review.ModelMaxFindings}
+			}
+			rt.review, err = review.New(ro)
 			if err != nil {
 				return fmt.Errorf("%s: %w", rc.Name, err)
 			}
@@ -237,7 +285,12 @@ func (a *App) build() error {
 			if serr != nil {
 				return fmt.Errorf("%s: %w", rc.Name, serr)
 			}
-			rt.index, err = semindex.New(semindex.Options{Repo: rc, API: a.orch, Store: store, Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop})
+			io := semindex.Options{Repo: rc, API: a.orch, Store: store, Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop}
+			if rc.Index.Mode == config.ModeModel {
+				io.Judge = semindex.LLMJudge{LLM: a.llm, PatchBytes: rc.Index.JudgePatchBytes}
+				io.JudgePerPass = rc.Index.JudgePerPass
+			}
+			rt.index, err = semindex.New(io)
 			if err != nil {
 				return fmt.Errorf("%s: %w", rc.Name, err)
 			}

@@ -81,6 +81,11 @@ type Component struct {
 	log  *slog.Logger
 	kick *loop.Kicker
 
+	// publish is held for writing while advice is posted and remembered, and for reading by whoever asks what is
+	// remembered. The comment is visible on the server the moment it is created; without this a reader that learns
+	// of it there could still find nothing here. Taken before mu, never while holding it.
+	publish sync.RWMutex
+
 	mu      sync.Mutex
 	pending map[string]execsched.Prepared
 	records map[string]*Record
@@ -206,6 +211,8 @@ func (c *Component) Process(ctx context.Context, p execsched.Prepared) error {
 			Notes: []string{"not analysed: the per-proposal limit of files was reached"}})
 	}
 
+	c.publish.Lock()
+	defer c.publish.Unlock()
 	posted, reviewID, err := c.post(ctx, p, rec)
 	rec.Posted, rec.ReviewID = posted, reviewID
 	if err != nil {
@@ -326,8 +333,12 @@ func (c *Component) Forget(proposal string) {
 }
 
 // Suggestions returns the full stored advice for a proposal (with the
-// suggested files), for the status API.
+// suggested files), for the status API. If the advice is being posted right
+// now it waits for that to finish (one request to the server at most), so a
+// comment that can be seen on the proposal always has its advice here.
 func (c *Component) Suggestions(proposal string) (Record, bool) {
+	c.publish.RLock()
+	defer c.publish.RUnlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	r, ok := c.records[proposal]
@@ -337,8 +348,11 @@ func (c *Component) Suggestions(proposal string) (Record, bool) {
 	return *r, true
 }
 
-// Status summarises what the advisor knows.
+// Status summarises what the advisor knows (waiting for advice that is being
+// posted, like Suggestions).
 func (c *Component) Status() Status {
+	c.publish.RLock()
+	defer c.publish.RUnlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := Status{Repo: c.o.Repo.Name, Advisor: c.o.Advisor.Name(), Records: []Summary{}}

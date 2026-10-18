@@ -306,6 +306,53 @@ func TestPostFailuresAreRecordedAndRetried(t *testing.T) {
 	}
 }
 
+// watcher stands for whoever learns from the server that the comment exists - a person with the proposal page
+// open, a test polling the proposal - and asks the advisor's own API for the full advice the moment it does.
+// It runs inside ReviewProposal, after the server has the comment and before the advisor has been told it is done.
+type watcher struct {
+	API
+	comp *Component
+	got  chan watched
+}
+
+type watched struct {
+	rec    Record
+	ok     bool
+	status Status
+}
+
+func (w *watcher) ReviewProposal(ctx context.Context, repo, id, decision, body string) (*agwp.Review, error) {
+	rv, err := w.API.ReviewProposal(ctx, repo, id, decision, body)
+	if err == nil {
+		go func() {
+			rec, ok := w.comp.Suggestions(id)
+			w.got <- watched{rec: rec, ok: ok, status: w.comp.Status()}
+		}()
+		time.Sleep(100 * time.Millisecond) // the head start a loaded machine gives the watcher over the advisor's own goroutine
+	}
+	return rv, err
+}
+
+func TestAdviceIsReadableAsSoonAsItsCommentIsVisible(t *testing.T) {
+	h := newHarness(t, nil)
+	w := &watcher{API: h.client, comp: h.comp, got: make(chan watched, 1)}
+	h.comp.o.API = w
+	if err := h.comp.Process(context.Background(), h.prepared(agwp.Conflict{Path: "a.txt"})); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case seen := <-w.got:
+		if !seen.ok || !seen.rec.Posted || seen.rec.ReviewID == 0 || len(seen.rec.Suggestions) != 1 {
+			t.Fatalf("the comment was visible but the advice was not available: ok=%v record=%+v", seen.ok, seen.rec)
+		}
+		if len(seen.status.Records) != 1 || !seen.status.Records[0].Posted {
+			t.Fatalf("status = %+v", seen.status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher never got an answer")
+	}
+}
+
 func TestRunLoopWorksThroughQueuedPreparations(t *testing.T) {
 	h := newHarness(t, nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -319,10 +366,7 @@ func TestRunLoopWorksThroughQueuedPreparations(t *testing.T) {
 	if len(h.reviews()) != 1 {
 		t.Fatal("the loop did not post")
 	}
-	for len(h.comp.Status().Records) == 0 && time.Now().Before(deadline) { // the record is stored just after the post
-		time.Sleep(2 * time.Millisecond)
-	}
-	st := h.comp.Status()
+	st := h.comp.Status() // no waiting for the record: it is there as soon as the comment is
 	if st.Advisor != "rules/1" || len(st.Records) != 1 || !st.Records[0].Posted || st.Records[0].Files[0] != "a.txt" || st.Records[0].Complete != 1 {
 		t.Fatalf("status = %+v", st)
 	}

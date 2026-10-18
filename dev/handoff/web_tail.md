@@ -15,9 +15,10 @@ Supersedes the "NOT done" list of `dev/handoff/web.md`.
    outline of 0px until its next animation frame after a change (theme toggle test, "focus is always visible"): the tests
    now wait for the engine instead of reading once. The earlier Firefox failures (timeline tab, layout shift) no longer
    fail; `focus is always visible` failed once in Firefox (element 12) and passed on the next run: the same wait is
-   now in place, it was not reproduced separately. WebKit (only) reports every request still in flight when a page is
-   closed as an uncaught exception ("<url> due to access control checks"); the fixture ignores exactly that, WebKit
-   only, once the test body is over (`e2e/fixtures.ts`, `settled`). During a test it still fails the test.
+   now in place, it was not reproduced separately. WebKit (only) reports every request to the app's own server still in
+   flight when a document is left (navigation or page close) as an uncaught exception ("<url> due to access control
+   checks"); `e2e/fixtures.ts` ignores exactly that message for WebKit and same-host URLs. A real CSP/CORS violation is
+   also a console error and still fails tests. Not investigated further whether the app could avoid the rejection.
 3. **Onboarding** `ConnectAgentPanel` on a repository with no changesets/proposals; commands in `src/lib/onboarding.ts`;
    `e2e/onboarding.spec.ts` takes them from the page and runs them with real `curl` and `ag` (clone, whoami, snapshot,
    push) and sees the proposal on the board. Unsafe identities are refused (unit + e2e).

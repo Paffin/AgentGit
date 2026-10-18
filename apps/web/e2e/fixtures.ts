@@ -21,12 +21,7 @@ interface Fixtures {
   openAs: (who: Who | null, opts?: { colorScheme?: 'light' | 'dark' }) => Promise<Page>
 }
 
-type Problems = {
-  list: string[]
-  allowed: RegExp[]
-  /** The test body is over; the page is about to be closed. */
-  settled: boolean
-}
+type Problems = { list: string[]; allowed: RegExp[] }
 
 function instrument(page: Page, problems: Problems): void {
   page.on('console', (m) => {
@@ -36,10 +31,11 @@ function instrument(page: Page, problems: Problems): void {
   })
   const webkit = page.context().browser()?.browserType().name() === 'webkit'
   page.on('pageerror', (e) => {
-    // Closing a page cancels the requests still in flight, and WebKit (only) reports each of those as an uncaught
-    // exception ("<url> due to access control checks"). That is the engine tearing the page down, not the app
-    // failing, so it is ignored once the test is over; during the test it still counts.
-    if (webkit && problems.settled && /due to access control checks/.test(e.message)) return
+    // Leaving a page (a navigation, or closing it) cancels the requests still in flight, and WebKit (only) reports
+    // each of those, for a request to the app's own server, as an uncaught exception
+    // ("<url> due to access control checks"). That is the engine tearing the old document down, not the app
+    // failing: a real cross-origin or CSP violation is also logged as a console error, which still fails a test.
+    if (webkit && /^\/?127\.0\.0\.1:\d+\/.* due to access control checks/.test(e.message)) return
     problems.list.push(`uncaught exception: ${e.message}`)
   })
   page.on('crash', () => problems.list.push('the page crashed'))
@@ -80,7 +76,6 @@ export const test = base.extend<Fixtures & { problems: Problems }>({
       const problems: Problems = {
         list: [],
         allowed: process.env.AG_E2E_RPS ? [/status of 429/] : [],
-        settled: false,
       }
       await use(problems)
       const unexpected = problems.list.filter((p) => !problems.allowed.some((re) => re.test(p)))
@@ -100,7 +95,6 @@ export const test = base.extend<Fixtures & { problems: Problems }>({
     instrument(page, problems)
     await signInInit(page, persona ? cast.token(persona) : null)
     await use(page)
-    problems.settled = true
   },
 
   openAs: async ({ browser, cast, problems, baseURL }, use, testInfo) => {
@@ -126,7 +120,6 @@ export const test = base.extend<Fixtures & { problems: Problems }>({
       await signInInit(p, who ? cast.token(who) : null)
       return p
     })
-    problems.settled = true
     await Promise.all(contexts.map((c) => c.close()))
   },
 })

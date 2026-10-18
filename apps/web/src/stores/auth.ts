@@ -53,6 +53,8 @@ export const useAuth = defineStore('auth', () => {
   /** The message of a failed redirect sign-in (`endedBecause === 'sso'`). */
   const ssoMessage = ref('')
   const expiryWarned = ref(false)
+  /** What the server said when it stopped accepting the credential mid-session (shown on /unauthorized). */
+  const rejection = ref<{ message: string; requestId: string } | null>(null)
   /** How this session was started: a pasted token, or a redirect sign-in. */
   const method = ref<'token' | 'oidc' | null>(null)
   const config = ref<AuthConfig | null>(null)
@@ -139,6 +141,7 @@ export const useAuth = defineStore('auth', () => {
     token.value = null
     principal.value = null
     status.value = 'anonymous'
+    if (reason !== 'expired') rejection.value = null
     endedBecause.value = reason
     method.value = null
     sso = null
@@ -177,6 +180,7 @@ export const useAuth = defineStore('auth', () => {
       removeStore('session', SSO_KEY)
       status.value = 'ready'
       endedBecause.value = ''
+      rejection.value = null
       scheduleExpiry()
       void loadCapabilities()
       return who
@@ -304,6 +308,7 @@ export const useAuth = defineStore('auth', () => {
       )
       status.value = 'ready'
       endedBecause.value = ''
+      rejection.value = null
       ssoMessage.value = ''
       scheduleExpiry()
       void loadCapabilities()
@@ -403,8 +408,10 @@ export const useAuth = defineStore('auth', () => {
   }
 
   // Any other request answered with 401 means the session is over.
-  onUnauthenticated(() => {
-    if (status.value === 'ready') end('expired')
+  onUnauthenticated((e) => {
+    if (status.value !== 'ready') return
+    rejection.value = { message: e.message, requestId: e.requestId ?? '' }
+    end('expired')
   })
 
   return {
@@ -417,6 +424,7 @@ export const useAuth = defineStore('auth', () => {
     method,
     config,
     expiryWarned,
+    rejection,
     isAuthenticated,
     identity,
     grants,

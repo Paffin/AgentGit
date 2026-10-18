@@ -4,7 +4,7 @@ name: Web UI
 # or the server it is tested against change.
 on:
   push:
-    branches: [main]
+    branches: [main, web-tail-ci]
     paths:
       - "apps/web/**"
       - "docs/protocol/openapi.json"
@@ -53,10 +53,9 @@ jobs:
       - run: npm run build
 
   # The whole suite, against a REAL ag-server that serves the UI from its own binary (the UI is built first and
-  # embedded: `scripts/build_ui.sh`, then `cargo build`), in Chromium, plus the layout and accessibility specs at
-  # tablet and phone size. The `firefox` and `webkit` projects exist in playwright.config.ts and are meant to be
-  # here too ({ project: firefox, browser: firefox }, { project: webkit, browser: webkit }), but have not been seen
-  # green yet: see dev/handoff/web.md. Nothing is quarantined: a failure is a bug or a documented engine difference.
+  # embedded: `scripts/build_ui.sh`, then `cargo build`), in Chromium, Firefox and WebKit, plus the layout and
+  # accessibility specs at tablet and phone size (Chromium). Nothing is quarantined: a failure is a bug or a
+  # documented engine difference (docs/guides/web-ui.md, "Verified where").
   e2e:
     name: end-to-end (${{ matrix.project }})
     runs-on: ubuntu-latest
@@ -67,6 +66,8 @@ jobs:
       matrix:
         include:
           - { project: chromium, browser: chromium }
+          - { project: firefox, browser: firefox }
+          - { project: webkit, browser: webkit }
           - { project: tablet, browser: chromium }
           - { project: phone, browser: chromium }
     steps:
@@ -108,6 +109,85 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-${{ matrix.project }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  # Redirect sign-in against a REAL identity provider: Keycloak (a pinned image, the realm in
+  # apps/web/e2e/keycloak/agentgit-realm.json). Two suites use it: the browser round trip (login redirect, groups to
+  # roles, silent re-authentication, token expiry once the provider's session is revoked, sign-out at the provider;
+  # e2e/keycloak.spec.ts) and the server's own token validation with tokens Keycloak issued
+  # (crates/ag-server/tests/oidc_keycloak.rs). The fast fake provider in e2e/support/idp.ts stays for the cases a real
+  # provider will not produce on request (a wrong state, a bad nonce, a forged signature); it is a test double and
+  # is documented as one.
+  identity-provider:
+    name: real identity provider (Keycloak)
+    runs-on: ubuntu-latest
+    needs: checks
+    timeout-minutes: 40
+    env:
+      # Tag and digest: the tag says what it is, the digest makes sure that is what runs.
+      KEYCLOAK_IMAGE: quay.io/keycloak/keycloak:26.0.7@sha256:4388e2379b7e870a447adbe7b80bd61f5fbf04e925832b19669fda4957f05a81
+      AG_E2E_KEYCLOAK: http://localhost:8180
+      AG_TEST_KEYCLOAK_URL: http://localhost:8180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start Keycloak with the test realm
+        run: |
+          docker run -d --name keycloak -p 8180:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            -v "$PWD/apps/web/e2e/keycloak:/opt/keycloak/data/import:ro" \
+            "$KEYCLOAK_IMAGE" start-dev --import-realm
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: web-e2e
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the UI (npm ci, production build, pre-compression)
+        run: scripts/build_ui.sh
+      - name: Build the server (with the UI inside) and the CLI
+        run: cargo build -p ag-server -p ag-cli
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Wait for Keycloak
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS "$AG_E2E_KEYCLOAK/realms/agentgit/.well-known/openid-configuration" >/dev/null 2>&1; then
+              echo "Keycloak is up after ~$((i * 2))s"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs keycloak | tail -80
+          echo "Keycloak did not become ready" >&2
+          exit 1
+      - name: The server's own token validation, with tokens Keycloak issued
+        run: cargo test -p ag-server --test oidc_keycloak -- --ignored --test-threads=1
+      - name: The browser round trip, token expiry and sign-out with Keycloak
+        run: npx playwright test --project=chromium --no-deps keycloak.spec.ts
+        working-directory: apps/web
+        env:
+          AG_SERVER_BIN: ${{ github.workspace }}/target/debug/ag-server
+          AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
+          AG_E2E_UI: embedded
+          CI: "true"
+      - name: Keycloak's log
+        if: failure()
+        run: docker logs keycloak | tail -120
+      - name: Keep the report when something failed
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report-keycloak
           path: |
             apps/web/playwright-report
             apps/web/test-results

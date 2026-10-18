@@ -279,3 +279,22 @@ async fn sign_in_discovery_lists_the_configured_providers() {
     assert!(!r.json.to_string().contains("secret"));
     srv.stop().await;
 }
+
+/// The Web UI tells people when it and the server are different versions (`apps/web/src/shell/VersionBanner.vue`),
+/// comparing the version of its own build (`apps/web/package.json`, written to `ui-version.json` by the build)
+/// with the `server_version` of `GET /v1/capabilities`, which is this crate's version. They are one workspace
+/// version: a release that bumps one and not the other would show every user a false mismatch warning.
+#[test]
+fn the_ui_package_has_the_workspace_version() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/web/package.json");
+    let Ok(text) = std::fs::read_to_string(&manifest) else {
+        // Built from a packaged crate, without the repository around it.
+        return;
+    };
+    let package: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(package["version"], env!("CARGO_PKG_VERSION"), "apps/web/package.json must carry the workspace version");
+    let lock = std::fs::read_to_string(manifest.with_file_name("package-lock.json")).unwrap();
+    let lock: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(lock["version"], env!("CARGO_PKG_VERSION"), "apps/web/package-lock.json");
+    assert_eq!(lock["packages"][""]["version"], env!("CARGO_PKG_VERSION"), "apps/web/package-lock.json");
+}

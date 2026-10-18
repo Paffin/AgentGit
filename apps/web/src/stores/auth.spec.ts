@@ -6,13 +6,13 @@ import type { Principal } from '@/api/types'
 const whoami = vi.fn()
 const capabilities = vi.fn()
 const setApiToken = vi.fn()
-let unauthenticated: (() => void) | null = null
+let unauthenticated: ((e: ApiError) => void) | null = null
 
 vi.mock('@/api/instance', () => ({
   api: { whoami: (...a: unknown[]) => whoami(...a), capabilities: () => capabilities() },
   client: {},
   setApiToken: (t: string | null) => setApiToken(t),
-  onUnauthenticated: (fn: () => void) => {
+  onUnauthenticated: (fn: (e: ApiError) => void) => {
     unauthenticated = fn
     return () => undefined
   },
@@ -136,9 +136,17 @@ describe('session lifecycle', () => {
     whoami.mockResolvedValue(principal())
     const auth = useAuth()
     await auth.signIn('agt_goodtoken_0123456789')
-    unauthenticated?.()
+    unauthenticated?.(
+      new ApiError({
+        status: 401,
+        code: 'unauthenticated',
+        message: 'token revoked',
+        requestId: 'req_9',
+      }),
+    )
     expect(auth.isAuthenticated).toBe(false)
     expect(auth.endedBecause).toBe('expired')
+    expect(auth.rejection).toEqual({ message: 'token revoked', requestId: 'req_9' })
   })
 
   it('ends the session at expiry and warns two minutes before', async () => {

@@ -283,10 +283,10 @@ test.describe('sessions that run out', () => {
     await expect(page.getByText('Your credential is about to expire')).toBeVisible()
     await expect(page.getByTestId('reauth')).toBeVisible()
     // ... and if they do not, the session ends when the token does.
-    await expect(page.getByRole('heading', { name: 'Sign in to AgentGit' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Your session ended', level: 1 })).toBeVisible({
       timeout: 20_000,
     })
-    await expect(page.getByText('Your session ended')).toBeVisible()
+    await expect(page).toHaveURL(/\/unauthorized/)
     await expect(page.getByTestId('user-menu')).toHaveCount(0)
     expect(
       (await idpEvents(page, state.idp.issuer, name)).filter((e) => e.kind === 'refresh'),

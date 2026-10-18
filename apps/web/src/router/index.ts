@@ -27,6 +27,13 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Signing in' },
   },
   {
+    // Where a session that ended while it was in use ends up: says why, then leads back to the sign-in.
+    path: '/unauthorized',
+    name: 'unauthorized',
+    component: () => import('@/views/UnauthorizedView.vue'),
+    meta: { public: true, title: 'Session ended' },
+  },
+  {
     path: '/',
     name: 'repos',
     component: () => import('@/views/ReposView.vue'),
@@ -137,7 +144,7 @@ export function createAppRouter(history = createWebHistory()): Router {
       }
     }
     if (to.meta.public) {
-      if (to.name === 'signin' && auth.isAuthenticated)
+      if ((to.name === 'signin' || to.name === 'unauthorized') && auth.isAuthenticated)
         return typeof to.query.next === 'string' ? safeNext(to.query.next) : { name: 'repos' }
       return true
     }

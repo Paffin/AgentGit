@@ -1,5 +1,5 @@
 import type { Browser } from '@playwright/test'
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { TOKEN_KEY, expect, test } from './fixtures.ts'
@@ -82,7 +82,10 @@ test.describe('a UI build of another version', () => {
   })
 
   test('a patch-level difference is compatible and says nothing', async ({ browser }) => {
-    const [major, minor] = serverVersion.split('.')
+    // The UI's own version (from its package.json, not from the network), with another patch level.
+    const own = JSON.parse(readFileSync(resolve(DIST, '../package.json'), 'utf8')).version as string
+    expect(own, 'the build and the server are one version').toBe(serverVersion)
+    const [major, minor] = own.split('.')
     const { ctx, page } = await open(browser, `${major}.${minor}.999`)
     await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
     await expect(page.getByTestId('version-banner')).toHaveCount(0)

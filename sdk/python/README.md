@@ -11,7 +11,7 @@ execution plane, and the event feed. Import name: `agentgit`.
 * **Typed.** Every message is a dataclass in `agentgit.models`, generated from that document; every method takes
   keyword arguments and returns a model. `py.typed` is shipped; the package type-checks under `mypy --strict`.
 * **Two runtime dependencies:** `httpx` and `cryptography`.
-* **Python 3.10 or newer.** The test suite passes on 3.10, 3.11, 3.12 and 3.13; newer versions are not run here.
+* **Python 3.10 or newer.** CI runs the test suite on 3.10, 3.11, 3.12 and 3.13 (the full lint and type checks on the default interpreter only); newer versions are not run.
 * **Alpha (0.1).** Not published to PyPI yet: install from a checkout (`pip install ./sdk/python`, or `uv sync` in
   `sdk/python` for development). It is exercised by the tests in this directory against a real `ag-server`.
 
@@ -433,7 +433,7 @@ its own process and temporary data directory, and the process is killed when the
 
 `src/agentgit/_generated/` holds `models.py` (a dataclass per message), `operations.py` (the route table) and
 `namespaces.py` (the synchronous and asynchronous namespace classes). `sdk/api-policy.json` carries what the OpenAPI
-document does not: the retry class of each operation, which bodies are binary, and the message fields the server always
+document does not: the retry class of each operation (its `bodies` section, for responses the document describes wrongly, is empty today) and the message fields the server always
 fills in (typed as present; `tests/test_server_contract.py` fails if the server ever answers `null` for one).
 
 ## Things the server does today that show through
@@ -447,9 +447,6 @@ the error envelope on every route, `regular` file types); these are what remains
   credential. Both are in the `unsafe` class.
 * `Retry-After` is whole seconds and at least 1, while `retry_after_ms` in the body can be shorter. The client waits for
   `retry_after_ms` (plus jitter), so a 429 with `retry_after_ms=40` is not stretched to a second.
-* The OpenAPI document lists `application/octet-stream` for the `200` of `objects.put`, which answers JSON
-  (`{"object_id": ..., ...}`). `sdk/api-policy.json` overrides that one response; everything else about request and
-  response bodies (`tree.file`, `objects.get`, `objects.put`, `events.subscribe`) comes from the document.
 
 ## License
 

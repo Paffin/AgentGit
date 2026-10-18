@@ -25,6 +25,8 @@ from agentgit.errors import AgentGitError, UnavailableError, error_from_info
 from agentgit.sse import SseFrame, SseParser
 
 DEFAULT_IDLE_MS = 90_000
+# A connection that stayed up this long counts as established: the failure counter of the reconnect policy restarts.
+STABLE_CONNECTION_S = 5
 # "after_seq" of a replay that is certainly past the end of the log: the answer's latest_seq is the
 # current end. (2**53 - 1 is the largest integer every JSON implementation carries exactly.)
 _PAST_THE_END = 2**53 - 1
@@ -39,12 +41,19 @@ def _params(repo: str, last: int, topics: Sequence[str] | None, heartbeat_ms: in
     return params
 
 
-def _event(frame: SseFrame) -> Event | None:
+def _event(frame: SseFrame) -> Event:
     """The event of a frame, or raises the error an ``error`` frame carries."""
     if frame.event == "error":
         info = json.loads(frame.data).get("error") or {}
         raise error_from_info(info, status=0, operation="events.subscribe")
     return decode_as(Event, json.loads(frame.data))
+
+
+def _idle_seconds(idle_timeout_ms: int | None) -> float | None:
+    """``None`` (the default) is 90 s; ``0`` turns the idle watchdog off, as ``idleTimeoutMs: 0`` does in TypeScript."""
+    if idle_timeout_ms is None:
+        return DEFAULT_IDLE_MS / 1000
+    return idle_timeout_ms / 1000 if idle_timeout_ms > 0 else None
 
 
 def _backoff(policy: ReconnectPolicy, failures: int, rand: float) -> float:
@@ -65,7 +74,7 @@ def subscribe_sync(
 ) -> Generator[Event, None, None]:
     op = OPERATIONS["events.subscribe"]
     policy = reconnect or ReconnectPolicy()
-    idle_s = (idle_timeout_ms or DEFAULT_IDLE_MS) / 1000
+    idle_s = _idle_seconds(idle_timeout_ms)
     last = after_seq
     if last is None:
         # "From now": pin down the current end of the log, so that a reconnect cannot skip events
@@ -90,7 +99,7 @@ def subscribe_sync(
                 for chunk in response.iter_bytes():
                     for frame in parser.feed(chunk):
                         event = _event(frame)
-                        if event is None or event.seq <= last:
+                        if event.seq <= last:
                             continue  # already delivered
                         last = event.seq
                         delivered = True
@@ -101,7 +110,7 @@ def subscribe_sync(
                 raise
         except (httpx.TimeoutException, httpx.TransportError):
             pass  # idle watchdog or a dropped connection
-        if connected_at and time.monotonic() - connected_at > 5:
+        if connected_at and time.monotonic() - connected_at > STABLE_CONNECTION_S:
             failures = 0
         if not delivered:
             failures += 1
@@ -127,7 +136,7 @@ async def subscribe_async(
 ) -> AsyncGenerator[Event, None]:
     op = OPERATIONS["events.subscribe"]
     policy = reconnect or ReconnectPolicy()
-    idle_s = (idle_timeout_ms or DEFAULT_IDLE_MS) / 1000
+    idle_s = _idle_seconds(idle_timeout_ms)
     last = after_seq
     if last is None:
         probe = await transport.execute(
@@ -150,7 +159,7 @@ async def subscribe_async(
                 async for chunk in response.aiter_bytes():
                     for frame in parser.feed(chunk):
                         event = _event(frame)
-                        if event is None or event.seq <= last:
+                        if event.seq <= last:
                             continue
                         last = event.seq
                         delivered = True
@@ -161,7 +170,7 @@ async def subscribe_async(
                 raise
         except (httpx.TimeoutException, httpx.TransportError):
             pass
-        if connected_at and time.monotonic() - connected_at > 5:
+        if connected_at and time.monotonic() - connected_at > STABLE_CONNECTION_S:
             failures = 0
         if not delivered:
             failures += 1

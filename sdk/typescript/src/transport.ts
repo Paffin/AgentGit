@@ -226,7 +226,6 @@ export class Transport {
       timeoutMs: undefined,
       runId: options.runId,
       extra: options.headers,
-      hasBody: false,
     });
     headers.set('accept', 'text/event-stream');
     let response: Response;
@@ -296,7 +295,6 @@ export class Transport {
       timeoutMs: number | undefined;
       runId: string | undefined;
       extra: Record<string, string> | undefined;
-      hasBody: boolean;
     },
   ): Promise<Headers> {
     const headers = new Headers();
@@ -326,7 +324,6 @@ export class Transport {
       timeoutMs: ctx.timeoutMs,
       runId: options.runId,
       extra: options.headers,
-      hasBody: built.hasJsonBody || op.body === 'bytes',
     });
     let body: BodyInit | undefined;
     if (built.hasJsonBody) {

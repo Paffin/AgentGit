@@ -516,8 +516,6 @@ route answers in the error envelope with the caller's request id, and file types
   `outcomeUnknown`, not repeated;
 * `Retry-After` is whole seconds and at least 1, while `retry_after_ms` can be shorter: the SDKs wait for
   `retry_after_ms`;
-* the OpenAPI document lists `application/octet-stream` for the `200` of `objects.put`, which answers JSON; the one
-  override in `sdk/api-policy.json`;
 * the rate limit now applies to every authenticated operation, not only to those of one repository, so any call can
   answer `429 rate_limited`; the retry rules handle it for every class, since the server rejects before running anything.
 

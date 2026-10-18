@@ -158,7 +158,10 @@ class SyncTransport:
         opts = CallOptions(run_id=run_id)
         headers = self._headers(op, opts, request_id, None, None)
         headers["accept"] = "text/event-stream"
-        timeout = httpx.Timeout(connect=30.0, read=idle_timeout_s, write=30.0, pool=30.0)
+        # the connect, write and pool phases follow the client's deadline per attempt (0 = no limit); only the read
+        # side is the idle watchdog
+        connect_s = self.config.request_timeout_ms / 1000 if self.config.request_timeout_ms > 0 else None
+        timeout = httpx.Timeout(connect=connect_s, read=idle_timeout_s, write=connect_s, pool=connect_s)
         try:
             with self.http.stream("GET", built.url, headers=headers, timeout=timeout) as response:
                 if response.status_code >= 400:

@@ -216,6 +216,48 @@ jobs:
       - name: Code samples in the docs are the code that is tested
         run: python3 sdk/tools/sync_doc_samples.py --check
 
+  # The README of each SDK names the runtimes it supports; these legs are what makes that sentence true. The
+  # `sdk` job above runs the full checks on one interpreter; here only the test suites run on the others.
+  sdk-runtimes:
+    name: client SDK tests (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runtime: "python 3.10", kind: python, version: "3.10"}
+          - {runtime: "python 3.11", kind: python, version: "3.11"}
+          - {runtime: "python 3.12", kind: python, version: "3.12"}
+          - {runtime: "python 3.13", kind: python, version: "3.13"}
+          - {runtime: "node 20", kind: node, version: "20"}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build -p ag-server
+      - if: matrix.kind == 'node'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.version }}
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - if: matrix.kind == 'node'
+        name: TypeScript SDK tests
+        working-directory: sdk/typescript
+        run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm test
+      - if: matrix.kind == 'python'
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - if: matrix.kind == 'python'
+        name: Python SDK tests
+        working-directory: sdk/python
+        run: |
+          uv sync --python ${{ matrix.version }}
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
+
   orchestrator:
     name: agent orchestrator (Go)
     runs-on: ubuntu-latest

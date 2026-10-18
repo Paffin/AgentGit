@@ -129,6 +129,17 @@ for rel, pat in tag_sources.items():
     else:
         ok(f"{rel}: default image tag is the workspace version {cargo_version}")
 
+# ---- the health check follows the operator's configuration -----------------------------------------
+# `--url` on the command line would override AG_HEALTHCHECK_URL, so a changed listen port or TLS would leave the
+# container permanently "unhealthy".
+hc = re.search(r"^HEALTHCHECK[^\n]*\\\n\s*CMD (.*)$", (DEPLOY / "docker/Dockerfile").read_text(), re.M)
+if not hc:
+    fail("deploy/docker/Dockerfile has no HEALTHCHECK")
+elif "--url" in hc.group(1):
+    fail("the Dockerfile HEALTHCHECK passes --url, which overrides AG_HEALTHCHECK_URL")
+else:
+    ok("the Dockerfile HEALTHCHECK leaves the URL to AG_HEALTHCHECK_URL")
+
 # ---- the job label alerts select on is the one the deployments produce ------------------------------
 alert_jobs = {j for _, e in exprs for j in re.findall(r'job="([^"]+)"', e)}
 prom_jobs = {

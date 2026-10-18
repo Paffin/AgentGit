@@ -255,3 +255,28 @@ class TestErrors:
         assert isinstance(err, Exception)
         assert str(err) == "stream_moved: moved [stream.cas] (request req_1)"
         assert (err.status, err.retry_after_ms, err.attempts, err.outcome_unknown) == (409, 5, 1, False)
+
+
+def test_idle_timeout_zero_disables_the_watchdog_like_the_typescript_sdk() -> None:
+    from agentgit._events import DEFAULT_IDLE_MS, _idle_seconds
+
+    assert _idle_seconds(None) == DEFAULT_IDLE_MS / 1000
+    assert _idle_seconds(1500) == 1.5
+    assert _idle_seconds(0) is None
+
+
+def test_the_stream_connect_phase_follows_the_request_timeout() -> None:
+    seen: list[Any] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"])
+        return httpx.Response(200, content=b"", headers={"content-type": "text/event-stream"})
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with AgentGitClient(BASE, "t", request_timeout_ms=7000, http_client=http) as c:
+        with c._transport.open_stream(
+            OPERATIONS["events.subscribe"], {"repo": "a/b"}, run_id=None, idle_timeout_s=None
+        ):
+            pass
+    assert [seen[0][k] for k in ("connect", "write", "pool")] == [7.0, 7.0, 7.0]
+    assert seen[0]["read"] is None

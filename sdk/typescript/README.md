@@ -8,9 +8,9 @@ execution plane, and the event feed.
   [`docs/protocol/openapi.json`](../../docs/protocol/openapi.json), grouped into namespaces named after the operation
   ids (`proposal.create` is `client.proposals.create`). Their request and response types are **generated** from that
   document.
-- **No runtime dependencies.** `fetch`, `AbortSignal` and `ReadableStream` are the only platform APIs used. The
+- **No runtime dependencies.** It uses the standard platform APIs available in Node 20+: `fetch`, `Headers`, `Response`, `AbortController`, `ReadableStream`, `TextEncoder`/`TextDecoder`, `URLSearchParams`, `crypto.getRandomValues` and timers. The
   Ed25519/SHA-256 code ([`@noble`](https://github.com/paulmillr/noble-ed25519), MIT) is bundled into `dist/`; see
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ESM, CommonJS and `.d.ts` are shipped; Node 20 or newer (the tests were run on 20.20 and 22.22).
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ESM, CommonJS and `.d.ts` are shipped; Node 20 or newer (CI runs the tests on Node 20 and 22).
 - **Retries that cannot apply a request twice** (see [Errors and retries](#errors-retries-idempotency-and-deadlines)).
 - **Alpha (0.1).** Not published to npm yet: build it from a checkout (`npm ci && npm run build` in `sdk/typescript`).
   The package is exercised by the tests in this directory against a real `ag-server`; it has not been run in a browser.
@@ -401,8 +401,7 @@ its own process and temporary data directory, and the process is killed when the
 
 `src/generated/` holds `schema.ts` (message types by [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript)),
 `models.ts` (one exported alias per message), `operations.ts` (the route table) and `api.ts` (the typed namespaces).
-`sdk/api-policy.json` carries what the OpenAPI document does not: the retry class of each operation, which bodies are
-binary, and the message fields the server always fills in (typed as present; `test/server-contract.test.ts` fails if the
+`sdk/api-policy.json` carries what the OpenAPI document does not: the retry class of each operation (its `bodies` section, for responses the document describes wrongly, is empty today) and the message fields the server always fills in (typed as present; `test/server-contract.test.ts` fails if the
 server ever answers `null` for one).
 
 ## Things the server does today that show through
@@ -416,9 +415,6 @@ listings, the error envelope on every route, `regular` file types); these are wh
   credential. Both are in the `unsafe` class.
 - `Retry-After` is whole seconds and at least 1, while `retry_after_ms` in the body can be shorter. The client waits for
   `retry_after_ms` (plus jitter), so a 429 with `retry_after_ms: 40` is not stretched to a second.
-- The OpenAPI document lists `application/octet-stream` for the `200` of `objects.put`, which answers JSON
-  (`{"object_id": ..., ...}`). `sdk/api-policy.json` overrides that one response; everything else about request and
-  response bodies (`tree.file`, `objects.get`, `objects.put`, `events.subscribe`) comes from the document.
 
 ## License
 

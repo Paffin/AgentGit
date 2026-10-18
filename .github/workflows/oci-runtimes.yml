@@ -1,0 +1,167 @@
+name: OCI runtimes and cgroup v2
+
+# The OCI sandbox is only worth anything if a real container runtime accepts its flags and the kernel enforces
+# what they request; the namespace sandbox's memory and task limits are only exact on a real, delegated cgroup v2
+# hierarchy. Neither can be shown with a fake runtime or a fake directory, so these jobs run the real thing:
+#
+#   * docker, rootful podman and rootless podman, each against a small image pinned by digest and pulled here
+#     (the sandbox never pulls), asserting from *inside* the container: no network, read-only root, no new
+#     privileges, no capabilities, memory / pids / CPU limits, no view of the worker's keys, cleanup.
+#   * the whole `ag-sandbox` suite on a delegated cgroup v2 subtree prepared as root and used by the test user,
+#     including crates/ag-sandbox/tests/cgroup_real.rs (memory.max, pids.max, memory.peak, OOM kills, removal).
+#
+# AG_REQUIRE_OCI / AG_REQUIRE_CGROUP / AG_REQUIRE_SANDBOX turn every skip into a failure: a runner that cannot do
+# what the job claims must not go green.
+
+on:
+  push:
+    branches: [main, wip/policy-cli-execution]
+    paths:
+      - "crates/ag-sandbox/**"
+      - "crates/ag-worker/**"
+      - "crates/ag-client/**"
+      - ".github/workflows/oci-runtimes.yml"
+      - "Cargo.lock"
+  pull_request:
+    paths:
+      - "crates/ag-sandbox/**"
+      - "crates/ag-worker/**"
+      - "crates/ag-client/**"
+      - ".github/workflows/oci-runtimes.yml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-runtimes-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # BusyBox 1.36.1 (multi-architecture index), pinned by digest like every image the sandbox accepts.
+  OCI_TEST_IMAGE: docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+
+jobs:
+  runtimes:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: docker
+            leg: docker
+          - name: podman (rootful)
+            leg: podman-rootful
+          - name: podman (rootless)
+            leg: podman-rootless
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: The host
+        run: |
+          uname -r
+          stat -fc 'cgroup file system: %T' /sys/fs/cgroup
+          cat /sys/fs/cgroup/cgroup.controllers
+          id
+          cat /proc/self/cgroup
+          docker version --format 'docker {{.Server.Version}}' || true
+          podman --version || true
+      - name: Docker
+        if: matrix.leg == 'docker'
+        run: |
+          docker pull "$OCI_TEST_IMAGE"
+          docker info --format '{{json .SecurityOptions}} cgroup v{{.CgroupVersion}} driver {{.CgroupDriver}}'
+          echo "AG_OCI_RUNTIME=docker" >> "$GITHUB_ENV"
+      - name: Podman, rootful (through sudo)
+        if: matrix.leg == 'podman-rootful'
+        run: |
+          command -v podman || { sudo apt-get update -qq && sudo apt-get install -y podman; }
+          sudo podman --version
+          printf '#!/bin/sh\nexec sudo -n podman "$@"\n' | sudo tee /usr/local/bin/podman-rootful > /dev/null
+          sudo chmod 0755 /usr/local/bin/podman-rootful
+          sudo podman pull "$OCI_TEST_IMAGE"
+          sudo podman info --format '{{.Host.Security.Rootless}} seccomp={{.Host.Security.SeccompEnabled}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
+          echo "AG_OCI_RUNTIME=/usr/local/bin/podman-rootful" >> "$GITHUB_ENV"
+      - name: Podman, rootless
+        if: matrix.leg == 'podman-rootless'
+        run: |
+          command -v podman || { sudo apt-get update -qq && sudo apt-get install -y podman; }
+          podman --version
+          grep -q "^$USER:" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"
+          # a systemd user session is what delegates the memory and pids controllers to an unprivileged user
+          sudo loginctl enable-linger "$USER" || true
+          sudo systemctl start "user@$(id -u).service" || true
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus" >> "$GITHUB_ENV"
+          podman system migrate || true
+          podman pull "$OCI_TEST_IMAGE"
+          podman info --format '{{.Host.Security.Rootless}} seccomp={{.Host.Security.SeccompEnabled}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
+          cat "/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers" || true
+          echo "AG_OCI_RUNTIME=podman" >> "$GITHUB_ENV"
+      - name: Build the tests
+        run: cargo test -p ag-sandbox --test oci_real --no-run
+      - name: The sandbox against the real runtime, checked from inside the container
+        run: cargo test -p ag-sandbox --test oci_real -- --nocapture
+        env:
+          AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
+          AG_REQUIRE_OCI: "1"
+      - name: Containers left behind
+        if: always()
+        run: |
+          rt="${AG_OCI_RUNTIME:-docker}"
+          "$rt" ps -a --filter label=ag-sandbox=1 --format '{{.Names}} {{.Status}}' || true
+
+  cgroup-v2:
+    name: namespace sandbox on a delegated cgroup v2
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Ubuntu 24.04 restricts unprivileged user namespaces with AppArmor (see ci.yml).
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Build the tests
+        run: cargo test -p ag-sandbox --no-run
+      - name: The host
+        run: |
+          uname -r
+          stat -fc 'cgroup file system: %T' /sys/fs/cgroup
+          echo "root controllers: $(cat /sys/fs/cgroup/cgroup.controllers)"
+          echo "root subtree_control: $(cat /sys/fs/cgroup/cgroup.subtree_control)"
+          cat /proc/self/cgroup
+      # What a systemd unit with Delegate= and DelegateSubgroup= gives a service, made by hand: a cgroup owned by
+      # the test user, with the memory and pids controllers enabled for its children, a leaf for the user's
+      # processes (a cgroup with processes cannot enable controllers for children), and an empty `sandboxes`
+      # directory under which the sandbox makes one cgroup per run.
+      - name: Delegate a cgroup subtree to the test user
+        run: |
+          set -euo pipefail
+          cg=/sys/fs/cgroup/ag-ci
+          sudo mkdir -p "$cg/main" "$cg/sandboxes"
+          echo "+memory +pids" | sudo tee /sys/fs/cgroup/cgroup.subtree_control > /dev/null || true
+          echo "+memory +pids" | sudo tee "$cg/cgroup.subtree_control" > /dev/null
+          echo "+memory +pids" | sudo tee "$cg/sandboxes/cgroup.subtree_control" > /dev/null
+          sudo chown -R "$(id -u):$(id -g)" "$cg"
+          echo "$cg controllers: $(cat $cg/cgroup.controllers); subtree: $(cat $cg/cgroup.subtree_control); sandboxes subtree: $(cat $cg/sandboxes/cgroup.subtree_control)"
+      - name: The ag-sandbox suites, every limit enforced by the kernel
+        run: |
+          set -euo pipefail
+          cg=/sys/fs/cgroup/ag-ci
+          # move this step's shell (and so everything it starts) into the leaf; root may move any process
+          sudo sh -c "echo $$ > $cg/main/cgroup.procs"
+          cat /proc/self/cgroup
+          cargo test -p ag-sandbox -- --nocapture
+        env:
+          AG_SANDBOX_CGROUP_BASE: /sys/fs/cgroup/ag-ci/sandboxes
+          AG_REQUIRE_CGROUP: "1"
+          AG_REQUIRE_SANDBOX: "1"
+      - name: Cgroups left behind
+        if: always()
+        run: ls -la /sys/fs/cgroup/ag-ci/sandboxes || true

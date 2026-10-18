@@ -43,7 +43,13 @@ pub(crate) struct Hooks<'a> {
     pub sampler: Option<&'a mut dyn FnMut() -> Option<Sample>>,
     /// Kill the sandbox when a sample shows more tasks than this (used where the kernel does not enforce it).
     pub task_limit: Option<u64>,
+    /// Asked on every wake-up; once it says `true` the sandbox is killed and the run ends with
+    /// [`SandboxError::Cancelled`] (the lease was lost, the operator wants the worker to stop now).
+    pub cancel: Option<&'a (dyn Fn() -> bool + Sync)>,
 }
+
+/// How often a cancellation request is noticed while the command is quiet.
+const CANCEL_POLL: Duration = Duration::from_millis(100);
 
 /// What happened, before it is mapped to an [`ExitStatus`] by the caller.
 pub(crate) struct Finished {
@@ -126,6 +132,7 @@ pub(crate) fn supervise(
     let memory_limit = limits.memory_bytes;
 
     let mut verdict = None;
+    let mut cancelled = false;
     let mut failure: Option<Failure> = None;
     let mut exec_done = false;
     let mut peak: Option<u64> = None;
@@ -157,6 +164,11 @@ pub(crate) fn supervise(
             break;
         }
         let now = Instant::now();
+        if hooks.cancel.is_some_and(|cancel| cancel()) {
+            cancelled = true;
+            kill_all(&mut hooks);
+            break;
+        }
         if out.truncated || err.truncated {
             verdict = Some(Verdict::OutputLimit);
             kill_all(&mut hooks);
@@ -202,6 +214,9 @@ pub(crate) fn supervise(
         if pidfd.is_none() {
             wake = wake.min(Duration::from_millis(10));
         }
+        if hooks.cancel.is_some() {
+            wake = wake.min(CANCEL_POLL);
+        }
         let mut entries: Vec<PollEntry> = Vec::with_capacity(5);
         let mut roles: Vec<Role> = Vec::with_capacity(5);
         if let Some(fd) = pidfd {
@@ -245,6 +260,9 @@ pub(crate) fn supervise(
     // The command is gone; collect the rest of its output and a late failure record.
     read_status(&mut status_fd, &mut failure, &mut exec_done);
     drain(&mut out, &mut err);
+    if cancelled {
+        return Err(SandboxError::Cancelled);
+    }
     if verdict.is_none() && (out.truncated || err.truncated) {
         verdict = Some(Verdict::OutputLimit);
     }

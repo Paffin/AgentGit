@@ -43,6 +43,11 @@ pub enum SandboxError {
     #[error("container runtime failure: {0}")]
     Runtime(String),
 
+    /// The caller asked for the run to stop ([`crate::Sandbox::run_cancellable`]); everything of the command was
+    /// killed and cleaned up. No outcome exists.
+    #[error("the run was cancelled")]
+    Cancelled,
+
     /// The supervising side failed (pipes, `poll`, `wait`), or a killed sandbox did not die in time.
     #[error("sandbox supervision failed: {context}: {source}")]
     Io {

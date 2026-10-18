@@ -26,12 +26,12 @@ undocumented_unsafe_blocks = "deny"
 [dependencies]
 libc.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-serde_json.workspace = true
 
 # Test-support program that the integration tests run *inside* the sandboxes (network probes, syscall attempts,
 # fork bombs, memory hogs, ...). It is never needed at run time.

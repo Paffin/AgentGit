@@ -7,7 +7,7 @@ use crate::outcome::{IsolationLevel, Outcome};
 use crate::spec::SandboxSpec;
 
 /// The rootless namespace sandbox. On this platform it is never available.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct NamespaceSandbox {
     _private: (),
 }
@@ -25,6 +25,17 @@ impl NamespaceSandbox {
         self
     }
 
+    /// Accepted so that callers compile on every platform; there are no cgroups to use here.
+    #[must_use]
+    pub fn with_cgroup_base(self, _base: impl Into<std::path::PathBuf>) -> Self {
+        self
+    }
+
+    /// There are no cgroups off Linux.
+    pub fn cgroup_availability(&self) -> Result<crate::CgroupReport, String> {
+        Err("cgroups are a Linux feature".into())
+    }
+
     /// Always `Unavailable` off Linux.
     pub fn availability(&self) -> Availability {
         Availability::Unavailable("namespaces are a Linux feature".into())
@@ -40,7 +51,11 @@ impl Sandbox for NamespaceSandbox {
         IsolationLevel::Namespaces
     }
 
-    fn run(&self, spec: &SandboxSpec) -> Result<Outcome, SandboxError> {
+    fn run_cancellable(
+        &self,
+        spec: &SandboxSpec,
+        _cancel: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Outcome, SandboxError> {
         spec.validate()?;
         Err(SandboxError::Unavailable { sandbox: "namespace", reason: "namespaces are a Linux feature".into() })
     }

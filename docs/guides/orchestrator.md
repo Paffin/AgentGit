@@ -29,20 +29,26 @@ and limited separately:
 
 | Identity | Role on the repository | Used for |
 |---|---|---|
-| `service:orchestrator` | `admin` | scheduling: starting runs, taking leases, preparing proposals, **minting the short-lived credentials of agents** (the server lets only administrators mint credentials for other identities) |
+| `service:orchestrator` | `delegator` | scheduling: starting runs, taking leases, preparing proposals, **minting the short-lived credentials of agents** (a `delegator` mints for `agent:*` only) and finishing or reaping their tasks and runs |
 | `service:reviewer` | `reviewer` | the automated reviews |
 | `service:advisor` | `reviewer` | the conflict advice |
 | `agent:<name>` | `writer` | the agents the orchestrator runs; one identity per executor |
 
-Give the service identity the `admin` role knowing what it is for: the credential it actually *uses* is
-scoped to a list of operations (next section) that excludes integrating, policy changes, reviewing, stream
-operations and role management, and `orchestrator check` warns if the credential is broader than that.
+The service identity needs the `delegator` role, not `admin`. A delegator holds a writer's capabilities plus
+two more: `credentials.delegate` (mint, list and revoke credentials for **agents only** - never for a person, a
+service or an administrator - and never more than the delegator itself could do) and `agent.operate` (finish
+a task or a run on an agent's behalf, and reap runs whose supervisor is gone; each is audited under the
+orchestrator). It cannot change policy, roles or repositories. On top of that the credential it actually
+*uses* is scoped to a list of operations (next section) that excludes integrating, policy changes, reviewing,
+stream operations and role management, and `orchestrator check` warns if the credential is broader than
+that. A server that predates the role is reported by `check` as an error (it would need `admin`, which gives
+the orchestrator far more than it uses).
 
 On a server's data directory, offline (the server may be stopped):
 
 ```bash
 ag-server admin create-repo acme/web
-ag-server admin grant --subject service:orchestrator --repo acme/web --role admin
+ag-server admin grant --subject service:orchestrator --repo acme/web --role delegator
 ag-server admin grant --subject service:reviewer     --repo acme/web --role reviewer
 ag-server admin grant --subject service:advisor      --repo acme/web --role reviewer
 ag-server admin grant --subject agent:docs-bot       --repo acme/web --role writer
@@ -70,7 +76,9 @@ export AG_ADVISOR_TOKEN=$(ag-server admin mint --subject service:advisor --ttl 2
 (`ag-server admin mint` prints the token once, on its last line. Use your secret store rather than shell
 variables in production.) The credentials are restricted to the repositories you list and the operations the
 configuration needs; the credentials of the agents it starts are *contained* in the orchestrator's own, which
-is why the list is derived from your configuration. They expire: the service warns at start-up when one has
+is why the list is derived from your configuration. Each agent credential is also **bound to the run of its
+session**: it acts only as that run, so two sessions of one agent (`slots` above 1) cannot act for each other,
+and it stops working when the run ends or is reaped. They expire: the service warns at start-up when one has
 less than three days left and logs an error when less than a day is left; renew by minting a new one and
 restarting. The reviewer and advisor variables may be left out only if you are content for those components
 not to work (they fall back to the orchestrator's credential, which cannot post reviews, and `check` says so).
@@ -188,7 +196,7 @@ developer, the reviewer and the integrator.
 
 ```text
 $ ag-server admin create-repo acme/web
-$ ag-server admin grant --subject service:orchestrator --repo acme/web --role admin
+$ ag-server admin grant --subject service:orchestrator --repo acme/web --role delegator
   ... (alice writer, bob reviewer, carol integrator, service:reviewer, service:advisor,
        agent:docs-bot and agent:shell-bot as above)
 
@@ -205,7 +213,7 @@ C=task_a1982c24b69a1cc8f591 (routed to shell-bot)
 
 $ orchestrator check -config orchestrator.yaml
 ok    server                   http://127.0.0.1:18090 speaks agwp.v1 (server 0.1.0)
-ok    orchestrator             authenticates as service:orchestrator (token), roles acme/web:admin
+ok    orchestrator             authenticates as service:orchestrator (token), roles acme/web:delegator
 ok    orchestrator             the credential's scope covers the 30 operations this configuration needs
 ok    orchestrator             the credential expires 2026-11-16T17:32:26Z
 ok    reviewer                 authenticates as service:reviewer (token), roles acme/web:reviewer

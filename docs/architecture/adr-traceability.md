@@ -80,7 +80,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 
 | Measure | Status |
 |---|---|
-| OIDC users; scoped short-lived agent credentials | ✅ `ag-server` (`security.rs`: OIDC, expiring/revocable/scoped credentials that can never exceed their minter). Credentials bind to an agent name, not a run — [roadmap](../../ROADMAP.md) |
+| OIDC users; scoped short-lived agent credentials | ✅ `ag-server` (`security.rs`: OIDC, expiring/revocable/scoped credentials that can never exceed their minter). A credential can be bound to one run (`scope.run_id`: it acts only as that run and dies with it; the orchestrator and `ag-mcp` bind every run), the `delegator` role mints credentials for `agent:*` only, and operators finish tasks and reap dead runs with audit entries — [ADR-0010](../adr/0010-run-bound-credentials.md); a credential minted without the binding is still the agent for every run |
 | RBAC/ABAC by repo/stream/operation | ✅ roles per repository pattern × credential scope (repos, streams, operations) on the server; policy lists inside the engine; no authentication in local mode |
 | Sandbox with CPU/RAM/network/FS limits | 🟡 `ag-sandbox`: all five enforced and tested from inside the namespace sandbox; memory/task limits are sampled (not kernel-exact) unless a cgroup is delegated; see [sandbox](sandbox.md) |
 | No standing secrets for untrusted code | 🟡 the worker's key and credential are never visible to the sandboxed check (tested); `validate run` only clears the environment |
@@ -89,7 +89,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Limits on blobs, ops, DAG depth, requests | ✅ request size (HTTP and gRPC alike), concurrency, per-credential rate limits and repository quotas on the server: total bytes charged on every write path (`quota.rs`; `quotas.rs`, `api_honesty.rs`), bytes per object, streams, open proposals. Stream and proposal counts are checked just before the insert, so concurrent creates can overshoot by the number in flight |
 | Independent, tamper-evident audit | ✅ hash chain (not yet externally anchored) |
 | Path traversal, symlink escape, zip bombs, object substitution | ✅ (no archive handling exists) |
-| Separate powers for agent, reviewer, admin | ✅ |
+| Separate powers for agent, reviewer, admin | ✅ (and a delegator that hands out agent credentials without administrator rights; a test fails if a new administrator-only capability is delegable) |
 
 ## §9 — AGWP v1
 

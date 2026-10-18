@@ -14,7 +14,7 @@ wires them up under `--profile observability`.
 | `agwp_requests_total` | counter | `transport`, `operation`, `code` | requests by result. `code` is `ok` or the [AGWP error code](../protocol/agwp-v1.md#errors) |
 | `agwp_request_duration_seconds` | histogram | `transport`, `operation` | latency, 1 ms to 60 s |
 | `agwp_inflight_requests` | gauge | | requests being handled |
-| `agwp_auth_failures_total` | counter | `reason` | failed authentications (`missing`, `invalid`) |
+| `agwp_auth_failures_total` | counter | `reason` | failed authentications (`missing`, `invalid`, and `run_ended`: a credential bound to a run that is no longer running, see [ADR-0010](../adr/0010-run-bound-credentials.md)) |
 | `agwp_rate_limited_total` | counter | | requests rejected by the rate limiter |
 | `agwp_shed_total` | counter | | requests rejected because the server was saturated |
 | `agwp_integrations_total` | counter | `outcome` | `integrated`, `blocked`, `conflict`, `denied`, `invalid` |
@@ -22,6 +22,7 @@ wires them up under `--profile observability`.
 | `agwp_open_repositories`, `agwp_event_subscriptions` | gauge | | |
 | `agwp_job_events_total` | counter | `event` | execution plane since start: `enqueued`, `claimed`, `succeeded`, `retried`, `failed` (`retried` and `failed` include the jobs taken back when a worker died holding them: a runner that crashes on its last attempt shows up here, not only a runner that reports the failure) |
 | `agwp_jobs_queued` | gauge | | queued validation jobs in repositories known to have work (counted, not listed, at scrape time; a repository that cannot be read at that moment is logged and left out of the sum) |
+| `agwp_agent_runs_reaped_total` | counter | | agent runs ended as `abandoned` by a reap (an operator's `ReapRuns`, `ag-server admin reap-runs`, or the periodic reaper of `[agents] reap_interval_secs`) |
 | `agwp_trace_spans_exported_total`, `agwp_trace_spans_dropped_total`, `agwp_trace_export_failures_total` | counter | | trace exporter health |
 | `agwp_uptime_seconds` | gauge | | |
 

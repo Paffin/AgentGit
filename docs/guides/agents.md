@@ -141,7 +141,93 @@ esac
 ag agent finish "$(echo "$RUN" | sed 's/.*#//')"
 ```
 
-## 8. Embedding instead of shelling out
+## 8. Against a server: credentials, delegation and operators
+
+Everything above also works over the network ([AGWP](../protocol/agwp-v1.md), `ag-server`). Three things are
+specific to a server; the design and its limits are in [ADR-0010](../adr/0010-run-bound-credentials.md).
+
+### A credential bound to a run
+
+A credential minted for `agent:refactor-bot` is, by default, bound to the **name**: whoever holds it can act as
+any run of the agent (`ag-run` header, heartbeat, complete, finish its tasks, release its leases). Two sessions of
+one agent running side by side can therefore act for each other, and a token that leaked from a finished run
+keeps working until it expires.
+
+Bind the credential to **one run** instead: name the run in the scope, and the repository that holds it (exactly
+one, no wildcards).
+
+```json
+POST /v1/credentials
+{ "subject": "agent:refactor-bot",
+  "scope": { "repos": ["acme/web"], "run_id": "run_…", "operations": ["objects.write", "proposal.create"] },
+  "ttl_secs": 3600 }
+```
+
+* The run must exist, be `running` and belong to the subject; the minter must itself be allowed to run agents in
+  that repository. The credential is capped like any agent credential, by its minter's expiry too.
+* It **acts only as that run** - with or without an `ag-run` header - and naming another run is
+  `permission_denied`. It cannot start runs, touch the workspaces, proposals and leases of another run, finish a
+  task the run did not claim, submit provenance recorded for another run, or list and revoke credentials of other
+  runs. It can mint credentials only for its own run, never wider than itself.
+* It **dies with the run**: once the run is completed, failed or abandoned, every call answers `unauthenticated`
+  ("the run this credential is bound to is no longer running"), an open event stream ends, and the credential
+  shows as revoked in the listing. The check happens on every request, so a lost revocation cannot revive it.
+* A client verifies the answer: a server without the feature (`auth.run_credentials` is missing from
+  `GET /v1/capabilities`) would mint an ordinary credential and say nothing, so the orchestrator and `ag-mcp` refuse
+  a credential whose scope does not echo the run.
+
+The Go orchestrator mints a run-bound credential for every session it starts. `ag-mcp` does the same for every run
+it starts (`--run-credentials auto|required|off`, default `auto`: bound when the server supports it and the credential
+is an agent's, otherwise carry on with the agent's own credential and say so in the result). Name-bound credentials
+keep working; nothing forces a client to bind.
+
+### The `delegator` role: minting credentials without being an administrator
+
+`delegator` holds a writer's capabilities plus `credentials.delegate` (mint, list and revoke credentials for
+**`agent:*` subjects only**) and `agent.operate` (below). It is what a service that starts agents - the
+orchestrator - needs instead of `admin`:
+
+```bash
+ag-server admin grant --subject service:orchestrator --repo 'acme/*' --role delegator
+```
+
+A delegator **cannot escalate**: it cannot mint a credential for a person, a service, an administrator or a system
+identity, and what it mints for an agent is always explicitly scoped to the capabilities the delegator itself holds on
+every repository of the scope, less everything administrative (credentials, roles, policy, repository management,
+GC/fsck, audit, stream CAS/force, and the operator powers). A request for more is `permission_denied`, an empty list
+of operations means "everything it may pass on", and an agent that is more powerful than the delegator (an
+administrator, say) still gets only what the delegator could do.
+
+### Operators: finish tasks, end dead runs
+
+A session that crashes leaves its run `running` and its task `in_progress`. With `agent.operate` (held by
+`delegator` and `admin`):
+
+* **Finish a task** (`POST …/tasks/{id}/finish`) that another identity owns. Anyone else may only finish their own
+  task, and a run may only finish the task *it* claimed. The audit entry names the operator, says `operator: true` and
+  records the owner it overrode.
+* **Finish a run** for its agent: the audit entry is the caller's, flagged `operator: true`, not the agent's.
+* **Reap** (`POST …/runs/reap`, `ag-server admin reap-runs <repo>`): ends the `running` runs whose last heartbeat is
+  older than `stale_after_ms` as `abandoned` (`run.abandon`), releases the leases of those runs and of any run that
+  already ended (`lease.reap`), and revokes the credentials bound to them. `dry_run` reports without changing
+  anything. A threshold below `[agents] min_stale_after_secs` (default 30 s) is refused, so a typo cannot end every
+  live run.
+
+```toml
+[agents]
+run_stale_after_secs = 900   # default threshold when the request names none
+min_stale_after_secs = 30
+reap_interval_secs = 0       # > 0: the server reaps every repository this often (audited as system:reaper)
+```
+
+A task is worked on by one run at a time: starting a second run for a task that already has a `running` run is
+`failed_precondition`; it starts again once the first run has ended - finished, or reaped. Claiming a task that is
+owned, blocked or finished is `failed_precondition` too.
+
+The local `ag agent reap --timeout 10m` of section 1 ends silent runs and frees their leases in a repository you have on
+disk (there are no credentials to revoke there).
+
+## 9. Embedding instead of shelling out
 
 `ag-integrate` is a normal Rust library: `Repository::open(path)` gives you `snapshot`, `propose`,
 `integrate`, `review`, `merge_preview`, `operation` and the rest with typed results (`Outcome`,

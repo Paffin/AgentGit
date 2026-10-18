@@ -120,8 +120,31 @@ startup probe allows about a minute) and size the single pod for your peak: the 
   registry. Back up the volume with snapshots, or copy the file while the server is stopped. Losing it
   means re-creating users and roles; it does not lose any repository's history.
 
+## Stale agent runs
+
+An agent that crashes leaves its run `running`, its task `in_progress` and its leases held. The server ends such
+runs only when it is told to: an operator (`delegator` or `admin`) calls `POST /v1/repos/{owner}/{name}/runs/reap`
+(the Go orchestrator does it for the runs of sessions it lost), or you let the server do it for every repository:
+
+```toml
+[agents]
+run_stale_after_secs = 900   # a running run without a heartbeat for this long is abandoned
+min_stale_after_secs = 30    # a reap request below this is refused (a typo must not end every live run)
+reap_interval_secs = 0       # > 0: reap every repository this often, audited as `system:reaper`; 0 = on request only
+```
+
+`ag-server admin reap-runs <owner/name> [--stale-after-secs N] [--dry-run]` does the same offline. A reap releases
+the leases of the ended runs, revokes the credentials bound to them and writes `run.abandon` / `lease.reap` audit
+entries; the counter is `agwp_agent_runs_reaped_total` ([observability](observability.md)). Several replicas may
+reap at once: a reap that finds nothing stale changes nothing. See the
+[agents guide](../guides/agents.md#8-against-a-server-credentials-delegation-and-operators).
+
 ## Upgrading
 
 On-disk formats are versioned; a build refuses to open data written by a newer version, and older data is
 migrated forward. Take a backup, deploy the new image, watch `/readyz`. Roll back by redeploying the old
 image **only if you have not run a version that migrated the data**; otherwise restore the backup.
+
+The control database moved to schema **3** with run-bound credentials ([ADR-0010](../adr/0010-run-bound-credentials.md)): two
+additive columns on `credentials`. A build that only knows schema 2 refuses the migrated database instead of reading a
+run-bound credential as an ordinary one, so across replicas start a new build first and roll back from a backup.

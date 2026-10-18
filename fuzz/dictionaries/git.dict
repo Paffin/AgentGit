@@ -1,12 +1,10 @@
-# What `git diff-tree --raw -z` and `git log --format=...` print.
+# What `git diff-tree --raw -z` and `git log -z --format=...` (NUL-terminated fields) print.
 mode_file="100644"
 mode_exec="100755"
 mode_link="120000"
 mode_gitlink="160000"
 mode_none="000000"
 colon=":"
-sep_field="\x1f"
-sep_record="\x1e"
 nul="\x00"
 status_a=" A\x00"
 status_m=" M\x00"

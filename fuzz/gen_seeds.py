@@ -200,11 +200,17 @@ raw = (b":100644 100644 " + b"a" * 40 + b" " + b"b" * 40 + b" M\0src/lib.rs\0"
        + b":000000 120000 " + b"0" * 40 + b" " + b"9" * 40 + b" A\0link\0"
        + b":000000 100644 " + b"0" * 40 + b" " + b"8" * 40 + b" A\0\xff\xfe-bad-utf8\0")
 put("git_parse", b"\x00" + raw)
-log = ("%s\x1f%s\x1fAda Lovelace\x1fada@example.com\x1f1700000000\x1fsubject\n\nbody\x1e\n" % ("1" * 40, "")
-       + "%s\x1f%s %s\x1fBob\x1fbob@example.com\x1f9999999999999999\x1fmerge\x1e\n" % ("2" * 40, "1" * 40, "3" * 40))
-put("git_parse", b"\x01" + log.encode())
-put("git_parse", b"\x01" + ("%s\x1f\x1fn\x1fe\x1f-5\x1f" % ("4" * 40) + "я" * 100 + "\x1e").encode())
-put("git_parse", b"\x01a\x1fb")
+def log_record(*fields: bytes) -> bytes:
+    """One commit as `git log -z --format=%H%x00%P%x00%an%x00%ae%x00%at%x00%B` prints it: NUL-terminated fields."""
+    return b"".join(f + b"\0" for f in fields)
+
+
+log = (log_record(b"1" * 40, b"", b"Ada Lovelace", b"ada@example.com", b"1700000000", b"subject\n\nbody\n")
+       + log_record(b"2" * 40, b"1" * 40 + b" " + b"3" * 40, b"Bob", b"bob@example.com", b"9999999999999999", b"merge\n"))
+put("git_parse", b"\x01" + log)
+put("git_parse", b"\x01" + log_record(b"4" * 40, b"", b"n", b"e", b"-5", "я".encode() * 100))
+put("git_parse", b"\x01" + log_record(b"5" * 40, b"", b"\xff\xfe", b"e", b"1", b"caf\xe9"))  # not UTF-8
+put("git_parse", b"\x01a\0b")
 
 print({k: v for k, v in sorted(counts.items())})
 print("total bytes:", sum(p.stat().st_size for p in CORPUS.rglob("*") if p.is_file()))

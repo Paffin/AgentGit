@@ -18,6 +18,8 @@ const { setEl, attrs } = useScrollRegion(() => props.label)
 <style scoped>
 .cmd {
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
   padding: var(--s-3) var(--s-4);
   background: var(--surface-2, var(--surface));
   border: 1px solid var(--border);

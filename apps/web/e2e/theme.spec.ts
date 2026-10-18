@@ -55,9 +55,11 @@ test.describe('themes', () => {
 
       await toggle.click() // light -> dark, even though the system is light
       await expect(toggle).toHaveAccessibleName(/dark/i)
+      // A computed colour is read mid-transition in some engines (WebKit reports the old one until its next
+      // animation frame), so wait for it to settle instead of reading it once.
+      await expect.poll(async () => luminance((await colours(page)).body)).toBeLessThan(0.05)
       const dark = await colours(page)
       expect(dark.theme).toBe('dark')
-      expect(luminance(dark.body)).toBeLessThan(0.05)
       expect(luminance(dark.text)).toBeGreaterThan(0.5)
 
       // It is remembered for this browser (and only a preference: no token, no data).
@@ -68,7 +70,7 @@ test.describe('themes', () => {
 
       await toggle.click() // dark -> system
       expect((await colours(page)).theme).toBeNull()
-      expect(luminance((await colours(page)).body)).toBeGreaterThan(0.5)
+      await expect.poll(async () => luminance((await colours(page)).body)).toBeGreaterThan(0.5)
     })
 
     test('the dark theme reaches every surface: cards, tables, code, diffs, dialogs, tooltips', async ({

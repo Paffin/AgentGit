@@ -139,7 +139,7 @@ test('a wrong password stays at the provider, which says so', async ({ browser }
   await page.locator('#username').fill('alice')
   await page.locator('#password').fill('not-the-password')
   await page.locator('#kc-login').click()
-  await expect(page.locator('#input-error, .kc-feedback-text, [id*="error"]').first()).toBeVisible()
+  await expect(page.getByText(/Invalid username or password/i)).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`^${escape(ISSUER)}/`))
   await ctx.close()
 })

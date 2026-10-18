@@ -135,12 +135,22 @@ impl Real {
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
-    /// Containers of this sandbox that still exist (running or not), by name.
+    /// Containers of this sandbox that still exist (running or not), each with what the runtime says about it.
     fn leftovers(&self) -> Vec<String> {
         let prefix = format!("name=ag-sandbox-{}-", std::process::id());
-        self.host(&["ps", "-a", "--filter", "label=ag-sandbox=1", "--filter", &prefix, "--format", "{{.Names}}"])
+        let names =
+            self.host(&["ps", "-a", "--filter", "label=ag-sandbox=1", "--filter", &prefix, "--format", "{{.Names}}"]);
+        names
             .split_whitespace()
-            .map(str::to_string)
+            .map(|name| {
+                let state = self.host(&[
+                    "inspect",
+                    "--format",
+                    "{{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} cmd={{.Path}} {{.Args}}",
+                    name,
+                ]);
+                format!("{name} [{}]", state.trim())
+            })
             .collect()
     }
 }

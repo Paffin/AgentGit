@@ -98,7 +98,8 @@ pub fn sandbox_spec(profile: &Profile, task: &v1::ValidationTask, workdir: &Path
         memory_bytes: u64::from(memory_mb) << 20,
         pids: u64::from(max_pids),
         output_bytes: profile.output_bytes,
-        ..Limits::default()
+        open_files: profile.open_files,
+        file_size_bytes: profile.file_size_bytes,
     };
     Ok(spec)
 }
@@ -109,7 +110,7 @@ mod tests {
     use crate::profile::Backend;
 
     fn profile() -> Profile {
-        let mut p = Profile::new(Backend::Namespace { host_ids: (65534, 65534) });
+        let mut p = Profile::new(Backend::namespace((65534, 65534)));
         p.ro_mounts.clear();
         p
     }
@@ -139,6 +140,18 @@ mod tests {
         assert_eq!(s.limits.memory_bytes, u64::from(p.defaults.memory_mb) << 20);
         assert_eq!(s.limits.pids, u64::from(p.defaults.max_pids));
         assert!(s.limits.cpu_s >= 60, "a multi-threaded check gets more CPU seconds than wall seconds");
+    }
+
+    #[test]
+    fn the_limits_only_the_worker_sets_come_from_its_profile() {
+        let mut p = profile();
+        p.open_files = 4096;
+        p.file_size_bytes = 8 << 30;
+        p.output_bytes = 1 << 20;
+        p.tmp_mb = 64;
+        let s = sandbox_spec(&p, &task(run(&["true"])), Path::new("/w")).unwrap();
+        assert_eq!((s.limits.open_files, s.limits.file_size_bytes, s.limits.output_bytes), (4096, 8 << 30, 1 << 20));
+        assert_eq!(s.rw_tmp_bytes, 64 << 20);
     }
 
     #[test]

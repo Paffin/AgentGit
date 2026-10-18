@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use ag_client::{Client, Options as ClientOptions};
 use ag_crypto::KeyPair;
-use ag_sandbox::{Availability, IsolationLevel, Mount};
+use ag_sandbox::{Availability, IsolationLevel, Mount, NamespaceSandbox, OciConfig, OciSandbox};
 use ag_worker::{Backend, Ceilings, DEFAULT_SANDBOX_ID, Defaults, Options, Profile, Worker};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -33,7 +33,23 @@ enum Command {
         identity: String,
     },
     /// Report which sandboxes work on this machine and why not, then exit.
-    Doctor,
+    Doctor(DoctorArgs),
+}
+
+#[derive(Args, Debug)]
+struct DoctorArgs {
+    /// Container runtime to probe: its daemon is asked (`<runtime> info`), not just looked for on PATH.
+    #[arg(long, default_value = "docker")]
+    oci_runtime: String,
+    /// An image (pinned by digest) to look for in the runtime's local store. The worker never pulls.
+    #[arg(long)]
+    oci_image: Option<String>,
+    /// Seconds to wait for each call to the container runtime.
+    #[arg(long, default_value_t = 10)]
+    oci_timeout_secs: u64,
+    /// A cgroup v2 directory to try for kernel-exact memory and task limits (see `--cgroup-base` of `run`).
+    #[arg(long, env = "AG_SANDBOX_CGROUP_BASE")]
+    cgroup_base: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -80,12 +96,25 @@ struct RunArgs {
     /// Process one job per lane, then exit.
     #[arg(long)]
     once: bool,
-    /// Seconds a claim lasts without a heartbeat.
+    /// Seconds a claim lasts without a heartbeat (at least 5).
     #[arg(long, default_value_t = 120)]
     lease_secs: u64,
-    /// Seconds one claim request waits for work (at most 30).
+    /// Seconds one claim request waits for work (at most 30, which is also what the server allows).
     #[arg(long, default_value_t = 20)]
     wait_secs: u64,
+    /// Seconds a job this worker could not run waits before the server offers it again.
+    #[arg(long, default_value_t = 10)]
+    retry_after_secs: u64,
+    /// The longest, in seconds, to wait between two failed claim requests (the wait starts at 1 and doubles).
+    #[arg(long, default_value_t = 30)]
+    backoff_max_secs: u64,
+    /// Seconds before a call to the server times out (this includes downloading one file of the tree).
+    #[arg(long, default_value_t = 120)]
+    client_timeout_secs: u64,
+    /// After the second stop signal, seconds the running checks get to be killed and cleaned up before the
+    /// worker exits anyway.
+    #[arg(long, default_value_t = 15)]
+    shutdown_grace_secs: u64,
 
     /// Which sandbox runs the checks.
     #[arg(long, value_enum, default_value_t = SandboxChoice::Auto)]
@@ -97,12 +126,25 @@ struct RunArgs {
     /// Container runtime for --sandbox oci.
     #[arg(long, default_value = "docker")]
     oci_runtime: String,
-    /// Image used when the policy names none (pinned by digest).
+    /// Image used when the policy names none (pinned by digest, and already in the runtime's local store: the
+    /// worker never pulls). Checked at start-up.
     #[arg(long)]
     oci_image: Option<String>,
-    /// Container user, `uid:gid`.
-    #[arg(long, default_value = "65534:65534")]
-    oci_user: String,
+    /// Container user, numeric `uid[:gid]`. Default: the one that can write the checked-out tree: 65534 when
+    /// this worker is root (it gives the tree to that user), this worker's own ids with a rootful runtime, `0:0`
+    /// with a rootless one (container root is then this user).
+    #[arg(long)]
+    oci_user: Option<String>,
+    /// Seconds to wait for a housekeeping call to the container runtime (`info`, `inspect`, `kill`).
+    #[arg(long, default_value_t = 10)]
+    oci_timeout_secs: u64,
+    /// For --sandbox namespace: the cgroup v2 directory under which each check gets a cgroup with kernel-exact
+    /// memory and task limits. It must be writable by this user, have the memory and pids controllers enabled in
+    /// its cgroup.subtree_control, and hold no processes (see docs/architecture/sandbox.md). Default: look in
+    /// this process's own cgroup and its parent; without one, memory and tasks are limited by sampling and
+    /// rlimits.
+    #[arg(long, env = "AG_SANDBOX_CGROUP_BASE")]
+    cgroup_base: Option<PathBuf>,
     /// When this worker runs as root, the unprivileged host user the check runs as.
     #[arg(long, default_value_t = DEFAULT_SANDBOX_ID)]
     sandbox_uid: u32,
@@ -115,6 +157,10 @@ struct RunArgs {
     /// Mount nothing but --mount entries (the default mounts /usr, /bin, /lib*, ... read-only).
     #[arg(long)]
     no_system_mounts: bool,
+    /// Name the content of the default system mounts (an OS release, an image digest). Without it the
+    /// environment digest binds only their host paths, which says nothing about what is in them.
+    #[arg(long, value_name = "IDENTITY")]
+    system_mounts_identity: Option<String>,
     /// A read-only mount: HOST[:SANDBOX][=IDENTITY]. IDENTITY names *what* is mounted (a toolchain version,
     /// an image id) and goes into the environment digest.
     #[arg(long = "mount", value_name = "HOST[:SANDBOX][=IDENTITY]")]
@@ -141,9 +187,28 @@ struct RunArgs {
     /// Processes for checks whose policy leaves it at 0.
     #[arg(long)]
     default_pids: Option<u32>,
+    /// CPU seconds (per process) for checks whose policy leaves it at 0 (default: the check's wall-clock limit
+    /// times the number of CPUs, up to --max-cpu-secs).
+    #[arg(long)]
+    default_cpu_secs: Option<u32>,
     /// Largest accepted checkout, in MiB.
     #[arg(long, default_value_t = 4096)]
     max_checkout_mb: u64,
+    /// Output kept from each of stdout and stderr, in MiB; a check that prints more is ended (default 8).
+    #[arg(long)]
+    output_mb: Option<u64>,
+    /// Size of each check's private /tmp, in MiB (default 512). It lives in memory.
+    #[arg(long)]
+    tmp_mb: Option<u64>,
+    /// How much of each output stream is stored with the job's result, in KiB (default 8).
+    #[arg(long)]
+    result_tail_kb: Option<usize>,
+    /// Open files per process for every check (default 1024).
+    #[arg(long)]
+    open_files: Option<u64>,
+    /// The largest single file a check may write, in MiB (default 1024).
+    #[arg(long)]
+    file_size_mb: Option<u64>,
 }
 
 /// Runs the worker command line; exits the process with status 1 on failure.
@@ -159,7 +224,7 @@ pub fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Keygen { out, identity } => keygen(&out, &identity),
-        Command::Doctor => doctor(),
+        Command::Doctor(args) => doctor(&args),
         Command::Run(args) => tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -181,16 +246,92 @@ fn keygen(out: &std::path::Path, identity: &str) -> Result<()> {
     Ok(())
 }
 
-fn doctor() -> Result<()> {
+/// What the container runtime says about itself and, if asked, the image: one line each.
+fn describe_oci(runtime: &str, image: Option<&str>, timeout: Duration) -> Vec<String> {
+    let mut lines = Vec::new();
+    match ag_sandbox::probe_runtime(runtime, timeout) {
+        Err(e) => {
+            lines.push(format!("unavailable: {e}"));
+            return lines;
+        }
+        Ok(info) => {
+            let yes_no = |v: Option<bool>| match v {
+                Some(true) => "yes",
+                Some(false) => "no",
+                None => "not reported",
+            };
+            lines.push(format!(
+                "`{runtime}` answers (version {}; rootless: {}; user namespaces: {}; default seccomp profile: {})",
+                info.version.as_deref().unwrap_or("not reported"),
+                yes_no(info.rootless),
+                yes_no(info.user_ns),
+                yes_no(info.seccomp)
+            ));
+            if info.seccomp == Some(false) {
+                lines.push(
+                    "WARNING: the runtime applies no seccomp profile by default; containers are less confined".into(),
+                );
+            }
+        }
+    }
+    if let Some(image) = image {
+        let mut cfg = OciConfig::new(runtime, image);
+        cfg.control_timeout = timeout;
+        cfg.allow_unpinned_image = true;
+        match OciSandbox::with_config(cfg).and_then(|sb| sb.image_present().map(|()| sb)) {
+            Ok(_) if image.contains("@sha256:") => lines.push(format!("image {image}: in the local store")),
+            Ok(_) => lines.push(format!(
+                "image {image}: in the local store, but NOT pinned by digest (a policy's `image` must be `name@sha256:...`)"
+            )),
+            Err(e) => lines.push(format!("image {image}: {e}")),
+        }
+    } else {
+        lines.push("no image given (--oci-image): the daemon was asked, an image was not looked for".into());
+    }
+    lines
+}
+
+fn doctor(args: &DoctorArgs) -> Result<()> {
     let (euid, egid) = ag_sandbox::effective_ids();
     println!(
         "running as uid {euid}, gid {egid}{}",
         if euid == 0 { " (root: checks will be mapped to an unprivileged user)" } else { "" }
     );
+    let timeout = Duration::from_secs(args.oci_timeout_secs);
     for (name, availability) in ag_sandbox::detect() {
-        match availability {
-            Availability::Available => println!("  {name:<10} available"),
-            Availability::Unavailable(why) => println!("  {name:<10} unavailable: {why}"),
+        match (name, availability) {
+            ("oci", Availability::Unavailable(why)) => println!("  {name:<10} unavailable: {why}"),
+            ("oci", Availability::Available) => {
+                println!(
+                    "  {name:<10} a docker or podman executable was found on PATH; asking `{}`:",
+                    args.oci_runtime
+                );
+                for line in describe_oci(&args.oci_runtime, args.oci_image.as_deref(), timeout) {
+                    println!("             {line}");
+                }
+            }
+            (_, Availability::Available) => println!("  {name:<10} available"),
+            (_, Availability::Unavailable(why)) => println!("  {name:<10} unavailable: {why}"),
+        }
+        if name == "namespace" {
+            let mut sandbox = NamespaceSandbox::new();
+            if let Some(base) = &args.cgroup_base {
+                sandbox = sandbox.with_cgroup_base(base);
+            }
+            match sandbox.cgroup_availability() {
+                Ok(r) => println!(
+                    "             cgroup v2: kernel-exact limits for {}{}",
+                    if r.memory { "memory" } else { "" },
+                    match (r.memory, r.pids) {
+                        (true, true) => " and tasks",
+                        (false, true) => "tasks only",
+                        _ => " only",
+                    }
+                ),
+                Err(why) => println!(
+                    "             cgroup v2: not used ({why}); memory is limited by sampling and tasks by rlimits or sampling"
+                ),
+            }
         }
     }
     let best = ag_sandbox::best_available();
@@ -202,6 +343,11 @@ fn doctor() -> Result<()> {
             "nothing: no isolating sandbox is available"
         },
         best.isolation()
+    );
+    let defaults = Profile::new(Backend::Process);
+    let unnamed = defaults.mounts_without_identity().len();
+    println!(
+        "the {unnamed} default system mounts carry no identity: the environment digest binds only their host paths (see --system-mounts-identity and --mount HOST=IDENTITY)"
     );
     Ok(())
 }
@@ -242,26 +388,90 @@ fn read_token(args: &RunArgs) -> Result<String> {
     Ok(t)
 }
 
+/// A namespace sandbox the way this worker would build it, for the start-up check of `--cgroup-base`.
+fn namespace_sandbox(cgroup_base: &Option<PathBuf>) -> NamespaceSandbox {
+    match cgroup_base {
+        Some(base) => NamespaceSandbox::new().with_cgroup_base(base),
+        None => NamespaceSandbox::new(),
+    }
+}
+
+fn namespace_backend(args: &RunArgs) -> Result<Backend> {
+    if let Availability::Unavailable(why) = NamespaceSandbox::new().availability() {
+        bail!("the namespace sandbox is unavailable: {why}");
+    }
+    // A base the operator named has to work: it is the difference between kernel-exact and sampled limits.
+    if args.cgroup_base.is_some()
+        && let Err(why) = namespace_sandbox(&args.cgroup_base).cgroup_availability()
+    {
+        bail!(
+            "--cgroup-base {} cannot be used: {why}",
+            args.cgroup_base.as_deref().map(|p| p.display().to_string()).unwrap_or_default()
+        );
+    }
+    Ok(Backend::Namespace { host_ids: (args.sandbox_uid, args.sandbox_gid), cgroup_base: args.cgroup_base.clone() })
+}
+
+/// The container backend, checked against the real runtime at start-up instead of failing every job later:
+/// the daemon answers, the default image is a pinned one that is in the local store, the container user can
+/// write the checked-out tree.
+fn oci_backend(args: &RunArgs) -> Result<Backend> {
+    let (euid, egid) = ag_sandbox::effective_ids();
+    let timeout = Duration::from_secs(args.oci_timeout_secs);
+    let info = ag_sandbox::probe_runtime(&args.oci_runtime, timeout).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let rootless = info.rootless == Some(true);
+    if info.seccomp == Some(false) {
+        tracing::warn!(runtime = %args.oci_runtime, "the container runtime applies no seccomp profile by default");
+    }
+    let user = match &args.oci_user {
+        None => info.user_for_tree(euid, egid, &format!("{DEFAULT_SANDBOX_ID}:{DEFAULT_SANDBOX_ID}")),
+        Some(user) => {
+            let Some((uid, _)) = ag_worker::parse_numeric_user(user) else {
+                bail!("--oci-user '{user}' must be a numeric uid[:gid]");
+            };
+            // A user who is not the one that owns the tree can write it only if the worker hands it over, and
+            // only root can.
+            if euid != 0 && !(if rootless { uid == 0 } else { uid == euid }) {
+                bail!(
+                    "--oci-user {user} could not write the checked-out tree: this worker runs as uid {euid}, and with a {} runtime the container user that owns the tree is {}. Leave --oci-user out to use it.",
+                    if rootless { "rootless" } else { "rootful" },
+                    if rootless { "0:0 (container root is this user)".to_string() } else { format!("{euid}:{egid}") }
+                );
+            }
+            user.clone()
+        }
+    };
+    if let Some(image) = &args.oci_image {
+        let mut cfg = OciConfig::new(&args.oci_runtime, image);
+        cfg.control_timeout = timeout;
+        cfg.user = user.clone();
+        let sandbox = OciSandbox::with_config(cfg).map_err(|e| anyhow::anyhow!("--oci-image: {e}"))?;
+        sandbox.image_present().map_err(|e| anyhow::anyhow!("--oci-image: {e}"))?;
+    }
+    // Containers a crashed predecessor left behind (and the memory and processes in them) are removed now.
+    match ag_sandbox::reap_orphans(&args.oci_runtime, timeout, timeout * 2) {
+        Ok(removed) if removed.is_empty() => {}
+        Ok(removed) => tracing::warn!(containers = ?removed, "removed containers a previous worker left behind"),
+        Err(e) => tracing::warn!(error = %e, "could not look for containers a previous worker left behind"),
+    }
+    Ok(Backend::Oci {
+        runtime: args.oci_runtime.clone(),
+        default_image: args.oci_image.clone(),
+        user,
+        control_timeout: timeout,
+    })
+}
+
 fn backend(args: &RunArgs) -> Result<Backend> {
-    let namespace = Backend::Namespace { host_ids: (args.sandbox_uid, args.sandbox_gid) };
     Ok(match args.sandbox {
-        SandboxChoice::Auto => match ag_sandbox::NamespaceSandbox::new().availability() {
-            Availability::Available => namespace,
+        SandboxChoice::Auto => match NamespaceSandbox::new().availability() {
+            Availability::Available => namespace_backend(args)?,
             Availability::Unavailable(why) => bail!(
                 "no isolating sandbox is available here ({why}). Fix that (see `ag-worker doctor`), use --sandbox oci, or, for code you already trust, --sandbox process --insecure-allow-process-sandbox"
             ),
         },
-        SandboxChoice::Namespace => {
-            if let Availability::Unavailable(why) = ag_sandbox::NamespaceSandbox::new().availability() {
-                bail!("the namespace sandbox is unavailable: {why}");
-            }
-            namespace
-        }
-        SandboxChoice::Oci => Backend::Oci {
-            runtime: args.oci_runtime.clone(),
-            default_image: args.oci_image.clone(),
-            user: args.oci_user.clone(),
-        },
+        SandboxChoice::Namespace => namespace_backend(args)?,
+        SandboxChoice::Oci => oci_backend(args)?,
         SandboxChoice::Process => {
             if !args.insecure_allow_process_sandbox {
                 bail!("--sandbox process is not isolation; add --insecure-allow-process-sandbox if you really want it");
@@ -273,6 +483,9 @@ fn backend(args: &RunArgs) -> Result<Backend> {
 
 fn profile(args: &RunArgs) -> Result<Profile> {
     let mut p = Profile::new(backend(args)?);
+    if let Some(problem) = p.backend.user_problem() {
+        bail!("{problem}");
+    }
     if args.insecure_allow_process_sandbox {
         p.min_isolation = IsolationLevel::None;
     }
@@ -280,6 +493,12 @@ fn profile(args: &RunArgs) -> Result<Profile> {
     p.allow_network = args.allow_network;
     if args.no_system_mounts {
         p.ro_mounts.clear();
+    }
+    if let Some(identity) = &args.system_mounts_identity {
+        if identity.is_empty() || args.no_system_mounts {
+            bail!("--system-mounts-identity needs a name and the system mounts (not --no-system-mounts)");
+        }
+        p.ro_mounts = p.ro_mounts.into_iter().map(|m| m.with_identity(identity.clone())).collect();
     }
     for m in &args.mounts {
         p.ro_mounts.push(parse_mount(m)?);
@@ -297,10 +516,30 @@ fn profile(args: &RunArgs) -> Result<Profile> {
     let d = Defaults::default();
     p.defaults = Defaults {
         memory_mb: args.default_memory_mb.unwrap_or(d.memory_mb),
-        cpu_secs: d.cpu_secs,
+        cpu_secs: args.default_cpu_secs.unwrap_or(d.cpu_secs),
         max_pids: args.default_pids.unwrap_or(d.max_pids),
     };
     p.max_checkout_bytes = args.max_checkout_mb << 20;
+    // Every one of these is a limit of the sandbox, which refuses a zero.
+    let positive = |what: &str, v: Option<u64>, unit: u64, into: &mut u64| -> Result<()> {
+        if let Some(v) = v {
+            if v == 0 {
+                bail!("--{what} must be greater than zero");
+            }
+            *into = v.checked_mul(unit).with_context(|| format!("--{what} is unreasonably large"))?;
+        }
+        Ok(())
+    };
+    positive("output-mb", args.output_mb, 1 << 20, &mut p.output_bytes)?;
+    positive("tmp-mb", args.tmp_mb, 1, &mut p.tmp_mb)?;
+    positive("open-files", args.open_files, 1, &mut p.open_files)?;
+    positive("file-size-mb", args.file_size_mb, 1 << 20, &mut p.file_size_bytes)?;
+    if let Some(kb) = args.result_tail_kb {
+        if kb == 0 {
+            bail!("--result-tail-kb must be greater than zero");
+        }
+        p.tail_bytes = kb.checked_mul(1024).context("--result-tail-kb is unreasonably large")?;
+    }
     if let Some(problem) = p.scratch_problem() {
         bail!("{problem}");
     }
@@ -308,6 +547,15 @@ fn profile(args: &RunArgs) -> Result<Profile> {
 }
 
 async fn run(args: RunArgs) -> Result<()> {
+    if args.lease_secs < 5 {
+        bail!(
+            "--lease-secs {} is below the minimum of 5: a claim shorter than that cannot be kept alive",
+            args.lease_secs
+        );
+    }
+    if args.wait_secs > 30 {
+        tracing::warn!(asked = args.wait_secs, used = 30, "--wait-secs is capped at 30 (the server's own limit)");
+    }
     let profile = profile(&args)?;
     let key =
         KeyPair::load(&args.key).with_context(|| format!("cannot load the signing key {}", args.key.display()))?;
@@ -318,7 +566,7 @@ async fn run(args: RunArgs) -> Result<()> {
         token,
         run: None,
         ca_file: args.ca_file.clone(),
-        timeout: Some(Duration::from_secs(120)),
+        timeout: Some(Duration::from_secs(args.client_timeout_secs)),
         user_agent: Some(format!("ag-worker/{}", env!("CARGO_PKG_VERSION"))),
     })
     .await
@@ -340,22 +588,46 @@ async fn run(args: RunArgs) -> Result<()> {
     if profile.backend.isolation() == IsolationLevel::None {
         tracing::warn!("the process sandbox is NOT isolation: checks run with this user's file and network access");
     }
+    let unnamed: Vec<String> = profile.mounts_without_identity().iter().map(|m| m.host.display().to_string()).collect();
+    if !unnamed.is_empty() {
+        tracing::warn!(
+            mounts = ?unnamed,
+            "these read-only mounts carry no identity: the environment digest binds only their host paths, not their content, so a policy that pins required_environment_digest cannot tell this worker's toolchain from another's (--system-mounts-identity, --mount HOST=IDENTITY)"
+        );
+    }
+    if let Backend::Namespace { cgroup_base, .. } = &profile.backend {
+        match namespace_sandbox(cgroup_base).cgroup_availability() {
+            Ok(r) => tracing::info!(memory = r.memory, pids = r.pids, "cgroup v2 limits: enforced by the kernel"),
+            Err(why) => tracing::info!(
+                reason = %why,
+                "no cgroup v2 limits: memory is limited by sampling and tasks by rlimits or sampling (see docs/architecture/sandbox.md)"
+            ),
+        }
+    }
 
     let opts = Options {
         label,
         repo: args.repo.clone(),
-        lease: Duration::from_secs(args.lease_secs.max(5)),
+        lease: Duration::from_secs(args.lease_secs),
         wait: Duration::from_secs(args.wait_secs.min(30)),
         concurrency: args.concurrency.max(1),
+        retry_after: Duration::from_secs(args.retry_after_secs),
+        backoff_max: Duration::from_secs(args.backoff_max_secs.max(1)),
     };
     let worker = Arc::new(Worker::new(client, profile, key, issuer, opts));
 
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+    let grace = Duration::from_secs(args.shutdown_grace_secs);
+    let stopper = worker.clone();
     tokio::spawn(async move {
         wait_for_signal().await;
-        tracing::info!("stopping after the current job (send the signal again to exit now)");
+        tracing::info!("stopping after the current job (send the signal again to stop the running checks now)");
         let _ = stop_tx.send(true);
         wait_for_signal().await;
+        tracing::warn!(?grace, "stopping the running checks now; their containers are killed and removed");
+        stopper.cancel();
+        tokio::time::sleep(grace).await;
+        tracing::error!(?grace, "the checks did not stop in time; exiting anyway");
         std::process::exit(130);
     });
     let reports = worker.run(stop_rx, args.once).await.map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -399,5 +671,85 @@ mod tests {
     fn the_default_label_is_acceptable_to_the_server() {
         let l = default_label();
         assert!(l.len() <= 64 && l.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)), "{l}");
+    }
+
+    fn args(extra: &[&str]) -> RunArgs {
+        let mut argv = vec!["ag-worker", "run", "--server", "http://x", "--key", "/k", "--sandbox", "process"];
+        argv.extend_from_slice(extra);
+        match Cli::try_parse_from(argv).unwrap().command {
+            Command::Run(a) => *a,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn every_limit_a_worker_operator_may_want_to_change_is_a_flag() {
+        let a = args(&[
+            "--insecure-allow-process-sandbox",
+            "--output-mb",
+            "16",
+            "--tmp-mb",
+            "2048",
+            "--result-tail-kb",
+            "64",
+            "--open-files",
+            "4096",
+            "--file-size-mb",
+            "8192",
+            "--default-cpu-secs",
+            "900",
+            "--max-checkout-mb",
+            "100",
+        ]);
+        let p = profile(&a).unwrap();
+        assert_eq!(p.output_bytes, 16 << 20);
+        assert_eq!(p.tmp_mb, 2048);
+        assert_eq!(p.tail_bytes, 64 * 1024);
+        assert_eq!(p.open_files, 4096);
+        assert_eq!(p.file_size_bytes, 8 << 30);
+        assert_eq!(p.defaults.cpu_secs, 900);
+        assert_eq!(p.max_checkout_bytes, 100 << 20);
+        // nothing given: the profile's own defaults
+        let d = profile(&args(&["--insecure-allow-process-sandbox"])).unwrap();
+        let base = Profile::new(Backend::Process);
+        assert_eq!((d.output_bytes, d.tmp_mb, d.tail_bytes), (base.output_bytes, base.tmp_mb, base.tail_bytes));
+        assert_eq!((d.open_files, d.file_size_bytes), (base.open_files, base.file_size_bytes));
+    }
+
+    #[test]
+    fn a_limit_of_zero_is_refused_not_passed_to_the_sandbox() {
+        for flag in ["--output-mb", "--tmp-mb", "--result-tail-kb", "--open-files", "--file-size-mb"] {
+            let a = args(&["--insecure-allow-process-sandbox", flag, "0"]);
+            let err = profile(&a).unwrap_err().to_string();
+            assert!(err.contains(flag) && err.contains("greater than zero"), "{err}");
+        }
+        let err = profile(&args(&["--insecure-allow-process-sandbox", "--file-size-mb", "18446744073709551615"]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unreasonably large"), "{err}");
+    }
+
+    #[test]
+    fn the_system_mounts_can_be_named_and_the_digest_then_binds_what_they_are() {
+        let a = args(&["--insecure-allow-process-sandbox", "--system-mounts-identity", "debian-12.5"]);
+        let p = profile(&a).unwrap();
+        assert!(p.mounts_without_identity().is_empty());
+        assert!(p.ro_mounts.iter().all(|m| m.identity.as_deref() == Some("debian-12.5")));
+        let err = profile(&args(&[
+            "--insecure-allow-process-sandbox",
+            "--system-mounts-identity",
+            "x",
+            "--no-system-mounts",
+        ]))
+        .unwrap_err();
+        assert!(err.to_string().contains("--system-mounts-identity"), "{err}");
+    }
+
+    #[test]
+    fn the_oci_user_is_numeric_and_the_flag_has_no_hidden_default() {
+        let a = args(&["--oci-user", "nobody"]);
+        assert_eq!(a.oci_user.as_deref(), Some("nobody"));
+        assert_eq!(args(&[]).oci_user, None, "the right user depends on the runtime and is chosen at start-up");
+        assert_eq!(args(&[]).oci_timeout_secs, 10);
     }
 }

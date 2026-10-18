@@ -202,7 +202,14 @@ def render_json_shapes() -> str:
         "",
     ]
     lines += [f"- `ag {c}`" for c in raw]
-    lines.append("")
+    lines += [
+        "",
+        "## Commands that never end",
+        "",
+        "`ag remote events --follow --json` prints one compact JSON object per line (NDJSON), each the shape of an "
+        "event in `ag remote events`, so that a consumer can read it line by line.",
+        "",
+    ]
     groups: dict[str, list[str]] = {}
     for key in sorted(commands):
         groups.setdefault(key.split("#")[0].split(" ")[0], []).append(key)

@@ -2,11 +2,11 @@
 .el .ds Aq '
 .TH ag-proposal-list 1  "list 0.1.0" 
 .SH NAME
-ag\-proposal\-list \- List proposals
+ag\-proposal\-list \- List proposals, newest first
 .SH SYNOPSIS
-\fBag proposal list\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-state\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
+\fBag proposal list\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-state\fR] [\fB\-\-as\fR] [\fB\-n\fR|\fB\-\-limit\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
 .SH DESCRIPTION
-List proposals
+List proposals, newest first
 .SH OPTIONS
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
@@ -17,6 +17,9 @@ Filter by state: open, integrated, closed
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-n\fR, \fB\-\-limit\fR \fI<LIMIT>\fR [default: 200]
+Show at most this many (0 = all)
 .TP
 \fB\-\-json\fR
 Machine\-readable JSON output

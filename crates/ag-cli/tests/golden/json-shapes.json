@@ -176,6 +176,7 @@
       "blobs": "number",
       "commits": "number",
       "head": "string",
+      "lossy_commits": "number",
       "skipped_paths": [],
       "skipped_submodules": "number"
     },
@@ -701,6 +702,7 @@
       "conflicts": [
         {
           "kind": "string",
+          "message": "string",
           "path": "string"
         }
       ],

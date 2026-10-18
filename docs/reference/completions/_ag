@@ -474,6 +474,8 @@ never\:"Never colour"))' \
             (list)
 _arguments "${_arguments_options[@]}" : \
 '--state=[Filter by state\: open, integrated, closed]:STATE:_default' \
+'-n+[Show at most this many (0 = all)]:LIMIT:_default' \
+'--limit=[Show at most this many (0 = all)]:LIMIT:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
@@ -1172,6 +1174,8 @@ never\:"Never colour"))' \
 ;;
 (runs)
 _arguments "${_arguments_options[@]}" : \
+'-n+[Show at most this many (0 = all)]:LIMIT:_default' \
+'--limit=[Show at most this many (0 = all)]:LIMIT:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
@@ -1501,13 +1505,15 @@ never\:"Never colour"))' \
 ;;
 (list)
 _arguments "${_arguments_options[@]}" : \
+'-n+[With --all\: show at most this many (0 = all)]:LIMIT:_default' \
+'--limit=[With --all\: show at most this many (0 = all)]:LIMIT:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
-'--all[Include released and expired leases]' \
+'--all[Include released and expired leases (the newest ones, see -n)]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
 '(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
@@ -2349,6 +2355,7 @@ never\:"Never colour"))' \
 _arguments "${_arguments_options[@]}" : \
 '-L+[Only these lines, \`START,END\`]:START,END:_default' \
 '--lines=[Only these lines, \`START,END\`]:START,END:_default' \
+'--max-commits=[Look at most this many changesets back (default\: the server'\''s limit; the output says when it stopped)]:N:_default' \
 '--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
@@ -2753,7 +2760,7 @@ _ag__subcmd__agent_commands() {
 'start:Start a run. Prints the identity the agent must use (\`agent\:name#run_…\`)' \
 'finish:Finish a run and release its leases' \
 'heartbeat:Heartbeat a running run' \
-'runs:List runs' \
+'runs:List runs, newest first' \
 'reap:Abandon runs with no recent heartbeat and release their leases' \
 'disable:Stop an agent from starting new runs' \
 'enable:Allow a disabled agent to run again' \
@@ -3056,7 +3063,7 @@ _ag__subcmd__preview_commands() {
 (( $+functions[_ag__subcmd__proposal_commands] )) ||
 _ag__subcmd__proposal_commands() {
     local commands; commands=(
-'list:List proposals' \
+'list:List proposals, newest first' \
 'show:Show a proposal with its reviews' \
 'review:Review the proposal'\''s current head' \
 'update:Point the proposal at a new head (earlier approvals stop counting)' \

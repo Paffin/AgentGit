@@ -428,7 +428,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
-            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List proposals')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List proposals, newest first')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a proposal with its reviews')
             [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Review the proposal''s current head')
             [CompletionResult]::new('update', 'update', [CompletionResultType]::ParameterValue, 'Point the proposal at a new head (earlier approvals stop counting)')
@@ -437,6 +437,8 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
         }
         'ag;proposal;list' {
             [CompletionResult]::new('--state', '--state', [CompletionResultType]::ParameterName, 'Filter by state: open, integrated, closed')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -889,7 +891,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('start', 'start', [CompletionResultType]::ParameterValue, 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)')
             [CompletionResult]::new('finish', 'finish', [CompletionResultType]::ParameterValue, 'Finish a run and release its leases')
             [CompletionResult]::new('heartbeat', 'heartbeat', [CompletionResultType]::ParameterValue, 'Heartbeat a running run')
-            [CompletionResult]::new('runs', 'runs', [CompletionResultType]::ParameterValue, 'List runs')
+            [CompletionResult]::new('runs', 'runs', [CompletionResultType]::ParameterValue, 'List runs, newest first')
             [CompletionResult]::new('reap', 'reap', [CompletionResultType]::ParameterValue, 'Abandon runs with no recent heartbeat and release their leases')
             [CompletionResult]::new('disable', 'disable', [CompletionResultType]::ParameterValue, 'Stop an agent from starting new runs')
             [CompletionResult]::new('enable', 'enable', [CompletionResultType]::ParameterValue, 'Allow a disabled agent to run again')
@@ -981,6 +983,8 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;agent;runs' {
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -1240,11 +1244,13 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;lease;list' {
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'With --all: show at most this many (0 = all)')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'With --all: show at most this many (0 = all)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
             [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
-            [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'Include released and expired leases')
+            [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'Include released and expired leases (the newest ones, see -n)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
             [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
@@ -1929,6 +1935,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
         'ag;remote;blame' {
             [CompletionResult]::new('-L', '-L ', [CompletionResultType]::ParameterName, 'Only these lines, `START,END`')
             [CompletionResult]::new('--lines', '--lines', [CompletionResultType]::ParameterName, 'Only these lines, `START,END`')
+            [CompletionResult]::new('--max-commits', '--max-commits', [CompletionResultType]::ParameterName, 'Look at most this many changesets back (default: the server''s limit; the output says when it stopped)')
             [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Remote to use (default: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')

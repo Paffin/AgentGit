@@ -406,7 +406,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
-            cand list 'List proposals'
+            cand list 'List proposals, newest first'
             cand show 'Show a proposal with its reviews'
             cand review 'Review the proposal''s current head'
             cand update 'Point the proposal at a new head (earlier approvals stop counting)'
@@ -414,6 +414,8 @@ set edit:completion:arg-completer[ag] = {|@words|
         }
         &'ag;proposal;list'= {
             cand --state 'Filter by state: open, integrated, closed'
+            cand -n 'Show at most this many (0 = all)'
+            cand --limit 'Show at most this many (0 = all)'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
@@ -841,7 +843,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand start 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)'
             cand finish 'Finish a run and release its leases'
             cand heartbeat 'Heartbeat a running run'
-            cand runs 'List runs'
+            cand runs 'List runs, newest first'
             cand reap 'Abandon runs with no recent heartbeat and release their leases'
             cand disable 'Stop an agent from starting new runs'
             cand enable 'Allow a disabled agent to run again'
@@ -927,6 +929,8 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;agent;runs'= {
+            cand -n 'Show at most this many (0 = all)'
+            cand --limit 'Show at most this many (0 = all)'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
@@ -1171,11 +1175,13 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;lease;list'= {
+            cand -n 'With --all: show at most this many (0 = all)'
+            cand --limit 'With --all: show at most this many (0 = all)'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
             cand --color 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never'
-            cand --all 'Include released and expired leases'
+            cand --all 'Include released and expired leases (the newest ones, see -n)'
             cand --json 'Machine-readable JSON output'
             cand -q 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
             cand --quiet 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
@@ -1823,6 +1829,7 @@ set edit:completion:arg-completer[ag] = {|@words|
         &'ag;remote;blame'= {
             cand -L 'Only these lines, `START,END`'
             cand --lines 'Only these lines, `START,END`'
+            cand --max-commits 'Look at most this many changesets back (default: the server''s limit; the output says when it stopped)'
             cand --remote 'Remote to use (default: origin)'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'

@@ -303,12 +303,13 @@ complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subc
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "list" -d 'List proposals'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "list" -d 'List proposals, newest first'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "show" -d 'Show a proposal with its reviews'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "review" -d 'Review the proposal\'s current head'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "update" -d 'Point the proposal at a new head (earlier approvals stop counting)'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "close" -d 'Close without integrating'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l state -d 'Filter by state: open, integrated, closed' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -s n -l limit -d 'Show at most this many (0 = all)' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -605,7 +606,7 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcomm
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "start" -d 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)'
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "finish" -d 'Finish a run and release its leases'
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "heartbeat" -d 'Heartbeat a running run'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "runs" -d 'List runs'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "runs" -d 'List runs, newest first'
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "reap" -d 'Abandon runs with no recent heartbeat and release their leases'
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "disable" -d 'Stop an agent from starting new runs'
 complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "enable" -d 'Allow a disabled agent to run again'
@@ -663,6 +664,7 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from heartbeat" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from heartbeat" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from heartbeat" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s n -l limit -d 'Show at most this many (0 = all)' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -831,12 +833,13 @@ complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from extend" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from extend" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from extend" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -s n -l limit -d 'With --all: show at most this many (0 = all)' -r
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -l all -d 'Include released and expired leases'
+complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -l all -d 'Include released and expired leases (the newest ones, see -n)'
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand lease; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
@@ -1291,6 +1294,7 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from log" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from log" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from blame" -s L -l lines -d 'Only these lines, `START,END`' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from blame" -l max-commits -d 'Look at most this many changesets back (default: the server\'s limit; the output says when it stopped)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from blame" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from blame" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from blame" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r

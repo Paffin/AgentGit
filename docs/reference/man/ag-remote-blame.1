@@ -4,7 +4,7 @@
 .SH NAME
 ag\-remote\-blame \- Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
 .SH SYNOPSIS
-\fBag remote blame\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-L\fR|\fB\-\-lines\fR] [\fB\-\-remote\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISPEC\fR> 
+\fBag remote blame\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-L\fR|\fB\-\-lines\fR] [\fB\-\-remote\fR] [\fB\-\-as\fR] [\fB\-\-max\-commits\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISPEC\fR> 
 .SH DESCRIPTION
 Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
 .SH OPTIONS
@@ -20,6 +20,9 @@ Remote to use (default: origin)
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-max\-commits\fR \fI<N>\fR [default: 0]
+Look at most this many changesets back (default: the server\*(Aqs limit; the output says when it stopped)
 .TP
 \fB\-\-json\fR
 Machine\-readable JSON output

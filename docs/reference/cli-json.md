@@ -29,6 +29,10 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - `ag policy example`
 - `ag remote cat`
 
+## Commands that never end
+
+`ag remote events --follow --json` prints one compact JSON object per line (NDJSON), each the shape of an event in `ag remote events`, so that a consumer can read it line by line.
+
 ## Commands
 
 - [`ag agent`](#ag-agent)
@@ -444,6 +448,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
   "blobs": "number",
   "commits": "number",
   "head": "string",
+  "lossy_commits": "number",
   "skipped_paths": [],
   "skipped_submodules": "number"
 }
@@ -1640,6 +1645,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
   "conflicts": [
     {
       "kind": "string",
+      "message": "string",
       "path": "string"
     }
   ],

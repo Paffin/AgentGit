@@ -667,12 +667,20 @@ _ag() {
             return 0
             ;;
         ag__subcmd__agent__subcmd__runs)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version"
+            opts="-n -C -q -v -h -V --limit --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --limit)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1635,12 +1643,20 @@ _ag() {
             return 0
             ;;
         ag__subcmd__lease__subcmd__list)
-            opts="-C -q -v -h -V --all --repo --as --json --color --quiet --verbose --help --version"
+            opts="-n -C -q -v -h -V --all --limit --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --limit)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -2317,13 +2333,21 @@ _ag() {
             return 0
             ;;
         ag__subcmd__proposal__subcmd__list)
-            opts="-C -q -v -h -V --state --repo --as --json --color --quiet --verbose --help --version"
+            opts="-n -C -q -v -h -V --state --limit --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --state)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --limit)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -2989,7 +3013,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote__subcmd__blame)
-            opts="-L -C -q -v -h -V --lines --remote --repo --as --json --color --quiet --verbose --help --version"
+            opts="-L -C -q -v -h -V --lines --max-commits --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3000,6 +3024,10 @@ _ag() {
                     return 0
                     ;;
                 -L)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-commits)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

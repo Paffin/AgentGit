@@ -4,19 +4,22 @@
 .SH NAME
 ag\-lease\-list \- List active leases
 .SH SYNOPSIS
-\fBag lease list\fR [\fB\-\-all\fR] [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
+\fBag lease list\fR [\fB\-\-all\fR] [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-n\fR|\fB\-\-limit\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
 .SH DESCRIPTION
 List active leases
 .SH OPTIONS
 .TP
 \fB\-\-all\fR
-Include released and expired leases
+Include released and expired leases (the newest ones, see \-n)
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-n\fR, \fB\-\-limit\fR \fI<LIMIT>\fR [default: 200]
+With \-\-all: show at most this many (0 = all)
 .TP
 \fB\-\-json\fR
 Machine\-readable JSON output

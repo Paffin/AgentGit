@@ -163,7 +163,8 @@ fn a_live_feed_is_one_json_object_per_line() {
     assert!(events.iter().all(|e| e["topic"].is_string()), "{events:?}");
     // the same shape as an event of `ag --json remote events`
     let replayed = fx.ag(&["--json", "remote", "events"]).ok().json();
-    let keys = |v: &serde_json::Value| v.as_object().unwrap().keys().cloned().collect::<std::collections::BTreeSet<_>>();
+    let keys =
+        |v: &serde_json::Value| v.as_object().unwrap().keys().cloned().collect::<std::collections::BTreeSet<_>>();
     assert_eq!(keys(&events[0]), keys(&replayed["events"][0]));
 }
 

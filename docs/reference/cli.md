@@ -647,7 +647,7 @@ List, review, update or close proposals
 Usage: ag proposal [OPTIONS] <COMMAND>
 
 Commands:
-  list    List proposals
+  list    List proposals, newest first
   show    Show a proposal with its reviews
   review  Review the proposal's current head
   update  Point the proposal at a new head (earlier approvals stop counting)
@@ -667,7 +667,7 @@ Options:
 ## ag proposal list
 
 ```text
-List proposals
+List proposals, newest first
 
 Usage: ag proposal list [OPTIONS]
 
@@ -675,6 +675,7 @@ Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --state <STATE>  Filter by state: open, integrated, closed
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+  -n, --limit <LIMIT>  Show at most this many (0 = all) [default: 200]
       --json           Machine-readable JSON output
       --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
@@ -1256,7 +1257,7 @@ Commands:
   start      Start a run. Prints the identity the agent must use (`agent:name#run_…`)
   finish     Finish a run and release its leases
   heartbeat  Heartbeat a running run
-  runs       List runs
+  runs       List runs, newest first
   reap       Abandon runs with no recent heartbeat and release their leases
   disable    Stop an agent from starting new runs
   enable     Allow a disabled agent to run again
@@ -1381,7 +1382,7 @@ Options:
 ## ag agent runs
 
 ```text
-List runs
+List runs, newest first
 
 Usage: ag agent runs [OPTIONS] [NAME]
 
@@ -1390,6 +1391,7 @@ Arguments:
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+  -n, --limit <LIMIT>  Show at most this many (0 = all) [default: 50]
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
       --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
@@ -1711,9 +1713,10 @@ List active leases
 Usage: ag lease list [OPTIONS]
 
 Options:
-      --all            Include released and expired leases
+      --all            Include released and expired leases (the newest ones, see -n)
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+  -n, --limit <LIMIT>  With --all: show at most this many (0 = all) [default: 200]
       --json           Machine-readable JSON output
       --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
@@ -2555,6 +2558,7 @@ Options:
   -L, --lines <START,END>  Only these lines, `START,END`
       --remote <REMOTE>    Remote to use (default: origin)
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --max-commits <N>    Look at most this many changesets back (default: the server's limit; the output says when it stopped) [default: 0]
       --json               Machine-readable JSON output
       --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown

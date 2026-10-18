@@ -270,6 +270,9 @@ standard error. Errors become one JSON line on standard error:
 Commands that print file contents or a template are the exceptions, because their output is the data: `ag cat`,
 `ag remote cat`, `ag policy example`, `ag completions`, `ag man`. `ag help` prints text.
 
+A command that never ends is the other exception to "one document": `ag remote events --follow --json` prints one
+compact JSON object per line (NDJSON), so that a script can read it line by line.
+
 Stability: the shapes are version 1 (`ag version --json` prints `json_schema`). Within a version, keys are only
 ever added, never removed, renamed or retyped, so ignore keys you do not know. The shapes are checked by golden
 tests; the list of commands and their shapes is docs/reference/cli-json.md.

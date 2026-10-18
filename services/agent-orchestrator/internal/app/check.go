@@ -94,7 +94,14 @@ func (a *App) Check(ctx context.Context) CheckReport {
 			rep.add("warn", id.label, "authenticates as a %s, not a service identity: audit trails and policies are clearer with service:%s", p.Kind, id.label)
 		}
 		for _, repo := range a.repos {
-			if !hasRole(p.Roles, repo.cfg.Name, id.roles) {
+			has, unsure := roleCheck(p.Roles, repo.cfg.Name, id.roles)
+			switch {
+			case has:
+			case len(unsure) > 0:
+				// The server decides what a pattern matches; when this check cannot translate one, it says so
+				// instead of reporting a missing role that may well be there.
+				rep.add("warn", id.label, "cannot verify role pattern(s) %s locally against %s: the server's matching rules are authoritative (roles: %s)", strings.Join(unsure, ", "), repo.cfg.Name, strings.Join(p.Roles, ", "))
+			default:
 				rep.add("error", id.label, "no %s role on %s (roles: %s)", strings.Join(id.roles, " or "), repo.cfg.Name, strings.Join(p.Roles, ", "))
 			}
 		}
@@ -174,35 +181,4 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		rep.add("ok", "state_dir", "%s is usable", a.cfg.State)
 	}
 	return rep
-}
-
-// hasRole reports whether roles ("pattern:role") grant one of want on repo.
-func hasRole(roles []string, repo string, want []string) bool {
-	for _, r := range roles {
-		i := strings.LastIndex(r, ":")
-		if i < 0 {
-			continue
-		}
-		pattern, role := r[:i], r[i+1:]
-		ok := false
-		for _, w := range want {
-			if role == w {
-				ok = true
-			}
-		}
-		if ok && matchPattern(pattern, repo) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchPattern(pattern, s string) bool {
-	if pattern == "*" || pattern == s {
-		return true
-	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(s, strings.TrimSuffix(pattern, "*"))
-	}
-	return false
 }

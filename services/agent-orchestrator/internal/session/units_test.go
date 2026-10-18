@@ -87,3 +87,26 @@ func TestSummaryHelpers(t *testing.T) {
 		t.Fatal("Exit.OK")
 	}
 }
+
+// ChargeOf reads the summaries result() writes; the two must not drift apart.
+func TestChargeOfMatchesTheSummariesTheSessionWrites(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status string
+		sum    string
+		want   Charge
+	}{
+		{"exit code", "failed", "failed: executor bot exited with code 3 (attempt 2)", ChargeAttempt},
+		{"temporary failure", "failed", "failed: executor bot exited with code 75 (attempt 2)", ChargeTemporary},
+		{"killed", "failed", "abandoned: the executor was killed by signal SIGKILL (attempt 2)", ChargeAttempt},
+		{"timeout", "failed", "timeout: the session exceeded 30m; the executor was stopped (attempt 2)", ChargeAttempt},
+		{"cancelled", "failed", "cancelled: orchestrator shutdown", ChargeNone},
+		{"refused before it ran", "failed", "deferred: lease conflict", ChargeNone},
+		{"lost with its orchestrator", "failed", LostRunPrefix + " for 10m0s and no session of this orchestrator supervises the run", ChargeNone},
+		{"completed", "completed", "completed by executor bot (attempt 2, 1s)", ChargeNone},
+	} {
+		if got := ChargeOf(tt.status, tt.sum); got != tt.want {
+			t.Errorf("%s: ChargeOf(%q, %q) = %v, want %v", tt.name, tt.status, tt.sum, got, tt.want)
+		}
+	}
+}

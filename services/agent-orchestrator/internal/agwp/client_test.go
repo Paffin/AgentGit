@@ -573,3 +573,37 @@ func TestInvalidBaseURLs(t *testing.T) {
 		t.Fatalf("c=%v err=%v", c, err)
 	}
 }
+
+// A default client jitters its retries and reconnects (+-20%); a constant would send every client of a restarted
+// server back in the same instant.
+func TestDefaultBackoffIsJitteredWithinTwentyPercent(t *testing.T) {
+	c, err := New("http://127.0.0.1:1", secret.New(testToken), WithRetry(RetryPolicy{MaxAttempts: 4, BaseDelay: time.Second, MaxDelay: time.Minute}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[time.Duration]bool{}
+	for i := 0; i < 200; i++ {
+		d := c.backoff(2) // 2s before jitter
+		if d < 1600*time.Millisecond || d > 2400*time.Millisecond {
+			t.Fatalf("backoff %v outside 2s +-20%%", d)
+		}
+		seen[d] = true
+	}
+	if len(seen) < 20 {
+		t.Fatalf("only %d distinct delays in 200 draws: the jitter is not random", len(seen))
+	}
+	// an injected constant still works (tests rely on it)
+	fixed, _ := New("http://127.0.0.1:1", secret.New(testToken), WithRetry(RetryPolicy{BaseDelay: time.Second, MaxDelay: time.Minute}), WithJitter(func() float64 { return 0.5 }))
+	if d := fixed.backoff(2); d != 2*time.Second {
+		t.Fatalf("fixed jitter: %v", d)
+	}
+}
+
+func TestResponseBodyBoundIsConfigurable(t *testing.T) {
+	c, _, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"identity":"`+strings.Repeat("x", 4096)+`"}`)
+	}), WithMaxResponseBytes(1024))
+	if _, err := c.Whoami(context.Background()); err == nil {
+		t.Fatal("a response over the configured bound was accepted")
+	}
+}

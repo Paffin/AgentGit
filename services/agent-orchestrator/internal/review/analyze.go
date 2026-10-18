@@ -55,6 +55,9 @@ type Settings struct {
 	Secrets   bool
 	Tests     bool
 	Allow     []*regexp.Regexp
+	// ImportFiles and ImportBytes bound what is fetched of an initial import (see config.Review).
+	ImportFiles int
+	ImportBytes int
 }
 
 // Finding is one thing a reviewer wants a person to look at.
@@ -71,6 +74,9 @@ type Summary struct {
 	Added     int  `json:"added"`
 	Removed   int  `json:"removed"`
 	Truncated bool `json:"truncated,omitempty"`
+	// Uninspected counts the files of an initial import whose content was not read (too many files, a file over
+	// the size bound, or a download that failed): secret, size and test checks did not see them.
+	Uninspected int `json:"uninspected,omitempty"`
 }
 
 // Analyze runs every enabled check over the per-file diffs.

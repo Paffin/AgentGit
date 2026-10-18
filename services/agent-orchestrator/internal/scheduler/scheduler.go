@@ -110,6 +110,10 @@ type Scheduler struct {
 	lastPass  time.Time
 	lastErr   string
 	tasksSeen map[string]int
+	// seeded: tasks whose retry budget was recovered from the server's run history (after a restart)
+	seeded map[string]bool
+	// predictErr is why the server's conflict prediction could not be read in the last pass ("" when it could)
+	predictErr string
 }
 
 // New builds a scheduler. It validates that every configured route exists.
@@ -125,7 +129,7 @@ func New(o Options) (*Scheduler, error) {
 	}
 	s := &Scheduler{o: o, log: o.Log.With("repo", o.Repo.Name, "component", "scheduler"), byName: map[string]config.Executor{}, agents: map[string]config.Executor{},
 		attempts: map[string]int{}, tempFails: map[string]int{}, retryAt: map[string]time.Time{}, awaiting: map[string]awaitInfo{},
-		deferred: map[string]Deferral{}, tasksSeen: map[string]int{}, kick: loop.NewKicker()}
+		deferred: map[string]Deferral{}, tasksSeen: map[string]int{}, seeded: map[string]bool{}, kick: loop.NewKicker()}
 	for _, e := range o.Execs {
 		s.byName[e.Name] = e
 		s.agents[e.Agent] = e
@@ -251,10 +255,11 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 	}
 
 	overlaps, perr := s.o.API.Predict(ctx, repo, s.o.Repo.Stream)
+	s.notePredict(perr)
 	if perr != nil {
-		s.log.Debug("conflict prediction unavailable", "err", perr)
 		overlaps = nil
 	}
+	holdForPrediction := perr != nil && s.o.Repo.Schedule.OnPredictError == "defer" && s.o.Repo.Schedule.Placement == "avoid"
 	var paths map[string][]string
 	if s.o.Paths != nil {
 		paths = s.o.Paths.OpenProposalPaths(repo)
@@ -272,6 +277,12 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 		if !ok {
 			continue // not ours
 		}
+		if t.State == agwp.TaskInProgress {
+			// An adopted task: the previous process may have spent attempts on it.
+			if !s.recoverBudget(ctx, t, ex) {
+				continue
+			}
+		}
 		s.mu.Lock()
 		retry := s.retryAt[t.ID]
 		s.mu.Unlock()
@@ -281,6 +292,10 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 		}
 		if s.o.Sessions.FreeSlots(ex) <= 0 {
 			s.setDeferred(t, ReasonExecutorBusy, "executor "+ex.Name+" is at its session limit")
+			continue
+		}
+		if holdForPrediction {
+			s.setDeferred(t, ReasonPredictUnavailable, "the server's conflict prediction cannot be read ("+perr.Error()+"); on_predict_error is defer")
 			continue
 		}
 		dec := Decide(Input{
@@ -315,6 +330,91 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 	}
 	s.pruneDeferred(seen)
 	return nil
+}
+
+// notePredict records whether the server's conflict prediction could be read in this pass. A failure is never
+// silent: it is logged once per outage, counted on every pass, and shown in /status.
+func (s *Scheduler) notePredict(err error) {
+	s.mu.Lock()
+	prev := s.predictErr
+	s.predictErr = ""
+	if err != nil {
+		s.predictErr = err.Error()
+	}
+	s.mu.Unlock()
+	switch {
+	case err != nil:
+		s.o.Metrics.PredictErrors.With(s.o.Repo.Name).Inc()
+		if prev == "" {
+			s.log.Warn("conflict prediction unavailable; placement does not see the server's overlap prediction until it is back", "err", err, "on_predict_error", s.o.Repo.Schedule.OnPredictError)
+		}
+	case prev != "":
+		s.log.Info("conflict prediction available again")
+	}
+}
+
+// recoverBudget restores, for a task this process did not start, the attempts that earlier runs of it already
+// spent. The run history is on the server; the counters of a previous orchestrator process are gone. Without this
+// a restart would hand a task that failed `attempts` times another full budget, and a crash-looping executor
+// would be retried without end. It reports whether the task may be started now.
+func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Executor) bool {
+	repo := s.o.Repo.Name
+	s.mu.Lock()
+	_, retrying := s.retryAt[t.ID]
+	known := s.seeded[t.ID] || s.attempts[t.ID] > 0 || retrying
+	s.mu.Unlock()
+	if known {
+		return true
+	}
+	runs, err := s.o.API.ListRuns(ctx, repo, ex.Agent, false, 200)
+	if err != nil {
+		s.setDeferred(t, ReasonStartFailed, "could not read the run history of the task: "+err.Error())
+		return false
+	}
+	spent, temp := 0, 0
+	var last time.Time
+	lastTemp := false
+	for _, r := range runs {
+		if r.TaskID != t.ID {
+			continue
+		}
+		charge := session.ChargeOf(r.Status, r.Summary)
+		if charge == session.ChargeNone {
+			continue
+		}
+		if charge == session.ChargeAttempt {
+			spent++
+		} else {
+			temp++
+		}
+		if fin := time.UnixMilli(r.FinishedAtMs); fin.After(last) {
+			last, lastTemp = fin, charge == session.ChargeTemporary
+		}
+	}
+	s.mu.Lock()
+	s.seeded[t.ID] = true
+	s.mu.Unlock()
+	if spent+temp == 0 {
+		return true
+	}
+	if spent >= s.o.Repo.Schedule.Attempts || temp >= maxTempFails {
+		s.log.Warn("giving up on the task: its attempt budget was spent before this process started", "task", t.ID, "attempts", spent, "temporary_failures", temp)
+		if err := s.o.Sessions.FinishTask(ctx, repo, t.ID, agwp.TaskCancelled); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+			s.log.Warn("could not cancel the task", "task", t.ID, "err", err)
+		}
+		s.clearDeferred(t.ID)
+		return false
+	}
+	n := spent
+	if lastTemp {
+		n = temp
+	}
+	s.mu.Lock()
+	s.attempts[t.ID], s.tempFails[t.ID] = spent, temp
+	s.retryAt[t.ID] = last.Add(s.backoffFor(n))
+	s.mu.Unlock()
+	s.log.Info("recovered the retry budget of a task from its run history", "task", t.ID, "attempts", spent, "temporary_failures", temp, "retry_at", last.Add(s.backoffFor(n)))
+	return true
 }
 
 // executorFor chooses the executor for a candidate; an adopted task must go
@@ -491,7 +591,7 @@ func (s *Scheduler) reapOrphans(ctx context.Context, runs []agwp.Run) {
 			continue
 		}
 		_, err := s.o.API.CompleteRun(ctx, s.o.Repo.Name, r.RunID, "failed",
-			fmt.Sprintf("abandoned: no heartbeat for %s and no session of this orchestrator supervises the run (orchestrator restarted, or the executor start was interrupted)", now.Sub(last).Round(time.Second)))
+			fmt.Sprintf(session.LostRunPrefix+" for %s and no session of this orchestrator supervises the run (orchestrator restarted, or the executor start was interrupted)", now.Sub(last).Round(time.Second)))
 		if err != nil && !agwp.IsNotFound(err) {
 			s.log.Warn("could not complete an orphaned run", "run", r.RunID, "err", err)
 			continue
@@ -616,6 +716,7 @@ func (s *Scheduler) forgetWaiting(id string) {
 	delete(s.attempts, id)
 	delete(s.tempFails, id)
 	delete(s.retryAt, id)
+	delete(s.seeded, id)
 	s.mu.Unlock()
 	s.clearDeferred(id)
 }
@@ -684,6 +785,8 @@ type Status struct {
 	Tasks     map[string]int `json:"tasks"`
 	LastPass  time.Time      `json:"last_pass,omitempty"`
 	LastError string         `json:"last_error,omitempty"`
+	// PredictError is why the server's conflict prediction could not be read in the last pass; empty when it could.
+	PredictError string `json:"predict_error,omitempty"`
 }
 
 // Waiting is a task whose proposals have not landed yet.
@@ -711,7 +814,7 @@ func (s *Scheduler) Status() Status {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st.LastPass, st.LastError = s.lastPass, s.lastErr
+	st.LastPass, st.LastError, st.PredictError = s.lastPass, s.lastErr, s.predictErr
 	st.Tasks = map[string]int{}
 	for k, v := range s.tasksSeen {
 		st.Tasks[k] = v

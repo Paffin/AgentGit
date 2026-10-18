@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,6 +114,8 @@ type Status struct {
 	Queue         []agwp.QueueEntry `json:"integration_queue,omitempty"`
 	LastPass      time.Time         `json:"last_pass,omitempty"`
 	LastError     string            `json:"last_error,omitempty"`
+	// ListError says why the validation or integration queue shown here may be stale or missing.
+	ListError string `json:"queue_error,omitempty"`
 }
 
 // Options wires an execution scheduler.
@@ -128,6 +131,8 @@ type Options struct {
 	Refresh time.Duration
 	// Recent bounds the remembered integrated proposals (default 20).
 	Recent int
+	// JobsLimit bounds the validation jobs read for the status view (default 200).
+	JobsLimit int
 }
 
 type entry struct {
@@ -155,6 +160,7 @@ type Scheduler struct {
 	queue      []agwp.QueueEntry
 	lastPass   time.Time
 	lastErr    string
+	listErr    string
 	listeners  []func(Prepared)
 	forgetters []func(string)
 }
@@ -172,6 +178,9 @@ func New(o Options) *Scheduler {
 	}
 	if o.Refresh <= 0 {
 		o.Refresh = 15 * time.Second
+	}
+	if o.JobsLimit <= 0 {
+		o.JobsLimit = 200
 	}
 	if o.Recent <= 0 {
 		o.Recent = 20
@@ -289,15 +298,28 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 		}
 	}
 	s.forgetClosed(ctx, seen)
-	if jobs, jerr := s.o.API.ListJobs(ctx, repo, "", 200); jerr == nil {
+	// The validation and integration queues are only shown in /status; a failure to read them does not fail the
+	// pass, but it is not hidden either: the view keeps its last content and the status says why.
+	var listErrs []string
+	if jobs, jerr := s.o.API.ListJobs(ctx, repo, "", s.o.JobsLimit); jerr == nil {
 		s.mu.Lock()
 		s.jobs = unfinished(jobs)
 		s.mu.Unlock()
+	} else {
+		listErrs = append(listErrs, "validation jobs: "+jerr.Error())
 	}
 	if q, qerr := s.o.API.ListQueue(ctx, repo, stream); qerr == nil {
 		s.mu.Lock()
 		s.queue = q
 		s.mu.Unlock()
+	} else {
+		listErrs = append(listErrs, "integration queue: "+qerr.Error())
+	}
+	s.mu.Lock()
+	s.listErr = strings.Join(listErrs, "; ")
+	s.mu.Unlock()
+	if len(listErrs) > 0 {
+		s.log.Warn("could not read the queues for the status view", "err", s.listErr)
 	}
 	return firstErr
 }
@@ -510,7 +532,7 @@ func (s *Scheduler) Status() Status {
 	defer s.mu.Unlock()
 	st := Status{Repo: s.o.Repo.Name, Stream: s.o.Repo.Stream, StreamHead: s.head.Head, StreamVersion: s.head.Version,
 		Integrated: append([]ProposalStatus(nil), s.recent...), Jobs: append([]agwp.Job(nil), s.jobs...),
-		Queue: append([]agwp.QueueEntry(nil), s.queue...), LastPass: s.lastPass, LastError: s.lastErr}
+		Queue: append([]agwp.QueueEntry(nil), s.queue...), LastPass: s.lastPass, LastError: s.lastErr, ListError: s.listErr}
 	st.Open = []ProposalStatus{} // never null in the JSON
 	for _, e := range s.entries {
 		st.Open = append(st.Open, e.status)

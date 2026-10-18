@@ -399,6 +399,83 @@ func TestFailedAttemptsAreRetriedWithBackoffThenCancelled(t *testing.T) {
 	}
 }
 
+// restart builds a scheduler that knows nothing, as after an orchestrator restart (the server keeps the history).
+func (h *harness) restart(mut func(*config.Repo), execs ...config.Executor) *Scheduler {
+	h.t.Helper()
+	rc := config.Repo{Name: repo, Stream: "main", Schedule: config.Schedule{Slots: 2, Placement: "avoid", Lease: "soft", LeaseTTL: 10 * time.Minute, Attempts: 2, Backoff: time.Minute, Default: execs[0].Name}}
+	if mut != nil {
+		mut(&rc)
+	}
+	s, err := New(Options{Repo: rc, Execs: execs, API: h.orch, Sessions: h.mgr, Clock: h.clk, Metrics: h.metrics,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute}})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return s
+}
+
+// The retry budget and the backoff survive a restart: they are recovered from the run history on the server.
+func TestAttemptsAndBackoffSurviveARestart(t *testing.T) {
+	ex := command(t, "bot", `echo nope >&2; exit 1`)
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Attempts = 2; r.Schedule.Backoff = time.Minute }, nil, ex)
+	tk := h.addTask("flaky", nil)
+	h.reconcile()
+	h.waitIdle()
+	h.eventually("attempt 1 to be recorded as a retry", func() bool { return len(h.sched.Status().Retrying) == 1 })
+
+	restarted := h.restart(nil, ex)
+	if err := restarted.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// still inside the backoff of the first failure: the restarted scheduler waits, it does not start "attempt 1" again
+	if len(h.mgr.Active()) != 0 || len(h.runs()) != 1 {
+		t.Fatalf("a restarted scheduler started work inside the backoff: %d active, %d runs", len(h.mgr.Active()), len(h.runs()))
+	}
+	var deferral Deferral
+	for _, d := range restarted.Status().Deferred {
+		if d.Task == tk {
+			deferral = d
+		}
+	}
+	if deferral.Reason != ReasonRetryBackoff {
+		t.Fatalf("deferral = %+v, want retry_backoff (statuses: %+v)", deferral, restarted.Status())
+	}
+
+	// after the backoff the second (last) attempt runs, and its failure cancels the task: two runs in total
+	h.clk.Advance(2 * time.Minute)
+	if err := restarted.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.waitIdle()
+	h.eventually("the task to be cancelled after the second attempt", func() bool { return h.state(tk) == agwp.TaskCancelled })
+	runs := h.runs()
+	if len(runs) != 2 || !strings.Contains(runs[1].Summary, "attempt 2") {
+		t.Fatalf("runs = %+v, want attempt 1 then attempt 2", runs)
+	}
+}
+
+func TestATaskWhoseBudgetWasSpentBeforeTheRestartIsCancelledNotRetried(t *testing.T) {
+	ex := command(t, "bot", `exit 1`)
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Attempts = 2; r.Schedule.Backoff = time.Second }, nil, ex)
+	// the first process allows two attempts and has made one; the restarted one allows one: the budget is spent
+	tk := h.addTask("one try used", nil)
+	h.reconcile()
+	h.waitIdle()
+	h.eventually("a retry to be recorded", func() bool { return len(h.sched.Status().Retrying) == 1 })
+	before := len(h.runs())
+	strict := h.restart(func(r *config.Repo) { r.Schedule.Attempts = 1 }, ex)
+	h.clk.Advance(time.Hour)
+	if err := strict.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.state(tk); got != agwp.TaskCancelled {
+		t.Fatalf("the task with a spent budget is %s, want cancelled", got)
+	}
+	if len(h.runs()) != before {
+		t.Fatal("a run was started for a task whose budget was spent")
+	}
+}
+
 func TestTempFailDoesNotSpendTheAttemptBudget(t *testing.T) {
 	counter := filepath.Join(t.TempDir(), "n")
 	script := fmt.Sprintf(`n=$(cat %[1]s 2>/dev/null || echo 0); n=$((n+1)); echo $n > %[1]s; if [ $n -lt 3 ]; then exit 75; fi; exit 0`, counter)
@@ -586,6 +663,38 @@ func TestServerErrorsSurfaceInStatusAndDoNotCrash(t *testing.T) {
 	h.reconcile() // recovers
 	if h.sched.Status().LastError != "" {
 		t.Fatal("error not cleared")
+	}
+}
+
+// A failing conflict prediction is not silent: it is counted, shown in /status, and (by choice) holds tasks back.
+func TestAnUnavailablePredictionIsReportedAndCanHoldTasksBack(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "bot", `true`))
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/predict", Times: -1, Status: 500, Code: "internal"})
+	tk := h.addTask("placed anyway", nil)
+	h.reconcile()
+	if st := h.sched.Status(); st.PredictError == "" {
+		t.Fatalf("the failed prediction is not in the status: %+v", st)
+	}
+	if got := h.metrics.PredictErrors.With(repo).Value(); got != 1 {
+		t.Fatalf("prediction errors counted = %v", got)
+	}
+	h.eventually("the task to run although the prediction is unavailable (the default is start)", func() bool { return h.state(tk) == agwp.TaskDone })
+
+	hold := newHarness(t, func(r *config.Repo) { r.Schedule.OnPredictError = "defer" }, nil, command(t, "bot", `true`))
+	hold.px.Inject(testutil.Fault{Method: "GET", Path: "/predict", Times: -1, Status: 500, Code: "internal"})
+	held := hold.addTask("held back", nil)
+	hold.reconcile()
+	if d, ok := hold.deferral(held); !ok || d.Reason != ReasonPredictUnavailable {
+		t.Fatalf("deferral = %+v %v", d, ok)
+	}
+	if hold.state(held) != agwp.TaskOpen || len(hold.mgr.Active()) != 0 {
+		t.Fatal("the task started although on_predict_error is defer")
+	}
+	hold.px.ClearFaults()
+	hold.reconcile()
+	hold.eventually("the task to run once the prediction is back", func() bool { return hold.state(held) == agwp.TaskDone })
+	if hold.sched.Status().PredictError != "" {
+		t.Fatal("the status still reports a prediction error")
 	}
 }
 

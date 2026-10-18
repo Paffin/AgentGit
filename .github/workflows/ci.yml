@@ -280,6 +280,20 @@ jobs:
           go vet ./...
           test -z "$(gofmt -l .)"
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race ./...
+      # The worked example of docs/guides/orchestrator.md is a script: it must keep running against a real ag-server
+      # (it builds the demo agent, files tasks, runs the orchestrator, plays the people, checks policy refusals).
+      - name: the worked example runs end to end
+        working-directory: services/agent-orchestrator
+        run: |
+          go build -o "$RUNNER_TEMP/orchestrator" ./cmd/orchestrator
+          ORCHESTRATOR_BIN="$RUNNER_TEMP/orchestrator" AG_SERVER_BIN="$GITHUB_WORKSPACE/target/debug/ag-server" sh examples/worked-example.sh | tee "$RUNNER_TEMP/worked-example.txt"
+          grep -q "orchestrator stopped" "$RUNNER_TEMP/worked-example.txt"
+      # The shipped image: builds, carries the version it was given, and reads the example configuration.
+      - name: the image builds and starts
+        run: |
+          docker build --build-arg VERSION="ci-${GITHUB_SHA}" -t agentgit/agent-orchestrator:ci services/agent-orchestrator
+          docker run --rm agentgit/agent-orchestrator:ci version | grep -q "ci-${GITHUB_SHA}"
+          docker run --rm -v "$GITHUB_WORKSPACE/services/agent-orchestrator/examples:/etc/orchestrator:ro" agentgit/agent-orchestrator:ci config -config /etc/orchestrator/orchestrator.yaml | grep -q "docs-bot"
 
   # The completion scripts must parse in the shells they are for. A missing shell fails the run (AG_REQUIRE_SHELLS)
   # instead of being skipped; PowerShell is on the runner image, zsh and fish are installed here.

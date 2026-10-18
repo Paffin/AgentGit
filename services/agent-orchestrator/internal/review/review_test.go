@@ -201,6 +201,44 @@ func TestInitialImportIntoAnEmptyStreamIsReviewed(t *testing.T) {
 	}
 }
 
+// The checks of an initial import only see the files that were fetched; the rest must be said, not silently
+// treated as clean.
+func TestAnInitialImportSaysWhichFilesItDidNotInspect(t *testing.T) {
+	h := newHarness(t, true)
+	h.c.settings.ImportFiles, h.c.settings.ImportBytes = 2, 200
+	big := "package big\n\n// " + strings.Repeat("padding ", 100) + "\n"
+	id, _ := h.propose("import", map[string]string{
+		"a.txt": "a\n", "b.txt": "b\n", // read
+		"c.txt": "c\n", "d.txt": "d\n", // beyond ImportFiles
+		"main.go": "package main\n\nvar key = \"" + awsKey() + "\"\n", // beyond ImportFiles: its secret is not seen
+	})
+	h.reconcile()
+	rs := h.reviews(id)
+	if len(rs) != 1 || !strings.Contains(rs[0].Body, "3 file(s) of this initial import were not inspected") {
+		t.Fatalf("reviews = %+v", rs)
+	}
+	if st := h.c.Status(); len(st.Recent) != 1 || st.Recent[0].Summary.Uninspected != 3 {
+		t.Fatalf("status = %+v", st)
+	}
+
+	// a file over the size bound counts as not inspected as well
+	h2 := newHarness(t, true)
+	h2.c.settings.ImportFiles, h2.c.settings.ImportBytes = 10, 200
+	id2, _ := h2.propose("import", map[string]string{"big.go": big, "small.go": "package small\n"})
+	h2.reconcile()
+	if rs := h2.reviews(id2); len(rs) != 1 || !strings.Contains(rs[0].Body, "1 file(s) of this initial import were not inspected") {
+		t.Fatalf("reviews = %+v", rs)
+	}
+
+	// and an import that was fully read, and is clean, still gets no comment
+	h3 := newHarness(t, true)
+	id3, _ := h3.propose("import", map[string]string{"small.go": "package small\n\nfunc F() {}\n", "small_test.go": "package small\n"})
+	h3.reconcile()
+	if rs := h3.reviews(id3); len(rs) != 0 {
+		t.Fatalf("a clean import must not be commented on: %+v", rs)
+	}
+}
+
 func TestReviewersNeverApproveOrRequestChanges(t *testing.T) {
 	h := newHarness(t, false)
 	h.propose("with key", map[string]string{"pkg/k.go": "package pkg\n\nvar k = \"" + awsKey() + "\"\n"})

@@ -62,6 +62,12 @@ func New(o Options) (*Component, error) {
 	if o.Log == nil {
 		o.Log = slog.Default()
 	}
+	if o.Repo.Index.ProposalFiles < 1 {
+		o.Repo.Index.ProposalFiles = 30
+	}
+	if o.Repo.Index.ProposalsPerPass < 1 {
+		o.Repo.Index.ProposalsPerPass = 10
+	}
 	skip, err := glob.CompileAll(o.Repo.Index.Skip)
 	if err != nil {
 		return nil, err
@@ -231,6 +237,9 @@ func (c *Component) Sync(ctx context.Context) error {
 	c.o.Metrics.IndexSymbols.With(repo).Set(float64(stats.Symbols))
 	c.o.Metrics.IndexUpdates.With(repo).Inc()
 	c.log.Info("index updated", "head", short(head.Head), "files", stats.Files, "symbols", stats.Symbols, "changed", len(put), "removed", len(remove))
+	if stats.DroppedDefs > 0 || stats.DroppedIdents > 0 {
+		c.log.Info("the index is incomplete by design: its bounds left some symbols out", "dropped_definitions", stats.DroppedDefs, "dropped_identifiers", stats.DroppedIdents)
+	}
 	return firstErr
 }
 

@@ -11,18 +11,19 @@ import (
 
 // Deferral reasons (stable strings: metrics labels and status output).
 const (
-	ReasonExclusiveLease = "exclusive_lease"     // someone else holds an exclusive lease on an overlapping scope
-	ReasonForeignLease   = "foreign_lease"       // someone else holds a soft lease on an overlapping scope
-	ReasonRunningTask    = "running_task"        // one of our sessions works on an overlapping scope
-	ReasonPendingLanding = "pending_integration" // finished work on an overlapping scope has not landed yet
-	ReasonTaskInProgress = "task_in_progress"    // another task with an overlapping scope is in progress
-	ReasonOpenProposal   = "open_proposal"       // an open proposal already touches the scope
-	ReasonPredicted      = "predicted_overlap"   // the server's conflict prediction reports an overlap
-	ReasonExecutorBusy   = "executor_busy"       // no free slot (not a conflict)
-	ReasonRepoBusy       = "repo_busy"           // the repository's session limit is reached (not a conflict)
-	ReasonRetryBackoff   = "retry_backoff"       // waiting out the delay after a failed attempt
-	ReasonLeaseConflict  = "lease_conflict"      // the server refused the lease at start
-	ReasonStartFailed    = "start_failed"        // starting the session failed; retried after a delay
+	ReasonExclusiveLease     = "exclusive_lease"     // someone else holds an exclusive lease on an overlapping scope
+	ReasonForeignLease       = "foreign_lease"       // someone else holds a soft lease on an overlapping scope
+	ReasonRunningTask        = "running_task"        // one of our sessions works on an overlapping scope
+	ReasonPendingLanding     = "pending_integration" // finished work on an overlapping scope has not landed yet
+	ReasonTaskInProgress     = "task_in_progress"    // another task with an overlapping scope is in progress
+	ReasonOpenProposal       = "open_proposal"       // an open proposal already touches the scope
+	ReasonPredicted          = "predicted_overlap"   // the server's conflict prediction reports an overlap
+	ReasonExecutorBusy       = "executor_busy"       // no free slot (not a conflict)
+	ReasonRepoBusy           = "repo_busy"           // the repository's session limit is reached (not a conflict)
+	ReasonRetryBackoff       = "retry_backoff"       // waiting out the delay after a failed attempt
+	ReasonLeaseConflict      = "lease_conflict"      // the server refused the lease at start
+	ReasonStartFailed        = "start_failed"        // starting the session failed; retried after a delay
+	ReasonPredictUnavailable = "predict_unavailable" // the conflict prediction cannot be read and on_predict_error is defer
 )
 
 // Input is what a placement decision looks at. All of it is advisory data

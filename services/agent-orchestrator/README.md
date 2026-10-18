@@ -146,6 +146,7 @@ server:
   timeout: 30s                             # per request
   retries: 4                               # attempts per request, 1..10
   stream_idle: 60s                         # reconnect an event stream silent for this long
+  max_response_bytes: 67108864             # bound on one response body the client reads (64 MiB)
   allow_insecure_remote: false             # permit plain http to a non-loopback host (credentials in the clear!)
 
 listen: 127.0.0.1:9090                     # admin API (AG_ORCH_LISTEN)
@@ -167,10 +168,12 @@ repos:
       lease_ttl: 30m                       # renewed on every heartbeat
       attempts: 1                          # tries per task, 1..10
       backoff: 30s                         # doubles per attempt, capped at 1h
+      on_predict_error: start              # start | defer: what placement does when the server's conflict prediction cannot be read
+                                           # (either way it is counted, logged and shown in /status as predict_error)
       default_executor: docs-bot           # implicit when there is exactly one executor
       routes:                              # first match wins; all given matchers must match
         - {executor: docs-bot, title: "^docs:", scope: "docs/**"}
-    validations: {enabled: true, enqueue: true}   # execution scheduler; enqueue asks the server to queue validation jobs
+    validations: {enabled: true, enqueue: true, refresh: 15s, recent: 20, jobs_limit: 200}   # execution scheduler; enqueue asks the server to queue validation jobs
     advisor: {enabled: true, inline_bytes: 16384, max_file_bytes: 1048576, max_paths: 20}
     review:
       enabled: true
@@ -182,10 +185,14 @@ repos:
       generated: ["**/*.lock", "**/package-lock.json", "**/go.sum", "**/dist/**", "**/*.min.js", "**/*.pb.go", "**/vendor/**"]
       sources: ["**/*.go", "**/*.rs", "**/*.py", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.java", "**/*.kt", "**/*.rb"]
       allow_secrets: []                    # regular expressions for lines that are not secrets; "ag:allow-secret" on a line also works
+      import_files: 60                     # an initial import (a proposal into an empty stream) is read file by file: at most this many files ...
+      import_file_bytes: 131072            # ... of at most this size; the rest is reported as "not inspected" in the comment
     index:
       enabled: true
-      max_file_bytes: 262144               # larger files are not indexed
+      max_file_bytes: 262144               # larger files are not indexed (nor read when analysing an open proposal)
       max_files: 5000
+      proposal_max_files: 30               # files of one open proposal that are read for the symbol analysis (the rest: partial)
+      proposals_per_pass: 10               # open proposals analysed per pass
       skip: ["vendor/**", "node_modules/**", "target/**", "dist/**", ".git/**", "**/*.min.js", "**/testdata/**"]   # abbreviated; the default list is longer
 
 executors:

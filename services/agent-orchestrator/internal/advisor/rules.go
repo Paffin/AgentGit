@@ -40,6 +40,8 @@ type Advisor interface {
 // on that side.
 type File struct {
 	Content []byte
+	// TooLarge says the file exists but is larger than the size bound; Content is then empty.
+	TooLarge bool
 }
 
 // Input is a conflicting path with its three versions: Base (the merge base),
@@ -122,7 +124,7 @@ func (r Rules) Suggest(_ context.Context, in Input) (Suggestion, error) {
 	}
 	s := Suggestion{Path: in.Path, Kind: in.Kind, Advisor: r.Name()}
 	for _, f := range []*File{in.Base, in.Ours, in.Theirs} {
-		if f != nil && !isText(f.Content, max) {
+		if f != nil && (f.TooLarge || !isText(f.Content, max)) {
 			s.Class = ClassBinary
 			s.Notes = append(s.Notes, fmt.Sprintf("binary content, invalid UTF-8 or larger than %d bytes: not analysed", max))
 			return s, nil

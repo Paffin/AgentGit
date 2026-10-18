@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	mrand "math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -113,8 +114,12 @@ func WithIdentityLabel(s string) Option { return func(c *Client) { c.identity = 
 // WithUserAgent sets the User-Agent header.
 func WithUserAgent(s string) Option { return func(c *Client) { c.userAgent = s } }
 
-// WithJitter injects the randomness source for backoff jitter (tests).
+// WithJitter replaces the randomness source of the backoff jitter (default: math/rand/v2, which is safe for
+// concurrent use; tests inject a constant).
 func WithJitter(f func() float64) Option { return func(c *Client) { c.jitter = f } }
+
+// DefaultMaxResponseBytes bounds how much of a response body is read unless WithMaxResponseBytes says otherwise.
+const DefaultMaxResponseBytes int64 = 64 << 20
 
 // WithMaxResponseBytes bounds how much of a response body is read.
 func WithMaxResponseBytes(n int64) Option { return func(c *Client) { c.maxBody = n } }
@@ -129,7 +134,7 @@ func New(baseURL string, token secret.Secret, opts ...Option) (*Client, error) {
 	c := &Client{
 		base: u, token: token, identity: "client", clk: clock.Real{}, retry: DefaultRetry,
 		timeout: 30 * time.Second, obs: nopObserver{}, userAgent: "agentgit-orchestrator",
-		jitter: func() float64 { return 0.5 }, maxBody: 64 << 20,
+		jitter: mrand.Float64, maxBody: DefaultMaxResponseBytes,
 	}
 	for _, o := range opts {
 		o(c)

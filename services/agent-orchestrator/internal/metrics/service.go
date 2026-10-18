@@ -10,6 +10,7 @@ type Service struct {
 	SessionsFinished  *CounterVec // labels: repo, executor, outcome (completed|failed|timeout|cancelled|lost)
 	SessionsRunning   *GaugeVec   // labels: repo, executor
 	TasksDeferred     *CounterVec // labels: repo, reason
+	PredictErrors     *CounterVec // labels: repo
 	ReconcileLoops    *CounterVec // labels: repo, component
 	ReconcileErrors   *CounterVec // labels: repo, component
 	EventsReceived    *CounterVec // labels: repo, topic
@@ -47,6 +48,7 @@ func NewService(r *Registry) *Service {
 		SessionsFinished:  r.NewCounterVec("orchestrator_sessions_finished_total", "Agent sessions that ended, by outcome.", "repo", "executor", "outcome"),
 		SessionsRunning:   r.NewGaugeVec("orchestrator_sessions_running", "Agent sessions currently running.", "repo", "executor"),
 		TasksDeferred:     r.NewCounterVec("orchestrator_tasks_deferred_total", "Scheduling passes in which a ready task was deferred.", "repo", "reason"),
+		PredictErrors:     r.NewCounterVec("orchestrator_predict_errors_total", "Scheduling passes in which the server's conflict prediction was unavailable.", "repo"),
 		ReconcileLoops:    r.NewCounterVec("orchestrator_reconcile_loops_total", "Completed reconcile loops.", "repo", "component"),
 		ReconcileErrors:   r.NewCounterVec("orchestrator_reconcile_errors_total", "Reconcile loops that ended with an error.", "repo", "component"),
 		EventsReceived:    r.NewCounterVec("orchestrator_events_received_total", "Repository events received over SSE.", "repo", "topic"),

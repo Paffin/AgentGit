@@ -245,7 +245,7 @@ func (c *Component) load(ctx context.Context, p execsched.Prepared, conf agwp.Co
 		case agwp.IsNotFound(err):
 			return nil, nil
 		case errors.Is(err, agwp.ErrResponseTooLarge):
-			return &File{Content: make([]byte, max+1)}, nil // reported as "too large" by the rules
+			return &File{TooLarge: true}, nil
 		}
 		return nil, err
 	}

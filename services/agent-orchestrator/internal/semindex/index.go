@@ -40,7 +40,11 @@ type Stats struct {
 	Names     int       `json:"distinct_names"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	Skipped   Skipped   `json:"skipped"`
-	LastError string    `json:"last_error,omitempty"`
+	// DroppedDefs and DroppedIdents are the definitions and identifiers left out by the bounds of a file or of the
+	// whole index: symbol queries and reference counts are incomplete by that much.
+	DroppedDefs   int    `json:"dropped_definitions"`
+	DroppedIdents int    `json:"dropped_identifiers"`
+	LastError     string `json:"last_error,omitempty"`
 }
 
 // Index is the in-memory symbol table of one repository's stream head. It is
@@ -58,6 +62,8 @@ type Index struct {
 	skipped Skipped
 	lastErr string
 	symbols int
+
+	droppedDefs, droppedIdents int
 }
 
 // NewIndex returns an empty index.
@@ -120,7 +126,7 @@ const maxSymbols = 200_000
 func (x *Index) rebuildLocked() {
 	x.byName = map[string][]DefRef{}
 	x.refs = map[string]int{}
-	x.symbols = 0
+	x.symbols, x.droppedDefs, x.droppedIdents = 0, 0, 0
 	paths := make([]string, 0, len(x.files))
 	for p := range x.files {
 		paths = append(paths, p)
@@ -128,8 +134,11 @@ func (x *Index) rebuildLocked() {
 	sort.Strings(paths)
 	for _, p := range paths {
 		e := x.files[p]
-		for _, d := range e.Syms.Defs {
+		x.droppedDefs += e.Syms.DroppedDefs
+		x.droppedIdents += e.Syms.DroppedIdents
+		for i, d := range e.Syms.Defs {
 			if x.symbols >= maxSymbols {
+				x.droppedDefs += len(e.Syms.Defs) - i
 				break
 			}
 			x.byName[d.Name] = append(x.byName[d.Name], DefRef{Path: p, Def: d})
@@ -246,7 +255,8 @@ func (x *Index) FilesFor(symbol string) Usage {
 func (x *Index) Stats() Stats {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
-	return Stats{Repo: x.repo, Head: x.head, Files: len(x.files), Symbols: x.symbols, Names: len(x.names), UpdatedAt: x.updated, Skipped: x.skipped, LastError: x.lastErr}
+	return Stats{Repo: x.repo, Head: x.head, Files: len(x.files), Symbols: x.symbols, Names: len(x.names), UpdatedAt: x.updated, Skipped: x.skipped,
+		DroppedDefs: x.droppedDefs, DroppedIdents: x.droppedIdents, LastError: x.lastErr}
 }
 
 // Head is the stream head the index describes.

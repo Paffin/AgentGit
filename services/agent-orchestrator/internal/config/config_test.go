@@ -283,6 +283,53 @@ func TestRedactedOutputHasNoSecrets(t *testing.T) {
 	}
 }
 
+// A token pasted where the NAME of a variable belongs must not come back in an error message, in the effective
+// configuration, or in a later "unset" message.
+func TestACredentialPastedAsAVariableNameIsNeverEchoed(t *testing.T) {
+	const tok = "agt_cred_0123456789abcdef0123456789abcdef"
+	for _, key := range []string{"token_env", "reviewer_token_env", "advisor_token_env"} {
+		doc := strings.Replace(minimal, "url: http://127.0.0.1:8080", "url: http://127.0.0.1:8080\n  "+key+": "+tok, 1)
+		_, err := parse(t, doc, goodEnv)
+		if err == nil || !strings.Contains(err.Error(), "looks like one") {
+			t.Fatalf("%s: err = %v", key, err)
+		}
+		if strings.Contains(err.Error(), tok) || strings.Contains(err.Error(), "agt_cred") {
+			t.Fatalf("%s: the credential is echoed: %v", key, err)
+		}
+	}
+	doc := minimal + "admin:\n  token_env: " + tok + "\n"
+	if _, err := parse(t, doc, goodEnv); err == nil || strings.Contains(err.Error(), tok) {
+		t.Fatalf("admin.token_env: %v", err)
+	}
+	long := strings.Repeat("x", 80)
+	if _, err := parse(t, strings.Replace(minimal, "url: http://127.0.0.1:8080", "url: http://127.0.0.1:8080\n  token_env: "+long, 1), goodEnv); err == nil || strings.Contains(err.Error(), long) {
+		t.Fatalf("an 80-character 'name' must be refused without being shown: %v", err)
+	}
+	// pass_env entries too
+	doc = minimal + "    pass_env: [PATH, " + tok + "]\n"
+	if _, err := parse(t, doc, goodEnv); err == nil || strings.Contains(err.Error(), tok) {
+		t.Fatalf("pass_env: %v", err)
+	}
+}
+
+func TestExecutorEnvironmentValuesAreRedactedInTheEffectiveConfiguration(t *testing.T) {
+	doc := minimal + "    env: {API_KEY: sk-live-secret-value, MODE: batch}\n"
+	c, err := parse(t, doc, goodEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := c.Redacted()
+	if strings.Contains(out, "sk-live-secret-value") || strings.Contains(out, "batch") {
+		t.Fatalf("an environment value is shown:\n%s", out)
+	}
+	if !strings.Contains(out, "API_KEY: "+RedactedValue) || !strings.Contains(out, "MODE: "+RedactedValue) {
+		t.Fatalf("the variable names are not kept:\n%s", out)
+	}
+	if c.Execs[0].Env["API_KEY"] != "sk-live-secret-value" {
+		t.Fatal("redaction changed the live configuration")
+	}
+}
+
 func TestEmptyAndInvalidFiles(t *testing.T) {
 	if _, err := parse(t, "", goodEnv); err == nil {
 		t.Fatal("an empty file has no repositories")

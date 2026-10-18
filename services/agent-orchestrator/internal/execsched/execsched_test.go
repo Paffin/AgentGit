@@ -475,6 +475,29 @@ func TestStatusReportsTheValidationAndIntegrationQueues(t *testing.T) {
 	}
 }
 
+// The queues in /status are display data: not being able to read them does not fail the pass, but the status
+// says why they are empty instead of looking like an empty queue.
+func TestUnreadableQueuesAreReportedNotHidden(t *testing.T) {
+	h := newHarness(t, false)
+	h.propose("x")
+	// The proxy answers the two listings with a 500 without involving the server; preparing is untouched.
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/jobs", Times: -1, Status: 500, Code: "internal"})
+	h.px.Inject(testutil.Fault{Method: "GET", Path: "/queue", Times: -1, Status: 500, Code: "internal"})
+	h.pass()
+	st := h.s.Status()
+	if !strings.Contains(st.ListError, "validation jobs") || !strings.Contains(st.ListError, "integration queue") {
+		t.Fatalf("queue_error = %q, status = %+v", st.ListError, st)
+	}
+	if len(st.Open) != 1 || st.Open[0].Mergeable != Yes {
+		t.Fatalf("the proposals must still be tracked: %+v", st.Open)
+	}
+	h.px.ClearFaults()
+	h.pass()
+	if got := h.s.Status().ListError; got != "" {
+		t.Fatalf("queue_error = %q after the queues became readable", got)
+	}
+}
+
 func TestClassifyTable(t *testing.T) {
 	p := agwp.Proposal{ID: "p", Stream: "main", Head: "h"}
 	tests := []struct {

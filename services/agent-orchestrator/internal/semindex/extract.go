@@ -76,6 +76,10 @@ type Symbols struct {
 	Defs   []Def             `json:"defs"`
 	Idents map[string]uint16 `json:"idents,omitempty"`
 	Lines  int               `json:"lines"`
+	// DroppedDefs and DroppedIdents count what the per-file bounds cut (maxDefsPerFile, maxIdentsPerFile): the
+	// index says how incomplete it is instead of being silently short.
+	DroppedDefs   int `json:"dropped_defs,omitempty"`
+	DroppedIdents int `json:"dropped_idents,omitempty"`
 }
 
 // Extract scans one file. known is the set of names currently defined in the
@@ -95,11 +99,14 @@ func Extract(lang string, content []byte, known map[string]bool) Symbols {
 	case LangTS, LangJS:
 		defs = scanJS(lines)
 	}
+	droppedDefs := 0
 	if len(defs) > maxDefsPerFile {
+		droppedDefs = len(defs) - maxDefsPerFile
 		defs = defs[:maxDefsPerFile]
 	}
 	finishSpans(defs, len(lines))
-	return Symbols{Lang: lang, Defs: defs, Idents: identCounts(lang, text, known), Lines: len(lines)}
+	idents, droppedIdents := identCounts(lang, text, known)
+	return Symbols{Lang: lang, Defs: defs, Idents: idents, Lines: len(lines), DroppedDefs: droppedDefs, DroppedIdents: droppedIdents}
 }
 
 // finishSpans sets EndLine: a definition runs until the next one starts.
@@ -433,7 +440,7 @@ func init() {
 
 // identCounts counts identifier occurrences, keeping at most maxIdentsPerFile:
 // names already defined somewhere come first, then the most frequent.
-func identCounts(lang, text string, known map[string]bool) map[string]uint16 {
+func identCounts(lang, text string, known map[string]bool) (map[string]uint16, int) {
 	counts := map[string]int{}
 	for _, m := range identRE.FindAllString(text, -1) {
 		if !keywords[m] {
@@ -441,7 +448,7 @@ func identCounts(lang, text string, known map[string]bool) map[string]uint16 {
 		}
 	}
 	if len(counts) <= maxIdentsPerFile {
-		return clamp(counts)
+		return clamp(counts), 0
 	}
 	type kv struct {
 		k string
@@ -465,7 +472,7 @@ func identCounts(lang, text string, known map[string]bool) map[string]uint16 {
 	for _, e := range all[:maxIdentsPerFile] {
 		kept[e.k] = e.v
 	}
-	return clamp(kept)
+	return clamp(kept), len(counts) - len(kept)
 }
 
 func clamp(m map[string]int) map[string]uint16 {

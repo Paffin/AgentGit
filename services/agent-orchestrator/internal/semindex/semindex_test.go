@@ -497,6 +497,60 @@ func TestDisjointProposalsDoNotOverlap(t *testing.T) {
 	}
 }
 
+// The bounds of the proposal analysis are the configured ones, and what they cut is reported as partial.
+func TestProposalAnalysisHonoursTheConfiguredBounds(t *testing.T) {
+	big := "package api\n\n" + strings.Repeat("// padding padding padding padding\n", 200) + "func Fetch(id string) string {\n\treturn id + \"!\"\n}\n"
+	small := "package api\n\nfunc Unrelated() { println() }\n"
+
+	// a file larger than index.max_file_bytes is not read
+	h := newHarness(t, func(r *config.Repo) { r.Index.MaxBytes = 2048 })
+	h.setTree(overlapBase)
+	id := h.propose("", "big", map[string]string{"pkg/api/api.go": big})
+	if err := h.comp.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var ps *ProposalSymbols
+	for _, p := range h.comp.Changes() {
+		if p.Proposal == id {
+			ps = p
+		}
+	}
+	if ps == nil || !ps.Partial || len(ps.Changed) != 0 {
+		t.Fatalf("a file over max_file_bytes must be skipped and the analysis marked partial: %+v", ps)
+	}
+
+	// more changed files than proposal_max_files
+	h2 := newHarness(t, func(r *config.Repo) { r.Index.ProposalFiles = 1 })
+	h2.setTree(overlapBase)
+	id2 := h2.propose("", "two files", map[string]string{"pkg/api/other.go": small, "pkg/util/util.go": "package util\n\nfunc Fetch(a, b int) int { return b }\n"})
+	if err := h2.comp.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range h2.comp.Changes() {
+		if p.Proposal == id2 && (!p.Partial || len(p.Changed) != 1) {
+			t.Fatalf("with proposal_max_files=1 one file is analysed and the rest reported as partial: %+v", p)
+		}
+	}
+
+	// proposals_per_pass: one proposal is analysed per pass, the loop is kicked for the rest
+	h3 := newHarness(t, func(r *config.Repo) { r.Index.ProposalsPerPass = 1 })
+	h3.setTree(overlapBase)
+	h3.propose("", "a", map[string]string{"pkg/api/other.go": small})
+	h3.propose("", "b", map[string]string{"pkg/util/util.go": "package util\n\nfunc Fetch(a, b int) int { return b }\n"})
+	if err := h3.comp.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h3.comp.Changes()); n != 1 {
+		t.Fatalf("%d proposals analysed in one pass, want 1", n)
+	}
+	if err := h3.comp.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h3.comp.Changes()); n != 2 {
+		t.Fatalf("%d proposals analysed after the second pass, want 2", n)
+	}
+}
+
 func TestAddedAndRemovedDefinitionsAreClassified(t *testing.T) {
 	h, seed := overlapHarness(t)
 	id := h.propose(seed, "add and remove", map[string]string{"pkg/api/api.go": "package api\n\nfunc Fetch(id string) string {\n\treturn id\n}\n\nfunc Brand() {}\n"})

@@ -24,9 +24,9 @@ import (
 const MarkerPrefix = "ag-review/1 head="
 
 const (
-	maxRootFiles = 60
-	maxRootBytes = 128 << 10
-	maxPerPass   = 25
+	defaultImportFiles = 60
+	defaultImportBytes = 128 << 10
+	maxPerPass         = 25
 )
 
 // API is what the reviewers call (satisfied by *agwp.Client). The only
@@ -98,7 +98,8 @@ func New(o Options) (*Component, error) {
 		o.Log = slog.Default()
 	}
 	rc := o.Repo.Review
-	st := Settings{MaxFiles: rc.MaxFiles, MaxLines: rc.MaxLines, Secrets: config.On(rc.Secrets), Tests: config.On(rc.Tests)}
+	st := Settings{MaxFiles: rc.MaxFiles, MaxLines: rc.MaxLines, Secrets: config.On(rc.Secrets), Tests: config.On(rc.Tests),
+		ImportFiles: rc.ImportFiles, ImportBytes: rc.ImportBytes}
 	var err error
 	if st.Protected, err = glob.CompileAll(rc.Protected); err != nil {
 		return nil, err
@@ -122,9 +123,29 @@ func New(o Options) (*Component, error) {
 	if st.MaxLines < 1 {
 		st.MaxLines = 1500
 	}
+	if st.ImportFiles < 1 {
+		st.ImportFiles = defaultImportFiles
+	}
+	if st.ImportBytes < 1 {
+		st.ImportBytes = defaultImportBytes
+	}
 	c := &Component{o: o, log: o.Log.With("repo", o.Repo.Name, "component", "review"), settings: st, kick: loop.NewKicker(), reviewed: map[string]string{}}
 	c.run = &loop.Runner{Name: "review", Repo: o.Repo.Name, Interval: o.Loop.Reconcile, Debounce: o.Loop.Debounce, Clock: o.Clock, Metrics: o.Metrics, Log: o.Log}
 	return c, nil
+}
+
+// SetReviewer records the identity the reviewer's credential really authenticates as (known after the preflight
+// check), so the comments name their true author.
+func (c *Component) SetReviewer(identity string) {
+	c.mu.Lock()
+	c.o.Reviewer = identity
+	c.mu.Unlock()
+}
+
+func (c *Component) reviewerIdentity() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.o.Reviewer
 }
 
 // Topics are the event prefixes that wake the reviewers.
@@ -189,20 +210,21 @@ func (c *Component) Reconcile(ctx context.Context) error {
 	return firstErr
 }
 
-// changes returns the per-file diffs of a proposal against its merge base.
-func (c *Component) changes(ctx context.Context, p agwp.Proposal) ([]agwp.FileDiff, bool, error) {
+// changes returns the per-file diffs of a proposal against its merge base, whether the server truncated the
+// diff, and (for an initial import) how many files could not be inspected.
+func (c *Component) changes(ctx context.Context, p agwp.Proposal) ([]agwp.FileDiff, bool, int, error) {
 	repo := c.o.Repo.Name
 	head, err := c.o.API.ReadHead(ctx, repo, c.o.Repo.Stream)
 	if err != nil {
-		return nil, false, fmt.Errorf("read the stream: %w", err)
+		return nil, false, 0, fmt.Errorf("read the stream: %w", err)
 	}
 	if head.Head == "" {
-		files, err := c.rootFiles(ctx, p)
-		return files, false, err
+		files, uninspected, err := c.rootFiles(ctx, p)
+		return files, false, uninspected, err
 	}
 	bases, err := c.o.API.MergeBases(ctx, repo, head.Head, p.Head)
 	if err != nil {
-		return nil, false, fmt.Errorf("merge base: %w", err)
+		return nil, false, 0, fmt.Errorf("merge base: %w", err)
 	}
 	from := head.Head
 	if len(bases) > 0 {
@@ -210,35 +232,43 @@ func (c *Component) changes(ctx context.Context, p agwp.Proposal) ([]agwp.FileDi
 	}
 	d, err := c.o.API.Diff(ctx, repo, from, p.Head, 0)
 	if err != nil {
-		return nil, false, fmt.Errorf("diff: %w", err)
+		return nil, false, 0, fmt.Errorf("diff: %w", err)
 	}
-	return d.Files, d.Truncated, nil
+	return d.Files, d.Truncated, 0, nil
 }
 
-// rootFiles treats every file of a proposal into an empty stream as added.
-func (c *Component) rootFiles(ctx context.Context, p agwp.Proposal) ([]agwp.FileDiff, error) {
+// rootFiles treats every file of a proposal into an empty stream as added. Content is read for at most
+// ImportFiles files of at most ImportBytes each; the files that were not read (too many, too large, or a download
+// that failed) are still listed, with no lines and no patch, and counted in the second result.
+func (c *Component) rootFiles(ctx context.Context, p agwp.Proposal) ([]agwp.FileDiff, int, error) {
 	repo := c.o.Repo.Name
 	tree, err := c.o.API.GetTree(ctx, repo, p.Head)
 	if err != nil {
-		return nil, fmt.Errorf("tree: %w", err)
+		return nil, 0, fmt.Errorf("tree: %w", err)
 	}
 	var out []agwp.FileDiff
+	uninspected := 0
 	for i, e := range tree.Entries {
 		fd := agwp.FileDiff{Path: e.Path, Status: "added"}
-		if i < maxRootFiles {
-			b, err := c.o.API.GetFile(ctx, repo, p.Head, e.Path, maxRootBytes)
-			if err == nil {
-				if isBinary(b) {
-					fd.Binary = true
-				} else {
-					lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
-					fd.Additions, fd.Patch = len(lines), patchOf(lines)
-				}
+		read := false
+		if i < c.settings.ImportFiles {
+			b, err := c.o.API.GetFile(ctx, repo, p.Head, e.Path, int64(c.settings.ImportBytes))
+			switch {
+			case err != nil:
+				c.log.Debug("initial import: a file could not be read", "proposal", p.ID, "path", e.Path, "err", err)
+			case isBinary(b):
+				fd.Binary, read = true, true
+			default:
+				lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
+				fd.Additions, fd.Patch, read = len(lines), patchOf(lines), true
 			}
+		}
+		if !read {
+			uninspected++
 		}
 		out = append(out, fd)
 	}
-	return out, nil
+	return out, uninspected, nil
 }
 
 func isBinary(b []byte) bool {
@@ -261,15 +291,15 @@ func patchOf(lines []string) string {
 
 func (c *Component) review(ctx context.Context, p agwp.Proposal) error {
 	repo := c.o.Repo.Name
-	files, truncated, err := c.changes(ctx, p)
+	files, truncated, uninspected, err := c.changes(ctx, p)
 	if err != nil {
 		return err
 	}
 	findings, sum := Analyze(files, c.settings)
-	sum.Truncated = truncated
+	sum.Truncated, sum.Uninspected = truncated, uninspected
 	rec := Record{Proposal: p.ID, Head: p.Head, At: c.o.Clock.Now(), Findings: findings, Summary: sum}
 	defer func() { c.remember(rec) }()
-	if len(findings) == 0 && !truncated {
+	if len(findings) == 0 && !truncated && uninspected == 0 {
 		return nil // nothing to say; a clean change gets no comment
 	}
 	digest := digestOf(findings)
@@ -288,7 +318,7 @@ func (c *Component) review(ctx context.Context, p agwp.Proposal) error {
 	if detail.Proposal.State != agwp.ProposalOpen || detail.Proposal.Head != p.Head {
 		return nil // moved on; the next head gets its own review
 	}
-	body := Render(p.Head, c.o.Reviewer, findings, sum, digest)
+	body := Render(p.Head, c.reviewerIdentity(), findings, sum, digest)
 	if _, err := c.o.API.ReviewProposal(ctx, repo, p.ID, agwp.DecisionComment, body); err != nil {
 		if agwp.IsCode(err, agwp.CodeFailedPrecond, agwp.CodeNotFound) {
 			return nil
@@ -339,6 +369,9 @@ func Render(head, reviewer string, findings []Finding, sum Summary, digest strin
 	fmt.Fprintf(&b, "Head `%s` · %d file(s) · +%d −%d", short(head), sum.Files, sum.Added, sum.Removed)
 	if sum.Truncated {
 		b.WriteString(" · _the diff was truncated by the server, so only part of the change was inspected_")
+	}
+	if sum.Uninspected > 0 {
+		fmt.Fprintf(&b, " · _%d file(s) of this initial import were not inspected (too many files, too large, or unreadable), so the checks above did not see them_", sum.Uninspected)
 	}
 	b.WriteString("\n\n")
 	for _, f := range findings {

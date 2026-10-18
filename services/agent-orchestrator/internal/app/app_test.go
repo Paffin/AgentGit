@@ -301,6 +301,33 @@ func TestATaskFlowsThroughTheWholeWiring(t *testing.T) {
 	})
 }
 
+// The comment names the identity the reviewer credential really has, not a name assumed in the code.
+func TestReviewCommentsNameTheRealReviewerIdentity(t *testing.T) {
+	r := newRig(t, func(r *testRig) {
+		if err := r.w.Srv.Admin.GrantRole(context.Background(), "service:code-review", repoName, "reviewer"); err != nil {
+			t.Fatal(err)
+		}
+		r.envv["AG_REVIEWER_TOKEN"] = r.w.Mint("service:code-review", ReviewerOps())
+	})
+	p, _ := r.w.Propose("ws-secret", "plants a key", testutil.Put("pkg/k.go", "package pkg\n\nvar k = \""+"AKIA"+"QWERTYUIOPASDFGH"+"\"\n"))
+	r.start(t)
+	var body string
+	eventually(t, "the review comment", 30*time.Second, func() bool {
+		d, err := r.w.Alice.GetProposal(context.Background(), repoName, p.ID)
+		if err != nil || len(d.Reviews) == 0 {
+			return false
+		}
+		body = d.Reviews[0].Body
+		return true
+	})
+	if !strings.Contains(body, "(service:code-review)") || strings.Contains(body, "(service:reviewer)") {
+		t.Fatalf("the comment does not name its real author:\n%s", body)
+	}
+	if d, _ := r.w.Alice.GetProposal(context.Background(), repoName, p.ID); d.Reviews[0].Reviewer != "service:code-review" {
+		t.Fatalf("review = %+v", d.Reviews[0])
+	}
+}
+
 func TestShutdownIsGracefulAndClosesTheListener(t *testing.T) {
 	r := newRig(t, nil)
 	stop := r.start(t)
@@ -607,11 +634,41 @@ func TestHasRole(t *testing.T) {
 		{[]string{"acme/web:writer"}, "acme/web", []string{"reviewer", "admin"}, false},
 		{[]string{"garbage"}, "acme/web", []string{"admin"}, false},
 		{nil, "acme/web", []string{"admin"}, false},
+		// the server matches role bindings with the globset crate: ?, inner *, classes and alternatives are valid
+		{[]string{"acme/we?:admin"}, "acme/web", []string{"admin"}, true},
+		{[]string{"acme/we?:admin"}, "acme/webb", []string{"admin"}, false},
+		{[]string{"*/web:delegator"}, "acme/web", []string{"delegator", "admin"}, true},
+		{[]string{"*/web:delegator"}, "acme/api", []string{"delegator", "admin"}, false},
+		{[]string{"{acme,other}/web:admin"}, "other/web", []string{"admin"}, true},
+		{[]string{"{acme,other}/web:admin"}, "third/web", []string{"admin"}, false},
+		{[]string{"acme/[wa]*:admin"}, "acme/api", []string{"admin"}, true},
+		{[]string{"acme/[!w]*:admin"}, "acme/web", []string{"admin"}, false},
+		{[]string{"acme/a*b*c:admin"}, "acme/abxbc", []string{"admin"}, true},
+		{[]string{"acme/web.git:admin"}, "acme/webXgit", []string{"admin"}, false}, // a dot is a dot
 	}
 	for _, c := range cases {
 		if got := hasRole(c.roles, c.repo, c.want); got != c.ok {
 			t.Errorf("hasRole(%v, %s, %v) = %v", c.roles, c.repo, c.want, got)
 		}
+	}
+}
+
+// A pattern the local matcher cannot translate is not evidence of a missing role: the check warns instead of failing.
+func TestAnUntranslatablePatternIsAWarningNotAMissingRole(t *testing.T) {
+	has, unsure := roleCheck([]string{"acme/[web:admin"}, "acme/web", []string{"admin"})
+	if has || len(unsure) != 1 {
+		t.Fatalf("has=%v unsure=%v", has, unsure)
+	}
+	r := newRig(t, func(r *testRig) {
+		// a binding with a valid pattern that the server accepts: any repository named like a file ending in b
+		if err := r.w.Srv.Admin.GrantRole(context.Background(), "service:glob-orch", "*/we?", "delegator"); err != nil {
+			t.Fatal(err)
+		}
+		r.envv["AG_ORCH_TOKEN"] = r.w.Mint("service:glob-orch", OrchestratorOps(r.cfg))
+	})
+	rep := newCheckApp(t, r).Check(context.Background())
+	if rep.find("error", "no delegator or admin role") {
+		t.Fatalf("a valid server-side pattern (*/we?) was reported as a missing role:\n%s", rep)
 	}
 }
 

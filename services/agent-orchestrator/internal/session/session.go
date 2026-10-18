@@ -342,6 +342,39 @@ func (s *Session) result(exit Exit) Result {
 	return res
 }
 
+// Charge says how a finished run counts against its task's attempt budget.
+type Charge int
+
+const (
+	// ChargeNone: the run did not use up an attempt (it completed, was cancelled by a stop request, or was refused
+	// before it ran).
+	ChargeNone Charge = iota
+	// ChargeAttempt: a failed attempt (an error, a timeout, a kill).
+	ChargeAttempt
+	// ChargeTemporary: the executor asked for a retry (EX_TEMPFAIL); it does not spend the budget.
+	ChargeTemporary
+)
+
+// LostRunPrefix starts the summary of a run that was found without a supervisor and without a heartbeat (the
+// orchestrator that started it went away). Such a run says nothing about the executor, so it spends no attempt.
+const LostRunPrefix = "abandoned: no heartbeat"
+
+// ChargeOf classifies a finished run from its server record, by the summary result() wrote. The scheduler uses it
+// to recover the retry budget of a task after the orchestrator restarted: the run history is on the server, the
+// counters of the previous process are not.
+func ChargeOf(status, summary string) Charge {
+	if status != "failed" {
+		return ChargeNone
+	}
+	switch {
+	case strings.HasPrefix(summary, "cancelled:"), strings.HasPrefix(summary, "deferred:"), strings.HasPrefix(summary, LostRunPrefix):
+		return ChargeNone
+	case strings.Contains(summary, fmt.Sprintf("exited with code %d", ExitTempFail)):
+		return ChargeTemporary
+	}
+	return ChargeAttempt
+}
+
 // readResult reads the optional result file the executor may have written.
 func (s *Session) readResult() string {
 	f, err := os.Open(s.resultFile)

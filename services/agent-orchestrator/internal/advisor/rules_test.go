@@ -23,6 +23,24 @@ func suggest(t *testing.T, in Input) Suggestion {
 	return s
 }
 
+// A file over the size bound is carried as a flag, not as a buffer of invented bytes.
+func TestAFileOverTheSizeBoundIsReportedNotAnalysed(t *testing.T) {
+	big := &File{TooLarge: true}
+	if len(big.Content) != 0 {
+		t.Fatal("a too-large file carries no content")
+	}
+	for name, in := range map[string]Input{
+		"ours":   {Path: "p", Base: f("a\n"), Ours: big, Theirs: f("b\n")},
+		"theirs": {Path: "p", Base: f("a\n"), Ours: f("b\n"), Theirs: big},
+		"base":   {Path: "p", Base: big, Ours: f("b\n"), Theirs: f("c\n")},
+	} {
+		s := suggest(t, in)
+		if s.Class != ClassBinary || s.Complete || len(s.Resolved) != 0 || len(s.Notes) != 1 || !strings.Contains(s.Notes[0], "larger than") {
+			t.Errorf("%s: suggestion = %+v", name, s)
+		}
+	}
+}
+
 func TestSuggestTable(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -47,6 +47,7 @@ type Server struct {
 	Timeout       time.Duration `yaml:"timeout"`
 	RetryMax      int           `yaml:"retries"`
 	StreamIdle    time.Duration `yaml:"stream_idle"`
+	MaxResponse   int64         `yaml:"max_response_bytes"` // bound on a response body the client reads
 	AllowInsecure bool          `yaml:"allow_insecure_remote"`
 }
 
@@ -95,6 +96,10 @@ type Schedule struct {
 	Backoff   time.Duration `yaml:"backoff"`
 	Default   string        `yaml:"default_executor"`
 	Routes    []Route       `yaml:"routes"`
+	// OnPredictError says what placement does when the server's conflict prediction cannot be read: "start"
+	// (default) places tasks by the other evidence and says so in /status and the metrics, "defer" holds the
+	// tasks back until the prediction is available again.
+	OnPredictError string `yaml:"on_predict_error"`
 }
 
 // Route sends matching tasks to an executor. All given matchers must match.
@@ -108,6 +113,12 @@ type Route struct {
 type ExecSched struct {
 	Enabled *bool `yaml:"enabled"`
 	Enqueue *bool `yaml:"enqueue"`
+	// Refresh is how often a proposal that is not fully green is prepared again when nothing is known to have
+	// changed; Recent bounds the integrated proposals kept for /status; JobsLimit bounds the validation jobs read
+	// for /status.
+	Refresh   time.Duration `yaml:"refresh"`
+	Recent    int           `yaml:"recent"`
+	JobsLimit int           `yaml:"jobs_limit"`
 }
 
 // Advisor configures the conflict advisor.
@@ -129,6 +140,11 @@ type Review struct {
 	Tests     *bool    `yaml:"tests"`
 	Sources   []string `yaml:"sources"`
 	AllowRE   []string `yaml:"allow_secrets"`
+	// An initial import (a proposal into an empty stream) has no diff to read: its files are fetched one by one.
+	// ImportFiles bounds how many are fetched, ImportBytes how large one may be; whatever is beyond the bounds is
+	// reported as not inspected.
+	ImportFiles int `yaml:"import_files"`
+	ImportBytes int `yaml:"import_file_bytes"`
 }
 
 // Index configures the semantic index.
@@ -137,6 +153,10 @@ type Index struct {
 	MaxBytes int      `yaml:"max_file_bytes"`
 	MaxFiles int      `yaml:"max_files"`
 	Skip     []string `yaml:"skip"`
+	// Analysing the definitions an open proposal changes is bounded too: the files of one proposal that are read
+	// (each at most MaxBytes), and the proposals analysed in one pass. What the bounds cut is reported as partial.
+	ProposalFiles    int `yaml:"proposal_max_files"`
+	ProposalsPerPass int `yaml:"proposals_per_pass"`
 }
 
 // Executor describes one way of running an agent.
@@ -281,6 +301,9 @@ func (c *Config) applyDefaults() {
 	setDur(&s.Timeout, 30*time.Second)
 	setInt(&s.RetryMax, 4)
 	setDur(&s.StreamIdle, 60*time.Second)
+	if s.MaxResponse == 0 {
+		s.MaxResponse = 64 << 20
+	}
 	setStr(&c.Listen, "127.0.0.1:9090")
 	setStr(&c.Log.Format, "text")
 	setStr(&c.Log.Level, "info")
@@ -294,6 +317,7 @@ func (c *Config) applyDefaults() {
 		boolDefault(&r.Schedule.Enabled, true)
 		setInt(&r.Schedule.Slots, 2)
 		setStr(&r.Schedule.Placement, "avoid")
+		setStr(&r.Schedule.OnPredictError, "start")
 		setStr(&r.Schedule.Lease, "soft")
 		setDur(&r.Schedule.LeaseTTL, 30*time.Minute)
 		setInt(&r.Schedule.Attempts, 1)
@@ -303,6 +327,9 @@ func (c *Config) applyDefaults() {
 		}
 		boolDefault(&r.ExecSched.Enabled, true)
 		boolDefault(&r.ExecSched.Enqueue, true)
+		setDur(&r.ExecSched.Refresh, 15*time.Second)
+		setInt(&r.ExecSched.Recent, 20)
+		setInt(&r.ExecSched.JobsLimit, 200)
 		boolDefault(&r.Advisor.Enabled, true)
 		setInt(&r.Advisor.Inline, 16<<10)
 		setInt(&r.Advisor.MaxFile, 1<<20)
@@ -324,6 +351,8 @@ func (c *Config) applyDefaults() {
 		boolDefault(&r.Index.Enabled, true)
 		setInt(&r.Index.MaxBytes, 256<<10)
 		setInt(&r.Index.MaxFiles, 5000)
+		setInt(&r.Index.ProposalFiles, 30)
+		setInt(&r.Index.ProposalsPerPass, 10)
 		if r.Index.Skip == nil {
 			r.Index.Skip = []string{"vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", "target/**", "**/target/**",
 				"dist/**", "**/dist/**", "build/**", ".git/**", "**/*.min.js", "**/*.map", "**/*.lock", "**/*.sum", "**/testdata/**"}
@@ -385,11 +414,18 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 	}
 	for _, p := range []struct{ path, v string }{{"server.token_env", c.Server.TokenEnv}, {"server.reviewer_token_env", c.Server.ReviewerEnv},
 		{"server.advisor_token_env", c.Server.AdvisorEnv}, {"admin.token_env", c.Admin.TokenEnv}} {
-		if p.v != "" && !envRE.MatchString(p.v) {
+		if p.v == "" {
+			continue
+		}
+		// A value that looks like a credential is never echoed back: neither here nor in a later "unset" message.
+		switch {
+		case LooksLikeCredential(p.v):
+			add(p.path, "must be the NAME of an environment variable, not a credential (this value looks like one and is not shown): put the token in the environment and name the variable here")
+		case !envRE.MatchString(p.v):
 			add(p.path, "must be the NAME of an environment variable, got %q (never put a token in the file)", p.v)
 		}
 	}
-	if needCredentials && getenv(c.Server.TokenEnv) == "" {
+	if needCredentials && !LooksLikeCredential(c.Server.TokenEnv) && getenv(c.Server.TokenEnv) == "" {
 		add("server.token_env", "environment variable %s is empty or unset: the orchestrator's own credential is required", c.Server.TokenEnv)
 	}
 	if c.Server.Timeout < time.Second {
@@ -397,6 +433,9 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 	}
 	if c.Server.RetryMax < 1 || c.Server.RetryMax > 10 {
 		add("server.retries", "must be between 1 and 10")
+	}
+	if c.Server.MaxResponse < 1<<10 || c.Server.MaxResponse > 1<<30 {
+		add("server.max_response_bytes", "must be between 1 KiB and 1 GiB")
 	}
 
 	// listen / admin
@@ -407,7 +446,7 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 	case !isLoopbackHost(host) && c.Admin.TokenEnv == "":
 		add("listen", "%q is not a loopback address; set admin.token_env so /status and the index API require a bearer token", c.Listen)
 	}
-	if needCredentials && c.Admin.TokenEnv != "" && getenv(c.Admin.TokenEnv) == "" {
+	if needCredentials && c.Admin.TokenEnv != "" && !LooksLikeCredential(c.Admin.TokenEnv) && getenv(c.Admin.TokenEnv) == "" {
 		add("admin.token_env", "environment variable %s is empty or unset", c.Admin.TokenEnv)
 	}
 	if c.State == "" {
@@ -479,6 +518,10 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 			}
 		}
 		for _, name := range e.Pass {
+			if LooksLikeCredential(name) {
+				add(p+".pass_env", "an entry looks like a credential, not a variable name (not shown)")
+				continue
+			}
 			if !envRE.MatchString(name) {
 				add(p+".pass_env", "%q is not an environment variable name", name)
 			}
@@ -519,6 +562,9 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 		}
 		if s.Placement != "avoid" && s.Placement != "allow" {
 			add(p+".schedule.placement", "must be avoid or allow")
+		}
+		if s.OnPredictError != "start" && s.OnPredictError != "defer" {
+			add(p+".schedule.on_predict_error", "must be start or defer")
 		}
 		if s.Lease != "soft" && s.Lease != "exclusive" && s.Lease != "none" {
 			add(p+".schedule.lease", "must be soft, exclusive or none")
@@ -572,6 +618,12 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 		if r.Index.MaxBytes < 1024 || r.Index.MaxFiles < 1 {
 			add(p+".index", "max_file_bytes must be at least 1024 and max_files at least 1")
 		}
+		if r.ExecSched.Refresh < time.Second || r.ExecSched.Recent < 1 || r.ExecSched.JobsLimit < 1 {
+			add(p+".validations", "refresh must be at least 1s, recent and jobs_limit at least 1")
+		}
+		if r.Index.ProposalFiles < 1 || r.Index.ProposalsPerPass < 1 {
+			add(p+".index", "proposal_max_files and proposals_per_pass must be at least 1")
+		}
 		if r.Advisor.Inline < 0 || r.Advisor.MaxFile < 1024 || r.Advisor.MaxPaths < 1 {
 			add(p+".advisor", "inline_bytes >= 0, max_file_bytes >= 1024 and max_paths >= 1 are required")
 		}
@@ -617,11 +669,33 @@ func (c *Config) Executor(name string) *Executor {
 	return nil
 }
 
-// Redacted renders the effective configuration for humans. It contains no
-// secrets by construction (credentials are only ever named, not held), and
-// repeats the check explicitly.
+// LooksLikeCredential reports whether a string that should be the NAME of an environment variable is more likely
+// the secret itself: it carries the prefix of an AgentGit credential, or is longer than any variable name in use.
+// Such a value is never echoed back in an error message or in the effective configuration.
+func LooksLikeCredential(v string) bool {
+	return strings.HasPrefix(v, "agt_") || len(v) > 64
+}
+
+// RedactedValue replaces the values of executor environments in the effective configuration.
+const RedactedValue = "<redacted>"
+
+// Redacted renders the effective configuration for humans. Credentials are only ever named in it, never held; on
+// top of that the values of every executor's `env` (where an operator may paste an API key for the agent) are
+// replaced, keeping the variable names.
 func (c *Config) Redacted() string {
-	b, err := yaml.Marshal(c)
+	cp := *c
+	cp.Execs = make([]Executor, len(c.Execs))
+	for i, e := range c.Execs {
+		if e.Env != nil {
+			env := make(map[string]string, len(e.Env))
+			for k := range e.Env {
+				env[k] = RedactedValue
+			}
+			e.Env = env
+		}
+		cp.Execs[i] = e
+	}
+	b, err := yaml.Marshal(&cp)
 	if err != nil {
 		return "config: " + err.Error()
 	}

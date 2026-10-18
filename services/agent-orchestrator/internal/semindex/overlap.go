@@ -18,12 +18,6 @@ const (
 	ChangeModified  = "modified"
 )
 
-const (
-	maxFilesPerProposal = 30
-	maxFileBytes        = 512 << 10
-	maxAnalysesPerPass  = 10
-)
-
 // Changed is one definition a proposal changes.
 type Changed struct {
 	Path      string `json:"path"`
@@ -94,25 +88,27 @@ func (c *Component) analyze(ctx context.Context, p agwp.Proposal, base string) (
 	}
 	ps := &ProposalSymbols{Proposal: p.ID, Title: p.Title, Head: p.Head, Base: base, At: c.o.Clock.Now(), Partial: diff.Truncated, Mentions: map[string]bool{}}
 	skipped := map[string]bool{}
+	maxBytes := int64(c.o.Repo.Index.MaxBytes)
+	maxFiles := c.o.Repo.Index.ProposalFiles
 	for _, f := range diff.Files {
 		ps.Files = append(ps.Files, f.Path)
 		lang := LanguageOf(f.Path)
 		if lang == "" || f.Binary || c.skip.Match(f.Path) {
 			continue
 		}
-		if len(skipped) >= maxFilesPerProposal {
+		if len(skipped) >= maxFiles {
 			ps.Partial = true
 			continue
 		}
 		var oldB, newB []byte
 		if f.Status != "added" {
-			if oldB, err = c.o.API.GetFile(ctx, repo, base, f.Path, maxFileBytes); err != nil {
+			if oldB, err = c.o.API.GetFile(ctx, repo, base, f.Path, maxBytes); err != nil {
 				ps.Partial, skipped[f.Path] = true, true
 				continue
 			}
 		}
 		if f.Status != "deleted" {
-			if newB, err = c.o.API.GetFile(ctx, repo, p.Head, f.Path, maxFileBytes); err != nil {
+			if newB, err = c.o.API.GetFile(ctx, repo, p.Head, f.Path, maxBytes); err != nil {
 				ps.Partial, skipped[f.Path] = true, true
 				continue
 			}
@@ -219,7 +215,7 @@ func (c *Component) refreshProposals(ctx context.Context) error {
 		if cur != nil && cur.Head == p.Head {
 			continue
 		}
-		if done >= maxAnalysesPerPass {
+		if done >= c.o.Repo.Index.ProposalsPerPass {
 			c.kick.Kick()
 			break
 		}

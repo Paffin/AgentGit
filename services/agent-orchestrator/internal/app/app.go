@@ -154,7 +154,7 @@ func (a *App) buildClients() error {
 	mk := func(label, env string) (*agwp.Client, error) {
 		return agwp.New(a.cfg.Server.URL, secret.New(a.getenv(env)),
 			agwp.WithHTTPClient(hc), agwp.WithStreamClient(sc), agwp.WithClock(a.clk), agwp.WithObserver(a.metrics),
-			agwp.WithIdentityLabel(label), agwp.WithTimeout(a.cfg.Server.Timeout),
+			agwp.WithIdentityLabel(label), agwp.WithTimeout(a.cfg.Server.Timeout), agwp.WithMaxResponseBytes(a.cfg.Server.MaxResponse),
 			agwp.WithRetry(agwp.RetryPolicy{MaxAttempts: a.cfg.Server.RetryMax, BaseDelay: 250 * time.Millisecond, MaxDelay: 5 * time.Second, MaxRetryAfter: 30 * time.Second}),
 			agwp.WithUserAgent("agentgit-orchestrator/"+Version))
 	}
@@ -206,7 +206,8 @@ func (a *App) build() error {
 				off := false
 				erc.ExecSched.Enqueue = &off // only here for the advisor and for placement: never queue jobs the operator switched off
 			}
-			rt.exec = execsched.New(execsched.Options{Repo: erc, API: a.orch, Clock: a.clk, Metrics: a.metrics, Log: logger(rc.Name, "execsched"), Loop: cfg.Loop})
+			rt.exec = execsched.New(execsched.Options{Repo: erc, API: a.orch, Clock: a.clk, Metrics: a.metrics, Log: logger(rc.Name, "execsched"), Loop: cfg.Loop,
+				Refresh: rc.ExecSched.Refresh, Recent: rc.ExecSched.Recent, JobsLimit: rc.ExecSched.JobsLimit})
 			rt.execShown = config.On(rc.ExecSched.Enabled)
 		}
 		if config.On(rc.Schedule.Enabled) && len(cfg.Execs) > 0 {
@@ -226,7 +227,7 @@ func (a *App) build() error {
 			rt.exec.SubscribeForget(rt.advisor.Forget)
 		}
 		if config.On(rc.Review.Enabled) {
-			rt.review, err = review.New(review.Options{Repo: rc, API: a.reviewer, Reviewer: "service:reviewer", Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop})
+			rt.review, err = review.New(review.Options{Repo: rc, API: a.reviewer, Reviewer: defaultReviewerIdentity, Clock: a.clk, Metrics: a.metrics, Log: a.log, Loop: cfg.Loop})
 			if err != nil {
 				return fmt.Errorf("%s: %w", rc.Name, err)
 			}
@@ -280,6 +281,10 @@ func (a *App) subscribe() {
 	})
 }
 
+// defaultReviewerIdentity is what a review comment says about its author until the preflight check has asked the
+// server who the reviewer credential really is.
+const defaultReviewerIdentity = "service:reviewer"
+
 // Preflight checks the server speaks our protocol, that the credentials work
 // and that every configured repository is reachable. It records the
 // orchestrator's identity and the expiry of its credential.
@@ -299,6 +304,13 @@ func (a *App) Preflight(ctx context.Context) error {
 		a.mu.Lock()
 		a.principals[label] = p
 		a.mu.Unlock()
+		if label == "reviewer" {
+			for _, rt := range a.repos {
+				if rt.review != nil {
+					rt.review.SetReviewer(p.Identity) // the comments name the identity the server knows, not a guess
+				}
+			}
+		}
 		exp := 0.0
 		if !p.ExpiresAt().IsZero() {
 			exp = float64(p.ExpiresAt().Unix())

@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+// What the per-file bounds cut is counted, kept with the file, and added up by the index: queries are incomplete by
+// exactly that much and /index/status says so.
+func TestBoundsAreCountedNotSilent(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package big\n\n")
+	for i := 0; i < maxDefsPerFile+25; i++ {
+		fmt.Fprintf(&b, "func F%04d() { v%04d := 1; _ = v%04d }\n", i, i, i)
+	}
+	sym := Extract(LangGo, []byte(b.String()), nil)
+	if len(sym.Defs) != maxDefsPerFile || sym.DroppedDefs != 25 {
+		t.Fatalf("defs kept %d, dropped %d", len(sym.Defs), sym.DroppedDefs)
+	}
+	if len(sym.Idents) != maxIdentsPerFile || sym.DroppedIdents == 0 {
+		t.Fatalf("identifiers kept %d, dropped %d", len(sym.Idents), sym.DroppedIdents)
+	}
+	x := NewIndex("a/b")
+	x.apply([]*FileEntry{{Path: "big.go", Syms: sym}, {Path: "small.go", Syms: Extract(LangGo, []byte("package s\n\nfunc One() {}\n"), nil)}}, nil, "h", Skipped{}, nil)
+	st := x.Stats()
+	if st.DroppedDefs != 25 || st.DroppedIdents != sym.DroppedIdents || st.Symbols != maxDefsPerFile+1 {
+		t.Fatalf("stats = %+v", st)
+	}
+}
+
 // brief renders defs as "kind container.name line exported" for compact assertions.
 func brief(defs []Def) []string {
 	var out []string

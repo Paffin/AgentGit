@@ -620,6 +620,38 @@ mod tests {
     }
 
     #[test]
+    fn the_control_and_replica_settings_are_validated() {
+        let parse = |toml: &str| -> Result<(), String> {
+            let c: ServerConfig = toml::from_str(toml).map_err(|e| e.to_string())?;
+            c.validate().map_err(|e| e.to_string())
+        };
+        parse("[control]\nurl_env = \"AG_PG_URL\"\nschema = \"ag_control\"\npool_size = 8\nbindings_ttl_ms = 5000\n[server]\ndrain_secs = 10\nreplica_id = \"pod-0.ag_1\"")
+            .unwrap();
+        let refused = [
+            ("[control]\nurl = \"postgres://u@h/db\"\nurl_env = \"X\"", "either control.url or control.url_env"),
+            ("[control]\nurl = \"postgres://u:secret@h/db\"", "must not contain a password"),
+            ("[control]\nschema = \"Bad-Name\"", "control.schema"),
+            ("[control]\nschema = \"pg_catalog\"", "control.schema"),
+            ("[control]\npool_size = 0", "control.pool_size"),
+            ("[control]\npool_size = 513", "control.pool_size"),
+            ("[control]\nbindings_ttl_ms = 300001", "bindings_ttl_ms"),
+            ("[server]\ndrain_secs = 301", "drain_secs"),
+            ("[server]\nreplica_id = \"\"", "replica_id"),
+            ("[server]\nreplica_id = \"has space\"", "replica_id"),
+            ("[control]\nurll = \"x\"", "unknown field"),
+        ];
+        for (toml, expected) in refused {
+            let err = parse(toml).expect_err(toml);
+            assert!(err.contains(expected), "{toml:?}: {err}");
+        }
+        // Naming an unset variable is an error only where the URL is needed.
+        let c: ServerConfig = toml::from_str("[control]\nurl_env = \"AG_TEST_SURELY_UNSET_CONTROL_URL\"").unwrap();
+        assert!(c.control.is_postgres());
+        assert!(c.control.resolve_url().unwrap_err().to_string().contains("AG_TEST_SURELY_UNSET_CONTROL_URL"));
+        assert!(!ServerConfig::default().control.is_postgres(), "no [control] section: the SQLite file");
+    }
+
+    #[test]
     fn plaintext_on_a_public_address_is_refused() {
         let mut c = ServerConfig::default();
         c.server.listen = "0.0.0.0:8080".parse().unwrap();

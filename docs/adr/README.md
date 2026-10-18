@@ -16,3 +16,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0006](0006-flat-trees-measured.md) | Flat trees: measured costs, optimizations, and when to go hierarchical |
 | [0007](0007-multi-replica-server.md) | Several `ag-server` replicas on one PostgreSQL and one bucket |
 | [0008](0008-mcp-server.md) | `ag-mcp`: the remote workflow as a Model Context Protocol server |
+| [0009](0009-identity-names-and-principals.md) | An identity's name cannot start with the run separator |

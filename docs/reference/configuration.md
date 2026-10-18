@@ -55,6 +55,7 @@ settings are shown by `ag config list` but are read-only there.
 | `AG_CONFIG` | path of the user file |
 | `AG_KEY_DIR` | where private keys live instead of `.ag/keys` |
 | `AG_RUN` | the agent run a server credential acts for (the credential must belong to that agent) |
+| `AG_TIMEOUT` | the deadline of each call to a server, in seconds: a whole number greater than zero (default 120); a push sends its objects in batches, each with the full deadline |
 | `AG_TOKEN` | credential for remotes |
 | `AG_TOKEN_<REMOTE>` | credential for one remote (upper-case; characters that are not letters or digits become `_`) |
 | `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM` | colour, see <https://no-color.org> |

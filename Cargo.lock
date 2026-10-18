@@ -54,6 +54,7 @@ dependencies = [
  "clap_complete",
  "clap_mangen",
  "hex",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",
@@ -70,6 +71,7 @@ dependencies = [
  "ag-object",
  "ag-protocol",
  "ag-server",
+ "ag-storage",
  "ag-types",
  "futures-util",
  "rustls",
@@ -77,6 +79,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tracing",
 ]

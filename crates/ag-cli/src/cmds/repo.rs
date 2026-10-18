@@ -266,7 +266,7 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
                 conflicts.len()
             );
             for c in conflicts {
-                let _ = writeln!(s, "  {}  ({})", c.path, c.kind);
+                let _ = writeln!(s, "  {}  ({})", c.path, if c.message.is_empty() { &c.kind } else { &c.message });
             }
             s
         }
@@ -284,11 +284,21 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
 pub fn rev_or_default(ctx: &Ctx, rev: &Option<String>) -> Result<ChangesetId> {
     match rev {
         Some(r) => Ok(ctx.repo.resolve_rev(r)?),
-        None => ctx
-            .repo
-            .resolve_rev("@")
-            .or_else(|_| ctx.repo.resolve_rev(ctx.repo.default_stream().as_str()))
-            .map_err(|_| anyhow!("the repository has no history yet; create files and run `ag snapshot -m ...`")),
+        // Only "there is nothing there" means "no history yet". A metadata database that is locked, corrupt or
+        // unreadable is that problem, and says so.
+        None => {
+            use ag_integrate::Error as E;
+            let no_history = || anyhow!("the repository has no history yet; create files and run `ag snapshot -m ...`");
+            match ctx.repo.resolve_rev("@") {
+                Ok(id) => Ok(id),
+                Err(E::NotFound(_)) => match ctx.repo.resolve_rev(ctx.repo.default_stream().as_str()) {
+                    Ok(id) => Ok(id),
+                    Err(E::NotFound(_)) => Err(no_history()),
+                    Err(e) => Err(e.into()),
+                },
+                Err(e) => Err(e.into()),
+            }
+        }
     }
 }
 

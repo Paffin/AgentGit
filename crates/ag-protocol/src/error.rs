@@ -279,6 +279,9 @@ impl ProtocolError {
                     tonic::Code::InvalidArgument => ErrorCode::InvalidArgument,
                     tonic::Code::Unavailable => ErrorCode::Unavailable,
                     tonic::Code::DeadlineExceeded => ErrorCode::DeadlineExceeded,
+                    // How a client's own deadline surfaces (`tonic::TimeoutExpired`): the call was cut off because
+                    // the server did not answer in time, which is a deadline and not an internal error.
+                    tonic::Code::Cancelled if status.message() == "Timeout expired" => ErrorCode::DeadlineExceeded,
                     tonic::Code::ResourceExhausted => ErrorCode::RateLimited,
                     _ => ErrorCode::Internal,
                 },

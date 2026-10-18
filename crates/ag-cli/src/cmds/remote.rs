@@ -136,8 +136,38 @@ fn rt() -> Result<tokio::runtime::Runtime> {
     Ok(tokio::runtime::Builder::new_current_thread().enable_all().build()?)
 }
 
+/// The deadline of a call to a server, in seconds, when `AG_TIMEOUT` does not say otherwise.
+const DEFAULT_CALL_TIMEOUT_SECS: u64 = 120;
+
+/// The deadline of every call to a server: `AG_TIMEOUT` seconds (a positive whole number), else 120. A push
+/// sends its objects in batches that each get the deadline, so it bounds one batch, not the whole transfer.
+pub(crate) fn call_timeout() -> Result<std::time::Duration> {
+    match std::env::var("AG_TIMEOUT") {
+        Ok(v) if !v.trim().is_empty() => {
+            let secs = v.trim().parse::<u64>().ok().filter(|s| *s > 0).ok_or_else(|| {
+                anyhow!("AG_TIMEOUT must be a whole number of seconds greater than zero, not '{}'", v.trim())
+            })?;
+            Ok(std::time::Duration::from_secs(secs))
+        }
+        _ => Ok(std::time::Duration::from_secs(DEFAULT_CALL_TIMEOUT_SECS)),
+    }
+}
+
 async fn connect(root: &Path, name: &str, r: &Remote) -> Result<Client> {
-    connect_with_timeout(root, name, r, std::time::Duration::from_secs(120)).await
+    connect_with_timeout(root, name, r, call_timeout()?).await
+}
+
+/// How `ag` connects to a remote: the one place that sets the agent run (`AG_RUN`), the user agent and the CA.
+fn options_for(r: &Remote, token: String, timeout: std::time::Duration) -> Options {
+    Options {
+        endpoint: r.url.clone(),
+        token,
+        run: std::env::var("AG_RUN").ok().filter(|s| !s.is_empty()),
+        ca_file: r.ca_file.clone(),
+        timeout: Some(timeout),
+        user_agent: Some(format!("ag/{}", env!("CARGO_PKG_VERSION"))),
+        ..Default::default()
+    }
 }
 
 /// Connects with `timeout` as the deadline of every call (`ag doctor` asks for a short one).
@@ -148,18 +178,8 @@ pub(crate) async fn connect_with_timeout(
     timeout: std::time::Duration,
 ) -> Result<Client> {
     let token = read_token(root, name, r)?;
-    let run = std::env::var("AG_RUN").ok().filter(|s| !s.is_empty());
     crate::ui::verbose(format!("remote {name}: {} (repository {})", r.url, r.repo));
-    Client::connect(Options {
-        endpoint: r.url.clone(),
-        token,
-        run,
-        ca_file: r.ca_file.clone(),
-        timeout: Some(timeout),
-        user_agent: Some(format!("ag/{}", env!("CARGO_PKG_VERSION"))),
-    })
-    .await
-    .map_err(|e| anyhow!("{e}"))
+    Client::connect(options_for(r, token, timeout)).await.map_err(|e| anyhow!("{e}"))
 }
 
 /// The configured remotes in name order (none when the repository has no `remotes.json`).
@@ -394,15 +414,7 @@ pub fn clone(cli: &Cli, a: &CloneArgs) -> Result<u8> {
             Some(t) => t.trim().to_string(),
             None => read_token(Path::new("."), &a.name, &remote)?,
         };
-        let client = Client::connect(Options {
-            endpoint: remote.url.clone(),
-            token,
-            ca_file: remote.ca_file.clone(),
-            timeout: Some(std::time::Duration::from_secs(120)),
-            ..Default::default()
-        })
-        .await
-        .map_err(|e| anyhow!("{e}"))?;
+        let client = Client::connect(options_for(&remote, token, call_timeout()?)).await.map_err(|e| anyhow!("{e}"))?;
         let info = client
             .repos()
             .describe(client.req(v1::GetRepoRequest { repo: repo_name.clone() }))
@@ -707,6 +719,9 @@ pub enum RemoteCmd {
         /// Only these lines, `START,END`.
         #[arg(short = 'L', long, value_name = "START,END")]
         lines: Option<String>,
+        /// Look at most this many changesets back (default: the server's limit; the output says when it stopped).
+        #[arg(long, value_name = "N", default_value_t = 0)]
+        max_commits: u32,
     },
     /// Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`.
     Cat {
@@ -765,11 +780,22 @@ pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
         }
         RemoteCmd::Remove { name } => {
             let mut all = load_remotes(&root)?;
-            if all.remotes.remove(name).is_none() {
+            if !all.remotes.contains_key(name) {
                 bail!("no remote named '{name}'");
             }
+            // The stored credential goes first: if it cannot be deleted the secret would stay on disk with
+            // nothing left that names it, so the remote is kept and the command can be run again.
+            let credential = root.join(".ag").join("credentials").join(name);
+            match std::fs::remove_file(&credential) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => bail!(
+                    "cannot delete the stored credential {} of remote '{name}': {e}; the remote is kept, delete the file by hand and run this again",
+                    credential.display()
+                ),
+            }
+            all.remotes.remove(name);
             save_remotes(&root, &all)?;
-            let _ = std::fs::remove_file(root.join(".ag").join("credentials").join(name));
             print_done(cli, &serde_json::json!({"removed": name}), || format!("Removed remote '{name}'."))?;
         }
         other => return remote_online(cli, &root, args.remote.as_deref(), other),
@@ -793,17 +819,29 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 })?;
             }
             RemoteCmd::Proposals { state } => {
-                let resp = c
-                    .proposals()
-                    .list(c.req(v1::ListProposalsRequest {
-                        repo,
-                        state: state.clone().unwrap_or_default(),
-                        page_size: 200,
-                        ..Default::default()
-                    }))
-                    .await
-                    .map_err(s)?
-                    .into_inner();
+                // Every page: a repository with more proposals than one page must not be silently cut short.
+                let mut all = Vec::new();
+                let mut token = String::new();
+                loop {
+                    let page = c
+                        .proposals()
+                        .list(c.req(v1::ListProposalsRequest {
+                            repo: repo.clone(),
+                            state: state.clone().unwrap_or_default(),
+                            page_size: ag_protocol::limits::MAX_PAGE_SIZE,
+                            page_token: token,
+                            ..Default::default()
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner();
+                    all.extend(page.proposals);
+                    token = page.next_page_token;
+                    if token.is_empty() {
+                        break;
+                    }
+                }
+                let resp = v1::ListProposalsResponse { proposals: all, next_page_token: String::new() };
                 print(cli, &resp, || {
                     resp.proposals
                         .iter()
@@ -1011,20 +1049,41 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         if ev.topic == "heartbeat" {
                             continue;
                         }
-                        print(cli, &ev, || format!("{:>6}  {}  {}", ev.seq, ev.topic, ev.payload_json))?;
+                        if cli.json {
+                            // One compact object per line (NDJSON), so that a consumer can read line by line.
+                            crate::ui::print_line(&serde_json::to_string(&ev)?);
+                        } else {
+                            print(cli, &ev, || format!("{:>6}  {}  {}", ev.seq, ev.topic, ev.payload_json))?;
+                        }
                     }
                 } else {
-                    let r = c
-                        .events()
-                        .replay(c.req(v1::ReplayRequest {
-                            repo,
-                            topics: topics.clone(),
-                            after_seq: *after,
-                            limit: 500,
-                        }))
-                        .await
-                        .map_err(s)?
-                        .into_inner();
+                    // Every event after `after`, a page at a time: a full page may be followed by more.
+                    let page_size = ag_protocol::limits::MAX_PAGE_SIZE;
+                    let mut cursor = *after;
+                    let mut events = Vec::new();
+                    let latest_seq = loop {
+                        let page = c
+                            .events()
+                            .replay(c.req(v1::ReplayRequest {
+                                repo: repo.clone(),
+                                topics: topics.clone(),
+                                after_seq: cursor,
+                                limit: page_size,
+                            }))
+                            .await
+                            .map_err(s)?
+                            .into_inner();
+                        let latest = page.latest_seq;
+                        let full = page.events.len() >= page_size as usize;
+                        if let Some(last) = page.events.last() {
+                            cursor = last.seq;
+                        }
+                        events.extend(page.events);
+                        if !full {
+                            break latest;
+                        }
+                    };
+                    let r = v1::ReplayResponse { events, latest_seq };
                     print(cli, &r, || {
                         r.events
                             .iter()
@@ -1060,17 +1119,34 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
             }
             RemoteCmd::Log { rev, limit } => {
-                let r = c
-                    .history()
-                    .log(c.req(v1::LogRequest {
-                        repo,
-                        rev: rev.clone().unwrap_or_default(),
-                        page_size: *limit,
-                        ..Default::default()
-                    }))
-                    .await
-                    .map_err(s)?
-                    .into_inner();
+                // The server clamps a page; ask for as many pages as `-n` needs instead of getting fewer entries
+                // than were asked for without a word.
+                let mut changesets = Vec::new();
+                let mut token = String::new();
+                loop {
+                    let want = (*limit as usize).saturating_sub(changesets.len());
+                    if want == 0 {
+                        break;
+                    }
+                    let page = c
+                        .history()
+                        .log(c.req(v1::LogRequest {
+                            repo: repo.clone(),
+                            rev: rev.clone().unwrap_or_default(),
+                            page_size: want.min(ag_protocol::limits::MAX_PAGE_SIZE as usize) as u32,
+                            page_token: token,
+                            ..Default::default()
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner();
+                    changesets.extend(page.changesets);
+                    token = page.next_page_token;
+                    if token.is_empty() {
+                        break;
+                    }
+                }
+                let r = v1::LogResponse { changesets, next_page_token: token };
                 print(cli, &r, || {
                     r.changesets
                         .iter()
@@ -1079,7 +1155,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .join("\n")
                 })?;
             }
-            RemoteCmd::Blame { spec, lines } => {
+            RemoteCmd::Blame { spec, lines, max_commits } => {
                 let (rev, path) = spec
                     .split_once(':')
                     .map(|(r, p)| (r.to_string(), p.to_string()))
@@ -1096,7 +1172,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 };
                 let b = c
                     .history()
-                    .blame(c.req(v1::BlameRequest { repo, rev, path, first_line, last_line, max_commits: 0 }))
+                    .blame(c.req(v1::BlameRequest {
+                        repo,
+                        rev,
+                        path,
+                        first_line,
+                        last_line,
+                        max_commits: *max_commits,
+                    }))
                     .await
                     .map_err(s)?
                     .into_inner();

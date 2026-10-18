@@ -55,10 +55,13 @@ pub enum AgentCmd {
         /// Run id.
         run: String,
     },
-    /// List runs.
+    /// List runs, newest first.
     Runs {
         /// Only this agent.
         name: Option<String>,
+        /// Show at most this many (0 = all).
+        #[arg(short = 'n', long, default_value_t = 50)]
+        limit: usize,
     },
     /// Abandon runs with no recent heartbeat and release their leases.
     Reap {
@@ -128,8 +131,9 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
             registry::heartbeat(meta, run)?;
             ctx.done(&json!({"run": run}), || format!("ok {run}"))?;
         }
-        AgentCmd::Runs { name } => {
-            let rows = meta.read(|tx| tx.runs(name.as_deref(), 50))?;
+        AgentCmd::Runs { name, limit } => {
+            let rows = meta.read(|tx| tx.runs(name.as_deref(), Ctx::cap(*limit)))?;
+            ctx.note_cap(rows.len(), *limit, "runs");
             if rows.is_empty() {
                 ctx.note("no runs yet; `ag agent start NAME` starts one");
             }
@@ -303,9 +307,12 @@ pub enum LeaseCmd {
     },
     /// List active leases.
     List {
-        /// Include released and expired leases.
+        /// Include released and expired leases (the newest ones, see -n).
         #[arg(long)]
         all: bool,
+        /// With --all: show at most this many (0 = all).
+        #[arg(short = 'n', long, default_value_t = 200, requires = "all")]
+        limit: usize,
     },
 }
 
@@ -345,8 +352,15 @@ pub fn lease(ctx: &Ctx, cmd: &LeaseCmd) -> Result<u8> {
             let l = leases::extend(meta, id, ctx.me.as_str(), parse_duration_ms(ttl)?)?;
             ctx.done(&l, || format!("{} now expires {} (token {} unchanged)", l.id, l.expires_at, l.token))?;
         }
-        LeaseCmd::List { all } => {
-            let rows = if *all { meta.read(|tx| tx.leases_all(200))? } else { meta.read(|tx| tx.leases_active())? };
+        LeaseCmd::List { all, limit } => {
+            let rows = if *all {
+                meta.read(|tx| tx.leases_all(Ctx::cap(*limit)))?
+            } else {
+                meta.read(|tx| tx.leases_active())?
+            };
+            if *all {
+                ctx.note_cap(rows.len(), *limit, "leases");
+            }
             let now = ctx.repo.clock().now();
             if rows.is_empty() {
                 ctx.note("no active leases; `ag lease acquire 'GLOB'` claims a scope");

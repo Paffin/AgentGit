@@ -142,11 +142,14 @@ pub fn propose(ctx: &Ctx, a: &ProposeArgs) -> Result<u8> {
 
 #[derive(Subcommand, Debug)]
 pub enum ProposalCmd {
-    /// List proposals.
+    /// List proposals, newest first.
     List {
         /// Filter by state: open, integrated, closed.
         #[arg(long)]
         state: Option<String>,
+        /// Show at most this many (0 = all).
+        #[arg(short = 'n', long, default_value_t = 200)]
+        limit: usize,
     },
     /// Show a proposal with its reviews.
     Show {
@@ -186,8 +189,9 @@ pub enum ProposalCmd {
 
 pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
     match cmd {
-        ProposalCmd::List { state } => {
-            let list = ctx.repo.meta().read(|tx| tx.proposals_list(state.as_deref(), 200))?;
+        ProposalCmd::List { state, limit } => {
+            let list = ctx.repo.meta().read(|tx| tx.proposals_list(state.as_deref(), Ctx::cap(*limit)))?;
+            ctx.note_cap(list.len(), *limit, "proposals");
             if list.is_empty() {
                 ctx.note("no proposals match; `ag propose -t TITLE` opens one");
             }

@@ -33,6 +33,13 @@ fn errors_survive_a_grpc_status_round_trip() {
     // A status from some other peer still maps to a sensible code.
     let plain = tonic::Status::unauthenticated("no token");
     assert_eq!(ProtocolError::from_status(&plain).code, ErrorCode::Unauthenticated);
+
+    // A client's own deadline (tonic reports it as a cancelled call) is a deadline, which a caller may retry; a
+    // call cancelled for any other reason is not.
+    let expired = tonic::Status::cancelled("Timeout expired");
+    assert_eq!(ProtocolError::from_status(&expired).code, ErrorCode::DeadlineExceeded);
+    let other = tonic::Status::cancelled("the client went away");
+    assert_eq!(ProtocolError::from_status(&other).code, ErrorCode::Internal);
 }
 
 #[test]

@@ -114,7 +114,11 @@ Routes that do not exist answer `404 not_found` and methods a route does not hav
 
 **Outcomes are not errors.** `integrate` returns `200` with `outcome.status` ∈ `integrated`, `blocked`
 (something can be provided: approvals, validation, a lease), `conflict`, `denied`, `invalid`. Each blocker
-has a stable `code` — see the [policy guide](../guides/policy.md#outcome-codes).
+has a stable `code` — see the [policy guide](../guides/policy.md#outcome-codes). A `conflict` outcome (and a
+sync that cannot merge) lists `Conflict`s: each has a `path`, a stable machine-readable `kind` — one of `content`,
+`both_added`, `delete_modify`, `binary`, `type_change`, `too_large`, `file_directory`, `rename_rename`,
+`rename_delete`; new kinds may be added, so a client must tolerate one it does not know — and a `message` for
+people (region counts, which side deleted); a client branches on `kind` and shows `message`.
 
 ## Authentication
 

@@ -52,7 +52,17 @@ ag pull                                  # the merged result comes back
   It refuses while the working directory has uncommitted changes (`ag snapshot` first).
 - Everything else about a proposal is `ag remote …`: `proposals`, `proposal`, `prepare`, `review`, `integrate`,
   `close`, `streams`, `events [--follow]`, `policy`, `log`, `cat`, `blame`, `whoami`. They mirror the local
-  commands of the same names but act on the server; `--json` works everywhere.
+  commands of the same names but act on the server; `--json` works everywhere. Listings are complete: `proposals`
+  and `events` read every page the server has, and `log -n N` asks for as many pages as `N` needs. `events
+  --follow --json` prints one compact JSON object per line (NDJSON), so a script can read it line by line;
+  `remote cat` writes the file's raw bytes. `remote blame --max-commits N` bounds how far back blame looks (the
+  server's own limit applies by default, and the output says when blame stopped there).
+- Every call to a server has a deadline: 120 seconds, or `AG_TIMEOUT` seconds (a whole number greater than zero;
+  anything else is refused, not ignored). A push sends its objects in batches of at most 32 MiB, each call with the
+  full deadline, so the deadline bounds a batch and not the whole transfer over a slow link. A download that stops
+  in the middle ends at the same deadline instead of waiting for ever.
+- `ag remote remove NAME` deletes the stored credential first; if it cannot, the remote is kept and the error
+  names the file.
 
 ## Offline
 

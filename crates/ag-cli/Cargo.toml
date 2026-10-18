@@ -48,5 +48,6 @@ tonic.workspace = true
 
 [dev-dependencies]
 ag-server.workspace = true
+rusqlite.workspace = true
 tempfile.workspace = true
 tokio.workspace = true

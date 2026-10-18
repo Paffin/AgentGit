@@ -143,6 +143,20 @@ impl Ctx {
         }
     }
 
+    /// The row cap for a listing command: `0` means everything. (An unlimited query is a very large limit rather
+    /// than `usize::MAX`, which some SQL back ends read as a negative number.)
+    pub fn cap(limit: usize) -> usize {
+        if limit == 0 { i64::MAX as usize } else { limit }
+    }
+
+    /// Tells the reader that a listing stopped at its cap. It goes to standard error even with `--json`, where a
+    /// script would otherwise take the newest `limit` rows for all of them.
+    pub fn note_cap(&self, shown: usize, limit: usize, what: &str) {
+        if limit != 0 && shown >= limit {
+            ui::hint(format!("showing the newest {limit} {what}; use -n 0 for all of them"));
+        }
+    }
+
     /// The default stream name.
     pub fn default_stream(&self) -> String {
         self.repo.default_stream().to_string()

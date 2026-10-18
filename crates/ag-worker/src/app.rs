@@ -568,6 +568,7 @@ async fn run(args: RunArgs) -> Result<()> {
         ca_file: args.ca_file.clone(),
         timeout: Some(Duration::from_secs(args.client_timeout_secs)),
         user_agent: Some(format!("ag-worker/{}", env!("CARGO_PKG_VERSION"))),
+        ..Default::default()
     })
     .await
     .context("cannot connect to the server")?;

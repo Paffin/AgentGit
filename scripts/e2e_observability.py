@@ -63,9 +63,20 @@ def main() -> None:
                lambda: [r for r in prom(args.prometheus, 'up{job="agentgit"}') if r["value"][1] == "1"])
     eventually("agwp_requests_total is in Prometheus with real traffic",
                lambda: [r for r in prom(args.prometheus, "sum(agwp_requests_total)") if float(r["value"][1]) > 0])
-    rules = get(f"{args.prometheus}/api/v1/rules")
-    groups = {g["name"]: g for g in rules["data"]["groups"]}
-    assert "agentgit" in groups and len(groups["agentgit"]["rules"]) >= 5, list(groups)
+
+    def evaluated_rules() -> dict:
+        # A rule's health is "unknown" until its group has run once, which happens up to one evaluation interval
+        # (15 s in deploy/observability/prometheus.compose.yml) after Prometheus started: wait for that first run
+        # instead of reading the rules the moment the first scrape has landed. A rule that then stays in "err" is
+        # reported below, with the names.
+        found = get(f"{args.prometheus}/api/v1/rules")
+        by_name = {g["name"]: g for g in found["data"]["groups"]}
+        assert "agentgit" in by_name and len(by_name["agentgit"]["rules"]) >= 5, list(by_name)
+        unevaluated = [r["name"] for r in by_name["agentgit"]["rules"] if r.get("health") == "unknown"]
+        assert not unevaluated, f"not evaluated yet: {unevaluated}"
+        return by_name
+
+    groups = eventually("the alert rules are loaded and have been evaluated once", evaluated_rules)
     print(f"   ok  alert rules loaded: {len(groups['agentgit']['rules'])} in group 'agentgit'")
     bad = [r["name"] for r in groups["agentgit"]["rules"] if r.get("health") != "ok"]
     assert not bad, f"rules failing to evaluate: {bad}"

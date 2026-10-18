@@ -11,7 +11,9 @@ Work package `server_audit` of the "no mocks / no stubs / no hardcodes" phase. I
 | `59dd88a` | Fail-closed control rows, every binding reaches the authorizer, sound scope containment, quota charged where bytes enter the store, events scan/revalidation/strict queries, real backends in create/list, honest `get_operation`/tree sizes, gRPC limits from config, negotiate from the engine, `trace_id`/`remote` on log lines, `public_url` removed, config validation |
 | `31586ff` | Web UI generated API schema (missed in `59dd88a`; the Web UI workflow went red for one push) |
 | `9a1fd1d` | Atomic idempotency records, job reaping that is counted and audited, `ag-server admin` from configuration, OIDC (lock, timeouts), queue outcomes, fsck object, lease listing limit, provenance verdicts |
-| (final commit) | quota test for integrations, docs, this file |
+| `47a01c3` | quota test for integrations (the merge's writes are counted), idempotency record lifetime documented |
+| `413ebd3` | log correlation fields documented, this file |
+| (follow-up) | `scripts/e2e_observability.py`: wait for the first rule evaluation (race that turned the Containers workflow red on `413ebd3`, see below) |
 
 Design points a reviewer should know:
 
@@ -47,8 +49,14 @@ Design points a reviewer should know:
 * CI: `31586ff` all green (CI, Web UI, Windows, Containers) — https://github.com/Paffin/AgentGit/actions/runs/39098144072
   (CI), .../39098144100 (Web UI), .../39098144074 (Windows), .../39098144071 (Containers).
   `9a1fd1d` all green too — CI https://github.com/Paffin/AgentGit/actions/runs/39099362391, Web UI .../39099362316,
-  Windows .../39099362275, Containers .../39099362375, Packaging .../39099362305. The last two commits (a test and
-  docs) are in the workflow's final report.
+  Windows .../39099362275, Containers .../39099362375, Packaging .../39099362305.
+  `413ebd3`: CI .../39099870204, Web UI .../39099870239, Windows .../39099870217, Packaging .../39099870237 green;
+  **Containers .../39099870269 red** in the step "Start the observability profile and check Prometheus, Grafana and
+  the collector": `scripts/e2e_observability.py` read the alert rules 11 s after Prometheus started and found all nine
+  with health `unknown` (a rule has no health until its group has run once; `evaluation_interval` is 15 s) and
+  reported them as "failing to evaluate". Not caused by the server changes (that commit touched a test and docs; the
+  same step passed on `9a1fd1d` by timing). The script now waits until every rule has been evaluated once and only then
+  asserts `health == "ok"`; the result of that run is in the workflow's final report.
 
 ## Triage of every item (60 audit rows in these two areas)
 

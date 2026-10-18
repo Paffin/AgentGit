@@ -34,9 +34,19 @@ export function encodeBase64(bytes: Uint8Array): string {
   return out;
 }
 
+/**
+ * Removes trailing `=` padding. A loop, not `/=+$/`: on a long run of `=` followed by another character that
+ * expression backtracks quadratically, and the input here is whatever a server (or a file) hands the caller.
+ */
+function stripPadding(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 61) end--;
+  return end === text.length ? text : text.slice(0, end);
+}
+
 /** Decodes standard base64 (padding optional, ASCII whitespace ignored). Throws `TypeError` on bad input. */
 export function decodeBase64(text: string): Uint8Array {
-  const clean = text.replace(/[\s]+/g, '').replace(/=+$/, '');
+  const clean = stripPadding(text.replace(/[\s]+/g, ''));
   if (clean.length % 4 === 1) throw new TypeError('invalid base64 length');
   const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
   let o = 0;

@@ -83,6 +83,16 @@ export interface UploadResult {
   alreadyPresent: string[];
 }
 
+/**
+ * Removes trailing `/`. A loop, not `/\/+$/`: on a long run of slashes followed by another character that expression
+ * backtracks quadratically, and a base URL often comes from configuration or an environment variable.
+ */
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return end === url.length ? url : url.slice(0, end);
+}
+
 /** The client: one namespace per area of the API, one method per OpenAPI operation id. */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface AgentGitClient extends Omit<Api, 'objects'> {
@@ -104,7 +114,7 @@ export class AgentGitClient {
     }
     this.#options = options;
     const config: TransportConfig = {
-      baseUrl: options.baseUrl.replace(/\/+$/, ''),
+      baseUrl: trimTrailingSlashes(options.baseUrl),
       token: options.token,
       fetch: fetchFn,
       runId: options.runId,

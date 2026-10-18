@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { AgentGitClient, AgentGitError, OPERATIONS, readSse, type SseFrame } from '../src/index.js';
 import { buildRequest } from '../src/transport.js';
 import { errorFromStatus } from '../src/errors.js';
+import { decodeBase64 } from '../src/encoding.js';
 
 const base = 'http://srv.test';
 
@@ -242,5 +243,35 @@ describe('errors without an envelope', () => {
     expect(err.cause).toBe(cause);
     expect(err.stack).toContain('AgentGitError');
     expect(err.attempts).toBe(1);
+  });
+});
+
+// Both of these once went through a regular expression (`/\/+$/`, `/=+$/`) that backtracks quadratically on a long run
+// of the repeated character followed by something else: a few hundred thousand characters pinned a core for minutes.
+// A linear implementation answers at once; on the old one these tests hit vitest's timeout.
+describe('inputs that made a regular expression backtrack quadratically', () => {
+  const noFetch: typeof fetch = async () => new Response('{}', { headers: { 'content-type': 'application/json' } });
+
+  it('a base URL with long runs of slashes is trimmed at the end only, at once', () => {
+    const run = '/'.repeat(100_000);
+    const started = performance.now();
+    const client = new AgentGitClient({ baseUrl: `${base}/x${run}y${run}`, token: 't', fetch: noFetch });
+    expect(client.baseUrl).toBe(`${base}/x${run}y`);
+    expect(performance.now() - started).toBeLessThan(1000); // the old expression needed ~10 s for this
+
+    // and the ordinary cases
+    expect(new AgentGitClient({ baseUrl: `${base}///`, token: 't', fetch: noFetch }).baseUrl).toBe(base);
+    expect(new AgentGitClient({ baseUrl: base, token: 't', fetch: noFetch }).baseUrl).toBe(base);
+  });
+
+  it('base64 with a long run of "=" inside is rejected at once, and real padding still decodes', () => {
+    const started = performance.now();
+    expect(() => decodeBase64(`A${'='.repeat(100_000)}A`)).toThrow(TypeError);
+    expect(performance.now() - started).toBeLessThan(1000); // the old expression needed ~10 s for this
+    const text = (b64: string) => new TextDecoder().decode(decodeBase64(b64));
+    expect(text('aGk=')).toBe('hi');
+    expect(text('aGk')).toBe('hi'); // padding is optional
+    expect(text('aG\nk=\t=')).toBe('hi'); // whitespace is ignored, and so is padding beyond what is needed
+    expect(decodeBase64('').length).toBe(0);
   });
 });

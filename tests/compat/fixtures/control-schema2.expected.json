@@ -1,0 +1,112 @@
+{
+ "bootstrap_token": "compat-bootstrap-token-0123456789abcdef",
+ "built_from": "e5a8146",
+ "control_schema_version": 2,
+ "created_at_ms": 1792313575536,
+ "credential_ids": {
+  "alice": "cred_111d1270664a7469",
+  "bot": "cred_90873e1db58a9604",
+  "revoked": "cred_ccc075f2988ab1d1"
+ },
+ "format": "agentgit-compat-server-expected-v1",
+ "repos": [
+  [
+   "acme/docs",
+   "trunk",
+   "acme/docs"
+  ],
+  [
+   "acme/web",
+   "main",
+   "acme/web"
+  ]
+ ],
+ "roles": [
+  [
+   "agent:bot",
+   "acme/web",
+   "writer"
+  ],
+  [
+   "group:platform",
+   "*",
+   "admin"
+  ],
+  [
+   "user:alice",
+   "acme/*",
+   "writer"
+  ],
+  [
+   "user:bob",
+   "acme/web",
+   "reader"
+  ]
+ ],
+ "server": "ag-server 0.1.0 (no git metadata)",
+ "tokens": {
+  "alice": "agt_111d1270664a7469_bGUnEgBDauZGk6I1YbWxNulcX9sKzlOhV10g3yphH8s",
+  "bot": "agt_90873e1db58a9604_FAVyYWAMfrsbjH7JKwre61-t67sluLTtAuFJ4bG_NdQ",
+  "revoked": "agt_ccc075f2988ab1d1_2it-qOe1vgQfoGaUT4797c6biWtiHkN7rK5tCLTo0M0"
+ },
+ "whoami": {
+  "alice": {
+   "credential_id": "cred_111d1270664a7469",
+   "expires_at_ms": 1792399975536,
+   "identity": "user:alice",
+   "kind": "user",
+   "method": "token",
+   "roles": [
+    "acme/*:writer"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "streams": []
+   }
+  },
+  "bootstrap": {
+   "credential_id": "bootstrap",
+   "expires_at_ms": 0,
+   "identity": "user:bootstrap-admin",
+   "kind": "user",
+   "method": "bootstrap",
+   "roles": [
+    "*:admin"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "streams": []
+   }
+  },
+  "bot": {
+   "credential_id": "cred_90873e1db58a9604",
+   "expires_at_ms": 1792317175556,
+   "identity": "agent:bot",
+   "kind": "agent",
+   "method": "token",
+   "roles": [
+    "acme/web:writer"
+   ],
+   "scope": {
+    "operations": [
+     "repo.read",
+     "objects.read",
+     "objects.write",
+     "publish",
+     "history.read",
+     "tree.read",
+     "stream.read",
+     "stream.cas"
+    ],
+    "repos": [
+     "acme/web"
+    ],
+    "streams": [
+     "main"
+    ]
+   }
+  }
+ }
+}

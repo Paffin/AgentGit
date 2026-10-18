@@ -1,0 +1,180 @@
+{
+ "bootstrap_token": "compat-bootstrap-token-0123456789abcdef",
+ "built_from": "b69669d",
+ "control_schema_version": 3,
+ "created_at_ms": 1792313576235,
+ "credential_ids": {
+  "alice": "cred_d1bd4efbe1a06c44",
+  "bot": "cred_0aa68e7ec347ec21",
+  "revoked": "cred_6db1f4d1adb8ed1e"
+ },
+ "format": "agentgit-compat-server-expected-v1",
+ "repos": [
+  [
+   "acme/docs",
+   "trunk",
+   "acme/docs"
+  ],
+  [
+   "acme/web",
+   "main",
+   "acme/web"
+  ]
+ ],
+ "roles": [
+  [
+   "agent:bot",
+   "acme/web",
+   "writer"
+  ],
+  [
+   "group:platform",
+   "*",
+   "admin"
+  ],
+  [
+   "service:orchestrator",
+   "acme/*",
+   "delegator"
+  ],
+  [
+   "user:alice",
+   "acme/*",
+   "writer"
+  ],
+  [
+   "user:bob",
+   "acme/web",
+   "reader"
+  ]
+ ],
+ "run_bound": {
+  "agent": "bot",
+  "credential_id": "cred_50621bf99b22a908",
+  "repo": "acme/web",
+  "run_id": "run_bf829dc02f9d4f82bd95",
+  "token": "agt_50621bf99b22a908_ECajhhe0rO2tFf00VZotlIk7F6jx7qR2RZMEUG_G4DM",
+  "whoami": {
+   "credential_id": "cred_50621bf99b22a908",
+   "expires_at_ms": 1792317176632,
+   "identity": "agent:bot",
+   "kind": "agent",
+   "method": "token",
+   "roles": [
+    "acme/web:writer"
+   ],
+   "scope": {
+    "operations": [
+     "repo.read",
+     "objects.read",
+     "objects.write",
+     "publish",
+     "operation.read",
+     "history.read",
+     "tree.read",
+     "stream.read",
+     "stream.create",
+     "workspace.read",
+     "workspace.write",
+     "proposal.read",
+     "proposal.create",
+     "proposal.update",
+     "proposal.close",
+     "integrate.prepare",
+     "integrate.validate",
+     "queue.read",
+     "queue.write",
+     "attestation.read",
+     "agent.read",
+     "agent.register",
+     "agent.run",
+     "task.read",
+     "task.write",
+     "lease.read",
+     "lease.write",
+     "provenance.read",
+     "provenance.write",
+     "predict",
+     "events.read",
+     "policy.read",
+     "pins.read",
+     "jobs.read"
+    ],
+    "repos": [
+     "acme/web"
+    ],
+    "run_id": "run_bf829dc02f9d4f82bd95",
+    "streams": []
+   }
+  }
+ },
+ "server": "ag-server 0.1.0 (b69669dc40c2 2026-10-18)",
+ "tokens": {
+  "alice": "agt_d1bd4efbe1a06c44_rJcA_F3vtB0YaxJrzpKt_0CQ2XHzDy5LUvuZXUG2Bco",
+  "bot": "agt_0aa68e7ec347ec21_bd-V_6n5iHJerTySCivTpozuiRI7SNPxaUXjzaR-bwo",
+  "revoked": "agt_6db1f4d1adb8ed1e_JX9JQSSIRm5c1ywraldkFpRODG8sdiMRsx4qKj33VZQ"
+ },
+ "whoami": {
+  "alice": {
+   "credential_id": "cred_d1bd4efbe1a06c44",
+   "expires_at_ms": 1792399976235,
+   "identity": "user:alice",
+   "kind": "user",
+   "method": "token",
+   "roles": [
+    "acme/*:writer"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "run_id": "",
+    "streams": []
+   }
+  },
+  "bootstrap": {
+   "credential_id": "bootstrap",
+   "expires_at_ms": 0,
+   "identity": "user:bootstrap-admin",
+   "kind": "user",
+   "method": "bootstrap",
+   "roles": [
+    "*:admin"
+   ],
+   "scope": {
+    "operations": [],
+    "repos": [],
+    "run_id": "",
+    "streams": []
+   }
+  },
+  "bot": {
+   "credential_id": "cred_0aa68e7ec347ec21",
+   "expires_at_ms": 1792317176254,
+   "identity": "agent:bot",
+   "kind": "agent",
+   "method": "token",
+   "roles": [
+    "acme/web:writer"
+   ],
+   "scope": {
+    "operations": [
+     "repo.read",
+     "objects.read",
+     "objects.write",
+     "publish",
+     "history.read",
+     "tree.read",
+     "stream.read",
+     "stream.cas"
+    ],
+    "repos": [
+     "acme/web"
+    ],
+    "run_id": "",
+    "streams": [
+     "main"
+    ]
+   }
+  }
+ }
+}

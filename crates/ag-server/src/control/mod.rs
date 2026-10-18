@@ -189,6 +189,15 @@ fn startup_error(message: String) -> ApiError {
     ApiError::new(ag_protocol::ErrorCode::FailedPrecondition, message)
 }
 
+/// The control database was written by a newer build: say so, whatever the backend, instead of the opaque
+/// "internal error" every other storage failure becomes.
+fn newer_schema(found: i64, supported: i64) -> ApiError {
+    startup_error(format!(
+        "the control database has schema version {found}, newer than this server supports ({supported}); \
+         upgrade ag-server (or restore an older backup) instead of running an old build against it"
+    ))
+}
+
 /// Connection settings of a PostgreSQL control plane.
 #[derive(Clone, Debug)]
 pub struct PostgresTarget {
@@ -213,7 +222,10 @@ impl Control {
 
     /// Opens (creating and migrating) the SQLite database at `path`.
     pub fn open(path: &Path, clock: Arc<dyn Clock>) -> ApiResult<Self> {
-        Ok(Self::new(db(Database::open_sqlite(path, MIGRATIONS))?, clock))
+        match Database::open_sqlite(path, MIGRATIONS) {
+            Err(MetaError::UnsupportedSchema { found, supported }) => Err(newer_schema(found, supported)),
+            other => Ok(Self::new(db(other)?, clock)),
+        }
     }
 
     /// A private in-memory database (tests).
@@ -251,12 +263,7 @@ impl Control {
                     tracing::warn!(error = %e, "the control database is not reachable yet; retrying");
                     std::thread::sleep(Duration::from_secs(1));
                 }
-                Err(MetaError::UnsupportedSchema { found, supported }) => {
-                    return Err(startup_error(format!(
-                        "the control database has schema version {found}, newer than this server supports \
-                         ({supported}); upgrade ag-server (or restore an older backup) instead of running an old build against it"
-                    )));
-                }
+                Err(MetaError::UnsupportedSchema { found, supported }) => return Err(newer_schema(found, supported)),
                 Err(e) => return Err(startup_error(format!("cannot open the control database: {e}"))),
             }
         };

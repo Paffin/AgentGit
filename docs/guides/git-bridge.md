@@ -1,7 +1,9 @@
 # Git bridge
 
 Git is an **adapter**, not the engine. The bridge uses the `git` command line (plumbing only), so it needs
-`git` on `PATH` and never links Git's code.
+`git` on `PATH` and never links Git's code. A walkthrough whose commands are run by the tests, including a check that an
+import followed by an export gives back the same trees, is [Migrating a Git
+repository](../tutorials/migrating-from-git.md).
 
 ## Import a Git repository
 

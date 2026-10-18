@@ -120,6 +120,9 @@ ag integrate <proposal>          # lands; the attestation names the exact tree t
 
 Details: [Policy reference](guides/policy.md), [Validation](guides/validation.md).
 
+A longer version of this, with an agent, a lease and a refused integration at every step, is
+[Your first agent-safe repository](tutorials/first-agent-safe-repo.md); its commands are run by the tests.
+
 ## Running agents
 
 ```bash

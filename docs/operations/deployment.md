@@ -3,7 +3,8 @@
 `ag-server` is one process: AGWP over gRPC and HTTP/JSON on a single port, plus `/healthz`, `/readyz`,
 `/metrics` and `/openapi.json`. Everything lives under one data directory (a SQLite *control database*
 with credentials, role bindings and the repository registry; per-repository data unless you configure
-PostgreSQL and S3 — see [postgres-and-s3.md](postgres-and-s3.md)).
+PostgreSQL and S3 — see [postgres-and-s3.md](postgres-and-s3.md)). To try a server on your machine first, with
+roles, credentials, a policy and an agent, follow [Run a team server](../tutorials/team-server.md).
 
 Three ready-made ways to run it, all under [`deploy/`](../../deploy):
 

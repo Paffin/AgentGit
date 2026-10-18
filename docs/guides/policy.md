@@ -121,6 +121,10 @@ and for blocked/denied a list of `blockers[]` with a stable `code`:
 
 ## Recipes
 
+Complete documents for these and more (merge queue, release stream, trusted workers, fresh evidence, size limits, and
+the mistakes the parser rejects), each parsed by the real parser in the tests, are in the
+[policy cookbook](../tutorials/policy-cookbook.md).
+
 **Solo project, just keep history safe:** no policy.
 
 **Team with CI:** trusted CI issuer + `required_validations: [tests]` + `approvals.min: 1`.

@@ -38,7 +38,9 @@ Documentation that drifts is worse than none, so most of it is *checked*:
   binaries (`scripts/doc_snippets.py`), the output the pages show is compared with what the commands print, and the
   policy documents in the cookbook go through the real policy parser.
 - The walkthrough in the README comes from [`examples/quickstart.sh`](../examples/quickstart.sh), which CI
-  runs as a test (and so does `cargo test`).
+  runs as a test (and so does `cargo test`). The script asserts every exit code, and `crates/ag-cli/tests/quickstart.rs`
+  checks that every line of output shown in the README's "See it work" transcript is a line the script really prints
+  (ids and text cut short with `…` are wildcards), so a reworded message fails the test.
 - `scripts/check_docs.py` checks links, test names, `ag` commands, environment variables and the refusal messages quoted
   in the docs against the code; the site build (`mkdocs build --strict`) checks every link and `#anchor`.
 - Byte-level format claims are backed by [`tests/conformance/`](../tests/conformance/): vectors produced by an

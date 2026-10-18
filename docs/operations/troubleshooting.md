@@ -1,6 +1,9 @@
 # Troubleshooting
 
-Start with `ag verify` and, for an integration, `ag --json op show <operation-id>`.
+Start with `ag verify` and, for an integration, `ag --json op show <operation-id>`. For an integration that is blocked or
+refused, [Troubleshooting a blocked integration](../tutorials/troubleshooting-blocked-integration.md) reproduces every
+message below with commands that are run by the tests, and explains the cases that surprise people (a check that "passed" and
+still does not count, approvals that disappear).
 
 ## Exit codes at a glance
 

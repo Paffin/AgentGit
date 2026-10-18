@@ -1,5 +1,8 @@
 # Handoff: the `ag` CLI as a product, and the documentation site
 
+> **Update 2026-10-18:** the second half (docs site, tutorials, generated reference pages, snippet harness, the
+> `shells` job) is done: see `dev/handoff/docs_site.md`. The "Not done" list below is history.
+
 Track owner session: `session_01F8AFjCQ5Q47gBZQNqYFtGQ` (docs/CLI agent). State when this was written: CLI work
 landed and tested; docs site and tutorials NOT started in code. Nothing below is claimed beyond what was run.
 

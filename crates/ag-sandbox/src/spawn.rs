@@ -97,7 +97,7 @@ impl CStrings {
 /// One classic-BPF instruction. Only Linux has seccomp; elsewhere the program is always empty.
 #[cfg(target_os = "linux")]
 pub(crate) type SockFilter = libc::sock_filter;
-/// Placeholder where there is no seccomp (never constructed).
+/// The element type of the seccomp program on platforms without seccomp, where that program is always empty.
 #[cfg(not(target_os = "linux"))]
 pub(crate) type SockFilter = u64;
 

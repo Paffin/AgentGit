@@ -1,0 +1,45 @@
+# Exceptions to scripts/check_no_stubs.py. One per line:   glob | rule | needle | reason
+#
+#   glob    a path pattern (fnmatch: `*` also crosses `/`), relative to the repository root
+#   rule    todo-macro | marker | for-now | not-implemented | placeholder | stub | test-double
+#   needle  text that must occur in the offending line, or `*` for every line of that rule in those files
+#   reason  mandatory: why this use is legitimate. If you cannot write one, finish the code instead.
+#
+# The list is for words that mean something else in context (an HTML input's placeholder, a SQL parameter
+# placeholder) and for code whose job is exactly what the word says and is honest about it. It is not a place to
+# park unfinished work. An entry that matches nothing is reported (python3 scripts/check_no_stubs.py --strict fails
+# on it), so delete entries together with the code they excuse.
+
+# -- "placeholder" that is a different thing --------------------------------------------------------------------
+apps/web/src/ui/DataTable.vue | placeholder | placeholder rows | skeleton rows drawn while a table loads (a loading state, not invented data)
+apps/web/src/**/*.vue | placeholder | * | the HTML `placeholder` attribute of an input (hint text shown in an empty field), or the CSS ::placeholder selector: user interface text, not an unfinished implementation
+crates/ag-server/src/routes.rs | placeholder | * | `{placeholders}` are the parameters in an HTTP route template such as /v1/repos/{owner}/{name}
+crates/ag-server/src/http.rs | placeholder | path placeholders | the same: route-template parameters
+crates/ag-storage/src/meta/db.rs | placeholder | * | SQL parameter placeholders (`?1` rewritten to `$1` for PostgreSQL)
+crates/ag-storage/src/meta/mod.rs | placeholder | placeholders | SQL parameter placeholders in the doc comment of a raw-SQL hook
+crates/ag-storage/src/meta/pg/mod.rs | placeholder | pg_placeholders | the function that rewrites SQL parameter placeholders for PostgreSQL
+crates/ag-storage/src/sqldb.rs | placeholder | placeholders | SQL parameter placeholders
+sdk/python/src/agentgit/_core.py | placeholder | path placeholders | route-template parameters, as in the server
+sdk/typescript/src/transport.ts | placeholder | path placeholders | route-template parameters, as in the server
+services/agent-orchestrator/internal/review/analyze.go | placeholder | * | the secret scanner deliberately ignores values that look like placeholders ("changeme", "your-key-here"): matching them is its job
+services/agent-orchestrator/internal/review/analyze.go | stub | placeholderRE | the same regular expression (the word list of values the secret scanner ignores)
+services/agent-orchestrator/internal/review/analyze.go | test-double | placeholderRE | the same regular expression
+crates/ag-integrate/src/workdir/mod.rs | placeholder | placeholder file a checkout wrote | portability, documented in docs/operations/windows.md: on file systems without symlinks a checkout writes a small file in place of the link and the scan recognises it
+
+# -- platform shims that refuse honestly ------------------------------------------------------------------------
+
+# -- generated code and protocol vocabulary ---------------------------------------------------------------------
+crates/ag-protocol/src/lib.rs | stub | client and server stubs | the gRPC client and server stubs that tonic generates from the .proto file: the standard name for generated glue, not a stub implementation
+
+# -- test hooks that must be reachable from other crates' tests (all #[doc(hidden)], none used by product code) ---
+crates/ag-integrate/src/failpoints.rs | test-double | simulate a crash | failure-injection points: the mechanism by which the fault-injection tests crash the protocol at an exact step. In production nothing is ever armed and a hit is one set lookup
+crates/ag-storage/src/meta/mod.rs | test-double | tests that simulate | #[doc(hidden)] raw-SQL hook that integration tests of other crates use to damage a database on purpose; the engine never calls it
+crates/ag-storage/src/s3/mod.rs | test-double | damage simulation | #[doc(hidden)] hook that the S3 integration tests use to corrupt a stored object on purpose; product code never calls it
+
+# -- documentation inside source that honestly describes how something is tested -------------------------------------
+crates/ag-sandbox/src/cgroup.rs | test-double | fake cgroup directory | module doc: the unit tests of the cgroup v2 file protocol run against a scratch directory laid out like cgroupfs; docs/architecture/sandbox.md says what is verified where
+crates/ag-sandbox/src/oci.rs | test-double | fake runtime | module doc: the OCI backend's argument construction is tested with a stand-in runtime and NOT against a real Docker or Podman; docs/architecture/sandbox.md says so (open audit item, dev/audit/CONFIRMED.md execution-plane)
+
+# -- other legitimate uses ---------------------------------------------------------------------------------------
+crates/ag-server/src/auth/mod.rs | test-double | Compare against a dummy | constant-time authentication: when the credential does not exist the code still compares against a dummy hash so that timing does not reveal which credentials exist
+services/agent-orchestrator/internal/clock/clock.go | test-double | * | a manually advanced Clock that the orchestrator's tests use (Go cannot share _test.go code across packages). Test support in a production package: to move under internal/testutil (tracked in dev/handoff/docs_site.md)

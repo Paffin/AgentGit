@@ -84,6 +84,16 @@ jobs:
         run: python3 scripts/gen_readme_assets.py --check
       - name: README demo still behaves as documented
         run: AG=$PWD/target/release/ag ./examples/quickstart.sh
+      # Links, test names, `ag` commands, environment variables and the refusal messages quoted in the docs are checked
+      # against the code. --require-ag: a missing binary fails the step instead of skipping the command check.
+      - name: Docs match the code
+        run: AG=$PWD/target/release/ag python3 scripts/check_docs.py --require-ag
+      # No todo!(), TODO/FIXME/XXX/HACK, "for now", placeholder, stub, mock/fake/dummy or simulation in product source
+      # (tests excluded); the exceptions, each with a reason, are in scripts/no_stubs_allowlist.txt.
+      - name: No stubs or simulated code in product source
+        run: |
+          python3 scripts/test_check_no_stubs.py
+          python3 scripts/check_no_stubs.py
 
   backends:
     name: PostgreSQL + S3 backends

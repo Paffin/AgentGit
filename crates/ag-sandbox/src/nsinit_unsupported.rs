@@ -1,5 +1,5 @@
-//! Placeholder for platforms without Linux namespaces: the namespace sandbox is unavailable there, so
-//! no plan ever carries a namespace part.
+//! The namespace sandbox's child-side setup on platforms without Linux namespaces. The sandbox is unavailable
+//! there (it reports itself `Unavailable`), so no plan ever carries a namespace part and none of this runs.
 
 use crate::spawn::{ChildFds, Plan};
 

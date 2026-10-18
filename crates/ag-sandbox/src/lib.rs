@@ -58,12 +58,12 @@ mod mem;
 #[cfg(target_os = "linux")]
 mod namespace;
 #[cfg(not(target_os = "linux"))]
-#[path = "namespace_stub.rs"]
+#[path = "namespace_unsupported.rs"]
 mod namespace;
 #[cfg(target_os = "linux")]
 mod nsinit;
 #[cfg(not(target_os = "linux"))]
-#[path = "nsinit_stub.rs"]
+#[path = "nsinit_unsupported.rs"]
 mod nsinit;
 mod oci;
 mod outcome;

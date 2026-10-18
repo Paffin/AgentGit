@@ -328,7 +328,7 @@ fn the_integrate_tool_exists_only_behind_its_flag_and_never_bypasses_policy() {
 
     // With the flag: loud at startup, and policy still decides.
     let mut m = Mcp::start(&w.srv, &w.agent, &["--repo", REPO, "--enable-integrate"]);
-    let err = m.stderr_text();
+    let err = m.stderr_with("THE INTEGRATE TOOL IS ENABLED");
     assert!(err.contains("THE INTEGRATE TOOL IS ENABLED"), "{err}");
     assert!(m.tool_names().contains(&"integrate".to_string()));
     let integrate_tool = m.tools().into_iter().find(|t| t["name"] == "integrate").unwrap();
@@ -357,7 +357,7 @@ fn the_integrate_tool_exists_only_behind_its_flag_and_never_bypasses_policy() {
     assert_eq!(out.structured["status"], "integrated", "{}\n{}", out.text, out.structured);
     assert!(out.text.starts_with("INTEGRATED"), "{}", out.text);
     assert_eq!(m.ok("log", json!({"limit": 1})).structured["changesets"][0]["message"], "in the envelope");
-    assert!(m.stderr_text().contains("integrate tool called"), "every use is logged");
+    assert!(m.stderr_with("integrate tool called").contains("integrate tool called"), "every use is logged");
 }
 
 #[test]

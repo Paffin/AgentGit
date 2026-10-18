@@ -290,6 +290,24 @@ impl Mcp {
         self.stderr.lock().unwrap().join("\n")
     }
 
+    /// The standard error once it contains `needle`, or as it is when five seconds have passed.
+    ///
+    /// A line the process wrote before it answered is already in the pipe when the answer arrives, but the
+    /// thread that drains standard error runs independently of the one that drains standard output, so
+    /// reading [`Mcp::stderr_text`] right after a response can miss it. Waiting for the line is the
+    /// deterministic way to assert that the process logged something; the bound only keeps a missing line from
+    /// hanging the suite.
+    pub fn stderr_with(&self, needle: &str) -> String {
+        let end = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let text = self.stderr_text();
+            if text.contains(needle) || std::time::Instant::now() >= end {
+                return text;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     pub fn write_raw(&mut self, line: &str) {
         let w = self.stdin.as_mut().expect("stdin open");
         w.write_all(line.as_bytes()).unwrap();

@@ -1,5 +1,6 @@
-# The build context is an allow-list: only what `cargo build` and the image's COPY lines need.
-# (Everything else — docs, the web UI, SDKs, examples, CI files — cannot change the image, so it must not
+# The build context is an allow-list: only what `cargo build`, the Web UI build (the `ui` stage of the Dockerfile:
+# the server embeds apps/web/dist) and the image's COPY lines need.
+# (Everything else — docs, the UI's tests, SDKs, examples, CI files — cannot change the image, so it must not
 # be able to invalidate a layer either.)
 *
 !Cargo.toml
@@ -10,9 +11,22 @@
 !proto
 !migrations
 !deploy/docker/ag-server.toml
+!scripts/build_ui.sh
+!apps/web/package.json
+!apps/web/package-lock.json
+!apps/web/index.html
+!apps/web/vite.config.ts
+!apps/web/tsconfig*.json
+!apps/web/public
+!apps/web/scripts
+!apps/web/src
 
 # ...minus build output, local state and tests that may sit inside the allowed directories.
 **/target
+apps/web/dist
+apps/web/src/**/*.spec.ts
+apps/web/scripts/check-api.mjs
+apps/web/scripts/summarize-failures.mjs
 **/.ag
 **/node_modules
 crates/*/tests

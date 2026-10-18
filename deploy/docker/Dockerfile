@@ -6,15 +6,22 @@
 #   docker build -f deploy/docker/Dockerfile --target cli -t agentgit-cli .       # the `ag` CLI
 #
 # Both are glibc binaries on a distroless base: no shell, no package manager, a non-root user
-# (uid 65532). `.dockerignore` keeps the build context to what cargo needs (Cargo.*, crates/, proto/,
-# migrations/), so editing docs, the web UI or the SDKs does not invalidate any layer.
+# (uid 65532). `.dockerignore` keeps the build context to what the build needs (Cargo.*, crates/, proto/,
+# migrations/, and the sources of the Web UI), so editing docs, the SDKs, the UI's tests or the CI files does not
+# invalidate any layer.
+#
+# `ag-server` serves the Web UI from inside its own binary (cargo feature `ui`, crate ag-ui-assets: it embeds
+# apps/web/dist at compile time). So the server image is built in this order, and `dist` must exist before the
+# final `cargo build`, or the binary compiles without a UI and serves a page that says how to build it.
 #
 # Layers, in the order they change (least often first), so that CI's buildx cache (type=gha) and a
 # developer's local cache both skip the expensive parts:
 #   chef      toolchain + cmake/clang + cargo-chef             (changes with RUST_VERSION)
 #   planner   recipe.json = the dependency graph of the workspace
+#   ui        1. `npm ci`:          the UI's dependencies      (changes with apps/web/package-lock.json)
+#             2. scripts/build_ui.sh: apps/web/dist            (changes with apps/web/src)
 #   build     1. `cargo chef cook`: compile every dependency   (changes with Cargo.lock / manifests)
-#             2. `cargo build`:      compile AgentGit itself   (changes with crates/)
+#             2. `cargo build`:      compile AgentGit itself   (changes with crates/ or the UI build)
 #
 # Release builds pass the commit and its date (there is no .git in the build context):
 #   docker build ... --build-arg AG_BUILD_COMMIT=$(git rev-parse HEAD) --build-arg AG_BUILD_DATE=$(git show -s --format=%cs HEAD)
@@ -22,6 +29,8 @@
 
 ARG RUST_VERSION=1.89
 ARG CARGO_CHEF_VERSION=0.1.78
+# apps/web/package.json asks for Node >= 22.18 (scripts/build_ui.sh checks it too).
+ARG NODE_VERSION=22.22
 
 # ---- toolchain ---------------------------------------------------------------------------------
 FROM rust:${RUST_VERSION}-bookworm AS chef
@@ -39,6 +48,21 @@ FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
+# ---- the Web UI ----------------------------------------------------------------------------------
+# Only the final `dist` leaves this stage; Node is not part of any image. The dependencies are installed before the
+# sources are copied, so editing a component does not reinstall node_modules. `.dockerignore` keeps the host's
+# node_modules out of the context, which is why the second COPY cannot overwrite the installed ones.
+FROM node:${NODE_VERSION}-bookworm-slim AS ui
+WORKDIR /src
+COPY apps/web/package.json apps/web/package-lock.json apps/web/
+RUN --mount=type=cache,target=/root/.npm \
+    cd apps/web && npm ci
+COPY apps/web apps/web
+COPY scripts/build_ui.sh scripts/build_ui.sh
+# AG_UI_SKIP_INSTALL: node_modules is already there. The script checks the Node version, type-checks, builds,
+# pre-compresses (.br/.gz next to every compressible file) and fails if dist/index.html is missing.
+RUN AG_UI_SKIP_INSTALL=1 bash scripts/build_ui.sh
+
 # ---- compile ---------------------------------------------------------------------------------------
 FROM chef AS build
 # --locked: the lockfile decides every version. Paths are remapped so the binary does not embed the
@@ -50,6 +74,8 @@ COPY --from=planner /src/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo chef cook --release --locked --recipe-path recipe.json -p ag-server -p ag-cli
 COPY . .
+# The UI the server embeds (crates/ag-ui-assets/build.rs looks for ../../apps/web/dist).
+COPY --from=ui /src/apps/web/dist apps/web/dist
 ARG AG_BUILD_COMMIT=""
 ARG AG_BUILD_DATE=""
 ENV AG_BUILD_COMMIT=${AG_BUILD_COMMIT} \

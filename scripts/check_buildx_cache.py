@@ -4,14 +4,15 @@
     scripts/check_buildx_cache.py build.log                       # the default steps below
     scripts/check_buildx_cache.py build.log 'cargo build' 'apt-get'
 
-Without arguments it requires every `RUN` step that installs cargo-chef, cooks the dependencies or compiles
-AgentGit (deploy/docker/Dockerfile) to be `CACHED`, and at least one such step to exist: a log that has none
-(a changed Dockerfile, a renamed step) must fail rather than pass vacuously.
+Without arguments it requires every `RUN` step that installs cargo-chef, cooks the dependencies, installs and
+builds the Web UI (`npm ci`, scripts/build_ui.sh) or compiles AgentGit (deploy/docker/Dockerfile) to be `CACHED`,
+and at least one such step per needle to exist: a log that has none (a changed Dockerfile, a renamed step) must
+fail rather than pass vacuously.
 """
 import re
 import sys
 
-DEFAULT = ["cargo install cargo-chef", "cargo chef cook", "cargo build --release"]
+DEFAULT = ["cargo install cargo-chef", "cargo chef cook", "cargo build --release", "npm ci", "scripts/build_ui.sh"]
 
 
 def main() -> int:

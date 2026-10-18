@@ -5,8 +5,8 @@
 --no-fail-fast` (100 test targets, including the ACL test and the Ctrl+C / Ctrl+Break console tests), and the README
 demo under PowerShell 7 and Windows PowerShell 5.1. It had been red since the web/CLI tracks merged: `ag doctor` did not
 compile on Windows (fixed in `a9b32a3`), then five tests assumed the host (`30da1b1`, `3d03bd9`; the list is in
-`docs/operations/windows.md`, "What the first runs found"). One green run is not "green repeatedly": keep watching it
-before making it a required check. Still unverified: whether a clean machine needs NASM, `-C target-feature=+crt-static`
+`docs/operations/windows.md`, "What the first runs found"). It was green again on the next push (`ad8f8cb`, run
+39094567535); two runs are not "green repeatedly": keep watching it before making it a required check. Still unverified: whether a clean machine needs NASM, `-C target-feature=+crt-static`
 (no VC++ redistributable), and anything that needs a server (PostgreSQL / S3 on Windows). A Windows *type-check* from
 Linux catches `cfg(windows)` compile errors in about a minute and was what made the last iterations cheap: see the last
 section; zero warnings is the bar (`cargo check --target x86_64-pc-windows-msvc --workspace --all-targets`).

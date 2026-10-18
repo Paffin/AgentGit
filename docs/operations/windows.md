@@ -8,8 +8,9 @@ what works, what is adapted, what is refused, and which tests prove each stateme
 > Status honesty: the Windows workflow was first green on `main` at `3d03bd9`
 > ([run 39093843818](https://github.com/Paffin/AgentGit/actions/runs/39093843818)): the whole workspace builds,
 > `cargo test --workspace --no-fail-fast` passes on `windows-latest` (100 test targets), and the README demo runs under
-> PowerShell 7 and Windows PowerShell 5.1. That is one green run after several red ones (see "What the first runs found"
-> below), not a track record. Statements marked **(unverified)** have not been observed on a Windows runner. The
+> PowerShell 7 and Windows PowerShell 5.1. The next push was green too
+> ([run 39094567535](https://github.com/Paffin/AgentGit/actions/runs/39094567535)); two runs after several red ones (see
+> "What the first runs found" below) are not a track record. Statements marked **(unverified)** have not been observed on a Windows runner. The
 > workflow is not yet a required check; it becomes one after it has been green repeatedly (see
 > [`dev/handoff/windows.md`](../../dev/handoff/windows.md)).
 

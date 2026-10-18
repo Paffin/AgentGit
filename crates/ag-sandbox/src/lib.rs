@@ -66,6 +66,7 @@ mod nsinit;
 #[path = "nsinit_unsupported.rs"]
 mod nsinit;
 mod oci;
+mod oci_record;
 mod outcome;
 mod planning;
 mod process;
@@ -80,7 +81,7 @@ pub use detect::{Availability, best_available, detect};
 pub use digest::environment_digest;
 pub use error::SandboxError;
 pub use namespace::NamespaceSandbox;
-pub use oci::{OciConfig, OciSandbox};
+pub use oci::{OciConfig, OciSandbox, RuntimeInfo, probe_runtime, reap_orphans};
 pub use outcome::{CgroupReport, Enforcement, ExitStatus, IsolationLevel, IsolationReport, Outcome};
 pub use process::ProcessSandbox;
 pub use spec::{Limits, Mount, Network, SandboxSpec, WORK_DIR, standard_system_mounts};
@@ -109,5 +110,19 @@ pub trait Sandbox: Send + Sync {
     fn isolation(&self) -> IsolationLevel;
 
     /// Run `spec` to completion. Validates the spec first ([`SandboxSpec::validate`]).
-    fn run(&self, spec: &SandboxSpec) -> Result<Outcome, SandboxError>;
+    fn run(&self, spec: &SandboxSpec) -> Result<Outcome, SandboxError> {
+        self.run_cancellable(spec, &|| false)
+    }
+
+    /// Like [`run`](Sandbox::run), but `cancel` is asked about every 100 ms while the command runs; once it
+    /// returns `true` everything of the command is killed (for a container: the container is killed and
+    /// removed through the runtime), the sandbox cleans up and the call returns
+    /// [`SandboxError::Cancelled`]. For a worker: the claim was lost, or the operator wants it to stop now.
+    fn run_cancellable(&self, spec: &SandboxSpec, cancel: &(dyn Fn() -> bool + Sync)) -> Result<Outcome, SandboxError>;
+
+    /// A cheap check, before any work is spent on a job, that a run can succeed at all: for the OCI sandbox that
+    /// the image is in the runtime's local store (the sandbox never pulls). The default checks nothing.
+    fn preflight(&self) -> Result<(), SandboxError> {
+        Ok(())
+    }
 }

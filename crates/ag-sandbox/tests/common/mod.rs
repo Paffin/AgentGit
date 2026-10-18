@@ -172,3 +172,15 @@ pub fn children_of_this_process() -> Vec<(u32, String)> {
 pub fn euid_egid() -> (u32, u32) {
     ag_sandbox::effective_ids()
 }
+
+/// The host name, as `hostname` prints it.
+pub fn host_name() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_default().trim().to_string()
+}
+
+/// The address this host would use to reach the internet (a route lookup; nothing is sent), if it has one.
+pub fn outbound_ip() -> Option<String> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("192.0.2.1:9").ok()?;
+    Some(socket.local_addr().ok()?.ip().to_string())
+}

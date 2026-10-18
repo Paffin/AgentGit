@@ -21,7 +21,7 @@ use crate::nsinit::{MountOp, NsPlan};
 use crate::outcome::{Enforcement, ExitStatus, IsolationLevel, IsolationReport, Outcome};
 use crate::planning::{exec_inputs, path_cstring};
 use crate::spawn::{self, Failure, INNER_ID, Plan, Res, stage};
-use crate::spec::{Network, SandboxSpec, WORK_DIR, normalize_sandbox_path};
+use crate::spec::{Limits, Network, SandboxSpec, WORK_DIR, normalize_sandbox_path};
 use crate::supervise::{Hooks, classify, supervise};
 use crate::sys;
 use crate::{Sandbox, seccomp};
@@ -70,16 +70,17 @@ fn existing(paths: &[&'static str]) -> Vec<(&'static str, bool)> {
 /// The command runs as user and group `1000` inside its user namespace, which the kernel maps to a single
 /// *host* id: by default the user running the sandbox (so files the command writes to `/work` belong to
 /// that user), or, when the host process is root, the ids given to [`with_host_ids`](Self::with_host_ids).
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct NamespaceSandbox {
     host_ids: Option<(u32, u32)>,
+    cgroup_base: Option<PathBuf>,
 }
 
 impl NamespaceSandbox {
     /// A namespace sandbox. Constructing one never fails; use [`availability`](Self::availability) (or
     /// [`crate::detect`]) to learn whether this host can run it.
     pub fn new() -> Self {
-        NamespaceSandbox { host_ids: None }
+        NamespaceSandbox { host_ids: None, cgroup_base: None }
     }
 
     /// Map the command's id to the unprivileged **host** user and group `uid`/`gid` instead of to the user
@@ -95,6 +96,28 @@ impl NamespaceSandbox {
     pub fn with_host_ids(mut self, uid: u32, gid: u32) -> Self {
         self.host_ids = Some((uid, gid));
         self
+    }
+
+    /// Create the per-run cgroups (kernel-exact `memory` and `pids` limits) under `base` instead of looking for
+    /// a place: a directory the sandbox's user may write to, with the memory and pids controllers enabled in
+    /// its `cgroup.subtree_control` and no processes of its own. Without this the environment variable
+    /// `AG_SANDBOX_CGROUP_BASE` is consulted, then the process's own cgroup and its parent. See
+    /// [`cgroup_availability`](Self::cgroup_availability) to find out whether it works, and
+    /// `docs/architecture/sandbox.md` for how to prepare one.
+    #[must_use]
+    pub fn with_cgroup_base(mut self, base: impl Into<PathBuf>) -> Self {
+        self.cgroup_base = Some(base.into());
+        self
+    }
+
+    /// What cgroup v2 limits a run would get: makes (and removes) a throw-away cgroup the way a run does and
+    /// reports which controllers the kernel accepted, or why there is no usable base. A run without cgroups is
+    /// not an error (the sampled and rlimit limits stay in force), but an operator who configured a base wants
+    /// to know at start-up that it does not work.
+    pub fn cgroup_availability(&self) -> Result<crate::CgroupReport, String> {
+        let base = cgroup::delegated_base(self.cgroup_base.as_deref())?;
+        let cg = Cgroup::create(&base, &Limits::default(), Limits::default().pids)?;
+        Ok(cg.report())
     }
 
     /// Whether unprivileged namespaces, `pivot_root`, a fresh `/proc` and the seccomp filter all work here.
@@ -116,7 +139,7 @@ impl Sandbox for NamespaceSandbox {
         IsolationLevel::Namespaces
     }
 
-    fn run(&self, spec: &SandboxSpec) -> Result<Outcome, SandboxError> {
+    fn run_cancellable(&self, spec: &SandboxSpec, cancel: &(dyn Fn() -> bool + Sync)) -> Result<Outcome, SandboxError> {
         spec.validate()?;
         if let Availability::Unavailable(reason) = self.availability() {
             return Err(SandboxError::Unavailable { sandbox: "namespace", reason });
@@ -129,7 +152,7 @@ impl Sandbox for NamespaceSandbox {
         }
         let ids = self.host_ids.unwrap_or((euid, egid));
         let plan = build_plan(spec, false, ids != (euid, egid))?;
-        run_plan(spec, plan, ids)
+        run_plan(spec, plan, ids, self.cgroup_base.as_deref(), cancel)
     }
 }
 
@@ -146,7 +169,7 @@ fn probe() -> Availability {
     let mut spec = SandboxSpec::new(["true"], std::env::temp_dir());
     spec.limits.wall_ms = 10_000;
     let ids = sys::euid_egid();
-    let result = build_plan(&spec, true, false).and_then(|plan| run_plan(&spec, plan, ids));
+    let result = build_plan(&spec, true, false).and_then(|plan| run_plan(&spec, plan, ids, None, &|| false));
     match result {
         Ok(_) => Availability::Available,
         Err(e) => Availability::Unavailable(format!("{e}{}", hint())),
@@ -418,20 +441,35 @@ fn failure_error(f: Failure, plan: &Plan, spec: &SandboxSpec) -> SandboxError {
     }
 }
 
-fn run_plan(spec: &SandboxSpec, plan: Plan, host_ids: (u32, u32)) -> Result<Outcome, SandboxError> {
+fn run_plan(
+    spec: &SandboxSpec,
+    plan: Plan,
+    host_ids: (u32, u32),
+    cgroup_base: Option<&Path>,
+    cancel: &(dyn Fn() -> bool + Sync),
+) -> Result<Outcome, SandboxError> {
     let started = Instant::now();
     let probe = plan.probe_only;
 
-    // Optional cgroup v2 limits. Never for the availability probe.
+    // Optional cgroup v2 limits. Never for the availability probe. Why there are none goes into the notes.
+    let mut cgroup_note = None;
     let mut cg = if probe {
         None
     } else {
-        cgroup::delegated_base().and_then(|base| Cgroup::create(&base, &spec.limits, spec.limits.pids))
+        match cgroup::delegated_base(cgroup_base).and_then(|base| Cgroup::create(&base, &spec.limits, spec.limits.pids))
+        {
+            Ok(cg) => Some(cg),
+            Err(why) => {
+                cgroup_note = Some(why);
+                None
+            }
+        }
     };
 
     let mut child = spawn::spawn(&plan).map_err(spawn_error)?;
     write_id_maps(child.pid, host_ids)?;
-    if cg.as_ref().is_some_and(|c| c.add(child.pid).is_err()) {
+    if let Some(Err(e)) = cg.as_ref().map(|c| c.add(child.pid)) {
+        cgroup_note = Some(format!("moving the sandbox into its cgroup failed: {e}"));
         cg = None;
     }
     let cgroup_report = cg.as_ref().map(Cgroup::report);
@@ -455,6 +493,7 @@ fn run_plan(spec: &SandboxSpec, plan: Plan, host_ids: (u32, u32)) -> Result<Outc
         on_kill: None,
         sampler: if (sample_memory || (sample_tasks && readable)) && !probe { Some(&mut sample) } else { None },
         task_limit: if sample_tasks && readable { Some(spec.limits.pids) } else { None },
+        cancel: Some(cancel),
     };
     let finished = supervise(child.pid, child.pidfd.as_ref(), io, &spec.stdin, &spec.limits, started, hooks)?;
     child.mark_reaped();
@@ -528,7 +567,10 @@ fn run_plan(spec: &SandboxSpec, plan: Plan, host_ids: (u32, u32)) -> Result<Outc
         );
     }
     if cgroup_report.is_none() {
-        notes.push("no writable cgroup v2 subtree with the memory/pids controllers".into());
+        notes.push(format!(
+            "no cgroup v2 limits: {}",
+            cgroup_note.as_deref().unwrap_or("no writable cgroup v2 subtree with the memory/pids controllers")
+        ));
     }
     if sys::euid_egid().0 != 0 {
         notes.push(

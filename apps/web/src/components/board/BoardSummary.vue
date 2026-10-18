@@ -74,7 +74,7 @@ const stream = computed({
     <div class="tile">
       <p class="k">Open proposals</p>
       <p class="v">{{ board.cards.length }}{{ board.proposalsTruncated ? '+' : '' }}</p>
-      <p class="s">
+      <p class="s" :class="{ 'one-line': !board.proposalsTruncated }">
         {{ ready }} ready · {{ held }} held back<template v-if="checking">
           · {{ checking }} checking</template
         >
@@ -161,6 +161,11 @@ const stream = computed({
 .s {
   font-size: var(--fs-sm);
   color: var(--text-2);
+}
+.s.one-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .s.warn {
   color: var(--warn);

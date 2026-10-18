@@ -63,12 +63,26 @@ def optional_ref(prop: dict[str, Any]) -> str | None:
     return None
 
 
+def scalar_type(prop: dict[str, Any]) -> str | None:
+    """The JSON type of a property; `["string", "null"]` (a nullable scalar) is `"string"`."""
+    t = prop.get("type")
+    if isinstance(t, list):
+        present = [x for x in t if x != "null"]
+        return str(present[0]) if len(present) == 1 else None
+    return str(t) if t is not None else None
+
+
+def is_string_enum(schema: dict[str, Any]) -> bool:
+    """A schema that is a closed set of strings (`LoginToken`), not a message."""
+    return schema.get("type") == "string" and isinstance(schema.get("enum"), list)
+
+
 def model_type(prop: dict[str, Any]) -> str:
     """The Python type of a response/message field."""
     name = ref_name(prop) or optional_ref(prop)
     if name:
         return name
-    t = prop.get("type")
+    t = scalar_type(prop)
     if t == "string":
         return "str"
     if t == "integer":
@@ -90,6 +104,8 @@ def model_type(prop: dict[str, Any]) -> str:
 def input_type(prop: dict[str, Any]) -> str:
     """The type accepted for a request parameter (dataclass instances or plain mappings)."""
     name = ref_name(prop) or optional_ref(prop)
+    if name and is_string_enum(SCHEMAS[name]):
+        return name
     if name:
         return f"{name} | Mapping[str, Any]"
     t = prop.get("type")
@@ -130,11 +146,16 @@ def model_field(schema_name: str, wire: str, prop: dict[str, Any]) -> str:
 
 def models_py() -> str:
     out = [BANNER, "from __future__ import annotations\n\n", "from dataclasses import dataclass, field\n"]
-    out.append("from typing import Any\n\n")
+    out.append("from typing import Any, Literal\n\n")
     names = sorted(SCHEMAS)
     out.append(f"__all__ = {json.dumps(names + ['PutObjectResult'], indent=4)}\n\n\n")
     for name in names:
         schema = SCHEMAS[name]
+        if is_string_enum(schema):
+            # on the wire it is one of these strings: a type alias, not a class
+            out.append(f"# {' '.join(str(schema.get('description', name)).split())}\n")
+            out.append(f"{name} = Literal[{', '.join(json.dumps(v) for v in schema['enum'])}]\n\n\n")
+            continue
         out.append("@dataclass(kw_only=True)\n")
         out.append(f"class {name}:\n")
         out.append(doc(schema.get("description", f"The `{name}` message."), "    "))

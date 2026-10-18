@@ -14,6 +14,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 const failures = [];
+// one entry per operation of the OpenAPI document (the number grows with the API; it is not written down here)
+const spec = JSON.parse(readFileSync(path.join(root, '../../docs/protocol/openapi.json'), 'utf8'));
+const operationCount = Object.values(spec.paths).flatMap((item) => Object.values(item)).length;
 const check = (ok, what) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`);
   if (!ok) failures.push(what);
@@ -37,7 +40,7 @@ for (const [name, m] of [
     m.verifyProvenance(record, m.signProvenance(record, key.privateKey), key.publicKey),
     `${name}: provenance signatures verify`,
   );
-  check(Object.keys(m.OPERATIONS).length === 91, `${name}: 91 operations`);
+  check(Object.keys(m.OPERATIONS).length === operationCount, `${name}: ${operationCount} operations`);
   check(
     new m.AgentGitClient({ baseUrl: 'http://127.0.0.1:1' }).proposals.create instanceof Function,
     `${name}: namespaced methods exist`,

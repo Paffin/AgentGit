@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 __all__ = [
     "AcquireLeaseRequest",
@@ -14,6 +14,9 @@ __all__ = [
     "AncestorsResponse",
     "Attestation",
     "AuditEntry",
+    "AuthConfig",
+    "AuthConfigRequest",
+    "AuthProvider",
     "BlameLine",
     "BlameRequest",
     "BlameResponse",
@@ -112,6 +115,7 @@ __all__ = [
     "ListWorkspacesResponse",
     "LogRequest",
     "LogResponse",
+    "LoginToken",
     "MergeBaseRequest",
     "MergeBaseResponse",
     "MintCredentialRequest",
@@ -272,6 +276,32 @@ class AuditEntry:
 
 
 @dataclass(kw_only=True)
+class AuthConfig:
+    """How a browser can sign in to this server. Public: it needs no credentials."""
+    mode: str = field(default="")
+    providers: list[AuthProvider] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class AuthConfigRequest:
+    """Request of `GET /v1/auth/config` (it takes no parameters)."""
+    pass
+
+
+@dataclass(kw_only=True)
+class AuthProvider:
+    """One identity provider for redirect sign-in (OpenID Connect authorization code with PKCE)."""
+    authorization_endpoint: str | None = field(default=None)
+    client_id: str = field(default="")
+    end_session_endpoint: str | None = field(default=None)
+    issuer: str = field(default="")
+    name: str = field(default="")
+    scopes: list[str] = field(default_factory=list)
+    token: LoginToken | None = field(default=None)
+    token_endpoint: str | None = field(default=None)
+
+
+@dataclass(kw_only=True)
 class BlameLine:
     """The `BlameLine` message."""
     author: str = field(default="")
@@ -389,7 +419,7 @@ class CompleteRunRequest:
 @dataclass(kw_only=True)
 class ConfigureRepoRequest:
     """The `ConfigureRepoRequest` message."""
-    description: Any | None = field(default=None)
+    description: str | None = field(default=None)
     idempotency_key: str = field(default="")
     quota: Quota | None = field(default=None)
     repo: str = field(default="")
@@ -1103,6 +1133,10 @@ class LogResponse:
     """The `LogResponse` message."""
     changesets: list[Changeset] = field(default_factory=list)
     next_page_token: str = field(default="")
+
+
+# Which token of the authorization-code response is the bearer credential.
+LoginToken = Literal["id_token", "access_token"]
 
 
 @dataclass(kw_only=True)

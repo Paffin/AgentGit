@@ -1,6 +1,6 @@
 // A tour of EVERY operation of the HTTP API through the SDK, against a real server. A recording
-// fetch maps each request back to its OpenAPI operation id; the final test fails if any of the 91
-// operations was not reached (or if the server answered "no such route" / 405 for one).
+// fetch maps each request back to its OpenAPI operation id; the final test fails if any
+// operation of the OpenAPI document was not reached (or if the server answered "no such route" / 405 for one).
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -89,6 +89,8 @@ describe('the tour', () => {
 
   it('session, repositories, roles and credentials', async () => {
     await admin.session.negotiate();
+    // public, like negotiate: a server without identity providers offers the pasted credential only
+    expect(await admin.session.authConfig()).toEqual({ mode: 'token' });
     expect((await admin.session.whoami()).identity).toBe('user:bootstrap-admin');
     expect((await admin.repos.describe({ repo })).name).toBe(repo);
     expect((await admin.repos.list({ prefix: 'tour/' })).repos).toHaveLength(1);

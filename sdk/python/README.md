@@ -5,7 +5,7 @@ repositories, virtual workspaces, proposals, integration, agents with runs, leas
 execution plane, and the event feed. Import name: `agentgit`.
 
 * **Sync and async with one surface.** `AgentGitClient` (on `httpx.Client`) and `AsyncAgentGitClient` (on
-  `httpx.AsyncClient`) expose the same 91 operations of
+  `httpx.AsyncClient`) expose every operation of
   [`docs/protocol/openapi.json`](../../docs/protocol/openapi.json), grouped into namespaces named after the operation
   ids (`proposal.create` is `client.proposals.create(...)`, `history.merge_base` is `client.history.merge_base(...)`).
 * **Typed.** Every message is a dataclass in `agentgit.models`, generated from that document; every method takes
@@ -98,7 +98,7 @@ print(status)  # integrated
 
 | Namespace | Methods |
 |---|---|
-| `session` | `negotiate`, `whoami` (and `client.negotiate()`, which also checks the protocol version) |
+| `session` | `negotiate`, `auth_config`, `whoami` (and `client.negotiate()`, which also checks the protocol version) |
 | `repos` | `create`, `describe`, `list`, `configure` |
 | `workspaces` | `create`, `get`, `list`, `modify`, `sync`, `delete` |
 | `proposals` | `create`, `get`, `list`, `update`, `review`, `close` |

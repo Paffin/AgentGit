@@ -105,6 +105,7 @@ export const NAMESPACE_METHODS = {
     revoke: 'admin.roles.revoke',
   },
   session: {
+    authConfig: 'session.auth_config',
     negotiate: 'session.negotiate',
     whoami: 'session.whoami',
   },
@@ -308,6 +309,8 @@ export interface Api {
     revoke(request: Req<'admin.roles.revoke'>, options?: CallOptions): Promise<Res<'admin.roles.revoke'>>;
   };
   readonly session: {
+    /** How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed) (`GET /v1/auth/config`, operation `session.auth_config`) */
+    authConfig(request?: Req<'session.auth_config'>, options?: CallOptions): Promise<Res<'session.auth_config'>>;
     /** Protocol version, features, limits and accepted authentication methods (no credentials needed) (`GET /v1/capabilities`, operation `session.negotiate`) */
     negotiate(request?: Req<'session.negotiate'>, options?: CallOptions): Promise<Res<'session.negotiate'>>;
     /** The authenticated identity, its roles and credential scope (`GET /v1/whoami`, operation `session.whoami`) */

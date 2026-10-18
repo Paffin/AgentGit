@@ -4,7 +4,7 @@ TypeScript client for [AgentGit](https://github.com/Paffin/AgentGit)'s wire prot
 repositories, virtual workspaces, proposals, integration, agents with runs, leases and **signed provenance**, the
 execution plane, and the event feed.
 
-- **One method per operation.** All 91 operations of
+- **One method per operation.** Every operation of
   [`docs/protocol/openapi.json`](../../docs/protocol/openapi.json), grouped into namespaces named after the operation
   ids (`proposal.create` is `client.proposals.create`). Their request and response types are **generated** from that
   document.
@@ -66,7 +66,7 @@ body, as the protocol prescribes.
 
 | Namespace              | Methods                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| `session`              | `negotiate`, `whoami` (and `client.negotiate()`, which also checks the protocol version)                |
+| `session`              | `negotiate`, `authConfig`, `whoami` (and `client.negotiate()`, which also checks the protocol version)  |
 | `repos`                | `create`, `describe`, `list`, `configure`                                                               |
 | `workspaces`           | `create`, `get`, `list`, `modify`, `sync`, `delete`                                                     |
 | `proposals`            | `create`, `get`, `list`, `update`, `review`, `close`                                                    |

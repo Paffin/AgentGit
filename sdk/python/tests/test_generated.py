@@ -32,16 +32,46 @@ def test_regenerating_produces_no_diff() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def is_string_enum(schema: dict[str, Any]) -> bool:
+    return schema.get("type") == "string" and "enum" in schema
+
+
 def test_every_schema_of_the_openapi_document_has_a_dataclass() -> None:
-    for name in SPEC["components"]["schemas"]:
-        cls = getattr(models, name, None)
-        assert cls is not None, f"no model for schema {name}"
-        assert dataclasses.is_dataclass(cls)
+    for name, schema in SPEC["components"]["schemas"].items():
+        model = getattr(models, name, None)
+        assert model is not None, f"no model for schema {name}"
+        if not is_string_enum(schema):
+            assert dataclasses.is_dataclass(model)
     assert "PutObjectResult" in models.__all__
+
+
+def test_a_closed_set_of_strings_is_a_literal_type_not_a_class() -> None:
+    enums = {n: s for n, s in SPEC["components"]["schemas"].items() if is_string_enum(s)}
+    assert "LoginToken" in enums  # the one the sign-in configuration uses
+    for name, schema in enums.items():
+        alias = getattr(models, name)
+        assert typing.get_origin(alias) is typing.Literal, name
+        assert list(typing.get_args(alias)) == schema["enum"], name
+    # the message that carries it declares the field with the alias, and decodes the plain string
+    hints = typing.get_type_hints(models.AuthProvider)
+    assert models.LoginToken in typing.get_args(hints["token"])
+    provider = decode_as(models.AuthProvider, {"name": "idp", "issuer": "https://idp", "token": "id_token"})
+    assert provider.token == "id_token"
+    assert provider.authorization_endpoint is None
+
+
+def test_nullable_strings_are_typed_as_strings() -> None:
+    hints = typing.get_type_hints(models.ConfigureRepoRequest)
+    assert set(typing.get_args(hints["description"])) == {str, type(None)}
+    hints = typing.get_type_hints(models.AuthProvider)
+    for field in ("authorization_endpoint", "token_endpoint", "end_session_endpoint"):
+        assert set(typing.get_args(hints[field])) == {str, type(None)}, field
 
 
 def test_model_fields_are_the_wire_fields() -> None:
     for name, schema in SPEC["components"]["schemas"].items():
+        if is_string_enum(schema):
+            continue
         cls = getattr(models, name)
         wire = {str(f.metadata.get("wire", f.name)) for f in dataclasses.fields(cls)}
         assert wire == set(schema.get("properties", {})), name

@@ -1,6 +1,6 @@
 """A tour of EVERY operation of the HTTP API through the SDK, against a real server. A recording
-transport maps each request back to its OpenAPI operation id; the final test fails if any of the 91
-operations was not reached (or if the server answered "no such route" / 405 for one).
+transport maps each request back to its OpenAPI operation id; the final test fails if any
+operation of the OpenAPI document was not reached (or if the server answered "no such route" / 405 for one).
 """
 
 from __future__ import annotations
@@ -109,6 +109,9 @@ class Seed:
 def test_session_repositories_roles_and_credentials(tour: dict[str, AgentGitClient]) -> None:
     admin = tour["admin"]
     admin.session.negotiate()
+    # public, like negotiate: a server without identity providers offers the pasted credential only
+    auth = admin.session.auth_config()
+    assert (auth.mode, auth.providers) == ("token", [])
     assert admin.session.whoami().identity == "user:bootstrap-admin"
     assert admin.repos.describe(repo=REPO).name == REPO
     assert len(admin.repos.list(prefix="tour/").repos) == 1

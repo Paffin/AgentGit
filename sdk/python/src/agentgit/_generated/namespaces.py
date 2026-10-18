@@ -14,6 +14,9 @@ from agentgit._generated.models import (
     AncestorsResponse,
     Attestation,
     AuditEntry,
+    AuthConfig,
+    AuthConfigRequest,
+    AuthProvider,
     BlameLine,
     BlameRequest,
     BlameResponse,
@@ -112,6 +115,7 @@ from agentgit._generated.models import (
     ListWorkspacesResponse,
     LogRequest,
     LogResponse,
+    LoginToken,
     MergeBaseRequest,
     MergeBaseResponse,
     MintCredentialRequest,
@@ -1034,7 +1038,7 @@ class ReposApi:
         self,
         *,
         repo: str,
-        description: Any | None = None,
+        description: str | None = None,
         idempotency_key: str | None = None,
         quota: Quota | Mapping[str, Any] | None = None,
         options: CallOptions | None = None,
@@ -1125,6 +1129,14 @@ class SessionApi:
 
     def __init__(self, caller: SyncCaller) -> None:
         self._c = caller
+
+    def auth_config(
+        self,
+        *,
+        options: CallOptions | None = None,
+    ) -> AuthConfig:
+        """How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed) (`GET /v1/auth/config`, operation `session.auth_config`)."""
+        return self._c._call("session.auth_config", {}, options, AuthConfig)
 
     def negotiate(
         self,
@@ -2276,7 +2288,7 @@ class AsyncReposApi:
         self,
         *,
         repo: str,
-        description: Any | None = None,
+        description: str | None = None,
         idempotency_key: str | None = None,
         quota: Quota | Mapping[str, Any] | None = None,
         options: CallOptions | None = None,
@@ -2367,6 +2379,14 @@ class AsyncSessionApi:
 
     def __init__(self, caller: AsyncCaller) -> None:
         self._c = caller
+
+    async def auth_config(
+        self,
+        *,
+        options: CallOptions | None = None,
+    ) -> AuthConfig:
+        """How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed) (`GET /v1/auth/config`, operation `session.auth_config`)."""
+        return await self._c._call("session.auth_config", {}, options, AuthConfig)
 
     async def negotiate(
         self,

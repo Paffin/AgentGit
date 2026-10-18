@@ -2,7 +2,7 @@
 
 AgentGit has two client SDKs for the [AGWP v1](../protocol/agwp-v1.md) HTTP/JSON API, in
 [`sdk/typescript`](../../sdk/typescript/README.md) (`@agentgit/client`) and
-[`sdk/python`](../../sdk/python/README.md) (`agentgit-client`, imported as `agentgit`). They cover **all 91 operations**
+[`sdk/python`](../../sdk/python/README.md) (`agentgit-client`, imported as `agentgit`). They cover **every operation**
 of [`openapi.json`](../protocol/openapi.json), with the same names and the same rules, and add what a protocol
 description cannot: retries that cannot apply a request twice, deadlines, pagination, an event feed that resumes, and the
 helpers for content ids and signatures.

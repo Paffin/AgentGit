@@ -110,7 +110,17 @@ fn main() {
             println!("{}", String::from_utf8_lossy(&buf).trim_end_matches('\0'));
         }
         "env" => {
-            let mut v: Vec<String> = std::env::vars().map(|(k, v)| format!("{k}={v}")).collect();
+            // The environment the kernel handed to this process at `execve`, i.e. exactly what the sandbox passed.
+            // `std::env::vars()` would also show what this process added to its own environment afterwards: an
+            // instrumented build (cargo llvm-cov) has the profiling runtime set `__LLVM_PROFILE_RT_INIT_ONCE` at start-up.
+            let mut v: Vec<String> = match std::fs::read("/proc/self/environ") {
+                Ok(raw) => raw
+                    .split(|b| *b == 0)
+                    .filter(|e| !e.is_empty())
+                    .map(|e| String::from_utf8_lossy(e).into_owned())
+                    .collect(),
+                Err(_) => std::env::vars().map(|(k, v)| format!("{k}={v}")).collect(),
+            };
             v.sort();
             for l in v {
                 println!("{l}");

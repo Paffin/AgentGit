@@ -1,5 +1,5 @@
 # Alerting rules for AgentGit. Every metric used here is exported by ag-server;
-# scripts/check_deploy.py verifies that against a running server.
+# scripts/check_deploy.py verifies the metric names against crates/ag-server/src/metrics.rs (label values are not checked).
 groups:
   - name: agentgit
     rules:
@@ -24,12 +24,12 @@ groups:
       - alert: AgentGitSlowRequests
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(agwp_request_duration_seconds_bucket[5m]))) > 5
+            sum by (le) (rate(agwp_request_duration_seconds_bucket{operation!~"jobs.claim|stream.head|events.subscribe"}[5m]))) > 5
         for: 10m
         labels: {severity: warning}
         annotations:
           summary: p99 request latency above 5 seconds
-          description: Check storage latency (PostgreSQL, object store) and agwp_inflight_requests.
+          description: Long-poll operations (jobs.claim, stream.head, events.subscribe) are excluded. Check the handler, storage latency (PostgreSQL, object store) and agwp_inflight_requests.
 
       - alert: AgentGitShedding
         expr: increase(agwp_shed_total[5m]) > 0

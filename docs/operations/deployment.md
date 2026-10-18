@@ -10,7 +10,7 @@ Three ready-made ways to run it, all under [`deploy/`](../../deploy):
 
 | | For | Files |
 |---|---|---|
-| **Binary** | trying it, small teams, systemd | `ag-server serve --config ag-server.toml` |
+| **Binary** | trying it, small teams | `ag-server serve --config ag-server.toml` (the release archives contain it; there is no ready-made systemd unit — write one around that command) |
 | **Docker Compose** | one host with PostgreSQL and SeaweedFS (S3) | [`deploy/compose/`](../../deploy/compose) |
 | **Kubernetes** | a cluster | [`deploy/kubernetes/`](../../deploy/kubernetes) (kustomize) |
 
@@ -24,7 +24,7 @@ Be clear about what "ready-made" means here.
 | `kustomize build` of every kustomization (base, `ci`, `prometheus-operator`, `ha`); `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |
 | `promtool check rules` / `check config` | Behaviour under load; upgrades and failover of the *cluster*. The server's multi-replica behaviour (kill -9, rolling restart, no lost update) is proved by process tests ([High availability](high-availability.md)); the `ha` overlay has not been applied to a cluster |
 | `docker compose config` with and without secrets (it refuses to start without them) | A cluster other than kind: ingress, TLS termination, a real storage class, a CNI that enforces the NetworkPolicy |
-| Every shipped `ag-server.toml` loads and validates with this server | Published images: nothing has been pushed to GHCR, so the default `ghcr.io/paffin/agentgit-server:latest` does not resolve; build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind) |
+| Every shipped `ag-server.toml` loads and validates with this server | Published images: nothing has been pushed to GHCR yet, so the default `ghcr.io/paffin/agentgit-server:0.1.0` resolves only after the first release tag; until then build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind). The default tag is the workspace version, which is what `release.yml` pushes; `check_deploy.py` keeps the three defaults equal to it |
 | Every metric used by alerts and the dashboard is one the server exports | The release workflow has only been rehearsed without publishing; the first tag is its first real publish ([releasing.md](releasing.md#what-is-not-proven)) |
 | `ag-server healthcheck`, bearer-protected `/metrics` and trace export are covered by integration tests | |
 
@@ -84,6 +84,8 @@ docker compose exec ag-server /usr/local/bin/ag-server admin --data-dir /data mi
 
 (`admin` works on the data directory directly, also while the server is stopped.)
 
+The image and tag are `AG_IMAGE` / `AG_VERSION` in `.env` (default `ghcr.io/paffin/agentgit-server` / the workspace version). The container health check calls `ag-server healthcheck`, whose URL is `AG_HEALTHCHECK_URL` (default `http://127.0.0.1:8080`): set it in the container environment when `server.listen` or TLS differ.
+
 Add dashboards and tracing with `docker compose --profile observability up -d` after writing the metrics
 token to `secrets/metrics_token` — see [observability.md](observability.md).
 
@@ -98,10 +100,15 @@ kubectl apply -k deploy/kubernetes/base           # or overlays/prometheus-opera
 kubectl -n agentgit rollout status deploy/ag-server
 ```
 
-Pin the image (`images:` in `base/kustomization.yaml`) to a released version, and expose the Service through
+The image defaults to the workspace version (`0.1.0`, the `X.Y.Z` tag `release.yml` pushes; `:latest` exists only for a stable release and moves). Override it with `images:` in your own kustomization (`newName`/`newTag`, for a private registry or another release), and expose the Service through
 your ingress/gateway with TLS. The pod runs as uid 65532 with a read-only root filesystem, no capabilities,
 the `RuntimeDefault` seccomp profile and no service-account token, under the `restricted` Pod Security
 level.
+
+The `prometheus-operator` overlay also adds an ingress rule to the NetworkPolicy for the namespace `monitoring`
+(a patch in its `kustomization.yaml`): change the namespace there to where your Prometheus runs, and add a rule for
+your ingress controller (the base file shows an example). Its ServiceMonitor sets `jobLabel`, so the series carry
+`job="agentgit"`, which is what `alerts.yml` selects; `check_deploy.py` verifies that.
 
 ### Scaling
 

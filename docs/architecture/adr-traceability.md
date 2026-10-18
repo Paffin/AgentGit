@@ -32,7 +32,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | 5 | Every merge is reproducible | ✅ versioned algorithm, deterministic, tested |
 | 6 | The agent is not a trusted party | ✅ policy, leases, signed provenance; 🟡 sandboxed checks share the host kernel ([details](sandbox.md)) |
 | 7 | Git is an external adapter | ✅ `ag-git` |
-| 8 | Every step is observable | ✅ reflog, audit chain, outbox, `ag trace`; 🔜 OpenTelemetry/Prometheus |
+| 8 | Every step is observable | ✅ reflog, audit chain, outbox, `ag trace`, OpenTelemetry traces and Prometheus metrics ([observability](../operations/observability.md)) |
 
 ## §3–§5 — system, model, publication
 
@@ -67,14 +67,14 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 |---|---|---|
 | Agent identity (per agent and per run) | ✅ | `ag agent register/start` |
 | Task ownership | ✅ | `ag task`, runs claim tasks |
-| Virtual workspace (isolated, no full checkout required) | 🟡 | workspaces are directory-backed; API-only virtual workspaces 🔜 |
+| Virtual workspace (isolated, no full checkout required) | ✅ | `ag` workspaces are directory-backed; over the server, virtual workspaces need no checkout (`POST …/workspaces`, `agents_flow` and `history_api` tests) |
 | Dependency awareness | ✅ | task dependencies, cycle-free, enforced at run start |
 | Conflict prediction | ✅ | `ag predict` (path level) |
 | Integration queue | ✅ | `ag queue` |
 | Provenance | ✅ | signed, separate from changesets |
 | Autonomous review | 🔜 | reviews by agents are possible; policy decides whether they count |
 | Policy-bound autonomy | ✅ | `agent_autonomy` |
-| Replay & trace | 🟡 | `ag trace`, audit chain; event replay API 🔜 |
+| Replay & trace | 🟡 | `ag trace`, audit chain, `events.replay` and the SSE subscription (`api_contract` tests) |
 | Soft leases; fencing tokens for exclusivity | ✅ | |
 
 ## §8 — security
@@ -99,4 +99,4 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 ## §10–§11 — stack and UI
 
 Rust core ✅ · CLI (clap) ✅ · Vue Web UI ✅ ([guide](../guides/web-ui.md)) · Go orchestrator ✅ · SDKs ✅ (TypeScript, Python; unpublished) · OpenTelemetry (traces) / Prometheus ✅ ·
-NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (files validated in CI; not run end to end — [deployment](../operations/deployment.md)). The ADR's text is cut off at §11 (Web UI); the rest was never received.
+NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (the image, the Compose stack and a kind deployment run end to end in the `Containers` workflow; no real cluster, ingress or storage class, the HA overlay and the Prometheus Operator overlay are not applied to one — [deployment](../operations/deployment.md)). The ADR's text is cut off at §11 (Web UI); the rest was never received.

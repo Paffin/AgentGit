@@ -113,6 +113,6 @@ USER 65532:65532
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/usr/local/bin/ag-server", "healthcheck", "--url", "http://127.0.0.1:8080"]
+    CMD ["/usr/local/bin/ag-server", "healthcheck"]
 ENTRYPOINT ["/usr/local/bin/ag-server"]
 CMD ["serve"]

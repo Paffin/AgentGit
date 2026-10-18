@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ag-server
-          image: ghcr.io/paffin/agentgit-server:latest
+          image: ghcr.io/paffin/agentgit-server:0.1.0
           args: ["serve"]
           ports:
             - name: http

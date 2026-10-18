@@ -110,6 +110,43 @@ elif compose_versions != {m.group(1)}:
 else:
     ok(f"the S3 suites run against the SeaweedFS release the Compose stack uses ({m.group(1)})")
 
+# ---- image tags ------------------------------------------------------------------------------------
+# release.yml pushes `ghcr.io/paffin/agentgit-server:X.Y.Z` (and `:latest` only for a stable release); a default of
+# `latest` would silently move under an operator. Every default names the workspace version, which is what the
+# release workflow's check_release.py demands the tag to equal.
+cargo_version = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M).group(1)
+tag_sources = {
+    "deploy/kubernetes/base/kustomization.yaml": r"newTag:\s*([\w.-]+)",
+    "deploy/kubernetes/base/deployment.yaml": r"agentgit-server:([\w.-]+)",
+    "deploy/compose/compose.yaml": r"AG_VERSION:-([\w.-]+)\}",
+}
+for rel, pat in tag_sources.items():
+    m = re.search(pat, (ROOT / rel).read_text())
+    if not m:
+        fail(f"{rel}: no default image tag found")
+    elif m.group(1) != cargo_version:
+        fail(f"{rel}: default image tag is {m.group(1)!r}, the workspace version (what release.yml publishes) is {cargo_version!r}")
+    else:
+        ok(f"{rel}: default image tag is the workspace version {cargo_version}")
+
+# ---- the job label alerts select on is the one the deployments produce ------------------------------
+alert_jobs = {j for _, e in exprs for j in re.findall(r'job="([^"]+)"', e)}
+prom_jobs = {
+    j.strip("\"'")
+    for f in (DEPLOY / "observability").glob("prometheus*.yml")
+    for j in re.findall(r"job_name:\s*(\S+)", f.read_text())
+}
+sm = yaml.safe_load((DEPLOY / "kubernetes/overlays/prometheus-operator/servicemonitor.yaml").read_text())
+job_label = sm["spec"].get("jobLabel")
+svc = yaml.safe_load((DEPLOY / "kubernetes/base/service.yaml").read_text())
+sm_job = svc["metadata"].get("labels", {}).get(job_label) if job_label else svc["metadata"]["name"]
+if alert_jobs != prom_jobs:
+    fail(f"alerts select job {sorted(alert_jobs)} but the Prometheus scrape config names {sorted(prom_jobs)}")
+elif {sm_job} != alert_jobs:
+    fail(f"the ServiceMonitor produces job={sm_job!r} (jobLabel={job_label!r}) but alerts select {sorted(alert_jobs)}")
+else:
+    ok(f"alerts, the scrape config and the ServiceMonitor agree on job={sm_job!r}")
+
 # ---- generated rule ----------------------------------------------------------------------------
 r = run([sys.executable, str(ROOT / "scripts/gen_prometheusrule.py"), "--check"])
 if r.returncode:

@@ -102,7 +102,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "Latency (all operations)",
-      "description": "",
+      "description": "Long-poll operations (jobs.claim, stream.head, events.subscribe) wait by design and are excluded.",
       "datasource": {
         "type": "prometheus",
         "uid": "agentgit-prometheus"
@@ -131,7 +131,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(agwp_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(agwp_request_duration_seconds_bucket{operation!~\"jobs.claim|stream.head|events.subscribe\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "datasource": {
             "type": "prometheus",
@@ -140,7 +140,7 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(agwp_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agwp_request_duration_seconds_bucket{operation!~\"jobs.claim|stream.head|events.subscribe\"}[$__rate_interval])))",
           "legendFormat": "p95",
           "datasource": {
             "type": "prometheus",
@@ -149,7 +149,7 @@
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(agwp_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(agwp_request_duration_seconds_bucket{operation!~\"jobs.claim|stream.head|events.subscribe\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "datasource": {
             "type": "prometheus",
@@ -162,7 +162,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "Slowest operations (p95)",
-      "description": "",
+      "description": "Long-poll operations (jobs.claim, stream.head, events.subscribe) wait by design and are excluded.",
       "datasource": {
         "type": "prometheus",
         "uid": "agentgit-prometheus"
@@ -191,7 +191,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(8, histogram_quantile(0.95, sum by (le, operation) (rate(agwp_request_duration_seconds_bucket[$__rate_interval]))))",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (le, operation) (rate(agwp_request_duration_seconds_bucket{operation!~\"jobs.claim|stream.head|events.subscribe\"}[$__rate_interval]))))",
           "legendFormat": "{{operation}}",
           "datasource": {
             "type": "prometheus",

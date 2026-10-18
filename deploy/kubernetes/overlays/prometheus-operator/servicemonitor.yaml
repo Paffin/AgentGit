@@ -7,6 +7,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: agentgit
 spec:
+  # Series get job="agentgit" (the Service label app.kubernetes.io/part-of), the job name of the plain Prometheus
+  # configs and of alerts.yml; without jobLabel they would be job="ag-server" and AgentGitDown could never fire.
+  jobLabel: app.kubernetes.io/part-of
   selector:
     matchLabels:
       app.kubernetes.io/name: ag-server

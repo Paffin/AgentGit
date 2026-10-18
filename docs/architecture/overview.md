@@ -18,6 +18,7 @@ flowchart TB
         CLI["ag CLI"]
         SDK["Rust API (ag-integrate)"]
         GIT["Git bridge (ag-git)"]
+        NET["Network: ag-server (AGWP) ← ag-client, SDKs, Web UI, ag-mcp, orchestrator"]
     end
     subgraph engine["Engine — ag-integrate"]
         PUB["publish<br/>prepare · upload · verify · ready"]
@@ -34,12 +35,13 @@ flowchart TB
         MRG["ag-merge · ag-diff"]
     end
     subgraph store["Storage — ag-storage"]
-        OBJ[("Object store<br/>immutable, verified on read")]
-        META[("Metadata (SQLite, WAL)<br/>index · streams · reflog · intents<br/>outbox · audit · policy")]
+        OBJ[("Object store (files or S3)<br/>immutable, verified on read")]
+        META[("Metadata (SQLite WAL or PostgreSQL)<br/>index · streams · reflog · intents<br/>outbox · audit · policy")]
     end
     CLI --> engine
     SDK --> engine
     GIT --> engine
+    NET --> engine
     engine --> platform
     engine --> core
     engine --> store
@@ -57,14 +59,22 @@ flowchart TB
 | `ag-dag` | ancestors, merge bases, reachability over any `Graph` |
 | `ag-diff` | deterministic Myers line diff and unified output |
 | `ag-merge` | deterministic three-way merge of text and trees with typed conflicts |
-| `ag-storage` | `ObjectStore` (fs / memory) and `Meta` (SQLite) with all transactional operations |
+| `ag-storage` | `ObjectStore` (fs / memory / S3-compatible) and `Meta` (SQLite / PostgreSQL) with all transactional operations; the server's control database ([storage](storage.md), [PostgreSQL and S3](../operations/postgres-and-s3.md)) |
 | `ag-policy` | policy document, attestation signing/verification, pure evaluation |
 | `ag-agent` | agent registry and runs, tasks, leases and fencing, provenance, conflict prediction |
 | `ag-integrate` | the engine: publication, integration, workspaces, queue, GC, fsck, backup, recovery |
 | `ag-sandbox` | isolated execution of untrusted commands: rootless namespaces, OCI containers, a limits-only fallback ([sandbox](sandbox.md)) |
 | `ag-worker` | the execution-plane worker: claims validation jobs, runs them in `ag-sandbox`, signs attestations ([guide](../guides/workers.md)) |
 | `ag-git` | Git import/export via `git` plumbing |
+| `ag-protocol` | the AGWP v1 messages and operation list shared by server and clients ([protocol](../protocol/README.md)) |
+| `ag-server` | the network server: AGWP over gRPC and HTTP/JSON + SSE, roles, credentials, quotas, metrics ([deployment](../operations/deployment.md)) |
+| `ag-ui-assets` | embeds the built Web UI into `ag-server` ([Web UI](../guides/web-ui.md)) |
+| `ag-client` | the Rust client for `ag-server` (used by `ag clone`/`push`/`pull`, [remote](../guides/remote.md)) |
+| `ag-mcp` | the MCP server for agent hosts ([guide](../guides/mcp.md)) |
 | `ag-cli` | the `ag` binary |
+
+Outside the Cargo workspace: the TypeScript and Python SDKs (`sdk/`, [guide](../guides/sdks.md)), the Vue Web UI
+(`apps/web`) and the Go agent orchestrator (`services/agent-orchestrator`, [guide](../guides/orchestrator.md)).
 
 ## Canonical model: a changeset DAG
 
@@ -104,8 +114,8 @@ one machine) are safe against one repository. This is tested with parallel worke
 
 ## What is deliberately not here (yet)
 
-A network server, the AGWP protocol, PostgreSQL/S3 backends, a Web UI, SDKs for other languages, rename
-detection and blame. They are specified in ADR-0001 and listed with status in the
-[roadmap](../../ROADMAP.md) and [traceability](adr-traceability.md). (A sandboxed execution plane exists in a
-first version: see the [sandbox](sandbox.md) and the [workers guide](../guides/workers.md).) The engine is a library
-with the same operations those layers will expose; see the [protocol mapping](../protocol/README.md).
+The roadmap items that are not built are in [ROADMAP](../../ROADMAP.md); what each ADR promise maps to today, and
+which promises are still open, is in [traceability](adr-traceability.md). The engine is a library; the server exposes
+the same operations over the network ([protocol mapping](../protocol/README.md)). What is verified, and what is
+explicitly not, is stated per area: [deployment](../operations/deployment.md#what-has-been-verified),
+[sandbox](sandbox.md), [workers](../guides/workers.md).

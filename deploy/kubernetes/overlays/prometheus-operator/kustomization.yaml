@@ -4,3 +4,16 @@ resources:
   - ../../base
   - servicemonitor.yaml
   - prometheusrule.yaml
+# The base NetworkPolicy admits only pods of the namespace; Prometheus normally runs elsewhere. Change `monitoring`
+# to the namespace of the Prometheus that selects the ServiceMonitor.
+patches:
+  - target: {kind: NetworkPolicy, name: ag-server}
+    patch: |-
+      - op: add
+        path: /spec/ingress/-
+        value:
+          from:
+            - namespaceSelector:
+                matchLabels: {kubernetes.io/metadata.name: monitoring}
+          ports:
+            - {protocol: TCP, port: 8080}

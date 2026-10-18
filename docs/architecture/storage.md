@@ -149,8 +149,8 @@ miss. `ag reindex` drops and rebuilds all derived data, which doubles as a proof
 Measured on a small shared VM with a synthetic repository of **3 000 files and 1 500 commits**
 (release build): import from Git 13 s; creating a workspace (checking out 3 000 files) 0.3 s; snapshot 0.2 s; propose 0.5 s;
 integrate 0.8 s; `ag verify` (hash 9 000 objects, recompute a head tree through 1 500 commits) 0.4 s;
-metadata DB 4 MB. These are not SLOs — benchmarks and load targets are an explicit non-goal until the
-server exists (ADR-0001 §1) — but they show where the design stands.
+metadata DB 4 MB. These are not SLOs and they are single-process numbers on SQLite and local files (no network, no PostgreSQL or S3
+latency, see [ADR-0006](../adr/0006-flat-trees-measured.md)); load numbers for the server are not published. They show where the design stands.
 
 Known limits:
 

@@ -232,4 +232,4 @@ disk (there are no credentials to revoke there).
 `ag-integrate` is a normal Rust library: `Repository::open(path)` gives you `snapshot`, `propose`,
 `integrate`, `review`, `merge_preview`, `operation` and the rest with typed results (`Outcome`,
 `IntegrationResult`). Open one `Repository` per thread (`repo.reopen()`); processes and threads coordinate
-through SQLite. A network API is on the [roadmap](../../ROADMAP.md).
+through SQLite. Over the network, use [`ag-server`](../operations/deployment.md) and its [clients](sdks.md) instead.

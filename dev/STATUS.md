@@ -28,13 +28,16 @@ e2e, Go suite green.
   advisor, Dockerfile not building the embedded UI, `ag doctor` not compiling on Windows + 5 host-assumption tests.
   Open from that round: a flaky Web UI axe race (`scrollable-region-focusable`, dark theme) — in wave 2, web_tail.
   Rule: no landing without watching its CI.
-* **Wave 2 is running** (`dev/workflows/product-wave-2.js`, 3 sequential lanes, cap 2 concurrent agents): A server
-  (server_audit → server_hardening → ha_tail → perf), B core (core_engine_storage → policy_cli_execution → clients_ops →
-  orchestrator incl. model-backed advisors verified live via OpenRouter), C docs/infra (docs_site → security_tail → mcp_tail
-  → web_tail incl. real-IdP e2e). Then a CI verifier (+generic fix rounds) and a docs-fold agent that rewrites README/
-  CHANGELOG/ROADMAP/traceability from the handoffs. If the session dies: re-run it with
-  `Workflow({scriptPath: "dev/workflows/product-wave-2.js"})` after checking which `dev/handoff/<wp>.md` files exist
-  (done packages are the ones with a handoff and green CI; remove them from the lane lists first).
+* **Wave 2 (`dev/workflows/product-wave-2.js`) — partly done, interrupted twice by the usage limit.** Landed with green CI
+  at `4058ab0` (CI, Windows, Docs, Packaging, Containers, Web UI all green): `server_audit` (60 findings fixed: fail-closed
+  control rows, atomic byte quota on every write path, SSE without skipped events/ends on revocation, honest API/backends),
+  `core_engine_storage` (merge limit error, negative pre-1970 clock ADR-0009, storage fixes, real S3 server leg with
+  SeaweedFS), `docs_site` (MkDocs Material site + Docs workflow with guarded Pages deploy, 5 tutorials run as tests, FAQ,
+  glossary, comparison, generated CLI reference pages, `check_no_stubs.py` gate). **Remaining** (re-run = resume the
+  workflow; cached packages replay): server_hardening, ha_tail, perf (lane A); policy_cli_execution, clients_ops,
+  orchestrator (lane B); security_tail, mcp_tail, web_tail (lane C); then the CI verifier and the docs-fold agent.
+  Resume: `Workflow({scriptPath: "dev/workflows/product-wave-2.js", resumeFromRunId: <last run id>})` or, in a fresh
+  session, re-run the script with the finished packages removed from `LANES` (done ones have `dev/handoff/<wp>.md`).
 * Audit finished (see the Audit section).
 
 ## Product-readiness tracks (7 parallel agents; briefs in `dev/tracks/tracks.md`)

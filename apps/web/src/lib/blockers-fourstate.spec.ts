@@ -144,8 +144,8 @@ describe('the four independent states', () => {
       prep: prep({
         strategy: '',
         conflicts: [
-          { path: 'src/a.ts', kind: 'content' },
-          { path: 'b', kind: 'both_added' },
+          { path: 'src/a.ts', kind: 'content', message: 'content conflict (1 region(s))' },
+          { path: 'b', kind: 'both_added', message: 'both sides added different content' },
         ],
       }),
     })

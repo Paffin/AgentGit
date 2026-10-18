@@ -162,7 +162,7 @@ const finished = computed(() => status.value === 'integrated')
           </p>
           <ul class="conf">
             <li v-for="c in outcome.conflicts" :key="c.path" class="mono">
-              {{ c.path }} <span class="faint">({{ c.kind.replace('_', ' ') }})</span>
+              {{ c.path }} <span class="faint">({{ c.message || c.kind.replace('_', ' ') }})</span>
             </li>
           </ul>
         </Alert>

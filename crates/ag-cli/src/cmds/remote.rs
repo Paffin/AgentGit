@@ -984,7 +984,11 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         "Conflict:\n{}",
                         o.conflicts
                             .iter()
-                            .map(|c| format!("  - {} ({})", c.path, c.kind))
+                            .map(|c| format!(
+                                "  - {} ({})",
+                                c.path,
+                                if c.message.is_empty() { &c.kind } else { &c.message }
+                            ))
                             .collect::<Vec<_>>()
                             .join("\n")
                     ),

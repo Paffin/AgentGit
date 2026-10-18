@@ -15,8 +15,10 @@ Two things to know before you start:
 - **The sample key.** Every `public_key` below is the same sample, `5091ec77…`. It is a valid key, but nobody holds its
   private half, so the sample CI identity can never sign anything. Replace it with the output of
   `ag validate keygen NAME` (or `ag-worker keygen`) for your CI.
-- **A policy is a new version every time you set it**, and changing the policy invalidates the attestations made under
-  the old one, on purpose. Set policies deliberately, not on every deploy. `ag policy history` lists the versions.
+- **A policy that differs from the one in force is a new version**, and changing the policy invalidates the
+  attestations made under the old one, on purpose. Storing the same document again changes nothing (no new version,
+  no audit entry, no attestation lost), so a deploy that sets the policy every time is safe. `ag policy history` lists
+  the versions.
   Only an admin of the *current* version may replace it, and unknown fields are rejected so that a typo cannot weaken a
   policy: that is the first of the [mistakes](#mistakes-the-parser-catches) below.
 

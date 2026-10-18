@@ -65,7 +65,7 @@ For each `required_validations` entry there must be an attestation that is **all
 - from an identity **and** public key listed in `trusted_issuers` (and in the entry's `issuers`, if given);
 - about **this exact tree** (the candidate's tree ID — see [Concepts](../concepts.md));
 - under **this policy version** (changing the policy invalidates earlier attestations on purpose: the
-  inputs of the check changed);
+  inputs of the check changed; storing the same document again is not a change and keeps the version);
 - with the entry's `environment_digest` if given, and not older than `max_age_secs` if given;
   attestations dated more than five minutes in the future are ignored.
 

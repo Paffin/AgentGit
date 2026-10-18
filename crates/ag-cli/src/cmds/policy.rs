@@ -74,9 +74,19 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
         PolicyCmd::Set { file, stream } => {
             let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
             let text = std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+            let before = ctx.repo.policy(&s)?.1;
             let row = ctx.repo.set_policy(&s, &text, &ctx.me)?;
             ctx.done(&row, || {
-                format!("Policy of '{s}' is now version {} (hash {})", row.version, &row.doc_hash[..12])
+                if before == row.version {
+                    // The same document again is not a new version (and invalidates no attestation).
+                    format!(
+                        "Policy of '{s}' is unchanged: still version {} (hash {})",
+                        row.version,
+                        &row.doc_hash[..12]
+                    )
+                } else {
+                    format!("Policy of '{s}' is now version {} (hash {})", row.version, &row.doc_hash[..12])
+                }
             })?;
         }
         PolicyCmd::History { stream } => {

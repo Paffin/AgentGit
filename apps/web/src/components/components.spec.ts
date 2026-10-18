@@ -133,7 +133,9 @@ describe('ProposalCard', () => {
         proposal: p.id,
         strategy: '',
         candidate_tree: '',
-        conflicts: [{ path: 'src/index.ts', kind: 'content' }],
+        conflicts: [
+          { path: 'src/index.ts', kind: 'content', message: 'content conflict (2 region(s))' },
+        ],
         base: 'b',
         changed_files: [],
         problem: '',
@@ -154,6 +156,8 @@ describe('ProposalCard', () => {
       global,
     })
     expect(w.text()).toContain('src/index.ts')
+    // the words for a person, not the code a program switches on
+    expect(w.text()).toContain('content conflict (2 region(s))')
     expect(w.text()).toContain('Conflicting paths')
     expect(w.find('[data-state="mergeable"]').attributes('data-tone')).toBe('failed')
   })
@@ -165,7 +169,7 @@ describe('ProposalCard', () => {
         proposal: p.id,
         strategy: '',
         candidate_tree: '',
-        conflicts: [{ path: EVIL, kind: EVIL }],
+        conflicts: [{ path: EVIL, kind: EVIL, message: EVIL }],
         base: '',
         changed_files: [],
         problem: '',

@@ -266,7 +266,7 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
                 conflicts.len()
             );
             for c in conflicts {
-                let _ = writeln!(s, "  {}  ({})", c.path, if c.message.is_empty() { &c.kind } else { &c.message });
+                let _ = writeln!(s, "  {}  ({})", c.path, c.describe());
             }
             s
         }

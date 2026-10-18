@@ -62,7 +62,7 @@ const reviews = computed(() =>
       <p class="label">Conflicting paths</p>
       <ul role="list">
         <li v-for="c in conflicts.slice(0, 4)" :key="c.path" class="mono">
-          {{ c.path }} <span class="faint">({{ c.kind }})</span>
+          {{ c.path }} <span class="faint">({{ c.message || c.kind }})</span>
         </li>
         <li v-if="conflicts.length > 4" class="faint">and {{ conflicts.length - 4 }} more</li>
       </ul>

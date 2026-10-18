@@ -323,7 +323,7 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>, co
                 let _ =
                     writeln!(s, "Conflict: the proposal cannot be merged automatically; the stream was not changed.");
                 for c in conflicts {
-                    let _ = writeln!(s, "  {}  ({})", c.path, c.kind);
+                    let _ = writeln!(s, "  {}  ({})", c.path, c.describe());
                 }
                 if let Some(b) = base {
                     let _ = writeln!(s, "merge base: {}", b.short());
@@ -380,7 +380,7 @@ pub fn preview(ctx: &Ctx, a: &PreviewArgs) -> Result<u8> {
             let _ = writeln!(s, "candidate tree: {t}");
         }
         for c in &pv.conflicts {
-            let _ = writeln!(s, "conflict: {} ({})", c.path, if c.message.is_empty() { &c.kind } else { &c.message });
+            let _ = writeln!(s, "conflict: {} ({})", c.path, c.describe());
         }
         if !pv.changed_files.is_empty() {
             let _ = writeln!(s, "would change {} file(s): {}", pv.changed_files.len(), pv.changed_files.join(", "));

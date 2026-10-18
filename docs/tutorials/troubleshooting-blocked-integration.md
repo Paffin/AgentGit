@@ -129,17 +129,29 @@ under the current policy version. So the same message returns when:
 - the **policy changed**: a new version invalidates earlier attestations on purpose, because the inputs of the check changed;
 - the attestation is signed by a key that is not the one in `trusted_issuers`.
 
-Here is the second one. alice stores the policy again (even unchanged, that is a new version):
+Here is the second one. alice changes the policy (a limit on the size of a change; storing the *same* document again
+is not a new version, says so, and invalidates nothing):
 
 <!-- doctest -->
 ```bash
 ag policy set ../policy.json
+cat > ../policy2.json <<JSON
+{
+  "trusted_issuers": [{ "identity": "service:ci", "public_key": "$KEY" }],
+  "required_validations": [{ "check": "tests", "issuers": ["service:ci"] }],
+  "approvals": { "min": 1, "forbid_self_approval": true },
+  "require_provenance_for_agents": true,
+  "max_changed_files": 100
+}
+JSON
+ag policy set ../policy2.json
 ag integrate "$P1"                                 # expect-exit 3
 ag --as service:ci validate run "$P1" --check tests --key ci -- true
 ```
 
 <!-- expect -->
 ```text
+Policy of 'main' is unchanged: still version 1 (hash ...)
 Policy of 'main' is now version 2 (hash ...)
 Blocked (policy v2); the stream was not changed:
   - check 'tests' has no trusted passing attestation for this exact tree

@@ -35,6 +35,11 @@ impl ConflictInfo {
     pub fn from_conflict(c: &ag_merge::Conflict) -> Self {
         ConflictInfo { path: c.path.to_string(), kind: c.kind.code().to_string(), message: c.kind.to_string() }
     }
+
+    /// What to show a person: the message, or the code for an outcome stored before messages existed.
+    pub fn describe(&self) -> &str {
+        if self.message.is_empty() { &self.kind } else { &self.message }
+    }
 }
 
 /// A reason an integration cannot proceed (yet).

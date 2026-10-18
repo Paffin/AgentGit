@@ -1,9 +1,8 @@
 //! The OCI sandbox against a *fake* container runtime: a shell script that records how it is called and
-//! behaves as told. This checks the arguments the sandbox builds, how it supervises and cleans up the
-//! runtime client, and how runtime failures are told apart from the command's own.
-//!
-//! **No real Docker or Podman exists on the machine these tests were written on, so nothing here shows that
-//! a real runtime accepts these arguments or enforces what they request.**
+//! behaves as told. This is the one place a test double is acceptable: it checks the arguments the sandbox
+//! builds, how it supervises and cleans up the runtime client (timeouts, output caps, stdin, cancellation,
+//! ordering of `inspect`/`rm`), and how it reacts to what a runtime says. It proves **nothing** about what a
+//! real runtime accepts or enforces: that is `tests/oci_real.rs`, which runs against real Docker and Podman.
 #![cfg(target_os = "linux")] // the namespace and container sandboxes are exercised on Linux only
 
 mod common;
@@ -35,7 +34,10 @@ case "$1" in
       error125) echo "docker: Error response from daemon: pull access denied for check" >&2; exit 125 ;;
     esac ;;
   kill) touch "$dir/killed" ;;
-  inspect) cat "$dir/oom" 2>/dev/null || echo false ;;
+  inspect) cat "$dir/inspect.json" 2>/dev/null || { echo "Error: No such container" >&2; exit 1; } ;;
+  info) cat "$dir/info.json" 2>/dev/null || echo '{}' ;;
+  image) if [ -f "$dir/noimage" ]; then echo "Error: No such image" >&2; exit 1; else echo sha256:abc; fi ;;
+  ps) cat "$dir/ps.txt" 2>/dev/null ;;
   rm) touch "$dir/removed" ;;
 esac
 "#;
@@ -136,25 +138,56 @@ fn a_run_builds_the_expected_command_and_cleans_up_after_itself() {
 }
 
 #[test]
-fn the_report_says_what_was_requested_and_that_it_was_not_verified() {
+fn the_report_claims_nothing_the_runtime_did_not_record() {
     let fake = Fake::new("ok");
     let w = workdir();
     let sb = fake.sandbox();
     assert_eq!(sb.isolation(), IsolationLevel::Container);
     assert_eq!(sb.name(), "oci");
+    // this runtime cannot say anything about the container (no record, no info): flags are not assumed
     let o = sb.run(&spec_in(w.path())).unwrap();
     let r = &o.isolation;
     assert!(!r.verified, "flags passed to a runtime are not observations");
-    assert!(r.net_ns && r.private_root && r.read_only_root && r.no_new_privs && r.capabilities_dropped && r.seccomp);
+    assert!(!(r.net_ns || r.private_root || r.read_only_root || r.no_new_privs || r.capabilities_dropped || r.seccomp));
     assert_eq!(r.image.as_deref(), Some(IMAGE));
     assert!(r.runtime.as_deref().unwrap().ends_with("fake-docker"));
-    assert!(r.notes.iter().any(|n| n.contains("not observed")));
+    assert!(r.notes.iter().any(|n| n.contains("could not be read")), "{:?}", r.notes);
     // another image is another environment
     let other = OciSandbox::new(fake.runtime().to_str().unwrap(), IMAGE.replace("0123", "4567"))
         .unwrap()
         .run(&spec_in(w.path()))
         .unwrap();
     assert_ne!(o.environment_digest, other.environment_digest);
+}
+
+#[test]
+fn a_record_that_contradicts_the_request_means_no_verdict() {
+    let fake = Fake::new("ok");
+    // the runtime says the container is privileged and not read-only: not what was asked for
+    fake.set(
+        "inspect.json",
+        r#"[{"State":{"Status":"exited","ExitCode":0,"OOMKilled":false},"HostConfig":{"Privileged":true,"ReadonlyRootfs":false}}]"#,
+    );
+    let w = workdir();
+    let err = fake.sandbox().run(&spec_in(w.path())).unwrap_err();
+    match &err {
+        SandboxError::Runtime(m) => assert!(m.contains("privileged") && m.contains("read-only root"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(fake.call("rm").is_some(), "the container is removed all the same");
+}
+
+#[test]
+fn the_runtimes_description_of_itself_is_used_for_seccomp_and_user_namespaces() {
+    let fake = Fake::new("ok");
+    fake.set("info.json", r#"{"SecurityOptions":["name=seccomp,profile=builtin","name=rootless"]}"#);
+    let w = workdir();
+    let o = fake.sandbox().run(&spec_in(w.path())).unwrap();
+    assert!(o.isolation.seccomp && o.isolation.user_ns && !o.isolation.host_root);
+    fake.set("info.json", r#"{"SecurityOptions":[]}"#);
+    let o = fake.sandbox().run(&spec_in(w.path())).unwrap();
+    assert!(!o.isolation.seccomp && !o.isolation.user_ns);
+    assert!(o.isolation.notes.iter().any(|n| n.contains("no seccomp profile")), "{:?}", o.isolation.notes);
 }
 
 #[test]
@@ -176,7 +209,7 @@ fn a_timeout_stops_the_container_not_just_the_client() {
     let name = flag_value(&fake.call("run").unwrap(), "--name").unwrap();
     assert_eq!(fake.call("kill").expect("the runtime was asked to kill the container"), ["kill", &name]);
     assert!(fake.call("rm").is_some(), "and to remove it");
-    assert!(host_processes_matching("fake-docker").is_empty(), "no client process is left");
+    assert!(host_processes_matching(&fake.runtime().to_string_lossy()).is_empty(), "no client process is left");
 }
 
 #[test]
@@ -213,12 +246,95 @@ fn a_runtime_failure_is_an_error_not_a_failed_check() {
 fn an_out_of_memory_kill_is_reported_as_the_memory_limit() {
     let fake = Fake::new("ok");
     fake.set("exit", "137");
-    fake.set("oom", "true");
+    fake.set("inspect.json", r#"[{"State":{"Status":"exited","ExitCode":137,"OOMKilled":true},"HostConfig":{}}]"#);
     let w = workdir();
     assert_eq!(fake.sandbox().run(&spec_in(w.path())).unwrap().status, ExitStatus::MemoryLimit);
     // a 137 without the OOM flag is just the command's exit status
-    fake.set("oom", "false");
+    fake.set("inspect.json", r#"[{"State":{"Status":"exited","ExitCode":137,"OOMKilled":false},"HostConfig":{}}]"#);
     assert_eq!(fake.sandbox().run(&spec_in(w.path())).unwrap().status, ExitStatus::Exited(137));
+    // a 137 and no readable record: no verdict is signed on a guess
+    std::fs::remove_file(fake.dir.path().join("inspect.json")).unwrap();
+    assert!(matches!(fake.sandbox().run(&spec_in(w.path())), Err(SandboxError::Runtime(_))));
+}
+
+#[test]
+fn a_command_that_never_started_is_an_exec_error_and_one_that_exits_125_is_a_failed_check() {
+    let fake = Fake::new("ok");
+    let w = workdir();
+    fake.set("exit", "127");
+    fake.set(
+        "inspect.json",
+        r#"[{"State":{"Status":"created","ExitCode":127,"Error":"exec: \"run-the-check\": executable file not found in $PATH"},"HostConfig":{}}]"#,
+    );
+    let err = fake.sandbox().run(&spec_in(w.path())).unwrap_err();
+    assert!(matches!(&err, SandboxError::Exec { program, .. } if program == "sh"), "{err}");
+    // the command itself exited 125 after printing what looks like a runtime error: still its own status
+    fake.set("exit", "125");
+    fake.set("inspect.json", r#"[{"State":{"Status":"exited","ExitCode":125},"HostConfig":{}}]"#);
+    assert_eq!(fake.sandbox().run(&spec_in(w.path())).unwrap().status, ExitStatus::Exited(125));
+}
+
+#[test]
+fn a_cancelled_run_kills_and_removes_the_container_and_returns_no_outcome() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let fake = Fake::new("timeout");
+    let w = workdir();
+    let stop = AtomicBool::new(false);
+    let started = std::time::Instant::now();
+    let err = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            stop.store(true, Ordering::SeqCst);
+        });
+        fake.sandbox().run_cancellable(&spec_in(w.path()), &|| stop.load(Ordering::SeqCst)).unwrap_err()
+    });
+    assert!(matches!(err, SandboxError::Cancelled), "{err}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let name = flag_value(&fake.call("run").unwrap(), "--name").unwrap();
+    assert_eq!(fake.call("kill").expect("the runtime was asked to kill the container"), ["kill", &name]);
+    assert!(fake.call("rm").is_some(), "and to remove it");
+    assert!(host_processes_matching(&fake.runtime().to_string_lossy()).is_empty(), "no client process is left");
+}
+
+#[test]
+fn the_image_and_the_daemon_can_be_checked_before_any_job() {
+    let fake = Fake::new("ok");
+    let sb = fake.sandbox();
+    assert!(sb.image_present().is_ok() && sb.preflight().is_ok());
+    fake.set("noimage", "");
+    let err = sb.preflight().unwrap_err();
+    match &err {
+        SandboxError::Runtime(m) => {
+            assert!(m.contains("never pulls") && m.contains(IMAGE) && m.contains(" pull "), "{m}")
+        }
+        other => panic!("{other:?}"),
+    }
+    fake.set(
+        "info.json",
+        r#"{"ServerVersion":"27.1.0","SecurityOptions":["name=seccomp,profile=builtin","name=rootless"]}"#,
+    );
+    let info = sb.probe().unwrap();
+    assert_eq!(info.version.as_deref(), Some("27.1.0"));
+    assert_eq!((info.rootless, info.seccomp, info.user_ns), (Some(true), Some(true), Some(true)));
+    // a runtime that is not there says so
+    let gone = OciSandbox::new("/definitely/not/a/runtime", IMAGE).unwrap();
+    assert!(matches!(gone.probe(), Err(SandboxError::Unavailable { sandbox: "oci", .. })));
+}
+
+#[test]
+fn orphans_of_dead_workers_are_removed_and_those_of_live_ones_are_not() {
+    let fake = Fake::new("ok");
+    let me = std::process::id();
+    // pid 2^30 + 1 cannot exist (pid_max is at most 2^22)
+    fake.set("ps.txt", &format!("ag-sandbox-1073741825-0-aa\nag-sandbox-{me}-0-bb\nunrelated\n"));
+    let removed = fake.sandbox().reap_orphans().unwrap();
+    assert_eq!(removed, ["ag-sandbox-1073741825-0-aa"]);
+    let rm: Vec<Vec<String>> = fake.calls().into_iter().filter(|c| c[0] == "rm").collect();
+    assert_eq!(rm.len(), 1);
+    assert_eq!(rm[0].last().unwrap(), "ag-sandbox-1073741825-0-aa");
+    // the listing is restricted to containers of this sandbox and this host
+    let ps = fake.call("ps").unwrap();
+    assert!(ps.iter().any(|a| a == "label=ag-sandbox=1"), "{ps:?}");
 }
 
 #[test]

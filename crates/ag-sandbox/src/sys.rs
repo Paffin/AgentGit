@@ -323,6 +323,25 @@ pub(crate) fn is_writable(path: &std::path::Path) -> bool {
     unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
 }
 
+/// The host name (`gethostname(2)`), or an empty string if it cannot be read.
+pub(crate) fn hostname() -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: gethostname writes at most `buf.len()` bytes into the buffer we own; we leave one spare byte
+    // so that the result is always NUL-terminated.
+    let ok = unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len() - 1) } == 0;
+    if !ok {
+        return String::new();
+    }
+    let end = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).into_owned()
+}
+
+/// Whether a process with this id exists (`kill(pid, 0)`): a permission error still means "exists".
+pub(crate) fn process_exists(pid: pid_t) -> bool {
+    // SAFETY: signal 0 only checks for existence.
+    unsafe { libc::kill(pid, 0) == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) }
+}
+
 /// An all-zero `rusage` (tests build `Reaped` values by hand).
 #[cfg(test)]
 pub(crate) fn zero_rusage() -> libc::rusage {

@@ -40,7 +40,7 @@ impl Sandbox for ProcessSandbox {
         IsolationLevel::None
     }
 
-    fn run(&self, spec: &SandboxSpec) -> Result<Outcome, SandboxError> {
+    fn run_cancellable(&self, spec: &SandboxSpec, cancel: &(dyn Fn() -> bool + Sync)) -> Result<Outcome, SandboxError> {
         spec.validate()?;
         let started = Instant::now();
         let (argv, envp, exec_paths) = exec_inputs(spec)?;
@@ -104,7 +104,7 @@ impl Sandbox for ProcessSandbox {
             &spec.stdin,
             l,
             started,
-            Hooks { group: true, ..Hooks::default() },
+            Hooks { group: true, cancel: Some(cancel), ..Hooks::default() },
         )?;
         child.mark_reaped();
 

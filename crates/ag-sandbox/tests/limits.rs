@@ -198,7 +198,7 @@ fn a_root_host_maps_the_command_to_an_unprivileged_user_on_request() {
     let md = std::fs::metadata(w.path().join("f")).unwrap();
     assert_eq!(std::os::unix::fs::MetadataExt::uid(&md), 65534, "files belong to the unprivileged host user");
     assert!(!o.isolation.host_root);
-    assert_eq!(o.isolation.tasks, Enforcement::Rlimit);
+    assert!(matches!(o.isolation.tasks, Enforcement::Rlimit | Enforcement::Cgroup), "{:?}", o.isolation.tasks);
     // the kernel-level identity: not root, so it cannot write the root-owned files it can see
     let o = run(&sb, &probe_spec(w.path(), &["write", "/proc/sys/vm/overcommit_ratio", "50"]));
     assert!(o.stdout_lossy().starts_with("err "), "{}", o.stdout_lossy());
@@ -224,8 +224,14 @@ fn the_task_limit_is_sampled_where_the_kernel_exempts_the_user() {
     let mut s = probe_spec(w.path(), &["forkbomb", "2000", "300"]);
     s.limits.pids = 20;
     let o = run(&sb, &s);
-    assert_eq!(o.isolation.tasks, Enforcement::Sampled);
     assert!(o.isolation.host_root);
+    if o.isolation.tasks == Enforcement::Cgroup {
+        // a delegated pids cgroup (see tests/cgroup_real.rs) enforces it exactly instead: the surplus fork fails
+        let line = o.stdout_lossy();
+        assert!(line.contains("stopped_by EAGAIN"), "{line}");
+        return;
+    }
+    assert_eq!(o.isolation.tasks, Enforcement::Sampled);
     assert_eq!(o.status, ExitStatus::PidsLimit, "stdout: {}", o.stdout_lossy());
     // a command that stays within the limit is not disturbed
     let mut s = probe_spec(w.path(), &["forkbomb", "10"]);

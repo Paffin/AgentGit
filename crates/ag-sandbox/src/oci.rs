@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use crate::digest::environment_digest;
 use crate::error::SandboxError;
-use crate::oci_record::{self, Check, DaemonFacts, Observed, Requested, State};
+use crate::oci_record::{self, Check, DaemonFacts, Engine, Observed, Requested, State};
 use crate::outcome::{CgroupReport, Enforcement, ExitStatus, IsolationLevel, IsolationReport, Outcome};
 use crate::spec::{Network, SandboxSpec, WORK_DIR, normalize_sandbox_path};
 use crate::supervise::{Finished, Hooks, Verdict, supervise, wait_status};
@@ -124,6 +124,8 @@ pub struct RuntimeInfo {
     pub user_ns: Option<bool>,
     /// A seccomp profile is applied to containers by default.
     pub seccomp: Option<bool>,
+    /// Which family of runtime this is.
+    pub engine: Engine,
 }
 
 impl RuntimeInfo {
@@ -323,7 +325,13 @@ pub fn probe_runtime(runtime: &str, timeout: Duration) -> Result<RuntimeInfo, Sa
                 .or_else(|| doc.pointer("/version/Version"))
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string);
-            Ok(RuntimeInfo { version, rootless: facts.rootless, user_ns: facts.user_ns, seccomp: facts.seccomp })
+            Ok(RuntimeInfo {
+                version,
+                rootless: facts.rootless,
+                user_ns: facts.user_ns,
+                seccomp: facts.seccomp,
+                engine: facts.engine,
+            })
         }
         Some(c) => Err(SandboxError::Unavailable { sandbox: "oci", reason: failure_text(runtime, &c) }),
         None => Err(SandboxError::Unavailable {
@@ -531,7 +539,13 @@ impl Sandbox for OciSandbox {
         let state = record.and_then(oci_record::state);
         let status = map_status(&finished, state.as_ref(), &spec.argv[0], &self.cfg.runtime)?;
 
-        let isolation = self.report(spec, observed.as_ref(), record.is_some(), daemon, removed, &name);
+        let mut isolation = self.report(spec, observed.as_ref(), record.is_some(), daemon, removed, &name);
+        if daemon.engine == Engine::Podman && spec.limits.memory_bytes > 0 && status == ExitStatus::Exited(137) {
+            isolation.notes.push(
+                "exit status 137 under a memory limit may be the kernel's OOM kill: Podman (checked on 4.9) does not record one in `inspect`, so it cannot be told from another SIGKILL"
+                    .into(),
+            );
+        }
         Ok(Outcome {
             status,
             stdout: finished.stdout,
@@ -1046,7 +1060,8 @@ mod tests {
         cfg.user = "0:0".into();
         let root = OciSandbox::with_config(cfg).unwrap();
         assert!(root.report(&spec, None, false, nothing, true, "n").host_root);
-        let rootless = DaemonFacts { user_ns: Some(true), rootless: Some(true), seccomp: Some(true) };
+        let rootless =
+            DaemonFacts { user_ns: Some(true), rootless: Some(true), seccomp: Some(true), ..Default::default() };
         assert!(!root.report(&spec, None, false, rootless, true, "n").host_root);
         assert!(root.report(&spec, None, false, rootless, true, "n").user_ns);
         // a user known only by name is treated as root

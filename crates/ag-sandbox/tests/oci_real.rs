@@ -28,8 +28,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use ag_sandbox::{
-    Enforcement, ExitStatus, Mount, Network, OciConfig, OciSandbox, Outcome, RuntimeInfo, Sandbox, SandboxError,
-    SandboxSpec,
+    Enforcement, Engine, ExitStatus, Mount, Network, OciConfig, OciSandbox, Outcome, RuntimeInfo, Sandbox,
+    SandboxError, SandboxSpec,
 };
 
 static LOCK: Mutex<()> = Mutex::new(());
@@ -287,11 +287,24 @@ fn the_memory_limit_is_set_in_the_cgroup_and_a_hog_is_killed_by_the_kernel() {
     // a program under the limit is fine
     let fine = r.sh_in("head -c 16000000 /dev/zero | tr '\\0' x | wc -c", w.path(), |s| s.limits.memory_bytes = limit);
     assert_eq!(fine.status, ExitStatus::Exited(0), "{}", fine.stderr_lossy());
-    // one that doubles a string until it is killed
-    let hog = r.sh_in("awk 'BEGIN { s = \"xxxxxxxxxxxxxxxx\"; while (1) s = s s }'", w.path(), |s| {
-        s.limits.memory_bytes = limit
-    });
-    assert_eq!(hog.status, ExitStatus::MemoryLimit, "{}", hog.stderr_lossy());
+    // One that doubles a string until it is killed. The shell reports how its child died: 137 is SIGKILL (the
+    // kernel's OOM kill; the program's own allocation failure would end with another status).
+    let hog = r.sh_in(
+        "awk 'BEGIN { s = \"xxxxxxxxxxxxxxxx\"; while (1) s = s s }'; rc=$?; echo \"awk=$rc\" >&2; exit $rc",
+        w.path(),
+        |s| s.limits.memory_bytes = limit,
+    );
+    assert!(hog.stderr_lossy().contains("awk=137"), "the kernel killed the hog: {}", hog.stderr_lossy());
+    let noted = hog.isolation.notes.iter().any(|n| n.contains("does not record one in `inspect`"));
+    match (r.info.engine, hog.status) {
+        // Docker records the kernel's OOM kill and the sandbox says so.
+        (Engine::Docker, status) => assert_eq!(status, ExitStatus::MemoryLimit, "{}", hog.stderr_lossy()),
+        // Podman (4.9, in CI) does not set `State.OOMKilled` for the same kill, so there is nothing in its record
+        // to call it a memory kill by: the sandbox reports the exit status it has and says why in the notes.
+        (Engine::Podman, ExitStatus::Exited(137)) => assert!(noted, "{:?}", hog.isolation.notes),
+        (Engine::Podman, ExitStatus::MemoryLimit) => assert!(!noted, "a runtime that records the kill needs no excuse"),
+        (_, other) => panic!("{other:?}: {}", hog.stderr_lossy()),
+    }
     assert!(r.leftovers().is_empty());
 }
 

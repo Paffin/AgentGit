@@ -84,6 +84,7 @@ pub use namespace::NamespaceSandbox;
 pub use oci::{
     DEFAULT_CONTROL_TIMEOUT, DEFAULT_REMOVE_TIMEOUT, OciConfig, OciSandbox, RuntimeInfo, probe_runtime, reap_orphans,
 };
+pub use oci_record::Engine;
 pub use outcome::{CgroupReport, Enforcement, ExitStatus, IsolationLevel, IsolationReport, Outcome};
 pub use process::ProcessSandbox;
 pub use spec::{Limits, Mount, Network, SandboxSpec, WORK_DIR, standard_system_mounts};

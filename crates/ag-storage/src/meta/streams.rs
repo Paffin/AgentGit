@@ -103,6 +103,11 @@ impl Tx<'_> {
             .collect()
     }
 
+    /// Number of streams.
+    pub fn count_streams(&self) -> Result<u64, MetaError> {
+        Ok(self.conn.query_one("SELECT COUNT(*) FROM streams", &[])?.i64(0)? as u64)
+    }
+
     /// Atomically moves a stream head if (and only if) its state still equals
     /// `expected`. Appends the reflog entry in the same transaction and
     /// returns the new state.

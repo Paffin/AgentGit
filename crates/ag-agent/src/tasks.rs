@@ -128,19 +128,56 @@ pub(crate) fn claim_in_tx(tx: &Tx<'_>, task: &str, owner: &str) -> Result<(), Me
     tx.task_update(task, Some(owner), Some("in_progress"))
 }
 
-/// Marks a task done or cancelled. Only its owner (or anyone, if unowned) may.
+/// Marks a task done or cancelled. Only its owner (or anyone, if unowned) may; an owner acting as a run
+/// (`agent:bot#run_…`) may only finish the task *that run* claimed - another run of the same agent has no say in
+/// it. Use [`finish_task_as_operator`] for an operator that overrides the owner.
 pub fn finish_task(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
+    finish_task_inner(meta, task, state, actor, false)
+}
+
+/// Like [`finish_task`] for an operator: the task is finished whoever owns it. The audit entry says that it was
+/// an operator's doing and whose task it overrode, so the log never shows an owner finishing what an operator
+/// finished for it.
+pub fn finish_task_as_operator(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
+    finish_task_inner(meta, task, state, actor, true)
+}
+
+fn finish_task_inner(meta: &Meta, task: &str, state: &str, actor: &str, operator: bool) -> Result<(), AgentError> {
     if !["done", "cancelled"].contains(&state) {
         return Err(AgentError::Invalid("state must be 'done' or 'cancelled'".into()));
     }
-    let principal = actor.split('#').next().unwrap_or(actor).to_string();
+    let (principal, run_id) = match actor.split_once('#') {
+        Some((p, r)) => (p, Some(r)),
+        None => (actor, None),
+    };
     meta.write(|tx| {
         let t = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
-        if let Some(o) = t.owner.as_ref().filter(|o| **o != principal) {
-            return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
+        let mut details = json!({"state": state});
+        match t.owner.as_ref() {
+            Some(o) if operator => {
+                // Recorded only when the operator really overrides somebody.
+                if o != principal {
+                    details["operator"] = json!(true);
+                    details["owner"] = json!(o);
+                }
+            }
+            Some(o) if o != principal => {
+                return Err(MetaError::Invalid(format!("task '{task}' is owned by {o}")));
+            }
+            Some(_) => {
+                if let Some(run_id) = run_id {
+                    let claimed_by_this_run = tx.run(run_id)?.is_some_and(|r| {
+                        r.task_id.as_deref() == Some(task) && format!("agent:{}", r.agent) == principal
+                    });
+                    if !claimed_by_this_run {
+                        return Err(MetaError::Invalid(format!("task '{task}' was not claimed by run '{run_id}'")));
+                    }
+                }
+            }
+            None => {}
         }
         tx.task_update(task, None, Some(state))?;
-        tx.audit_append(actor, "task.finish", task, &json!({"state": state})).map(|_| ())
+        tx.audit_append(actor, "task.finish", task, &details).map(|_| ())
     })
     .map_err(|e| match e {
         MetaError::Invalid(m) => AgentError::Conflict(m),

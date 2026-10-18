@@ -6,7 +6,8 @@
 //! about exactly that candidate right now?* It uses the very same evaluation
 //! as the committing transaction, but changes nothing.
 
-use ag_policy::{RunSpec, Unmet};
+use ag_policy::{RequiredValidation, RunSpec, Unmet};
+use ag_storage::meta::{MetaError, Tx};
 use ag_types::{Identity, TreeId};
 use serde::Serialize;
 
@@ -44,25 +45,59 @@ pub struct Preparation {
     pub validations: Vec<ValidationState>,
 }
 
+/// What [`Repository::prepare_with`] knows when it lets the caller read more in its transaction.
+#[derive(Debug)]
+pub struct PrepareContext<'a> {
+    /// The proposal id.
+    pub proposal: &'a str,
+    /// The candidate tree (`None`: there is no unambiguous candidate, so nothing was evaluated).
+    pub tree: Option<TreeId>,
+    /// The policy version evaluated (0 = no policy stored).
+    pub policy_version: u64,
+    /// The checks the policy requires of the candidate.
+    pub required: &'a [RequiredValidation],
+}
+
 impl Repository {
     /// Previews the integration of `proposal_id` as `actor` and evaluates
     /// policy against the exact candidate tree. Nothing is modified.
     pub fn prepare(&self, proposal_id: &str, actor: &Identity, fencing_tokens: &[u64]) -> Result<Preparation> {
+        self.prepare_with(proposal_id, actor, fencing_tokens, |_, _| Ok(())).map(|(prep, ())| prep)
+    }
+
+    /// Like [`Repository::prepare`], and runs `observe` in the very read transaction that evaluates the policy and
+    /// reads the attestations. What `observe` reads - the jobs that validate the candidate, say - is therefore
+    /// from the same snapshot as the verdict: a job that completes at that moment is either seen with its
+    /// attestation or seen as still running without it, never as finished while the attestation is missing.
+    /// (Without a candidate there is no verdict; `observe` then runs in a read transaction of its own.)
+    pub fn prepare_with<R>(
+        &self,
+        proposal_id: &str,
+        actor: &Identity,
+        fencing_tokens: &[u64],
+        observe: impl FnOnce(&Tx<'_>, &PrepareContext<'_>) -> std::result::Result<R, MetaError>,
+    ) -> Result<(Preparation, R)> {
         let prop = self.find_proposal(proposal_id)?;
         let preview = self.merge_preview(&prop.id)?;
         let Some(tree_id) = preview.candidate_tree else {
-            return Ok(Preparation {
-                proposal: prop.id,
-                preview,
-                policy_version: 0,
-                blockers: Vec::new(),
-                validations: Vec::new(),
-            });
+            let seen = self.meta.read(|tx| {
+                observe(tx, &PrepareContext { proposal: &prop.id, tree: None, policy_version: 0, required: &[] })
+            })?;
+            return Ok((
+                Preparation {
+                    proposal: prop.id,
+                    preview,
+                    policy_version: 0,
+                    blockers: Vec::new(),
+                    validations: Vec::new(),
+                },
+                seen,
+            ));
         };
         let author = Identity::new(prop.author.clone()).map_err(|e| Error::Invalid(format!("proposal author: {e}")))?;
         let changed_paths: Vec<ag_policy::ChangedPath> =
             preview.changed_files.iter().map(|p| ag_policy::ChangedPath { path: p.clone() }).collect();
-        let (verdict, passing) = self.meta.read(|tx| {
+        let (verdict, passing, seen) = self.meta.read(|tx| {
             let v = verdict_in_tx(
                 tx,
                 &prop,
@@ -74,7 +109,18 @@ impl Repository {
                 fencing_tokens,
             )?;
             let atts = tx.attestations_for_tree(&tree_id)?;
-            Ok((v, atts))
+            // Tests hold the transaction open here to let a validation finish at exactly this moment.
+            self.failpoints.pause("prepare.in_snapshot");
+            let seen = observe(
+                tx,
+                &PrepareContext {
+                    proposal: &prop.id,
+                    tree: Some(tree_id),
+                    policy_version: v.policy_version,
+                    required: &v.policy.required_validations,
+                },
+            )?;
+            Ok((v, atts, seen))
         })?;
 
         let mut validations = Vec::new();
@@ -104,13 +150,16 @@ impl Repository {
                 required_environment_digest: rv.environment_digest.clone(),
             });
         }
-        Ok(Preparation {
-            proposal: prop.id,
-            preview,
-            policy_version: verdict.policy_version,
-            blockers: verdict.blockers,
-            validations,
-        })
+        Ok((
+            Preparation {
+                proposal: prop.id,
+                preview,
+                policy_version: verdict.policy_version,
+                blockers: verdict.blockers,
+                validations,
+            },
+            seen,
+        ))
     }
 
     /// The candidate tree id for a proposal, if there is an unambiguous one.

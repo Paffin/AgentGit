@@ -157,14 +157,33 @@ pub fn start_run_with<R>(
     let identity =
         Identity::new(format!("{}#{}", agent_row.identity, run_id)).map_err(|e| AgentError::Invalid(e.to_string()))?;
     let run = Run { run_id, agent: agent.to_string(), identity };
-    let extra = meta.write(|tx| {
-        if let Some(t) = task_id {
-            crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;
-        }
-        tx.run_start(&run.run_id, agent, task_id)?;
-        tx.audit_append(run.identity.as_str(), "run.start", &run.run_id, &json!({"task": task_id}))?;
-        also(tx, &run)
-    })?;
+    let extra = meta
+        .write(|tx| {
+            if let Some(t) = task_id {
+                // Somebody else's task, a finished one, one that waits for others: refused here, as ever.
+                crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;
+                // And a task is worked on by one run at a time: a second run of the same agent (same owner, so the
+                // claim above allows it) would be a second pair of hands on the same files. It starts once the first
+                // run has ended - finished by its agent, or reaped by an operator after it went silent. (The error
+                // rolls the claim back with everything else.)
+                if let Some(active) = tx.runs_running_for_task(t)?.first() {
+                    return Err(MetaError::Invalid(format!(
+                        "task '{t}' is already being worked on by run '{}'",
+                        active.run_id
+                    )));
+                }
+            }
+            tx.run_start(&run.run_id, agent, task_id)?;
+            tx.audit_append(run.identity.as_str(), "run.start", &run.run_id, &json!({"task": task_id}))?;
+            also(tx, &run)
+        })
+        // A task that cannot be claimed (owned by somebody else, blocked, finished, or already being worked on) is a
+        // conflict with the state of things, not a malformed request.
+        .map_err(|e| match e {
+            MetaError::Invalid(m) => AgentError::Conflict(m),
+            MetaError::NotFound(m) => AgentError::NotFound(m),
+            other => AgentError::Meta(other),
+        })?;
     Ok((run, extra))
 }
 
@@ -174,8 +193,33 @@ pub fn heartbeat(meta: &Meta, run_id: &str) -> Result<(), AgentError> {
     Ok(())
 }
 
-/// Finishes a run (`completed`, `failed`) and releases the leases it holds.
+/// The identity a run acts as: `agent:<name>#<run_id>`.
+pub fn run_identity(agent: &str, run_id: &str) -> String {
+    format!("agent:{agent}#{run_id}")
+}
+
+/// Whether `actor` is the agent of `run` (the agent itself or one of its runs), as opposed to somebody acting
+/// for the agent: an operator, an orchestrator, a person.
+pub fn is_agent_of(actor: &str, run: &RunRow) -> bool {
+    actor.split('#').next() == Some(format!("agent:{}", run.agent).as_str())
+}
+
+/// Finishes a run (`completed`, `failed`) and releases the leases it holds. The audit entry names the run's own
+/// identity: this is the agent finishing its own run. Use [`finish_run_as`] when somebody else does.
 pub fn finish_run(meta: &Meta, run_id: &str, status: &str, summary: Option<&str>) -> Result<(), AgentError> {
+    finish_run_as(meta, run_id, status, summary, None)
+}
+
+/// Like [`finish_run`], with the audit entry written under `actor` (`None`: the run's own identity). When the
+/// actor is not the run's agent - an operator finishing a run on its behalf - the entry says so (`operator`), so
+/// the log never shows an agent doing what an operator did.
+pub fn finish_run_as(
+    meta: &Meta,
+    run_id: &str,
+    status: &str,
+    summary: Option<&str>,
+    actor: Option<&str>,
+) -> Result<(), AgentError> {
     if !["completed", "failed"].contains(&status) {
         return Err(AgentError::Invalid("status must be 'completed' or 'failed'".into()));
     }
@@ -183,14 +227,20 @@ pub fn finish_run(meta: &Meta, run_id: &str, status: &str, summary: Option<&str>
         let run = tx.run(run_id)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("run '{run_id}'")))?;
         tx.run_finish(run_id, status, summary)?;
         release_run_leases(tx, &run)?;
-        tx.audit_append(&format!("agent:{}#{}", run.agent, run_id), "run.finish", run_id, &json!({"status": status}))?;
+        let own = run_identity(&run.agent, run_id);
+        let actor = actor.unwrap_or(&own);
+        let mut details = json!({"status": status, "agent": run.agent});
+        if !is_agent_of(actor, &run) {
+            details["operator"] = json!(true);
+        }
+        tx.audit_append(actor, "run.finish", run_id, &details)?;
         Ok(())
     })?;
     Ok(())
 }
 
 fn release_run_leases(tx: &ag_storage::meta::Tx<'_>, run: &RunRow) -> Result<(), ag_storage::meta::MetaError> {
-    let holder = format!("agent:{}#{}", run.agent, run.run_id);
+    let holder = run_identity(&run.agent, &run.run_id);
     for l in tx.leases_active()? {
         if l.holder == holder {
             tx.lease_release(&l.id)?;
@@ -199,18 +249,80 @@ fn release_run_leases(tx: &ag_storage::meta::Tx<'_>, run: &RunRow) -> Result<(),
     Ok(())
 }
 
-/// Marks runs without a heartbeat since `timeout_ms` as abandoned and releases
-/// their leases. Returns the abandoned run ids.
-pub fn reap_stale_runs(meta: &Meta, timeout_ms: i64, actor: &str) -> Result<Vec<String>, AgentError> {
-    Ok(meta.write(|tx| {
-        let cutoff = ag_types::Timestamp::from_millis(tx.now().as_millis() - timeout_ms);
-        let mut reaped = Vec::new();
-        for run in tx.runs_stale(cutoff)? {
-            tx.run_finish(&run.run_id, "abandoned", Some("no heartbeat"))?;
-            release_run_leases(tx, &run)?;
-            tx.audit_append(actor, "run.abandon", &run.run_id, &json!({"agent": run.agent}))?;
-            reaped.push(run.run_id);
+/// What a reap ended (or, for a dry run, would end).
+#[derive(Clone, Debug, Default)]
+pub struct Reaped {
+    /// The stale runs: abandoned by the reap (still `running` in a dry run).
+    pub runs: Vec<RunRow>,
+    /// Ids of the leases released: those of the stale runs, and any active lease whose holder is a run that has
+    /// already ended.
+    pub released_leases: Vec<String>,
+}
+
+/// A lease a reap releases: its id, its holder and why.
+type LeaseToRelease = (String, String, &'static str);
+
+/// The stale runs and the leases to release, as of the transaction's clock.
+fn plan_reap(tx: &Tx<'_>, stale_after_ms: i64) -> Result<(Vec<RunRow>, Vec<LeaseToRelease>), MetaError> {
+    let cutoff = ag_types::Timestamp::from_millis(tx.now().as_millis().saturating_sub(stale_after_ms));
+    let stale = tx.runs_stale(cutoff)?;
+    let mut leases = Vec::new();
+    for l in tx.leases_active()? {
+        // Only a lease held by a run (`agent:<name>#<run>`) can be abandoned; one held by the agent itself has
+        // no run to end and expires on its own.
+        let Some((agent, run_id)) = l.holder.strip_prefix("agent:").and_then(|h| h.split_once('#')) else {
+            continue;
+        };
+        if stale.iter().any(|r| r.run_id == run_id && r.agent == agent) {
+            leases.push((l.id, l.holder, "its run was abandoned"));
+        } else if tx.run(run_id)?.is_some_and(|r| r.agent == agent && r.status != "running") {
+            leases.push((l.id, l.holder, "its run has ended"));
         }
-        Ok(reaped)
+    }
+    Ok((stale, leases))
+}
+
+/// Ends the runs that have not sent a heartbeat for `stale_after_ms` (`abandoned`) and releases the leases they
+/// hold - and the leases of runs that ended without releasing theirs. Every run and lease is recorded in the audit
+/// log under `actor`. With `dry_run`, nothing is changed and the result says what would be.
+pub fn reap_runs(meta: &Meta, stale_after_ms: i64, actor: &str, dry_run: bool) -> Result<Reaped, AgentError> {
+    if stale_after_ms < 0 {
+        return Err(AgentError::Invalid("stale_after_ms must not be negative".into()));
+    }
+    if dry_run {
+        return Ok(meta.read(|tx| {
+            let (runs, leases) = plan_reap(tx, stale_after_ms)?;
+            Ok(Reaped { runs, released_leases: leases.into_iter().map(|(id, _, _)| id).collect() })
+        })?);
+    }
+    Ok(meta.write(|tx| {
+        let (stale, leases) = plan_reap(tx, stale_after_ms)?;
+        let mut out = Reaped::default();
+        for run in stale {
+            tx.run_finish(&run.run_id, "abandoned", Some("no heartbeat"))?;
+            tx.audit_append(
+                actor,
+                "run.abandon",
+                &run.run_id,
+                &json!({
+                    "agent": run.agent,
+                    "last_heartbeat_ms": run.last_heartbeat.as_millis(),
+                    "stale_after_ms": stale_after_ms,
+                }),
+            )?;
+            out.runs.push(tx.run(&run.run_id)?.ok_or_else(|| MetaError::Corrupt("run vanished".into()))?);
+        }
+        for (id, holder, why) in leases {
+            tx.lease_release(&id)?;
+            tx.audit_append(actor, "lease.reap", &id, &json!({"holder": holder, "reason": why}))?;
+            out.released_leases.push(id);
+        }
+        Ok(out)
     })?)
+}
+
+/// Marks runs without a heartbeat since `timeout_ms` as abandoned and releases their leases. Returns the
+/// abandoned run ids. (The command-line form of [`reap_runs`].)
+pub fn reap_stale_runs(meta: &Meta, timeout_ms: i64, actor: &str) -> Result<Vec<String>, AgentError> {
+    Ok(reap_runs(meta, timeout_ms, actor, false)?.runs.into_iter().map(|r| r.run_id).collect())
 }

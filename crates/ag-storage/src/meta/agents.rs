@@ -288,6 +288,11 @@ impl Tx<'_> {
         }
     }
 
+    /// The runs of `task_id` that are still running, oldest first.
+    pub fn runs_running_for_task(&self, task_id: &str) -> Result<Vec<RunRow>, MetaError> {
+        self.runs_where("task_id = ?1 AND status = 'running' ORDER BY started_at, run_id", &params![task_id])
+    }
+
     /// Running runs whose last heartbeat is older than `before`.
     pub fn runs_stale(&self, before: Timestamp) -> Result<Vec<RunRow>, MetaError> {
         self.runs_where("status = 'running' AND last_heartbeat < ?1 ORDER BY started_at", &params![before.as_millis()])

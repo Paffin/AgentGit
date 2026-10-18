@@ -349,3 +349,140 @@ fn what_is_recorded_with_a_creation_commits_or_rolls_back_with_it() {
     let titles: Vec<String> = e.meta.read(|tx| tx.tasks(None)).unwrap().into_iter().map(|t| t.title).collect();
     assert_eq!(titles.len(), 2, "{titles:?} - a failed creation left no task behind (b = {})", b.id);
 }
+
+/// The audit entries of one action, with their details parsed.
+fn audit_of(e: &Env, action: &str) -> Vec<(ag_storage::meta::AuditEntry, serde_json::Value)> {
+    e.meta
+        .read(|tx| tx.audit_list(Some(action), 100))
+        .unwrap()
+        .into_iter()
+        .filter(|a| a.action == action)
+        .map(|a| {
+            let details = serde_json::from_str(&a.details).unwrap();
+            (a, details)
+        })
+        .collect()
+}
+
+#[test]
+fn an_operator_finishing_a_run_is_recorded_as_the_operator() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let own = registry::start_run(&e.meta, "bot", None).unwrap();
+    let other = registry::start_run(&e.meta, "bot", None).unwrap();
+
+    // The agent finishing its own run: the entry is the run's, and nothing marks it as an operator's.
+    registry::finish_run(&e.meta, &own.run_id, "completed", None).unwrap();
+    let (entry, details) = audit_of(&e, "run.finish").pop().unwrap();
+    assert_eq!(entry.actor, own.identity.as_str());
+    assert!(details.get("operator").is_none(), "{details}");
+
+    // An orchestrator finishing it for the agent: the entry names the orchestrator, flagged.
+    registry::finish_run_as(&e.meta, &other.run_id, "failed", Some("session lost"), Some("service:orchestrator"))
+        .unwrap();
+    let (entry, details) = audit_of(&e, "run.finish").into_iter().find(|(a, _)| a.target == other.run_id).unwrap();
+    assert_eq!(entry.actor, "service:orchestrator");
+    assert_eq!(details["operator"], true);
+    assert_eq!(details["agent"], "bot");
+    assert_eq!(e.meta.read(|tx| tx.run(&other.run_id)).unwrap().unwrap().status, "failed");
+}
+
+#[test]
+fn a_reap_ends_stale_runs_and_the_leases_of_ended_runs_and_audits_them_under_the_operator() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let stale = registry::start_run(&e.meta, "bot", None).unwrap();
+    let live = registry::start_run(&e.meta, "bot", None).unwrap();
+    let done = registry::start_run(&e.meta, "bot", None).unwrap();
+    let l_stale = leases::acquire(&e.meta, "a/**", stale.identity.as_str(), true, 3_600_000, None).unwrap().lease;
+    let l_live = leases::acquire(&e.meta, "b/**", live.identity.as_str(), true, 3_600_000, None).unwrap().lease;
+    // A run that ended while its lease stayed active (a crash between two writes; made by hand here).
+    let l_done = leases::acquire(&e.meta, "c/**", done.identity.as_str(), true, 3_600_000, None).unwrap().lease;
+    e.meta.write(|tx| tx.run_finish(&done.run_id, "completed", None)).unwrap();
+    // A lease held by the agent itself (no run) has no run to end: it is left to expire.
+    let l_agent = leases::acquire(&e.meta, "d/**", "agent:bot", false, 3_600_000, None).unwrap().lease;
+
+    e.clock.advance_ms(120_000);
+    registry::heartbeat(&e.meta, &live.run_id).unwrap();
+
+    // A dry run says what would happen and changes nothing.
+    let plan = registry::reap_runs(&e.meta, 60_000, "service:orchestrator", true).unwrap();
+    assert_eq!(plan.runs.iter().map(|r| r.run_id.clone()).collect::<Vec<_>>(), vec![stale.run_id.clone()]);
+    let mut planned = plan.released_leases.clone();
+    planned.sort();
+    let mut expected = vec![l_stale.id.clone(), l_done.id.clone()];
+    expected.sort();
+    assert_eq!(planned, expected);
+    assert_eq!(
+        e.meta.read(|tx| tx.run(&stale.run_id)).unwrap().unwrap().status,
+        "running",
+        "a dry run changes nothing"
+    );
+    assert!(audit_of(&e, "run.abandon").is_empty());
+
+    let reaped = registry::reap_runs(&e.meta, 60_000, "service:orchestrator", false).unwrap();
+    assert_eq!(reaped.runs.len(), 1);
+    assert_eq!(reaped.runs[0].status, "abandoned");
+    let active: Vec<String> = e.meta.read(|tx| tx.leases_active()).unwrap().into_iter().map(|l| l.id).collect();
+    assert!(active.contains(&l_live.id) && active.contains(&l_agent.id), "{active:?}");
+    assert!(!active.contains(&l_stale.id) && !active.contains(&l_done.id), "{active:?}");
+    // Every run and every lease it ended is in the audit log, under the operator.
+    let abandoned = audit_of(&e, "run.abandon");
+    assert_eq!((abandoned.len(), abandoned[0].0.actor.as_str()), (1, "service:orchestrator"));
+    assert_eq!(abandoned[0].1["agent"], "bot");
+    let reaped_leases = audit_of(&e, "lease.reap");
+    assert_eq!(reaped_leases.len(), 2, "{reaped_leases:?}");
+    assert!(reaped_leases.iter().all(|(a, _)| a.actor == "service:orchestrator"));
+    // The live run is untouched, and a second reap finds nothing.
+    assert_eq!(e.meta.read(|tx| tx.run(&live.run_id)).unwrap().unwrap().status, "running");
+    let again = registry::reap_runs(&e.meta, 60_000, "service:orchestrator", false).unwrap();
+    assert!(again.runs.is_empty() && again.released_leases.is_empty());
+    assert!(registry::reap_runs(&e.meta, -1, "service:orchestrator", false).is_err());
+}
+
+#[test]
+fn a_task_is_worked_on_by_one_run_at_a_time() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let t = tasks::create_task(&e.meta, "refactor", "", &[], "user:t").unwrap();
+    let first = registry::start_run(&e.meta, "bot", Some(&t.id)).unwrap();
+    // The claim alone would allow it (same owner); a second pair of hands on the same task is refused.
+    let err = registry::start_run(&e.meta, "bot", Some(&t.id)).unwrap_err();
+    assert!(err.to_string().contains(&first.run_id), "{err}");
+    // Once the first run is over - finished, or abandoned by a reap - the task can be taken again.
+    registry::finish_run(&e.meta, &first.run_id, "failed", None).unwrap();
+    let second = registry::start_run(&e.meta, "bot", Some(&t.id)).unwrap();
+    e.clock.advance_ms(120_000);
+    registry::reap_runs(&e.meta, 60_000, "service:orchestrator", false).unwrap();
+    assert_eq!(e.meta.read(|tx| tx.run(&second.run_id)).unwrap().unwrap().status, "abandoned");
+    registry::start_run(&e.meta, "bot", Some(&t.id)).unwrap();
+}
+
+#[test]
+fn a_run_finishes_only_the_task_it_claimed_and_an_operator_finishes_any() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let mine = tasks::create_task(&e.meta, "mine", "", &[], "user:t").unwrap();
+    let theirs = tasks::create_task(&e.meta, "theirs", "", &[], "user:t").unwrap();
+    let run_a = registry::start_run(&e.meta, "bot", Some(&mine.id)).unwrap();
+    let run_b = registry::start_run(&e.meta, "bot", Some(&theirs.id)).unwrap();
+
+    // Another run of the same agent has no say in a task it did not claim ...
+    let err = tasks::finish_task(&e.meta, &mine.id, "done", run_b.identity.as_str()).unwrap_err();
+    assert!(matches!(err, AgentError::Conflict(_)), "{err}");
+    assert!(err.to_string().contains(&run_b.run_id), "{err}");
+    // ... the agent itself (no run) does, as before, and so does the run that claimed it.
+    tasks::finish_task(&e.meta, &theirs.id, "done", "agent:bot").unwrap();
+    tasks::finish_task(&e.meta, &mine.id, "done", run_a.identity.as_str()).unwrap();
+    assert!(audit_of(&e, "task.finish").iter().all(|(_, d)| d.get("operator").is_none()));
+
+    // An operator finishes a task owned by an agent; the entry names the operator and the owner it overrode.
+    let t = tasks::create_task(&e.meta, "stuck", "", &[], "user:t").unwrap();
+    registry::start_run(&e.meta, "bot", Some(&t.id)).unwrap();
+    assert!(tasks::finish_task(&e.meta, &t.id, "cancelled", "service:orchestrator").is_err(), "not the owner");
+    tasks::finish_task_as_operator(&e.meta, &t.id, "cancelled", "service:orchestrator").unwrap();
+    assert_eq!(e.meta.read(|tx| tx.task(&t.id)).unwrap().unwrap().state, "cancelled");
+    let (entry, details) = audit_of(&e, "task.finish").into_iter().find(|(a, _)| a.target == t.id).unwrap();
+    assert_eq!(entry.actor, "service:orchestrator");
+    assert_eq!((&details["operator"], &details["owner"]), (&serde_json::json!(true), &serde_json::json!("agent:bot")));
+}

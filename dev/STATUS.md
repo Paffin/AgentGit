@@ -18,8 +18,8 @@ file only says where the work stands and what is left for people.
 CI verifier at `7132198` (docs-only head): CI, CodeQL, Security, Docs and Windows all succeeded. The path-filtered
 workflows (Containers, Packaging, Web UI) did not run for that commit; their latest runs on `main` are green
 (Containers and Packaging at `c9a08a5`, Web UI at `f49fbd8`). `OCI runtimes and cgroup v2` was red once on `27bbce1` (a
-test race, not product code) and is green at `c9a08a5` (`dev/handoff/generic-fix.md`). The fold commit's own runs are
-recorded at the end of this file when they finish.
+test race, not product code) and is green at `c9a08a5` (`dev/handoff/generic-fix.md`). The documentation fold (`1ec826a`)
+was green in CI, CodeQL, Security, Docs and Windows.
 
 Verified at the last full runs: 1,036 Rust tests (CI at `148a98c`), coverage 79.1% of 37,285 lines, mutation testing
 of five crates at 100% of the mutants that compile, 20 fuzz targets (60 s smoke in CI; 4.3 h local, no crash).

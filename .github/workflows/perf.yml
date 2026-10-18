@@ -1,0 +1,122 @@
+name: Performance
+
+# Measurements, not gates (docs/architecture/performance.md, docs/operations/performance.md). The smoke variant
+# proves on every change to the engine, the server or the tool that the benchmark and the load generator still run
+# end to end; its numbers come from a shared 4-vCPU runner and are uploaded as artifacts, never compared with a
+# threshold. The full sizes (1k/10k/100k files; 20 s of load per scenario at 16 writers and 100 subscribers) run
+# weekly and by hand, on the same kind of runner, and are the numbers to compare with the published ones.
+#
+#   smoke   ag-bench engine --sizes 1000,10000 and ag-bench load --profile smoke. Non-gating: continue-on-error.
+#   full    ag-bench engine (1k/10k/100k, memory and disk) and ag-bench load --profile full. Weekly and by hand.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/ag-bench/**"
+      - "crates/ag-server/**"
+      - "crates/ag-integrate/**"
+      - "crates/ag-merge/**"
+      - "crates/ag-tree/**"
+      - ".github/workflows/perf.yml"
+  pull_request:
+    paths:
+      - "crates/ag-bench/**"
+      - ".github/workflows/perf.yml"
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    name: smoke (non-gating)
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # A slow or noisy runner must never turn main red; a crash of the tools is still visible as a red step.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: perf
+      - name: Build the server and the tool (release)
+        run: cargo build --release -p ag-server -p ag-bench
+      - name: Engine benchmark (1k and 10k files)
+        run: target/release/ag-bench engine --sizes 1000,10000 --samples 5 --json engine-smoke.json --markdown engine-smoke.md
+      - name: Load test against a real ag-server
+        run: target/release/ag-bench load --profile smoke --json load-smoke.json --markdown load-smoke.md
+      - name: Results in the job summary
+        if: always()
+        run: |
+          for f in engine-smoke.md load-smoke.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: perf-smoke
+          path: |
+            engine-smoke.json
+            engine-smoke.md
+            load-smoke.json
+            load-smoke.md
+          if-no-files-found: ignore
+          retention-days: 30
+
+  full:
+    name: full (weekly, by hand)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: perf
+      - run: cargo build --release -p ag-server -p ag-bench
+      - name: Engine benchmark, in memory
+        run: target/release/ag-bench engine --backend memory --json engine-memory.json --markdown engine-memory.md
+      - name: Engine benchmark, on disk (SQLite and files)
+        run: target/release/ag-bench engine --backend disk --sizes 1000,10000 --json engine-disk.json --markdown engine-disk.md
+      - name: Load test
+        run: target/release/ag-bench load --profile full --json load-full.json --markdown load-full.md
+      - name: Results in the job summary
+        if: always()
+        run: |
+          for f in engine-memory.md engine-disk.md load-full.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: perf-full
+          path: |
+            engine-memory.json
+            engine-memory.md
+            engine-disk.json
+            engine-disk.md
+            load-full.json
+            load-full.md
+          if-no-files-found: ignore
+          retention-days: 90

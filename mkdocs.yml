@@ -128,6 +128,7 @@ nav:
       - Hardening checklist: operations/hardening.md
       - Supply chain: operations/supply-chain.md
       - Windows: operations/windows.md
+      - Performance under load: operations/performance.md
       - Troubleshooting: operations/troubleshooting.md
   - Architecture:
       - Overview: architecture/overview.md
@@ -138,6 +139,7 @@ nav:
       - Security model: architecture/security.md
       - Compatibility: architecture/compatibility.md
       - Testing: architecture/testing.md
+      - Performance of the engine: architecture/performance.md
       - The sandbox: architecture/sandbox.md
       - ADR traceability: architecture/adr-traceability.md
       - Decision records:

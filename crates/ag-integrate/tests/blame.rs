@@ -204,3 +204,43 @@ fn a_long_history_stays_correct() {
     }
     assert!(!b.truncated);
 }
+
+/// A history of unpublished changesets several keyframe intervals long (no tree of it is cached), in which the
+/// file is deleted and created again. Blame looks the file up in each visited changeset without building its
+/// tree; the lookup must give what the tree would: a deletion ends the file's history, a re-creation starts it.
+#[test]
+fn blame_over_a_long_uncached_chain_with_a_delete_and_a_recreate() {
+    let f = fx();
+    let mut text = String::from("one\ntwo\nthree\n");
+    let mut head = step(&f, &[], &[("a.txt", &text), ("other.txt", "x\n")], "user:alice", "start");
+    let mut recreated = None;
+    let mut last_appended = head;
+    for i in 0..80 {
+        if i == 40 {
+            // Gone in this changeset ...
+            head = step(&f, &[head], &[("other.txt", "x\n")], "user:bob", "remove a.txt");
+        } else if i == 41 {
+            // ... and created anew, with different lines, by someone else.
+            text = String::from("n1\nn2\nn3\n");
+            head = step(&f, &[head], &[("a.txt", &text), ("other.txt", "x\n")], "user:carol", "recreate a.txt");
+            recreated = Some(head);
+        } else {
+            text.push_str(&format!("line {i}\n"));
+            head = step(&f, &[head], &[("a.txt", &text), ("other.txt", "x\n")], "user:bob", &format!("append {i}"));
+            last_appended = head;
+        }
+    }
+    let b = blame(&f, &head, "a.txt");
+    let recreated = recreated.unwrap();
+    assert_eq!(b.lines.len(), 3 + 38);
+    for l in &b.lines[..3] {
+        assert_eq!(l.changeset, recreated, "{l:?}: the old history ended with the deletion");
+        assert!(!l.boundary);
+    }
+    assert_eq!(b.lines.last().unwrap().changeset, last_appended);
+    assert_eq!(b.lines.last().unwrap().text, "line 79");
+    assert!(!b.truncated);
+    // Every appended line is blamed on exactly the changeset that appended it.
+    let log = f.repo.log(&head, 200, Some("a.txt")).unwrap();
+    assert!(log.iter().any(|e| e.id == recreated));
+}

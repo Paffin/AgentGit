@@ -75,3 +75,11 @@ per file, so ~15–20 MB per tree at 100 000 files and a few trees at once durin
   `scale` tests are the starting point for those measurements.
 - A cheap further win exists if needed: an in-process LRU of decoded trees (a tree of a changeset is
   immutable), which would remove most of the ≈ 3 × 45 ms decode per integration at 100 000 files.
+
+## Update 2026-10-18: reproducible measurements
+
+The suite in `crates/ag-bench` (`ag-bench engine`) repeats these measurements for publish, integrate, three-way merge
+with rename detection, tree diff, blame and manifest decode at 1k/10k/100k files, and
+[Performance of the engine](../architecture/performance.md) records the numbers with their conditions. It found one
+bottleneck that this table did not show (blame over a long chain of changesets without cached trees, 10.6 s at 100 000
+files, now 168 ms); the decision above is unchanged.

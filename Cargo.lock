@@ -20,6 +20,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ag-bench"
+version = "0.1.0"
+dependencies = [
+ "ag-changeset",
+ "ag-integrate",
+ "ag-merge",
+ "ag-object",
+ "ag-protocol",
+ "ag-storage",
+ "ag-tree",
+ "ag-types",
+ "anyhow",
+ "clap",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "ureq",
+]
+
+[[package]]
 name = "ag-changeset"
 version = "0.1.0"
 dependencies = [

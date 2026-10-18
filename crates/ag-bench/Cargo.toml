@@ -1,0 +1,42 @@
+[package]
+name = "ag-bench"
+description = "AgentGit: benchmarks of the engine's hot paths and a load generator for ag-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# A measurement tool for this repository, not a product: nothing depends on it and nobody installs it.
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "ag-bench"
+path = "src/main.rs"
+
+[dependencies]
+ag-types.workspace = true
+ag-object.workspace = true
+ag-changeset.workspace = true
+ag-tree.workspace = true
+ag-merge.workspace = true
+ag-storage.workspace = true
+ag-integrate.workspace = true
+ag-protocol.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+ureq.workspace = true

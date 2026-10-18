@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 
 use ag_diff::{diff_hunks, is_binary, split_lines};
 use ag_merge::detect_renames;
-use ag_tree::Tree;
+use ag_tree::{Entry, Tree, TreeCache};
 use ag_types::{ChangesetId, FileType, RepoPath, Timestamp};
 use serde::Serialize;
 
@@ -95,6 +95,37 @@ pub struct Blame {
 type Pending = Vec<(usize, usize)>;
 
 impl Repository {
+    /// The entry at `path` in the tree of `id`, without building that tree: the first changeset on the
+    /// first-parent chain whose operations mention the path decides (operations are relative to the first
+    /// parent); a cached tree decides when none does. This is what makes blame linear in the history it
+    /// visits: building the tree of every visited changeset replays up to [`crate::KEYFRAME_INTERVAL`]
+    /// operation lists over a copy of the whole tree each time.
+    fn entry_at(&self, id: &ChangesetId, path: &RepoPath) -> Result<Option<Entry>> {
+        let cache = ag_storage::MetaTreeCache(&self.meta);
+        let mut cursor = Some(*id);
+        let mut steps = 0u64;
+        while let Some(cur) = cursor {
+            if let Some(tree) = cache.cached_tree(&cur) {
+                return Ok(tree.get(path).copied());
+            }
+            if steps >= self.limits.max_dag_depth {
+                return Err(Error::Invalid(format!("history deeper than {} changesets", self.limits.max_dag_depth)));
+            }
+            let cs = self.changeset(&cur)?;
+            if let Some(op) = cs.ops.iter().find(|o| o.path() == path) {
+                return Ok(match op {
+                    ag_changeset::Op::Put { content, file_type, executable, .. } => {
+                        Some(Entry { content: *content, file_type: *file_type, executable: *executable })
+                    }
+                    ag_changeset::Op::Delete { .. } => None,
+                });
+            }
+            cursor = cs.first_parent();
+            steps += 1;
+        }
+        Ok(None)
+    }
+
     /// Blames the file at `path` as of `rev`.
     pub fn blame(&self, rev: &ChangesetId, path: &str, opts: &BlameOptions) -> Result<Blame> {
         let path = RepoPath::new(path).map_err(|e| Error::Invalid(format!("bad path '{path}': {e}")))?;
@@ -187,7 +218,7 @@ impl Repository {
             let mut unresolved: Pending = lines;
             // File as it was in this changeset (needed only if it is diffed).
             let mut this_file: Option<Vec<u8>> = None;
-            let mut c_tree: Option<Tree> = None;
+            let mut c_entry: Option<Entry> = None;
 
             for (i, parent) in cs.parents.iter().enumerate() {
                 if unresolved.is_empty() {
@@ -201,36 +232,31 @@ impl Repository {
                 }
                 // Load this changeset's file once.
                 if this_file.is_none() {
-                    let tree = match c_tree.take() {
-                        Some(t) => t,
-                        None => self.tree_of(&id)?,
-                    };
-                    let e = tree
-                        .get(&cur_path)
+                    let e = self
+                        .entry_at(&id, &cur_path)?
                         .ok_or_else(|| Error::Invalid(format!("'{cur_path}' vanished at {}", id.short())))?;
                     this_file = Some(self.blob(&e.content)?);
-                    c_tree = Some(tree);
+                    c_entry = Some(e);
                 }
                 let c_data = this_file.as_deref().expect("loaded");
                 let c_lines = split_lines(c_data);
 
-                let parent_tree = self.tree_of(parent)?;
-                // Where was this file in the parent?
+                // Where was this file in the parent? (A point lookup: no tree is built for the parent.)
                 let mut parent_path = cur_path.clone();
-                let mut parent_entry = parent_tree.get(&cur_path).copied();
+                let mut parent_entry = self.entry_at(parent, &cur_path)?;
                 if parent_entry.is_none() && i == 0 {
                     // Created here: a rename if a similar file was deleted in the same changeset.
-                    let deleted: Vec<_> = cs
-                        .ops
-                        .iter()
-                        .filter_map(|o| match o {
-                            ag_changeset::Op::Delete { path } => parent_tree.get(path).map(|e| (path.clone(), *e)),
-                            _ => None,
-                        })
-                        .collect();
+                    let mut deleted: Vec<(RepoPath, Entry)> = Vec::new();
+                    for o in &cs.ops {
+                        if let ag_changeset::Op::Delete { path } = o
+                            && let Some(e) = self.entry_at(parent, path)?
+                        {
+                            deleted.push((path.clone(), e));
+                        }
+                    }
                     if !deleted.is_empty() {
                         let old = Tree::from_entries(deleted, &self.limits)?;
-                        let new_entry = c_tree.as_ref().and_then(|t| t.get(&cur_path)).copied().expect("present");
+                        let new_entry = c_entry.expect("loaded above");
                         let new = Tree::from_entries([(cur_path.clone(), new_entry)], &self.limits)?;
                         let found = detect_renames(&old, &new, &blobs).map_err(|e| Error::Invalid(e.to_string()))?;
                         if let Some(r) = found.into_iter().next() {

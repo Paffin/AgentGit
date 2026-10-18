@@ -74,7 +74,8 @@ jobs:
           AG_REQUIRE_SANDBOX: "1"
           AG_REQUIRE_DOC_SNIPPETS: "1"
         run: |
-          cargo llvm-cov --workspace --no-report
+          # --no-fail-fast: one failing test must not hide the ones after it (a failure still fails the job)
+          cargo llvm-cov --workspace --no-report --no-fail-fast
           cargo llvm-cov report --json --summary-only --output-path coverage.json
           cargo llvm-cov report --lcov --output-path lcov.info
       - name: Coverage by crate, and the floors

@@ -328,7 +328,10 @@ def run_page(page: Page, bin_dir: Path, timeout: int, keep: bool, show: bool = F
         "AG_DOCTEST": "1",
         "AGDT_POLICIES": str(policies),
     }
-    for keep_var in ("SYSTEMROOT", "RUST_BACKTRACE"):
+    # LLVM_PROFILE_FILE: under `cargo llvm-cov` the binaries are instrumented and told where to write their profile
+    # (an absolute path); without it each `ag` would leave a `default_*.profraw` in the scratch directory, which the
+    # tutorials would count as an extra changed file.
+    for keep_var in ("SYSTEMROOT", "RUST_BACKTRACE", "LLVM_PROFILE_FILE"):
         if keep_var in os.environ:
             env[keep_var] = os.environ[keep_var]
     ok = True

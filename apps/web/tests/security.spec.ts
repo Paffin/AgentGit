@@ -22,9 +22,13 @@ const source = walk(join(root, 'src')).filter(
 const text = (f: string) => readFileSync(f, 'utf8')
 const rel = (f: string) => relative(root, f)
 
-/** The `<script>` elements of an HTML document: tag names are case-insensitive and `</script >` closes one. */
+/**
+ * The `<script>` elements of an HTML document, the way a browser finds them: tag names are case-insensitive, and an
+ * end tag is `</script`, then nothing, or whitespace or a slash and anything up to the `>` (`</script >`,
+ * `</script bar>`).
+ */
 function scriptsOf(html: string): { attrs: string; body: string }[] {
-  return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].map((m) => ({
+  return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script(?:[\s/][^>]*)?>/gi)].map((m) => ({
     attrs: m[1] ?? '',
     body: m[2] ?? '',
   }))
@@ -101,13 +105,16 @@ describe('source hygiene', () => {
     }
   })
 
-  it('the inline-script check sees upper-case tags and a closing tag with a space', () => {
+  it('the inline-script check sees upper-case tags and the odd end tags a browser accepts', () => {
     // The expression this replaced was case-sensitive: an inline <SCRIPT> would have passed the check above.
     const found = scriptsOf(
       '<SCRIPT>alert(1)</SCRIPT ><script src="/a.js"></script><ScRiPt\n>x</script>',
     )
     expect(found.map((s) => s.body.trim())).toEqual(['alert(1)', '', 'x'])
     expect(found[1]?.attrs).toMatch(/\bsrc=/)
+    // an end tag may carry anything up to its `>`, after whitespace or a slash; `</scripts>` ends nothing
+    const odd = scriptsOf('<script>one</script\t\n bar><script>two</script/x><script>three</scripts>four</script>')
+    expect(odd.map((s) => s.body)).toEqual(['one', 'two', 'three</scripts>four'])
     expect(scriptsOf('<p>no scripts</p>')).toEqual([])
   })
 })

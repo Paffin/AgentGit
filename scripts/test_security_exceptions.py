@@ -328,7 +328,7 @@ class Go(unittest.TestCase):
         self.assertEqual(messages, [{"a": 1}, {"b": 2}, {"c": 3}])
 
 
-def sarif_dir(*results):
+def sarif_dir(*results, language="rust"):
     """A directory with one SARIF file in the layout CodeQL writes (the one test double of this file: CodeQL cannot
     run in a unit test; the real thing runs in .github/workflows/codeql.yml). results: (rule, path, score)."""
     d = pathlib.Path(tempfile.mkdtemp())
@@ -341,7 +341,7 @@ def sarif_dir(*results):
         }
         for r, path, _ in results
     ]
-    (d / "rust.sarif").write_text(json.dumps({"version": "2.1.0", "runs": [{"tool": {"driver": {"rules": rules}}, "results": res}]}))
+    (d / f"{language}.sarif").write_text(json.dumps({"version": "2.1.0", "runs": [{"tool": {"driver": {"rules": rules}}, "results": res}]}))
     return d
 
 
@@ -380,6 +380,25 @@ class CodeQl(unittest.TestCase):
         with Env(""):
             self.assertEqual(run("codeql", alerts)[0], 1)
             self.assertEqual(run("codeql", alerts, "--fail-on", "high")[0], 0)
+
+    def test_an_exception_is_only_called_stale_by_the_scan_of_its_own_language(self):
+        # The languages are analysed by separate jobs: the JavaScript scan cannot say that a Python or Rust exception
+        # is no longer needed, but it can say so about a JavaScript one.
+        both = self.accepted(rule="py/clear-text-logging-sensitive-data", path="scripts/a.py") + self.accepted(
+            rule="js/file-access-to-http", path="apps/web/a.ts"
+        ) + self.accepted(rule="rust/cleartext-logging", path="crates/x/src/a.rs")
+        with Env(both):
+            rc, out = run("codeql", sarif_dir(language="javascript"))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out.count("no longer needed"), 1, out)
+        self.assertIn("js/file-access-to-http", out)
+        with Env(both):
+            rc, out = run("codeql", sarif_dir(language="python"))
+            self.assertIn("py/clear-text-logging-sensitive-data", out)
+            self.assertEqual(out.count("no longer needed"), 1, out)
+            # a file named after a language the script does not know: every exception counts
+            rc, out = run("codeql", sarif_dir(language="somethingnew"))
+        self.assertEqual(out.count("no longer needed"), 3, out)
 
     def test_a_directory_without_sarif_is_an_error_not_a_pass(self):
         with Env(""):

@@ -350,10 +350,32 @@ def report(label: str, bad: list[Finding], ok: list[tuple[Finding, Exc]], noted:
     return 1 if bad else 0
 
 
-def stale(excs: list[Exc], ecosystem: str, seen: set[str]) -> None:
+def stale(excs: list[Exc], ecosystem: str, seen: set[str], relevant=lambda e: True) -> None:
+    """Notices for accepted exceptions that this scan (the ones `relevant` says it could have reported) did not see."""
     for e in excs:
-        if e.ecosystem == ecosystem and e.id not in seen:
+        if e.ecosystem == ecosystem and e.id not in seen and relevant(e):
             say("notice", "exception no longer needed", f"{e.id} ({e.package}) is not reported by this scan; remove it from security/exceptions.toml")
+
+
+# The part of a CodeQL rule id before the slash, by the language CodeQL names its SARIF file after.
+CODEQL_RULE_PREFIX = {
+    "javascript": "js", "javascript-typescript": "js", "typescript": "js", "python": "py", "rust": "rust", "go": "go",
+    "java": "java", "java-kotlin": "java", "kotlin": "java", "csharp": "cs", "cpp": "cpp", "c-cpp": "cpp", "ruby": "rb",
+    "swift": "swift", "actions": "actions",
+}
+
+
+def codeql_prefixes(directory: pathlib.Path) -> set[str] | None:
+    """Rule-id prefixes of the languages whose SARIF files are in `directory` (`javascript.sarif` -> `js`), or None
+    when a file is named after a language this script does not know (then every exception counts as in scope).
+    The analysis of each language is a job of its own, so a scan of the JavaScript results cannot tell whether a
+    Python exception is still needed."""
+    prefixes = set()
+    for f in directory.glob("*.sarif"):
+        if f.stem not in CODEQL_RULE_PREFIX:
+            return None
+        prefixes.add(CODEQL_RULE_PREFIX[f.stem])
+    return prefixes
 
 
 def cmd_check(today: dt.date) -> int:
@@ -389,7 +411,13 @@ def cmd_scan(kind: str, report_path: pathlib.Path, today: dt.date, fail_on: str)
 
         label = "CodeQL"
         bad, ok = judge(findings, excs, today, counts)
-        stale(excs, "codeql", {i for f in findings for i in f.ids})
+        scope = codeql_prefixes(report_path)
+        stale(
+            excs,
+            "codeql",
+            {i for f in findings for i in f.ids},
+            lambda e: scope is None or e.id.split("/", 1)[0] in scope,
+        )
         return report(label, bad, ok, [f for f in findings if not counts(f)])
     text = _read(report_path)
     if kind == "npm":

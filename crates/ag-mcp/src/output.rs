@@ -144,6 +144,15 @@ impl From<ApiError> for ToolError {
 pub fn explain_api_error(e: ApiError) -> ToolError {
     let (code, message, hint, retryable) = match (e.status, e.code.as_str()) {
         (_, "cancelled") => ("cancelled".to_string(), "The call was cancelled.".to_string(), None, false),
+        // The credential of a run stops working with the run: it is finished, failed or was reaped as abandoned.
+        (401, _) | (_, "unauthenticated") if e.message.contains("is no longer running") => (
+            "run_ended".to_string(),
+            "The run this call acted as is no longer running (it was finished, failed or abandoned), so its credential \
+             stopped working. Nothing else is wrong with your access."
+                .to_string(),
+            Some("Start a new run with run_start or task_claim and continue there; work you already saved in a workspace or proposal is still there.".to_string()),
+            false,
+        ),
         (401, _) | (_, "unauthenticated") => (
             "credential_rejected".to_string(),
             "The AgentGit server rejected the credential this MCP server uses: it has expired, was revoked or is invalid.".to_string(),

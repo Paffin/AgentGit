@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use ag_mcp::config::{Config, DEFAULT_GROUPS, Group, TokenSource};
+use ag_mcp::config::{Config, DEFAULT_GROUPS, Group, RunCredentials, TokenSource};
 use ag_mcp::protocol::supported_strings;
 use ag_mcp::{Registry, Server, log};
 use clap::Parser;
@@ -50,6 +50,11 @@ struct Cli {
     /// Refuse writes to paths not covered by an active lease that the agent holds.
     #[arg(long, env = "AG_MCP_REQUIRE_LEASE")]
     require_lease: bool,
+
+    /// Whether each run gets a credential of its own, bound to that run: auto (when the server supports it and the
+    /// credential is an agent's), required (refuse to start a run otherwise) or off.
+    #[arg(long, env = "AG_MCP_RUN_CREDENTIALS", default_value = "auto")]
+    run_credentials: String,
 
     /// Most repository-derived text in one response, in bytes.
     #[arg(long, env = "AG_MCP_MAX_OUTPUT_BYTES", default_value_t = 64 * 1024)]
@@ -109,6 +114,7 @@ fn build_config(cli: Cli) -> Result<Config, String> {
     cfg.repos = cli.repos.into_iter().filter(|r| !r.is_empty()).collect();
     cfg.write_paths = cli.write_paths.into_iter().filter(|r| !r.is_empty()).collect();
     cfg.require_lease = cli.require_lease;
+    cfg.run_credentials = RunCredentials::parse(&cli.run_credentials)?;
     cfg.max_output_bytes = cli.max_output_bytes;
     cfg.timeout = Duration::from_secs(cli.timeout_secs.max(1));
     cfg.max_lease_seconds = cli.max_lease_seconds;

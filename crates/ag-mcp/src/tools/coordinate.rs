@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use super::read::{lease_brief, task_brief};
 use super::*;
 use crate::api::{enc, repo_path};
-use crate::config::Group;
+use crate::config::{Group, RunCredentials};
 use crate::output::{ToolError, ToolOutput};
 
 fn run_json(r: &Value) -> Value {
@@ -43,6 +43,7 @@ fn start_run(ctx: &CallCtx<'_>, args: &Value, task: Option<&str>) -> Result<Tool
     let r = ctx.api.send("POST", &format!("{}/runs", repo_path(&repo)), Some(&body), &ctx.opts_keyed(None, &key))?;
     let run = run_json(&r);
     let id = run["run_id"].as_str().unwrap_or("").to_string();
+    let binding = bind_run_credential(ctx, &repo, &agent, &id)?;
     let mut data = json!({"run": run});
     if let Some(t) = task {
         // show what was claimed; best effort
@@ -61,8 +62,87 @@ fn start_run(ctx: &CallCtx<'_>, args: &Value, task: Option<&str>) -> Result<Tool
             crate::sanitize::attr_value(r.get("identity").and_then(Value::as_str).unwrap_or(""))
         ),
     };
-    Ok(ToolOutput::new(summary, data)
-        .note("Finish the run with run_finish when you are done: it releases the leases the run holds."))
+    let mut out = ToolOutput::new(summary, data)
+        .note("Finish the run with run_finish when you are done: it releases the leases the run holds.");
+    if let Some(note) = binding {
+        out = out.note(note);
+    }
+    Ok(out)
+}
+
+/// Gives the run a credential of its own: bound to it, minted from the agent's own credential, kept in memory.
+/// Returns a note for the model when the run is carrying on without one.
+fn bind_run_credential(ctx: &CallCtx<'_>, repo: &str, agent: &str, run: &str) -> Result<Option<String>, ToolError> {
+    let required = ctx.cfg.run_credentials == RunCredentials::Required;
+    // Ends the run that was just started, so a refusal leaves nothing behind.
+    let give_up = |why: String| -> ToolError {
+        let _ = ctx.api.send(
+            "POST",
+            &format!("{}/runs/{}/complete", repo_path(repo), enc(run)),
+            Some(&json!({"status": "failed", "summary": "ag-mcp: no credential could be bound to this run"})),
+            &ctx.opts(None),
+        );
+        ToolError::refused("run_credential_required", why)
+    };
+    let unbound = |why: &str| -> Result<Option<String>, ToolError> {
+        if required {
+            Err(give_up(format!("{why} and --run-credentials is `required`; the run was ended as failed")))
+        } else {
+            Ok(Some(format!(
+                "{why}, so this run carries on with the agent's own credential: another run of the same agent could act as it."
+            )))
+        }
+    };
+    if ctx.cfg.run_credentials == RunCredentials::Off {
+        return Ok(None);
+    }
+    if !ctx.api.supports("auth.run_credentials", &ctx.opts(None))? {
+        return unbound("this AgentGit server cannot bind credentials to runs");
+    }
+    let who = ctx.api.get("/v1/whoami", &[], &ctx.opts(None))?;
+    let identity = who.get("identity").and_then(Value::as_str).unwrap_or("");
+    if identity != format!("agent:{agent}") {
+        return unbound(&format!(
+            "this credential authenticates as `{}`, not as agent `{agent}`, and only an agent can bind its own run",
+            crate::sanitize::attr_value(identity)
+        ));
+    }
+    // What the run may do is what the agent's own credential may do (it can only narrow, never widen).
+    let mut scope = json!({"repos": [repo], "run_id": run});
+    if let Some(ops) = who.pointer("/scope/operations").filter(|o| o.as_array().is_some_and(|a| !a.is_empty())) {
+        scope["operations"] = ops.clone();
+    }
+    if let Some(streams) = who.pointer("/scope/streams").filter(|o| o.as_array().is_some_and(|a| !a.is_empty())) {
+        scope["streams"] = streams.clone();
+    }
+    let minted = ctx.api.send(
+        "POST",
+        "/v1/credentials",
+        Some(&json!({"subject": identity, "description": format!("ag-mcp, run {run}"), "scope": scope})),
+        &ctx.opts(None),
+    );
+    let minted = match minted {
+        Ok(m) => m,
+        Err(e) if required => return Err(give_up(format!("no credential could be bound to the run ({})", e.message))),
+        Err(e) => {
+            return Ok(Some(format!(
+                "no credential could be bound to this run ({}), so it carries on with the agent's own credential: \
+                 another run of the same agent could act as it.",
+                crate::sanitize::attr_value(&e.message)
+            )));
+        }
+    };
+    let token = minted.get("token").and_then(Value::as_str).unwrap_or("").to_string();
+    // A server that does not know about run binding would mint an ordinary credential and say nothing: check.
+    let bound = minted.pointer("/credential/scope/run_id").and_then(Value::as_str) == Some(run);
+    if token.is_empty() || !bound {
+        if let Some(id) = minted.pointer("/credential/id").and_then(Value::as_str) {
+            let _ = ctx.api.send("DELETE", &format!("/v1/credentials/{}", enc(id)), None, &ctx.opts(None));
+        }
+        return unbound("the server minted a credential that is not bound to the run");
+    }
+    ctx.api.bind_run(run, token);
+    Ok(None)
 }
 
 fn task_claim(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
@@ -101,7 +181,7 @@ fn run_heartbeat(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolErro
         "POST",
         &format!("{}/runs/{}/heartbeat", repo_path(&repo), enc(&id)),
         Some(&json!({})),
-        &ctx.opts(None),
+        &ctx.opts(Some(&id)),
     )?;
     Ok(ToolOutput::new(
         format!("Heartbeat recorded for run {id}."),
@@ -125,8 +205,10 @@ fn run_finish(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> 
         "POST",
         &format!("{}/runs/{}/complete", repo_path(&repo), enc(&id)),
         Some(&json!({"status": status, "summary": str_arg(args, "summary").unwrap_or("")})),
-        &ctx.opts(None),
+        &ctx.opts(Some(&id)),
     )?;
+    // The server revoked the credentials bound to the run; there is nothing left to keep.
+    ctx.api.unbind_run(&id);
     Ok(ToolOutput::new(
         format!("Run {id} finished as {status}; its leases were released. The run_id can no longer be used."),
         json!({"run": run_json(&r)}),

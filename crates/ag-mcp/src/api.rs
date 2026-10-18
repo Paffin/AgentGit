@@ -4,9 +4,10 @@
 //! do harm (reads, and creations that carry an idempotency key), and a single re-read of the credential file after a
 //! `401` so that an operator can rotate an expired credential without restarting the agent session.
 
+use std::collections::HashMap;
 use std::io::Read as _;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -74,6 +75,11 @@ pub struct Api {
     agent: ureq::Agent,
     base: String,
     token: RwLock<String>,
+    /// Credentials bound to one run each (ADR-0010), by run id: calls that act as a run use theirs instead of the
+    /// agent's own. They live in this process only and are never printed.
+    run_tokens: RwLock<HashMap<String, String>>,
+    /// The features the server advertised, read once.
+    features: Mutex<Option<Vec<String>>>,
     source: TokenSource,
     timeout: Duration,
     counter: AtomicU64,
@@ -136,6 +142,8 @@ impl Api {
             agent,
             base: cfg.base_url().to_string(),
             token: RwLock::new(token),
+            run_tokens: RwLock::new(HashMap::new()),
+            features: Mutex::new(None),
             source: cfg.token.clone(),
             timeout: cfg.timeout,
             counter: AtomicU64::new(0),
@@ -153,7 +161,47 @@ impl Api {
 
     /// Replaces any occurrence of the credential in `s`.
     pub fn scrub(&self, s: &str) -> String {
-        scrub_secrets(s, &self.token())
+        let s = scrub_secrets(s, &self.token());
+        // The credentials of runs have the shape of any other and are scrubbed by it; the exact value goes too.
+        let runs = self.run_tokens.read().map(|m| m.values().cloned().collect::<Vec<_>>()).unwrap_or_default();
+        runs.iter().fold(s, |s, t| scrub_secrets(&s, t))
+    }
+
+    /// The credential bound to `run`, if this process minted one.
+    pub fn run_token(&self, run: &str) -> Option<String> {
+        self.run_tokens.read().ok().and_then(|m| m.get(run).cloned())
+    }
+
+    /// Makes calls that act as `run` use `token`, a credential bound to that run.
+    pub fn bind_run(&self, run: &str, token: String) {
+        if let Ok(mut m) = self.run_tokens.write() {
+            m.insert(run.to_string(), token);
+        }
+    }
+
+    /// Forgets the credential of a run that ended.
+    pub fn unbind_run(&self, run: &str) {
+        if let Ok(mut m) = self.run_tokens.write() {
+            m.remove(run);
+        }
+    }
+
+    /// Whether the server advertises `feature` (`GET /v1/capabilities`, asked once and remembered).
+    pub fn supports(&self, feature: &str, o: &Opts<'_>) -> Result<bool, ApiError> {
+        if let Some(f) = self.features.lock().ok().and_then(|g| g.clone()) {
+            return Ok(f.iter().any(|x| x == feature));
+        }
+        let caps = self.get("/v1/capabilities", &[], o)?;
+        let features: Vec<String> = caps
+            .get("features")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|f| f.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        let has = features.iter().any(|x| x == feature);
+        if let Ok(mut g) = self.features.lock() {
+            *g = Some(features);
+        }
+        Ok(has)
     }
 
     fn request_id(&self) -> String {
@@ -210,14 +258,16 @@ impl Api {
             if o.cancelled() {
                 return Err(ApiError::local("cancelled", "the request was cancelled"));
             }
-            let used_token = self.token();
+            // A call that acts as a run with a credential of its own uses that one - and only that one.
+            let bound = o.run_id.and_then(|r| self.run_token(r));
+            let used_token = bound.clone().unwrap_or_else(|| self.token());
             let res = self.once(method, &url, &rid, payload.as_deref(), o, &used_token, max_body);
             let err = match res {
                 Ok((status, bytes)) if status < 300 => return Ok((status, bytes)),
                 Ok((status, bytes)) => self.error_from_response(status, &bytes),
                 Err(e) => e,
             };
-            if err.status == 401 && !refreshed && self.source.refreshable() {
+            if err.status == 401 && !refreshed && bound.is_none() && self.source.refreshable() {
                 refreshed = true;
                 if let Ok(fresh) = self.source.load()
                     && fresh != used_token

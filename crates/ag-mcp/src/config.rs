@@ -69,6 +69,37 @@ impl fmt::Display for Group {
 /// The groups switched on when `--allow` is not given.
 pub const DEFAULT_GROUPS: [Group; 4] = [Group::Read, Group::Workspace, Group::Propose, Group::Coordinate];
 
+/// Whether the calls of a run use a credential of their own (ADR-0010 in the AgentGit repository).
+///
+/// A credential bound to a run acts only as that run and stops working when the run ends, so two runs of one agent
+/// (two sessions of an agent platform, say) cannot act for each other, and a credential that leaks from a finished
+/// run is worthless. `ag-mcp` mints it for each run it starts, from the agent's own credential, and keeps it in
+/// memory: the model never sees it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RunCredentials {
+    /// Bind each run when the server supports it and the credential is an agent's; otherwise carry on with the
+    /// agent's own credential and say so in the result of `run_start` / `task_claim`.
+    #[default]
+    Auto,
+    /// Never leave a run unbound: if no bound credential can be had, the run is ended as failed and the call
+    /// refused.
+    Required,
+    /// Never bind: every call uses the agent's own credential.
+    Off,
+}
+
+impl RunCredentials {
+    /// Parses the value of `--run-credentials`.
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim() {
+            "auto" => Ok(Self::Auto),
+            "required" => Ok(Self::Required),
+            "off" => Ok(Self::Off),
+            other => Err(format!("--run-credentials must be auto, required or off, not `{other}`")),
+        }
+    }
+}
+
 /// Where the credential comes from. It is never part of the command line.
 #[derive(Clone)]
 pub enum TokenSource {
@@ -152,6 +183,8 @@ pub struct Config {
     pub write_paths: Vec<String>,
     /// Writes only under an active lease that the caller holds.
     pub require_lease: bool,
+    /// Whether each run gets a credential of its own.
+    pub run_credentials: RunCredentials,
     /// Bound on the repository-derived text in one response, in bytes.
     pub max_output_bytes: usize,
     /// Per-request timeout towards the server.
@@ -180,6 +213,7 @@ impl Config {
             repos: Vec::new(),
             write_paths: Vec::new(),
             require_lease: false,
+            run_credentials: RunCredentials::Auto,
             max_output_bytes: 64 * 1024,
             timeout: Duration::from_secs(30),
             max_message_bytes: 8 * 1024 * 1024,

@@ -45,6 +45,50 @@ fn split_lines_keeps_terminators() {
     assert_eq!(split_lines(b"\n\n").len(), 2);
 }
 
+/// Every sequence over `alphabet` letters up to `max_len` long.
+fn all_sequences(max_len: usize, alphabet: u8) -> Vec<Vec<u8>> {
+    let mut out = vec![vec![]];
+    let mut frontier: Vec<Vec<u8>> = vec![vec![]];
+    for _ in 0..max_len {
+        let mut next = Vec::new();
+        for s in &frontier {
+            for c in 0..alphabet {
+                let mut t = s.clone();
+                t.push(c);
+                next.push(t);
+            }
+        }
+        out.extend(next.iter().cloned());
+        frontier = next;
+    }
+    out
+}
+
+/// Not a sample (the property tests below are): every pair of sequences of up to five elements over three letters,
+/// which is where the ties and the off-by-one cases of the algorithm are. Each result must reproduce the target, be
+/// minimal, and be made of ordered hunks separated by elements that really are equal.
+#[test]
+fn every_short_pair_is_diffed_correctly_and_minimally() {
+    let seqs = all_sequences(5, 3);
+    assert_eq!(seqs.len(), 364);
+    for a in &seqs {
+        for b in &seqs {
+            let hunks = diff_hunks(a, b);
+            assert_eq!(apply(a, b, &hunks), *b, "{a:?} -> {b:?}: {hunks:?}");
+            let cost: usize = hunks.iter().map(|h| h.a_len + h.b_len).sum();
+            assert_eq!(cost, a.len() + b.len() - 2 * lcs_len(a, b), "{a:?} -> {b:?}: {hunks:?}");
+            let (mut ai, mut bi) = (0, 0);
+            for h in &hunks {
+                assert!(h.a_len + h.b_len > 0, "an empty hunk: {a:?} -> {b:?}");
+                assert_eq!(a[ai..h.a_start], b[bi..h.b_start], "{a:?} -> {b:?}: the text between hunks is shared");
+                assert!(h.a_end() <= a.len() && h.b_end() <= b.len());
+                (ai, bi) = (h.a_end(), h.b_end());
+            }
+            assert_eq!(a[ai..], b[bi..], "{a:?} -> {b:?}: so is the tail");
+        }
+    }
+}
+
 #[test]
 fn big_edit_distance_falls_back_to_one_correct_hunk() {
     let a: Vec<u32> = (0..3000).collect();
@@ -83,6 +127,64 @@ fn unified_diff_survives_an_absurd_context() {
         assert_eq!(huge, unified_diff("a", "b", old, new, 1000), "context {context}");
         assert!(huge.contains("@@ -1,8 +1,8 @@"), "{huge}");
     }
+}
+
+fn lines_of(lines: &[&str]) -> Vec<u8> {
+    lines.iter().flat_map(|l| format!("{l}\n").into_bytes()).collect()
+}
+
+#[test]
+fn changes_are_one_hunk_exactly_when_their_context_touches() {
+    // Changes to line 2 and to a later line; with one line of context two unchanged lines between them are shared
+    // context (one hunk), three are not (two hunks).
+    let old = lines_of(&["1", "2", "3", "4", "5", "6", "7", "8"]);
+    let hunks = |new: &[u8], context: usize| unified_diff("a", "b", &old, new, context).matches("@@ -").count();
+    assert_eq!(hunks(&lines_of(&["1", "X", "3", "4", "Y", "6", "7", "8"]), 1), 1, "lines 3 and 4 between the changes");
+    assert_eq!(hunks(&lines_of(&["1", "X", "3", "4", "5", "Y", "7", "8"]), 1), 2, "lines 3, 4 and 5 between them");
+    // with no context at all, changes that are not adjacent are separate hunks
+    assert_eq!(hunks(&lines_of(&["1", "X", "3", "4", "5", "Y", "7", "8"]), 0), 2);
+    assert_eq!(hunks(&lines_of(&["1", "X", "3", "Y", "5", "6", "7", "8"]), 0), 2);
+}
+
+#[test]
+fn one_binary_side_is_enough_to_call_it_binary() {
+    for (old, new) in [(&b"text\n"[..], &b"\0bin"[..]), (&b"\0bin"[..], &b"text\n"[..])] {
+        let d = unified_diff("a", "b", old, new, 3);
+        assert_eq!(d, "--- a\n+++ b\nBinary files differ\n");
+    }
+}
+
+#[test]
+fn a_missing_final_newline_is_marked_on_the_side_it_is_missing_from_only() {
+    // only the old side lacks it
+    assert_eq!(
+        unified_diff("a", "b", b"x\ny", b"x\ny\n", 0),
+        "--- a\n+++ b\n@@ -2 +2 @@\n-y\n\\ No newline at end of file\n+y\n"
+    );
+    // only the new side lacks it
+    assert_eq!(
+        unified_diff("a", "b", b"x\ny\n", b"x\ny", 0),
+        "--- a\n+++ b\n@@ -2 +2 @@\n-y\n+y\n\\ No newline at end of file\n"
+    );
+    // a context line at the end of a file without the newline carries the marker too, and only the last line does
+    assert_eq!(
+        unified_diff("a", "b", b"a\nb\nc", b"A\nb\nc", 3),
+        "--- a\n+++ b\n@@ -1,3 +1,3 @@\n-a\n+A\n b\n c\n\\ No newline at end of file\n"
+    );
+}
+
+#[test]
+fn hunk_headers_name_empty_ranges_the_way_diff_does() {
+    // a pure insertion has an empty old range that starts BEFORE the inserted text (line 0 at the top) ...
+    assert_eq!(unified_diff("a", "b", b"b\n", b"a\nb\n", 0), "--- a\n+++ b\n@@ -0,0 +1 @@\n+a\n");
+    assert_eq!(unified_diff("a", "b", b"a\n", b"a\nb\nc\n", 0), "--- a\n+++ b\n@@ -1,0 +2,2 @@\n+b\n+c\n");
+    // ... a pure deletion has an empty new range
+    assert_eq!(unified_diff("a", "b", b"a\nb\n", b"b\n", 0), "--- a\n+++ b\n@@ -1 +0,0 @@\n-a\n");
+    // one line is "N", several are "N,len"
+    assert_eq!(
+        unified_diff("a", "b", b"1\n2\n3\n", b"1\nX\nY\n", 0),
+        "--- a\n+++ b\n@@ -2,2 +2,2 @@\n-2\n-3\n+X\n+Y\n"
+    );
 }
 
 #[test]

@@ -5,8 +5,45 @@
 # Every mutant must be caught by the crate's own tests. A mutant that cannot change behaviour (an equivalent mutant)
 # is excluded below, with the reason; a mutant that can is a missing test and gets one. Do not add an entry to make a
 # run green.
+#
+# An entry that names a line and column (`lib\.rs:98:15`) does so on purpose: if the code moves, the entry stops
+# matching and the mutant is reported again, to be looked at and re-listed, rather than staying hidden for good.
 
 exclude_re = [
-    # Tree::empty() is `Self::default()`; replacing it with `Default::default()` is the same call.
+    # ag-tree: Tree::empty() is `Self::default()`; replacing it with `Default::default()` is the same call.
     "Tree::empty -> Self with Default::default\\(\\)",
+
+    # ag-object: `Writer::varint` ORs the continuation bit into a byte that was masked to 7 bits, so `|` and `^`
+    # give the same byte.
+    "ag-object/src/canon\\.rs:83:\\d+: replace \\| with \\^ in Writer::varint",
+
+    # ag-diff, `myers`. It is private and has one caller, `diff_hunks`, which has already cut the common prefix and
+    # suffix off and returned for two empty inputs.
+    #  - the early return for an empty side is a shortcut: the general search finds the same single hunk, only
+    #    after trying up to MAX_EDIT_DISTANCE steps first;
+    "ag-diff/src/lib\\.rs:98:15: replace \\|\\| with && in myers",
+    #  - `n + m` and `max + 1` only have to be big enough: `n * m` is as big or the search gives up and the caller
+    #    falls back to one hunk (which is the answer when nothing is shared), and `max * 1` is also a valid offset;
+    "ag-diff/src/lib\\.rs:10[12]:19: replace \\+ with \\* in myers",
+    #  - `.min(v.len() - 1)` never binds: `off + d <= 2 * max + 1 < v.len()`;
+    "ag-diff/src/lib\\.rs:108:51: replace - with [+/] in myers",
+    #  - the loop that appends the leading run of equal elements to the edit script never runs, because the
+    #    caller removed the common prefix (so the walk back ends at (0, 0)); its body is unreachable.
+    "ag-diff/src/lib\\.rs:16[345]:\\d+: replace .* in myers",
+
+    # ag-diff, `unified_diff`: whether a *leading* context line is the last line of the old file only matters for the
+    # "no newline at end of file" marker, and a last line without its newline cannot be followed by a change (an
+    # insertion after it would need the new file to continue past a line that has no end).
+    "ag-diff/src/lib\\.rs:235:(52|56): replace .* in unified_diff",
+
+    # ag-merge, `detect_renames_in`: with nothing deleted, or nothing added, the rest of the function finds no pair
+    # either; the early return only saves building two empty collections.
+    "ag-merge/src/rename\\.rs:73:27: replace \\|\\| with && in detect_renames_in",
+    # ag-merge, `merge_text`: `j = i * 1` starts the scan for the end of a cluster at the cluster's own first hunk,
+    # which is inside it by definition, so the cluster is the same.
+    "ag-merge/src/text\\.rs:69:23: replace \\+ with \\* in merge_text",
+    # ag-merge, `plan_renames`: the arms `Some(t) if t == b => {}` (and its mirror) say "the other side left the file
+    # alone, the ordinary per-path rule already gives the answer". Without the guard the same file is merged as a
+    # rename unit, and a unit whose other side equals the base resolves to our side's entry: the same tree.
+    "ag-merge/src/tree\\.rs:(405|437):32: replace match guard [to] == b with false in plan_renames",
 ]

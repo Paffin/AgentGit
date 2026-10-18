@@ -51,10 +51,11 @@ pub fn merge_text(base: &[u8], ours: &[u8], theirs: &[u8]) -> TextMerge {
     let ho = diff_hunks(&b, &o);
     let ht = diff_hunks(&b, &t);
 
-    // All hunks tagged with their side, ordered by base position.
+    // All hunks tagged with their side, ordered by base position. The sort is stable and ours come first, so hunks
+    // of both sides at the same place stay in the order ours, theirs.
     let mut all: Vec<(Side, Hunk)> = ho.iter().map(|h| (Side::Ours, *h)).collect();
     all.extend(ht.iter().map(|h| (Side::Theirs, *h)));
-    all.sort_by_key(|(side, h)| (h.a_start, h.a_end(), *side == Side::Theirs));
+    all.sort_by_key(|(_, h)| (h.a_start, h.a_end()));
 
     let mut clean: Vec<u8> = Vec::new();
     let mut rendered: Vec<u8> = Vec::new();

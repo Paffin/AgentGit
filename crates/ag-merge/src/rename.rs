@@ -130,9 +130,8 @@ pub fn detect_renames_in(changes: &[Change], io: &dyn BlobIo) -> Result<Vec<Rena
                 let Some(sa) = &a[i] else { continue };
                 for (j, (to, _)) in right.iter().enumerate() {
                     let Some(sb) = &b[j] else { continue };
-                    // The best possible score is bounded by the size ratio; skip hopeless pairs cheaply.
-                    let (lo, hi) = (sa.bytes.min(sb.bytes), sa.bytes.max(sb.bytes));
-                    if hi == 0 || (200 * lo / (lo + hi)) < MIN_SIMILARITY as usize {
+                    // Skip hopeless pairs cheaply: their best possible score is below the threshold.
+                    if similarity_ceiling(sa.bytes, sb.bytes) < MIN_SIMILARITY {
                         continue;
                     }
                     let score = similarity(sa, sb);
@@ -178,12 +177,16 @@ fn signatures(files: &[(&RepoPath, &Entry)], io: &dyn BlobIo) -> Result<Vec<Opti
             if data.len() > MAX_SIMILARITY_FILE_SIZE || is_binary(&data) || data.is_empty() {
                 return Ok(None);
             }
-            let mut lines: Vec<(u64, u32)> =
-                split_lines(&data).into_iter().map(|l| (fnv1a(l), l.len() as u32)).collect();
-            lines.sort_unstable();
-            Ok(Some(Signature { lines, bytes: data.len() }))
+            Ok(Some(signature(&data)))
         })
         .collect()
+}
+
+/// The sorted multiset of a file's lines, each as (hash, length).
+fn signature(data: &[u8]) -> Signature {
+    let mut lines: Vec<(u64, u32)> = split_lines(data).into_iter().map(|l| (fnv1a(l), l.len() as u32)).collect();
+    lines.sort_unstable();
+    Signature { lines, bytes: data.len() }
 }
 
 /// FNV-1a: fixed, dependency-free and identical on every platform, as determinism requires.
@@ -194,6 +197,13 @@ fn fnv1a(bytes: &[u8]) -> u64 {
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     h
+}
+
+/// The highest [`similarity`] two files of these sizes (both above zero: empty files never get a signature) can
+/// reach, in percent: they cannot have more bytes in common than the smaller one has.
+fn similarity_ceiling(a_bytes: usize, b_bytes: usize) -> u32 {
+    let (lo, hi) = (a_bytes.min(b_bytes), a_bytes.max(b_bytes));
+    (200 * lo / (lo + hi)) as u32
 }
 
 /// `2 × common bytes / (bytes a + bytes b)` in percent, over the multiset of lines.
@@ -211,4 +221,72 @@ fn similarity(a: &Signature, b: &Signature) -> u32 {
         }
     }
     ((200 * common) / (a.bytes + b.bytes)) as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The output of the FNV-1a (64 bit) algorithm for these inputs, computed from its definition (offset basis
+    /// 0xcbf29ce484222325, prime 0x100000001b3, xor then multiply) independently of this code. The line hashes are
+    /// part of what makes a rename search the same everywhere, so they are pinned.
+    #[test]
+    fn fnv1a_is_the_fnv_1a_64_bit_hash() {
+        assert_eq!(fnv1a(b""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a(b"a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(fnv1a(b"foobar"), 0x8594_4171_f739_67e8);
+        assert_eq!(fnv1a(b"hello\n"), 0xa9bc_80cc_a21f_28b3);
+    }
+
+    #[test]
+    fn the_ceiling_is_the_share_of_the_larger_file_that_the_smaller_one_can_cover() {
+        // 2 * smaller / (smaller + larger), in whole percent, whichever file is which
+        assert_eq!(similarity_ceiling(5, 5), 100);
+        assert_eq!(similarity_ceiling(3, 7), 60);
+        assert_eq!(similarity_ceiling(7, 3), 60);
+        assert_eq!(similarity_ceiling(2, 3), 80);
+        assert_eq!(similarity_ceiling(1, 99), 2);
+        assert_eq!(similarity_ceiling(100, 1), 1);
+    }
+
+    #[test]
+    fn the_ceiling_is_never_below_what_two_files_actually_score() {
+        // a pair is skipped when its ceiling is under the threshold, so the ceiling must not be an underestimate
+        let texts = ["a\n", "a\nb\n", "a\nb\nc\n", "b\nc\nd\ne\n", "a\nb\nc\nd\ne\nf\ng\n", "zzzzzzzz\n"];
+        for x in texts {
+            for y in texts {
+                let (a, b) = (signature(x.as_bytes()), signature(y.as_bytes()));
+                assert!(similarity(&a, &b) <= similarity_ceiling(a.bytes, b.bytes), "{x:?} {y:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn similarity_counts_each_line_as_often_as_both_files_have_it() {
+        let sim = |a: &str, b: &str| similarity(&signature(a.as_bytes()), &signature(b.as_bytes()));
+        // identical files, and files with nothing in common
+        assert_eq!(sim("x\ny\n", "x\ny\n"), 100);
+        assert_eq!(sim("x\ny\n", "p\nq\n"), 0);
+        // a line the other file has once counts once, however often this one has it ...
+        assert_eq!(sim("x\ny\n", "x\nx\nz\n"), 40); // 2 * 2 / (4 + 6)
+        assert_eq!(sim("x\nx\nz\n", "x\ny\n"), 40);
+        // ... and twice when both have it twice
+        assert_eq!(sim("x\nx\n", "x\nx\nz\n"), 80); // 2 * 4 / (4 + 6)
+        // the order of the lines does not matter
+        assert_eq!(sim("a\nb\nc\n", "c\na\nb\n"), 100);
+        // bytes, not lines: the long line they share outweighs the short ones that differ
+        assert_eq!(sim("0123456789\na\n", "0123456789\nb\n"), 84); // 2 * 11 / 26
+    }
+
+    #[test]
+    fn a_signature_is_the_sorted_lines_with_their_lengths() {
+        let s = signature(b"b\nlonger line\nb\nlast");
+        assert_eq!(s.bytes, 20);
+        assert_eq!(s.lines.len(), 4);
+        assert!(s.lines.windows(2).all(|w| w[0] <= w[1]));
+        let mut lengths: Vec<u32> = s.lines.iter().map(|l| l.1).collect();
+        lengths.sort_unstable();
+        assert_eq!(lengths, vec![2, 2, 4, 12]);
+        assert_eq!(s.lines.iter().filter(|l| l.0 == fnv1a(b"b\n")).count(), 2);
+    }
 }

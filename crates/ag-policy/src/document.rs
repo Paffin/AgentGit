@@ -295,6 +295,16 @@ mod tests {
     }
 
     #[test]
+    fn a_timeout_is_between_one_second_and_one_day() {
+        for (timeout, ok) in [(1u32, true), (600, true), (86_400, true), (86_401, false), (0, false), (u32::MAX, false)]
+        {
+            let spec: super::RunSpec =
+                serde_json::from_str(&format!(r#"{{"argv":["x"],"timeout_secs":{timeout}}}"#)).unwrap();
+            assert_eq!(spec.validate("t").is_ok(), ok, "timeout_secs {timeout}");
+        }
+    }
+
+    #[test]
     fn unsatisfiable_policies_are_rejected() {
         let no_issuers = r#"{"required_validations":[{"check":"tests"}]}"#;
         assert!(matches!(Policy::parse(no_issuers), Err(PolicyError::Invalid(_))));

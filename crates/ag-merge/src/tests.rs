@@ -49,6 +49,46 @@ fn overlapping_edits_conflict() {
 }
 
 #[test]
+fn every_marker_of_a_conflict_starts_on_its_own_line() {
+    // a side without a final newline gets one before the next marker ...
+    assert_eq!(render_conflict_markers(b"x", b"y"), b"<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n".to_vec());
+    // ... one that has it does not get a second ...
+    assert_eq!(render_conflict_markers(b"x\n", b"y\n"), b"<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n".to_vec());
+    // ... and an empty side stays empty: no blank line between the markers
+    assert_eq!(render_conflict_markers(b"", b"y\n"), b"<<<<<<< ours\n=======\ny\n>>>>>>> theirs\n".to_vec());
+    assert_eq!(render_conflict_markers(b"x\n", b""), b"<<<<<<< ours\nx\n=======\n>>>>>>> theirs\n".to_vec());
+    assert_eq!(render_conflict_markers(b"", b""), b"<<<<<<< ours\n=======\n>>>>>>> theirs\n".to_vec());
+}
+
+#[test]
+fn a_conflict_at_the_end_of_a_file_without_a_final_newline_renders_cleanly() {
+    match m("a\nb", "a\nX", "a\nY") {
+        TextMerge::Conflicted { regions, rendered } => {
+            assert_eq!(regions.len(), 1);
+            assert_eq!(String::from_utf8(rendered).unwrap(), "a\n<<<<<<< ours\nX\n=======\nY\n>>>>>>> theirs\n");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn hunks_of_both_sides_at_the_same_place_do_not_depend_on_which_side_is_which() {
+    // both sides insert at the same position, and both replace the same line: one cluster either way
+    for (base, ours, theirs) in [("a\nb\n", "a\nX\nb\n", "a\nY\nb\n"), ("a\nb\nc\n", "a\nX\nc\n", "a\nY\nc\n")] {
+        let ab = m(base, ours, theirs);
+        let ba = m(base, theirs, ours);
+        match (ab, ba) {
+            (TextMerge::Conflicted { regions: r1, .. }, TextMerge::Conflicted { regions: r2, .. }) => {
+                assert_eq!((r1.len(), r2.len()), (1, 1));
+                assert_eq!((&r1[0].ours, &r1[0].theirs), (&r2[0].theirs, &r2[0].ours));
+                assert_eq!(r1[0].base, r2[0].base);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+#[test]
 fn adjacent_edits_conflict_by_design() {
     // ours edits line 2, theirs edits line 3: touching hunks.
     assert!(matches!(m("a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nC\nd\n"), TextMerge::Conflicted { .. }));
@@ -281,6 +321,105 @@ fn file_vs_directory_conflict() {
 }
 
 #[test]
+fn a_file_is_text_merged_up_to_16_mib_and_conflicts_beyond() {
+    let io = Mem::default();
+    // 16384 lines of 1 KiB are exactly 16 MiB; ours edits the first line, theirs the last
+    let line = |i: usize| format!("{i:01023}\n");
+    let base: String = (0..16_384).map(line).collect();
+    assert_eq!(base.len(), 16 * 1024 * 1024);
+    let ours = format!("{}{}", "o".repeat(1023) + "\n", &base[1024..]);
+    let theirs = format!("{}{}", &base[..base.len() - 1024], "t".repeat(1023) + "\n");
+    let merge = |theirs: &str| {
+        let (b, o, t) = (tree(&io, &[("f", &base)]), tree(&io, &[("f", &ours)]), tree(&io, &[("f", theirs)]));
+        merge_trees(&b, &o, &t, &io, &lim()).unwrap()
+    };
+    let r = merge(&theirs);
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    let merged = content(&io, &r.tree, "f");
+    assert!(merged.starts_with("ooo") && merged.ends_with("ttt\n") && merged.len() == base.len());
+    // one byte more on one side
+    let r = merge(&format!("{theirs}z"));
+    assert_eq!(r.conflicts.len(), 1, "{:?}", r.conflicts);
+    assert_eq!(r.conflicts[0].kind, ConflictKind::TooLarge);
+    assert_eq!(MAX_TEXT_MERGE_SIZE, 16 * 1024 * 1024);
+}
+
+#[test]
+fn content_is_only_merged_when_all_three_sides_are_regular_files() {
+    use FileType::{Regular as R, Symlink as S};
+    let io = Mem::default();
+    let mk = |content: &str, file_type: FileType| {
+        let entry =
+            Entry { content: io.write_blob(content.as_bytes().to_vec()).unwrap(), file_type, executable: false };
+        Tree::from_entries([(p("f"), entry)], &lim()).unwrap()
+    };
+    // every combination with a link in it, whichever side it is on
+    for (base, ours, theirs) in [(S, R, R), (R, S, R), (R, R, S), (S, S, R), (S, R, S), (R, S, S), (S, S, S)] {
+        let r = merge_trees(&mk("b\n", base), &mk("o\n", ours), &mk("t\n", theirs), &io, &lim()).unwrap();
+        assert_eq!(r.conflicts.len(), 1, "{base:?} {ours:?} {theirs:?}");
+        assert_eq!(r.conflicts[0].kind, ConflictKind::TypeChange, "{base:?} {ours:?} {theirs:?}");
+    }
+    // three regular files that differ are an ordinary content conflict
+    let r = merge_trees(&mk("b\n", R), &mk("o\n", R), &mk("t\n", R), &io, &lim()).unwrap();
+    assert_eq!(r.conflicts[0].kind, ConflictKind::Content { regions: 1 });
+}
+
+#[test]
+fn the_executable_bit_goes_to_the_side_that_changed_it() {
+    let io = Mem::default();
+    let body = "1\n2\n3\n4\n5\n6\n7\n8\n";
+    let (edit_first, edit_last) = (body.replacen("1\n", "ONE\n", 1), body.replacen("8\n", "EIGHT\n", 1));
+    let mk = |content: &str, executable: bool| {
+        let entry = Entry {
+            content: io.write_blob(content.as_bytes().to_vec()).unwrap(),
+            file_type: FileType::Regular,
+            executable,
+        };
+        Tree::from_entries([(p("run"), entry)], &lim()).unwrap()
+    };
+    // (executable in base, in ours, in theirs) -> in the result; both sides edit the file, so it is a content merge
+    let table = [
+        (false, false, false, false),
+        (false, true, true, true),
+        (false, true, false, true), // ours made it executable
+        (false, false, true, true), // theirs made it executable
+        (true, true, true, true),
+        (true, false, false, false),
+        (true, false, true, false), // ours cleared it
+        (true, true, false, false), // theirs cleared it
+    ];
+    for (base, ours, theirs, expected) in table {
+        let r = merge_trees(&mk(body, base), &mk(&edit_first, ours), &mk(&edit_last, theirs), &io, &lim()).unwrap();
+        assert!(r.is_clean(), "{:?}", r.conflicts);
+        assert_eq!(r.tree.get(&p("run")).unwrap().executable, expected, "base {base} ours {ours} theirs {theirs}");
+        assert_eq!(content(&io, &r.tree, "run"), "ONE\n2\n3\n4\n5\n6\n7\nEIGHT\n");
+    }
+}
+
+#[test]
+fn every_kind_of_conflict_has_a_sentence() {
+    let cases = [
+        (ConflictKind::Content { regions: 2 }, "content conflict (2 region(s))"),
+        (ConflictKind::BothAdded, "both sides added different content"),
+        (ConflictKind::DeleteModify { ours_deleted: true }, "deleted on our side, modified on theirs"),
+        (ConflictKind::DeleteModify { ours_deleted: false }, "modified on our side, deleted on theirs"),
+        (ConflictKind::Binary, "binary file changed on both sides"),
+        (ConflictKind::TypeChange, "file type or symlink target changed on both sides"),
+        (ConflictKind::TooLarge, "file too large to merge"),
+        (ConflictKind::FileDirectory { inside: p("x/y") }, "file/directory conflict with 'x/y'"),
+        (
+            ConflictKind::RenameRename { ours: p("a"), theirs: p("b") },
+            "renamed to 'a' on our side and to 'b' on theirs",
+        ),
+        (ConflictKind::RenameDelete { ours_renamed: true }, "renamed on our side, deleted on theirs"),
+        (ConflictKind::RenameDelete { ours_renamed: false }, "deleted on our side, renamed on theirs"),
+    ];
+    for (kind, text) in cases {
+        assert_eq!(kind.to_string(), text);
+    }
+}
+
+#[test]
 fn tree_merge_is_deterministic() {
     let io = Mem::default();
     let base = tree(&io, &[("a", "1\n2\n3\n"), ("b", "k")]);
@@ -363,6 +502,184 @@ fn copies_pair_by_file_name_then_path_and_never_twice() {
     // The same answer however the inputs were built.
     let r2 = pairs(&detect_renames(&old, &new, &io).unwrap());
     assert_eq!(r, r2);
+}
+
+fn symlink_tree(io: &Mem, path: &str, target: &str) -> Tree {
+    let link = Entry {
+        content: io.write_blob(target.as_bytes().to_vec()).unwrap(),
+        file_type: FileType::Symlink,
+        executable: false,
+    };
+    Tree::from_entries([(p(path), link)], &lim()).unwrap()
+}
+
+#[test]
+fn a_symlink_is_never_renamed_even_to_a_file_with_the_same_bytes() {
+    let io = Mem::default();
+    let file = tree(&io, &[("f", "target")]);
+    // link -> file, file -> link and link -> link, all with the same blob behind them
+    assert!(detect_renames(&symlink_tree(&io, "l", "target"), &file, &io).unwrap().is_empty());
+    assert!(detect_renames(&file, &symlink_tree(&io, "l", "target"), &io).unwrap().is_empty());
+    assert!(
+        detect_renames(&symlink_tree(&io, "l1", "target"), &symlink_tree(&io, "l2", "target"), &io).unwrap().is_empty()
+    );
+}
+
+#[test]
+fn a_path_is_paired_once_whether_the_content_is_identical_or_only_similar() {
+    let io = Mem::default();
+    // identical: one old file, two new ones - and two old files, one new one
+    let same = "same\n";
+    let one_to_two =
+        detect_renames(&tree(&io, &[("a.txt", same)]), &tree(&io, &[("b.txt", same), ("c.txt", same)]), &io);
+    assert_eq!(pairs(&one_to_two.unwrap()), vec![("a.txt".into(), "b.txt".into(), 100)]);
+    let two_to_one =
+        detect_renames(&tree(&io, &[("a.txt", same), ("b.txt", same)]), &tree(&io, &[("c.txt", same)]), &io);
+    assert_eq!(pairs(&two_to_one.unwrap()), vec![("a.txt".into(), "c.txt".into(), 100)]);
+
+    // similar: the better match wins and the other file stays unpaired, in both directions
+    let original = lines("orig", 20);
+    let close = format!("{}changed\n", lines("orig", 19)); // 19 of 20 lines
+    let looser = format!("{}{}", lines("orig", 15), lines("other", 5)); // 15 of 20 lines
+    let one_to_two =
+        detect_renames(&tree(&io, &[("old.rs", &original)]), &tree(&io, &[("x.rs", &looser), ("y.rs", &close)]), &io);
+    assert_eq!(pairs(&one_to_two.unwrap()), vec![("old.rs".into(), "y.rs".into(), 95)]);
+    let two_to_one =
+        detect_renames(&tree(&io, &[("x.rs", &looser), ("y.rs", &original)]), &tree(&io, &[("new.rs", &close)]), &io);
+    assert_eq!(pairs(&two_to_one.unwrap()), vec![("y.rs".into(), "new.rs".into(), 95)]);
+}
+
+/// `n` files that share no line with each other, in `dir`; `f0.txt` is `lines(&format!("{dir}0"), 8)`.
+fn crowd(io: &Mem, dir: &str, n: usize) -> Tree {
+    Tree::from_entries(
+        (0..n).map(|i| (p(&format!("{dir}/f{i}.txt")), entry(io, &lines(&format!("{dir}{i}"), 8)))),
+        &lim(),
+    )
+    .unwrap()
+}
+
+/// What `crowd(.., "old"|"new", ..)`'s `f0.txt` looks like after its last line was edited.
+fn edited_f0(dir: &str) -> String {
+    format!("{}edited\n", lines(&format!("{dir}0"), 7))
+}
+
+#[test]
+fn similarity_is_only_tried_for_up_to_two_hundred_files_on_each_side() {
+    let io = Mem::default();
+    let moved = |old: &Tree, new: &Tree| pairs(&detect_renames(old, new, &io).unwrap());
+    for (n, found) in [(200, true), (201, false)] {
+        // many deleted files, one added file that is an edited copy of one of them
+        let added = tree(&io, &[("g.txt", &edited_f0("old"))]);
+        let r = moved(&crowd(&io, "old", n), &added);
+        assert_eq!(r.len(), usize::from(found), "{n} deleted: {r:?}");
+        // one deleted file, many added files
+        let deleted = tree(&io, &[("g.txt", &edited_f0("new"))]);
+        let r = moved(&deleted, &crowd(&io, "new", n));
+        assert_eq!(r.len(), usize::from(found), "{n} added: {r:?}");
+    }
+    // ... and a search that is not attempted costs no read: only the file ids are compared
+    let spy = Counting::new(&io);
+    let added = tree(&io, &[("g.txt", &edited_f0("old"))]);
+    assert!(detect_renames(&crowd(&io, "old", 201), &added, &spy).unwrap().is_empty());
+    assert!(
+        detect_renames(&tree(&io, &[("g.txt", &edited_f0("new"))]), &crowd(&io, "new", 201), &spy).unwrap().is_empty()
+    );
+    assert_eq!(spy.reads(), 0);
+}
+
+/// A [`BlobIo`] that counts the blobs read through it.
+struct Counting<'a> {
+    inner: &'a Mem,
+    reads: std::cell::Cell<usize>,
+}
+
+impl<'a> Counting<'a> {
+    fn new(inner: &'a Mem) -> Self {
+        Self { inner, reads: std::cell::Cell::new(0) }
+    }
+    fn reads(&self) -> usize {
+        self.reads.get()
+    }
+}
+
+impl BlobIo for Counting<'_> {
+    fn read_blob(&self, id: &BlobId) -> Result<Vec<u8>, IoError> {
+        self.reads.set(self.reads.get() + 1);
+        self.inner.read_blob(id)
+    }
+    fn write_blob(&self, data: Vec<u8>) -> Result<BlobId, IoError> {
+        self.inner.write_blob(data)
+    }
+}
+
+#[test]
+fn files_are_read_only_when_there_is_something_left_to_compare_them_with() {
+    let io = Mem::default();
+    let spy = Counting::new(&io);
+    // an exact rename needs the ids alone
+    detect_renames(&tree(&io, &[("a", "same\n")]), &tree(&io, &[("b", "same\n")]), &spy).unwrap();
+    assert_eq!(spy.reads(), 0);
+    // everything deleted was matched exactly: the new file has nothing to be compared with
+    let found = detect_renames(&tree(&io, &[("a", "same\n")]), &tree(&io, &[("b", "same\n"), ("c", "other\n")]), &spy);
+    assert_eq!(pairs(&found.unwrap()), vec![("a".into(), "b".into(), 100)]);
+    assert_eq!(spy.reads(), 0);
+    // and the other way round
+    let found = detect_renames(&tree(&io, &[("a", "same\n"), ("c", "other\n")]), &tree(&io, &[("b", "same\n")]), &spy);
+    assert_eq!(pairs(&found.unwrap()), vec![("a".into(), "b".into(), 100)]);
+    assert_eq!(spy.reads(), 0);
+    // two candidates, one on each side: both are read once
+    detect_renames(&tree(&io, &[("a", "one\n")]), &tree(&io, &[("b", "two\n")]), &spy).unwrap();
+    assert_eq!(spy.reads(), 2);
+}
+
+#[test]
+fn the_similarity_threshold_is_sixty_percent_of_the_bytes() {
+    let io = Mem::default();
+    let renamed = |old: &str, new: &str| {
+        let found = detect_renames(&tree(&io, &[("old", old)]), &tree(&io, &[("new", new)]), &io).unwrap();
+        found.iter().map(|r| r.similarity).collect::<Vec<_>>()
+    };
+    // 59 bytes of 100 are shared: 2 * 59 / 200 = 59 percent, one short
+    let (shared, ours, theirs) = ("p".repeat(58) + "\n", "u".repeat(40) + "\n", "v".repeat(40) + "\n");
+    assert_eq!(renamed(&format!("{shared}{ours}"), &format!("{shared}{theirs}")), Vec::<u32>::new());
+    // 60 of 100: exactly the threshold
+    let (shared, ours, theirs) = ("p".repeat(59) + "\n", "u".repeat(39) + "\n", "v".repeat(39) + "\n");
+    assert_eq!(renamed(&format!("{shared}{ours}"), &format!("{shared}{theirs}")), vec![60]);
+    // a small file all of whose bytes are in a larger one: 2 * 3 / (3 + 7) = 60 percent, whichever way round
+    assert_eq!(renamed("xy\n", "xy\nabc\n"), vec![60]);
+    assert_eq!(renamed("xy\nabc\n", "xy\n"), vec![60]);
+    // a few bytes more and it is 54
+    assert_eq!(renamed("xy\n", "xy\nabcd\n"), Vec::<u32>::new());
+}
+
+#[test]
+fn similarity_matching_stops_at_exactly_256_kib() {
+    let io = Mem::default();
+    // 4096 lines of 64 bytes, and the same with the first line replaced by another of the same length
+    let big: String = (0..4096).map(|i| format!("{i:063}\n")).collect();
+    let edited = format!("{}\n{}", "x".repeat(63), &big[64..]);
+    let renamed =
+        |old: &str, new: &str| detect_renames(&tree(&io, &[("old", old)]), &tree(&io, &[("new", new)]), &io).unwrap();
+    assert_eq!((big.len(), edited.len()), (262_144, 262_144));
+    assert_eq!(pairs(&renamed(&big, &edited)), vec![("old".into(), "new".into(), 99)]);
+    // one byte more, on both sides: only identical files match
+    assert!(renamed(&format!("{big}z"), &format!("{edited}z")).is_empty());
+    assert_eq!(pairs(&renamed(&format!("{big}z"), &format!("{big}z"))), vec![("old".into(), "new".into(), 100)]);
+}
+
+#[test]
+fn a_file_with_a_nul_byte_only_matches_exactly() {
+    let io = Mem::default();
+    let renamed = |old: String, new: String| {
+        detect_renames(&tree(&io, &[("old", &old)]), &tree(&io, &[("new", &new)]), &io).unwrap()
+    };
+    let (old, new) = (format!("{}tail\n", lines("shared", 20)), format!("{}changed\ntail\n", lines("shared", 19)));
+    // the same two files without a NUL byte are a rename ...
+    assert_eq!(renamed(old.clone(), new.clone()).len(), 1);
+    // ... and with one they are not, although nearly all of their lines are the same
+    assert!(renamed(old.replacen("tail", "\0tail", 1), new.replacen("tail", "\0tail", 1)).is_empty());
+    // the identical binary file is
+    assert_eq!(renamed(old.replacen("tail", "\0tail", 1), old.replacen("tail", "\0tail", 1)).len(), 1);
 }
 
 #[test]

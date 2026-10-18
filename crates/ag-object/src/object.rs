@@ -162,6 +162,21 @@ mod tests {
     }
 
     #[test]
+    fn kind_tags_names_and_their_inverse() {
+        // Literal values: the tag is part of the hash preimage, so it is a format, not an implementation detail.
+        for (kind, tag, name) in
+            [(ObjectKind::Blob, 1, "blob"), (ObjectKind::Changeset, 2, "changeset"), (ObjectKind::Tree, 3, "tree")]
+        {
+            assert_eq!(kind.tag(), tag);
+            assert_eq!(kind.name(), name);
+            assert_eq!(ObjectKind::from_tag(tag), Some(kind));
+        }
+        assert_eq!(ObjectKind::from_tag(0), None);
+        assert_eq!(ObjectKind::from_tag(4), None);
+        assert_eq!(ObjectKind::from_tag(255), None);
+    }
+
+    #[test]
     fn envelope_roundtrip_and_verify() {
         let obj = RawObject::blob(b"hello".to_vec());
         let id = obj.id();

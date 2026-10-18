@@ -258,6 +258,48 @@ mod tests {
     }
 
     #[test]
+    fn fixed_width_fields_are_the_literal_bytes_and_read_back_exactly() {
+        // Checked against literal bytes, not only writer against reader: a writer that wrote nothing and a reader
+        // that returned a constant would agree with each other.
+        let key: [u8; 32] = std::array::from_fn(|i| i as u8 + 2);
+        let mut w = Writer::new();
+        w.u8(0xab).u16(0x1234).i64(-2).varint(300).fixed32(&key);
+        let bytes = w.finish();
+        let mut expected = vec![0xab, 0x12, 0x34];
+        expected.extend_from_slice(&(-2i64).to_be_bytes());
+        expected.extend_from_slice(&[0xac, 0x02]);
+        expected.extend_from_slice(&key);
+        assert_eq!(bytes, expected);
+
+        let mut r = Reader::new(&bytes);
+        assert_eq!(r.u8().unwrap(), 0xab);
+        assert_eq!(r.u16().unwrap(), 0x1234);
+        assert_eq!(r.i64().unwrap(), -2);
+        assert_eq!(r.varint().unwrap(), 300);
+        assert_eq!(r.fixed32().unwrap(), key);
+        assert!(r.finish().is_ok());
+    }
+
+    #[test]
+    fn short_input_is_eof_for_every_fixed_width_read() {
+        assert_eq!(Reader::new(&[]).u8(), Err(CanonError::Eof));
+        assert_eq!(Reader::new(&[1]).u16(), Err(CanonError::Eof));
+        assert_eq!(Reader::new(&[0; 7]).i64(), Err(CanonError::Eof));
+        assert_eq!(Reader::new(&[0; 31]).fixed32(), Err(CanonError::Eof));
+    }
+
+    #[test]
+    fn a_length_equal_to_the_bound_is_accepted_and_one_more_is_not() {
+        let mut w = Writer::new();
+        w.str("abcd");
+        let bytes = w.finish();
+        assert_eq!(Reader::new(&bytes).str(4), Ok("abcd"));
+        assert_eq!(Reader::new(&bytes).str(3), Err(CanonError::TooLong { len: 4, max: 3 }));
+        assert_eq!(Reader::new(&bytes).bounded_varint(4), Ok(4));
+        assert_eq!(Reader::new(&bytes).bounded_varint(3), Err(CanonError::TooLong { len: 4, max: 3 }));
+    }
+
+    #[test]
     fn trailing_bytes_rejected() {
         let mut r = Reader::new(&[1, 2]);
         r.u8().unwrap();

@@ -140,3 +140,17 @@ impl Attestation {
         self.public_key.verify(DOMAIN, &bytes, &self.signature).map_err(|_| AttestationError::BadSignature)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_result_is_stored_under_the_name_it_has_in_json() {
+        for (result, name) in [(CheckResult::Pass, "pass"), (CheckResult::Fail, "fail")] {
+            assert_eq!(result.as_str(), name);
+            assert_eq!(serde_json::to_string(&result).unwrap(), format!("\"{name}\""));
+            assert_eq!(serde_json::from_str::<CheckResult>(&format!("\"{name}\"")).unwrap(), result);
+        }
+    }
+}

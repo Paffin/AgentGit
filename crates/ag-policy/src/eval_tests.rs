@@ -395,6 +395,148 @@ fn integrator_and_author_allow_lists() {
 }
 
 #[test]
+fn only_an_attestation_for_the_required_check_counts() {
+    let p = policy_with_tests();
+    let mut c = Ctx::new();
+    // trusted, signed, for this tree and policy version - but for another check
+    c.atts.push(attest(&ci_key(), "service:ci", 1, "lint", CheckResult::Pass, 3, 999_000));
+    let e = c.eval(&p);
+    assert_eq!(e.decision, Decision::Blocked);
+    assert_eq!(e.unmet, vec![Unmet::MissingValidation { check: "tests".into() }]);
+    // a failure of another check is not a failure of this one
+    c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, 999_000));
+    c.atts.push(attest(&ci_key(), "service:ci", 1, "lint", CheckResult::Fail, 3, 999_000));
+    assert!(c.eval(&p).is_allowed());
+}
+
+#[test]
+fn a_validation_can_be_limited_to_named_issuers() {
+    let other_key = KeyPair::from_seed([7; 32]);
+    let mut p = policy_with_tests();
+    p.trusted_issuers.push(TrustedIssuer { identity: id("service:other"), public_key: other_key.public() });
+    p.required_validations[0].issuers = vec![id("service:ci")];
+    let mut c = Ctx::new();
+    // trusted, but not one of the issuers this check accepts
+    c.atts.push(attest(&other_key, "service:other", 1, "tests", CheckResult::Pass, 3, 999_000));
+    assert_eq!(c.eval(&p).decision, Decision::Blocked);
+    c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, 999_000));
+    assert!(c.eval(&p).is_allowed());
+    // without the restriction either issuer is enough
+    p.required_validations[0].issuers.clear();
+    c.atts.remove(1);
+    assert!(c.eval(&p).is_allowed());
+}
+
+/// `now` is 1_000_000 ms in every [`Ctx`].
+#[test]
+fn the_clock_skew_and_the_age_limit_are_inclusive() {
+    let allowed = |policy: &Policy, issued_at: i64| {
+        let mut c = Ctx::new();
+        c.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, issued_at));
+        c.eval(policy).is_allowed()
+    };
+    // five minutes ahead of the evaluation clock is tolerated, one millisecond more is not
+    let p = policy_with_tests();
+    assert!(allowed(&p, 1_000_000 + 300_000));
+    assert!(!allowed(&p, 1_000_000 + 300_001));
+    // exactly as old as the limit is fine, one millisecond older is not
+    let mut aged = policy_with_tests();
+    aged.required_validations[0].max_age_secs = Some(900);
+    assert!(allowed(&aged, 100_000));
+    assert!(!allowed(&aged, 99_999));
+}
+
+#[test]
+fn the_changed_file_limit_is_inclusive_and_zero_means_no_limit() {
+    let changed = |n: usize| (0..n).map(|i| ChangedPath { path: format!("f{i}") }).collect::<Vec<_>>();
+    let limited = Policy { max_changed_files: 2, ..Policy::default() };
+    let mut c = Ctx::new();
+    c.changed = changed(2);
+    assert!(c.eval(&limited).is_allowed());
+    c.changed = changed(3);
+    let e = c.eval(&limited);
+    assert_eq!(e.decision, Decision::Denied);
+    assert_eq!(e.unmet, vec![Unmet::TooManyChangedFiles { changed: 3, max: 2 }]);
+    c.changed = changed(500);
+    assert!(c.eval(&Policy::default()).is_allowed());
+}
+
+#[test]
+fn what_was_satisfied_is_listed_and_nothing_else() {
+    let e = Ctx::new().eval(&Policy::default());
+    assert!(e.unmet.is_empty());
+    assert_eq!(e.satisfied, vec!["actor user:alice may integrate".to_string()], "no approvals were required");
+    let mut c = Ctx::new();
+    c.approvals.push(approve("user:carol", 1));
+    let e = c.eval(&approval_policy(1));
+    assert_eq!(
+        e.satisfied,
+        vec!["actor user:alice may integrate".to_string(), "1 approval(s) of 1 required".to_string()]
+    );
+}
+
+#[test]
+fn an_envelope_with_no_room_or_no_paths_contains_nothing_not_even_an_empty_change() {
+    let agent = id("agent:docbot#run_1");
+    // max_files 0: "nothing is ever inside the envelope", so the agent may not integrate
+    let no_room = Policy {
+        agent_autonomy: AgentAutonomy { auto_integrate: true, allowed_paths: vec!["docs/**".into()], max_files: 0 },
+        ..Policy::default()
+    };
+    let mut c = Ctx::new();
+    c.actor = agent.clone();
+    c.author = agent.clone();
+    c.changed = vec![];
+    assert_eq!(c.eval(&no_room).decision, Decision::Denied);
+    // no allowed paths: an agent-authored change still needs the human approval
+    let no_paths = Policy {
+        agent_autonomy: AgentAutonomy { auto_integrate: false, allowed_paths: vec![], max_files: 3 },
+        approvals: ApprovalRules { min: 0, min_for_agents: 1, ..ApprovalRules::default() },
+        ..Policy::default()
+    };
+    let mut c = Ctx::new();
+    c.author = agent;
+    c.changed = vec![];
+    assert_eq!(c.eval(&no_paths).decision, Decision::Blocked);
+    c.approvals.push(approve("user:carol", 1));
+    assert!(c.eval(&no_paths).is_allowed());
+}
+
+#[test]
+fn every_unmet_requirement_reads_as_a_sentence_and_the_denials_are_the_ones_that_cannot_wait() {
+    let cases = [
+        (Unmet::ActorNotAllowed { reason: "no".into() }, "actor not allowed to integrate: no", true),
+        (
+            Unmet::AuthorNotAllowed { author: "agent:x".into() },
+            "author agent:x is not allowed to propose to this stream",
+            true,
+        ),
+        (
+            Unmet::FailedValidation { check: "tests".into(), attestation: "att_1".into() },
+            "check 'tests' FAILED on this exact tree (attestation att_1)",
+            true,
+        ),
+        (
+            Unmet::MissingValidation { check: "tests".into() },
+            "check 'tests' has no trusted passing attestation for this exact tree",
+            false,
+        ),
+        (
+            Unmet::InsufficientApprovals { scope: "default".into(), required: 2, have: 1 },
+            "approvals (default): 1 of 2 required",
+            false,
+        ),
+        (Unmet::ChangesRequested { reviewer: "user:carol".into() }, "user:carol requested changes", false),
+        (Unmet::MissingProvenance, "agent-authored change has no signed provenance", false),
+        (Unmet::TooManyChangedFiles { changed: 5, max: 3 }, "5 files changed, policy allows at most 3", true),
+    ];
+    for (unmet, text, denial) in cases {
+        assert_eq!(unmet.to_string(), text);
+        assert_eq!(unmet.is_denial(), denial, "{text}");
+    }
+}
+
+#[test]
 fn evaluation_is_deterministic() {
     let p = policy_with_tests();
     let mut c = Ctx::new();

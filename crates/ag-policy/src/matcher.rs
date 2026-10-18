@@ -60,3 +60,46 @@ impl IdentityMatcher {
         self.set.is_match(id.as_str()) || self.set.is_match(id.principal().as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn patterns(p: &[&str]) -> Vec<String> {
+        p.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn a_pattern_names_either_the_whole_identity_or_its_principal() {
+        let run = Identity::new("agent:bot#run_1").unwrap();
+        // the principal only: "agent:bot" names every run of the bot
+        assert!(IdentityMatcher::new(&patterns(&["agent:bot"])).unwrap().is_match(&run));
+        // the whole identity only: one run
+        assert!(IdentityMatcher::new(&patterns(&["agent:bot#run_1"])).unwrap().is_match(&run));
+        // neither
+        assert!(!IdentityMatcher::new(&patterns(&["agent:bot#run_2", "agent:other"])).unwrap().is_match(&run));
+        // and a plain user, which has no run part
+        let user = Identity::new("user:alice").unwrap();
+        assert!(IdentityMatcher::new(&patterns(&["user:*"])).unwrap().is_match(&user));
+        assert!(!IdentityMatcher::new(&patterns(&["agent:*"])).unwrap().is_match(&user));
+    }
+
+    #[test]
+    fn matchers_know_whether_they_have_patterns() {
+        assert!(IdentityMatcher::new(&[]).unwrap().is_empty());
+        assert!(!IdentityMatcher::new(&patterns(&["user:*"])).unwrap().is_empty());
+        assert!(PathMatcher::new(&[]).unwrap().is_empty());
+        assert!(!PathMatcher::new(&patterns(&["docs/**"])).unwrap().is_empty());
+        // an empty matcher matches nothing, which is not the same as matching everything
+        assert!(!PathMatcher::new(&[]).unwrap().is_match("docs/a.md"));
+    }
+
+    #[test]
+    fn a_star_stays_inside_one_directory_and_two_stars_do_not() {
+        let m = PathMatcher::new(&patterns(&["docs/*.md", "src/**"])).unwrap();
+        assert!(m.is_match("docs/a.md"));
+        assert!(!m.is_match("docs/deep/a.md"));
+        assert!(m.is_match("src/a/b/c.rs"));
+        assert!(!m.is_match("other/a.md"));
+    }
+}

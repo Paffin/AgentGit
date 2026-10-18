@@ -27,7 +27,7 @@ const principal = (over: Partial<Principal> = {}): Principal => ({
   credential_id: 'cred_1',
   expires_at_ms: 0,
   roles: ['acme/*:writer', 'acme/web:reviewer'],
-  scope: { repos: [], streams: [], operations: [] },
+  scope: { repos: [], streams: [], operations: [], run_id: '' },
   ...over,
 })
 

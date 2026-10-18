@@ -147,6 +147,8 @@ __all__ = [
     "QueueEntry",
     "Quota",
     "ReadHeadRequest",
+    "ReapRunsRequest",
+    "ReapRunsResponse",
     "ReflogEntry",
     "ReflogRequest",
     "ReflogResponse",
@@ -408,7 +410,7 @@ class CompleteJobRequest:
 
 @dataclass(kw_only=True)
 class CompleteRunRequest:
-    """The `CompleteRunRequest` message."""
+    """A run is finished by its own agent (a run-bound credential: by that run alone) or by an operator (`agent.operate`), whose action is recorded in the audit log as an operator's."""
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     run_id: str = field(default="")
@@ -503,6 +505,7 @@ class CredentialScope:
     """Restrictions attached to a credential. Every field narrows; empty = no restriction on that dimension."""
     operations: list[str] = field(default_factory=list)
     repos: list[str] = field(default_factory=list)
+    run_id: str = field(default="")
     streams: list[str] = field(default_factory=list)
 
 
@@ -633,7 +636,7 @@ class FileOp:
 
 @dataclass(kw_only=True)
 class FinishTaskRequest:
-    """The `FinishTaskRequest` message."""
+    """Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit log as an operator's, with the owner it overrode."""
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")
@@ -1445,6 +1448,23 @@ class ReadHeadRequest:
 
 
 @dataclass(kw_only=True)
+class ReapRunsRequest:
+    """Ends the runs of a repository that stopped heartbeating, releases the leases they (and finished runs) still hold, and revokes the credentials bound to them. An operator action (capability `agent.operate`); every run it ends is recorded in the audit log under the operator's identity."""
+    dry_run: bool = field(default=False)
+    repo: str = field(default="")
+    stale_after_ms: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class ReapRunsResponse:
+    """The `ReapRunsResponse` message."""
+    dry_run: bool = field(default=False)
+    released_leases: list[str] = field(default_factory=list)
+    revoked_credentials: int = field(default=0)
+    runs: list[Run] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
 class ReflogEntry:
     """The `ReflogEntry` message."""
     actor: str = field(default="")
@@ -1501,6 +1521,7 @@ class ReplayResponse:
 class Repo:
     """The `Repo` message."""
     changeset_count: int = field(default=0)
+    counts_error: str = field(default="")
     created_at_ms: int = field(default=0)
     created_by: str = field(default="")
     default_stream: str = field(default="")

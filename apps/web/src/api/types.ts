@@ -63,13 +63,15 @@ export type Operation = S['Operation']
 /** Request bodies: every field is optional on the wire (missing = zero value), so callers pass only what they mean. */
 export type Req<K extends keyof S> = Partial<S[K]>
 
-export type Role = 'reader' | 'writer' | 'reviewer' | 'integrator' | 'runner' | 'admin'
+export type Role =
+  'reader' | 'writer' | 'reviewer' | 'integrator' | 'runner' | 'delegator' | 'admin'
 export const ROLES: readonly Role[] = [
   'reader',
   'writer',
   'reviewer',
   'integrator',
   'runner',
+  'delegator',
   'admin',
 ]
 

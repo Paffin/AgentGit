@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Repo } from '@/api/types'
 import { formatDate, plural } from '@/lib/format'
-import { mapLimit } from '@/lib/pool'
 import { useAuth } from '@/stores/auth'
 import { useToasts } from '@/stores/toasts'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -28,7 +27,6 @@ usePageTitle(() => 'Repositories')
 
 const MAX_REPOS = 1000
 const all = ref<Repo[]>([])
-const counts = ref<Record<string, { streams: number; changesets: number }>>({})
 const loading = ref(true)
 const truncated = ref(false)
 const error = ref<unknown>(null)
@@ -51,20 +49,9 @@ const visible = computed(() => {
   )
 })
 
-// The list endpoint does not fill in counts (describe does), so fetch them for what is on screen.
-async function enrich(repos: Repo[], mine: number) {
-  const todo = repos.filter((r) => !counts.value[r.name])
-  await mapLimit(todo, 4, async (r) => {
-    // Stop when this list was replaced or left, or the session ended (no request without a credential).
-    if (mine !== serial || !auth.isAuthenticated) return
-    const full = await api.repos.get(r.name)
-    if (mine !== serial) return
-    counts.value = {
-      ...counts.value,
-      [r.name]: { streams: full.stream_count, changesets: full.changeset_count },
-    }
-  })
-}
+// The list carries the real counts. A repository whose metadata could not be read says so (`counts_error`)
+// and shows a dash with the reason, never a zero.
+const countText = (r: Repo, n: number) => (r.counts_error ? '–' : String(n))
 
 async function load() {
   const mine = ++serial
@@ -86,16 +73,12 @@ async function load() {
       }
     } while (token)
     loading.value = false
-    void enrich(items.slice(0, 60), mine)
   } catch (e) {
     if (mine !== serial) return
     error.value = e
     loading.value = false
   }
 }
-
-// Fetch counts for rows that become visible through searching.
-watch(visible, (v) => void enrich(v.slice(0, 60), serial))
 
 onMounted(load)
 onBeforeUnmount(() => serial++)
@@ -204,12 +187,16 @@ const split = (name: string) => {
         <template #cell-default_stream="{ row }"
           ><Badge mono icon="branch">{{ (row as Repo).default_stream }}</Badge></template
         >
-        <template #cell-stream_count="{ row }">{{
-          counts[(row as Repo).name]?.streams ?? '–'
-        }}</template>
-        <template #cell-changeset_count="{ row }">{{
-          counts[(row as Repo).name]?.changesets ?? '–'
-        }}</template>
+        <template #cell-stream_count="{ row }"
+          ><span :title="(row as Repo).counts_error || undefined">{{
+            countText(row as Repo, (row as Repo).stream_count)
+          }}</span></template
+        >
+        <template #cell-changeset_count="{ row }"
+          ><span :title="(row as Repo).counts_error || undefined">{{
+            countText(row as Repo, (row as Repo).changeset_count)
+          }}</span></template
+        >
         <template #cell-created_at_ms="{ row }"
           ><span class="faint">{{ formatDate((row as Repo).created_at_ms) }}</span></template
         >

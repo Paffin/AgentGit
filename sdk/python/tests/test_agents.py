@@ -14,11 +14,12 @@ from agentgit import (
     InvalidArgumentError,
     LeaseConflictError,
     PermissionDeniedError,
+    UnauthenticatedError,
     generate_agent_key,
     put_file,
     sign_provenance,
 )
-from tests.harness import RunningServer
+from tests.harness import RunningServer, start_server
 
 REPO = "acme/agents"
 
@@ -206,3 +207,69 @@ def test_tasks_form_a_dependency_graph(team: dict[str, AgentGitClient]) -> None:
     third = alice.tasks.create(repo=REPO, title="third")
     assert alice.tasks.depend(repo=REPO, task=third.id, depends_on=use.id).depends_on == [use.id]
     assert isinstance(alice.agents.predict(repo=REPO, stream="main").overlaps, list)
+
+
+def test_credentials_bound_to_a_run_act_only_as_it_and_die_with_it() -> None:
+    # A reap threshold of a second is for this test only: the server's minimum is 30 seconds unless told otherwise.
+    server = start_server(config="[agents]\nmin_stale_after_secs = 1\n")
+    try:
+        admin = server.admin()
+        admin.repos.create(name=REPO)
+        orchestrator = server.actor("service:orchestrator", REPO, "delegator")
+        bot = server.actor("agent:bound-bot", REPO, "writer")
+        key = generate_agent_key()
+        bot.agents.register(repo=REPO, name="bound-bot", public_key=key.public_key_hex)
+        run_a = bot.agents.start_run(repo=REPO, agent="bound-bot")
+        run_b = bot.agents.start_run(repo=REPO, agent="bound-bot")
+
+        def bind(run_id: str) -> AgentGitClient:
+            minted = orchestrator.credentials.mint(
+                subject="agent:bound-bot", ttl_secs=300, scope={"repos": [REPO], "run_id": run_id}
+            )
+            assert minted.credential.scope is not None
+            assert minted.credential.scope.run_id == run_id
+            return server.anonymous(token=minted.token)
+
+        ca, cb = bind(run_a.run_id), bind(run_b.run_id)
+        me = ca.session.whoami()
+        assert me.scope is not None
+        assert me.scope.run_id == run_a.run_id
+
+        # Each acts as its own run - the server attributes the work to it, with no `ag-run` header - and no other.
+        ws = ca.workspaces.create(repo=REPO, name="bound-a", stream="main")
+        assert ws.owner == f"agent:bound-bot#{run_a.run_id}"
+        with pytest.raises(PermissionDeniedError):
+            cb.agents.heartbeat(repo=REPO, run_id=run_a.run_id)
+        with pytest.raises(PermissionDeniedError):
+            cb.workspaces.modify(repo=REPO, name="bound-a", changes=[put_file("x", "x")])
+        cb.agents.heartbeat(repo=REPO, run_id=run_b.run_id)
+
+        # A delegator hands out agent credentials and nothing else.
+        with pytest.raises(PermissionDeniedError):
+            orchestrator.credentials.mint(subject="user:alice", ttl_secs=60, scope={"repos": [REPO]})
+        with pytest.raises(PermissionDeniedError):
+            orchestrator.credentials.mint(
+                subject="agent:bound-bot",
+                ttl_secs=60,
+                scope={"repos": [REPO], "operations": ["integrate.run"]},
+            )
+
+        # The operator ends run a on the agent's behalf: its credential stops working at once; run b's does not.
+        orchestrator.agents.complete(repo=REPO, run_id=run_a.run_id, status="failed", summary="session lost")
+        with pytest.raises(UnauthenticatedError):
+            ca.session.whoami()
+        me_b = cb.session.whoami()
+        assert me_b.scope is not None
+        assert me_b.scope.run_id == run_b.run_id
+
+        # Run b goes silent; the operator reaps it.
+        time.sleep(1.2)
+        reaped = orchestrator.agents.reap_runs(repo=REPO, stale_after_ms=1000)
+        assert [(r.run_id, r.status) for r in reaped.runs] == [(run_b.run_id, "abandoned")]
+        assert reaped.revoked_credentials == 1
+        with pytest.raises(UnauthenticatedError):
+            cb.session.whoami()
+        with pytest.raises(PermissionDeniedError):  # a writer is no operator
+            bot.agents.reap_runs(repo=REPO, stale_after_ms=1000)
+    finally:
+        server.stop()

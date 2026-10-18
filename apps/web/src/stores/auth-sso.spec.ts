@@ -67,7 +67,7 @@ const principal = (over: Partial<Principal> = {}): Principal => ({
   credential_id: 'c',
   expires_at_ms: Date.now() + 600_000,
   roles: ['acme/*:reader'],
-  scope: { repos: [], streams: [], operations: [] },
+  scope: { repos: [], streams: [], operations: [], run_id: '' },
   ...over,
 })
 

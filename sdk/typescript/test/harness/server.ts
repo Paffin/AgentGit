@@ -77,7 +77,7 @@ export class RunningServer {
   async actor(
     subject: string,
     repo: string,
-    role: 'reader' | 'writer' | 'reviewer' | 'integrator' | 'runner' | 'admin',
+    role: 'reader' | 'writer' | 'reviewer' | 'integrator' | 'runner' | 'delegator' | 'admin',
     options: Partial<AgentGitClientOptions> & {
       ttlSecs?: number;
       scope?: { repos?: string[]; streams?: string[]; operations?: string[] };

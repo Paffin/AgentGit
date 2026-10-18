@@ -192,7 +192,7 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
           v-model="role"
           label="Role"
           :options="roleOptions"
-          hint="reader · writer · reviewer · integrator · runner · admin"
+          hint="reader · writer · reviewer · integrator · runner · delegator · admin"
         />
         <Alert v-if="error" tone="bad" live="alert" title="Could not grant the role">{{
           error.message

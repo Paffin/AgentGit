@@ -24,6 +24,7 @@ export const NAMESPACE_METHODS = {
     list: 'agent.list',
     listRuns: 'agent.list_runs',
     predict: 'agent.predict',
+    reapRuns: 'agent.reap_runs',
     register: 'agent.register',
     startRun: 'agent.start_run',
   },
@@ -175,6 +176,8 @@ export interface Api {
     listRuns(request: Req<'agent.list_runs'>, options?: CallOptions): Promise<Res<'agent.list_runs'>>;
     /** Predict overlapping work on a stream (`GET /v1/repos/{owner}/{rname}/predict`, operation `agent.predict`) */
     predict(request: Req<'agent.predict'>, options?: CallOptions): Promise<Res<'agent.predict'>>;
+    /** Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials (`POST /v1/repos/{owner}/{rname}/runs/reap`, operation `agent.reap_runs`) */
+    reapRuns(request: Req<'agent.reap_runs'>, options?: CallOptions): Promise<Res<'agent.reap_runs'>>;
     /** Register an agent and its public key (`POST /v1/repos/{owner}/{rname}/agents`, operation `agent.register`) */
     register(request: Req<'agent.register'>, options?: CallOptions): Promise<Res<'agent.register'>>;
     /** Start a run (returns the identity to act as) (`POST /v1/repos/{owner}/{rname}/runs`, operation `agent.start_run`) */

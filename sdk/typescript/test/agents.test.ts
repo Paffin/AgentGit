@@ -19,7 +19,8 @@ let bob: AgentGitClient;
 let carol: AgentGitClient;
 
 beforeAll(async () => {
-  server = await startServer();
+  // A reap threshold of a second is for this test only: the server's minimum is 30 seconds unless told otherwise.
+  server = await startServer({ config: '[agents]\nmin_stale_after_secs = 1\n' });
   admin = server.admin();
   await admin.repos.create({ name: repo });
   alice = await server.actor('user:alice', repo, 'writer');
@@ -224,5 +225,66 @@ describe('leases and tasks', () => {
   it('predicts overlapping work on a stream', async () => {
     const prediction = await alice.agents.predict({ repo, stream: 'main' });
     expect(Array.isArray(prediction.overlaps)).toBe(true);
+  });
+});
+
+describe('credentials bound to a run', () => {
+  it('act only as their run, die with it, and are handed out by a delegator that is no administrator', async () => {
+    const orchestrator = await server.actor('service:orchestrator', repo, 'delegator');
+    const bot = await server.actor('agent:bound-bot', repo, 'writer');
+    const key = generateAgentKey();
+    await bot.agents.register({ repo, name: 'bound-bot', public_key: key.publicKeyHex });
+    const [a, b] = [
+      await bot.agents.startRun({ repo, agent: 'bound-bot' }),
+      await bot.agents.startRun({ repo, agent: 'bound-bot' }),
+    ];
+    const bind = async (run: string) => {
+      const minted = await orchestrator.credentials.mint({
+        subject: 'agent:bound-bot',
+        ttl_secs: 300,
+        scope: { repos: [repo], run_id: run },
+      });
+      expect(minted.credential.scope?.run_id).toBe(run);
+      return server.anonymous({ token: minted.token });
+    };
+    const [ca, cb] = [await bind(a.run_id), await bind(b.run_id)];
+    expect((await ca.session.whoami()).scope?.run_id).toBe(a.run_id);
+
+    // Each acts as its own run - the server attributes the work to it, with no `ag-run` header - and no other.
+    const ws = await ca.workspaces.create({ repo, name: 'bound-a', stream: 'main' });
+    expect(ws.owner).toBe(`agent:bound-bot#${a.run_id}`);
+    await expect(cb.agents.heartbeat({ repo, run_id: a.run_id })).rejects.toMatchObject({ code: 'permission_denied' });
+    await expect(cb.workspaces.modify({ repo, name: 'bound-a', changes: [putFile('x', 'x')] })).rejects.toMatchObject({
+      code: 'permission_denied',
+    });
+    await cb.agents.heartbeat({ repo, run_id: b.run_id });
+
+    // A delegator hands out agent credentials and nothing else.
+    await expect(
+      orchestrator.credentials.mint({ subject: 'user:alice', ttl_secs: 60, scope: { repos: [repo] } }),
+    ).rejects.toMatchObject({ code: 'permission_denied' });
+    await expect(
+      orchestrator.credentials.mint({
+        subject: 'agent:bound-bot',
+        ttl_secs: 60,
+        scope: { repos: [repo], operations: ['integrate.run'] },
+      }),
+    ).rejects.toMatchObject({ code: 'permission_denied' });
+
+    // The operator ends run a on the agent's behalf: its credential stops working at once; run b's does not.
+    await orchestrator.agents.complete({ repo, run_id: a.run_id, status: 'failed', summary: 'session lost' });
+    await expect(ca.session.whoami()).rejects.toMatchObject({ code: 'unauthenticated', status: 401 });
+    expect((await cb.session.whoami()).scope?.run_id).toBe(b.run_id);
+
+    // Run b goes silent; the operator reaps it (its audit entry names the operator).
+    await new Promise((r) => setTimeout(r, 1200));
+    const reaped = await orchestrator.agents.reapRuns({ repo, stale_after_ms: 1000 });
+    expect(reaped.runs.map((r) => [r.run_id, r.status])).toEqual([[b.run_id, 'abandoned']]);
+    expect(reaped.revoked_credentials).toBe(1);
+    await expect(cb.session.whoami()).rejects.toMatchObject({ code: 'unauthenticated' });
+    // A writer is no operator.
+    await expect(bot.agents.reapRuns({ repo, stale_after_ms: 1000 })).rejects.toMatchObject({
+      code: 'permission_denied',
+    });
   });
 });

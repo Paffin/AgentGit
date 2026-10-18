@@ -147,6 +147,8 @@ from agentgit._generated.models import (
     QueueEntry,
     Quota,
     ReadHeadRequest,
+    ReapRunsRequest,
+    ReapRunsResponse,
     ReflogEntry,
     ReflogRequest,
     ReflogResponse,
@@ -371,6 +373,17 @@ class AgentsApi:
     ) -> PredictResponse:
         """Predict overlapping work on a stream (`GET /v1/repos/{owner}/{rname}/predict`, operation `agent.predict`)."""
         return self._c._call("agent.predict", {"repo": repo, "stream": stream}, options, PredictResponse)
+
+    def reap_runs(
+        self,
+        *,
+        repo: str,
+        dry_run: bool | None = None,
+        stale_after_ms: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReapRunsResponse:
+        """Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials (`POST /v1/repos/{owner}/{rname}/runs/reap`, operation `agent.reap_runs`)."""
+        return self._c._call("agent.reap_runs", {"repo": repo, "dry_run": dry_run, "stale_after_ms": stale_after_ms}, options, ReapRunsResponse)
 
     def register(
         self,
@@ -1622,6 +1635,17 @@ class AsyncAgentsApi:
     ) -> PredictResponse:
         """Predict overlapping work on a stream (`GET /v1/repos/{owner}/{rname}/predict`, operation `agent.predict`)."""
         return await self._c._call("agent.predict", {"repo": repo, "stream": stream}, options, PredictResponse)
+
+    async def reap_runs(
+        self,
+        *,
+        repo: str,
+        dry_run: bool | None = None,
+        stale_after_ms: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReapRunsResponse:
+        """Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials (`POST /v1/repos/{owner}/{rname}/runs/reap`, operation `agent.reap_runs`)."""
+        return await self._c._call("agent.reap_runs", {"repo": repo, "dry_run": dry_run, "stale_after_ms": stale_after_ms}, options, ReapRunsResponse)
 
     async def register(
         self,

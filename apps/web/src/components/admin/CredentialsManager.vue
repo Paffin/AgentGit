@@ -226,7 +226,8 @@ async function revoke() {
             !(row as Credential).scope ||
             (row as Credential).scope!.repos.length +
               (row as Credential).scope!.streams.length +
-              (row as Credential).scope!.operations.length ===
+              (row as Credential).scope!.operations.length +
+              ((row as Credential).scope!.run_id ? 1 : 0) ===
               0
           "
           class="faint"
@@ -251,6 +252,14 @@ async function revoke() {
             mono
             tone="accent"
             >{{ r }}</Badge
+          >
+          <Badge
+            v-if="(row as Credential).scope!.run_id"
+            size="sm"
+            mono
+            tone="warn"
+            :title="'Acts only as this run, and ends with it'"
+            >run {{ (row as Credential).scope!.run_id }}</Badge
           >
         </span>
       </template>

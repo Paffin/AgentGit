@@ -268,7 +268,7 @@ describe('WhoamiCard', () => {
           credential_id: 'cred_1',
           expires_at_ms: Date.now() + 3_600_000,
           roles: ['acme/*:writer'],
-          scope: { repos: ['acme/web'], streams: ['agents/*'], operations: [] },
+          scope: { repos: ['acme/web'], streams: ['agents/*'], operations: [], run_id: '' },
         },
       },
     })
@@ -289,7 +289,7 @@ describe('WhoamiCard', () => {
           credential_id: 'bootstrap',
           expires_at_ms: 0,
           roles: ['*:admin'],
-          scope: { repos: [], streams: [], operations: [] },
+          scope: { repos: [], streams: [], operations: [], run_id: '' },
         },
       },
     })

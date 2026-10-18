@@ -917,6 +917,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/runs/reap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials */
+        post: operations["agent.reap_runs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/runs/{run_id}/complete": {
         parameters: {
             query?: never;
@@ -1630,6 +1647,10 @@ export interface components {
             /** @default  */
             worker: string;
         };
+        /**
+         * @description A run is finished by its own agent (a run-bound credential: by that run alone) or by an operator
+         *     (`agent.operate`), whose action is recorded in the audit log as an operator's.
+         */
         CompleteRunRequest: {
             /**
              * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
@@ -1795,6 +1816,15 @@ export interface components {
              * @default []
              */
             repos: string[];
+            /**
+             * @description Binds the credential to one run of one agent (ADR-0010). `repos` must then name exactly one literal
+             *     repository (the one that holds the run). A run-bound credential acts only as that run, only in that
+             *     repository, and stops working when the run is no longer running (completed, failed, abandoned). Minting
+             *     needs the run to be running and to belong to the credential's subject. Empty = bound to the agent's
+             *     name only (every run of the agent).
+             * @default
+             */
+            run_id: string;
             /**
              * @description Stream patterns (glob), e.g. "main", "agents/\*".
              * @default []
@@ -2017,6 +2047,10 @@ export interface components {
             /** @default  */
             path: string;
         };
+        /**
+         * @description Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit
+         *     log as an operator's, with the owner it overrode.
+         */
         FinishTaskRequest: {
             /** @default  */
             id: string;
@@ -2751,7 +2785,9 @@ export interface components {
             scope: components["schemas"]["CredentialScope"] | null;
             /**
              * @description Identity the credential authenticates as. A caller may mint credentials
-             *     for itself or, with `credentials.mint`, for agents and services.
+             *     for itself, with `credentials.mint` (administrators) for anybody, or with `credentials.delegate`
+             *     (the `delegator` role) for `agent:<name>` only - and then only with the capabilities the caller itself
+             *     holds on the scope's repositories (ADR-0010).
              * @default
              */
             subject: string;
@@ -3263,6 +3299,49 @@ export interface components {
              */
             wait_version_gt: number;
         };
+        /**
+         * @description Ends the runs of a repository that stopped heartbeating, releases the leases they (and finished runs) still
+         *     hold, and revokes the credentials bound to them. An operator action (capability `agent.operate`); every
+         *     run it ends is recorded in the audit log under the operator's identity.
+         */
+        ReapRunsRequest: {
+            /**
+             * @description Report what would be reaped without changing anything.
+             * @default false
+             */
+            dry_run: boolean;
+            /** @default  */
+            repo: string;
+            /**
+             * Format: int64
+             * @description A running run whose last heartbeat is older than this is abandoned. 0 = the server's
+             *     `\[agents\] run_stale_after_secs`. Values below the server's `\[agents\] min_stale_after_secs` are refused, so
+             *     that a typo cannot end every live run.
+             * @default 0
+             */
+            stale_after_ms: number;
+        };
+        ReapRunsResponse: {
+            /** @default false */
+            dry_run: boolean;
+            /**
+             * @description Ids of the leases that were (or would be) released: those of the reaped runs and any active lease whose
+             *     holder is a run that is no longer running.
+             * @default []
+             */
+            released_leases: string[];
+            /**
+             * Format: int32
+             * @description How many credentials bound to the reaped runs were revoked (0 with `dry_run`).
+             * @default 0
+             */
+            revoked_credentials: number;
+            /**
+             * @description The runs that were (or, with `dry_run`, would be) ended as "abandoned".
+             * @default []
+             */
+            runs: components["schemas"]["Run"][];
+        };
         ReflogEntry: {
             /** @default  */
             actor: string;
@@ -3357,6 +3436,11 @@ export interface components {
              */
             changeset_count: number;
             /**
+             * @description Empty when `stream_count` and `changeset_count` are exact; otherwise why they could not be read.
+             * @default
+             */
+            counts_error: string;
+            /**
              * Format: int64
              * @default 0
              */
@@ -3395,7 +3479,8 @@ export interface components {
             quota: components["schemas"]["Quota"];
             /**
              * Format: int32
-             * @description Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.
+             * @description Exact: read from the repository's own metadata by Create, Describe and List alike. When the repository
+             *     cannot be read (its storage is unreachable or damaged), both are 0 and `counts_error` says why.
              * @default 0
              */
             stream_count: number;
@@ -3520,7 +3605,7 @@ export interface components {
              */
             repo: string;
             /**
-             * @description reader, writer, reviewer, integrator, runner, admin.
+             * @description reader, writer, reviewer, integrator, runner, delegator, admin.
              * @default
              */
             role: string;
@@ -3556,7 +3641,8 @@ export interface components {
              */
             started_at_ms: number;
             /**
-             * @description "running", "completed", "failed" or "stale" (abandoned: no heartbeat).
+             * @description "running", "completed", "failed" or "abandoned" (ended by a reap: no heartbeat within the operator's
+             *     threshold; see ReapRuns).
              * @default
              */
             status: string;
@@ -6391,6 +6477,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "agent.reap_runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReapRunsRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReapRunsResponse"];
                 };
             };
             /** @description Error */

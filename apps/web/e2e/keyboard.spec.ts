@@ -31,7 +31,11 @@ test.describe('keyboard use', () => {
     await expect(page.getByTestId('board-summary')).toBeVisible()
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press('Tab')
-      const shown = await page.evaluate(() => {
+      const shown = await page.evaluate(async () => {
+        // Let the engine start the focus style (WebKit reports an outline of 0px until its next frame).
+        await new Promise<void>((r) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => r())),
+        )
         const el = document.activeElement as HTMLElement | null
         if (!el || el === document.body) return { ok: true, what: 'body' }
         const cs = getComputedStyle(el)

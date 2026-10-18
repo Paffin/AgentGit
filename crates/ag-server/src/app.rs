@@ -218,7 +218,7 @@ impl App {
             crate::control::ControlKind::Sqlite => "sqlite",
             crate::control::ControlKind::Postgres => "postgres",
         };
-        metrics.replica_info.with_label_values(&[&replica_id, env!("CARGO_PKG_VERSION"), backend]).set(1);
+        metrics.replica_info.with_label_values(&[replica_id.as_str(), env!("CARGO_PKG_VERSION"), backend]).set(1);
         tracing::info!(replica = %replica_id, control = backend, control_schema = stored_schema, "control plane ready");
         Ok(Self(Arc::new(AppState {
             cfg,

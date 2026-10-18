@@ -726,7 +726,7 @@ fn print<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String) -> 
     crate::ctx::emit(cli.json, value, human)
 }
 
-/// Like [`print`] for confirmations, which `--quiet` suppresses.
+/// Like [`print()`] for confirmations, which `--quiet` suppresses.
 fn print_done<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String) -> Result<()> {
     if cli.quiet && !cli.json {
         return Ok(());

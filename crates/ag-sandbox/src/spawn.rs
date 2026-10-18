@@ -688,7 +688,9 @@ mod tests {
         // child with status 97 on any allocation, which would show up here as a failed run.
         use crate::{NamespaceSandbox, ProcessSandbox, Sandbox, SandboxSpec};
         let dir = tempfile::tempdir().unwrap();
-        let spec = SandboxSpec::new(["/bin/true"], dir.path()).ro_mounts(crate::standard_system_mounts());
+        // `true` is looked up on the default PATH: it lives in `/bin` on some hosts and only in `/usr/bin` on
+        // others (macOS has no `/bin/true`), and the lookup itself must also stay allocation-free in the child.
+        let spec = SandboxSpec::new(["true"], dir.path()).ro_mounts(crate::standard_system_mounts());
         let out = ProcessSandbox::new().run(&spec).expect("process sandbox runs");
         assert!(out.success(), "{:?} {}", out.status, out.stderr_lossy());
         let ns = NamespaceSandbox::new();

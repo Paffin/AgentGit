@@ -1,5 +1,18 @@
 # Handoff: release & distribution track
 
+**Update 2026-10-18 (restore-green-main, containers group).** Done since this was written, all on `main`, green at
+`3d03bd9` (Containers [39093843769](https://github.com/Paffin/AgentGit/actions/runs/39093843769), Packaging
+[39093843784](https://github.com/Paffin/AgentGit/actions/runs/39093843784)): the Dockerfile has a Node stage
+(`scripts/build_ui.sh`) so the image's `ag-server` embeds the Web UI (checked in `containers.yml`: log line, `/`, a
+deep link, a pre-compressed script, no UI on API paths; the cache job also requires the UI layers `CACHED`);
+`release.yml` builds the UI before its binaries and its archive smoke test checks the app (**not run since**: the
+rehearsal needs the Actions UI); the observability step is no longer `continue-on-error` (green in two runs);
+`ci.yml`'s duplicate `images` job is gone; `deployment.md`'s verified table is rewritten from the Containers results;
+`ag-mcp` became a publishable crate (eleven now) and the metadata gate in `packaging.yml` fails when the checker does.
+The red `container images build` at `c69526d` was not the Dockerfile but rustc 1.89 rejecting an array of `&String` and
+`&str` in `ag-server` (fixed in `3440edc`). Items 3, 4 and 5 below are therefore done; 2 (rehearsal from `main`) is
+not, and now also covers the UI build in the binaries job.
+
 Branch with everything: `wip/release-track` (also `wip/dist-track`, `wip/dist-track-2`: scratch branches used to
 iterate CI; safe to delete). What passed its gates is on `main`.
 

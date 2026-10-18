@@ -1,6 +1,17 @@
 # Windows track — handoff
 
-Status when this was written: the code and `docs/operations/windows.md` are landed (main c4ebdb2); the Windows CI
+**Update 2026-10-18 (restore-green-main, containers group): the Windows workflow is green on `main` at `3d03bd9`**
+([run 39093843818](https://github.com/Paffin/AgentGit/actions/runs/39093843818)): build, `cargo test --workspace
+--no-fail-fast` (100 test targets, including the ACL test and the Ctrl+C / Ctrl+Break console tests), and the README
+demo under PowerShell 7 and Windows PowerShell 5.1. It had been red since the web/CLI tracks merged: `ag doctor` did not
+compile on Windows (fixed in `a9b32a3`), then five tests assumed the host (`30da1b1`, `3d03bd9`; the list is in
+`docs/operations/windows.md`, "What the first runs found"). One green run is not "green repeatedly": keep watching it
+before making it a required check. Still unverified: whether a clean machine needs NASM, `-C target-feature=+crt-static`
+(no VC++ redistributable), and anything that needs a server (PostgreSQL / S3 on Windows). A Windows *type-check* from
+Linux catches `cfg(windows)` compile errors in about a minute and was what made the last iterations cheap: see the last
+section; zero warnings is the bar (`cargo check --target x86_64-pc-windows-msvc --workspace --all-targets`).
+
+Status when the track first handed over (older than the update above): the code and `docs/operations/windows.md` are landed (main c4ebdb2); the Windows CI
 workflow (`.github/workflows/windows.yml`) was **not yet green** — its runs for c4ebdb2:
 <https://github.com/Paffin/AgentGit/actions/runs/39077344233> (Windows), <https://github.com/Paffin/AgentGit/actions/runs/39077344272> (CI).
 See "Verified" for exactly what was observed.
@@ -65,7 +76,8 @@ See "Verified" for exactly what was observed.
 
 ## Local Windows type-check without Windows (Linux)
 
-`rustup target add x86_64-pc-windows-msvc`; build scripts for ring/aws-lc/sqlite need a C compiler, so point
-`CC_x86_64_pc_windows_msvc`, `AR_x86_64_pc_windows_msvc` at a script that creates the requested output file and
-exits 0, then `cargo check --target x86_64-pc-windows-msvc --workspace --all-targets` (and `clippy`). It catches
-`cfg(windows)` errors only; it runs no code.
+`rustup target add x86_64-pc-windows-msvc`, then `scripts/windows_typecheck.sh` (arguments are those of `cargo check`;
+default `--workspace --all-targets`). Build scripts for ring/aws-lc/sqlite need a C compiler, so the script points
+`CC_x86_64_pc_windows_msvc` / `AR_x86_64_pc_windows_msvc` at a stand-in that creates the requested output file and exits
+0 (the MSVC `cl`/`lib` argument forms `-Fo`, `-out:` and the `ar` form are handled). It catches `cfg(windows)` /
+`cfg(unix)` compile errors, unused imports included, and runs no code.

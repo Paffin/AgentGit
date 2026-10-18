@@ -5,10 +5,13 @@
 macOS in CI. The execution plane (`ag-sandbox`, `ag-worker`) is **Linux only**. This page says what that means:
 what works, what is adapted, what is refused, and which tests prove each statement.
 
-> Status honesty: the first Windows run compiled the whole workspace and passed most suites; the failures it found
-> were fixed in the same series of commits. Statements marked **(unverified)** have not yet been observed on a
-> Windows runner. The workflow is not yet a required check; it becomes one after it has been green repeatedly
-> (see [`dev/handoff/windows.md`](../../dev/handoff/windows.md) for the exact state).
+> Status honesty: the Windows workflow was first green on `main` at `3d03bd9`
+> ([run 39093843818](https://github.com/Paffin/AgentGit/actions/runs/39093843818)): the whole workspace builds,
+> `cargo test --workspace --no-fail-fast` passes on `windows-latest` (100 test targets), and the README demo runs under
+> PowerShell 7 and Windows PowerShell 5.1. That is one green run after several red ones (see "What the first runs found"
+> below), not a track record. Statements marked **(unverified)** have not been observed on a Windows runner. The
+> workflow is not yet a required check; it becomes one after it has been green repeatedly (see
+> [`dev/handoff/windows.md`](../../dev/handoff/windows.md)).
 
 ## Support matrix
 
@@ -125,7 +128,7 @@ later loosened is **not** detected (Unix refuses files with group/other access).
 `ag-server serve` stops gracefully on Ctrl+C, Ctrl+Break, closing the console window and logoff/shutdown, draining
 requests and flushing telemetry. The Unix equivalents (SIGINT/SIGTERM) are tested; the Windows ones are tested by
 `ctrl_c_stops_a_console_server_gracefully` and `ctrl_break_stops_a_console_server_gracefully`, which need a console
-(**unverified** on hosted runners; see the handoff note). Running it as a Windows *service* is not supported;
+and pass on the hosted runner (run 39093843818). Running it as a Windows *service* is not supported;
 use a service wrapper such as NSSM.
 
 ### TLS and DNS
@@ -147,6 +150,19 @@ Every other test runs. These are deliberately Unix-only, each for a recorded rea
 | real-symlink tests in `workdir/tests.rs` | symlinks need a privilege; placeholders and junctions are tested instead |
 | symlink/exec-bit steps of the Git round trip | the history is built without them on Windows (plain file stand-ins) |
 | `examples/quickstart.sh` | bash and python3; `quickstart.ps1` runs instead |
+| `ag-worker` `tests/version.rs` | the Windows binary refuses every invocation with status 2, `--version` included (`unsupported.rs` pins it) |
+| `a_path_that_starts_with_a_quote_survives_the_export` (`ag-git/tests/hostile.rs`) | a `"` is not allowed in a Windows file name and Git for Windows refuses such a path itself, so there is no repository to import; the quoting rule it protects (`a_path_that_starts_with_a_quote_is_quoted_for_fast_import`) runs everywhere |
+| second half of `a_tree_with_windows_device_names_is_refused_whole_before_anything_is_written` | checks the same tree out under the POSIX rules onto the real file system, which on Windows cannot hold `NUL` or `a:b`; the refusal under the Windows rules, the half that matters here, runs |
+
+### What the first runs found
+
+One real portability bug in the product: `ag doctor` did not compile on Windows (a key-permission list that was only
+filled in a `#[cfg(unix)]` block, which broke the whole Windows build); on Windows it now checks no modes, and says so
+instead of claiming "permissions private". Everything else the runs found was an assumption a test made about the
+host, fixed without weakening what is asserted: the CLI printed `.ag\config.json` where a test compared text with
+`.ag/config.json` (now compared as a path); a refused loopback connection takes about two seconds to be reported on
+Windows (its SYN retries), which equals the 2 s timeout of the `ag-mcp` unreachable-server test, so that test gives
+Windows 6 s and still asserts that the client reports `unavailable`; and the three rows above.
 
 ## Other platforms
 

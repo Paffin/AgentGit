@@ -117,16 +117,16 @@ Both names were free on 2026-10-17 (`scripts/check_publish_metadata.py --online`
 
 Nothing is published to crates.io and nothing in CI can publish there. Every crate carries complete metadata
 (description, license, repository, homepage, readme, keywords, categories, rust-version —
-`scripts/check_publish_metadata.py` enforces it), and **ten crates are publishable today**; `Packaging` runs
+`scripts/check_publish_metadata.py` enforces it), and **eleven crates are publishable today**; `Packaging` runs
 `cargo publish --dry-run` on them, which packages each from its tarball and compiles it against the others'
 tarballs. Publish order (dependencies first):
 
 ```
-ag-types  ag-object  ag-changeset  ag-crypto  ag-dag  ag-diff  ag-tree  ag-merge  ag-policy  ag-sandbox
+ag-types  ag-object  ag-changeset  ag-crypto  ag-dag  ag-diff  ag-mcp  ag-tree  ag-merge  ag-policy  ag-sandbox
 ```
 
-The other nine crates are marked `publish = false`, each with the reason in its `Cargo.toml`. They are blocked by
-two things that need a decision, not just a tag:
+The other ten crates are marked `publish = false`, each with the reason in its `Cargo.toml`. They are blocked by
+three things, two of which need a decision, not just a tag:
 
 1. **Four names are already taken on crates.io by an unrelated project** (checked 2026-10-17): `ag-agent`,
    `ag-git`, `ag-protocol` and `ag-worker`. Publishing means renaming packages (for example `agentgit-protocol`).
@@ -136,9 +136,14 @@ two things that need a decision, not just a tag:
 2. **Two crates read files outside their own directory**, which `cargo package` does not include:
    `ag-protocol/build.rs` compiles `../../proto`, and `ag-storage` embeds `../../migrations`. Both directories would
    move into their crates (the migrations are also read by the HA work, so do this when it is quiet).
+3. **`ag-ui-assets` embeds `../../apps/web/dist`**, the Web UI build, which is not Rust source and lies outside the
+   crate. A published `ag-server` would need the built UI shipped inside a crate (or a build step on the user's
+   machine); until that is designed it stays in the workspace.
 
-Everything that depends on those two (`ag-agent`, `ag-integrate`, `ag-git`, `ag-client`, `ag-server`, `ag-cli`,
-`ag-worker`) follows. Until then `cargo install` works from a checkout (`cargo install --path crates/ag-cli`).
+Everything that depends on those (`ag-agent`, `ag-integrate`, `ag-git`, `ag-client`, `ag-server`, `ag-cli`,
+`ag-worker`) follows. `ag-mcp` is publishable because its only workspace dependencies are dev-dependencies, and those
+on the unpublishable `ag-server` and `ag-storage` are path-only (cargo drops a dev-dependency without a version when
+it packages; `.workspace = true` would keep the workspace version and crates.io could not resolve it). Until then `cargo install` works from a checkout (`cargo install --path crates/ag-cli`).
 
 ## Reproducible builds — status
 

@@ -200,7 +200,8 @@ jobs:
           # ag-mcp has no build script, so its version line carries no commit: check the crate version only.
           v=$("$bin/ag-mcp" --version); echo "$v"
           [ "$v" = "ag-mcp $CARGO_VERSION" ] || { echo "::error::ag-mcp --version is '$v'"; exit 1; }
-          "$bin/ag-mcp" --list-tools --server http://127.0.0.1:1 | grep -q '"name"'
+          tools=$("$bin/ag-mcp" --list-tools --server http://127.0.0.1:1)
+          case "$tools" in *'"name": "task_claim"'*) ;; *) echo "::error::ag-mcp lists no task_claim tool"; exit 1;; esac
           AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
           AG_METRICS_TOKEN=$(openssl rand -hex 32)
           export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN

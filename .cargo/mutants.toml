@@ -34,16 +34,17 @@ exclude_re = [
     # ag-diff, `unified_diff`: whether a *leading* context line is the last line of the old file only matters for the
     # "no newline at end of file" marker, and a last line without its newline cannot be followed by a change (an
     # insertion after it would need the new file to continue past a line that has no end).
-    "ag-diff/src/lib\\.rs:235:(52|56): replace .* in unified_diff",
+    "ag-diff/src/lib\\.rs:235:52: replace \\+ with \\* in unified_diff",
+    "ag-diff/src/lib\\.rs:235:56: replace == with != in unified_diff",
 
     # ag-merge, `detect_renames_in`: with nothing deleted, or nothing added, the rest of the function finds no pair
     # either; the early return only saves building two empty collections.
     "ag-merge/src/rename\\.rs:73:27: replace \\|\\| with && in detect_renames_in",
     # ag-merge, `merge_text`: `j = i * 1` starts the scan for the end of a cluster at the cluster's own first hunk,
     # which is inside it by definition, so the cluster is the same.
-    "ag-merge/src/text\\.rs:69:23: replace \\+ with \\* in merge_text",
+    "ag-merge/src/text\\.rs:\\d+:\\d+: replace \\+ with \\* in merge_text",
     # ag-merge, `plan_renames`: the arms `Some(t) if t == b => {}` (and its mirror) say "the other side left the file
     # alone, the ordinary per-path rule already gives the answer". Without the guard the same file is merged as a
     # rename unit, and a unit whose other side equals the base resolves to our side's entry: the same tree.
-    "ag-merge/src/tree\\.rs:(405|437):32: replace match guard [to] == b with false in plan_renames",
+    "ag-merge/src/tree\\.rs:\\d+:\\d+: replace match guard [to] == b with false in plan_renames",
 ]

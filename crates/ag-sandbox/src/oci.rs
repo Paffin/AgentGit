@@ -64,6 +64,11 @@ const CLIENT_ENV: [&str; 16] = [
     "CONTAINERS_CONF",
 ];
 
+/// The default for [`OciConfig::control_timeout`].
+pub const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
+/// The default for [`OciConfig::remove_timeout`].
+pub const DEFAULT_REMOVE_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// The most of a housekeeping command's output that is read (`inspect` and `info` are tens of kilobytes).
 const CAPTURE_LIMIT: u64 = 8 << 20;
 
@@ -102,8 +107,8 @@ impl OciConfig {
             user: "65534:65534".into(),
             cpus: Some(1.0),
             allow_unpinned_image: false,
-            control_timeout: Duration::from_secs(10),
-            remove_timeout: Duration::from_secs(20),
+            control_timeout: DEFAULT_CONTROL_TIMEOUT,
+            remove_timeout: DEFAULT_REMOVE_TIMEOUT,
         }
     }
 }

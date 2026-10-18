@@ -57,6 +57,6 @@ pub use checkout::{Checkout, CheckoutError};
 #[cfg(unix)]
 pub use plan::{DEFAULT_PATH, Unrunnable, sandbox_spec};
 #[cfg(unix)]
-pub use profile::{Backend, Ceilings, DEFAULT_SANDBOX_ID, Defaults, Profile, Refusal};
+pub use profile::{Backend, Ceilings, DEFAULT_SANDBOX_ID, Defaults, Profile, Refusal, parse_numeric_user};
 #[cfg(unix)]
 pub use worker::{Disposition, JobReport, Options, Worker};

@@ -37,9 +37,16 @@ pub enum CheckoutError {
     /// The server answered with an error.
     #[error("{0}")]
     Server(ClientError),
-    /// The server's data is inconsistent, unsafe or too large.
+    /// The server's data is inconsistent or too large (a hash that does not match, an object of the wrong kind,
+    /// a manifest that does not rebuild into the job's tree, a checkout above this worker's size limit). Another
+    /// worker, or the same one later, may do better.
     #[error("{0}")]
     Bad(String),
+    /// The tree itself holds something this worker refuses to write: a symlink that points outside the
+    /// checkout, a path that runs through a symlink, a file type it does not know. That is a property of
+    /// the tree, so every worker would refuse it and retrying cannot help.
+    #[error("{0}")]
+    Unsafe(String),
     /// A local file-system problem.
     #[error("cannot write the checkout: {0}")]
     Io(#[from] std::io::Error),
@@ -106,7 +113,7 @@ fn entry_from_wire(e: &v1::TreeEntry) -> Result<(RepoPath, Entry), CheckoutError
         // The protocol says `regular`; servers before that was fixed said `file`.
         "regular" | "file" => FileType::Regular,
         "symlink" => FileType::Symlink,
-        other => return Err(CheckoutError::Bad(format!("unknown file type '{other}' for '{}'", e.path))),
+        other => return Err(CheckoutError::Unsafe(format!("unknown file type '{other}' for '{}'", e.path))),
     };
     Ok((path, Entry { content, file_type, executable: e.executable }))
 }
@@ -201,7 +208,7 @@ fn write_entry(
     match entry.file_type {
         FileType::Symlink => {
             let t = std::str::from_utf8(data)
-                .map_err(|_| CheckoutError::Bad(format!("symlink '{path}' has a target that is not UTF-8")))?;
+                .map_err(|_| CheckoutError::Unsafe(format!("symlink '{path}' has a target that is not UTF-8")))?;
             check_link_target(path, t)?;
             if fs::symlink_metadata(&target).is_ok() {
                 fs::remove_file(&target)?;
@@ -239,7 +246,7 @@ fn safe_target(root: &Path, rel: &RepoPath, owner: Option<(u32, u32)>) -> Result
         match fs::symlink_metadata(&cur) {
             Ok(md) if md.file_type().is_dir() => {}
             Ok(_) => {
-                return Err(CheckoutError::Bad(format!(
+                return Err(CheckoutError::Unsafe(format!(
                     "'{}' exists and is not a directory; refusing to write through it",
                     cur.display()
                 )));
@@ -259,7 +266,7 @@ fn safe_target(root: &Path, rel: &RepoPath, owner: Option<(u32, u32)>) -> Result
 
 /// A symlink target must stay inside the checkout.
 fn check_link_target(link: &RepoPath, target: &str) -> Result<(), CheckoutError> {
-    let bad = |why: &str| CheckoutError::Bad(format!("symlink '{link}' -> '{target}' {why}"));
+    let bad = |why: &str| CheckoutError::Unsafe(format!("symlink '{link}' -> '{target}' {why}"));
     if target.is_empty() || target.contains('\0') {
         return Err(bad("has an empty or invalid target"));
     }
@@ -314,7 +321,7 @@ mod tests {
         };
         // a path whose directory component is a symlink
         let err = write_entry(root, &p("evil/x"), &e, b"data", None).unwrap_err();
-        assert!(matches!(err, CheckoutError::Bad(_)), "{err}");
+        assert!(matches!(err, CheckoutError::Unsafe(_)), "{err}");
         assert!(!outside.path().join("x").exists());
         // a file that is already there (even a symlink to somewhere else) is not overwritten
         std::os::unix::fs::symlink(outside.path().join("target"), root.join("f")).unwrap();
@@ -345,5 +352,31 @@ mod tests {
         ] {
             assert!(entry_from_wire(&bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn what_no_worker_could_check_is_told_apart_from_what_another_attempt_might_fix() {
+        // a property of the tree: every worker would refuse it
+        let link = check_link_target(&p("a/link"), "/etc/passwd").unwrap_err();
+        assert!(matches!(link, CheckoutError::Unsafe(_)), "{link}");
+        let kind = entry_from_wire(&v1::TreeEntry {
+            path: "x".into(),
+            blob_id: "ab".repeat(32),
+            size: 0,
+            file_type: "fifo".into(),
+            executable: false,
+        })
+        .unwrap_err();
+        assert!(matches!(kind, CheckoutError::Unsafe(_)), "{kind}");
+        // a property of the exchange with the server: it may go differently next time
+        let id = entry_from_wire(&v1::TreeEntry {
+            path: "x".into(),
+            blob_id: "zz".into(),
+            size: 0,
+            file_type: "regular".into(),
+            executable: false,
+        })
+        .unwrap_err();
+        assert!(matches!(id, CheckoutError::Bad(_)), "{id}");
     }
 }

@@ -13,7 +13,7 @@ number 0009 had been taken meanwhile by "identity names and principals", so this
 | `f6c4b6c` | `ag-mcp`: run credentials |
 | `fe116ad` | Go orchestrator |
 | `c3fac03` | SDKs, Web UI, generated CLI reference |
-| `eaa4172` | ADR-0010, docs, this handoff |
+| `dfaa657` | ADR-0010, docs, this handoff (a later docs-only commit adds the CI links below) |
 
 | ROADMAP item | What it is now | Where |
 |---|---|---|
@@ -69,7 +69,12 @@ role name `delegator`, features `auth.run_credentials`, `auth.delegation`, `agen
   (an in-memory AGWP server, test code only, updated to the new API); every behaviour of this package is also proven by
   the integration tests against the real `ag-server`. The only test hook in product code is the engine's named
   failpoint gate `prepare.in_snapshot` (`Failpoints::pause`: a lookup in an empty map unless a test arms it).
-* CI: CI_LINKS
+* CI: all green for `dfaa657` (the last code commit) - CI (10/10 jobs: fmt+clippy+rustdoc, test ubuntu + macOS, MSRV 1.89,
+  PostgreSQL + S3 backends, SDKs, Go orchestrator, deployment files, generated docs + demo, shell completions)
+  https://github.com/Paffin/AgentGit/actions/runs/39109608982 ; Containers (image, layer cache, compose with PostgreSQL +
+  SeaweedFS, kind) .../39109609035 ; Windows .../39109609007 ; Web UI (unit + chromium/tablet/phone e2e)
+  .../39109608984 ; Packaging .../39109608985 ; Docs .../39109608974. The result of the docs-only commit that adds
+  this paragraph is in the final report of the package.
 
 ## Audit triage
 

@@ -21,6 +21,11 @@ Which commands use 3 and 4
 Commands that find a problem with the repository itself exit 1: ag verify, ag audit, ag recover (errors),
 ag backup (unhealthy copy), ag doctor (a check failed).
 
+Code 4 is the verdict on a change, not a general "conflict" or "not found" status: asking for something that does
+not exist ("not found: proposal 'x'", "no stream 'x'") or creating something that already exists ("already
+exists: stream 'main'") is an ordinary error and exits 1. A script that must tell those apart reads
+`error.message` of the JSON error; the exit code stays 1 so that scripts written against it keep working.
+
 Branch on the code, not on message text. With --json, `ag integrate` also returns `outcome.status`
 and stable `blockers[].code` values (see `ag help policy`).
 

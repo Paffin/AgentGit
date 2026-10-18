@@ -37,6 +37,35 @@ fn script(a: &Ag, shell: &str) -> String {
     a.ag(&["completions", shell]).ok().stdout()
 }
 
+/// Remove the build stamp from a man page (`0.1.0 (a9fcee0fbcbc 2026-10-18)` becomes `0.1.0`). The stamp changes
+/// with every commit, so the copies in `docs/reference/man/` are stored without it; `scripts/gen_cli_docs.py`
+/// applies the same rule (`strip_build_stamp`). In the roff source the hyphens of the date are escaped.
+fn strip_build_stamp(page: &str) -> String {
+    let mut out = String::with_capacity(page.len());
+    let mut rest = page;
+    while let Some(i) = rest.find(" (") {
+        let (head, tail) = rest.split_at(i);
+        let inner = tail[2..].split(')').next().unwrap_or_default();
+        let (first, date) = match inner.split_once(' ') {
+            Some((f, d)) => (f, Some(d)),
+            None => (inner, None),
+        };
+        let commit = (7..=40).contains(&first.len()) && first.bytes().all(|b| b.is_ascii_hexdigit());
+        let date_ok = date.is_none_or(|d| d.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '\\'));
+        let after_version = head.chars().next_back().is_some_and(|c| c.is_ascii_alphanumeric());
+        let stamp = (commit && date_ok) || inner == "no git metadata";
+        out.push_str(head);
+        if after_version && stamp && tail[2..].len() > inner.len() {
+            rest = &tail[2 + inner.len() + 1..];
+        } else {
+            out.push_str(" (");
+            rest = &tail[2..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 #[test]
 fn every_shell_gets_a_script_that_knows_the_commands() {
     let a = Ag::bare();
@@ -74,7 +103,7 @@ fn the_scripts_parse_in_the_shells_that_are_installed() {
         let o = Command::new("fish").arg("--no-execute").arg(&p).output().unwrap();
         assert!(o.status.success(), "fish --no-execute: {}", String::from_utf8_lossy(&o.stderr));
     }
-    if have("pwsh") {
+    if available("pwsh") {
         let p = write("_ag.ps1", "powershell");
         let cmd = format!(
             "$tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile('{}', [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) {{ $errors | ForEach-Object {{ $_.Message }}; exit 1 }}",
@@ -145,6 +174,16 @@ fn the_copies_shipped_in_docs_reference_are_current() {
 }
 
 #[test]
+fn the_build_stamp_is_removed_from_man_pages_and_nothing_else() {
+    assert_eq!(strip_build_stamp(".TH ag 1  \"ag 0.1.0 (a9fcee0fbcbc 2026-10-18)\""), ".TH ag 1  \"ag 0.1.0\"");
+    assert_eq!(strip_build_stamp("v0.1.0 (a9fcee0fbcbc 2026\\-10\\-18)\nnext"), "v0.1.0\nnext");
+    assert_eq!(strip_build_stamp("v0.2.0\\-rc.1 (a9fcee0)"), "v0.2.0\\-rc.1");
+    assert_eq!(strip_build_stamp("v0.2.0 (no git metadata)"), "v0.2.0");
+    let prose = "Use ag (the tool) and (abc) or call (it) done (";
+    assert_eq!(strip_build_stamp(prose), prose);
+}
+
+#[test]
 fn man_pages_cover_every_command_and_are_well_formed() {
     let a = Ag::bare();
     let top = a.ag(&["man"]).ok().stdout();
@@ -168,9 +207,16 @@ fn man_pages_cover_every_command_and_are_well_formed() {
     let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/reference/man");
     if shipped.is_dir() {
         for n in &names {
-            let want = fs::read_to_string(dir.path().join(n)).unwrap();
+            let want = strip_build_stamp(&fs::read_to_string(dir.path().join(n)).unwrap());
             let have = fs::read_to_string(shipped.join(n)).unwrap_or_else(|e| panic!("docs/reference/man/{n}: {e}"));
             assert!(want == have, "docs/reference/man/{n} is out of date: run python3 scripts/gen_cli_docs.py");
+        }
+        for e in fs::read_dir(&shipped).unwrap().flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            assert!(
+                names.contains(&n),
+                "docs/reference/man/{n} is no longer generated: run python3 scripts/gen_cli_docs.py"
+            );
         }
     }
 }

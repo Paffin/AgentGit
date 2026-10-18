@@ -1,0 +1,63 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-provenance-attach 1  "attach 0.1.0" 
+.SH NAME
+ag\-provenance\-attach \- Sign and attach a provenance record to a changeset
+.SH SYNOPSIS
+\fBag provenance attach\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-run\fR] [\fB\-\-json\fR] [\fB\-\-task\fR] [\fB\-\-color\fR] [\fB\-\-model\fR] [\fB\-\-prompt\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-\-rationale\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-check\fR] [\fB\-\-input\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fB\-\-agent\fR> [\fIREV\fR] 
+.SH DESCRIPTION
+Sign and attach a provenance record to a changeset
+.SH OPTIONS
+.TP
+\fB\-\-agent\fR \fI<AGENT>\fR
+Agent name (its key signs the record)
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-run\fR \fI<RUN>\fR
+Run id
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-task\fR \fI<TASK>\fR
+Task id
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-\-model\fR \fI<MODEL>\fR
+Model identifier
+.TP
+\fB\-\-prompt\-file\fR \fI<PROMPT_FILE>\fR
+File holding the prompt; only its SHA\-256 is stored
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-\-rationale\fR \fI<RATIONALE>\fR
+Why the change was made
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-\-check\fR \fI<CHECKS>\fR
+A check the agent ran itself (repeatable)
+.TP
+\fB\-\-input\fR \fI<INPUTS>\fR
+A source consulted (repeatable). Stored as untrusted text
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+[\fIREV\fR]
+Changeset (default: the workspace head)
+.SH VERSION
+v0.1.0

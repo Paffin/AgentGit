@@ -1,0 +1,88 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-remote 1  "remote 0.1.0" 
+.SH NAME
+ag\-remote \- Manage remotes and work with proposals, events and policy on a server
+.SH SYNOPSIS
+\fBag remote\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Manage remotes and work with proposals, events and policy on a server
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-remote\fR \fI<REMOTE>\fR
+Remote to use (default: origin)
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+ag\-remote\-add(1)
+Add a remote
+.TP
+ag\-remote\-list(1)
+List remotes
+.TP
+ag\-remote\-remove(1)
+Forget a remote
+.TP
+ag\-remote\-whoami(1)
+Show who the server thinks you are
+.TP
+ag\-remote\-proposals(1)
+List proposals on the server
+.TP
+ag\-remote\-proposal(1)
+Show a proposal with its reviews
+.TP
+ag\-remote\-prepare(1)
+What would integrating do now, and what is missing?
+.TP
+ag\-remote\-review(1)
+Review a proposal\*(Aqs current head
+.TP
+ag\-remote\-integrate(1)
+Integrate a proposal into its stream
+.TP
+ag\-remote\-close(1)
+Close a proposal without integrating it
+.TP
+ag\-remote\-streams(1)
+List streams
+.TP
+ag\-remote\-events(1)
+Show the events of the repository (replay), or follow them live
+.TP
+ag\-remote\-policy(1)
+Show or set a stream\*(Aqs policy
+.TP
+ag\-remote\-log(1)
+Show history of a revision on the server
+.TP
+ag\-remote\-blame(1)
+Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
+.TP
+ag\-remote\-cat(1)
+Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+.SH VERSION
+v0.1.0

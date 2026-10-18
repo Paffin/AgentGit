@@ -56,7 +56,7 @@ ag --version
 ```
 
 Or just build it: `cargo build --release -p ag-cli` → `target/release/ag`. (The crates are not on crates.io
-yet; [Releasing](operations/releasing.md#crates-io) says why.)
+yet; [Releasing](operations/releasing.md#cratesio) says why.)
 
 ## Your first repository
 

@@ -10,6 +10,7 @@ use clap::{Args, Subcommand};
 use serde_json::json;
 
 use super::repo::rev_or_default;
+use crate::cmds::StreamSel;
 use crate::ctx::{Ctx, parse_duration_ms};
 use crate::exit;
 
@@ -263,8 +264,9 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
 pub struct IntegrateArgs {
     /// Proposal id.
     pub proposal: String,
-    /// Idempotency key (default: derived from the proposal; repeating resumes/replays).
-    #[arg(long)]
+    /// Idempotency key (default: derived from the proposal; repeating resumes/replays). Not the issuer key of
+    /// `ag validate run --key`; `--idempotency-key` is the unambiguous spelling.
+    #[arg(long, visible_alias = "idempotency-key")]
     pub key: Option<String>,
     /// Fencing token(s) of exclusive leases the author holds.
     #[arg(long = "fencing-token")]
@@ -472,13 +474,13 @@ pub enum QueueCmd {
     },
     /// Show the queue.
     List {
-        /// Stream (default: the default stream).
-        stream: Option<String>,
+        #[command(flatten)]
+        stream: StreamSel,
     },
     /// Integrate queued proposals in order.
     Run {
-        /// Stream (default: the default stream).
-        stream: Option<String>,
+        #[command(flatten)]
+        stream: StreamSel,
     },
 }
 
@@ -489,7 +491,7 @@ pub fn queue(ctx: &Ctx, cmd: &QueueCmd) -> Result<u8> {
             ctx.done(&row, || format!("Queued {proposal} as #{} on '{}'", row.id, row.stream))?;
         }
         QueueCmd::List { stream } => {
-            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            let s = stream.name(ctx);
             let rows = ctx.repo.queue(&s)?;
             if rows.is_empty() {
                 ctx.note(format!("the queue of '{s}' is empty; `ag queue add PROPOSAL` adds to it"));
@@ -510,7 +512,7 @@ pub fn queue(ctx: &Ctx, cmd: &QueueCmd) -> Result<u8> {
             })?;
         }
         QueueCmd::Run { stream } => {
-            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            let s = stream.name(ctx);
             let rep = ctx.repo.run_queue(&s, &ctx.me)?;
             ctx.out(&rep, || {
                 format!(

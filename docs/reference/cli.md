@@ -12,9 +12,11 @@ Exit codes (stable, safe for scripts and agents to rely on):
 | 3 | **blocked**: something you can provide is missing (approval, validation, lease token) |
 | 4 | **refused**: conflict, policy denial or invalid request; the stream was not changed |
 
+Which commands use 3 and 4, and the commands that exit 1 on a problem they found, are listed in [Help topics](help-topics.md#exit-codes) (`ag help exit-codes`).
+
 Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`, `--color <auto|always|never>`
 (`NO_COLOR` is honoured; nothing is coloured in a pipe), `-q/--quiet`, `-v/--verbose`.
-Concept pages are available in the terminal: `ag help workflow|policy|leases|identities|revisions|exit-codes|json|config`.
+Concept pages are available in the terminal: `ag help workflow|policy|leases|identities|revisions|exit-codes|json|config`, and in [Help topics](help-topics.md). Machine-readable output: [`--json` shapes](cli-json.md). Environment and files: [Configuration](configuration.md). Shell completion and man pages: [Completions and man pages](completions.md).
 
 ## Commands
 
@@ -782,7 +784,7 @@ Arguments:
 
 Options:
   -C, --repo <DIR>                      Operate on the repository at this path (default: discovered from the current directory)
-      --key <KEY>                       Idempotency key (default: derived from the proposal; repeating resumes/replays)
+      --key <KEY>                       Idempotency key (default: derived from the proposal; repeating resumes/replays). Not the issuer key of `ag validate run --key`; `--idempotency-key` is the unambiguous spelling [alias: --idempotency-key]
       --as <IDENTITY>                   Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --fencing-token <FENCING_TOKENS>  Fencing token(s) of exclusive leases the author holds
       --json                            Machine-readable JSON output
@@ -976,17 +978,18 @@ Show the queue
 Usage: ag queue list [OPTIONS] [STREAM]
 
 Arguments:
-  [STREAM]  Stream (default: the default stream)
+  [STREAM]  Stream (default: the default stream); `--stream STREAM` means the same
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  The stream, as an option (the same as the positional STREAM)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag queue run
@@ -997,17 +1000,18 @@ Integrate queued proposals in order
 Usage: ag queue run [OPTIONS] [STREAM]
 
 Arguments:
-  [STREAM]  Stream (default: the default stream)
+  [STREAM]  Stream (default: the default stream); `--stream STREAM` means the same
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  The stream, as an option (the same as the positional STREAM)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag policy
@@ -1044,17 +1048,18 @@ Show the policy in force
 Usage: ag policy show [OPTIONS] [STREAM]
 
 Arguments:
-  [STREAM]  Stream (default: the default stream)
+  [STREAM]  Stream (default: the default stream); `--stream STREAM` means the same
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  The stream, as an option (the same as the positional STREAM)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag policy set
@@ -1087,17 +1092,18 @@ List policy versions
 Usage: ag policy history [OPTIONS] [STREAM]
 
 Arguments:
-  [STREAM]  Stream (default: the default stream)
+  [STREAM]  Stream (default: the default stream); `--stream STREAM` means the same
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  The stream, as an option (the same as the positional STREAM)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag policy example
@@ -1796,17 +1802,18 @@ Predict overlapping work
 Usage: ag predict [OPTIONS] [STREAM]
 
 Arguments:
-  [STREAM]  Stream (default: the default stream)
+  [STREAM]  Stream (default: the default stream); `--stream STREAM` means the same
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  The stream, as an option (the same as the positional STREAM)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag workspace

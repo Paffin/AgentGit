@@ -1,0 +1,45 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-agent-finish 1  "finish 0.1.0" 
+.SH NAME
+ag\-agent\-finish \- Finish a run and release its leases
+.SH SYNOPSIS
+\fBag agent finish\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-status\fR] [\fB\-\-as\fR] [\fB\-m\fR|\fB\-\-message\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIRUN\fR> 
+.SH DESCRIPTION
+Finish a run and release its leases
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-status\fR \fI<STATUS>\fR [default: completed]
+`completed` or `failed`
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-m\fR, \fB\-\-message\fR \fI<MESSAGE>\fR
+Summary
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+<\fIRUN\fR>
+Run id
+.SH VERSION
+v0.1.0

@@ -81,6 +81,28 @@ fn quiet_prints_only_what_was_asked_for() {
     assert!(a.ag(&["-q", "-v", "status"]).code_is(2).stderr().contains("cannot be used with"));
 }
 
+/// The tutorials capture these values in shell variables (`KEY=$(ag -q validate keygen ci)`), so `--quiet` must
+/// print the bare value and nothing else; without `--quiet` and with `--json` the full output is unchanged.
+#[test]
+fn quiet_prints_the_bare_key_identity_and_fencing_token() {
+    let a = Ag::new();
+    let key = a.ag(&["-q", "validate", "keygen", "ci"]).ok().stdout();
+    assert_eq!(key.trim().len(), 64, "a bare public key: {key:?}");
+    assert!(key.trim().chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(a.ag(&["validate", "keygen", "ci2"]).ok().stdout().contains("Add this to your policy"));
+    assert_eq!(a.ag(&["--json", "validate", "keygen", "ci3"]).ok().json()["identity"], "service:ci3");
+
+    a.ag(&["agent", "register", "bot"]).ok();
+    let who = a.ag(&["-q", "agent", "start", "bot"]).ok().stdout();
+    assert!(who.trim().starts_with("agent:bot#run_") && !who.trim().contains(' '), "{who:?}");
+    assert!(a.ag(&["agent", "start", "bot"]).ok().stdout().contains("Act as:"));
+
+    let token = a.ag(&["-q", "lease", "acquire", "src/**", "--exclusive", "--ttl", "30m"]).ok().stdout();
+    assert!(token.trim().parse::<u64>().is_ok(), "a bare fencing token: {token:?}");
+    let full = a.ag(&["lease", "acquire", "docs/**", "--ttl", "30m"]).ok().stdout();
+    assert!(full.contains("fencing token:"), "{full}");
+}
+
 #[test]
 fn verbose_explains_itself_on_stderr_only() {
     let a = Ag::new();

@@ -1,0 +1,39 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-agent-reap 1  "reap 0.1.0" 
+.SH NAME
+ag\-agent\-reap \- Abandon runs with no recent heartbeat and release their leases
+.SH SYNOPSIS
+\fBag agent reap\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-timeout\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
+.SH DESCRIPTION
+Abandon runs with no recent heartbeat and release their leases
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-timeout\fR \fI<TIMEOUT>\fR [default: 10m]
+Heartbeat timeout
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH VERSION
+v0.1.0

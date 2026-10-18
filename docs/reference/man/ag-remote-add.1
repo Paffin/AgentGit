@@ -1,0 +1,54 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-remote-add 1  "add 0.1.0" 
+.SH NAME
+ag\-remote\-add \- Add a remote
+.SH SYNOPSIS
+\fBag remote add\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-token\-env\fR] [\fB\-\-as\fR] [\fB\-\-token\-stdin\fR] [\fB\-\-ca\-file\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fINAME\fR> <\fIURL\fR> 
+.SH DESCRIPTION
+Add a remote
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-remote\fR \fI<REMOTE>\fR
+Remote to use (default: origin)
+.TP
+\fB\-\-token\-env\fR \fI<TOKEN_ENV>\fR
+Environment variable holding the credential
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-token\-stdin\fR
+Read the credential from stdin and store it in `.ag/credentials/<name>` (mode 0600)
+.TP
+\fB\-\-ca\-file\fR \fI<CA_FILE>\fR
+Extra CA certificate (PEM) to trust
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+<\fINAME\fR>
+Name, e.g. origin
+.TP
+<\fIURL\fR>
+`http(s)://host:port/owner/name`
+.SH VERSION
+v0.1.0

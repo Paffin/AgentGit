@@ -1,0 +1,56 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-validate-run 1  "run 0.1.0" 
+.SH NAME
+ag\-validate\-run \- Check out the exact candidate tree of a proposal, run a command on it and record a signed attestation of the result
+.SH SYNOPSIS
+\fBag validate run\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-issuer\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-\-env\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fB\-\-check\fR> <\fB\-\-key\fR> <\fIPROPOSAL\fR> <\fICOMMAND\fR> 
+.SH DESCRIPTION
+Check out the exact candidate tree of a proposal, run a command on it and record a signed attestation of the result.
+.PP
+WARNING: the command runs on this machine without a sandbox. This runner is for trusted code and local workflows; use an isolated execution plane for untrusted code.
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-check\fR \fI<CHECK>\fR
+Check name, as listed in the policy\*(Aqs `required_validations`
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-key\fR \fI<KEY>\fR
+Name of the issuer key created with `ag validate keygen`
+.TP
+\fB\-\-issuer\fR \fI<ISSUER>\fR
+Issuer identity (default: `service:<key name>`)
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-\-env\fR \fI<ENV>\fR
+Environment digest to record (default: derived from the command and platform)
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+<\fIPROPOSAL\fR>
+Proposal id
+.TP
+<\fICOMMAND\fR>
+The command and its arguments
+.SH VERSION
+v0.1.0

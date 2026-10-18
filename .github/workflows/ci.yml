@@ -187,3 +187,17 @@ jobs:
           go vet ./...
           test -z "$(gofmt -l .)"
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race ./...
+
+  # The completion scripts must parse in the shells they are for. A missing shell fails the run (AG_REQUIRE_SHELLS)
+  # instead of being skipped; PowerShell is on the runner image, zsh and fish are installed here.
+  shells:
+    name: shell completions (bash, zsh, fish, PowerShell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh fish
+      - name: The scripts parse; bash completes real commands; the shipped copies are current
+        run: AG_REQUIRE_SHELLS=1 cargo test -p ag-cli --test completions

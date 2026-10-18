@@ -1,0 +1,48 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-lease-acquire 1  "acquire 0.1.0" 
+.SH NAME
+ag\-lease\-acquire \- Claim a scope (path glob). Soft by default; `\-\-exclusive` is enforced at integration
+.SH SYNOPSIS
+\fBag lease acquire\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-exclusive\fR] [\fB\-\-as\fR] [\fB\-\-ttl\fR] [\fB\-\-json\fR] [\fB\-\-task\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISCOPE\fR> 
+.SH DESCRIPTION
+Claim a scope (path glob). Soft by default; `\-\-exclusive` is enforced at integration
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-exclusive\fR
+Enforce with a fencing token at integration time
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-ttl\fR \fI<TTL>\fR [default: 1h]
+How long the lease lasts
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-task\fR \fI<TASK>\fR
+Task the lease belongs to
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+<\fISCOPE\fR>
+Path glob, e.g. `src/auth/**`
+.SH VERSION
+v0.1.0

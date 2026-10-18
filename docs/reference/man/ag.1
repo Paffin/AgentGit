@@ -1,0 +1,201 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag 1  "ag 0.1.0" 
+.SH NAME
+ag \- AgentGit: the `ag` command\-line interface
+.SH SYNOPSIS
+\fBag\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+AgentGit: an agent\-native source control system. People, agents and CI change one codebase at the same time; every change lands through a proposal, and a per\-stream policy decides what must be true first (validation of the exact tree, approvals, leases, an autonomy envelope for agents).
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+ag\-init(1)
+Create a repository in the current directory
+.TP
+ag\-status(1)
+Summarize the workspace, your proposals, leases, task and remote at a glance
+.TP
+ag\-snapshot(1)
+Record the working directory as a new snapshot
+.TP
+ag\-sync(1)
+Bring the stream\*(Aqs latest head into the workspace
+.TP
+ag\-log(1)
+Show history
+.TP
+ag\-show(1)
+Show one changeset and what it changed
+.TP
+ag\-diff(1)
+Show differences between two revisions, or the working directory and its snapshot
+.TP
+ag\-cat(1)
+Print a file as of a revision: `ag cat main:src/lib.rs`
+.TP
+ag\-blame(1)
+Show which changeset introduced each line of a file
+.TP
+ag\-ls(1)
+List a directory as of a revision
+.TP
+ag\-checkout(1)
+Write a revision\*(Aqs files into a new directory
+.TP
+ag\-portability(1)
+List what a revision contains that Windows, macOS or Linux file systems cannot hold
+.TP
+ag\-stream(1)
+Manage streams
+.TP
+ag\-propose(1)
+Publish a snapshot and open a proposal to integrate it
+.TP
+ag\-proposal(1)
+List, review, update or close proposals
+.TP
+ag\-integrate(1)
+Integrate a proposal into its stream
+.TP
+ag\-preview(1)
+Show what integrating a proposal would do, without doing it
+.TP
+ag\-op(1)
+Inspect or resume operations
+.TP
+ag\-recover(1)
+Resume interrupted operations and expire stale ones
+.TP
+ag\-queue(1)
+The ordered integration queue
+.TP
+ag\-policy(1)
+Show or change stream policy
+.TP
+ag\-validate(1)
+Run checks and issue signed attestations
+.TP
+ag\-agent(1)
+Agent identities and runs
+.TP
+ag\-task(1)
+Tasks and their dependencies
+.TP
+ag\-lease(1)
+Soft and exclusive leases with fencing tokens
+.TP
+ag\-provenance(1)
+Signed provenance of agent\-made changes
+.TP
+ag\-predict(1)
+Predict overlapping work
+.TP
+ag\-workspace(1)
+Create, list and remove workspaces (isolated lines of work in their own directories)
+.TP
+ag\-trace(1)
+Show the audit trail of an object, proposal, run or stream
+.TP
+ag\-audit(1)
+Verify the tamper\-evident audit chain
+.TP
+ag\-verify(1)
+Check the integrity of the whole repository
+.TP
+ag\-gc(1)
+Delete unreachable objects (safe: fails closed, honours a grace period)
+.TP
+ag\-reindex(1)
+Rebuild derived indexes from the object store
+.TP
+ag\-backup(1)
+Write a verified, consistent copy of the repository to a new directory
+.TP
+ag\-git(1)
+Import from or export to Git (needs the `git` command)
+.TP
+ag\-clone(1)
+Clone a repository from an `ag\-server`
+.TP
+ag\-fetch(1)
+Download new history from the server
+.TP
+ag\-pull(1)
+Fetch, then fast\-forward the local stream and bring the workspace up to date
+.TP
+ag\-push(1)
+Upload your snapshot and open a proposal on the server
+.TP
+ag\-remote(1)
+Manage remotes and work with proposals, events and policy on a server
+.TP
+ag\-pin(1)
+Pin a revision so garbage collection keeps it
+.TP
+ag\-unpin(1)
+Remove a pin
+.TP
+ag\-pins(1)
+List pins
+.TP
+ag\-doctor(1)
+Check the installation, the repository, your identity and every remote\*(Aqs credential
+.TP
+ag\-config(1)
+Show, get, set and locate configuration (the user file; the repository\*(Aqs settings are shown read\-only)
+.TP
+ag\-completions(1)
+Print a shell completion script: bash, zsh, fish, powershell or elvish
+.TP
+ag\-man(1)
+Print the man page, or write one page per command with \-\-dir
+.TP
+ag\-version(1)
+Print the version, the protocol and the JSON schema version
+.TP
+ag\-help(1)
+Show help for a command, or a topic: workflow, policy, leases, identities, revisions, exit\-codes, json, config
+.SH EXTRA
+Common workflow:
+  ag init \-\-namespace me/app     create a repository in this directory
+  ag snapshot \-m "message"       record the working directory
+  ag propose \-t "title"          publish it and open a proposal
+  ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+
+Where am I, is it healthy:
+  ag status                      workspace, your proposals, leases, task and remote at a glance
+  ag doctor                      check the installation, the repository, your identity and every remote
+
+Exit codes: 0 ok, 1 error, 2 usage, 3 blocked (provide what is missing and run it again),
+4 refused (conflict, policy denial; the stream was not changed). Add \-\-json for machine\-readable output.
+
+Help topics (ag help TOPIC): workflow, policy, leases, identities, revisions, exit\-codes, json, config
+Shell completion: ag completions bash|zsh|fish|powershell|elvish     Man pages: ag man \-\-dir DIR
+Documentation: https://github.com/Paffin/AgentGit/tree/main/docs
+.SH VERSION
+v0.1.0

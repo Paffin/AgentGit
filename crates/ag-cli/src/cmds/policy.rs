@@ -13,6 +13,7 @@ use clap::Subcommand;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
+use crate::cmds::StreamSel;
 use crate::ctx::Ctx;
 use crate::exit;
 
@@ -37,8 +38,8 @@ const EXAMPLE_POLICY: &str = r#"{
 pub enum PolicyCmd {
     /// Show the policy in force.
     Show {
-        /// Stream (default: the default stream).
-        stream: Option<String>,
+        #[command(flatten)]
+        stream: StreamSel,
     },
     /// Replace the policy with the contents of a JSON file (needs an admin).
     Set {
@@ -50,8 +51,8 @@ pub enum PolicyCmd {
     },
     /// List policy versions.
     History {
-        /// Stream (default: the default stream).
-        stream: Option<String>,
+        #[command(flatten)]
+        stream: StreamSel,
     },
     /// Print an example policy document.
     Example,
@@ -60,7 +61,7 @@ pub enum PolicyCmd {
 pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
     match cmd {
         PolicyCmd::Show { stream } => {
-            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            let s = stream.name(ctx);
             let (p, v) = ctx.repo.policy(&s)?;
             ctx.out(&json!({"stream": s, "version": v, "policy": p}), || {
                 format!(
@@ -79,7 +80,7 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
             })?;
         }
         PolicyCmd::History { stream } => {
-            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            let s = stream.name(ctx);
             let h = ctx.repo.policy_history(&s)?;
             if h.is_empty() {
                 ctx.note(format!("no policy has been stored for '{s}' yet (the built-in default applies); `ag policy example` shows a document to start from"));
@@ -144,7 +145,8 @@ pub fn validate(ctx: &Ctx, cmd: &ValidateCmd) -> Result<u8> {
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let kp = keys.create(&format!("issuer-{name}"))?;
             let pk = kp.public().to_hex();
-            ctx.out(&json!({"name": name, "identity": format!("service:{name}"), "public_key": pk, "key_file": keys.path(&format!("issuer-{name}"))}), || {
+            // With --quiet: just the public key, so `KEY=$(ag -q validate keygen ci)` works.
+            ctx.created(&pk, &json!({"name": name, "identity": format!("service:{name}"), "public_key": pk, "key_file": keys.path(&format!("issuer-{name}"))}), || {
                 format!(
                     "Created issuer key '{name}' ({}).\nAdd this to your policy's trusted_issuers:\n  {{ \"identity\": \"service:{name}\", \"public_key\": \"{pk}\" }}\nKeep the key file out of any environment that runs untrusted code.",
                     keys.path(&format!("issuer-{name}")).display()

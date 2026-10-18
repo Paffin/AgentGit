@@ -528,3 +528,51 @@ fn hostile_text_in_history_cannot_inject_terminal_escapes() {
     assert!(!j.stdout().contains('\u{1b}'));
     assert!(j.json()[0]["message"].as_str().unwrap().contains('\u{1b}'));
 }
+
+/// `policy show|history`, `queue list|run` and `predict` took the stream as a positional argument while
+/// `propose` and `policy set` took `--stream`. Both spellings now work everywhere (and mean the same); naming the
+/// stream twice is a usage error.
+#[test]
+fn a_stream_can_be_named_positionally_or_with_the_option() {
+    let a = Ag::new();
+    a.write("f.txt", "x\n");
+    let p = a.propose_as("user:alice", "first");
+    a.ag(&["integrate", &p]).ok();
+    a.ag(&["stream", "create", "dev", "--from", "main"]).ok();
+    a.write("policy.json", r#"{"approvals": {"min": 1}}"#);
+    a.ag(&["policy", "set", "policy.json", "--stream", "dev"]).ok();
+
+    let positional = a.ag(&["--json", "policy", "show", "dev"]).ok().json();
+    let option = a.ag(&["--json", "policy", "show", "--stream", "dev"]).ok().json();
+    assert_eq!(positional, option);
+    assert_eq!(positional["stream"], "dev");
+    assert_eq!(positional["version"], 1, "the policy was stored on dev, not on main");
+    assert_eq!(a.ag(&["--json", "policy", "show"]).ok().json()["version"], 0, "the default stream is unchanged");
+    assert_eq!(
+        a.ag(&["--json", "policy", "history", "dev"]).ok().json(),
+        a.ag(&["--json", "policy", "history", "--stream", "dev"]).ok().json()
+    );
+    for cmd in [&["queue", "list"][..], &["queue", "run"], &["predict"]] {
+        let positional = [&["--json"][..], cmd, &["dev"]].concat();
+        let option = [&["--json"][..], cmd, &["--stream", "dev"]].concat();
+        assert_eq!(a.ag(&positional).ok().json(), a.ag(&option).ok().json(), "{cmd:?}");
+    }
+    // Naming the stream twice is refused rather than guessed.
+    let both = a.ag(&["policy", "show", "main", "--stream", "dev"]).code_is(2);
+    assert!(both.stderr().contains("cannot be used with"), "{}", both.stderr());
+}
+
+/// `integrate --key` is an idempotency key, `validate run --key` names an issuer key. `--idempotency-key` is the
+/// unambiguous spelling of the first and is interchangeable with it.
+#[test]
+fn integrate_takes_its_idempotency_key_as_key_or_idempotency_key() {
+    let a = Ag::new();
+    a.write("f.txt", "x\n");
+    let p = a.propose_as("user:alice", "first");
+    let first = a.ag(&["--json", "integrate", &p, "--idempotency-key", "k-1"]).ok().json();
+    // Repeating the same request with the old spelling replays the recorded result instead of failing.
+    let again = a.ag(&["--json", "integrate", &p, "--key", "k-1"]).ok().json();
+    assert_eq!(first["operation_id"], again["operation_id"]);
+    let help = a.ag(&["integrate", "--help"]).ok().stdout();
+    assert!(help.contains("--idempotency-key"), "{help}");
+}

@@ -4,3 +4,7 @@ target/
 .ag/
 !crates/**/.ag/
 *.whl
+__pycache__/
+*.pyc
+/site/
+.venv-docs/

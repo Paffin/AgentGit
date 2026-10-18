@@ -1,0 +1,48 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-diff 1  "diff 0.1.0" 
+.SH NAME
+ag\-diff \- Show differences between two revisions, or the working directory and its snapshot
+.SH SYNOPSIS
+\fBag diff\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-U\fR|\fB\-\-context\fR] [\fB\-\-as\fR] [\fB\-w\fR|\fB\-\-workspace\fR] [\fB\-\-dir\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIREVS\fR] 
+.SH DESCRIPTION
+Show differences between two revisions, or the working directory and its snapshot
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-U\fR, \fB\-\-context\fR \fI<CONTEXT>\fR [default: 3]
+Lines of context
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-w\fR, \fB\-\-workspace\fR \fI<WORKSPACE>\fR [default: default]
+Workspace (for the no\-argument form)
+.TP
+\fB\-\-dir\fR \fI<DIR>\fR
+Workspace directory (for the no\-argument form)
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+[\fIREVS\fR]
+With two revisions: diff A to B. With one: diff it against its first parent. With none: diff the workspace head against the working directory
+.SH VERSION
+v0.1.0

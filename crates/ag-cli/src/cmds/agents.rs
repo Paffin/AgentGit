@@ -12,8 +12,10 @@ use clap::{Args, Subcommand};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
+use crate::cmds::StreamSel;
 use crate::ctx::{Ctx, parse_duration_ms};
 use crate::exit;
+use crate::ui;
 
 // ---- agents ----------------------------------------------------------------
 
@@ -113,7 +115,8 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
         }
         AgentCmd::Start { name, task } => {
             let run = registry::start_run(meta, name, task.as_deref())?;
-            ctx.out(&json!({"run_id": run.run_id, "identity": run.identity}), || {
+            // With --quiet: just the identity to act as, so `export AG_IDENTITY=$(ag -q agent start NAME)` works.
+            ctx.created(&run.identity.to_string(), &json!({"run_id": run.run_id, "identity": run.identity}), || {
                 format!("Run {}\nAct as: {}\n  export AG_IDENTITY={}", run.run_id, run.identity, run.identity)
             })?;
         }
@@ -312,7 +315,13 @@ pub fn lease(ctx: &Ctx, cmd: &LeaseCmd) -> Result<u8> {
         LeaseCmd::Acquire { scope, exclusive, ttl, task } => {
             let got =
                 leases::acquire(meta, scope, ctx.me.as_str(), *exclusive, parse_duration_ms(ttl)?, task.as_deref())?;
-            ctx.out(&got, || {
+            if ctx.quiet && !ctx.json {
+                for o in &got.overlaps {
+                    ui::eprint_line(&format!("warning: overlaps {} on '{}' held by {}", o.id, o.scope, o.holder));
+                }
+            }
+            // With --quiet: just the fencing token, so `TOKEN=$(ag -q lease acquire 'src/**' --exclusive)` works.
+            ctx.created(&got.lease.token.to_string(), &got, || {
                 let mut s = format!(
                     "{} lease {} on '{}' until {}\nfencing token: {}   (pass `--fencing-token {}` to `ag integrate`)",
                     if got.lease.exclusive { "Exclusive" } else { "Soft" },
@@ -472,12 +481,12 @@ pub fn provenance(ctx: &Ctx, cmd: &ProvCmd) -> Result<u8> {
 
 #[derive(Args, Debug)]
 pub struct PredictArgs {
-    /// Stream (default: the default stream).
-    pub stream: Option<String>,
+    #[command(flatten)]
+    pub stream: StreamSel,
 }
 
 pub fn predict(ctx: &Ctx, a: &PredictArgs) -> Result<u8> {
-    let s = a.stream.clone().unwrap_or_else(|| ctx.default_stream());
+    let s = a.stream.name(ctx);
     let p = predictor::predict(ctx.repo.meta(), &s)?;
     ctx.out(&p, || {
         if p.overlaps.is_empty() {

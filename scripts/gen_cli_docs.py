@@ -1,19 +1,37 @@
 #!/usr/bin/env python3
-"""Generate docs/reference/cli.md from the real `ag --help` output.
+"""Generate the CLI reference under docs/reference/ from the real `ag` binary and its test fixtures.
 
-    python3 scripts/gen_cli_docs.py            # rewrite docs/reference/cli.md
-    python3 scripts/gen_cli_docs.py --check    # exit 1 if the file is out of date (used by CI)
+    python3 scripts/gen_cli_docs.py            # rewrite the generated files
+    python3 scripts/gen_cli_docs.py --check    # exit 1 if any of them is out of date (used by CI)
+
+Generated, never edited by hand:
+
+    docs/reference/cli.md                       `ag --help` of every command
+    docs/reference/help-topics.md               `ag help TOPIC`, the concept pages of the terminal
+    docs/reference/cli-json.md                  the `--json` output shapes, from crates/ag-cli/tests/golden/*.json
+    docs/reference/completions/*                `ag completions SHELL` for bash, zsh, fish, PowerShell, elvish
+    docs/reference/man/*.1                      `ag man --dir`, one page per command
 
 The binary is taken from $AG, else target/release/ag, else target/debug/ag.
+
+The build stamp that `--version` prints (`0.1.0 (<commit> <date>)`) is removed from the man pages: it changes with
+every commit, and a committed copy that could only match one commit would make the check useless.
+`crates/ag-cli/tests/completions.rs` applies the same rule when it compares the shipped copies.
 """
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "docs" / "reference" / "cli.md"
+REF = ROOT / "docs" / "reference"
+GOLDEN = ROOT / "crates" / "ag-cli" / "tests" / "golden"
+SHELLS = [("bash", "ag.bash"), ("zsh", "_ag"), ("fish", "ag.fish"), ("powershell", "_ag.ps1"), ("elvish", "ag.elv")]
+# Files in these directories are owned by this script: stale ones are reported and removed.
+OWNED_DIRS = ("completions", "man")
 
 
 def find_ag() -> str:
@@ -25,10 +43,14 @@ def find_ag() -> str:
     sys.exit("ag binary not found; run `cargo build` first or set $AG")
 
 
-def help_of(ag: str, path: list[str]) -> str:
+def run(ag: str, args: list[str]) -> str:
     env = dict(os.environ, COLUMNS="100", NO_COLOR="1", AG_IDENTITY="user:docs")
-    res = subprocess.run([ag, *path, "--help"], capture_output=True, text=True, env=env, check=True)
-    return res.stdout.rstrip() + "\n"
+    res = subprocess.run([ag, *args], capture_output=True, text=True, env=env, check=True)
+    return res.stdout
+
+
+def help_of(ag: str, path: list[str]) -> str:
+    return run(ag, [*path, "--help"]).rstrip() + "\n"
 
 
 def subcommands(text: str) -> list[str]:
@@ -50,7 +72,10 @@ def walk(ag: str, path: list[str], out: list[tuple[list[str], str]]) -> None:
         walk(ag, [*path, sub], out)
 
 
-def render(entries: list[tuple[list[str], str]]) -> str:
+# -- cli.md -----------------------------------------------------------------------------------------------
+
+
+def render_cli(entries: list[tuple[list[str], str]]) -> str:
     lines = [
         "# CLI reference",
         "",
@@ -66,9 +91,14 @@ def render(entries: list[tuple[list[str], str]]) -> str:
         "| 3 | **blocked**: something you can provide is missing (approval, validation, lease token) |",
         "| 4 | **refused**: conflict, policy denial or invalid request; the stream was not changed |",
         "",
+        "Which commands use 3 and 4, and the commands that exit 1 on a problem they found, are listed in "
+        "[Help topics](help-topics.md#exit-codes) (`ag help exit-codes`).",
+        "",
         "Global options: `-C/--repo`, `--as <identity>` (or `AG_IDENTITY`), `--json`, `--color <auto|always|never>`",
         "(`NO_COLOR` is honoured; nothing is coloured in a pipe), `-q/--quiet`, `-v/--verbose`.",
-        "Concept pages are available in the terminal: `ag help workflow|policy|leases|identities|revisions|exit-codes|json|config`.",
+        "Concept pages are available in the terminal: `ag help workflow|policy|leases|identities|revisions|exit-codes|json|config`,"
+        " and in [Help topics](help-topics.md). Machine-readable output: [`--json` shapes](cli-json.md). "
+        "Environment and files: [Configuration](configuration.md). Shell completion and man pages: [Completions and man pages](completions.md).",
         "",
         "## Commands",
         "",
@@ -84,21 +114,183 @@ def render(entries: list[tuple[list[str], str]]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def main() -> None:
-    ag = find_ag()
+# -- help-topics.md ---------------------------------------------------------------------------------------
+
+
+def topic_names(ag: str) -> list[str]:
+    """The topics, in the order `ag help` lists them."""
+    text = run(ag, ["help"])
+    m = re.search(r"^Help topics \(ag help TOPIC\):\n((?:  .*\n?)+)", text, re.M)
+    if not m:
+        sys.exit("`ag help` does not list its topics any more; update scripts/gen_cli_docs.py")
+    return [re.match(r"^\s+(\S+)", line).group(1) for line in m.group(1).splitlines() if line.strip()]
+
+
+def render_topics(ag: str) -> str:
+    names = topic_names(ag)
+    lines = [
+        "# Help topics",
+        "",
+        "<!-- GENERATED by scripts/gen_cli_docs.py from `ag help TOPIC` (sources: crates/ag-cli/help/*.md). Do not edit by hand. -->",
+        "",
+        "The concept pages of the terminal, word for word: `ag help TOPIC` prints the same text. "
+        "They are short on purpose; the guides they point to have the detail.",
+        "",
+    ]
+    lines += [f"- [`ag help {n}`](#{n})" for n in names]
+    lines.append("")
+    for n in names:
+        text = run(ag, ["help", n]).rstrip()
+        lines += [f"## {n}", "", "```text", text, "```", ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# -- cli-json.md ------------------------------------------------------------------------------------------
+
+
+def load_golden() -> tuple[dict[str, object], list[str], int]:
+    commands: dict[str, object] = {}
+    raw: set[str] = set()
+    version = None
+    for name in ("json-shapes.json", "json-shapes-remote.json"):
+        d = json.loads((GOLDEN / name).read_text())
+        commands.update(d["commands"])
+        raw.update(d["raw"])
+        if version not in (None, d["schema_version"]):
+            sys.exit("the golden files disagree about the JSON schema version")
+        version = d["schema_version"]
+    return commands, sorted(raw), int(version)
+
+
+def render_json_shapes() -> str:
+    commands, raw, version = load_golden()
+    lines = [
+        "# `--json` output shapes",
+        "",
+        "<!-- GENERATED by scripts/gen_cli_docs.py from crates/ag-cli/tests/golden/*.json. Do not edit by hand. -->",
+        "",
+        f"Every command that reports something accepts the global `--json` flag. The schema version is **{version}** "
+        "(`ag version --json` prints `json_schema`).",
+        "",
+        "**The stability rule.** Within a schema version, keys are only ever *added*: never removed, renamed or "
+        "retyped. A consumer ignores keys it does not know. Removing, renaming or retyping a key would be a new "
+        "schema version and an entry in the changelog.",
+        "",
+        "**Where this is enforced.** The shapes below are the golden files `crates/ag-cli/tests/golden/json-shapes.json` "
+        "and `json-shapes-remote.json`. `cargo test -p ag-cli` runs every command listed here in a scratch repository "
+        "(the remote ones against a real in-process `ag-server`), compares the *shape* of its output (keys and value "
+        "types, no values) with the golden file, and fails when a command of `ag --help` has neither a shape nor an "
+        "entry in the list of commands whose output is not JSON.",
+        "",
+        "Reading the shapes: a value is its type (`string`, `number`, `bool`, `null`); `string|null` means both were "
+        "seen; an array shows the merged shape of its elements, and `[]` means the list was empty in the test run. "
+        "A command printed with a suffix such as `integrate (blocked)` is the same command in another situation "
+        "(here: when policy blocks the integration, exit code 3).",
+        "",
+        "## Errors",
+        "",
+        "With `--json` an error is one JSON line on standard error (and the exit code is the process's):",
+        "",
+        "```json",
+        '{"error":{"message":"not found: proposal \'x\'","hint":"...","exit_code":1}}',
+        "```",
+        "",
+        "## Commands whose output is not JSON",
+        "",
+        "Their output *is* the data (file contents, a template, a script, a man page, help text), so `--json` does "
+        "not change it:",
+        "",
+    ]
+    lines += [f"- `ag {c}`" for c in raw]
+    lines.append("")
+    groups: dict[str, list[str]] = {}
+    for key in sorted(commands):
+        groups.setdefault(key.split("#")[0].split(" ")[0], []).append(key)
+    lines += ["## Commands", ""]
+    lines += [f"- [`ag {g}`](#ag-{g})" for g in groups]
+    lines.append("")
+    for g, keys in groups.items():
+        lines += [f"## ag {g}", ""]
+        for key in keys:
+            base, _, variant = key.partition("#")
+            title = f"ag {base}" + (f" ({variant})" if variant else "")
+            lines += [f"### {title}", "", "```json", json.dumps(commands[key], indent=2, sort_keys=True), "```", ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# -- completions and man pages ----------------------------------------------------------------------------
+
+_STAMP = re.compile(
+    r"(\d+\.\d+\.\d+(?:\\?-[0-9A-Za-z.]+)?) \((?:[0-9a-f]{7,40}(?: [0-9]{4}\\?-[0-9]{2}\\?-[0-9]{2})?|no git metadata)\)"
+)
+
+
+def strip_build_stamp(page: str) -> str:
+    """`ag 0.1.0 (a9fcee0fbcbc 2026-10-18)` -> `ag 0.1.0` (the roff source escapes the hyphens)."""
+    return _STAMP.sub(r"\1", page)
+
+
+def completion_scripts(ag: str) -> dict[str, str]:
+    return {f"completions/{file}": run(ag, ["completions", shell]) for shell, file in SHELLS}
+
+
+def man_pages(ag: str) -> dict[str, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run([ag, "man", "--dir", tmp], capture_output=True, check=True)
+        return {
+            f"man/{p.name}": strip_build_stamp(p.read_text()) for p in sorted(Path(tmp).iterdir()) if p.suffix == ".1"
+        }
+
+
+# -- driver -----------------------------------------------------------------------------------------------
+
+
+def generate(ag: str) -> dict[str, str]:
     entries: list[tuple[list[str], str]] = []
     walk(ag, [], entries)
-    new = render(entries)
+    files = {
+        "cli.md": render_cli(entries),
+        "help-topics.md": render_topics(ag),
+        "cli-json.md": render_json_shapes(),
+    }
+    files.update(completion_scripts(ag))
+    files.update(man_pages(ag))
+    return files
+
+
+def stale_files(files: dict[str, str]) -> list[str]:
+    out = []
+    for d in OWNED_DIRS:
+        for p in sorted((REF / d).glob("*")) if (REF / d).is_dir() else []:
+            if f"{d}/{p.name}" not in files:
+                out.append(f"{d}/{p.name}")
+    return out
+
+
+def main() -> None:
+    ag = find_ag()
+    files = generate(ag)
+    stale = stale_files(files)
     if "--check" in sys.argv:
-        old = OUT.read_text() if OUT.exists() else ""
-        if old != new:
-            sys.stderr.write("docs/reference/cli.md is out of date. Run: python3 scripts/gen_cli_docs.py\n")
+        bad = [rel for rel, text in files.items() if not (REF / rel).exists() or (REF / rel).read_text() != text]
+        bad += [f"{rel} (no longer generated)" for rel in stale]
+        if bad:
+            sys.stderr.write(
+                "generated reference files are out of date: "
+                + ", ".join(f"docs/reference/{b}" for b in bad[:12])
+                + (f" and {len(bad) - 12} more" if len(bad) > 12 else "")
+                + "\nRun: python3 scripts/gen_cli_docs.py\n"
+            )
             sys.exit(1)
-        print("docs/reference/cli.md is up to date")
+        print(f"docs/reference is up to date ({len(files)} generated files)")
         return
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(new)
-    print(f"wrote {OUT.relative_to(ROOT)} ({len(entries)} commands)")
+    for rel in stale:
+        (REF / rel).unlink()
+    for rel, text in files.items():
+        out = REF / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+    print(f"wrote {len(files)} files under docs/reference/ ({len(stale)} stale removed)")
 
 
 if __name__ == "__main__":

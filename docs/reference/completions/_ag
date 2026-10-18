@@ -1,0 +1,3426 @@
+#compdef ag
+
+autoload -U is-at-least
+
+_ag() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag_commands" \
+"*::: :->ag" \
+&& ret=0
+    case $state in
+    (ag)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+'--namespace=[Repository namespace, e.g. \`acme/webapp\` (default\: \`local/<directory name>\`)]:NAMESPACE:_default' \
+'--stream=[Name of the first stream]:STREAM:_default' \
+'--storage=[JSON file with the \`storage\` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default\: a SQLite file and local objects under \`.ag/\`]:FILE:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-w+[Workspace name]:WORKSPACE:_default' \
+'--workspace=[Workspace name]:WORKSPACE:_default' \
+'--dir=[Working directory of the workspace (required for non-default workspaces)]:DIR:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--remote[Also ask each remote'\''s server for its current head (needs the network and a credential)]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(snapshot)
+_arguments "${_arguments_options[@]}" : \
+'-m+[Snapshot message]:MESSAGE:_default' \
+'--message=[Snapshot message]:MESSAGE:_default' \
+'-w+[Workspace name]:WORKSPACE:_default' \
+'--workspace=[Workspace name]:WORKSPACE:_default' \
+'--dir=[Working directory of the workspace]:DIR:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--force[Snapshot even if conflict markers remain]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+'-w+[Workspace name]:WORKSPACE:_default' \
+'--workspace=[Workspace name]:WORKSPACE:_default' \
+'--dir=[Working directory of the workspace]:DIR:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(log)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Maximum number of entries]:LIMIT:_default' \
+'--limit=[Maximum number of entries]:LIMIT:_default' \
+'--path=[Only changesets that touched this path]:PATH:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision to start from (default\: the workspace head):_default' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision (default\: the workspace head):_default' \
+&& ret=0
+;;
+(diff)
+_arguments "${_arguments_options[@]}" : \
+'-U+[Lines of context]:CONTEXT:_default' \
+'--context=[Lines of context]:CONTEXT:_default' \
+'-w+[Workspace (for the no-argument form)]:WORKSPACE:_default' \
+'--workspace=[Workspace (for the no-argument form)]:WORKSPACE:_default' \
+'--dir=[Workspace directory (for the no-argument form)]:DIR:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'*::revs -- With two revisions\: diff A to B. With one\: diff it against its first parent. With none\: diff the workspace head against the working directory:_default' \
+&& ret=0
+;;
+(cat)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':spec -- `REV\:PATH`, for example `main\:src/lib.rs` or `@\:README.md`:_default' \
+&& ret=0
+;;
+(blame)
+_arguments "${_arguments_options[@]}" : \
+'-L+[Only these lines, \`START,END\` (1-based, inclusive)]:START,END:_default' \
+'--lines=[Only these lines, \`START,END\` (1-based, inclusive)]:START,END:_default' \
+'--max-commits=[Visit at most this many changesets; older lines are marked as a boundary]:MAX_COMMITS:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':spec -- `\[REV\:\]PATH`, for example `src/lib.rs`, `main\:src/lib.rs` or `@\:README.md`. Without a revision, the workspace head (or the default stream) is used:_default' \
+&& ret=0
+;;
+(ls)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision (default\: the workspace head):_default' \
+'::path -- Directory to list (default\: the root):_default' \
+&& ret=0
+;;
+(checkout)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':rev -- Revision to write out:_default' \
+':dir -- Destination directory (created if missing; must be empty):_files' \
+&& ret=0
+;;
+(portability)
+_arguments "${_arguments_options[@]}" : \
+'--target=[File system to check against\: \`windows\`, \`macos\` or \`linux\` (default\: this machine)]:PLATFORM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision to inspect (default\: the workspace head):_default' \
+&& ret=0
+;;
+(stream)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__stream_commands" \
+"*::: :->stream" \
+&& ret=0
+
+    case $state in
+    (stream)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-stream-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" : \
+'--from=[Start the stream at this published revision]:FROM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Stream name:_default' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Stream name:_default' \
+&& ret=0
+;;
+(reflog)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Maximum entries]:LIMIT:_default' \
+'--limit=[Maximum entries]:LIMIT:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Stream name:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(propose)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Proposal title]:TITLE:_default' \
+'--title=[Proposal title]:TITLE:_default' \
+'-d+[Longer description]:DESCRIPTION:_default' \
+'--description=[Longer description]:DESCRIPTION:_default' \
+'--stream=[Target stream (default\: the repository'\''s default stream)]:STREAM:_default' \
+'--task=[Task this proposal belongs to]:TASK:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision to propose (default\: the workspace head):_default' \
+&& ret=0
+;;
+(proposal)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__proposal_commands" \
+"*::: :->proposal" \
+&& ret=0
+
+    case $state in
+    (proposal)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-proposal-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--state=[Filter by state\: open, integrated, closed]:STATE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(review)
+_arguments "${_arguments_options[@]}" : \
+'-m+[Review text]:MESSAGE:_default' \
+'--message=[Review text]:MESSAGE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--approve[Approve]' \
+'--request-changes[Request changes]' \
+'--comment[Comment only]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(update)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+'::rev -- New head (default\: the workspace head):_default' \
+&& ret=0
+;;
+(close)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(integrate)
+_arguments "${_arguments_options[@]}" : \
+'--key=[Idempotency key (default\: derived from the proposal; repeating resumes/replays). Not the issuer key of \`ag validate run --key\`; \`--idempotency-key\` is the unambiguous spelling]:KEY:_default' \
+'--idempotency-key=[Idempotency key (default\: derived from the proposal; repeating resumes/replays). Not the issuer key of \`ag validate run --key\`; \`--idempotency-key\` is the unambiguous spelling]:KEY:_default' \
+'*--fencing-token=[Fencing token(s) of exclusive leases the author holds]:FENCING_TOKENS:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':proposal -- Proposal id:_default' \
+&& ret=0
+;;
+(preview)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':proposal -- Proposal id:_default' \
+&& ret=0
+;;
+(op)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__op_commands" \
+"*::: :->op" \
+&& ret=0
+
+    case $state in
+    (op)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-op-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Operation id:_default' \
+&& ret=0
+;;
+(resume)
+_arguments "${_arguments_options[@]}" : \
+'*--fencing-token=[Fencing token(s) to present]:FENCING_TOKENS:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Operation id:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Maximum entries]:LIMIT:_default' \
+'--limit=[Maximum entries]:LIMIT:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(recover)
+_arguments "${_arguments_options[@]}" : \
+'--max-age=[Operations untouched for longer than this are aborted]:MAX_AGE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(queue)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__queue_commands" \
+"*::: :->queue" \
+&& ret=0
+
+    case $state in
+    (queue)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-queue-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':proposal -- Proposal id:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[The stream, as an option (the same as the positional STREAM)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::stream -- Stream (default\: the default stream); `--stream STREAM` means the same:_default' \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[The stream, as an option (the same as the positional STREAM)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::stream -- Stream (default\: the default stream); `--stream STREAM` means the same:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(policy)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__policy_commands" \
+"*::: :->policy" \
+&& ret=0
+
+    case $state in
+    (policy)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-policy-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[The stream, as an option (the same as the positional STREAM)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::stream -- Stream (default\: the default stream); `--stream STREAM` means the same:_default' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream (default\: the default stream)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':file -- JSON policy file:_files' \
+&& ret=0
+;;
+(history)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[The stream, as an option (the same as the positional STREAM)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::stream -- Stream (default\: the default stream); `--stream STREAM` means the same:_default' \
+&& ret=0
+;;
+(example)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__validate_commands" \
+"*::: :->validate" \
+&& ret=0
+
+    case $state in
+    (validate)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-validate-command-$line[1]:"
+        case $line[1] in
+            (keygen)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Key name, e.g. `ci`:_default' \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" : \
+'--check=[Check name, as listed in the policy'\''s \`required_validations\`]:CHECK:_default' \
+'--key=[Name of the issuer key created with \`ag validate keygen\`]:KEY:_default' \
+'--issuer=[Issuer identity (default\: \`service\:<key name>\`)]:ISSUER:_default' \
+'--env=[Environment digest to record (default\: derived from the command and platform)]:ENV:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':proposal -- Proposal id:_default' \
+'*::command -- The command and its arguments:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':tree -- Tree id (64 hex characters):_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(agent)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__agent_commands" \
+"*::: :->agent" \
+&& ret=0
+
+    case $state in
+    (agent)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-agent-command-$line[1]:"
+        case $line[1] in
+            (register)
+_arguments "${_arguments_options[@]}" : \
+'--role=[\`agent\` or \`reviewer\`]:ROLE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Agent name (`\[a-z0-9\]\[a-z0-9_-\]*`):_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(start)
+_arguments "${_arguments_options[@]}" : \
+'--task=[Task to work on (claims it; its dependencies must be done)]:TASK:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Agent name:_default' \
+&& ret=0
+;;
+(finish)
+_arguments "${_arguments_options[@]}" : \
+'--status=[\`completed\` or \`failed\`]:STATUS:_default' \
+'-m+[Summary]:MESSAGE:_default' \
+'--message=[Summary]:MESSAGE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':run -- Run id:_default' \
+&& ret=0
+;;
+(heartbeat)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':run -- Run id:_default' \
+&& ret=0
+;;
+(runs)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::name -- Only this agent:_default' \
+&& ret=0
+;;
+(reap)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Heartbeat timeout]:TIMEOUT:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(disable)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Agent name:_default' \
+&& ret=0
+;;
+(enable)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Agent name:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(task)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__task_commands" \
+"*::: :->task" \
+&& ret=0
+
+    case $state in
+    (task)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-task-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+'-d+[Description]:DESCRIPTION:_default' \
+'--description=[Description]:DESCRIPTION:_default' \
+'*--scope=[Path glob the task is expected to touch (repeatable)]:SCOPE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':title -- Title:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'--state=[Filter by state\: open, in_progress, done, cancelled]:STATE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(depend)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':task -- The dependent task:_default' \
+':on -- The task it waits for:_default' \
+&& ret=0
+;;
+(ready)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(done)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':task -- Task id:_default' \
+&& ret=0
+;;
+(cancel)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':task -- Task id:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(lease)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__lease_commands" \
+"*::: :->lease" \
+&& ret=0
+
+    case $state in
+    (lease)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-lease-command-$line[1]:"
+        case $line[1] in
+            (acquire)
+_arguments "${_arguments_options[@]}" : \
+'--ttl=[How long the lease lasts]:TTL:_default' \
+'--task=[Task the lease belongs to]:TASK:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--exclusive[Enforce with a fencing token at integration time]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':scope -- Path glob, e.g. `src/auth/**`:_default' \
+&& ret=0
+;;
+(release)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Lease id:_default' \
+&& ret=0
+;;
+(extend)
+_arguments "${_arguments_options[@]}" : \
+'--ttl=[New duration from now]:TTL:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Lease id:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--all[Include released and expired leases]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(provenance)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__provenance_commands" \
+"*::: :->provenance" \
+&& ret=0
+
+    case $state in
+    (provenance)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-provenance-command-$line[1]:"
+        case $line[1] in
+            (attach)
+_arguments "${_arguments_options[@]}" : \
+'--agent=[Agent name (its key signs the record)]:AGENT:_default' \
+'--run=[Run id]:RUN:_default' \
+'--task=[Task id]:TASK:_default' \
+'--model=[Model identifier]:MODEL:_default' \
+'--prompt-file=[File holding the prompt; only its SHA-256 is stored]:PROMPT_FILE:_files' \
+'--rationale=[Why the change was made]:RATIONALE:_default' \
+'*--check=[A check the agent ran itself (repeatable)]:CHECKS:_default' \
+'*--input=[A source consulted (repeatable). Stored as untrusted text]:INPUTS:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Changeset (default\: the workspace head):_default' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Changeset (default\: the workspace head):_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(predict)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[The stream, as an option (the same as the positional STREAM)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::stream -- Stream (default\: the default stream); `--stream STREAM` means the same:_default' \
+&& ret=0
+;;
+(workspace)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__workspace_commands" \
+"*::: :->workspace" \
+&& ret=0
+
+    case $state in
+    (workspace)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-workspace-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+'--dir=[Directory to check out into (created if missing; must be empty)]:DIR:_files' \
+'--stream=[Stream to track (default\: the default stream)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Workspace name:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Workspace name:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(trace)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Maximum entries]:LIMIT:_default' \
+'--limit=[Maximum entries]:LIMIT:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::target -- What to trace\: a proposal id, run id, task id, stream, agent identity or changeset (prefix). Default\: everything:_default' \
+&& ret=0
+;;
+(audit)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Number of entries for \`--list\`]:LIMIT:_default' \
+'--limit=[Number of entries for \`--list\`]:LIMIT:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--list[List recent entries instead of verifying the chain]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(gc)
+_arguments "${_arguments_options[@]}" : \
+'--grace=[Keep unreachable objects younger than this]:GRACE:_default' \
+'--reflog-retention=[Keep heads that appeared in a reflog within this window]:REFLOG_RETENTION:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--dry-run[Report only; delete nothing]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(reindex)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(backup)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--include-keys[Also copy private keys (agent and issuer identities). Off by default]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':dest -- Destination directory (new or empty):_files' \
+&& ret=0
+;;
+(git)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__git_commands" \
+"*::: :->git" \
+&& ret=0
+
+    case $state in
+    (git)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-git-command-$line[1]:"
+        case $line[1] in
+            (import)
+_arguments "${_arguments_options[@]}" : \
+'--rev=[Revision to import]:REV:_default' \
+'--stream=[Stream to create for the imported history]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':path -- Path of the Git repository:_files' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+'--branch=[Branch name in Git]:BRANCH:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':stream -- Stream to export:_default' \
+':path -- Destination Git repository:_files' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(clone)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream to clone (default\: the repository'\''s default stream)]:STREAM:_default' \
+'--name=[Name for the remote]:NAME:_default' \
+'--token-env=[Environment variable holding the credential (default\: AG_TOKEN)]:TOKEN_ENV:_default' \
+'--ca-file=[Extra CA certificate (PEM) to trust]:CA_FILE:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--token-stdin[Read the credential from stdin and store it in \`.ag/credentials/<name>\` (mode 0600)]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':url -- `http(s)\://host\:port/owner/name`:_default' \
+'::dir -- Directory to create (default\: the repository name):_files' \
+&& ret=0
+;;
+(fetch)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote name (default\: origin)]:REMOTE:_default' \
+'--stream=[Stream (default\: the repository'\''s default stream)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(pull)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote name (default\: origin)]:REMOTE:_default' \
+'--stream=[Stream (default\: the repository'\''s default stream)]:STREAM:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote name (default\: origin)]:REMOTE:_default' \
+'-t+[Proposal title]:TITLE:_default' \
+'--title=[Proposal title]:TITLE:_default' \
+'-d+[Longer description]:DESCRIPTION:_default' \
+'--description=[Longer description]:DESCRIPTION:_default' \
+'--stream=[Target stream (default\: the repository'\''s default stream)]:STREAM:_default' \
+'--task=[Task this proposal belongs to]:TASK:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision to propose (default\: the workspace head):_default' \
+&& ret=0
+;;
+(remote)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__remote_commands" \
+"*::: :->remote" \
+&& ret=0
+
+    case $state in
+    (remote)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-remote-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'--token-env=[Environment variable holding the credential]:TOKEN_ENV:_default' \
+'--ca-file=[Extra CA certificate (PEM) to trust]:CA_FILE:_files' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--token-stdin[Read the credential from stdin and store it in \`.ag/credentials/<name>\` (mode 0600)]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Name, e.g. origin:_default' \
+':url -- `http(s)\://host\:port/owner/name`:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Name:_default' \
+&& ret=0
+;;
+(whoami)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(proposals)
+_arguments "${_arguments_options[@]}" : \
+'--state=[Filter\: open, integrated, closed]:STATE:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(proposal)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(prepare)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--validate[Also queue the validation jobs the policy knows how to run]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(review)
+_arguments "${_arguments_options[@]}" : \
+'-m+[Review text]:MESSAGE:_default' \
+'--message=[Review text]:MESSAGE:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--approve[Approve]' \
+'--request-changes[Request changes]' \
+'--comment[Comment only]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(integrate)
+_arguments "${_arguments_options[@]}" : \
+'*--fencing-token=[Fencing tokens of exclusive leases the author holds]:FENCING_TOKENS:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(close)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(streams)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(events)
+_arguments "${_arguments_options[@]}" : \
+'--after=[Replay events after this sequence number]:AFTER:_default' \
+'*--topics=[Only these topics (prefix match), e.g. \`stream,proposal\`]:TOPICS:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--follow[Keep following new events]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(policy)
+_arguments "${_arguments_options[@]}" : \
+'--set=[Replace the policy with the JSON document in this file]:SET:_files' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':stream -- Stream:_default' \
+&& ret=0
+;;
+(log)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Maximum entries]:LIMIT:_default' \
+'--limit=[Maximum entries]:LIMIT:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::rev -- Revision (default\: the default stream):_default' \
+&& ret=0
+;;
+(blame)
+_arguments "${_arguments_options[@]}" : \
+'-L+[Only these lines, \`START,END\`]:START,END:_default' \
+'--lines=[Only these lines, \`START,END\`]:START,END:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':spec -- `\[REV\:\]PATH`:_default' \
+&& ret=0
+;;
+(cat)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':spec -- `REV\:PATH`:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(pin)
+_arguments "${_arguments_options[@]}" : \
+'--reason=[Why]:REASON:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Pin name:_default' \
+':rev -- Revision to keep:_default' \
+&& ret=0
+;;
+(unpin)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':name -- Pin name:_default' \
+&& ret=0
+;;
+(pins)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[How long to wait for each server before giving up]:SECONDS:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--offline[Do not contact any server\: check that credentials exist, not that they work]' \
+'--strict[Exit with 1 when a check warns, not only when one fails]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-config-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':key -- Setting name, for example `identity`:_default' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':key -- Setting name:_default' \
+':value -- New value:_default' \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':key -- Setting name:_default' \
+&& ret=0
+;;
+(path)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':shell -- The shell to generate the script for:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(man)
+_arguments "${_arguments_options[@]}" : \
+'--dir=[Write \`ag.1\` and one page per subcommand (\`ag-stream-list.1\`, …) into this directory instead of printing the top-level page]:DIR:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(version)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'*::what -- A topic (`ag help policy`) or a command (`ag help stream create`). Without it\: the overview and the topics:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_ag_commands] )) ||
+_ag_commands() {
+    local commands; commands=(
+'init:Create a repository in the current directory' \
+'status:Summarize the workspace, your proposals, leases, task and remote at a glance' \
+'snapshot:Record the working directory as a new snapshot' \
+'sync:Bring the stream'\''s latest head into the workspace' \
+'log:Show history' \
+'show:Show one changeset and what it changed' \
+'diff:Show differences between two revisions, or the working directory and its snapshot' \
+'cat:Print a file as of a revision\: \`ag cat main\:src/lib.rs\`' \
+'blame:Show which changeset introduced each line of a file' \
+'ls:List a directory as of a revision' \
+'checkout:Write a revision'\''s files into a new directory' \
+'portability:List what a revision contains that Windows, macOS or Linux file systems cannot hold' \
+'stream:Manage streams' \
+'propose:Publish a snapshot and open a proposal to integrate it' \
+'proposal:List, review, update or close proposals' \
+'integrate:Integrate a proposal into its stream' \
+'preview:Show what integrating a proposal would do, without doing it' \
+'op:Inspect or resume operations' \
+'recover:Resume interrupted operations and expire stale ones' \
+'queue:The ordered integration queue' \
+'policy:Show or change stream policy' \
+'validate:Run checks and issue signed attestations' \
+'agent:Agent identities and runs' \
+'task:Tasks and their dependencies' \
+'lease:Soft and exclusive leases with fencing tokens' \
+'provenance:Signed provenance of agent-made changes' \
+'predict:Predict overlapping work' \
+'workspace:Create, list and remove workspaces (isolated lines of work in their own directories)' \
+'trace:Show the audit trail of an object, proposal, run or stream' \
+'audit:Verify the tamper-evident audit chain' \
+'verify:Check the integrity of the whole repository' \
+'gc:Delete unreachable objects (safe\: fails closed, honours a grace period)' \
+'reindex:Rebuild derived indexes from the object store' \
+'backup:Write a verified, consistent copy of the repository to a new directory' \
+'git:Import from or export to Git (needs the \`git\` command)' \
+'clone:Clone a repository from an \`ag-server\`' \
+'fetch:Download new history from the server' \
+'pull:Fetch, then fast-forward the local stream and bring the workspace up to date' \
+'push:Upload your snapshot and open a proposal on the server' \
+'remote:Manage remotes and work with proposals, events and policy on a server' \
+'pin:Pin a revision so garbage collection keeps it' \
+'unpin:Remove a pin' \
+'pins:List pins' \
+'doctor:Check the installation, the repository, your identity and every remote'\''s credential' \
+'config:Show, get, set and locate configuration (the user file; the repository'\''s settings are shown read-only)' \
+'completions:Print a shell completion script\: bash, zsh, fish, powershell or elvish' \
+'man:Print the man page, or write one page per command with --dir' \
+'version:Print the version, the protocol and the JSON schema version' \
+'help:Show help for a command, or a topic\: workflow, policy, leases, identities, revisions, exit-codes, json, config' \
+    )
+    _describe -t commands 'ag commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent_commands] )) ||
+_ag__subcmd__agent_commands() {
+    local commands; commands=(
+'register:Register an agent and create its signing key' \
+'list:List agents' \
+'start:Start a run. Prints the identity the agent must use (\`agent\:name#run_…\`)' \
+'finish:Finish a run and release its leases' \
+'heartbeat:Heartbeat a running run' \
+'runs:List runs' \
+'reap:Abandon runs with no recent heartbeat and release their leases' \
+'disable:Stop an agent from starting new runs' \
+'enable:Allow a disabled agent to run again' \
+    )
+    _describe -t commands 'ag agent commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__disable_commands] )) ||
+_ag__subcmd__agent__subcmd__disable_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent disable commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__enable_commands] )) ||
+_ag__subcmd__agent__subcmd__enable_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent enable commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__finish_commands] )) ||
+_ag__subcmd__agent__subcmd__finish_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent finish commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__heartbeat_commands] )) ||
+_ag__subcmd__agent__subcmd__heartbeat_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent heartbeat commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__list_commands] )) ||
+_ag__subcmd__agent__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__reap_commands] )) ||
+_ag__subcmd__agent__subcmd__reap_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent reap commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__register_commands] )) ||
+_ag__subcmd__agent__subcmd__register_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent register commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__runs_commands] )) ||
+_ag__subcmd__agent__subcmd__runs_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent runs commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__start_commands] )) ||
+_ag__subcmd__agent__subcmd__start_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent start commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__audit_commands] )) ||
+_ag__subcmd__audit_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag audit commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__backup_commands] )) ||
+_ag__subcmd__backup_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag backup commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__blame_commands] )) ||
+_ag__subcmd__blame_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag blame commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__cat_commands] )) ||
+_ag__subcmd__cat_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag cat commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__checkout_commands] )) ||
+_ag__subcmd__checkout_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag checkout commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__clone_commands] )) ||
+_ag__subcmd__clone_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag clone commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__completions_commands] )) ||
+_ag__subcmd__completions_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag completions commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config_commands] )) ||
+_ag__subcmd__config_commands() {
+    local commands; commands=(
+'list:Show every setting with its effective value and where it comes from' \
+'get:Print one setting'\''s effective value (see \`list\` for the keys)' \
+'set:Store a user-level setting\: \`identity\` or \`color\`' \
+'unset:Remove a stored user-level setting' \
+'path:Print the locations of the configuration files' \
+    )
+    _describe -t commands 'ag config commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config__subcmd__get_commands] )) ||
+_ag__subcmd__config__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag config get commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config__subcmd__list_commands] )) ||
+_ag__subcmd__config__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag config list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config__subcmd__path_commands] )) ||
+_ag__subcmd__config__subcmd__path_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag config path commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config__subcmd__set_commands] )) ||
+_ag__subcmd__config__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag config set commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__config__subcmd__unset_commands] )) ||
+_ag__subcmd__config__subcmd__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag config unset commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__diff_commands] )) ||
+_ag__subcmd__diff_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag diff commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__doctor_commands] )) ||
+_ag__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag doctor commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__fetch_commands] )) ||
+_ag__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag fetch commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__gc_commands] )) ||
+_ag__subcmd__gc_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag gc commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__git_commands] )) ||
+_ag__subcmd__git_commands() {
+    local commands; commands=(
+'import:Import a Git repository'\''s history into a new stream' \
+'export:Export a stream'\''s history to a Git repository (created if missing)' \
+    )
+    _describe -t commands 'ag git commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__git__subcmd__export_commands] )) ||
+_ag__subcmd__git__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag git export commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__git__subcmd__import_commands] )) ||
+_ag__subcmd__git__subcmd__import_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag git import commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__help_commands] )) ||
+_ag__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag help commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__init_commands] )) ||
+_ag__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag init commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__integrate_commands] )) ||
+_ag__subcmd__integrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag integrate commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__lease_commands] )) ||
+_ag__subcmd__lease_commands() {
+    local commands; commands=(
+'acquire:Claim a scope (path glob). Soft by default; \`--exclusive\` is enforced at integration' \
+'release:Release a lease early' \
+'extend:Extend a lease; the fencing token stays the same' \
+'list:List active leases' \
+    )
+    _describe -t commands 'ag lease commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__lease__subcmd__acquire_commands] )) ||
+_ag__subcmd__lease__subcmd__acquire_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag lease acquire commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__lease__subcmd__extend_commands] )) ||
+_ag__subcmd__lease__subcmd__extend_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag lease extend commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__lease__subcmd__list_commands] )) ||
+_ag__subcmd__lease__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag lease list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__lease__subcmd__release_commands] )) ||
+_ag__subcmd__lease__subcmd__release_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag lease release commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__log_commands] )) ||
+_ag__subcmd__log_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag log commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__ls_commands] )) ||
+_ag__subcmd__ls_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag ls commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__man_commands] )) ||
+_ag__subcmd__man_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag man commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__op_commands] )) ||
+_ag__subcmd__op_commands() {
+    local commands; commands=(
+'show:Show an operation'\''s recorded state and result. Use this instead of blindly retrying when a response was lost' \
+'resume:Resume an operation (for example one that was blocked)' \
+'list:List recent operations' \
+    )
+    _describe -t commands 'ag op commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__op__subcmd__list_commands] )) ||
+_ag__subcmd__op__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag op list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__op__subcmd__resume_commands] )) ||
+_ag__subcmd__op__subcmd__resume_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag op resume commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__op__subcmd__show_commands] )) ||
+_ag__subcmd__op__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag op show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__pin_commands] )) ||
+_ag__subcmd__pin_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag pin commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__pins_commands] )) ||
+_ag__subcmd__pins_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag pins commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__policy_commands] )) ||
+_ag__subcmd__policy_commands() {
+    local commands; commands=(
+'show:Show the policy in force' \
+'set:Replace the policy with the contents of a JSON file (needs an admin)' \
+'history:List policy versions' \
+'example:Print an example policy document' \
+    )
+    _describe -t commands 'ag policy commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__policy__subcmd__example_commands] )) ||
+_ag__subcmd__policy__subcmd__example_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag policy example commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__policy__subcmd__history_commands] )) ||
+_ag__subcmd__policy__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag policy history commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__policy__subcmd__set_commands] )) ||
+_ag__subcmd__policy__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag policy set commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__policy__subcmd__show_commands] )) ||
+_ag__subcmd__policy__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag policy show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__portability_commands] )) ||
+_ag__subcmd__portability_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag portability commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__predict_commands] )) ||
+_ag__subcmd__predict_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag predict commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__preview_commands] )) ||
+_ag__subcmd__preview_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag preview commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal_commands] )) ||
+_ag__subcmd__proposal_commands() {
+    local commands; commands=(
+'list:List proposals' \
+'show:Show a proposal with its reviews' \
+'review:Review the proposal'\''s current head' \
+'update:Point the proposal at a new head (earlier approvals stop counting)' \
+'close:Close without integrating' \
+    )
+    _describe -t commands 'ag proposal commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__close_commands] )) ||
+_ag__subcmd__proposal__subcmd__close_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal close commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__list_commands] )) ||
+_ag__subcmd__proposal__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__review_commands] )) ||
+_ag__subcmd__proposal__subcmd__review_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal review commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__show_commands] )) ||
+_ag__subcmd__proposal__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__update_commands] )) ||
+_ag__subcmd__proposal__subcmd__update_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal update commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__propose_commands] )) ||
+_ag__subcmd__propose_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag propose commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__provenance_commands] )) ||
+_ag__subcmd__provenance_commands() {
+    local commands; commands=(
+'attach:Sign and attach a provenance record to a changeset' \
+'show:Show and verify the provenance of a changeset' \
+    )
+    _describe -t commands 'ag provenance commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__provenance__subcmd__attach_commands] )) ||
+_ag__subcmd__provenance__subcmd__attach_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag provenance attach commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__provenance__subcmd__show_commands] )) ||
+_ag__subcmd__provenance__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag provenance show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__pull_commands] )) ||
+_ag__subcmd__pull_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag pull commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__push_commands] )) ||
+_ag__subcmd__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag push commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__queue_commands] )) ||
+_ag__subcmd__queue_commands() {
+    local commands; commands=(
+'add:Add a proposal to its stream'\''s queue' \
+'list:Show the queue' \
+'run:Integrate queued proposals in order' \
+    )
+    _describe -t commands 'ag queue commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__queue__subcmd__add_commands] )) ||
+_ag__subcmd__queue__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag queue add commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__queue__subcmd__list_commands] )) ||
+_ag__subcmd__queue__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag queue list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__queue__subcmd__run_commands] )) ||
+_ag__subcmd__queue__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag queue run commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__recover_commands] )) ||
+_ag__subcmd__recover_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag recover commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__reindex_commands] )) ||
+_ag__subcmd__reindex_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag reindex commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote_commands] )) ||
+_ag__subcmd__remote_commands() {
+    local commands; commands=(
+'add:Add a remote' \
+'list:List remotes' \
+'remove:Forget a remote' \
+'whoami:Show who the server thinks you are' \
+'proposals:List proposals on the server' \
+'proposal:Show a proposal with its reviews' \
+'prepare:What would integrating do now, and what is missing?' \
+'review:Review a proposal'\''s current head' \
+'integrate:Integrate a proposal into its stream' \
+'close:Close a proposal without integrating it' \
+'streams:List streams' \
+'events:Show the events of the repository (replay), or follow them live' \
+'policy:Show or set a stream'\''s policy' \
+'log:Show history of a revision on the server' \
+'blame:Show which changeset introduced each line of a file on the server\: \`ag remote blame main\:src/lib.rs\`' \
+'cat:Print a file as of a revision on the server\: \`ag remote cat main\:src/lib.rs\`' \
+    )
+    _describe -t commands 'ag remote commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__add_commands] )) ||
+_ag__subcmd__remote__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote add commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__blame_commands] )) ||
+_ag__subcmd__remote__subcmd__blame_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote blame commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__cat_commands] )) ||
+_ag__subcmd__remote__subcmd__cat_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote cat commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__close_commands] )) ||
+_ag__subcmd__remote__subcmd__close_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote close commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__events_commands] )) ||
+_ag__subcmd__remote__subcmd__events_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote events commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__integrate_commands] )) ||
+_ag__subcmd__remote__subcmd__integrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote integrate commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__list_commands] )) ||
+_ag__subcmd__remote__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__log_commands] )) ||
+_ag__subcmd__remote__subcmd__log_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote log commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__policy_commands] )) ||
+_ag__subcmd__remote__subcmd__policy_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote policy commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__prepare_commands] )) ||
+_ag__subcmd__remote__subcmd__prepare_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote prepare commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__proposal_commands] )) ||
+_ag__subcmd__remote__subcmd__proposal_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote proposal commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__proposals_commands] )) ||
+_ag__subcmd__remote__subcmd__proposals_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote proposals commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__remove_commands] )) ||
+_ag__subcmd__remote__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote remove commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__review_commands] )) ||
+_ag__subcmd__remote__subcmd__review_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote review commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__streams_commands] )) ||
+_ag__subcmd__remote__subcmd__streams_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote streams commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__whoami_commands] )) ||
+_ag__subcmd__remote__subcmd__whoami_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote whoami commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__show_commands] )) ||
+_ag__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__snapshot_commands] )) ||
+_ag__subcmd__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag snapshot commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__status_commands] )) ||
+_ag__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag status commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__stream_commands] )) ||
+_ag__subcmd__stream_commands() {
+    local commands; commands=(
+'list:List streams and their heads' \
+'create:Create a stream, optionally at an existing published revision' \
+'show:Show one stream' \
+'reflog:Show the append-only history of head movements' \
+    )
+    _describe -t commands 'ag stream commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__stream__subcmd__create_commands] )) ||
+_ag__subcmd__stream__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag stream create commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__stream__subcmd__list_commands] )) ||
+_ag__subcmd__stream__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag stream list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__stream__subcmd__reflog_commands] )) ||
+_ag__subcmd__stream__subcmd__reflog_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag stream reflog commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__stream__subcmd__show_commands] )) ||
+_ag__subcmd__stream__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag stream show commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__sync_commands] )) ||
+_ag__subcmd__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag sync commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task_commands] )) ||
+_ag__subcmd__task_commands() {
+    local commands; commands=(
+'create:Create a task' \
+'list:List tasks' \
+'depend:Declare that TASK cannot start until ON is done' \
+'ready:Open tasks whose dependencies are all done' \
+'done:Mark a task done' \
+'cancel:Cancel a task' \
+    )
+    _describe -t commands 'ag task commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__cancel_commands] )) ||
+_ag__subcmd__task__subcmd__cancel_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task cancel commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__create_commands] )) ||
+_ag__subcmd__task__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task create commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__depend_commands] )) ||
+_ag__subcmd__task__subcmd__depend_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task depend commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__done_commands] )) ||
+_ag__subcmd__task__subcmd__done_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task done commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__list_commands] )) ||
+_ag__subcmd__task__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__ready_commands] )) ||
+_ag__subcmd__task__subcmd__ready_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task ready commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__trace_commands] )) ||
+_ag__subcmd__trace_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag trace commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__unpin_commands] )) ||
+_ag__subcmd__unpin_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag unpin commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__validate_commands] )) ||
+_ag__subcmd__validate_commands() {
+    local commands; commands=(
+'keygen:Generate a signing key for an issuer and print its public key' \
+'run:Check out the exact candidate tree of a proposal, run a command on it and record a signed attestation of the result' \
+'list:List attestations recorded for a tree' \
+    )
+    _describe -t commands 'ag validate commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__validate__subcmd__keygen_commands] )) ||
+_ag__subcmd__validate__subcmd__keygen_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag validate keygen commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__validate__subcmd__list_commands] )) ||
+_ag__subcmd__validate__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag validate list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__validate__subcmd__run_commands] )) ||
+_ag__subcmd__validate__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag validate run commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__verify_commands] )) ||
+_ag__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag verify commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__version_commands] )) ||
+_ag__subcmd__version_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag version commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__workspace_commands] )) ||
+_ag__subcmd__workspace_commands() {
+    local commands; commands=(
+'create:Create a workspace starting at the stream head and check it out into DIR' \
+'list:List workspaces' \
+'remove:Forget a workspace (its directory is left alone)' \
+    )
+    _describe -t commands 'ag workspace commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__workspace__subcmd__create_commands] )) ||
+_ag__subcmd__workspace__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag workspace create commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__workspace__subcmd__list_commands] )) ||
+_ag__subcmd__workspace__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag workspace list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__workspace__subcmd__remove_commands] )) ||
+_ag__subcmd__workspace__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag workspace remove commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_ag" ]; then
+    _ag "$@"
+else
+    compdef _ag ag
+fi

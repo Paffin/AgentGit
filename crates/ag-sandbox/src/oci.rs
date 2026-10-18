@@ -477,13 +477,13 @@ impl Sandbox for OciSandbox {
         }
         let pidfd = sys::pidfd_open(pid);
 
-        // Killing the client does not stop the container; ask the runtime to.
+        // Killing the client does not stop the container; ask the runtime to. If the container is not there yet
+        // (the first one on a cold daemon takes a while to create), wait for it: a client killed in the middle
+        // of the creation leaves a container that was created and never started, and nobody removes it.
         let kill_runtime = runtime.clone();
         let kill_name = name.clone();
         let control = self.cfg.control_timeout;
-        let mut on_kill = move || {
-            let _ = capture(&kill_runtime, &["kill", &kill_name], control);
-        };
+        let mut on_kill = move || stop_container(&kill_runtime, &kill_name, control);
         let result = supervise(
             pid,
             pidfd.as_ref(),
@@ -685,6 +685,35 @@ fn read_capped<R: std::io::Read + Send + 'static>(pipe: Option<R>) -> std::threa
         }
         s
     })
+}
+
+/// The runtime's state word for a container (`created`, `running`, `exited`, ...), `None` if there is no such
+/// container (yet).
+fn container_status(runtime: &Path, name: &str, limit: Duration) -> Option<String> {
+    let c = capture(runtime, &["inspect", "--type", "container", "--format", "{{.State.Status}}", name], limit)?;
+    c.ok.then(|| c.stdout.trim().to_string())
+}
+
+/// Stop a container that may still be on its way into existence: wait (at most `limit`) until it exists and runs,
+/// then kill it. A container that has already ended, or never shows up, needs nothing.
+fn stop_container(runtime: &Path, name: &str, limit: Duration) {
+    let deadline = Instant::now() + limit;
+    loop {
+        match container_status(runtime, name, limit).as_deref() {
+            Some("running" | "paused" | "restarting") => {
+                let _ = capture(runtime, &["kill", name], limit);
+                return;
+            }
+            // created but not started yet, or not created yet: the client is still at it
+            None | Some("created") => {}
+            // exited, dead, removing: nothing left to stop
+            Some(_) => return,
+        }
+        if Instant::now() >= deadline {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }
 
 /// Force-remove the container (also the way a killed or timed-out one is finally cleaned up). `false` if the

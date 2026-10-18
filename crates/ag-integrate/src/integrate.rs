@@ -410,11 +410,7 @@ impl Repository {
         let merged = merge_trees(&base_tree, &head_tree, &theirs, &RepoBlobs(self), &self.limits)
             .map_err(|e| Error::Invalid(format!("merge failed: {e}")))?;
         if !merged.is_clean() {
-            let conflicts = merged
-                .conflicts
-                .iter()
-                .map(|c| ConflictInfo { path: c.path.to_string(), kind: c.kind.to_string() })
-                .collect();
+            let conflicts = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
             return Ok(Candidate::Conflict { conflicts, base });
         }
         let ops = head_tree.diff(&merged.tree);
@@ -695,7 +691,6 @@ pub(crate) fn verdict_in_tx(
     let has_provenance =
         author.kind() == IdentityKind::Agent && !provenance::verified_for(tx, &prop.head, author)?.is_empty();
     let facts = Facts {
-        stream: &prop.stream,
         actor,
         author,
         proposal_head: prop.head,

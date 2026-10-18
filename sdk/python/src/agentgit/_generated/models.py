@@ -431,6 +431,7 @@ class ConfigureRepoRequest:
 class Conflict:
     """The `Conflict` message."""
     kind: str = field(default="")
+    message: str = field(default="")
     path: str = field(default="")
 
 

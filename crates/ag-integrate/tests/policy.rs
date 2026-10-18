@@ -352,3 +352,36 @@ fn policy_changes_are_versioned_and_need_an_admin() {
     let audit = f.repo.meta().read(|tx| tx.audit_list(Some("main"), 10)).unwrap();
     assert_eq!(audit.iter().filter(|a| a.action == "policy.set").count(), 2);
 }
+
+#[test]
+fn setting_the_same_policy_again_is_a_no_op_that_keeps_the_attestations_valid() {
+    let f = fx();
+    let doc = policy_json("");
+    let first = f.repo.set_policy("main", &doc, &id("user:alice")).unwrap();
+    let audit = |f: &Fx| {
+        let entries = f.repo.meta().read(|tx| tx.audit_list(Some("main"), 100)).unwrap();
+        entries.iter().filter(|e| e.action == "policy.set").count()
+    };
+    assert_eq!(audit(&f), 1);
+
+    // a retry after a lost response, or a policy-as-code loop: the same document, even spelled differently
+    let again = f.repo.set_policy("main", &doc, &id("user:alice")).unwrap();
+    assert_eq!((again.version, &again.doc_hash), (first.version, &first.doc_hash));
+    let respelled = format!("\n  {}  \n", doc.replace("\"tests\"", "\"tests\" "));
+    assert_eq!(f.repo.set_policy("main", &respelled, &id("user:alice")).unwrap().version, first.version);
+    assert_eq!(audit(&f), 1, "nothing was audited for the repeats");
+    assert_eq!(f.repo.policy_history("main").unwrap().len(), 1, "no version was added");
+
+    // so the attestation made under that version still counts
+    let c = f.snap(None, &[("a", "1")], "user:bob");
+    let p = f.propose(c, "t", "user:bob");
+    let (tree, _) = blocked(&f.integrate(&p, "user:alice"));
+    f.repo.submit_attestation(&attest(&f, tree, CheckResult::Pass, first.version, &ci_key(), "service:ci")).unwrap();
+    f.repo.set_policy("main", &doc, &id("user:alice")).unwrap();
+    assert!(matches!(f.integrate(&p, "user:alice").outcome, Outcome::Integrated { .. }));
+
+    // a different document is a new version, and the old attestations stop counting for it
+    let changed = f.repo.set_policy("main", &policy_json(r#","max_changed_files":100"#), &id("user:alice")).unwrap();
+    assert_eq!(changed.version, first.version + 1);
+    assert_eq!(audit(&f), 2);
+}

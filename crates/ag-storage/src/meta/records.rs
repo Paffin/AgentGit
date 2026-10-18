@@ -233,6 +233,12 @@ impl Tx<'_> {
         }
     }
 
+    /// Every open proposal of `stream`, newest first. No cap: a prediction that silently ignored the oldest
+    /// proposals would miss overlaps.
+    pub fn proposals_open_for_stream(&self, stream: &str) -> Result<Vec<ProposalRow>, MetaError> {
+        self.proposals_where("state = 'open' AND stream = ?1 ORDER BY created_at DESC, id DESC", &params![stream])
+    }
+
     /// How many proposals are in `state` (a count, not a scan of the rows).
     pub fn proposals_count(&self, state: &str) -> Result<u64, MetaError> {
         let rows = self.conn.query("SELECT COUNT(*) FROM proposals WHERE state = ?1", &params![state])?;

@@ -74,7 +74,6 @@ impl Ctx {
         evaluate(
             p,
             &Facts {
-                stream: "main",
                 actor: &self.actor,
                 author: &self.author,
                 proposal_head: cs(1),
@@ -210,7 +209,6 @@ fn extreme_timestamps_are_blocked_not_a_panic() {
         let mut facts_now = Ctx::new();
         facts_now.atts.push(attest(&ci_key(), "service:ci", 1, "tests", CheckResult::Pass, 3, 0));
         let far = Facts {
-            stream: "main",
             actor: &facts_now.actor,
             author: &facts_now.author,
             proposal_head: cs(1),
@@ -404,4 +402,25 @@ fn evaluation_is_deterministic() {
     let a = serde_json::to_string(&c.eval(&p)).unwrap();
     let b = serde_json::to_string(&c.eval(&p)).unwrap();
     assert_eq!(a, b);
+}
+
+#[test]
+fn every_unmet_requirement_has_a_fixed_wire_code_equal_to_its_serde_tag() {
+    let all = [
+        Unmet::ActorNotAllowed { reason: "r".into() },
+        Unmet::AuthorNotAllowed { author: "a".into() },
+        Unmet::FailedValidation { check: "c".into(), attestation: "x".into() },
+        Unmet::MissingValidation { check: "c".into() },
+        Unmet::InsufficientApprovals { scope: "default".into(), required: 2, have: 1 },
+        Unmet::ChangesRequested { reviewer: "u".into() },
+        Unmet::MissingProvenance,
+        Unmet::TooManyChangedFiles { changed: 5, max: 3 },
+    ];
+    let mut seen = std::collections::BTreeSet::new();
+    for u in &all {
+        let tag = serde_json::to_value(u).unwrap()["kind"].as_str().unwrap().to_string();
+        assert_eq!(u.code(), tag, "{u:?}");
+        assert!(seen.insert(u.code()), "codes are distinct");
+    }
+    assert_eq!(seen.len(), 8);
 }

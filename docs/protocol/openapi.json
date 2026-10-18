@@ -448,7 +448,7 @@
         "properties": {
           "code": {
             "default": "",
-            "description": "e.g. missing_validation, approvals, missing_provenance, lease, not_allowed.",
+            "description": "A stable code: missing_validation, failed_validation, insufficient_approvals, changes_requested,\nmissing_provenance, too_many_changed_files, actor_not_allowed, author_not_allowed, or lease (an exclusive\nlease held by someone else covers a changed path).",
             "type": "string"
           },
           "detail": {
@@ -523,6 +523,7 @@
           },
           "lease_ms": {
             "default": 0,
+            "description": "How long the claim lasts without a heartbeat (\\<= 0 = 120000; at most 3600000, larger values are lowered).",
             "format": "int64",
             "type": "integer"
           },
@@ -533,7 +534,7 @@
           },
           "wait_ms": {
             "default": 0,
-            "description": "Long-poll for up to this many ms when nothing is queued.",
+            "description": "Long-poll for up to this many ms when nothing is queued (at most 30000, larger values are lowered).",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -723,7 +724,12 @@
         "properties": {
           "kind": {
             "default": "",
-            "description": "\"content\", \"both_added\", \"delete_modify\", \"binary\", \"type_change\",\n\"too_large\", \"file_directory\".",
+            "description": "A stable code: \"content\", \"both_added\", \"delete_modify\", \"binary\", \"type_change\",\n\"too_large\", \"file_directory\", \"rename_rename\" or \"rename_delete\". Clients may switch on it;\n`message` is for people.",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "The conflict in words, with the details the code leaves out (e.g. \"content conflict (2 region(s))\").\nEmpty for outcomes stored before the field existed. Do not parse it.",
             "type": "string"
           },
           "path": {
@@ -981,6 +987,7 @@
         "properties": {
           "context": {
             "default": 0,
+            "description": "Lines of context around each hunk: 0 = the default of 3, at most 100 (larger values are lowered); a diff\nwith no context lines cannot be asked for.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -1144,7 +1151,7 @@
           },
           "topic": {
             "default": "",
-            "description": "e.g. \"stream.updated\", \"proposal.created\", \"integration.completed\",\n\"publication.published\", \"job.queued\", \"lease.acquired\", \"audit.appended\".",
+            "description": "The audit action the event is a view of, e.g. \"stream.integrate\", \"proposal.create\", \"proposal.review\",\n\"changeset.publish\", \"lease.acquire\", \"run.start\", \"job.enqueue\", \"policy.set\". SubscribeRequest.topics\nmatches by exact name, by dotted prefix (\"proposal\" matches \"proposal.create\" and \"proposal.review\") or\n\"\\*\" (everything).",
             "type": "string"
           }
         },
@@ -1655,6 +1662,7 @@
           },
           "lease_ms": {
             "default": 0,
+            "description": "The new lease (\\<= 0 = 120000; at most 3600000, larger values are lowered).",
             "format": "int64",
             "type": "integer"
           },
@@ -2873,6 +2881,7 @@
           },
           "paths": {
             "default": [],
+            "description": "The overlapping paths, sorted, at most 20: a longer list is cut and the cut is not signalled, so treat the\nlist as a sample. The overlap itself (the entry's existence) is what matters.",
             "items": {
               "type": "string"
             },
@@ -3481,6 +3490,7 @@
           },
           "wait_ms": {
             "default": 0,
+            "description": "At most 30000; larger values are lowered.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -9376,6 +9386,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "description": "At most 30000; larger values are lowered.",
               "format": "int32",
               "minimum": 0,
               "type": "integer"

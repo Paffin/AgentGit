@@ -13,10 +13,8 @@ dependencies = [
  "ag-policy",
  "ag-storage",
  "ag-types",
- "hex",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror",
 ]

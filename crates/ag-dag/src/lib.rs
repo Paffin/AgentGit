@@ -243,6 +243,77 @@ pub fn merge_bases<G: Graph + ?Sized>(g: &G, a: &ChangesetId, b: &ChangesetId) -
     Ok(keyed.into_iter().map(|(_, id)| id).collect())
 }
 
+/// The changesets reachable from `a` but not from `b`, and those reachable from `b` but not from `a`
+/// (including `a` and `b` themselves unless one is an ancestor of the other), each newest generation first,
+/// ties by identifier. Equal to the difference of the two [`ancestors`] sets, but computed by walking down
+/// from both ends and stopping where the histories meet, so the cost is the size of the *divergence* plus a
+/// small margin, not of the shared history underneath it. `limit` bounds the number of changesets visited
+/// (the divergence and the margin); [`DagError::LimitExceeded`] after that.
+pub fn divergence<G: Graph + ?Sized>(
+    g: &G,
+    a: &ChangesetId,
+    b: &ChangesetId,
+    limit: usize,
+) -> Result<(Vec<ChangesetId>, Vec<ChangesetId>), DagError> {
+    let mut flags: HashMap<ChangesetId, u8> = HashMap::new();
+    let mut heap: BinaryHeap<(u64, Reverse<ChangesetId>)> = BinaryHeap::new();
+    // How many queued nodes are not (yet) known to be common to both sides.
+    let mut pending = 0usize;
+    flags.insert(*a, P1);
+    heap.push((g.generation(a)?, Reverse(*a)));
+    pending += 1;
+    match flags.get_mut(b) {
+        Some(f) => *f |= P2,
+        None => {
+            flags.insert(*b, P2);
+            heap.push((g.generation(b)?, Reverse(*b)));
+            pending += 1;
+        }
+    }
+    let (mut only_a, mut only_b) = (Vec::new(), Vec::new());
+    let mut visited = 0usize;
+    // Nodes come out newest generation first, so a node's flags are final when it is popped: everything that
+    // could reach it from either side has a higher generation. Walk on while anything queued is not yet known
+    // to be common; below that point every ancestor is shared.
+    while pending > 0 {
+        let (_, Reverse(id)) = heap.pop().expect("non-empty");
+        visited += 1;
+        if visited > limit {
+            return Err(DagError::LimitExceeded(limit));
+        }
+        let mut f = flags[&id] & (P1 | P2 | STALE);
+        if f & STALE == 0 {
+            pending -= 1;
+        }
+        if f == P1 {
+            only_a.push(id);
+        } else if f == P2 {
+            only_b.push(id);
+        } else {
+            f |= STALE;
+        }
+        for p in g.parents(&id)? {
+            match flags.get_mut(&p) {
+                None => {
+                    flags.insert(p, f);
+                    heap.push((g.generation(&p)?, Reverse(p)));
+                    if f & STALE == 0 {
+                        pending += 1;
+                    }
+                }
+                Some(pf) => {
+                    let was_stale = *pf & STALE != 0;
+                    *pf |= f;
+                    if !was_stale && *pf & STALE != 0 {
+                        pending -= 1;
+                    }
+                }
+            }
+        }
+    }
+    Ok((only_a, only_b))
+}
+
 /// The set of changesets reachable from `roots` (including the roots).
 pub fn reachable<G: Graph + ?Sized>(
     g: &G,

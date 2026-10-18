@@ -174,3 +174,77 @@ proptest! {
         prop_assert!(gens.windows(2).all(|w| w[0] >= w[1]));
     }
 }
+
+/// A graph that counts how many parent lookups the algorithms make.
+struct Counting<'a> {
+    inner: &'a TestGraph,
+    parent_calls: std::cell::Cell<usize>,
+}
+
+impl Graph for Counting<'_> {
+    fn parents(&self, id: &ChangesetId) -> Result<Vec<ChangesetId>, DagError> {
+        self.parent_calls.set(self.parent_calls.get() + 1);
+        self.inner.parents(id)
+    }
+
+    fn generation(&self, id: &ChangesetId) -> Result<u64, DagError> {
+        self.inner.generation(id)
+    }
+}
+
+#[test]
+fn divergence_of_two_lines_that_forked_from_a_long_history_costs_only_the_fork() {
+    // 0 <- 1 <- ... <- 4999 (shared), then a: 5000..5003 and b: 5004..5005 on top of 4999
+    let mut parents: Vec<Vec<usize>> = vec![vec![]];
+    for i in 1..5000 {
+        parents.push(vec![i - 1]);
+    }
+    parents.push(vec![4999]); // 5000
+    parents.extend((5001..5004).map(|i| vec![i - 1]));
+    parents.push(vec![4999]); // 5004
+    parents.push(vec![5004]); // 5005
+    let g = TestGraph { parents };
+    let counting = Counting { inner: &g, parent_calls: std::cell::Cell::new(0) };
+    let (only_a, only_b) = divergence(&counting, &nid(5003), &nid(5005), 100).unwrap();
+    assert_eq!(only_a, vec![nid(5003), nid(5002), nid(5001), nid(5000)]);
+    assert_eq!(only_b, vec![nid(5005), nid(5004)]);
+    assert!(counting.parent_calls.get() < 20, "{} lookups for a divergence of 6", counting.parent_calls.get());
+    // the limit applies to the divergence, not to the history underneath it
+    assert_eq!(divergence(&counting, &nid(5003), &nid(5005), 3), Err(DagError::LimitExceeded(3)));
+    // the full ancestor walk would have failed on the same bound
+    assert_eq!(ancestors(&g, &[nid(5003)], 100), Err(DagError::LimitExceeded(100)));
+}
+
+#[test]
+fn divergence_of_related_and_identical_changesets() {
+    //   0 - 1 - 2 - 3
+    //        \
+    //         4
+    let g = TestGraph { parents: vec![vec![], vec![0], vec![1], vec![2], vec![1]] };
+    assert_eq!(divergence(&g, &nid(3), &nid(3), 10).unwrap(), (vec![], vec![]));
+    // an ancestor has nothing of its own
+    assert_eq!(divergence(&g, &nid(3), &nid(1), 10).unwrap(), (vec![nid(3), nid(2)], vec![]));
+    assert_eq!(divergence(&g, &nid(1), &nid(3), 10).unwrap(), (vec![], vec![nid(3), nid(2)]));
+    assert_eq!(divergence(&g, &nid(3), &nid(4), 10).unwrap(), (vec![nid(3), nid(2)], vec![nid(4)]));
+    // unrelated histories: everything is divergence
+    let u = TestGraph { parents: vec![vec![], vec![0], vec![], vec![2]] };
+    assert_eq!(divergence(&u, &nid(1), &nid(3), 10).unwrap(), (vec![nid(1), nid(0)], vec![nid(3), nid(2)]));
+}
+
+proptest! {
+    #[test]
+    fn divergence_matches_the_difference_of_the_ancestor_sets(g in arb_graph(), a in 0usize..14, b in 0usize..14) {
+        let n = g.parents.len();
+        let (a, b) = (a % n, b % n);
+        let (only_a, only_b) = divergence(&g, &nid(a), &nid(b), 1000).unwrap();
+        let (anc_a, anc_b) = (naive_ancestors(&g, a), naive_ancestors(&g, b));
+        let want_a: BTreeSet<usize> = anc_a.difference(&anc_b).copied().collect();
+        let want_b: BTreeSet<usize> = anc_b.difference(&anc_a).copied().collect();
+        prop_assert_eq!(only_a.iter().map(idx).collect::<BTreeSet<_>>(), want_a);
+        prop_assert_eq!(only_b.iter().map(idx).collect::<BTreeSet<_>>(), want_b);
+        // no duplicates, newest generation first
+        prop_assert_eq!(only_a.len(), only_a.iter().collect::<BTreeSet<_>>().len());
+        let gens: Vec<u64> = only_a.iter().map(|i| g.generation(i).unwrap()).collect();
+        prop_assert!(gens.windows(2).all(|w| w[0] >= w[1]));
+    }
+}

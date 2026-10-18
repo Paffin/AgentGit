@@ -171,6 +171,8 @@ fn overlapping_edits_are_reported_as_conflicts_and_nothing_changes() {
     let Outcome::Conflict { conflicts, base: b } = r.outcome else { panic!("{:?}", r.outcome) };
     assert_eq!(conflicts.len(), 1);
     assert_eq!(conflicts[0].path, "f.txt");
+    assert_eq!(conflicts[0].kind, "content", "a stable code, not prose");
+    assert!(conflicts[0].message.starts_with("content conflict"), "{}", conflicts[0].message);
     assert_eq!(b, Some(base));
     assert_eq!((f.head(), f.version()), before, "a conflict never moves the stream");
     // the proposal stays open so it can be fixed
@@ -488,4 +490,52 @@ fn a_rename_conflict_is_reported_at_the_new_path() {
     assert_eq!(conflicts.len(), 1);
     assert_eq!(conflicts[0].path, "b.txt");
     assert_eq!((f.head(), f.version()), before);
+}
+
+#[test]
+fn every_kind_of_conflict_has_a_stable_code_on_the_wire() {
+    // both sides add a different file at the same path
+    let f = fx();
+    let base = f.land(None, &[("keep", "1\n")]);
+    let a = f.snap(Some(base), &[("keep", "1\n"), ("new.txt", "mine\n")], "user:alice");
+    let b = f.snap(Some(base), &[("keep", "1\n"), ("new.txt", "yours\n")], "user:bob");
+    let (pa, pb) = (f.propose(a, "a", "user:alice"), f.propose(b, "b", "user:bob"));
+    f.integrate(&pa, "user:alice");
+    let Outcome::Conflict { conflicts, .. } = f.integrate(&pb, "user:alice").outcome else { panic!() };
+    assert_eq!((conflicts[0].kind.as_str(), conflicts[0].path.as_str()), ("both_added", "new.txt"));
+    assert!(conflicts[0].message.contains("both sides added"), "{}", conflicts[0].message);
+
+    // one side deletes a file the other modifies
+    let f = fx();
+    let base = f.land(None, &[("f.txt", "1\n2\n3\n"), ("other", "x\n")]);
+    let deleted = f.snap(Some(base), &[("other", "x\n")], "user:alice");
+    let modified = f.snap(Some(base), &[("f.txt", "1\nTWO\n3\n"), ("other", "x\n")], "user:bob");
+    let (pd, pm) = (f.propose(deleted, "del", "user:alice"), f.propose(modified, "mod", "user:bob"));
+    f.integrate(&pd, "user:alice");
+    let Outcome::Conflict { conflicts, .. } = f.integrate(&pm, "user:alice").outcome else { panic!() };
+    assert_eq!((conflicts[0].kind.as_str(), conflicts[0].path.as_str()), ("delete_modify", "f.txt"));
+
+    // the codes are a closed, documented set; a message never stands in for one
+    let all = [
+        "content",
+        "both_added",
+        "delete_modify",
+        "binary",
+        "type_change",
+        "too_large",
+        "file_directory",
+        "rename_rename",
+        "rename_delete",
+    ];
+    for c in &conflicts {
+        assert!(all.contains(&c.kind.as_str()), "{}", c.kind);
+    }
+}
+
+#[test]
+fn stored_outcomes_without_a_message_still_read() {
+    // operation outcomes are stored as JSON; those written before `message` existed have no such field
+    let old: ag_integrate::ConflictInfo =
+        serde_json::from_str(r#"{"path":"f.txt","kind":"content conflict (1 region(s))"}"#).unwrap();
+    assert_eq!((old.path.as_str(), old.message.as_str()), ("f.txt", ""));
 }

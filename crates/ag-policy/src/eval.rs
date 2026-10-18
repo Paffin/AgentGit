@@ -32,8 +32,6 @@ pub struct ApprovalFact {
 /// integration transaction) so the verdict and the commit see the same state.
 #[derive(Clone, Debug)]
 pub struct Facts<'a> {
-    /// Target stream.
-    pub stream: &'a str,
     /// Identity performing the integration.
     pub actor: &'a Identity,
     /// Author of the proposal.
@@ -108,6 +106,23 @@ pub enum Unmet {
 }
 
 impl Unmet {
+    /// The stable name of the requirement, as a blocker's `code` on the wire: `actor_not_allowed`,
+    /// `author_not_allowed`, `failed_validation`, `missing_validation`, `insufficient_approvals`,
+    /// `changes_requested`, `missing_provenance` or `too_many_changed_files`. Fixed strings, so that renaming a
+    /// Rust variant cannot change what clients see (`serde`'s tag of the same name is checked against them).
+    pub fn code(&self) -> &'static str {
+        match self {
+            Unmet::ActorNotAllowed { .. } => "actor_not_allowed",
+            Unmet::AuthorNotAllowed { .. } => "author_not_allowed",
+            Unmet::FailedValidation { .. } => "failed_validation",
+            Unmet::MissingValidation { .. } => "missing_validation",
+            Unmet::InsufficientApprovals { .. } => "insufficient_approvals",
+            Unmet::ChangesRequested { .. } => "changes_requested",
+            Unmet::MissingProvenance => "missing_provenance",
+            Unmet::TooManyChangedFiles { .. } => "too_many_changed_files",
+        }
+    }
+
     /// Denials cannot be fixed by waiting; everything else can.
     pub fn is_denial(&self) -> bool {
         matches!(

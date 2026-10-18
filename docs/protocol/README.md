@@ -35,7 +35,7 @@ move a stream head directly; changes travel as proposals and land only through `
 | **Integration** | `integrate` (prepare + integrate, resumable), `merge_preview`, `submit_attestation` | `ag integrate`, `ag remote integrate/prepare` |
 | **Stream** | compare-and-swap is internal to `integrate` by design | `ag stream show/reflog` |
 | **Agent** | `ag_agent::registry::*`, leases, tasks, provenance, conflict prediction | `ag agent …`, `ag lease …`, `ag task …` |
-| **Events** | outbox and the hash-chained audit log (SSE and replay) | `ag trace`, `ag audit`, `ag remote events --follow` |
+| **Events** | the hash-chained audit log (SSE and replay); the outbox is internal to the engine | `ag trace`, `ag audit`, `ag remote events --follow` |
 | **Execution** | validation jobs for trusted workers: claim, heartbeat, complete (with a signed attestation), fail | — |
 | **Admin** | policy, roles, credentials, GC, fsck, pins | `ag policy`, `ag gc`, `ag remote policy` |
 

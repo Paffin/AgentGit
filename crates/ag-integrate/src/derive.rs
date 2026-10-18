@@ -1,10 +1,20 @@
 //! Derived indexes: the outbox dispatcher and tree cache.
 //!
 //! The metadata index and the object store are the sources of truth. Trees
-//! are *derived*: they are computed asynchronously from `changeset.published`
-//! outbox events, are verified on read, and can be dropped and rebuilt at any
-//! time ([`Repository::reindex`]). Readers never depend on them: a missing
-//! tree is recomputed from history.
+//! are *derived*: they are computed from `changeset.published` outbox events,
+//! are verified on read, and can be dropped and rebuilt at any time
+//! ([`Repository::reindex`]). Readers never depend on them: a missing tree is
+//! recomputed from history.
+//!
+//! There is no background dispatcher. A pass runs inline, after the
+//! transaction of every publication and integration has committed
+//! ([`Repository::derive_best_effort`]); it cannot fail the operation that
+//! triggered it, so its failure is *recorded* instead
+//! ([`Repository::derive_status`]): a failed event stays pending and is
+//! retried by the next pass, and `reindex` rebuilds everything. The only
+//! in-process consumer is tree derivation; the other topics
+//! (`stream.updated`) are notifications that nothing here consumes, marked
+//! dispatched on the next pass. The external event feed is the audit log.
 
 use ag_changeset::ChangesetSource;
 use ag_storage::MetaTreeCache;
@@ -14,6 +24,13 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::{Error, Repository, Result};
+
+/// Outbox events handled by the pass that follows a publication.
+pub(crate) const DERIVE_BATCH_AFTER_PUBLISH: usize = 64;
+/// Outbox events handled by the pass that follows an integration.
+pub(crate) const DERIVE_BATCH_AFTER_INTEGRATE: usize = 256;
+/// Key, in the repository's `meta` table, of the text of the last failed post-commit pass (empty: it succeeded).
+const DERIVE_LAST_ERROR_KEY: &str = "derive.last_error";
 
 /// Trees are cached for every changeset whose first-parent depth is a multiple
 /// of this interval, plus the tree of every live head. Any other tree is
@@ -32,7 +49,49 @@ pub struct DeriveReport {
     pub pending: u64,
 }
 
+/// How the derive passes are doing.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct DeriveStatus {
+    /// Outbox events not yet handled.
+    pub pending: u64,
+    /// Why the last post-commit pass was incomplete; `None` if it was not (or none ran).
+    pub last_error: Option<String>,
+}
+
 impl Repository {
+    /// Runs the derive pass that follows a committed publication or integration, and records how it went.
+    ///
+    /// The operation has already committed, so nothing here may fail it: caching the tree of the new `head`
+    /// (if there is one) and handling up to `batch` pending events are best effort. A failure is not lost: the
+    /// text is kept for [`Repository::derive_status`], failed events stay pending for the next pass, and a later
+    /// pass that succeeds clears the record.
+    pub(crate) fn derive_best_effort(&self, head: Option<&ChangesetId>, batch: usize) {
+        let mut problems = Vec::new();
+        if let Some(head) = head
+            && let Err(e) = self.cache_tree(head)
+        {
+            problems.push(format!("caching the tree of {head}: {e}"));
+        }
+        match self.derive_pending(batch) {
+            Ok(r) if r.failed == 0 => {}
+            Ok(r) => problems.push(format!("{} outbox event(s) failed and stay pending", r.failed)),
+            Err(e) => problems.push(format!("derive pass: {e}")),
+        }
+        let text = problems.join("; ");
+        // Write only when the record changes: a healthy repository does no extra write per operation. If the
+        // record itself cannot be updated the metadata store is failing, which the next operation reports.
+        if self.meta.read(|tx| tx.meta_get(DERIVE_LAST_ERROR_KEY)).ok().flatten().unwrap_or_default() != text {
+            let _ = self.meta.write(|tx| tx.meta_set(DERIVE_LAST_ERROR_KEY, &text));
+        }
+    }
+
+    /// Pending outbox events and the last failure of a post-commit derive pass.
+    pub fn derive_status(&self) -> Result<DeriveStatus> {
+        let pending = self.meta.read(|tx| tx.outbox_pending_count())?;
+        let last_error = self.meta.read(|tx| tx.meta_get(DERIVE_LAST_ERROR_KEY))?.filter(|s| !s.is_empty());
+        Ok(DeriveStatus { pending, last_error })
+    }
+
     /// Dispatches up to `limit` pending outbox events (at-least-once).
     pub fn derive_pending(&self, limit: usize) -> Result<DeriveReport> {
         let events = self.meta.read(|tx| tx.outbox_pending(limit))?;
@@ -43,7 +102,10 @@ impl Repository {
                     let id: ChangesetId = serde_json::from_value(ev.payload["id"].clone())?;
                     self.derive_tree(&id)
                 })(),
-                // Notification-only topics have no in-process consumer.
+                // Notification-only topics (`stream.updated`) have no in-process consumer: they are recorded in
+                // the outbox in the integration's transaction and marked dispatched here. Leaving them pending
+                // would grow the backlog and, as the pending list is a bounded oldest-first batch, eventually
+                // crowd `changeset.published` out of it.
                 _ => Ok(()),
             };
             match outcome {
@@ -64,6 +126,7 @@ impl Repository {
 
     /// Caches the tree of `id` if it is a keyframe.
     fn derive_tree(&self, id: &ChangesetId) -> Result<()> {
+        self.failpoints.hit("derive.tree")?;
         let depth = self
             .meta
             .read(|tx| tx.fp_depth(id))?

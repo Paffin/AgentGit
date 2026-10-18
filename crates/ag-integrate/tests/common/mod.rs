@@ -99,6 +99,9 @@ pub fn storage_for_tests(dir: &TestDir) -> Option<StorageConfig> {
             session_token_env: Some("AG_TEST_S3_SESSION_TOKEN".into()),
             ca_bundle: None,
             lock: ObjectLockKind::Auto,
+            request_timeout_secs: None,
+            max_retries: None,
+            list_page_size: None,
         };
         dir.cleanup.lock().unwrap().push(Box::new(ag_storage::testing::PrefixGuard::new(cfg)));
     }

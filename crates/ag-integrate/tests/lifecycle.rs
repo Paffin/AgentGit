@@ -210,6 +210,47 @@ fn fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage() {
     assert!(rep.issues.iter().any(|i| i.kind == "audit_chain_broken"), "{:?}", rep.issues);
 }
 
+#[test]
+fn fsck_finds_pins_proposals_and_workspaces_that_point_at_nothing() {
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
+    let main = StreamName::new("main").unwrap();
+    // Stored but not published: what a proposal, a pin and a workspace snapshot legitimately point at.
+    let c1 = snap_in(&repo, None, &[("a", "1")], "user:alice");
+    repo.pin("release", &c1, "kept for the release", &id("user:alice")).unwrap();
+    let p = repo.propose("main", &c1, "t", "", &id("user:alice"), None).unwrap();
+    repo.workspace_create("scratch", &main, &id("user:alice")).unwrap();
+    repo.meta().write(|tx| tx.workspace_update("scratch", Some(&c1), Some(&c1))).unwrap();
+    let ok = repo.fsck().unwrap();
+    assert!(ok.is_ok(), "unpublished but stored roots are healthy: {:?}", ok.issues);
+
+    // Each of them is repointed at a changeset that never existed (a lost object, a bad restore, a hand edit).
+    let ghost: ag_types::ChangesetId = "ab".repeat(32).parse().unwrap();
+    let g = Param::from(ghost.to_hex());
+    repo.meta()
+        .write(|tx| {
+            tx.raw_execute("UPDATE pins SET changeset = ?1", std::slice::from_ref(&g))?;
+            tx.raw_execute("UPDATE proposals SET head = ?1 WHERE id = ?2", &[g.clone(), Param::from(p.id.as_str())])?;
+            tx.raw_execute(
+                "UPDATE workspaces SET head = ?1, base = ?1 WHERE name = 'scratch'",
+                std::slice::from_ref(&g),
+            )
+        })
+        .unwrap();
+    drop(repo);
+    let repo = Repository::open(dir.path()).unwrap();
+    let rep = repo.fsck().unwrap();
+    let kinds: Vec<&str> = rep.issues.iter().map(|i| i.kind.as_str()).collect();
+    for kind in ["dangling_pin", "dangling_proposal_head", "dangling_workspace_ref"] {
+        assert!(kinds.contains(&kind), "{kind} missing from {:?}", rep.issues);
+    }
+    assert_eq!(kinds.iter().filter(|k| **k == "dangling_workspace_ref").count(), 2, "head and base: {:?}", rep.issues);
+    let pin = rep.issues.iter().find(|i| i.kind == "dangling_pin").unwrap();
+    assert!(pin.detail.contains("release") && pin.detail.contains(&ghost.to_string()), "{}", pin.detail);
+    // …and garbage collection, which starts from those roots, refuses to run: this is what `verify` now explains.
+    assert!(repo.gc(&GcOptions::default(), "user:alice").is_err());
+}
+
 fn bytes_of(a: &str, b: &str, blob: &ag_types::BlobId, repo: &Repository) -> Vec<u8> {
     // The blob in the fixture is "1" or "2"; find which one hashes to `blob`.
     for s in [a, b] {
@@ -278,6 +319,32 @@ fn derived_trees_are_disposable_and_reindex_rebuilds_them() {
     assert_eq!(repo.tree_of(&c2).unwrap().id(), expected, "bad cache is bypassed");
     assert_eq!(repo.reindex().unwrap(), 2);
     assert!(repo.fsck().unwrap().is_ok());
+}
+
+#[test]
+fn a_failed_derive_pass_after_a_commit_is_recorded_retried_and_cleared() {
+    let dir = tempdir();
+    let repo = disk_repo(&dir);
+    let alice = id("user:alice");
+    let healthy = repo.derive_status().unwrap();
+    assert_eq!((healthy.pending, healthy.last_error), (0, None));
+
+    // The derive step after the commit fails once. The publication itself has committed and reports success…
+    repo.failpoints().arm("derive.tree");
+    let c1 = snap_in(&repo, None, &[("a", "1")], "user:alice");
+    let first = repo.publish(&c1, &alice, None).unwrap();
+    assert_eq!(first.state, ag_integrate::PublishState::Published);
+    // …and the failure is not lost: an event stays pending and the reason is recorded.
+    let failing = repo.derive_status().unwrap();
+    assert!(failing.pending >= 1, "{failing:?}");
+    let why = failing.last_error.expect("the failure is recorded");
+    assert!(why.contains("stay pending"), "{why}");
+
+    // The next pass retries the pending event, succeeds, and the record is cleared.
+    let c2 = snap_in(&repo, Some(c1), &[("a", "1"), ("b", "2")], "user:alice");
+    repo.publish(&c2, &alice, None).unwrap();
+    let recovered = repo.derive_status().unwrap();
+    assert_eq!((recovered.pending, recovered.last_error), (0, None), "retried and cleared");
 }
 
 // ---- workspaces ----------------------------------------------------------------

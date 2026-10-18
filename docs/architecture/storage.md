@@ -112,7 +112,7 @@ metadata, engine, policy, lifecycle and agent suites run unchanged on PostgreSQL
 | `changesets`, `changeset_parents`, `changeset_paths` | index of **published** changesets: generation, first-parent depth, parents, touched paths | rebuildable from objects (`ag reindex`) |
 | `streams`, `reflog` | stream heads, versions; append-only head history | source of truth |
 | `intents`, `intent_objects` | durable operations, idempotency keys, staged objects | source of truth |
-| `outbox` | transactional events (`changeset.published`, `stream.updated`) | source of truth (at-least-once delivery) |
+| `outbox` | transactional events (`changeset.published`, `stream.updated`) | source of truth for the one in-process consumer, tree derivation (at-least-once); `stream.updated` is a recorded notification that nothing consumes and the next pass marks dispatched. The external event feed is the audit log, not the outbox |
 | `audit` | hash-chained audit log | source of truth, tamper-evident |
 | `policies` | append-only policy versions | source of truth |
 | `proposals`, `reviews`, `attestations`, `pins`, `workspaces`, `queue` | collaboration state | source of truth |
@@ -120,15 +120,21 @@ metadata, engine, policy, lifecycle and agent suites run unchanged on PostgreSQL
 | `trees`, `changeset_trees` | **derived** tree manifests | disposable cache |
 | `jobs` | the asynchronous job queue (schema version 2): leased claims, retry with backoff, dedupe keys | source of truth |
 
-There are deliberately no foreign keys: referential consistency is checked by `ag verify`, which lets
-garbage collection remove rows in any order.
+There are deliberately no foreign keys, which lets garbage collection remove rows in any order. `ag verify` checks
+the references that matter for safety: every object's hash, each changeset against its index row and its parents,
+stream heads (published, and their cached tree against history), reflog tails, and that every pin, open-proposal
+head and workspace head/base names a changeset the object store can produce (the roots garbage collection starts
+from). It does not check rows that merely mention a proposal or an operation (reviews, queue entries, intents) or
+cached trees other than the stream heads' (those are verified when read, or rebuilt by `ag reindex`).
 
 ## Derived data
 
 Trees are derived (`tree(c) = apply(tree(first_parent(c)), ops(c))`) and cached sparsely:
 
 - **keyframes**: the tree of every changeset whose first-parent depth is a multiple of 32
-  (`KEYFRAME_INTERVAL`), written asynchronously from the outbox;
+  (`KEYFRAME_INTERVAL`), written from the outbox by a pass that runs inline right after each publication and
+  integration commits (best effort: a failed event stays pending and is retried by the next pass or `ag reindex`;
+  `Repository::derive_status` reports the pending count and the last failure);
 - **live heads**: the tree of each stream head, open proposal head and workspace head, written eagerly;
 - everything else is rebuilt on demand by replaying fewer than 32 operation lists from the nearest cached
   ancestor (`resolve_tree`).

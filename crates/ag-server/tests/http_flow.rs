@@ -13,6 +13,10 @@ async fn capabilities_are_public_and_everything_else_needs_credentials() {
     assert_eq!(r.status, 200);
     assert_eq!(r.json["protocol_version"], "agwp.v1");
     assert!(r.json["features"].as_array().unwrap().iter().any(|f| f == "events.replay"));
+    // The advertised changeset limits are the engine's, not a second copy of them.
+    let engine = ag_types::Limits::default();
+    assert_eq!(r.json["limits"]["max_changeset_ops"], engine.max_ops);
+    assert_eq!(r.json["limits"]["max_changesets_per_publication"], engine.max_changesets_per_publication);
 
     let r = anon.get("/v1/whoami").await;
     assert_eq!(r.status, 401);

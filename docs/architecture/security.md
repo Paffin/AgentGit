@@ -47,7 +47,7 @@ of them being honest.
 | Policy typos silently weakening rules | unknown fields rejected; unsatisfiable policies rejected on load | `Policy::parse` | `unknown_fields_are_rejected`, `unsatisfiable_policies_are_rejected` |
 | Tampering with history/audit | hash-chained audit entries written in the same transaction as the change; `ag audit`/`ag verify` | `Tx::audit_*`, `fsck` | `audit_chain_detects_tampering`, `fsck_reports_a_healthy_repository_and_finds_each_kind_of_damage` |
 | Data loss by GC | fail closed; roots incl. reflog retention; grace period; atomic age-checked delete | `gc.rs` | GC tests in [Publication & integration](publication-and-integration.md) |
-| Key theft from disk | key files `0600`, refused if group/world accessible, never overwritten | `ag_crypto::KeyPair` | `key_file_roundtrip_and_permissions` |
+| Key theft from disk | key files `0600` on Unix, refused on load if group/world accessible; on Windows an owner-only ACL is set when the file is created but cannot be read back, so a loosened ACL is not detected ([Windows](../operations/windows.md)); never overwritten | `ag_crypto::KeyPair`, `ag_crypto::private_file` | `key_file_roundtrip_and_permissions`, `unix_files_are_0600_and_directories_0700_and_loose_files_are_refused`, `windows_files_and_directories_get_an_owner_only_acl` |
 
 ## Prompt injection
 

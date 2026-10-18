@@ -10,6 +10,11 @@ use serde::Serialize;
 
 use crate::{Error, Repository, Result};
 
+/// Most changesets one `log` walk visits, whatever `max_dag_depth` allows: a log that long is not a log anybody
+/// reads, and the walk holds the request meanwhile. Hitting it is an error (`DagError::LimitExceeded`), not a
+/// silently shortened history.
+const LOG_WALK_CAP: u64 = 5_000_000;
+
 /// A [`Graph`] that prefers the metadata index (published changesets, with
 /// stored generation numbers) and falls back to the object store for
 /// changesets that are not published yet, such as workspace snapshots.
@@ -181,7 +186,7 @@ impl Repository {
     /// `limit` entries without walking the rest of the history.
     pub fn log(&self, head: &ChangesetId, limit: usize, path: Option<&str>) -> Result<Vec<LogEntry>> {
         let g = self.graph();
-        let walk_limit = self.limits.max_dag_depth.min(5_000_000) as usize;
+        let walk_limit = self.limits.max_dag_depth.min(LOG_WALK_CAP) as usize;
         let mut out = Vec::new();
         let mut visited = 0usize;
         let mut failure: Option<Error> = None;

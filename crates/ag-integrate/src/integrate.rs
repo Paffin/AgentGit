@@ -29,12 +29,17 @@ use ag_types::{ChangesetId, Identity, IdentityKind, Timestamp, TreeId};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::derive::DERIVE_BATCH_AFTER_INTEGRATE;
 use crate::publish::hash_request;
 use crate::repo::RepoBlobs;
 use crate::types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
 use crate::{Error, Repository, Result};
 
+/// How often an integration re-reads the stream and recomputes its candidate when another writer moves the head
+/// under it, before it gives up with a contention error the caller can retry.
 const MAX_CAS_ATTEMPTS: usize = 8;
+/// Most unfinished operations one `recover` pass looks at; the next pass takes the rest.
+const RECOVER_BATCH: usize = 10_000;
 
 /// Parameters of an integration request.
 #[derive(Clone, Debug)]
@@ -228,10 +233,18 @@ impl Repository {
             if intent.state.is_terminal() {
                 return self.integration_result(&intent);
             }
-            let proposal_id = intent.payload["proposal"].as_str().unwrap_or_default().to_string();
-            let stream = intent.payload["stream"].as_str().unwrap_or_default().to_string();
+            // The payload was written by `integrate` itself; if a field is missing or unreadable the record is
+            // damaged, and carrying on with an empty proposal id, stream or token list would answer a different
+            // question than the one that was asked.
+            let proposal_id = payload_str(&intent, "proposal")?;
+            let stream = payload_str(&intent, "stream")?;
             let head: ChangesetId = serde_json::from_value(intent.payload["head"].clone())?;
-            let tokens: Vec<u64> = serde_json::from_value(intent.payload["tokens"].clone()).unwrap_or_default();
+            let tokens: Vec<u64> = serde_json::from_value(intent.payload["tokens"].clone()).map_err(|e| {
+                Error::Invalid(format!(
+                    "operation '{}' has an unreadable 'tokens' in its payload: {e}",
+                    intent.operation_id
+                ))
+            })?;
 
             let Some(prop) = self.meta.read(|tx| tx.proposal(&proposal_id))? else {
                 return self.abort_integrate(op, "the proposal no longer exists");
@@ -279,10 +292,11 @@ impl Repository {
                 Step::Retry => continue,
                 Step::Done(result) => {
                     self.failpoints.hit("integrate.after_commit")?;
-                    if let Outcome::Integrated { new_head, .. } = &result.outcome {
-                        let _ = self.cache_tree(new_head);
-                    }
-                    let _ = self.derive_pending(256);
+                    let new_head = match &result.outcome {
+                        Outcome::Integrated { new_head, .. } => Some(new_head),
+                        _ => None,
+                    };
+                    self.derive_best_effort(new_head, DERIVE_BATCH_AFTER_INTEGRATE);
                     return Ok(*result);
                 }
             }
@@ -580,7 +594,7 @@ impl Repository {
                     IntentState::Ready,
                     IntentState::Blocked,
                 ],
-                10_000,
+                RECOVER_BATCH,
             )
         })?;
         for intent in pending {
@@ -624,6 +638,14 @@ impl Repository {
         }
         Ok(report)
     }
+}
+
+/// A string field of an operation's payload, or an error naming the damaged record.
+fn payload_str(intent: &IntentRow, field: &str) -> Result<String> {
+    intent.payload[field]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| Error::Invalid(format!("operation '{}' has no '{field}' in its payload", intent.operation_id)))
 }
 
 /// Everything policy has to say about a candidate, evaluated against facts

@@ -43,7 +43,7 @@ mod workspace;
 pub use api_support::{FileDiff, MAX_NEGOTIATED};
 pub use backup::BackupReport;
 pub use blame::{Blame, BlameLine, BlameOptions, DEFAULT_BLAME_COMMITS, MAX_BLAME_FILE_SIZE, MAX_BLAME_LINES};
-pub use derive::{DeriveReport, KEYFRAME_INTERVAL};
+pub use derive::{DeriveReport, DeriveStatus, KEYFRAME_INTERVAL};
 pub use error::Error;
 pub use failpoints::Failpoints;
 pub use fsck::{FsckIssue, FsckReport};
@@ -60,7 +60,8 @@ pub use queue::QueueRunReport;
 pub use repo::Repository;
 pub use storage::{
     DEFAULT_PG_URL_ENV, DEFAULT_S3_ACCESS_KEY_ID_ENV, DEFAULT_S3_SECRET_ACCESS_KEY_ENV, DEFAULT_S3_SESSION_TOKEN_ENV,
-    MetaConfig, ObjectLockKind, ObjectsConfig, StorageConfig,
+    MAX_S3_LIST_PAGE, MAX_S3_REQUEST_TIMEOUT_SECS, MAX_S3_RETRIES, MetaConfig, ObjectLockKind, ObjectsConfig,
+    StorageConfig,
 };
 pub use types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
 pub use virtual_ws::{VirtualChange, VirtualContent};

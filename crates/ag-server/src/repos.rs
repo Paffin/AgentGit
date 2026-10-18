@@ -357,6 +357,9 @@ mod tests {
                 session_token_env: None,
                 ca_bundle: None,
                 lock: Default::default(),
+                request_timeout_secs: None,
+                max_retries: None,
+                list_page_size: None,
             },
         };
         let a = derive_storage(&template, "acme/web");

@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+use crate::derive::DERIVE_BATCH_AFTER_PUBLISH;
 use crate::{Error, Repository, Result};
 
 /// Outcome of a publication.
@@ -370,7 +371,7 @@ impl Repository {
         })?;
         // The commit succeeded; a failure here models a lost response.
         self.failpoints.hit("publish.after_commit")?;
-        let _ = self.derive_pending(64);
+        self.derive_best_effort(None, DERIVE_BATCH_AFTER_PUBLISH);
         Ok(())
     }
 }

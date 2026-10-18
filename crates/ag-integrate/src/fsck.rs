@@ -8,6 +8,9 @@ use serde::Serialize;
 
 use crate::{Repository, Result};
 
+/// "No limit" for the listings below (a count that fits the database's signed 64-bit `LIMIT`).
+const ALL_ROWS: usize = i64::MAX as usize;
+
 /// One problem found by [`Repository::fsck`].
 #[derive(Clone, Debug, Serialize)]
 pub struct FsckIssue {
@@ -54,8 +57,15 @@ impl FsckReport {
 
 impl Repository {
     /// Verifies the whole repository: every stored object's hash, every
-    /// published changeset against its index row, every stream head, the
-    /// derived tree caches (recomputed from history), and the audit chain.
+    /// published changeset against its index row, every stream head (and its
+    /// cached tree, recomputed from history), that every other root of
+    /// reachability (pins, open proposals, workspaces) names a changeset the
+    /// object store can produce, the reflog tails, and the audit chain.
+    ///
+    /// Not covered: cached trees other than the stream heads' (keyframes and
+    /// those of workspaces and pins are verified when they are read), and the
+    /// rows that merely mention a proposal or an operation (reviews, queue
+    /// entries, intents).
     pub fn fsck(&self) -> Result<FsckReport> {
         let mut r = FsckReport::default();
 
@@ -132,6 +142,24 @@ impl Repository {
             }
         }
 
+        // Pins, open proposals and workspaces keep changesets alive (garbage collection starts from them and
+        // refuses to run when one is unreadable). They may name changesets that are stored but not published yet
+        // (a proposal waiting for its integration, a workspace snapshot), so the test is "can the object store
+        // produce it", not "is it published".
+        for pin in self.meta.read(|tx| tx.pins())? {
+            self.check_root(&mut r, "dangling_pin", &format!("pin '{}'", pin.name), &pin.changeset);
+        }
+        for p in self.meta.read(|tx| tx.proposals_list(Some("open"), ALL_ROWS))? {
+            self.check_root(&mut r, "dangling_proposal_head", &format!("open proposal {}", p.id), &p.head);
+        }
+        for w in self.meta.read(|tx| tx.workspaces())? {
+            for (what, id) in [("head", &w.head), ("base", &w.base)] {
+                if let Some(id) = id {
+                    self.check_root(&mut r, "dangling_workspace_ref", &format!("workspace '{}' {what}", w.name), id);
+                }
+            }
+        }
+
         let audit = self.meta.read(|tx| tx.audit_verify())?;
         r.audit_entries = audit.entries;
         r.audit_head = audit.head;
@@ -139,5 +167,12 @@ impl Repository {
             r.issue("audit_chain_broken", format!("audit entry #{seq} does not match the hash chain"));
         }
         Ok(r)
+    }
+
+    /// Records an issue of `kind` unless the object store yields the changeset `id` that `what` points at.
+    fn check_root(&self, r: &mut FsckReport, kind: &str, what: &str, id: &ag_types::ChangesetId) {
+        if let Err(e) = self.history.changeset(id) {
+            r.issue(kind, format!("{what} points at {id}, which cannot be read: {e}"));
+        }
     }
 }

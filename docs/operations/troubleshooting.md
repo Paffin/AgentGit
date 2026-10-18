@@ -82,6 +82,7 @@ depth. `.ag` and `.git` are always ignored.
 | `history_not_derivable` | the history below a head does not apply cleanly | restore |
 | `stale_derived_tree` | cached tree disagrees with history | `ag reindex` (the cache is disposable) |
 | `reflog_mismatch` | a reflog does not end at its stream's head/version | restore; indicates tampering or a bug |
+| `dangling_pin` / `dangling_proposal_head` / `dangling_workspace_ref` | a pin, an open proposal or a workspace names a changeset the object store cannot produce (`ag gc` refuses to run until it is fixed) | restore the object (`ag backup`/mirror) or the metadata; remove the pin/workspace if it is no longer wanted |
 | `audit_chain_broken` | an audit entry was altered or removed | treat as tampering; compare with the audit head hash you recorded |
 
 ## `ag gc` says "aborted: reachable … is unreadable"

@@ -49,6 +49,13 @@ impl Repository {
     /// Processes all `queued` entries of `stream` in order. A blocked or
     /// conflicting entry does not hold up the ones behind it; it is marked and
     /// can be enqueued again once fixed.
+    ///
+    /// The queue carries no fencing tokens: a fencing token proves that the *lease holder* is the one
+    /// integrating (`ag integrate <proposal> --fencing-tokens N`), and whoever runs the queue is not
+    /// that party. A proposal that touches a path under somebody's exclusive lease is therefore left
+    /// `blocked` with the lease named as the blocker; integrate it directly with the token, or wait for
+    /// the lease to end, and enqueue it again. (Storing tokens with the entry would need a schema and a
+    /// protocol change, which nothing asks for yet.)
     pub fn run_queue(&self, stream: &str, actor: &Identity) -> Result<QueueRunReport> {
         let mut report = QueueRunReport::default();
         let entries = self.meta.read(|tx| tx.queue_list(stream, Some("queued")))?;

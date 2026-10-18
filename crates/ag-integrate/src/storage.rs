@@ -37,6 +37,12 @@ pub const DEFAULT_S3_ACCESS_KEY_ID_ENV: &str = "AWS_ACCESS_KEY_ID";
 pub const DEFAULT_S3_SECRET_ACCESS_KEY_ENV: &str = "AWS_SECRET_ACCESS_KEY";
 /// See [`DEFAULT_S3_ACCESS_KEY_ID_ENV`].
 pub const DEFAULT_S3_SESSION_TOKEN_ENV: &str = "AWS_SESSION_TOKEN";
+/// Most retries `storage.objects.max_retries` may ask for (each waits up to 3 s: this is about a minute of waiting).
+pub const MAX_S3_RETRIES: u32 = 20;
+/// Most keys `storage.objects.list_page_size` may ask for: what `ListObjectsV2` itself allows per page.
+pub const MAX_S3_LIST_PAGE: u32 = 1000;
+/// Longest `storage.objects.request_timeout_secs`: a day. Anything above is more likely a unit mistake than a plan.
+pub const MAX_S3_REQUEST_TIMEOUT_SECS: u64 = 24 * 60 * 60;
 
 /// The `storage` section of the repository configuration.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,6 +85,9 @@ pub enum MetaConfig {
 /// Object backend.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+// A configuration value, built a few times per process and never copied in bulk: the size of the S3 variant (one
+// field per documented key) costs nothing, and boxing it would only add noise to every construction site.
+#[allow(clippy::large_enum_variant)]
 pub enum ObjectsConfig {
     /// `.ag/store/objects`, files on the local disk (the default).
     #[default]
@@ -113,6 +122,16 @@ pub enum ObjectsConfig {
         /// How writers and the garbage collector exclude each other (default `auto`).
         #[serde(default)]
         lock: ObjectLockKind,
+        /// Deadline of one request, body included, in seconds (default 300). A blob up to the repository's blob limit
+        /// is one request, so raise it on a slow uplink.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_timeout_secs: Option<u64>,
+        /// Retries after the first attempt for transient failures (default 5, at most [`MAX_S3_RETRIES`]).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_retries: Option<u32>,
+        /// Keys requested per listing page (default 1000, at most [`MAX_S3_LIST_PAGE`]); the service may return fewer.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        list_page_size: Option<u32>,
     },
 }
 
@@ -160,7 +179,17 @@ impl StorageConfig {
                 return Err(Error::Config("storage.meta.pool_size must be at least 1".into()));
             }
         }
-        if let ObjectsConfig::S3 { endpoint, bucket, prefix, lock, .. } = &self.objects {
+        if let ObjectsConfig::S3 {
+            endpoint,
+            bucket,
+            prefix,
+            lock,
+            request_timeout_secs,
+            max_retries,
+            list_page_size,
+            ..
+        } = &self.objects
+        {
             if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) {
                 return Err(Error::Config("storage.objects.endpoint must start with http:// or https://".into()));
             }
@@ -178,6 +207,27 @@ impl StorageConfig {
                 && (p.contains("//") || p.chars().any(char::is_control))
             {
                 return Err(Error::Config(format!("storage.objects.prefix '{p}' is not usable")));
+            }
+            if let Some(secs) = request_timeout_secs
+                && !(1..=MAX_S3_REQUEST_TIMEOUT_SECS).contains(secs)
+            {
+                return Err(Error::Config(format!(
+                    "storage.objects.request_timeout_secs must be between 1 and {MAX_S3_REQUEST_TIMEOUT_SECS} (got {secs})"
+                )));
+            }
+            if let Some(n) = max_retries
+                && *n > MAX_S3_RETRIES
+            {
+                return Err(Error::Config(format!(
+                    "storage.objects.max_retries must be at most {MAX_S3_RETRIES} (got {n})"
+                )));
+            }
+            if let Some(n) = list_page_size
+                && !(1..=MAX_S3_LIST_PAGE).contains(n)
+            {
+                return Err(Error::Config(format!(
+                    "storage.objects.list_page_size must be between 1 and {MAX_S3_LIST_PAGE} (got {n})"
+                )));
             }
             if *lock == ObjectLockKind::PostgresAdvisory && !matches!(self.meta, MetaConfig::Postgres { .. }) {
                 return Err(Error::Config(
@@ -280,6 +330,9 @@ fn open_s3(
         session_token_env,
         ca_bundle,
         lock,
+        request_timeout_secs,
+        max_retries,
+        list_page_size,
     } = &storage.objects
     else {
         unreachable!("checked by the caller");
@@ -304,6 +357,7 @@ fn open_s3(
         cfg.path_style = *ps;
     }
     cfg.ca_bundle = ca_bundle.as_ref().map(PathBuf::from);
+    apply_s3_tuning(&mut cfg, *request_timeout_secs, *max_retries, *list_page_size);
 
     let lock: Arc<dyn ObjectLock> = match (lock, pg) {
         (ObjectLockKind::Auto | ObjectLockKind::PostgresAdvisory, Some(target)) => {
@@ -318,6 +372,25 @@ fn open_s3(
         (ObjectLockKind::InProcess, _) => Arc::new(ag_storage::InProcessLock::new()),
     };
     Ok(Arc::new(S3ObjectStore::open(cfg, lock)?))
+}
+
+/// Replaces the client's defaults with the values the configuration sets.
+#[cfg(feature = "s3")]
+fn apply_s3_tuning(
+    cfg: &mut ag_storage::S3Config,
+    request_timeout_secs: Option<u64>,
+    max_retries: Option<u32>,
+    list_page_size: Option<u32>,
+) {
+    if let Some(secs) = request_timeout_secs {
+        cfg.request_timeout = std::time::Duration::from_secs(secs);
+    }
+    if let Some(n) = max_retries {
+        cfg.max_retries = n;
+    }
+    if let Some(n) = list_page_size {
+        cfg.list_page_size = n;
+    }
 }
 
 const META_SENTINEL: &str = "This repository keeps its metadata in PostgreSQL (see config.json, storage.meta).\n\
@@ -431,6 +504,9 @@ mod tests {
                 session_token_env: None,
                 ca_bundle: None,
                 lock: ObjectLockKind::Auto,
+                request_timeout_secs: None,
+                max_retries: None,
+                list_page_size: None,
             },
         };
         assert!(bad_endpoint.validate().unwrap_err().to_string().contains("credentials"));
@@ -456,9 +532,62 @@ mod tests {
                 session_token_env: None,
                 ca_bundle: None,
                 lock: ObjectLockKind::PostgresAdvisory,
+                request_timeout_secs: None,
+                max_retries: None,
+                list_page_size: None,
             },
         };
         assert!(lock_without_pg.validate().unwrap_err().to_string().contains("PostgreSQL metadata"));
+    }
+
+    #[cfg(feature = "s3")]
+    #[test]
+    fn configured_values_reach_the_client_and_absent_ones_leave_its_defaults() {
+        use std::time::Duration;
+
+        let fresh = || ag_storage::S3Config::new("http://h", "r", "b", ag_storage::Credentials::new("id", "secret"));
+        let defaults = fresh();
+        let mut cfg = fresh();
+        apply_s3_tuning(&mut cfg, None, None, None);
+        assert_eq!(
+            (cfg.request_timeout, cfg.max_retries, cfg.list_page_size),
+            (defaults.request_timeout, defaults.max_retries, defaults.list_page_size)
+        );
+        apply_s3_tuning(&mut cfg, Some(900), Some(2), Some(250));
+        assert_eq!((cfg.request_timeout, cfg.max_retries, cfg.list_page_size), (Duration::from_secs(900), 2, 250));
+    }
+
+    fn s3_with(extra: &str) -> serde_json::Result<StorageConfig> {
+        parse(&format!(r#"{{"objects": {{"kind": "s3", "endpoint": "http://h", "bucket": "b"{extra}}}}}"#))
+    }
+
+    #[test]
+    fn the_request_deadline_retries_and_page_size_are_configuration() {
+        let c = s3_with(r#", "request_timeout_secs": 900, "max_retries": 2, "list_page_size": 250"#).unwrap();
+        c.validate().unwrap();
+        let ObjectsConfig::S3 { request_timeout_secs, max_retries, list_page_size, .. } = &c.objects else { panic!() };
+        assert_eq!((*request_timeout_secs, *max_retries, *list_page_size), (Some(900), Some(2), Some(250)));
+        assert_eq!(parse(&serde_json::to_string(&c).unwrap()).unwrap(), c, "they survive a round trip");
+        // Absent means the client's defaults (and nothing is written back for them).
+        let plain = s3_with("").unwrap();
+        plain.validate().unwrap();
+        assert!(!serde_json::to_string(&plain).unwrap().contains("request_timeout_secs"));
+    }
+
+    #[test]
+    fn out_of_range_s3_tuning_is_refused_with_the_key_named() {
+        for (extra, key) in [
+            (r#", "request_timeout_secs": 0"#, "request_timeout_secs"),
+            (r#", "request_timeout_secs": 100000"#, "request_timeout_secs"),
+            (r#", "max_retries": 21"#, "max_retries"),
+            (r#", "list_page_size": 0"#, "list_page_size"),
+            (r#", "list_page_size": 1001"#, "list_page_size"),
+        ] {
+            let e = s3_with(extra).unwrap().validate().unwrap_err().to_string();
+            assert!(e.contains(&format!("storage.objects.{key}")), "{extra}: {e}");
+        }
+        s3_with(r#", "max_retries": 0, "list_page_size": 1, "request_timeout_secs": 1"#).unwrap().validate().unwrap();
+        assert!(s3_with(r#", "request_timeout": 5"#).is_err(), "a misspelt key is still an error");
     }
 
     #[test]

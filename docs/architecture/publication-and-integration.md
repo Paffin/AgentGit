@@ -40,7 +40,9 @@ stateDiagram-v2
 4. **Ready** — a single `BEGIN IMMEDIATE` transaction registers the changesets (generation numbers, parents,
    touched paths), enqueues `changeset.published` outbox events, appends an audit entry and sets the intent
    to `Published`.
-5. **Derive** — asynchronously (the outbox dispatcher), keyframe trees are cached; see [Storage](storage.md).
+5. **Derive** — right after the commit, inline and best effort (there is no background dispatcher), keyframe trees
+   are cached from the outbox events; a failure cannot fail the publication, is recorded, and the event is retried by
+   the next pass; see [Storage](storage.md).
 
 If any check fails the intent becomes `Rejected` with the reason and **nothing** is registered.
 

@@ -187,6 +187,7 @@ jobs:
           python3 scripts/test_sbom_npm.py
           python3 scripts/test_check_dependabot.py
           python3 scripts/test_codeql_summary.py
+          python3 scripts/test_coverage_summary.py
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable

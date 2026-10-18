@@ -67,3 +67,6 @@ jobs:
           upload: always
       - name: What the analysis found
         run: python3 scripts/codeql_summary.py sarif-results
+      # A medium or worse alert fails the job unless security/exceptions.toml accepts it (rule, file, reason, expiry).
+      - name: Alerts that are not accepted
+        run: python3 scripts/security_exceptions.py codeql sarif-results --fail-on medium

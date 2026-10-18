@@ -1,0 +1,146 @@
+name: Quality
+
+# Two measurements of how much the tests are worth (docs/architecture/testing.md has the numbers and how to read them):
+#
+#   coverage   cargo-llvm-cov over the whole workspace test suite, a table per crate in the job summary and a floor
+#              per crate (scripts/coverage_floors.toml) below which the job fails. On changes to the Rust code, and
+#              weekly. The lcov file is uploaded as an artifact.
+#   mutation   cargo-mutants on the crates whose bugs corrupt data silently - ag-object, ag-diff, ag-tree, ag-merge,
+#              ag-policy: every mutant (a `+` turned into `-`, a condition negated, a body replaced) must be caught by
+#              the crate's own tests, or sit in .cargo/mutants.toml with the reason it cannot matter. Weekly and by
+#              hand (an hour or more; not on pull requests).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "tests/**"
+      - "scripts/coverage_*"
+      - ".cargo/mutants.toml"
+      - ".github/workflows/quality.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "scripts/coverage_*"
+      - ".github/workflows/quality.yml"
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      crates:
+        description: "Crates to mutate (space-separated); empty for the five default ones"
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: coverage (cargo-llvm-cov)
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.crates == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: coverage
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      # The same environment as the test job of ci.yml: the namespace sandbox suites must run, not skip.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Run the workspace tests with coverage
+        env:
+          AG_REQUIRE_SANDBOX: "1"
+          AG_REQUIRE_DOC_SNIPPETS: "1"
+        run: |
+          cargo llvm-cov --workspace --no-report
+          cargo llvm-cov report --json --summary-only --output-path coverage.json
+          cargo llvm-cov report --lcov --output-path lcov.info
+      - name: Coverage by crate, and the floors
+        run: python3 scripts/coverage_summary.py coverage.json --floors scripts/coverage_floors.toml --markdown "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: |
+            coverage.json
+            lcov.info
+          retention-days: 30
+
+  mutation:
+    name: mutation (${{ matrix.crate }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [ag-object, ag-diff, ag-tree, ag-merge, ag-policy]
+    steps:
+      - name: Selected by hand?
+        id: pick
+        env:
+          WANTED: ${{ github.event.inputs.crates }}
+          CRATE: ${{ matrix.crate }}
+        run: |
+          run=true
+          if [ -n "${WANTED:-}" ]; then
+            case " $WANTED " in *" $CRATE "*) ;; *) run=false ;; esac
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - if: steps.pick.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: steps.pick.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - if: steps.pick.outputs.run == 'true'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: mutation-${{ matrix.crate }}
+      - if: steps.pick.outputs.run == 'true'
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-mutants@27.1.0
+      - if: steps.pick.outputs.run == 'true'
+        name: Mutate
+        env:
+          CRATE: ${{ matrix.crate }}
+        # Exit status: 0 every mutant was caught, 2 a mutant survived, 3 only timeouts (a mutant that loops forever is
+        # caught by the test timeout; reported, not failed), 4 the unmutated tests already fail.
+        run: |
+          set +e
+          cargo mutants -p "$CRATE" --no-shuffle -j2 --output mutants-out
+          code=$?
+          echo "cargo-mutants exited with $code"
+          python3 scripts/mutants_summary.py "mutants-out/mutants.out" "$CRATE" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -eq 3 ]; then exit 0; fi
+          exit "$code"
+      - if: always() && steps.pick.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mutants-${{ matrix.crate }}
+          path: mutants-out/mutants.out
+          retention-days: 30

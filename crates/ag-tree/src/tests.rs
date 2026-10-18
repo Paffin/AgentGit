@@ -55,6 +55,64 @@ fn file_directory_conflicts() {
 }
 
 #[test]
+fn len_is_empty_and_iter_describe_the_entries() {
+    let empty = Tree::empty();
+    assert!(empty.is_empty());
+    assert_eq!(empty.len(), 0);
+    assert_eq!(empty.iter().count(), 0);
+    let t = tree(vec![put("b", "2"), put("a", "1")]);
+    assert!(!t.is_empty());
+    assert_eq!(t.len(), 2);
+    // canonical (bytewise path) order, with the entries that were put
+    let listed: Vec<(&str, BlobId)> = t.iter().map(|(path, e)| (path.as_str(), e.content)).collect();
+    assert_eq!(listed, [("a", hash_blob(b"1")), ("b", hash_blob(b"2"))]);
+}
+
+#[test]
+fn the_entry_limit_is_inclusive_in_from_entries_and_apply() {
+    let limits = Limits { max_tree_entries: 2, ..Limits::default() };
+    let entry = |c: &str| Entry { content: hash_blob(c.as_bytes()), file_type: FileType::Regular, executable: false };
+    // exactly at the limit is accepted, one more is not
+    assert!(Tree::from_entries([(p("a"), entry("1")), (p("b"), entry("2"))], &limits).is_ok());
+    assert_eq!(
+        Tree::from_entries([(p("a"), entry("1")), (p("b"), entry("2")), (p("c"), entry("3"))], &limits),
+        Err(TreeError::TooManyEntries(3))
+    );
+    let two = Tree::empty().apply(&[put("a", "1"), put("b", "2")], &limits).unwrap();
+    assert_eq!(two.len(), 2);
+    assert_eq!(two.apply(&[put("c", "3")], &limits), Err(TreeError::TooManyEntries(3)));
+    // the limit is on the result: a delete in the same changeset makes room for a put
+    assert!(two.apply(&[del("a"), put("c", "3")], &limits).is_ok());
+    // and replacing an entry adds none
+    assert!(two.apply(&[put("a", "changed")], &limits).is_ok());
+}
+
+#[test]
+fn changes_lists_exactly_the_paths_that_differ() {
+    let a = tree(vec![put("keep", "k"), put("gone", "g"), put("chg", "1")]);
+    let b = tree(vec![put("keep", "k"), put("chg", "2"), put("new", "n")]);
+    let changes = a.changes(&b);
+    let paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(paths, ["chg", "gone", "new"]); // path order; "keep" is the same on both sides and is not a change
+    assert_eq!((changes[0].before, changes[0].after), (a.get(&p("chg")).copied(), b.get(&p("chg")).copied()));
+    assert!(changes[0].before.is_some() && changes[0].after.is_some());
+    assert!(changes[1].before.is_some() && changes[1].after.is_none());
+    assert!(changes[2].before.is_none() && changes[2].after.is_some());
+    // the same tree against itself, and the empty tree against the empty tree: nothing
+    assert!(a.changes(&a).is_empty());
+    assert!(Tree::empty().changes(&Tree::empty()).is_empty());
+    // the executable bit alone is a change
+    let exec = Tree::empty()
+        .apply(
+            &[Op::Put { path: p("keep"), content: hash_blob(b"k"), file_type: FileType::Regular, executable: true }],
+            &lim(),
+        )
+        .unwrap();
+    let plain = tree(vec![put("keep", "k")]);
+    assert_eq!(plain.changes(&exec).len(), 1);
+}
+
+#[test]
 fn diff_is_minimal_and_roundtrips() {
     let a = tree(vec![put("keep", "k"), put("gone", "g"), put("chg", "1")]);
     let b = tree(vec![put("keep", "k"), put("chg", "2"), put("new/x", "n")]);

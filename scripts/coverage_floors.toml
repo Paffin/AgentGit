@@ -1,0 +1,22 @@
+# Minimum line coverage per crate, in percent, enforced by .github/workflows/quality.yml (scripts/coverage_summary.py).
+#
+# A floor is not a target: it is set about five points under what the test suite reaches today, rounded down to a
+# multiple of five, so that a change which deletes tests or lands a large untested module fails the build while an
+# ordinary change never trips it. Raise a floor when a crate's coverage has risen; lowering one needs a reason in the
+# commit message. The numbers behind these and how to read them: docs/architecture/testing.md.
+#
+# Measured by `cargo llvm-cov --workspace`: the tests of the whole workspace count for every crate (the ones of
+# ag-cli, ag-server and ag-integrate exercise the core crates too). Files under tests/, examples/ and benches/ are
+# not part of a crate's measured source.
+
+[lines]
+# The deterministic core: a bug here corrupts data silently.
+ag-types = 75
+ag-crypto = 80
+ag-object = 90
+ag-changeset = 85
+ag-dag = 85
+ag-diff = 90
+ag-tree = 90
+ag-merge = 90
+ag-policy = 85

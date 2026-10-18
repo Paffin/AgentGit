@@ -11,6 +11,7 @@ Run:  python3 -m unittest scripts/test_security_exceptions.py
 import contextlib
 import datetime as dt
 import io
+import json
 import os
 import pathlib
 import sys
@@ -325,6 +326,70 @@ class Go(unittest.TestCase):
     def test_a_stream_is_parsed_as_a_stream(self):
         messages = list(se.go_messages('{"a":1}\n{"b":2}  {"c":3}\n'))
         self.assertEqual(messages, [{"a": 1}, {"b": 2}, {"c": 3}])
+
+
+def sarif_dir(*results):
+    """A directory with one SARIF file in the layout CodeQL writes (the one test double of this file: CodeQL cannot
+    run in a unit test; the real thing runs in .github/workflows/codeql.yml). results: (rule, path, score)."""
+    d = pathlib.Path(tempfile.mkdtemp())
+    rules = [{"id": r, "properties": {"security-severity": str(score)}} for r, _, score in results]
+    res = [
+        {
+            "ruleId": r,
+            "message": {"text": f"{r} here"},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": path}, "region": {"startLine": 7}}}],
+        }
+        for r, path, _ in results
+    ]
+    (d / "rust.sarif").write_text(json.dumps({"version": "2.1.0", "runs": [{"tool": {"driver": {"rules": rules}}, "results": res}]}))
+    return d
+
+
+class CodeQl(unittest.TestCase):
+    def accepted(self, rule="rust/cleartext-logging", path="crates/x/src/a.rs"):
+        return entry(id=rule, eco="codeql", package=path)
+
+    def test_no_alerts_passes(self):
+        with Env(""):
+            rc, out = run("codeql", sarif_dir())
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0 unaccepted", out)
+
+    def test_an_alert_that_is_not_accepted_fails(self):
+        with Env(""):
+            rc, out = run("codeql", sarif_dir(("rust/cleartext-logging", "crates/x/src/a.rs", 7.5)))
+        self.assertEqual(rc, 1)
+        self.assertIn("rust/cleartext-logging", out)
+
+    def test_an_exception_covers_one_rule_in_one_file(self):
+        alerts = sarif_dir(("rust/cleartext-logging", "crates/x/src/a.rs", 7.5))
+        with Env(self.accepted()):
+            self.assertEqual(run("codeql", alerts)[0], 0)
+        with Env(self.accepted(path="crates/x/src/other.rs")):
+            self.assertEqual(run("codeql", alerts)[0], 1)  # another file
+        with Env(self.accepted(rule="rust/hard-coded-cryptographic-value")):
+            self.assertEqual(run("codeql", alerts)[0], 1)  # another rule
+
+    def test_an_expired_exception_fails_the_scan_again(self):
+        alerts = sarif_dir(("rust/cleartext-logging", "crates/x/src/a.rs", 7.5))
+        with Env(self.accepted()):
+            self.assertEqual(run("codeql", alerts, today=dt.date(2027, 1, 16))[0], 1)
+
+    def test_the_threshold_is_medium_by_default_and_can_be_raised(self):
+        alerts = sarif_dir(("js/some-rule", "a.js", 5.0))
+        with Env(""):
+            self.assertEqual(run("codeql", alerts)[0], 1)
+            self.assertEqual(run("codeql", alerts, "--fail-on", "high")[0], 0)
+
+    def test_a_directory_without_sarif_is_an_error_not_a_pass(self):
+        with Env(""):
+            self.assertEqual(run("codeql", tempfile.mkdtemp())[0], 2)
+
+    def test_rule_ids_are_valid_exception_ids(self):
+        excs, problems = se.parse_exceptions(self.accepted(rule="js/server-side-unvalidated-url-redirection"))
+        self.assertEqual(problems, [])
+        _, problems = se.parse_exceptions(self.accepted(rule="not a rule"))
+        self.assertTrue(any("not a RUSTSEC/GHSA" in p for p in problems))
 
 
 class BrokenReports(unittest.TestCase):

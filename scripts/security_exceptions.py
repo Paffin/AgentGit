@@ -11,6 +11,8 @@ reason and an expiry date (docs/operations/supply-chain.md):
                                           pip-audit reports no severity)
   security_exceptions.py go   REPORT      `govulncheck -format json` (fails on any vulnerability whose vulnerable
                                           function is reachable from our code and not accepted)
+  security_exceptions.py codeql DIR       the SARIF files CodeQL wrote (fails on a medium or worse alert that is
+                                          not accepted; an accepted one names the rule id and the file)
 
 Exit status: 0 clean, 1 findings or an invalid exceptions file, 2 the report could not be read (a scanner that
 crashed must never look like a clean scan).
@@ -37,13 +39,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 EXCEPTIONS = ROOT / "security" / "exceptions.toml"
 DENY = ROOT / "deny.toml"
 
-ECOSYSTEMS = ("rust", "npm", "python", "go")
+ECOSYSTEMS = ("rust", "npm", "python", "go", "codeql")
 MAX_LIFETIME_DAYS = 92
 SOON_DAYS = 14
 FIELDS = ("id", "ecosystem", "package", "scope", "reason", "owner", "added", "expires")
 # npm audit severities, lowest to highest.
 NPM_SEVERITIES = ("info", "low", "moderate", "high", "critical")
-ID_PATTERN = re.compile(r"^(RUSTSEC-\d{4}-\d{4}|GHSA(-[0-9a-z]{4}){3}|PYSEC-\d{4}-\d+|GO-\d{4}-\d+|CVE-\d{4}-\d+)$")
+# CodeQL alert severities (scripts/codeql_summary.py), lowest to highest.
+CODEQL_SEVERITIES = ("low", "medium", "high", "critical")
+ID_PATTERN = re.compile(
+    r"^(RUSTSEC-\d{4}-\d{4}|GHSA(-[0-9a-z]{4}){3}|PYSEC-\d{4}-\d+|GO-\d{4}-\d+|CVE-\d{4}-\d+"
+    r"|(rust|js|py|go|java|cpp|cs|rb|swift|actions)/[a-z0-9-]+)$"  # a CodeQL rule id
+)
 
 
 class ReportError(Exception):
@@ -250,6 +257,24 @@ def pip_findings(text: str) -> list[Finding]:
     return out
 
 
+def codeql_findings(directory: pathlib.Path) -> list[Finding]:
+    """Alerts of the SARIF files in `directory`, one per rule and file (an exception names the rule and the file)."""
+    import codeql_summary  # the SARIF reader, next to this script
+
+    files = sorted(directory.glob("*.sarif")) if directory.is_dir() else []
+    if not files:
+        raise ReportError(f"no SARIF files in {directory}: the analysis did not write results")
+    seen: dict[tuple[str, str], Finding] = {}
+    for f in files:
+        try:
+            doc = json.loads(f.read_text())
+        except json.JSONDecodeError as e:
+            raise ReportError(f"{f} is not JSON: {e}") from e
+        for r in codeql_summary.findings(doc):
+            seen.setdefault((r["rule"], r["path"]), Finding("codeql", r["path"], (r["rule"],), r["severity"], r["message"]))
+    return list(seen.values())
+
+
 def go_messages(text: str):
     """The concatenated JSON values of `govulncheck -format json` (a stream, not an array)."""
     dec = json.JSONDecoder()
@@ -355,6 +380,17 @@ def cmd_scan(kind: str, report_path: pathlib.Path, today: dt.date, fail_on: str)
         for p in problems:
             say("error", "security/exceptions.toml", p)
         return 1
+    if kind == "codeql":
+        findings = codeql_findings(report_path)
+        floor = CODEQL_SEVERITIES.index(fail_on)
+
+        def counts(f: Finding) -> bool:
+            return CODEQL_SEVERITIES.index(f.severity) >= floor
+
+        label = "CodeQL"
+        bad, ok = judge(findings, excs, today, counts)
+        stale(excs, "codeql", {i for f in findings for i in f.ids})
+        return report(label, bad, ok, [f for f in findings if not counts(f)])
     text = _read(report_path)
     if kind == "npm":
         findings = npm_findings(text)
@@ -389,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
     npm = sub.add_parser("npm")
     npm.add_argument("report", type=pathlib.Path)
     npm.add_argument("--fail-on", choices=NPM_SEVERITIES, default="high")
+    codeql = sub.add_parser("codeql")
+    codeql.add_argument("report", type=pathlib.Path, help="directory of the .sarif files")
+    codeql.add_argument("--fail-on", choices=CODEQL_SEVERITIES, default="medium")
     for name in ("pip", "go"):
         sub.add_parser(name).add_argument("report", type=pathlib.Path)
     args = ap.parse_args(argv)

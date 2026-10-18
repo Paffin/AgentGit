@@ -40,3 +40,77 @@ reason = "Same package and the same reasoning as GHSA-5gmw-xhrv-c9v3: options of
 owner = "maintainers"
 added = "2026-10-17"
 expires = "2027-01-15"
+
+# --- CodeQL (ecosystem "codeql": id is the rule, package the file) ----------------------------------------------------
+# The gate is `security_exceptions.py codeql` in .github/workflows/codeql.yml: a medium or worse alert fails the job unless
+# it is listed here. All four below are in test tooling, not in anything shipped, and were read, not assumed.
+
+[[exception]]
+id = "py/clear-text-logging-sensitive-data"
+ecosystem = "codeql"
+package = "scripts/s3_test_setup.py"
+scope = "test tooling: run by scripts/s3-test.sh against a moto server that script starts and discards"
+reason = "The script creates an IAM user on a throw-away moto server and prints that user's access key pair, because printing it is the interface: s3-test.sh reads it into the environment of the test run. The credentials exist only for that server. A rewrite that hands them over through a file would stop the alert but not make a real secret safer."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "js/file-access-to-http"
+ecosystem = "codeql"
+package = "apps/web/e2e/support/http.ts"
+scope = "test tooling: the end-to-end suite's HTTP client, apps/web/e2e"
+reason = "The base URL and the tokens come from the state file the global setup of the same run wrote into its own runtime directory (state.ts); the file is not input from anywhere else, and the suite only ever talks to the ag-server it started on 127.0.0.1."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "js/http-to-file-access"
+ecosystem = "codeql"
+package = "apps/web/e2e/support/state.ts"
+scope = "test tooling: the end-to-end suite's shared state, apps/web/e2e"
+reason = "The global setup writes the tokens and URLs it has just received from the server it started into its own runtime directory, a fixed path under apps/web/e2e, for the test workers to read. The data decides the file's content, never its name or location."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "js/server-side-unvalidated-url-redirection"
+ecosystem = "codeql"
+package = "apps/web/e2e/support/idp.ts"
+scope = "test tooling: the fake OIDC identity provider of the end-to-end suite, apps/web/e2e"
+reason = "Every redirect target is checked first against the one registered redirect URI pattern (^http://127.0.0.1:PORT/auth/callback$ at the authorize endpoint, the login form and the logout endpoint); CodeQL does not treat a regular-expression test as a barrier. The IdP listens on loopback for the duration of one test run."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "rust/cleartext-logging"
+ecosystem = "codeql"
+package = "crates/ag-mcp/src/sanitize.rs"
+scope = "unit test of the credential scrubber (the alert is on an assertion message inside #[cfg(test)])"
+reason = "The string in the assertion message is what scrub_secrets returned for a made-up token: the output of the redaction, which the test is asserting contains no credential. CodeQL sees a value derived from a variable named like a token flowing to a message; no production path logs it."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "rust/cleartext-logging"
+ecosystem = "codeql"
+package = "crates/ag-sandbox/tests/common/mod.rs"
+scope = "test helper of the sandbox isolation suites"
+reason = "`secret_str` is the path of a temporary directory that the isolation tests hide from the sandbox, and the assertion message prints it when a probe fails. It is not a secret; the name is the tests' own."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"
+
+[[exception]]
+id = "rust/cleartext-logging"
+ecosystem = "codeql"
+package = "crates/ag-sandbox/tests/isolation.rs"
+scope = "sandbox isolation suite"
+reason = "Same as crates/ag-sandbox/tests/common/mod.rs: `secret_str` is a temporary directory path used as the probe target, printed only in a failed assertion."
+owner = "maintainers"
+added = "2026-10-18"
+expires = "2027-01-16"

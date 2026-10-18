@@ -65,8 +65,8 @@ func TestOrchestratorNeverIntegrates(t *testing.T) {
 		if d.IsDir() {
 			switch rel {
 			case ".git", "internal/agwp", "internal/testutil", "integration":
-				// the client library holds the operations on purpose; the fake server and the
-				// integration tests play the humans and the server
+				// the client library holds the operations on purpose; the test harness and the
+				// integration tests play the humans (and start the real server)
 				return filepath.SkipDir
 			}
 			return nil

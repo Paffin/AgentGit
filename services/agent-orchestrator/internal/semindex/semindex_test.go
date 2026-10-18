@@ -63,7 +63,7 @@ func newHarness(t *testing.T, mut func(*config.Repo)) *harness {
 
 func (h *harness) newComponent() *Component {
 	c, err := New(Options{Repo: h.cfg, API: h.client, Store: h.store, Metrics: h.metrics, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Loop: config.Loop{Reconcile: time.Minute},
-		Judge: h.judge, JudgeRetry: 30 * time.Millisecond})
+		Judge: h.judge, JudgeRetry: 800 * time.Millisecond})
 	if err != nil {
 		h.t.Fatal(err)
 	}

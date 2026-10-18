@@ -219,8 +219,8 @@ func (r LLMReviewer) Review(ctx context.Context, c Change) (*ModelReview, error)
 			details = append(details, d)
 		}
 		loc := ""
-		if p := strings.TrimSpace(f.Path); p != "" {
-			if known[p] {
+		if p, ok := resolvePath(known, strings.TrimSpace(f.Path)); p != "" || !ok {
+			if ok {
 				loc = p
 				if f.Line > 0 && f.Line < 10_000_000 {
 					loc = fmt.Sprintf("%s:%d", p, f.Line)
@@ -233,4 +233,34 @@ func (r LLMReviewer) Review(ctx context.Context, c Change) (*ModelReview, error)
 		out.Findings = append(out.Findings, Finding{Kind: KindModel, Severity: sev, Title: title, Details: details})
 	}
 	return out, nil
+}
+
+// resolvePath maps the path a model names onto a path of the change: exactly, without a diff prefix (a/, b/, ./),
+// or as the tail of exactly one changed path ("users.go" for "store/users.go"). An empty path is no path (and
+// ok); a path that matches nothing, or is ambiguous, is not located (ok false).
+func resolvePath(known map[string]bool, p string) (string, bool) {
+	if p == "" {
+		return "", true
+	}
+	for _, pre := range []string{"a/", "b/", "./"} {
+		if !known[p] && strings.HasPrefix(p, pre) {
+			p = strings.TrimPrefix(p, pre)
+		}
+	}
+	if known[p] {
+		return p, true
+	}
+	found := ""
+	for k := range known {
+		if strings.HasSuffix(k, "/"+p) {
+			if found != "" {
+				return p, false // ambiguous
+			}
+			found = k
+		}
+	}
+	if found != "" {
+		return found, true
+	}
+	return p, false
 }

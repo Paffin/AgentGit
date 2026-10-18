@@ -1,0 +1,42 @@
+# The same platform with a language model behind the advisor, the reviewers and the semantic index
+# (see "Model-backed components" in docs/guides/orchestrator.md).
+#
+# Nothing here is a default of any vendor: the endpoint, the model and the NAME of the variable that holds the
+# key are yours. The key itself is never written in this file (a value that looks like one is refused).
+server:
+  url: http://127.0.0.1:18090
+
+listen: 127.0.0.1:19090
+state_dir: /var/lib/orchestrator
+
+llm:
+  base_url: https://openrouter.ai/api/v1  # any OpenAI-compatible API root; "/chat/completions" is appended
+  model: openai/gpt-4o-mini               # your choice; a cheap model is enough for comments
+  api_key_env: AG_LLM_KEY                 # the NAME of the variable. Leave it out behind a gateway that adds the credential
+  timeout: 60s
+  retries: 3
+  max_output_tokens: 1500
+  max_input_bytes: 120000                 # a larger request is refused before anything is sent
+  budget:
+    requests_per_hour: 200                # 0 = unlimited
+    tokens_per_day: 2000000
+
+repos:
+  - name: acme/web
+    stream: main
+    advisor:
+      mode: model                         # rules decide what is worth asking; the model proposes a resolution
+      model_file_bytes: 24000
+    review:
+      mode: model                         # secret, size and path checks always run; the model adds its own section
+      model_diff_bytes: 40000
+    index:
+      mode: model                         # the static severity of an overlap stays; the model adds its assessment
+      judge_pairs_per_pass: 3
+
+executors:
+  - name: docs-bot
+    type: command
+    command: ["/opt/orchestrator/docs-bot"]
+    pass_env: [PATH]
+    heartbeat: 5s

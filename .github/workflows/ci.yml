@@ -261,6 +261,9 @@ jobs:
   orchestrator:
     name: agent orchestrator (Go)
     runs-on: ubuntu-latest
+    env:
+      AG_LLM_LIVE_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AG_LLM_LIVE_MODEL: ${{ vars.AG_LLM_MODEL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -280,6 +283,15 @@ jobs:
           go vet ./...
           test -z "$(gofmt -l .)"
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race ./...
+      # The model-backed advisor, reviewer and index judge against a real endpoint: opt-in (it costs money). Runs on a
+      # push only when the repository defines the OPENROUTER_API_KEY secret and the AG_LLM_MODEL variable.
+      - name: model-backed components against a real model (only when a key and a model are configured)
+        if: ${{ github.event_name == 'push' && env.AG_LLM_LIVE_KEY != '' && env.AG_LLM_LIVE_MODEL != '' }}
+        working-directory: services/agent-orchestrator
+        env:
+          AG_LLM_LIVE: "1"
+          AG_LLM_LIVE_KEY_ENV: AG_LLM_LIVE_KEY
+        run: AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -count=1 -v -run 'Live' ./internal/llm ./internal/advisor ./internal/review ./internal/semindex ./internal/app
       # The worked example of docs/guides/orchestrator.md is a script: it must keep running against a real ag-server
       # (it builds the demo agent, files tasks, runs the orchestrator, plays the people, checks policy refusals).
       - name: the worked example runs end to end

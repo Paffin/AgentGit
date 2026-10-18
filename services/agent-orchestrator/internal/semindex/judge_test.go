@@ -175,7 +175,7 @@ func TestAFailedPairIsTriedAgainAfterTheDelay(t *testing.T) {
 	if srv.Count() != 1 {
 		t.Fatalf("%d requests; the failed pair must wait", srv.Count())
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(900 * time.Millisecond)
 	if err := h.comp.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}

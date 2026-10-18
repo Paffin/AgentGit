@@ -223,7 +223,7 @@ func TestBadAnswersLeaveTheHeuristicReviewAndSaySo(t *testing.T) {
 
 func TestAFailedModelIsAskedAgainLaterAndTheSecondCommentCarriesIt(t *testing.T) {
 	h := newHarness(t, false)
-	h.c.o.ModelRetry = 20 * time.Millisecond
+	h.c.o.ModelRetry = 800 * time.Millisecond // long enough that a loaded machine cannot reach it between two quick passes
 	srv := testutil.NewLLMServer(t, func(r testutil.LLMRequest) testutil.LLMReply {
 		if r.N == 1 {
 			return testutil.LLMReply{Status: 503, Text: "overloaded"}
@@ -240,7 +240,7 @@ func TestAFailedModelIsAskedAgainLaterAndTheSecondCommentCarriesIt(t *testing.T)
 	if srv.Count() != 1 {
 		t.Fatalf("the model was asked again after %d requests, before the retry time", srv.Count())
 	}
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(900 * time.Millisecond)
 	h.reconcile()
 	rs := h.reviews(id)
 	if len(rs) != 2 || !strings.Contains(rs[1].Body, "Hard-coded key") || srv.Count() != 2 {

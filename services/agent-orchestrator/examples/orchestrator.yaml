@@ -38,6 +38,9 @@ repos:
     review:
       max_files: 40
       max_lines: 1500
+    # The advisor, the reviewers and the index are heuristics unless you say otherwise (mode: heuristic is the
+    # default). To let a language model read the diffs and propose resolutions, set `mode: model` on advisor,
+    # review and/or index and fill in the llm section: see examples/orchestrator-model.yaml.
 
 executors:
   # Your agent: any program that edits a workspace and opens a proposal (see the executor contract in the README).

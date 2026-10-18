@@ -137,6 +137,27 @@ func TestTheShippedExampleConfigurationIsValid(t *testing.T) {
 	}
 }
 
+// The model-mode example is valid when its key variable is set, and says so plainly when it is not.
+func TestTheModelModeExampleIsValidOnlyWithItsKeyVariable(t *testing.T) {
+	const path = "../../examples/orchestrator-model.yaml"
+	cfg, err := config.Load(path, env(map[string]string{"AG_ORCH_TOKEN": "x", "AG_LLM_KEY": "k"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cfg.Repos[0]
+	if !cfg.UsesModel() || r.Advisor.Mode != config.ModeModel || r.Review.Mode != config.ModeModel || r.Index.Mode != config.ModeModel {
+		t.Fatalf("modes = %+v", r)
+	}
+	_, err = config.Load(path, env(map[string]string{"AG_ORCH_TOKEN": "x"}))
+	if err == nil || !strings.Contains(err.Error(), "AG_LLM_KEY") {
+		t.Fatalf("err = %v", err)
+	}
+	// the effective configuration names the variable and never a key
+	if code, out, errs := exec(t, env(map[string]string{"AG_LLM_KEY": "sk-secret-value-123456"}), "config", "-config", path); code != 0 || !strings.Contains(out, "AG_LLM_KEY") || strings.Contains(out, "sk-secret-value-123456") {
+		t.Fatalf("config: %d %s %s", code, out, errs)
+	}
+}
+
 func TestOpsCanBePrintedAsMintFlags(t *testing.T) {
 	p := writeConfig(t, "http://127.0.0.1:1")
 	code, out, errs := exec(t, env(nil), "ops", "-config", p, "-for", "reviewer", "-flags")

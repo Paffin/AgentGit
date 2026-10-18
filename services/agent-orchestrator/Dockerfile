@@ -5,10 +5,9 @@
 # Build from this directory:
 #     docker build -t agentgit/agent-orchestrator:dev .
 #
-# NOTE: this Dockerfile has not been built by its authors (the machine it was
-# written on has a Docker client but no daemon). The Go build it runs is the one
-# the tests exercise; the image-specific parts (base image names, the nonroot
-# user, ownership of the state directory) are standard but unverified.
+# CI builds this image on every push (the "agent orchestrator (Go)" job, step "the
+# image builds and starts"): it must report the version it was given and read the
+# example configuration. Running it with a real server is not part of that step.
 
 FROM golang:1.27 AS build
 WORKDIR /src

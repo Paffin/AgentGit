@@ -23,9 +23,10 @@ with least-privilege credentials.
 | Scheduler | per-repository view of tasks; event-driven plus a periodic reconcile; concurrency limits; oldest ready task first; **conflict-aware placement** (leases, running sessions, work that has not landed, open proposals' files, the server's overlap prediction); retries with backoff | `internal/scheduler` |
 | Sessions | register the agent and its key, start a run on its behalf, mint a scoped credential, take a lease on the task scope, launch an executor, supervise it (heartbeats, timeout, capped output, SIGTERM then kill of the whole process group), complete the run, release leases, revoke the credential | `internal/session` |
 | Execution scheduler | keeps every open proposal prepared (`integration.prepare` with validations enqueued), tracks four independent states per proposal (mergeable, validated, approved, integrated) | `internal/execsched` |
-| Advisor | for conflicting proposals, deterministic rule-based suggestions (whitespace only, both sides extended the same list, neighbouring edits, ...) posted as one `comment` review; behind an `Advisor` interface so a smarter one can replace it; never applied automatically | `internal/advisor` |
-| Reviewers | deterministic checks on each proposal head posted as `comment` reviews: likely secrets, protected paths, oversized change, source without tests, generated or binary churn | `internal/review` |
-| Semantic index | incremental symbol index of the stream (Go, Rust, Python, TypeScript, JavaScript), an HTTP query API, and symbol-level overlap between open proposals; bounded memory and disk | `internal/semindex` |
+| Advisor | for conflicting proposals, suggestions posted as one `comment` review; never applied automatically. `advisor.mode: heuristic` (default): deterministic rules (whitespace only, both sides extended the same list, neighbouring edits, ...). `model`: a language model proposes a resolution for what the rules are not sure of ([model mode](#model-mode-optional)) | `internal/advisor` |
+| Reviewers | checks on each proposal head posted as `comment` reviews. Always: likely secrets, protected paths, oversized change, source without tests, generated or binary churn (heuristics). `review.mode: model` adds a clearly separated section with a language model's reading of the diff | `internal/review` |
+| Semantic index | incremental symbol index of the stream (Go, Rust, Python, TypeScript, JavaScript), an HTTP query API, and symbol-level overlap between open proposals; bounded memory and disk. `index.mode: model` adds a language model's assessment (conflict or compatible) beside the static severity of each overlap | `internal/semindex` |
+| Model client | provider-agnostic OpenAI-compatible chat-completions client shared by the three above: configurable endpoint, model and key variable name, timeouts, retries, request and token budgets, fenced prompts, validated answers | `internal/llm` |
 | Admin | `/healthz`, `/readyz`, `/metrics`, `/status`, structured logs, graceful shutdown, `check` and `ops` commands | `internal/app`, `cmd/orchestrator` |
 
 ```mermaid
@@ -85,6 +86,7 @@ services/agent-orchestrator/
     events/                per-repository event hub (replay + SSE, resume by sequence number)
     scheduler/ session/    task scheduling and agent sessions (command executors)
     execsched/ advisor/ review/ semindex/
+    llm/                   OpenAI-compatible chat client (budgets, retries, fenced prompts, strict JSON answers)
     textdiff/ glob/ secret/ metrics/ clock/ loop/   small support packages
     testutil/              shared test harness: the REAL ag-server, a world on it (repository, people, CI worker),
                            a fault-injecting forwarding proxy; testutil/testagent is a test-only agent program
@@ -149,6 +151,20 @@ server:
   max_response_bytes: 67108864             # bound on one response body the client reads (64 MiB)
   allow_insecure_remote: false             # permit plain http to a non-loopback host (credentials in the clear!)
 
+llm:                                       # only read when a component below has mode: model (see "Model mode")
+  base_url: https://openrouter.ai/api/v1   # API root; "/chat/completions" is appended. No default: the endpoint is yours
+  model: vendor/model-id                   # required in model mode. No default
+  api_key_env: AG_LLM_KEY                  # the NAME of the variable holding the key; empty: no Authorization header (a gateway adds it)
+  timeout: 60s                             # per attempt
+  retries: 3                               # after the first attempt, 0..8 (honours Retry-After; backoff with jitter)
+  max_output_tokens: 1500
+  max_input_bytes: 120000                  # a larger request is refused before anything is sent
+  temperature: 0
+  json_mode: false                         # ask for response_format json_object (not every model supports it)
+  concurrency: 2
+  budget: {requests_per_hour: 200, tokens_per_day: 2000000}   # 0 = unlimited; counters restart with the process
+  # ca_file, headers (non-secret only; never Authorization), allow_insecure_remote (plain http to a non-loopback host)
+
 listen: 127.0.0.1:9090                     # admin API (AG_ORCH_LISTEN)
 admin:
   token_env: AG_ORCH_ADMIN                 # bearer token for /status, /metrics, /advisor, /index; REQUIRED when listen is not loopback
@@ -174,9 +190,12 @@ repos:
       routes:                              # first match wins; all given matchers must match
         - {executor: docs-bot, title: "^docs:", scope: "docs/**"}
     validations: {enabled: true, enqueue: true, refresh: 15s, recent: 20, jobs_limit: 200}   # execution scheduler; enqueue asks the server to queue validation jobs
-    advisor: {enabled: true, inline_bytes: 16384, max_file_bytes: 1048576, max_paths: 20}
+    advisor: {enabled: true, mode: heuristic, inline_bytes: 16384, max_file_bytes: 1048576, max_paths: 20, model_file_bytes: 24000}   # mode: heuristic | model
     review:
       enabled: true
+      mode: heuristic                      # heuristic | model (adds a model section; the checks below always run)
+      model_diff_bytes: 40000              # model mode: bound on the diff text in the prompt
+      model_max_findings: 8                # model mode: findings taken from one answer
       max_files: 40
       max_lines: 1500
       secrets: true
@@ -189,6 +208,9 @@ repos:
       import_file_bytes: 131072            # ... of at most this size; the rest is reported as "not inspected" in the comment
     index:
       enabled: true
+      mode: heuristic                      # heuristic | model (a model assesses the overlaps the static analysis finds)
+      judge_patch_bytes: 30000             # model mode: bound on the diff text in the prompt
+      judge_pairs_per_pass: 3              # model mode: pairs assessed per pass
       max_file_bytes: 262144               # larger files are not indexed (nor read when analysing an open proposal)
       max_files: 5000
       proposal_max_files: 30               # files of one open proposal that are read for the symbol analysis (the rest: partial)
@@ -268,6 +290,60 @@ revokes the credential. A run whose supervisor is gone (orchestrator crash) is f
 and ended by the server (`agent.reap_runs`, audited under the orchestrator) as abandoned; the server
 releases its leases and revokes its credentials when a run ends.
 
+## Model mode (optional)
+
+Each of the advisor, the reviewers and the semantic index has a `mode`. **`heuristic` is the default**: fixed
+rules and keyword matching, deterministic, free, and honest about what they are (the comments and `/status` say
+`rules/1` / "heuristic"). `model` puts a language model behind the *same interface* in addition to them; nothing
+else in the service changes. It needs no vendor: the `llm` section names any **OpenAI-compatible
+`/chat/completions` endpoint**, the model, and the **name** of the environment variable that holds the key. There
+is no default endpoint, model or key, and a key pasted into the file is refused (and never echoed).
+
+What a model is, and is not, allowed to do:
+
+- **It only proposes.** Its output is text in a `comment` review (the advisor's suggested file, the reviewer's
+  findings, the index's assessment). It cannot approve, request changes, integrate, close or change anything; the
+  structural test that forbids those calls covers the model-backed code too.
+- **Repository text is untrusted.** Every piece of it (titles, descriptions, diffs, file versions) is placed in the
+  prompt between delimiters with a random per-request id, the system prompt says that nothing inside them is an
+  instruction, and the id is removed from the content so it cannot forge an end marker
+  (`TestThePromptFencesRepositoryTextAsUntrusted`).
+- **Bounded.** A prompt is cut to configured bounds (`model_file_bytes`, `model_diff_bytes`, `judge_patch_bytes`),
+  refused outright above `llm.max_input_bytes`, limited by concurrency, a requests-per-hour and a tokens-per-day
+  budget, a timeout per attempt and a bounded number of retries (429 and 5xx, `Retry-After` honoured, jittered
+  backoff). A budget that is used up is an error with an honest note, not a silent retry loop.
+- **Secrets stay home.** Text that looks like a secret is masked before it leaves the machine, and a file
+  containing one is not sent to the advisor at all. The key is read from its variable into a type that never
+  prints, goes only into the `Authorization` header, and is scrubbed from every error, log and `/status`.
+- **Answers are validated.** One JSON object of a fixed shape; unknown verdicts, severities or paths, a
+  resolution with conflict markers or over the size bound, an empty explanation, a reply cut off by the output
+  bound: all are rejected, and the heuristic answer stands with a note saying that the model was asked and why its
+  answer was not used. A model's confidence is never rated above `medium`; its suggestion lists the lines it dropped
+  from either side or invented.
+- **Honest labels.** The comment says which parts were written by which model and that nothing has verified them.
+  The advisor still decides with its rules which files are worth asking about (a mechanical resolution the rules
+  are sure of is never put to the model), and the index keeps its static severity next to the model's assessment.
+- **Repeatable.** A model's text differs from run to run, so its comments are recognised by what they answer
+  (the conflict, or the heuristic findings plus the model's name), not by their text: a restart does not post
+  the same advice twice.
+
+`/status` shows the model, the endpoint and the totals (requests, failures, tokens, last hour and day);
+`/metrics` has `orchestrator_llm_requests_total{purpose,outcome}`, `orchestrator_llm_tokens_total` and
+`orchestrator_llm_request_seconds_total`.
+
+How it is tested, in three layers:
+
+1. **Test double of a third-party API** (`testutil.LLMServer`, an `httptest` server): scripted answers to check what
+   is *sent* (fencing, bounds, masking, no key in the body) and what is done with what *comes back* (validation,
+   fallbacks, retries, budgets, the stable markers). It is named here because a model cannot run in a test; it is not
+   evidence of what a real model does. The proposals, conflicts and diffs in these tests are the real server's.
+2. **Live, opt-in** (`AG_LLM_LIVE=1` and `AG_LLM_LIVE_MODEL`, optionally `AG_LLM_LIVE_BASE_URL` and
+   `AG_LLM_LIVE_KEY_ENV`): the client, the advisor on a real conflicting proposal, the reviewer on a real defective
+   proposal, the index judge on two real overlapping proposals and the whole application, against a real endpoint
+   and a real `ag-server`. The transcript (prompt shapes, replies, token use) is logged. CI runs them on a push
+   when the repository defines the `OPENROUTER_API_KEY` secret and the `AG_LLM_MODEL` variable.
+3. The exact record of a live run is in [the guide](../../docs/guides/orchestrator.md#model-backed-components-optional).
+
 ## Security model
 
 - **Identity.** The service authenticates as `service:orchestrator` (and `service:reviewer`,
@@ -330,7 +406,9 @@ go test -race ./...            # unit tests for every package, plus the integrat
   model and is never shipped) and a **forwarding proxy** in front of the real server that records requests and
   injects the failures a healthy server cannot produce on demand (a 500, a dropped connection, a cut event
   stream, an older server's capability answer). Everything the proxy does not break reaches the real server.
-  The fake clock (for backoff and refresh timers) is the only other substitute.
+  The fake clock (for backoff and refresh timers) is the only other substitute, apart from the model double
+  described under [Model mode](#model-mode-optional) (`testutil.LLMServer`, a double of a third-party API; live
+  tests with a real model are opt-in via `AG_LLM_LIVE=1`).
 - **Integration suite** (`integration/`, Linux): starts the **real `ag-server` binary** for every test on a
   free loopback port in a temporary directory (`AG_BOOTSTRAP_TOKEN=... ag-server serve --data-dir ... --listen
   ...`), always kills it, and drives the orchestrator through it. The binary is taken from `$AG_SERVER_BIN`, then
@@ -368,16 +446,21 @@ These are findings, not complaints; each is covered or handled as described.
 
 ## What has not been verified
 
-- The Dockerfile has **not been built**: the machine it was written on has a Docker client but no daemon. The
-  Go build it runs is the one the tests exercise.
+- The Docker image is built in CI on every push (it must print the version it was given and read the example
+  configuration). It has not been run against a real server inside a container, and no multi-architecture image is
+  published from here.
 - Non-Linux platforms: the packages compile for macOS and Windows (`go build` with `GOOS` set), but sessions
   there are untested; process-group handling is Unix-specific and the integration suite is Linux-only.
 - Credential renewal of a very long session is not implemented (an agent session is capped at 55 minutes by
   design); a service credential expiring while the service runs is detected and logged, not renewed.
-- The advisor and reviewers are **deterministic heuristics**. They are useful and explainable, not
-  exhaustive: the secret detector can miss a secret and can flag a non-secret; the semantic index is a
-  line-based extractor, not a language server. No model-backed advisor exists; the `Advisor` interface is
-  where one would plug in.
+- In `heuristic` mode (the default) the advisor and reviewers are **deterministic heuristics**. They are useful
+  and explainable, not exhaustive: the secret detector can miss a secret and can flag a non-secret; the semantic
+  index is a line-based extractor, not a language server.
+- Model mode was exercised live with **one cheap model** through **one provider** (see the guide for the record). The
+  quality of the advice of other models, long files (above `model_file_bytes` the advisor falls back to the rules),
+  non-English repositories and adversarial repository content beyond the unit-tested prompt injection was not
+  measured. A model's answer can be wrong; every comment says so. The key-in-header path was not exercised live
+  (the sandbox proxy that ran the live tests adds the credential itself); it is covered by the test double only.
 - Behaviour against a server other than the `ag-server` revision the suite ran against, and at scale
   (many repositories, thousands of open proposals), has not been measured.
 

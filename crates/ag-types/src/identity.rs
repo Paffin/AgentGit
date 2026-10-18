@@ -33,8 +33,8 @@ pub enum IdentityError {
     /// Missing or unknown `kind:` prefix.
     #[error("identity must look like 'user:name', 'agent:name', 'service:name' or 'system:name'")]
     BadPrefix,
-    /// The name part is empty or too long.
-    #[error("identity name must be 1..=128 characters")]
+    /// The name part is empty, too long, or starts with the `#` that introduces a run suffix.
+    #[error("identity name must be 1..=128 characters and must not start with '#' (a run suffix follows a name)")]
     BadLength,
     /// The name contains characters outside `[A-Za-z0-9._@#+-]`.
     #[error("identity name may only contain letters, digits and '._@#+-'")]
@@ -43,9 +43,10 @@ pub enum IdentityError {
 
 /// Who performed an action: `kind:name`.
 ///
-/// The name is restricted to `[A-Za-z0-9._@#+-]`, 1 to 128 characters, so an
-/// identity can always be embedded in logs, paths and signed payloads
-/// without escaping. Agent runs use the form `agent:name#run`.
+/// The name is restricted to `[A-Za-z0-9._@#+-]`, 1 to 128 characters, and does
+/// not start with `#`, so an identity can always be embedded in logs, paths and
+/// signed payloads without escaping and its [principal](Identity::principal) is
+/// itself an identity. Agent runs use the form `agent:name#run`.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Identity(String);
 
@@ -58,6 +59,11 @@ impl Identity {
             return Err(IdentityError::BadPrefix);
         }
         if name.is_empty() || name.len() > 128 {
+            return Err(IdentityError::BadLength);
+        }
+        // What precedes the first '#' is the principal's name: `agent:#run1` would have the principal `agent:`,
+        // which is not an identity, and every such run would share it.
+        if name.starts_with('#') {
             return Err(IdentityError::BadLength);
         }
         if !name.chars().all(|c| c.is_ascii_alphanumeric() || "._@#+-".contains(c)) {
@@ -344,6 +350,32 @@ mod tests {
         assert_eq!(Identity::new("user:"), Err(IdentityError::BadLength));
         assert_eq!(Identity::new("user:a b"), Err(IdentityError::BadChar));
         assert_eq!(Identity::new("user:a\nb"), Err(IdentityError::BadChar));
+    }
+
+    #[test]
+    fn a_name_cannot_start_with_the_run_separator() {
+        // Its principal would be "agent:", which is not an identity; all such runs would share it.
+        for bad in ["agent:#run1", "user:#", "agent:#x#y", "service:#a"] {
+            assert_eq!(Identity::new(bad), Err(IdentityError::BadLength), "{bad}");
+        }
+        // '#' elsewhere stays valid, including several of them and a trailing one.
+        for ok in ["agent:bot#run1", "agent:a#b#c", "agent:bot#", "user:a#"] {
+            let id = Identity::new(ok).unwrap();
+            assert!(Identity::new(id.principal().as_str()).is_ok(), "{ok}: principal {}", id.principal());
+        }
+    }
+
+    proptest::proptest! {
+        /// Whatever name is accepted, its principal is itself an identity (and a principal is its own principal).
+        #[test]
+        fn the_principal_of_an_identity_is_an_identity(kind in 0usize..4, name in "[A-Za-z0-9._@#+-]{0,40}") {
+            let prefix = ["user", "agent", "service", "system"][kind];
+            if let Ok(id) = Identity::new(format!("{prefix}:{name}")) {
+                let principal = id.principal();
+                proptest::prop_assert!(Identity::new(principal.as_str()).is_ok(), "{} -> {}", id, principal);
+                proptest::prop_assert_eq!(principal.principal(), principal);
+            }
+        }
     }
 
     #[test]

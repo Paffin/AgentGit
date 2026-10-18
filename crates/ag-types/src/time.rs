@@ -19,10 +19,9 @@ impl Timestamp {
         self.0
     }
 
-    /// The current wall-clock time.
+    /// The current wall-clock time. A clock set before 1970 gives a negative timestamp (what it says), not zero.
     pub fn now() -> Self {
-        let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
-        Self(ms)
+        Self(millis_since_epoch(SystemTime::now()))
     }
 
     /// ISO-8601 / RFC 3339 representation in UTC with millisecond precision.
@@ -45,6 +44,22 @@ impl fmt::Display for Timestamp {
 impl fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Timestamp({})", self.to_rfc3339())
+    }
+}
+
+impl From<SystemTime> for Timestamp {
+    /// The instant `t` in Unix milliseconds (negative before 1970, saturating at the `i64` range).
+    fn from(t: SystemTime) -> Self {
+        Self(millis_since_epoch(t))
+    }
+}
+
+/// Signed milliseconds from the epoch to `t`, saturating at the `i64` range (about 292 million years: unreachable
+/// for a real clock, but never a silently wrapped value).
+fn millis_since_epoch(t: SystemTime) -> i64 {
+    match t.duration_since(UNIX_EPOCH) {
+        Ok(after) => i64::try_from(after.as_millis()).unwrap_or(i64::MAX),
+        Err(before) => i64::try_from(before.duration().as_millis()).map(|ms| -ms).unwrap_or(i64::MIN),
     }
 }
 
@@ -72,5 +87,14 @@ mod tests {
         assert_eq!(Timestamp::from_millis(0).to_rfc3339(), "1970-01-01T00:00:00.000Z");
         assert_eq!(Timestamp::from_millis(1_760_659_200_123).to_rfc3339(), "2025-10-17T00:00:00.123Z");
         assert_eq!(Timestamp::from_millis(-1).to_rfc3339(), "1969-12-31T23:59:59.999Z");
+    }
+
+    #[test]
+    fn a_clock_before_the_epoch_is_negative_not_zero() {
+        use std::time::Duration;
+        assert_eq!(millis_since_epoch(UNIX_EPOCH - Duration::from_millis(1500)), -1500);
+        assert_eq!(millis_since_epoch(UNIX_EPOCH), 0);
+        assert_eq!(millis_since_epoch(UNIX_EPOCH + Duration::from_millis(1500)), 1500);
+        assert_eq!(Timestamp::from(UNIX_EPOCH - Duration::from_millis(1)).as_millis(), -1);
     }
 }

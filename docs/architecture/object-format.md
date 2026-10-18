@@ -78,8 +78,8 @@ regardless of the history that produced them. Decoding re-validates ordering and
 
 | Type | Rules |
 |---|---|
-| `RepoPath` | UTF-8, relative, `/`-separated, ≤ 4096 bytes, components ≤ 255; no empty, `.` or `..` components; no NUL/control characters or `\`; no `.git` or `.ag` component (ASCII case-insensitive) |
-| `Identity` | `user:`/`agent:`/`service:`/`system:` + `[A-Za-z0-9._@#+-]{1,128}` |
+| `RepoPath` | UTF-8, relative, `/`-separated, ≤ 4096 bytes, components ≤ 255; no empty, `.` or `..` components; no NUL/control characters or `\`; no `.git` or `.ag` component under any spelling a file system folds into it (ASCII case-insensitive; NTFS trailing dots and spaces, `:` alternate-stream suffixes and `git~N` short names; HFS+ ignorable code points: `crates/ag-types/src/portable.rs`) |
+| `Identity` | `user:`/`agent:`/`service:`/`system:` + `[A-Za-z0-9._@#+-]{1,128}`, not starting with `#` (the part before the first `#` is the principal and must itself be an identity; [ADR-0009](../adr/0009-identity-names-and-principals.md)) |
 | `Namespace` | `[a-z0-9][a-z0-9._-]*` segments separated by `/`, ≤ 128 |
 | `StreamName` | same alphabet as namespace, ≤ 64 |
 | `OperationId` | `[A-Za-z0-9_-]{8,64}` |

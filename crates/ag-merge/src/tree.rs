@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ag_tree::{Change, Entry, Tree};
+use ag_tree::{Change, Entry, Tree, TreeError};
 use ag_types::{BlobId, FileType, Limits, RepoPath};
 
 use crate::rename::detect_renames_in;
@@ -235,7 +235,14 @@ pub(crate) fn merge_incremental(
             (None, None) => None,
         })
         .collect();
-    let Ok(tree) = ours.apply(&ops, limits) else { return Ok(None) };
+    // Only a file/directory collision is meant to hand over to the reference algorithm, which reports it as a
+    // conflict. Every other failure (the merged tree is over the entry limit, or an engine bug made the ops
+    // inconsistent) is an error here: it must never turn into a "clean" merge.
+    let tree = match ours.apply(&ops, limits) {
+        Ok(tree) => tree,
+        Err(TreeError::FileDirectoryConflict { .. }) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
     conflicts.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Some(TreeMerge { tree, conflicts }))
 }
@@ -298,10 +305,17 @@ pub(crate) fn merge_full(
     }
     conflicts.sort_by(|a, b| a.path.cmp(&b.path));
 
-    let tree = match Tree::from_entries(merged.clone(), limits) {
+    let tree = match Tree::from_entries(merged, limits) {
         Ok(t) => t,
-        // Structurally invalid best-effort result: fall back to our tree.
-        Err(_) => ours.clone(),
+        // A file with something beneath it: the FileDirectory conflicts above report it, and the best-effort
+        // tree is ours.
+        Err(TreeError::FileDirectoryConflict { .. }) => {
+            debug_assert!(conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. })));
+            ours.clone()
+        }
+        // Anything else (the merged tree is over the entry limit) has no conflict that describes it, and "ours" would
+        // silently drop everything "theirs" added: it is an error, never a clean result.
+        Err(e) => return Err(e.into()),
     };
     Ok(TreeMerge { tree, conflicts })
 }

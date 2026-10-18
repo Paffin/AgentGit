@@ -19,8 +19,9 @@ pub enum SourceError {
 /// Read access to published changesets, by identifier.
 ///
 /// History algorithms (`ag-dag`, `ag-tree`) are written against this trait
-/// so they work identically over the object store, the metadata index or an
-/// in-memory test fixture.
+/// so they work identically over the object store (`ag_storage::StoreHistory`)
+/// or an in-memory fixture ([`MemoryHistory`]). The metadata index is exposed
+/// through `ag_dag::Graph` instead.
 pub trait ChangesetSource {
     /// Loads and decodes a changeset.
     fn changeset(&self, id: &ChangesetId) -> Result<Arc<Changeset>, SourceError>;

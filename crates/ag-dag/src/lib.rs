@@ -215,8 +215,10 @@ pub fn merge_bases<G: Graph + ?Sized>(g: &G, a: &ChangesetId, b: &ChangesetId) -
             heap.push((g.generation(&p)?, Reverse(p)));
         }
     }
-    let mut candidates: Vec<ChangesetId> =
-        results.into_iter().filter(|id| flags[id] & STALE == 0 || flags[id] & RESULT != 0).collect();
+    // Every entry of `results` is a common ancestor (reached from both sides), but not necessarily a *best* one:
+    // the walk can reach an ancestor of an earlier result from the other side first. The explicit pass below,
+    // not the STALE flag, is what removes those.
+    let mut candidates = results;
     candidates.sort();
     candidates.dedup();
     // Remove redundant candidates (those that are ancestors of another candidate).

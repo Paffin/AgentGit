@@ -606,3 +606,119 @@ mod strategies_agree {
         }
     }
 }
+
+// ---- the entry limit is an error, never a "clean" merge that dropped the other side ----------
+
+mod tight_limits {
+    use super::*;
+    use crate::tree::{merge_full, merge_incremental, plan_renames};
+    use ag_tree::TreeError;
+
+    fn tight(max_tree_entries: usize) -> Limits {
+        Limits { max_tree_entries, ..Limits::default() }
+    }
+
+    fn is_too_many(err: &IoError, entries: usize) -> bool {
+        matches!(err.downcast_ref::<TreeError>(), Some(TreeError::TooManyEntries(n)) if *n == entries)
+    }
+
+    #[test]
+    fn a_union_over_the_limit_is_an_error_in_every_entry_point() {
+        // Ours and theirs are each valid; together they hold 6 entries, the limit is 4.
+        let io = Mem::default();
+        let base = tree(&io, &[("a", "1"), ("b", "1")]);
+        let ours = tree(&io, &[("a", "1"), ("b", "1"), ("o1", "x"), ("o2", "x")]);
+        let theirs = tree(&io, &[("a", "1"), ("b", "1"), ("t1", "y"), ("t2", "y")]);
+        let limits = tight(4);
+
+        let err = merge_trees(&base, &ours, &theirs, &io, &limits).expect_err("not a clean merge of `ours`");
+        assert!(is_too_many(&err, 6), "{err}");
+
+        let (oc, tc) = (base.changes(&ours), base.changes(&theirs));
+        let plan = plan_renames(&base, &ours, &theirs, &oc, &tc, &io).unwrap();
+        let err = merge_full(&base, &ours, &theirs, &plan, &io, &limits).expect_err("the reference algorithm");
+        assert!(is_too_many(&err, 6), "{err}");
+        let err = merge_incremental(&ours, &tc, &plan, &io, &limits).expect_err("the fast path");
+        assert!(is_too_many(&err, 6), "{err}");
+
+        // With room for the union the same inputs merge cleanly and keep both sides' files.
+        let r = merge_trees(&base, &ours, &theirs, &io, &tight(6)).unwrap();
+        assert!(r.is_clean(), "{:?}", r.conflicts);
+        assert_eq!(r.tree.len(), 6);
+        assert!(r.tree.get(&p("o1")).is_some() && r.tree.get(&p("t2")).is_some());
+    }
+
+    #[test]
+    fn a_file_directory_collision_is_still_a_conflict_not_an_error() {
+        // The fallback to `ours` is for this case only, and only because a conflict says why.
+        let io = Mem::default();
+        let base = tree(&io, &[("x", "1")]);
+        let ours = tree(&io, &[("x", "1"), ("d", "file")]);
+        let theirs = tree(&io, &[("x", "1"), ("d/inner", "dir")]);
+        let r = merge_trees(&base, &ours, &theirs, &io, &Limits::default()).unwrap();
+        assert!(r.conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. })), "{:?}", r.conflicts);
+        assert_eq!(r.tree.id(), ours.id(), "the best-effort tree is ours");
+    }
+
+    const PATHS: &[&str] = &["a", "b", "c", "d", "e/x", "e/y", "f", "g/h"];
+
+    fn side() -> impl Strategy<Value = Vec<bool>> {
+        proptest::collection::vec(any::<bool>(), PATHS.len())
+    }
+
+    fn build(io: &Mem, sel: &[bool], body: &str) -> Tree {
+        let entries = PATHS.iter().zip(sel).filter(|(_, on)| **on).map(|(p_, _)| (p(p_), entry(io, body)));
+        Tree::from_entries(entries, &Limits::default()).unwrap()
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(400))]
+
+        /// Whatever the limit, the two strategies agree about whether the merge fits, and a merge that is
+        /// returned always fits: there is no limit at which a side's changes vanish without a word.
+        #[test]
+        fn strategies_agree_on_what_fits(base in side(), ours in side(), theirs in side(), max in 1usize..10) {
+            let io = Mem::default();
+            let (b, o, t) = (build(&io, &base, "same\n"), build(&io, &ours, "ours\n"), build(&io, &theirs, "theirs\n"));
+            let limits = tight(max);
+            let (oc, tc) = (b.changes(&o), b.changes(&t));
+            let plan = plan_renames(&b, &o, &t, &oc, &tc, &io).unwrap();
+            let full = merge_full(&b, &o, &t, &plan, &io, &limits);
+            let fast = merge_incremental(&o, &tc, &plan, &io, &limits);
+            match (&fast, &full) {
+                (Ok(Some(f)), Ok(full)) => {
+                    prop_assert_eq!(f.tree.id(), full.tree.id());
+                    prop_assert_eq!(&f.conflicts, &full.conflicts);
+                    prop_assert!(full.tree.len() <= max);
+                }
+                // The fast path hands over only a file/directory collision, and the reference then reports it.
+                (Ok(None), Ok(full)) => prop_assert!(
+                    full.conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. })),
+                    "declined without a structural conflict"
+                ),
+                (Err(_), Err(_)) => {}
+                (fast, full) => prop_assert!(
+                    false,
+                    "disagree: fast {:?}, full {:?}",
+                    fast.as_ref().map(|r| r.is_some()),
+                    full.as_ref().map(|_| ())
+                ),
+            }
+            if let Ok(merged) = merge_trees(&b, &o, &t, &io, &limits) {
+                prop_assert!(merged.tree.len() <= max);
+            }
+        }
+    }
+}
+
+#[test]
+fn algorithm_version_embeds_the_diff_version() {
+    // The tag is an explicit literal on purpose (changing it changes the ids of merge changesets); this keeps it
+    // from going stale when the diff algorithm's version is bumped.
+    assert!(
+        crate::ALGORITHM_VERSION.ends_with(&format!("+{}", ag_diff::ALGORITHM_VERSION)),
+        "bump ag-merge's ALGORITHM_VERSION when ag-diff's changes: {} vs {}",
+        crate::ALGORITHM_VERSION,
+        ag_diff::ALGORITHM_VERSION
+    );
+}

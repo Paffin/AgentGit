@@ -10,16 +10,22 @@
 //! (`ours == theirs` → that; `ours == base` → theirs; `theirs == base` →
 //! ours). When both sides changed a path differently:
 //!
-//! | situation                              | result                         |
-//! |----------------------------------------|--------------------------------|
-//! | both regular files, text               | line merge, may conflict       |
-//! | both regular files, binary             | conflict                       |
-//! | one side deleted, other modified       | conflict                       |
-//! | both added different content           | conflict                       |
-//! | symlink or type changes on both sides  | conflict                       |
-//! | file vs directory at the same path     | conflict                       |
+//! | situation                                          | result                   |
+//! |----------------------------------------------------|--------------------------|
+//! | both regular files, text                           | line merge, may conflict |
+//! | both regular files, binary                         | conflict                 |
+//! | one side deleted, other modified                   | conflict                 |
+//! | both added different content                       | conflict                 |
+//! | symlink or type changes on both sides              | conflict                 |
+//! | file vs directory at the same path                 | conflict                 |
+//! | file over [`MAX_TEXT_MERGE_SIZE`], edited on both  | `TooLarge` conflict      |
+//! | both sides moved a file to different paths         | `RenameRename` conflict  |
+//! | one side moved a file, the other deleted it        | `RenameDelete` conflict  |
 //!
 //! The executable bit merges independently of content.
+//!
+//! A merged tree that would exceed the entry limit of [`ag_types::Limits`] is not a conflict (no path is at
+//! fault) and never a clean result either: [`merge_trees`] returns an error.
 //!
 //! **Text** is merged by line. The hunks `base→ours` and `base→theirs` come
 //! from [`ag_diff`]. Hunks of the two sides that overlap **or touch** (share
@@ -28,8 +34,11 @@
 //! cannot know that adjacent edits are semantically independent, and a
 //! needless conflict is cheaper than a silent bad merge.
 //!
-//! Merge does not detect renames in this version; a rename is a delete plus an
-//! add, so a rename on one side and an edit on the other conflicts.
+//! Since `ag-merge/2` the merge is **rename-aware**: a file that exists only in the base is paired with a
+//! file that exists only in one side, first by identical bytes and then by line similarity (see
+//! [`detect_renames`] and the [`MIN_SIMILARITY`] and `MAX_SIMILARITY_*` bounds). When one side moved a file and
+//! the other edited it, the edit is merged at the new path. Directory renames and copies are not detected; they
+//! appear as per-file renames and adds.
 //!
 //! "Mergeable" never means "correct": a clean merge says only that an
 //! unambiguous result tree exists. Validation and approval are separate steps.

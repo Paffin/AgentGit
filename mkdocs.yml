@@ -123,6 +123,7 @@ nav:
       - GC and retention: operations/gc-and-retention.md
       - PostgreSQL and S3: operations/postgres-and-s3.md
       - Releasing: operations/releasing.md
+      - Hardening checklist: operations/hardening.md
       - Supply chain: operations/supply-chain.md
       - Windows: operations/windows.md
       - Troubleshooting: operations/troubleshooting.md
@@ -134,6 +135,7 @@ nav:
       - Storage: architecture/storage.md
       - Security model: architecture/security.md
       - Compatibility: architecture/compatibility.md
+      - Testing: architecture/testing.md
       - The sandbox: architecture/sandbox.md
       - ADR traceability: architecture/adr-traceability.md
       - Decision records:

@@ -23,7 +23,7 @@ test.describe('the unauthorized page', () => {
     await page.getByLabel('Access token').fill(cast.token('erin'))
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page).toHaveURL(/\/repos\/acme\/webapp$/)
     await page.goto('/unauthorized')
     await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/)
   })

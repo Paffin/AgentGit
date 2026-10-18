@@ -11,7 +11,8 @@ Checks (all must pass; used by CI):
 3. every `ag <command>` mentioned in the docs names a real top-level command
    (taken from `ag --help`, binary from $AG or target/{release,debug}/ag);
 4. every `AG_*` environment variable named in backticks exists in the sources, and every one that the `ag`
-   command line reads is documented in docs/reference/configuration.md;
+   command line reads is documented in docs/reference/configuration.md; the `docs/*.md` pages that `ag`'s help topics
+   and messages point at exist;
 5. every ADR is listed in docs/adr/README.md;
 6. every message in a table that follows `<!-- refusals -->` (the troubleshooting tutorial) is a message the code
    can print: its fixed parts, between the `{placeholders}`, occur in the Rust sources.
@@ -170,6 +171,12 @@ for f in (ROOT / "crates" / "ag-cli" / "src").rglob("*.rs"):
 for var in sorted(cli_vars - BUILD_INTERNAL):
     if var not in CONFIG_PAGE.read_text():
         errors.append(f"{rel(CONFIG_PAGE)}: `ag` reads {var} but the page does not mention it")
+
+# The terminal points at the docs (`ag help` topics, hints, `ag init`): those pages must exist.
+for f in [*(ROOT / "crates" / "ag-cli" / "help").glob("*.md"), *(ROOT / "crates" / "ag-cli" / "src").rglob("*.rs")]:
+    for m in re.finditer(r"\bdocs/[A-Za-z0-9_./-]+\.md\b", f.read_text()):
+        if not (ROOT / m.group(0)).exists():
+            errors.append(f"{rel(f)}: points at {m.group(0)}, which does not exist")
 
 # 5. the ADR index -------------------------------------------------------------------------------------
 adr_index = (ROOT / "docs" / "adr" / "README.md").read_text()

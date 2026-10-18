@@ -40,6 +40,9 @@ jobs:
         run: cargo test --workspace
         env:
           AG_REQUIRE_SANDBOX: ${{ runner.os == 'Linux' && '1' || '' }}
+          # The tutorials' commands run against this build of `ag` (crates/ag-cli/tests/docs_snippets.rs); a missing
+          # bash, python3 or git fails the test instead of skipping it.
+          AG_REQUIRE_DOC_SNIPPETS: "1"
 
   lint:
     name: fmt + clippy + rustdoc

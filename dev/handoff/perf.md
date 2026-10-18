@@ -33,8 +33,12 @@ Workflow: `.github/workflows/perf.yml`.
 
 ## Evidence
 
-CI: see the run links in the final report of the session (filled in after the push; this file cannot know its own
-commit's runs). Local: `cargo test -p ag-bench` x4 green; `cargo test -p ag-integrate`, `-p ag-server --test
+CI (commits `5e6c15d` -> `b8fb492` -> `5d2ed69` -> `27bbce1`; the first two broke Packaging, Security and Windows, fixed in the next ones: `publish = false` comment wording, `THIRD_PARTY_LICENSES.md` lists workspace crates (and `tempfile` must not be a normal dependency), `/dev/urandom` on Windows):
+* Performance `smoke` job green on `27bbce1`: https://github.com/Paffin/AgentGit/actions/runs/39135279385 (release build, engine benchmark, load smoke, artifact uploaded).
+* On `19a8d72` (descendant of mine, run after the fixes): Windows green https://github.com/Paffin/AgentGit/actions/runs/39135374137, Security green https://github.com/Paffin/AgentGit/actions/runs/39135373969, Docs, Web UI, Containers green. CI https://github.com/Paffin/AgentGit/actions/runs/39135374071: 15 of 16 jobs green (test ubuntu + macOS, clippy/fmt/rustdoc, MSRV, backends); the red one is "generated docs + demo" -> `check_no_stubs` on `apps/web/src/lib/onboarding.ts` (another agent's file, `[placeholder]` markers), not this package; it passes on current main.
+* CodeQL red on `5d2ed69`/`19a8d72`: `rust/cleartext-logging` in `crates/ag-server/tests/oidc_keycloak.rs` (another agent's test), not this package.
+Later pushes by other agents cancelled the CI runs of `27bbce1` itself, so no single CI run covers my last commit green end to end.
+Local: `cargo test -p ag-bench` x4 green; `cargo test -p ag-integrate`, `-p ag-server --test
 history_api`, `-p ag-cli --test cli blame` green; clippy `-D warnings` on `ag-bench`/`ag-integrate`; fmt; `check_docs`,
 `check_no_stubs`, `check_workflows` clean.
 

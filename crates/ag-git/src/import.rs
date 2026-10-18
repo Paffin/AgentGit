@@ -210,7 +210,9 @@ pub fn parse_log(out: &[u8]) -> Result<Vec<Commit>, GitError> {
         )));
     }
     let mut commits = Vec::with_capacity(fields.len() / LOG_FIELDS);
-    for f in fields.chunks_exact(LOG_FIELDS) {
+    // (the length is a multiple of LOG_FIELDS, checked above: no field is left over)
+    let (records, _) = fields.as_chunks::<LOG_FIELDS>();
+    for f in records {
         let mut lossy = false;
         let mut text = |bytes: &[u8]| match std::str::from_utf8(bytes) {
             Ok(s) => s.to_string(),

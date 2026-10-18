@@ -25,15 +25,24 @@ impl Graph for TestGraph {
     }
 
     fn generation(&self, id: &ChangesetId) -> Result<u64, DagError> {
-        fn go(g: &TestGraph, i: usize, memo: &mut HashMap<usize, u64>) -> u64 {
-            if let Some(v) = memo.get(&i) {
-                return *v;
+        // Iterative: a history thousands of changesets deep must not recurse that deep (a Windows test thread
+        // has a stack of 2 MiB and a bigger frame than Linux's).
+        let target = idx(id);
+        let mut memo: HashMap<usize, u64> = HashMap::new();
+        let mut stack = vec![(target, false)];
+        while let Some((i, parents_done)) = stack.pop() {
+            if memo.contains_key(&i) {
+                continue;
             }
-            let v = 1 + g.parents[i].iter().map(|p| go(g, *p, memo)).max().unwrap_or(0);
-            memo.insert(i, v);
-            v
+            if parents_done {
+                let v = 1 + self.parents[i].iter().map(|p| memo[p]).max().unwrap_or(0);
+                memo.insert(i, v);
+            } else {
+                stack.push((i, true));
+                stack.extend(self.parents[i].iter().filter(|p| !memo.contains_key(p)).map(|p| (*p, false)));
+            }
         }
-        Ok(go(self, idx(id), &mut HashMap::new()))
+        Ok(memo[&target])
     }
 }
 

@@ -269,7 +269,7 @@ function changed() {
             <ul role="list">
               <li v-for="c in prepData.conflicts" :key="c.path">
                 <code class="mono">{{ c.path }}</code>
-                <Badge size="sm" tone="bad">{{ c.kind.replace('_', ' ') }}</Badge>
+                <Badge size="sm" tone="bad">{{ c.message || c.kind.replace('_', ' ') }}</Badge>
               </li>
             </ul>
             <p class="faint">

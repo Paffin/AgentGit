@@ -17,6 +17,8 @@ const props = defineProps<{
   proposal: Proposal
   prep?: Preparation | null
   authorLeases: readonly Lease[]
+  /** Why the author's leases are unknown, when they could not be read. */
+  leasesError?: string
 }>()
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; done: [] }>()
 const toasts = useToasts()
@@ -122,6 +124,14 @@ const finished = computed(() => status.value === 'integrated')
         :error="tokenError"
         hint="Needed when an exclusive lease covers files this change touches: present the current token of the author’s lease."
       />
+      <Alert
+        v-if="!finished && leasesError"
+        tone="warn"
+        title="The author’s leases could not be read"
+      >
+        {{ leasesError }}. If an exclusive lease covers files this change touches, enter its fencing
+        token yourself.
+      </Alert>
       <p v-if="!finished && authorLeases.length" class="faint leases">
         Author’s exclusive leases:
         <span v-for="l in authorLeases" :key="l.id" class="mono"

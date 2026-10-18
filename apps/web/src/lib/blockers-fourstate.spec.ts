@@ -210,6 +210,29 @@ describe('the four independent states', () => {
     expect(s.approved.tone).toBe('unknown')
   })
 
+  it('does not call approval "not required" without the policy check', () => {
+    // prepare is loading or failed, the reviews are known and empty: nothing proves the policy asks for no approval
+    const s = deriveFourStates({ proposal: proposal(), prep: null, reviews: [] })
+    expect(s.approved).toMatchObject({ tone: 'unknown', value: 'checking' })
+    // with the check done and nothing required, it is "not required"
+    expect(
+      deriveFourStates({ proposal: proposal(), prep: prep(), reviews: [] }).approved,
+    ).toMatchObject({
+      tone: 'na',
+    })
+  })
+
+  it('does not invent the number of required approvals', () => {
+    const s = deriveFourStates({
+      proposal: proposal(),
+      prep: prep({ blockers: [blocker('insufficient_approvals', { have: 1 })] }),
+      reviews: [],
+    })
+    expect(s.approved.tone).toBe('blocked')
+    expect(s.approved.value).toBe('1 approval')
+    expect(s.approved.value).not.toContain('/')
+  })
+
   it('surfaces a problem string from the merge engine', () => {
     expect(
       deriveFourStates({

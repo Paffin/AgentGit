@@ -283,6 +283,23 @@ describe('WhoamiCard', () => {
     expect(w.text()).toContain('agents/*')
     expect(w.text()).toMatch(/\(\d+h \d+m\)|\(59m/)
   })
+  it('does not promise public content to a principal without roles', () => {
+    const w = mount(WhoamiCard, {
+      props: {
+        principal: {
+          identity: 'user:nobody',
+          kind: 'user',
+          method: 'token',
+          credential_id: 'cred_2',
+          expires_at_ms: 0,
+          roles: [],
+          scope: { repos: [], streams: [], operations: [], run_id: '' },
+        },
+      },
+    })
+    expect(w.text()).toContain('cannot see any repository')
+    expect(w.text()).not.toContain('public')
+  })
   it('says plainly when nothing limits a credential or it never expires', () => {
     const w = mount(WhoamiCard, {
       props: {

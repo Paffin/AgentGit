@@ -10,7 +10,6 @@ import { useRepoName } from '@/composables/useRepoName'
 import { firstLine, shortId } from '@/lib/format'
 import { buildGraph, emptyGraphState } from '@/lib/graph'
 import type { GraphRow, GraphState } from '@/lib/graph'
-import { ApiError } from '@/api/errors'
 import { useBoard } from '@/stores/board'
 import Badge from '@/ui/Badge.vue'
 import Button from '@/ui/Button.vue'
@@ -44,10 +43,18 @@ const empty = ref(false)
 let state: GraphState = emptyGraphState()
 let serial = 0
 
-const effectiveRev = computed(() => rev.value || board.repo?.default_stream || 'main')
+// The repository's own default stream; until its record has loaded there is nothing to ask for.
+const effectiveRev = computed(() => rev.value || board.repo?.default_stream || '')
 
 async function load(append = false) {
   const mine = ++serial
+  if (!effectiveRev.value) {
+    if (board.load.repo.status === 'error') {
+      error.value = board.load.repo.error
+      loading.value = false
+    }
+    return
+  }
   if (append) more.value = true
   else {
     loading.value = true
@@ -74,13 +81,7 @@ async function load(append = false) {
     next.value = page.nextPageToken
   } catch (e) {
     if (mine !== serial) return
-    // An empty stream has no history: that is a state, not a failure.
-    if (e instanceof ApiError && e.isNotFound && /no changesets yet/.test(e.message)) {
-      rows.value = []
-      empty.value = true
-    } else {
-      error.value = e
-    }
+    error.value = e
   } finally {
     if (mine === serial) {
       loading.value = false
@@ -89,7 +90,11 @@ async function load(append = false) {
   }
 }
 
-watch([() => board.repo?.default_stream, rev, path, repo], () => void load(), { immediate: true })
+watch(
+  [() => board.repo?.default_stream, () => board.load.repo.status, rev, path, repo],
+  () => void load(),
+  { immediate: true },
+)
 
 function apply() {
   rev.value = draft.value.trim()

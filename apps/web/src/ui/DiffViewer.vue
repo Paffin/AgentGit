@@ -41,7 +41,7 @@ const totals = computed(() => ({
       <div v-if="truncated" class="trunc" role="note">
         <Icon name="alert" :size="16" />
         The diff was cut off by the server because it is too large. Only the first
-        {{ plural(files.length, 'file') }} are shown; compare narrower paths to see the rest.
+        {{ plural(files.length, 'file') }} are shown.
       </div>
       <div class="files">
         <DiffFile

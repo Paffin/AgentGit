@@ -187,6 +187,21 @@ describe('describing events', () => {
       ).tone,
     ).toBe('ok')
   })
+  it('does not call a job without a verdict "passed"', () => {
+    const done = (result: unknown) =>
+      describeEvent(
+        event('job.complete', { actor: 'service:ci', target: 'job_1', details: { result } }),
+      )
+    expect(done({ outcome: 'fail' })).toMatchObject({ tone: 'bad' })
+    expect(done({ outcome: 'fail' }).verb).toContain('failed')
+    const stale = done({ stale: true })
+    expect(stale.tone).toBe('neutral')
+    expect(stale.verb).toContain('stale')
+    expect(stale.verb).not.toContain('passed')
+    const none = done({})
+    expect(none.tone).toBe('neutral')
+    expect(none.verb).not.toMatch(/passed|failed/)
+  })
   it('still renders topics it has never seen, and hostile payloads stay plain strings', () => {
     const v = describeEvent(
       event('future.thing', { actor: '<b>x</b>', target: '<script>', details: 'nope' }),

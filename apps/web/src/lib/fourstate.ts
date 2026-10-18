@@ -241,17 +241,29 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'changes requested',
       'An eligible reviewer asked for changes.',
     )
+  } else if (!prep) {
+    // Without the policy check (still loading, or it failed) neither "approved" nor "not required" is known.
+    approved = info('approved', 'Approved', 'unknown', 'checking', 'Waiting for the policy check…')
   } else if (approvalBlocker) {
     const d = (approvalBlocker.detail ?? {}) as { have?: number; required?: number }
     const have = typeof d.have === 'number' ? d.have : (summary?.approvals.length ?? 0)
-    const required = typeof d.required === 'number' ? d.required : have + 1
-    approved = info(
-      'approved',
-      'Approved',
-      'blocked',
-      `${have}/${required}`,
-      `${have} of ${required} required approvals of the current head.`,
-    )
+    // The count the policy requires is only shown when the server said it; it is never guessed.
+    approved =
+      typeof d.required === 'number'
+        ? info(
+            'approved',
+            'Approved',
+            'blocked',
+            `${have}/${d.required}`,
+            `${have} of ${d.required} required approvals of the current head.`,
+          )
+        : info(
+            'approved',
+            'Approved',
+            'blocked',
+            `${have} ${have === 1 ? 'approval' : 'approvals'}`,
+            `${have} approvals of the current head; the policy requires more.`,
+          )
   } else if (summary && summary.approvals.length > 0) {
     const n = summary.approvals.length
     approved = info(

@@ -288,6 +288,21 @@ impl Tx<'_> {
         }
     }
 
+    /// The newest `limit` runs that are still running (the filter applies before the limit, so a long-running
+    /// run is not pushed out of the answer by newer finished ones).
+    pub fn runs_running(&self, agent: Option<&str>, limit: usize) -> Result<Vec<RunRow>, MetaError> {
+        match agent {
+            Some(a) => self.runs_where(
+                "status = 'running' AND agent = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2",
+                &params![a, limit as i64],
+            ),
+            None => self.runs_where(
+                "status = 'running' ORDER BY started_at DESC, run_id DESC LIMIT ?1",
+                &params![limit as i64],
+            ),
+        }
+    }
+
     /// The runs of `task_id` that are still running, oldest first.
     pub fn runs_running_for_task(&self, task_id: &str) -> Result<Vec<RunRow>, MetaError> {
         self.runs_where("task_id = ?1 AND status = 'running' ORDER BY started_at, run_id", &params![task_id])

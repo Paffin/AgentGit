@@ -73,7 +73,7 @@ tests/          cross-cutting unit tests (source hygiene: no v-html, no eval, no
   `Request-Timeout` so the server knows our deadline, and an `ApiError` carrying `code`, `retryable` and
   `request_id`.
 - Retries are deliberate: only errors the server marks retryable (or network failures of requests that are safe
-  to repeat: reads, keyed mutations, read-only POSTs), honouring `Retry-After`, with a cap. `429` is always waited out.
+  to repeat: reads, keyed mutations, read-only POSTs), honouring `Retry-After`, with a cap. `429` is waited out while the wait stays within `maxRetryWaitMs` (30 s) and `maxRetries` (3); beyond that the error surfaces.
 - `sse.ts` implements Server-Sent Events over `fetch` streaming (so the token can travel in a header, never in
   a URL): a parser for the wire format, `Last-Event-ID`/`after_seq` resume, heartbeat comments ignored, a stall
   watchdog, de-duplication, exponential backoff with jitter.

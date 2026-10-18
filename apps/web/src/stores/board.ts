@@ -79,6 +79,9 @@ export interface LeaseRow {
 
 const POLL_MS = 8000
 const DETAIL_CONCURRENCY = 4
+/** Page sizes the board asks for; a full page of open proposals is reported as "more", never as the total. */
+const OPEN_PAGE_SIZE = 100
+const RUNS_LIMIT = 100
 
 /**
  * Everything the live board shows, kept fresh by the repository's event stream: each event marks the
@@ -91,6 +94,8 @@ export const useBoard = defineStore('board', () => {
   const streams = shallowRef<Stream[]>([])
   const stream = ref('')
   const proposals = shallowRef<Proposal[]>([])
+  /** The open-proposals page was full: there are more open proposals than the board shows. */
+  const proposalsTruncated = ref(false)
   const recent = shallowRef<Proposal[]>([])
   const details = shallowRef<Record<string, ProposalDetail>>({})
   const preps = shallowRef<Record<string, PrepState>>({})
@@ -202,7 +207,7 @@ export const useBoard = defineStore('board', () => {
     const value = await guarded('repo', mine, () => api.repos.get(r))
     if (value) {
       repo.value = value
-      if (!stream.value) stream.value = value.default_stream || 'main'
+      if (!stream.value) stream.value = value.default_stream
     }
   }
   async function loadStreams(mine: number) {
@@ -226,7 +231,10 @@ export const useBoard = defineStore('board', () => {
   async function loadRuns(mine: number) {
     const r = repoName.value
     if (!r) return
-    const value = await guarded('runs', mine, () => api.agents.runs(r, { limit: 100 }))
+    // The server applies the filter before its limit, so a long-running agent is listed however many newer runs ended.
+    const value = await guarded('runs', mine, () =>
+      api.agents.runs(r, { active_only: true, limit: RUNS_LIMIT }),
+    )
     if (value) runs.value = value
   }
   async function loadLeases(mine: number) {
@@ -293,13 +301,14 @@ export const useBoard = defineStore('board', () => {
     if (!r) return
     const open = await guarded('proposals', mine, async () => {
       const [openPage, donePage] = await Promise.all([
-        api.proposals.list(r, { state: 'open', page_size: 100 }),
+        api.proposals.list(r, { state: 'open', page_size: OPEN_PAGE_SIZE }),
         api.proposals.list(r, { state: 'integrated', page_size: 6 }),
       ])
-      return { open: openPage.items, done: donePage.items }
+      return { open: openPage.items, done: donePage.items, more: openPage.nextPageToken !== '' }
     })
     if (!open) return
     proposals.value = open.open
+    proposalsTruncated.value = open.more
     recent.value = open.done
     if (withDerived) await Promise.all([loadDetails(mine), loadPreps(mine)])
   }
@@ -427,6 +436,7 @@ export const useBoard = defineStore('board', () => {
     streams.value = []
     stream.value = ''
     proposals.value = []
+    proposalsTruncated.value = false
     recent.value = []
     details.value = {}
     preps.value = {}
@@ -470,6 +480,7 @@ export const useBoard = defineStore('board', () => {
     load,
     lastSyncAt,
     policySummary,
+    proposalsTruncated,
     streamProposals,
     cards,
     activeRuns,

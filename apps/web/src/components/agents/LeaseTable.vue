@@ -59,10 +59,12 @@ async function release(l: Lease) {
     toasts.error('Could not release the lease', e)
   }
 }
+/** One click extends by this much; the server refuses what its lease limits do not allow and says why. */
+const EXTEND_MS = 15 * 60_000
 async function extend(l: Lease) {
   try {
-    await api.agents.extendLease(props.repo, l.id, 15 * 60_000)
-    toasts.ok('Lease extended by 15 minutes', l.scope)
+    await api.agents.extendLease(props.repo, l.id, EXTEND_MS)
+    toasts.ok(`Lease extended by ${EXTEND_MS / 60_000} minutes`, l.scope)
     await leases.reload()
   } catch (e) {
     toasts.error('Could not extend the lease', e)

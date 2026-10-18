@@ -16,22 +16,29 @@ import { coalesce } from '@/lib/pool'
 import { useLive } from '@/stores/live'
 import { useResource } from './useResource'
 
+/** How many reflog entries are searched for the move that integrated a proposal (the server's page size cap). */
+const REFLOG_WINDOW = 500
+
 /**
  * What the proposal's diff starts from. Open or closed: the merge base with its stream. Integrated: the
  * stream head it replaced (from the reflog), so the diff stays the change as it landed.
+ *
+ * A failed lookup is an error, never an empty base: an empty base would show the whole tree as added. `''` (the
+ * empty tree) is only answered when the server says there is no common ancestor / the landed change has no parent.
  */
-async function diffBase(repo: string, p: Proposal): Promise<string> {
-  const none = (): string => ''
+export async function diffBase(repo: string, p: Proposal): Promise<string> {
   if (p.state !== 'integrated') {
-    const bases = await api.history.mergeBase(repo, p.stream, p.head).catch(() => [] as string[])
+    const bases = await api.history.mergeBase(repo, p.stream, p.head)
     return bases[0] ?? ''
   }
   const landed = p.integrated_as || p.head
-  const log: ReflogEntry[] = await api.streams.reflog(repo, p.stream, 500).catch(() => [])
+  const log: ReflogEntry[] = await api.streams.reflog(repo, p.stream, REFLOG_WINDOW)
   const hit = log.find((e) => e.new_head === landed)
   if (hit) return hit.old_head
-  const cs = await api.history.changeset(repo, landed).catch(() => null)
-  return cs?.parents[0] ?? none()
+  // Older than the reflog window: the landed changeset's first parent is the stream head it replaced when it was
+  // a fast-forward; for a merge it is the best base the history gives.
+  const cs = await api.history.changeset(repo, landed)
+  return cs.parents[0] ?? ''
 }
 
 const RELEVANT = [
@@ -111,6 +118,8 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
 
   /** Leases of the author's principal that are exclusive and active: their tokens may be needed to integrate. */
   const authorLeases = ref<Lease[]>([])
+  /** Set when the leases could not be read: the integrate dialog must not pretend the author holds none. */
+  const leasesError = ref<string>('')
   async function loadAuthorLeases() {
     const p = proposal.value
     if (!p) return
@@ -118,8 +127,10 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
       const all = await api.agents.leases(repo.value, true)
       const who = p.author.split('#')[0]
       authorLeases.value = all.filter((l) => l.exclusive && l.holder.split('#')[0] === who)
-    } catch {
+      leasesError.value = ''
+    } catch (e) {
       authorLeases.value = []
+      leasesError.value = e instanceof Error ? e.message : 'the leases could not be read'
     }
   }
 
@@ -172,6 +183,7 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
     states,
     reviewSummary,
     authorLeases,
+    leasesError,
     reloadAll,
     refresh: () => refresher.trigger(),
   }

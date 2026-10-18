@@ -41,8 +41,10 @@ watch(
   },
   { immediate: true },
 )
+/** The reflog is long; the page shows this many of the newest entries (the title says so). */
+const REFLOG_SHOWN = 100
 const reflog = useResource<ReflogEntry[]>(
-  async () => (selected.value ? api.streams.reflog(repo.value, selected.value, 100) : []),
+  async () => (selected.value ? api.streams.reflog(repo.value, selected.value, REFLOG_SHOWN) : []),
   { watch: [selected, repo] },
 )
 
@@ -169,7 +171,7 @@ async function create() {
     <Card
       :title="`Reflog · ${selected || '–'}`"
       icon="history"
-      subtitle="Append-only record of every head move"
+      subtitle="Append-only record of head moves, the newest 100 shown"
       flush
     >
       <ErrorState

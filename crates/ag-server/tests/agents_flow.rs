@@ -297,3 +297,36 @@ async fn leases_tasks_and_conflicting_workspaces() {
     assert_eq!(f.body, b"one\nTWO-resolved\nthree\n");
     srv.stop().await;
 }
+
+/// `active_only` is applied before the limit: a run that has been going for a long time is not pushed out of the
+/// answer by newer runs that already finished (the Web UI's "agents running" board relies on this).
+#[tokio::test]
+async fn active_runs_are_listed_even_when_newer_runs_have_finished() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    admin.post("/v1/repos", json!({"name": "acme/web"})).await;
+    let bot = agent_token(&srv, "long-bot", "acme/web").await;
+    let key = KeyPair::generate().unwrap();
+    let r =
+        bot.post("/v1/repos/acme/web/agents", json!({"name": "long-bot", "public_key": key.public().to_hex()})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let long = bot.post("/v1/repos/acme/web/runs", json!({"agent": "long-bot"})).await;
+    assert_eq!(long.status, 200, "{}", long.json);
+    let long_id = rid(&long.json["run_id"]);
+    for _ in 0..3 {
+        let r = bot.post("/v1/repos/acme/web/runs", json!({"agent": "long-bot"})).await;
+        let id = rid(&r.json["run_id"]);
+        let done = bot.post(&format!("/v1/repos/acme/web/runs/{id}/complete"), json!({"status": "completed"})).await;
+        assert_eq!(done.status, 200, "{}", done.json);
+        // runs are ordered by start time in milliseconds: keep the order unambiguous
+        tokio::time::sleep(std::time::Duration::from_millis(3)).await;
+    }
+    // The newest two runs are finished; the running one is the oldest.
+    let newest = admin.get("/v1/repos/acme/web/runs?limit=2").await;
+    assert!(newest.json["runs"].as_array().unwrap().iter().all(|r| r["run_id"] != long_id.as_str()), "{}", newest.json);
+    let active = admin.get("/v1/repos/acme/web/runs?limit=2&active_only=true").await;
+    let runs = active.json["runs"].as_array().unwrap();
+    assert_eq!(runs.len(), 1, "{}", active.json);
+    assert_eq!(runs[0]["run_id"], long_id.as_str());
+    srv.stop().await;
+}

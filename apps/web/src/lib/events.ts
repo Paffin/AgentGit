@@ -189,13 +189,27 @@ export function describeEvent(ev: ServerEvent): EventView {
       break
     case 'job.complete': {
       const result = (details.result ?? {}) as Record<string, unknown>
-      const pass = s(result.outcome) !== 'fail'
-      set({
-        icon: pass ? 'shield' : 'x',
-        tone: pass ? 'ok' : 'bad',
-        verb: `finished validation job (${pass ? 'passed' : 'failed'})`,
-        object: target,
-      })
+      // `outcome` is the verdict of the attestation the worker signed; a stale completion carries
+      // `stale: true` and no outcome, and a job that is not a validation has neither. Only a real verdict gets a tone.
+      const outcome = s(result.outcome)
+      if (outcome === 'pass' || outcome === 'fail') {
+        const pass = outcome === 'pass'
+        set({
+          icon: pass ? 'shield' : 'x',
+          tone: pass ? 'ok' : 'bad',
+          verb: `finished validation job (${pass ? 'passed' : 'failed'})`,
+          object: target,
+        })
+      } else if (result.stale === true) {
+        set({
+          icon: 'clock',
+          tone: 'neutral',
+          verb: 'skipped validation job: the candidate was stale (no attestation)',
+          object: target,
+        })
+      } else {
+        set({ icon: 'check', tone: 'neutral', verb: 'completed job', object: target })
+      }
       break
     }
     case 'job.fail':

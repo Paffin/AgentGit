@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useServerNow } from '@/composables/useNow'
 import { runHealth } from '@/lib/runs'
 import { shortId } from '@/lib/format'
@@ -23,7 +24,11 @@ const ready = computed(
         c.prep.data.conflicts.length === 0,
     ).length,
 )
-const blocked = computed(() => board.cards.length - ready.value)
+// A proposal whose policy check has not answered is neither ready nor held back: it is still being checked.
+const checking = computed(
+  () => board.cards.filter((c) => c.proposal.state === 'open' && !c.prep?.data).length,
+)
+const held = computed(() => board.cards.length - ready.value - checking.value)
 const quiet = computed(
   () =>
     board.activeRuns.filter((r) => runHealth(r, now.value, prefs.staleAfterMs).liveness === 'stale')
@@ -68,14 +73,28 @@ const stream = computed({
     </div>
     <div class="tile">
       <p class="k">Open proposals</p>
-      <p class="v">{{ board.cards.length }}</p>
-      <p class="s">{{ ready }} ready · {{ blocked }} held back</p>
+      <p class="v">{{ board.cards.length }}{{ board.proposalsTruncated ? '+' : '' }}</p>
+      <p class="s">
+        {{ ready }} ready · {{ held }} held back<template v-if="checking">
+          · {{ checking }} checking</template
+        >
+        <template v-if="board.proposalsTruncated">
+          · the board shows the first {{ board.cards.length }};
+          <RouterLink :to="`/repos/${board.repoName}/proposals`">see all</RouterLink>
+        </template>
+      </p>
     </div>
     <div class="tile">
       <p class="k">Agents running</p>
       <p class="v">{{ board.activeRuns.length }}</p>
       <p class="s" :class="{ warn: quiet > 0 }">
-        {{ quiet > 0 ? `${quiet} quiet` : 'all heartbeating' }}
+        {{
+          board.activeRuns.length === 0
+            ? 'no agents running'
+            : quiet > 0
+              ? `${quiet} quiet`
+              : 'all heartbeating'
+        }}
       </p>
     </div>
     <div class="tile">

@@ -15,17 +15,18 @@ const props = defineProps<{ repo: string; proposal: Proposal }>()
 const live = useLive()
 
 // The live buffer holds the newest events; older ones come from a replay (the server cannot filter by target).
-const history = useResource<EventView[]>(async () => {
+const WINDOW = 2500
+const history = useResource<{ views: EventView[]; olderNotSearched: boolean }>(async () => {
   const head = await api.events.replay(props.repo, { after_seq: 0, limit: 1 })
-  const from = Math.max(0, head.latestSeq - 2500)
-  const page = await api.events.replay(props.repo, { after_seq: from, limit: 2500 })
-  return page.events.map(describeEvent)
+  const from = Math.max(0, head.latestSeq - WINDOW)
+  const page = await api.events.replay(props.repo, { after_seq: from, limit: WINDOW })
+  return { views: page.events.map(describeEvent), olderNotSearched: from > 0 }
 })
 
 const items = computed(() => {
   const seen = new Set<number>()
   const out: EventView[] = []
-  for (const e of [...live.events, ...(history.data.value ?? [])]) {
+  for (const e of [...live.events, ...(history.data.value?.views ?? [])]) {
     if (seen.has(e.seq) || !eventConcernsProposal(e, props.proposal.id, props.proposal.head))
       continue
     seen.add(e.seq)
@@ -37,6 +38,10 @@ const items = computed(() => {
 
 <template>
   <div data-testid="timeline-tab">
+    <p v-if="history.data.value?.olderNotSearched" class="faint note" data-testid="timeline-window">
+      Only the last {{ WINDOW }} events of the repository were searched; an older proposal may have
+      earlier events that are not listed here.
+    </p>
     <div v-if="!history.settled.value && items.length === 0" class="sk">
       <Skeleton :lines="4" />
     </div>

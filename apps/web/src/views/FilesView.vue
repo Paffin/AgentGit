@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
-import { ApiError } from '@/api/errors'
 import type { DirEntry } from '@/api/types'
 import FileViewer from '@/components/files/FileViewer.vue'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -31,14 +30,16 @@ const qRev = computed(() => (typeof route.query.rev === 'string' ? route.query.r
 const path = computed(() =>
   typeof route.query.path === 'string' ? route.query.path.replace(/^\/+|\/+$/g, '') : '',
 )
-const rev = computed(() => qRev.value || board.repo?.default_stream || 'main')
+// The default stream is the repository's own; until the record has loaded there is no revision to ask for.
+const rev = computed(() => qRev.value || board.repo?.default_stream || '')
+const repoFailed = computed(() => !rev.value && board.load.repo.status === 'error')
 const draft = ref(qRev.value)
 watch(qRev, (v) => (draft.value = v))
 
 // What is at this path? (A directory, a file, or nothing.)
 const where = useResource<{ kind: string }>(
   async () => {
-    if (!path.value) return { kind: 'dir' }
+    if (!path.value || !rev.value) return { kind: 'dir' }
     return api.tree.resolve(repo.value, rev.value, path.value)
   },
   { watch: [repo, rev, path] },
@@ -53,6 +54,10 @@ const emptyRepo = ref(false)
 let serial = 0
 async function list(append = false) {
   const mine = ++serial
+  if (!rev.value) {
+    listing.value = !repoFailed.value // waiting for the repository record
+    return
+  }
   if (append) more.value = true
   else listing.value = true
   listError.value = null
@@ -70,12 +75,8 @@ async function list(append = false) {
     // A stream without a single changeset lists as empty at its root.
     if (!append && !path.value && page.entries.length === 0) emptyRepo.value = true
   } catch (e) {
-    // Servers that predate the empty listing answered 404 "no changesets yet".
     if (mine !== serial) return
-    if (e instanceof ApiError && e.isNotFound && /no changesets yet/.test(e.message)) {
-      emptyRepo.value = true
-      entries.value = []
-    } else listError.value = e
+    listError.value = e
   } finally {
     if (mine === serial) {
       listing.value = false
@@ -125,7 +126,7 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
       <div>
         <h1>Files</h1>
         <p class="muted">
-          The tree at <code class="mono">{{ rev }}</code
+          The tree at <code class="mono">{{ rev || '…' }}</code
           >, read from the server. Read-only.
         </p>
       </div>
@@ -162,7 +163,13 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
       </template>
 
       <ErrorState
-        v-if="where.error.value"
+        v-if="repoFailed"
+        what="the repository"
+        :error="board.load.repo.error"
+        @retry="board.refreshAll()"
+      />
+      <ErrorState
+        v-else-if="where.error.value"
         what="this path"
         :error="where.error.value"
         @retry="where.reload()"

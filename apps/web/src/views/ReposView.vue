@@ -85,13 +85,14 @@ onBeforeUnmount(() => serial++)
 
 // ---- create ----------------------------------------------------------------------------------------
 const creating = ref(false)
-const form = ref({ name: '', description: '', stream: 'main' })
+// Empty = the server's configured default stream applies.
+const form = ref({ name: '', description: '', stream: '' })
 const formError = ref<ApiError | null>(null)
 const busy = ref(false)
 const canCreate = computed(() => auth.isAdminAnywhere)
 
 function openCreate() {
-  form.value = { name: '', description: '', stream: 'main' }
+  form.value = { name: '', description: '', stream: '' }
   formError.value = null
   creating.value = true
 }
@@ -244,7 +245,8 @@ const split = (name: string) => {
           v-model="form.stream"
           label="Default stream"
           mono
-          hint="The line of integration most people follow."
+          placeholder="the server default"
+          hint="The line of integration most people follow. Leave empty to use the server default."
         />
         <Alert v-if="formError" tone="bad" live="alert" title="Could not create the repository">
           {{ formError.message }}

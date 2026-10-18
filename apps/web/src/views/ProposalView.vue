@@ -386,6 +386,7 @@ function changed() {
         :proposal="proposal"
         :prep="prepData"
         :author-leases="data.authorLeases.value"
+        :leases-error="data.leasesError.value"
         @done="changed"
       />
       <Dialog

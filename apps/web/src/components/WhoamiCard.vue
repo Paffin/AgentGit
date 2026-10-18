@@ -54,7 +54,7 @@ const scope = computed(() => {
     </template>
     <template #value-roles>
       <span v-if="principal.roles.length === 0" class="faint"
-        >none: you can see only what is public</span
+        >none: you cannot see any repository until an administrator grants you a role</span
       >
       <span v-else class="chips">
         <Badge v-for="r in principal.roles" :key="r" mono tone="accent">{{ r }}</Badge>

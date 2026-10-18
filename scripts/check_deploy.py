@@ -16,6 +16,7 @@ When the tools are on PATH (CI installs them), also:
     python3 scripts/check_deploy.py --strict   # a missing tool is a failure (CI)
 """
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -197,7 +198,7 @@ if have("promtool"):
             ok(f"promtool {cmd} {f}")
 
 if have("docker"):
-    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "AG_BOOTSTRAP_TOKEN": "x", "AG_METRICS_TOKEN": "y",
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), "AG_BOOTSTRAP_TOKEN": "x", "AG_METRICS_TOKEN": "y",
            "POSTGRES_PASSWORD": "p", "S3_ACCESS_KEY": "a", "S3_SECRET_KEY": "s", "GRAFANA_ADMIN_PASSWORD": "g"}
     r = run(["docker", "compose", "--profile", "observability", "config", "-q"], cwd=DEPLOY / "compose", env=env)
     if r.returncode:

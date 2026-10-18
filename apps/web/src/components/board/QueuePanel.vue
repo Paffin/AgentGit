@@ -5,6 +5,7 @@ import { api } from '@/api/instance'
 import type { QueueEntry } from '@/api/types'
 import { requirementText } from '@/lib/roles'
 import { shortId } from '@/lib/format'
+import { QUEUE_TONE, summarizeQueueRun } from '@/lib/queue'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import { useToasts } from '@/stores/toasts'
@@ -29,16 +30,6 @@ const titleOf = computed(() => {
   return m
 })
 
-const TONE: Record<string, 'ok' | 'warn' | 'bad' | 'info' | 'neutral'> = {
-  queued: 'info',
-  done: 'ok',
-  integrated: 'ok',
-  blocked: 'warn',
-  conflict: 'bad',
-  failed: 'bad',
-  skipped: 'neutral',
-}
-
 const waiting = computed(() => board.queueEntries.filter((e) => e.state === 'queued').length)
 const canRun = computed(() => auth.can(props.repo, 'runQueue'))
 
@@ -46,19 +37,9 @@ async function run() {
   running.value = true
   try {
     const res = await api.integration.runQueue(props.repo, board.stream)
-    const n = res.processed.length
-    if (res.stopped_at) {
-      toasts.warn(
-        `Queue stopped at ${shortId(res.stopped_at, 6)}`,
-        `${n} processed before a proposal was blocked or conflicted.`,
-      )
-    } else {
-      toasts.ok(
-        n === 0
-          ? 'The queue was empty'
-          : `Processed ${n} queued ${n === 1 ? 'proposal' : 'proposals'}`,
-      )
-    }
+    const s = summarizeQueueRun(res.processed)
+    if (s.tone === 'warn') toasts.warn(s.title, s.detail)
+    else toasts.ok(s.title)
     board.touched(['queue', 'proposals', 'streams'])
   } catch (e) {
     toasts.error('Could not run the queue', e)
@@ -108,7 +89,7 @@ const label = (e: QueueEntry) => titleOf.value.get(e.proposal) ?? shortId(e.prop
         icon="stack"
         compact
         title="The queue is empty"
-        description="Queued proposals are integrated one at a time, in order, stopping at the first one that is blocked."
+        description="Queued proposals are integrated in order. A blocked or rejected one is marked and skipped; the rest continue."
       />
       <ol v-else class="list">
         <li v-for="(e, i) in board.queueEntries" :key="e.id" class="entry" :data-queue="e.id">
@@ -125,7 +106,7 @@ const label = (e: QueueEntry) => titleOf.value.get(e.proposal) ?? shortId(e.prop
               <template v-if="e.outcome"> · {{ e.outcome }}</template>
             </p>
           </div>
-          <Badge :tone="TONE[e.state] ?? 'neutral'" size="sm">{{ e.state }}</Badge>
+          <Badge :tone="QUEUE_TONE[e.state] ?? 'neutral'" size="sm">{{ e.state }}</Badge>
         </li>
       </ol>
     </div>

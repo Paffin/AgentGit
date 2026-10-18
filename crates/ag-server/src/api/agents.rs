@@ -276,10 +276,9 @@ impl App {
         let limit = if req.limit == 0 { 100 } else { req.limit.min(1000) } as usize;
         self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, move |repo, _| {
             let agent = (!req.agent.is_empty()).then_some(req.agent.as_str());
-            let mut runs = repo.meta().read(|tx| tx.runs(agent, limit))?;
-            if req.active_only {
-                runs.retain(|r| r.status == "running");
-            }
+            let runs = repo
+                .meta()
+                .read(|tx| if req.active_only { tx.runs_running(agent, limit) } else { tx.runs(agent, limit) })?;
             Ok(v1::ListRunsResponse { runs: runs.iter().map(convert::run).collect() })
         })
         .await

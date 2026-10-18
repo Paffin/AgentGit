@@ -111,6 +111,24 @@ fn an_author_date_beyond_the_range_of_milliseconds_is_refused_not_wrapped() {
     assert!(err.to_string().contains("out of range"), "{err}");
 }
 
+/// A blob with exactly this content, written to the object store of the repository at `dir`.
+fn hash_blob(dir: &Path, content: &str) -> String {
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["hash-object", "-t", "blob", "-w", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(content.as_bytes()).unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+const QUOTED_NAMES: [&str; 4] = ["\"abc\"", "\"half", "dir/\"inner\".txt", "plain.txt"];
+
 #[test]
 fn a_path_that_starts_with_a_quote_survives_the_export() {
     // `fast-import` reads a path starting with `"` as a C-style quoted string, so `"abc"` used to come out
@@ -119,9 +137,42 @@ fn a_path_that_starts_with_a_quote_survives_the_export() {
     assert_eq!(fuzzing::fast_import_path("\"abc\""), "\"\\\"abc\\\"\"");
     assert_eq!(fuzzing::fast_import_path("\"x"), "\"\\\"x\"");
 
+    // Git can hold these names, NTFS cannot (`"` is not allowed in a Windows file name), and the bridge only talks
+    // to Git: so the source commit is built in the index with plumbing, and the export goes to a bare repository,
+    // where nothing has to create such a file. This runs on every platform; the variant with working trees is below.
     let src = tempfile::tempdir().unwrap();
     g(src.path(), &["init", "-q", "-b", "main"]);
-    for name in ["\"abc\"", "\"half", "dir/\"inner\".txt", "plain.txt"] {
+    for name in QUOTED_NAMES {
+        let blob = hash_blob(src.path(), name);
+        g(src.path(), &["update-index", "--add", "--cacheinfo", &format!("100644,{blob},{name}")]);
+    }
+    g(src.path(), &["commit", "-q", "-m", "quotes"]);
+
+    let ag_dir = tempfile::tempdir().unwrap();
+    let repo = ag_repo(ag_dir.path());
+    let report = import(&repo, &import_opts(src.path())).unwrap();
+    assert!(report.skipped_paths.is_empty(), "{:?}", report.skipped_paths);
+
+    let out = tempfile::tempdir().unwrap();
+    g(out.path(), &["init", "--bare", "-q"]);
+    export(
+        &repo,
+        &ExportOptions { stream: "imported".into(), git_dir: out.path().to_path_buf(), branch: "main".into() },
+    )
+    .unwrap();
+    let exported = g(out.path(), &["ls-tree", "-r", "main"]);
+    assert_eq!(exported, g(src.path(), &["ls-tree", "-r", "HEAD"]), "the exported tree must be the imported one");
+    assert_eq!(exported.lines().count(), QUOTED_NAMES.len(), "{exported}");
+}
+
+/// The same round trip through real working trees: the files exist on disk before the import and are checked out
+/// again after the export. Unix only, because that is where a file named `"abc"` can exist.
+#[cfg(unix)]
+#[test]
+fn a_path_that_starts_with_a_quote_survives_the_export_through_working_trees() {
+    let src = tempfile::tempdir().unwrap();
+    g(src.path(), &["init", "-q", "-b", "main"]);
+    for name in QUOTED_NAMES {
         let p = src.path().join(name);
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, name).unwrap();

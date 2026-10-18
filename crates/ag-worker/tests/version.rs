@@ -1,5 +1,9 @@
 //! `ag-worker --version` prints semver, commit and date (the build script itself is exercised in
 //! `crates/ag-cli/tests/version.rs`).
+//!
+//! Unix only, on purpose: where the sandbox does not exist the binary is a stub that refuses *every* invocation with
+//! status 2 (`--version` included; `tests/unsupported.rs` pins that), so there is no version line to read.
+#![cfg(unix)]
 #![allow(missing_docs)]
 
 #[test]

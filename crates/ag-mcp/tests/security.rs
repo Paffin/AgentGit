@@ -281,8 +281,13 @@ fn hostile_repository_content_comes_back_inert_delimited_and_labelled() {
 
 #[test]
 fn an_unreachable_server_is_reported_not_hung() {
+    // Windows reports a refused connection only after its own SYN retries, about 2 s, which is this whole timeout:
+    // with 2 s it is a coin toss whether the client sees the refusal ("unavailable") or gives up first
+    // ("deadline_exceeded", which is the right word for a server that did not answer in time). Room for the
+    // refusal keeps the assertion about what the client reports exactly as strict as on Unix.
+    let timeout = if cfg!(windows) { "6" } else { "2" };
     let mut m = Mcp::spawn(
-        &["--server", "http://127.0.0.1:1", "--timeout-secs", "2"],
+        &["--server", "http://127.0.0.1:1", "--timeout-secs", timeout],
         &[("AG_MCP_TOKEN", "agt_0000000000000000_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")],
     );
     m.request("server/discover", json!({}));

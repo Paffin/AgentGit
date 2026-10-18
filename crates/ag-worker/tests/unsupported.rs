@@ -12,7 +12,7 @@ fn run(args: &[&str]) -> (Option<i32>, String) {
 
 #[test]
 fn every_invocation_says_it_is_unsupported_and_exits_2() {
-    for args in [&[][..], &["doctor"][..], &["run", "--help"][..]] {
+    for args in [&[][..], &["doctor"][..], &["run", "--help"][..], &["--version"][..]] {
         let (code, stderr) = run(args);
         assert_eq!(code, Some(2), "{args:?}: {stderr}");
         assert!(stderr.contains("not supported on this platform"), "{args:?}: {stderr}");

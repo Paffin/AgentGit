@@ -278,7 +278,8 @@ fn config_shows_sets_and_explains_where_values_come_from() {
     // `path` names the files.
     let p = a.ag(&["--json", "config", "path"]).ok().json();
     assert!(p["user"]["path"].as_str().unwrap().ends_with("config.json"));
-    assert!(p["repository"]["config"].as_str().unwrap().ends_with(".ag/config.json"));
+    // Compared as a path, not as text: Windows prints the separator as a backslash.
+    assert!(std::path::Path::new(p["repository"]["config"].as_str().unwrap()).ends_with(".ag/config.json"));
 
     // A damaged user file is an error that names the file, not silently ignored.
     std::fs::write(a.cfg.path().join("config.json"), "{ not json").unwrap();

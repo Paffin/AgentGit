@@ -76,9 +76,14 @@ fn a_tree_with_windows_device_names_is_refused_whole_before_anything_is_written(
     }
     assert!(msg.contains("Nothing was written"), "{msg}");
     assert!(is_empty_dir(dst.path()), "not even fine.txt may be written: a partial checkout hides the problem");
-    // The same tree is fine where those names are fine.
-    checkout_tree_for(&r, &tree, dst.path(), &Platform::POSIX).unwrap();
-    assert_eq!(fs::read_to_string(dst.path().join("src/aux.c")).unwrap(), "device AUX");
+    // The same tree is fine where those names are fine. That needs a real file system that holds them, which a
+    // Windows host does not (`a:b` is an alternate data stream, `NUL` a device): there the refusal above is all
+    // that can be observed, and it is the same code path, only the platform rules differ.
+    #[cfg(unix)]
+    {
+        checkout_tree_for(&r, &tree, dst.path(), &Platform::POSIX).unwrap();
+        assert_eq!(fs::read_to_string(dst.path().join("src/aux.c")).unwrap(), "device AUX");
+    }
 }
 
 #[test]

@@ -1,0 +1,46 @@
+# ag-server for the high-availability overlay. Every replica reads this same file.
+# Secrets come from the `agentgit` Secret as environment variables — never from this file.
+
+[server]
+listen = "0.0.0.0:8080"
+data_dir = "/data"
+# TLS is terminated by the Ingress / Gateway / service mesh (see base/ag-server.toml).
+allow_insecure_remote = true
+# On SIGTERM /readyz turns 503 at once, the replica keeps serving for this long so the load balancer can stop
+# sending it requests, then it finishes the requests in flight and exits. Keep it above the readiness probe
+# period and below terminationGracePeriodSeconds (60).
+drain_secs = 10
+# replica_id defaults to $HOSTNAME, which is the pod name.
+
+[auth]
+bootstrap_token_env = "AG_BOOTSTRAP_TOKEN"
+
+[metrics]
+enabled = true
+token_env = "AG_METRICS_TOKEN"
+
+[telemetry]
+log_format = "json"
+log_filter = "info"
+
+# Credentials, roles and the repository registry live in PostgreSQL, shared by all replicas.
+[control]
+url_env = "AG_PG_URL"
+schema = "ag_control"
+# Connections per replica: replicas x (control.pool_size + repos.max_open x repos.pool_size) must stay below the
+# database's max_connections (docs/operations/high-availability.md#connection-budget).
+pool_size = 8
+# A role granted or revoked on another replica is honoured here within this time at the latest.
+bindings_ttl_ms = 5000
+
+[repos.storage.meta]
+kind = "postgres"
+url_env = "AG_PG_URL"
+schema = "ag"
+
+# EDIT: your bucket. The credentials are AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from the Secret.
+[repos.storage.objects]
+kind = "s3"
+endpoint = "https://s3.eu-west-1.amazonaws.com"
+region = "eu-west-1"
+bucket = "my-agentgit-bucket"

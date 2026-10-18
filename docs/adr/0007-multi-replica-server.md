@@ -1,9 +1,10 @@
 # ADR-0007: Several `ag-server` replicas on one PostgreSQL and one bucket
 
-- Status: accepted. Implemented: the PostgreSQL control plane, cluster notices, readiness/drain, control backup and
-  migration (unit-tested on SQLite and PostgreSQL). **Not yet verified:** the multi-process invariant tests
-  (`tests/multi_replica.rs`, written, on branch `wip/ha-track-rebased`, see `dev/handoff/ha.md`) and the operations guide;
-  until they pass, the "Invariants" below are design goals, not claims.
+- Status: accepted and implemented: the PostgreSQL control plane, cluster notices, readiness/drain, control backup and
+  migration. The invariants listed under "Invariants" are **proved** by multi-process tests that start real `ag-server`
+  binaries on a real PostgreSQL and S3 server (`crates/ag-server/tests/multi_replica.rs`, run by the `backends` CI job
+  against moto and against SeaweedFS). What remains a **design goal** and is not proved is listed in "Design goals not
+  yet proved". The operator's guide is [high-availability.md](../operations/high-availability.md).
 - Date: 2026-10-17
 - Amends: [ADR-0004](0004-postgres-and-s3-backends.md) (which left "the server's own control database" on SQLite)
 
@@ -70,15 +71,48 @@ behind a load balancer a supported, tested topology, without changing the engine
 9. **Drain.** SIGTERM flips `/readyz` to 503 at once, waits `server.drain_secs`, then ends streams and finishes
    in-flight requests. `/healthz` stays a pure liveness check; `/readyz` also fails when the control database is unreachable.
 
-## Invariants (one multi-process test each, pending verification)
+## Invariants (each proved by a multi-process test)
 
-- No lost update across replicas: concurrent integrations through different replicas yield one contiguous reflog
-  chain (`old_head` of entry *n+1* = `new_head` of entry *n*, versions 1…*n*), and every acknowledged change is in the final tree.
-- A killed replica loses no acknowledged write and double-applies nothing; clients retry against another replica.
-- A job enqueued through replica A is claimed by exactly one of several workers connected to B and C.
-- An SSE client on A sees an event caused through B, and `Last-Event-ID` replay works on any replica.
-- A credential revoked on A is rejected by B immediately; a role revoked on A takes effect on B within the bound of decision 7.
-- A rolling restart (one replica at a time) never leaves the service unavailable.
+Each line is a test in `crates/ag-server/tests/multi_replica.rs` that starts 2 to 5 real `ag-server` processes.
+
+- **No lost update across replicas**: concurrent integrations through different replicas yield one contiguous reflog
+  chain (`old_head` of entry *n+1* = `new_head` of entry *n*, versions 1…*n*), no head twice, every acknowledged change in the
+  final tree, the audit chain verifies, `fsck` is clean, all replicas agree.
+  `concurrent_integrations_through_three_replicas_never_lose_an_update`.
+- **A killed replica loses no acknowledged write and double-applies nothing**; clients retry against another replica with
+  their idempotency keys, and the killed replica rejoins. `killing_a_replica_mid_flight_loses_nothing_and_applies_nothing_twice`;
+  an idempotency key is honoured by every replica: `an_idempotency_key_used_on_one_replica_is_honoured_by_the_others`.
+- **A job enqueued through replica A is claimed by exactly one of several workers connected to B and C** (one attempt
+  each). `a_job_queued_through_one_replica_is_claimed_exactly_once_by_workers_on_the_others`.
+- **An SSE client on A sees an event caused through B, and `Last-Event-ID` / replay work on any replica.**
+  `an_event_caused_through_one_replica_reaches_a_subscriber_on_another_and_replays_anywhere`.
+- **A credential revoked on A is rejected by B at once** (measured 15-20 ms), a **revoked role takes effect on B within
+  the bound of decision 7** (measured under 50 ms; the test fails above `bindings_ttl_ms` + 1 s), and an open stream is
+  cut (measured 4.5 s, bound 5 s + a poll). `a_revoked_credential_and_a_revoked_role_stop_working_on_every_replica`.
+- **A rolling restart (one replica at a time) never leaves the service unavailable** and loses no write; each replica
+  drains (`/readyz` 503, `/healthz` 200) and exits 0. `a_rolling_restart_never_makes_the_service_unavailable_and_loses_no_write`.
+- **Replicas that start together migrate once; a newer schema is refused.**
+  `replicas_started_together_migrate_once_and_refuse_a_newer_schema`.
+- **`/readyz` follows the control database, `/healthz` does not; a database that refuses the replicas gives retryable
+  `unavailable`, and the replica recovers by itself.** `readiness_follows_the_control_database_and_liveness_does_not`
+  (it found, and the fix has its own test, that a refused login surfaced as `internal`:
+  `a_server_that_refuses_the_login_is_an_unavailable_database_not_an_internal_error`).
+- **`migrate-control` moves credentials (incl. revoked and scoped), roles and the repository registry to PostgreSQL;
+  fresh replicas serve them together with the repositories and their agent keys.**
+  `migrate_control_turns_a_single_server_into_replicas_without_losing_credentials_roles_repos_or_agent_keys`.
+
+## Design goals not yet proved
+
+These are intended, reasoned about, and **not** covered by a test; do not read them as claims.
+
+- Replicas of two *different* builds serving together during a rolling upgrade (decision 3: additive control migrations).
+  The rolling-restart test restarts the same build.
+- Behaviour across a PostgreSQL primary failover or a network partition (the tests lock out logins and terminate
+  backends, they do not promote a standby), and with a slow rather than dead database.
+- Throughput and latency under load: the tests prove correctness under concurrency, not capacity.
+- The shipped Kubernetes overlay (`deploy/kubernetes/overlays/ha`) is validated as manifests (kustomize, kubeconform) and
+  its configuration is loaded by this server in a test, but it has not been applied to a cluster.
+- Connection budget under many open repositories (the operator sizes `max_connections`).
 
 ## Consequences
 

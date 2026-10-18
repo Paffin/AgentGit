@@ -503,6 +503,35 @@ fn bad_connection_settings_fail_early_and_never_echo_the_password() {
     assert!(matches!(r, Err(MetaError::Invalid(_))));
 }
 
+#[test]
+fn a_server_that_refuses_the_login_is_an_unavailable_database_not_an_internal_error() {
+    let Some(url) = url() else { return };
+    let schema = TempSchema::new(&url);
+    let admin = open(&url, schema.name());
+    let role = unique("agtest_locked");
+    admin.write(|tx| tx.raw_query(&format!("CREATE ROLE {role} LOGIN SUPERUSER"), &[]).map(|_| ())).unwrap();
+    let locked_url = url.replacen("postgres@", &format!("{role}@"), 1);
+    assert_ne!(locked_url, url, "the test URL names the postgres user");
+    // While the role may log in, opening works.
+    let other = TempSchema::new(&url);
+    open(&locked_url, other.name());
+    // Locked out: the server answers, but with SQLSTATE 28000. Callers must see a connection failure (which the
+    // API reports as retryable `unavailable`), not an opaque statement error.
+    admin.write(|tx| tx.raw_query(&format!("ALTER ROLE {role} NOLOGIN"), &[]).map(|_| ())).unwrap();
+    let r = Meta::open_postgres(&locked_url, other.name(), Arc::new(SystemClock), Limits::default());
+    let result = match r {
+        Err(e @ MetaError::ConnectionLost { during_commit: false, .. }) => {
+            assert!(e.to_string().contains("28000"), "the SQLSTATE stays in the message: {e}");
+            Ok(())
+        }
+        Err(e) => Err(format!("expected ConnectionLost, got {e:?}")),
+        Ok(_) => Err("a role that may not log in must not connect".to_string()),
+    };
+    let _ = admin.write(|tx| tx.raw_query(&format!("DROP OWNED BY {role}"), &[]).map(|_| ()));
+    let _ = admin.write(|tx| tx.raw_query(&format!("DROP ROLE {role}"), &[]).map(|_| ()));
+    result.unwrap();
+}
+
 // ---- TLS (needs a server with ssl=on; scripts/pg-test.sh provides one) ---------
 
 #[cfg(feature = "tls")]

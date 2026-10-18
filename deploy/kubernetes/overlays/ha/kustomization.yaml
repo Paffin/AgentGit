@@ -1,0 +1,43 @@
+# AgentGit server, highly available: three replicas that share one PostgreSQL (control plane and repository
+# metadata) and one S3-compatible bucket (objects). Nothing about a replica is precious: the data directory is an
+# emptyDir, so a pod can be evicted, rescheduled or killed at any time (docs/operations/high-availability.md,
+# ADR-0007).
+#
+# Prerequisites you provide (this overlay does not run a database for you):
+#   * PostgreSQL 14+ reachable from the cluster, ideally itself highly available (managed service, Patroni, an
+#     operator); the server is only as available as its database.
+#   * an S3-compatible bucket;
+#   * the `agentgit` Secret with AG_BOOTSTRAP_TOKEN, AG_METRICS_TOKEN, AG_PG_URL (a URL with the password, so it
+#     lives in the Secret), AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (see ../../secret.example.yaml).
+# Edit ag-server.toml in this directory for your bucket, endpoint and region, then:
+#
+#   kubectl apply -k deploy/kubernetes/overlays/ha
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - poddisruptionbudget.yaml
+configMapGenerator:
+  - name: ag-server-config
+    behavior: replace
+    files:
+      - ag-server.toml
+patches:
+  # No volume claim: replicas keep no durable local state in this topology.
+  - target: {kind: PersistentVolumeClaim, name: ag-data}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: ag-data
+  - target: {kind: Deployment, name: ag-server}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value:
+          name: data
+          emptyDir:
+            sizeLimit: 1Gi
+  - path: deployment-patch.yaml
+    target: {kind: Deployment, name: ag-server}

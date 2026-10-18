@@ -41,3 +41,29 @@ fn the_compose_configuration_uses_postgres_and_s3() {
         other => panic!("expected S3, got {other:?}"),
     }
 }
+
+#[test]
+fn the_high_availability_overlay_configuration_runs_the_control_plane_on_postgres() {
+    let cfg = load("deploy/kubernetes/overlays/ha/ag-server.toml");
+    assert!(cfg.control.is_postgres(), "replicas must share a PostgreSQL control plane");
+    assert_eq!(cfg.control.url_env.as_deref(), Some("AG_PG_URL"));
+    assert!(cfg.server.drain_secs > 0, "a replica drains before it exits");
+    // The drain has to fit into terminationGracePeriodSeconds of the overlay's Deployment patch.
+    let patch = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../deploy/kubernetes/overlays/ha/deployment-patch.yaml"),
+    )
+    .unwrap();
+    let grace: u64 = patch
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("terminationGracePeriodSeconds:"))
+        .and_then(|v| v.trim().parse().ok())
+        .expect("the patch sets terminationGracePeriodSeconds");
+    assert!(
+        cfg.server.drain_secs < grace,
+        "drain_secs {} must be below the grace period {grace}",
+        cfg.server.drain_secs
+    );
+    let storage = cfg.repos.storage.expect("a storage template");
+    assert!(matches!(storage.meta, MetaConfig::Postgres { .. }));
+    assert!(matches!(storage.objects, ObjectsConfig::S3 { .. }), "replicas share no local disk");
+}

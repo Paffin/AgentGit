@@ -125,7 +125,7 @@ Say it plainly, because the table above is flattering:
 - **Local mode trusts the local user.** Identities are labels until you run a server; anyone who can write `.ag/` can bypass
   policy (tampering is detectable, not preventable). [Security model](architecture/security.md).
 - **No history rewriting, tags, submodules, LFS, partial or shallow clones.** The Git bridge reports what it cannot carry.
-- **One server process.** No high availability yet ([deployment](operations/deployment.md#scaling), [ADR-0007](adr/0007-multi-replica-server.md)).
+- **High availability is as good as your PostgreSQL.** Several `ag-server` replicas are supported and tested (no lost update, `kill -9`, rolling restart), but the database is a single point of failure unless you run it highly available, and nothing is measured under load ([high availability](operations/high-availability.md), [ADR-0007](adr/0007-multi-replica-server.md)).
 - **Ecosystem.** A CLI, a gRPC and HTTP/JSON protocol, TypeScript and Python SDKs (unpublished), an orchestrator, an MCP server and a
   small Web UI. No hosting, no integrations, no review interface comparable to the platforms above.
 - **Scale beyond what is measured.** 100 000 files in one tree; hierarchical trees are deferred ([ADR-0006](adr/0006-flat-trees-measured.md)).

@@ -123,6 +123,7 @@ nav:
       - Durability, backup, restore: operations/durability.md
       - GC and retention: operations/gc-and-retention.md
       - PostgreSQL and S3: operations/postgres-and-s3.md
+      - High availability: operations/high-availability.md
       - Releasing: operations/releasing.md
       - Hardening checklist: operations/hardening.md
       - Supply chain: operations/supply-chain.md

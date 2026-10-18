@@ -148,9 +148,10 @@ has the numbers and the triggers for changing the design). Larger repositories, 
 
 ### Can I run it highly available?
 
-Not today. The shipped deployments run exactly one `ag-server` replica ([Deploying](operations/deployment.md#scaling));
-the multi-replica design is in [ADR-0007](adr/0007-multi-replica-server.md) and its status is stated at the top of that
-record.
+Yes, with PostgreSQL and S3 behind several `ag-server` replicas: [High availability](operations/high-availability.md) says
+what is guaranteed (each guarantee is a test that kills and restarts real server processes), what fails how, and what is
+not verified. The default deployments still run one replica, and PostgreSQL itself is a single point of failure unless
+you run it highly available. The design is [ADR-0007](adr/0007-multi-replica-server.md).
 
 ### How do I connect my own agent or tool?
 

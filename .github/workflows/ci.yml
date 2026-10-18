@@ -140,6 +140,15 @@ jobs:
         run: |
           AG_REQUIRE_BACKENDS=1 AG_S3_SERVER=seaweedfs scripts/pg-test.sh scripts/s3-test.sh \
             bash -c 'cargo test -p ag-storage -p ag-integrate && cargo test -p ag-server --test storage_backends'
+      # The multi-replica server (ADR-0007, docs/operations/high-availability.md): 2-5 real ag-server processes on one
+      # PostgreSQL and one S3 server, driven over sockets - no lost update across replicas, kill -9 of a replica in
+      # flight, exactly-once job claims, SSE across replicas, bounded revocation, rolling restart, migrate-control.
+      # The workspace run above executes these too (serialised inside the binary); this step names them in the log, and
+      # runs them once more against SeaweedFS, a real S3 server.
+      - name: Multi-replica ag-server on PostgreSQL + S3 (moto)
+        run: scripts/ha-test.sh
+      - name: Multi-replica ag-server on PostgreSQL + S3 (SeaweedFS)
+        run: AG_S3_SERVER=seaweedfs scripts/ha-test.sh
 
   deploy:
     name: deployment files

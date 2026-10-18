@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ag-server
+spec:
+  replicas: 3
+  # A new pod must be ready before an old one goes away: capacity never drops below three during an upgrade.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    spec:
+      # server.drain_secs (ag-server.toml) plus the time open requests need to finish must fit in here.
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          # Two replicas on one node share its fate; prefer different nodes, never refuse to schedule.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: ag-server
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ag-server
+      containers:
+        - name: ag-server
+          # /readyz fails while the pod drains and while the control database does not answer, so the Service
+          # sends no traffic to a replica that cannot serve. Probed often: a drain is short.
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 2

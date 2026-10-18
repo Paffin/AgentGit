@@ -21,8 +21,8 @@ Be clear about what "ready-made" means here.
 | Checked in CI on every change (`ci.yml`: `scripts/check_deploy.py --strict`, `cargo test -p ag-server --test deploy_configs`) | **Not verified — treat as a starting point** |
 |---|---|
 | Every YAML/JSON file parses | The alert thresholds are reasoned defaults, not tuned on real traffic |
-| `kustomize build` of both kustomizations; `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |
-| `promtool check rules` / `check config` | Behaviour under load, upgrades and failover |
+| `kustomize build` of every kustomization (base, `ci`, `prometheus-operator`, `ha`); `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |
+| `promtool check rules` / `check config` | Behaviour under load; upgrades and failover of the *cluster*. The server's multi-replica behaviour (kill -9, rolling restart, no lost update) is proved by process tests ([High availability](high-availability.md)); the `ha` overlay has not been applied to a cluster |
 | `docker compose config` with and without secrets (it refuses to start without them) | A cluster other than kind: ingress, TLS termination, a real storage class, a CNI that enforces the NetworkPolicy |
 | Every shipped `ag-server.toml` loads and validates with this server | Published images: nothing has been pushed to GHCR, so the default `ghcr.io/paffin/agentgit-server:latest` does not resolve; build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind) |
 | Every metric used by alerts and the dashboard is one the server exports | The release workflow has only been rehearsed without publishing; the first tag is its first real publish ([releasing.md](releasing.md#what-is-not-proven)) |
@@ -105,12 +105,18 @@ level.
 
 ### Scaling
 
-**Run exactly one replica.** The control database is a SQLite file on the volume, and without PostgreSQL/S3
-repositories are files on the volume too, so two pods cannot share state (`strategy: Recreate` with a
-`ReadWriteOnce` volume enforces this). What PostgreSQL and S3 give you today is durability and independent
-storage scaling for repositories, not an active-active server. Plan for a restart taking seconds (the
-startup probe allows about a minute) and size the single pod for your peak: the server sheds load with
-`503 unavailable` + `Retry-After` when `limits.max_concurrent_requests` is reached, and clients retry.
+**The default is exactly one replica.** The control database is a SQLite file on the volume, and without
+PostgreSQL/S3 repositories are files on the volume too, so two pods cannot share state (`strategy: Recreate` with a
+`ReadWriteOnce` volume enforces this). Plan for a restart taking seconds (the startup probe allows about a minute)
+and size the single pod for your peak: the server sheds load with `503 unavailable` + `Retry-After` when
+`limits.max_concurrent_requests` is reached, and clients retry.
+
+**Several replicas** are supported when the control database is on PostgreSQL (`[control] url_env`) and the
+repositories are on PostgreSQL + S3: no shared disk, rolling upgrades, a replica can be killed at any time. That
+topology, its guarantees (each one a multi-process test), its failure modes, the move from a single server
+(`ag-server admin migrate-control`) and its limits (PostgreSQL stays a single point of failure unless it is itself
+highly available; rate limits are per replica) are in [High availability](high-availability.md). The Kubernetes
+overlay is `deploy/kubernetes/overlays/ha`; the Compose stack stays single-host.
 
 ### Backups
 
@@ -118,7 +124,10 @@ startup probe allows about a minute) and size the single pod for your peak: the 
   [postgres-and-s3.md](postgres-and-s3.md#operating-it).
 * The control database (`/data/control.db`) holds credentials' *hashes*, role bindings and the repository
   registry. Back up the volume with snapshots, or copy the file while the server is stopped. Losing it
-  means re-creating users and roles; it does not lose any repository's history.
+  means re-creating users and roles; it does not lose any repository's history. With the control database on
+  PostgreSQL, `ag-server admin backup-control --out FILE` writes a logical dump (credential hashes included: mode 0600)
+  that works for either backend, and `restore-control` reads it; `pg_dump` of the control schema is the other way
+  ([High availability](high-availability.md#moving-from-one-server-to-replicas)).
 
 ## Stale agent runs
 

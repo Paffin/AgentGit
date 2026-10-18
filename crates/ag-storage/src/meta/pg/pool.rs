@@ -115,7 +115,13 @@ impl Shared {
             #[cfg(feature = "tls")]
             Connector::Rustls(m) => self.config.connect(m.clone()),
         }
-        .map_err(|e| classify(&e, false))
+        .map_err(|e| match classify(&e, false) {
+            // The server answered but would not give us a session: login refused or the role locked (28xxx),
+            // too many connections (53300), the database is starting up or shutting down. None of these is a
+            // statement that failed, so callers see "the database is unavailable" (retryable), not an internal error.
+            MetaError::Postgres(message) => MetaError::ConnectionLost { during_commit: false, message },
+            other => other,
+        })
     }
 
     fn connect(&self) -> Result<PgClient, MetaError> {

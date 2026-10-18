@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ag-server
+  labels:
+    app.kubernetes.io/name: ag-server
+    app.kubernetes.io/part-of: agentgit
+spec:
+  # Node drains and cluster upgrades take one replica at a time; two always keep serving.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ag-server

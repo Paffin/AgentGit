@@ -42,7 +42,7 @@ If something here fails on your cluster, that is a bug in these files — please
 
 | Variable | Purpose |
 |---|---|
-| `AG_BOOTSTRAP_TOKEN` | the first administrator (≥ 32 random characters). Use it to create users and roles, then mint scoped credentials and stop using it |
+| `AG_BOOTSTRAP_TOKEN` | the first administrator (use 32 or more random characters; the server refuses to start with fewer than 16). Use it to create users and roles, then mint scoped credentials and stop using it |
 | `AG_METRICS_TOKEN` | bearer token for `/metrics`. **Set it**: without one the server logs a warning when it listens on a non-loopback address, because anyone who can reach the port can read the metrics |
 | `AG_PG_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | only with PostgreSQL / S3 storage |
 | `OTEL_EXPORTER_OTLP_HEADERS` | only if the trace collector needs headers (`authorization=Bearer …`) |

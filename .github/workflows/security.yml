@@ -140,7 +140,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      # The action needs the repository's dependency graph, which is a setting (Settings -> Advanced Security ->
+      # Dependency graph) that a workflow cannot switch on. While it is off GitHub answers 404 for the graph's SBOM and
+      # the action fails every pull request with "Dependency review is not supported on this repository"; that is
+      # reported as a warning here instead, and the job starts judging by itself once the graph is on. Any other
+      # answer runs the action, so a real failure is never hidden.
+      - name: Is the dependency graph enabled?
+        id: graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/dependency-graph/sbom" || echo 000)
+          echo "dependency graph SBOM endpoint answered $code"
+          if [ "$code" = 404 ]; then
+            echo "::warning title=Dependency review is off::The dependency graph is not enabled for this repository, so GitHub cannot review dependency changes. Enable it under Settings -> Advanced Security."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.graph.outputs.enabled == 'true'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           comment-summary-in-pr: never

@@ -84,7 +84,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release --locked -p ag-server -p ag-cli \
  && install -D target/release/ag-server /out/ag-server \
  && install -D target/release/ag /out/ag \
- && install -d -o 65532 -g 65532 /out/data
+ && install -d -m 0700 -o 65532 -g 65532 /out/data
 
 # ---- the command-line client ------------------------------------------------------------------
 FROM gcr.io/distroless/cc-debian12:nonroot AS cli

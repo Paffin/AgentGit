@@ -3,7 +3,9 @@ version: 2
 # Every ecosystem the repository has a lock file or manifest for, so that a dependency we ship or build with does
 # not age silently. The pull requests are what the Security workflow (security.yml) and the CI workflows then judge;
 # a green run is the evidence that the update is safe, a maintainer does the merge. Groups keep the number of
-# pull requests down: minor and patch updates of one ecosystem arrive together, major updates one by one.
+# pull requests down: minor and patch updates of one ecosystem arrive together, major updates one by one. Each pull
+# request runs every workflow whose paths it touches, so the open-pull-requests limits are deliberately low: the
+# first run over a long-neglected repository opened eighteen at once and queued about a hundred workflow runs.
 # Policy: docs/operations/supply-chain.md.
 
 updates:
@@ -21,7 +23,7 @@ updates:
     directory: /fuzz
     schedule:
       interval: weekly
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     groups:
       fuzz-minor-and-patch:
         update-types: [minor, patch]
@@ -31,7 +33,7 @@ updates:
     directory: /apps/web
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
@@ -39,7 +41,7 @@ updates:
     directory: /sdk/typescript
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       ts-sdk-minor-and-patch:
         update-types: [minor, patch]
@@ -50,7 +52,7 @@ updates:
     directory: /sdk/python
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       python-sdk-minor-and-patch:
         update-types: [minor, patch]
@@ -62,7 +64,7 @@ updates:
     directory: /services/agent-orchestrator
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
 
   # --- Containers ---------------------------------------------------------------------------------------------------
   # Base images of the shipped containers (deploy/docker/Dockerfile, services/agent-orchestrator/Dockerfile) and the

@@ -312,6 +312,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_bootstrap_token_that_is_too_short_to_be_a_secret_is_refused_at_start_up() {
+        let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let control = Arc::new(Control::open_in_memory(clock.clone()).unwrap());
+        let cfg = AuthSection::default();
+        let start =
+            |token: &str| Authenticator::with_bootstrap(control.clone(), clock.clone(), &cfg, Some(token.into()));
+        // 15 characters are refused, 16 are the shortest the server takes. (The deployment files ask for 32 random
+        // characters; this is the floor below which the server refuses to start at all.)
+        let err = start(&"x".repeat(15)).err().expect("a 15-character bootstrap token is refused");
+        assert!(err.to_string().contains(&cfg.bootstrap_token_env) && err.to_string().contains("too short"), "{err}");
+        let ok = start(&"x".repeat(16)).unwrap();
+        assert!(ok.bootstrap_enabled());
+        // an empty value is "not set", not "a token of length 0"
+        assert!(!start("").unwrap().bootstrap_enabled());
+    }
+
+    #[tokio::test]
     async fn a_valid_token_authenticates_and_a_tampered_one_does_not() {
         let (auth, _c, token, id) = setup(60_000);
         let p = auth.authenticate(&token).await.unwrap();

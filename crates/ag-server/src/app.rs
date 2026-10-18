@@ -174,6 +174,44 @@ fn parse_headers(s: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Creates the data directory. When this call creates it, it is `0700` on Unix: the control database in it holds the
+/// hash of every credential. A directory that already exists is left as it is, with a warning when users outside the
+/// owner's group can enter it.
+fn prepare_data_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    if !dir.exists() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        }
+        #[cfg(not(unix))]
+        std::fs::create_dir_all(dir)?;
+    }
+    if let Some(why) = data_dir_exposure(dir) {
+        tracing::warn!("{why}");
+    }
+    Ok(())
+}
+
+/// Why `dir` is too open, if it is: any access for "other" users (Unix permission bits). Group access is not
+/// flagged, because a shared group on a volume (Kubernetes `fsGroup`) is a deliberate setup.
+fn data_dir_exposure(dir: &std::path::Path) -> Option<String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(dir).ok()?.permissions().mode() & 0o777;
+        if mode & 0o007 != 0 {
+            return Some(format!(
+                "the data directory {} can be entered by every user of this host (mode {mode:03o}); it holds the control \
+                 database with the hash of every credential: chmod 700 it (750 for a shared group)",
+                dir.display()
+            ));
+        }
+    }
+    let _ = dir;
+    None
+}
+
 impl App {
     /// Builds the state: opens the control database, prepares authentication.
     pub fn new(cfg: ServerConfig) -> ApiResult<Self> {
@@ -188,7 +226,7 @@ impl App {
 
     /// Full control: explicit clock and bootstrap token (tests, embedding).
     pub fn with_options(cfg: ServerConfig, clock: Arc<dyn Clock>, bootstrap_token: Option<String>) -> ApiResult<Self> {
-        std::fs::create_dir_all(&cfg.server.data_dir).map_err(ApiError::internal)?;
+        prepare_data_dir(&cfg.server.data_dir).map_err(ApiError::internal)?;
         let control = Arc::new(Control::from_config(&cfg, clock.clone())?);
         if cfg.control.is_postgres() && !cfg.repos_are_shared() {
             tracing::warn!(
@@ -683,6 +721,38 @@ mod tests {
     use super::*;
 
     const TOKEN: &str = "unit-test-bootstrap-token-0123456789";
+
+    #[cfg(unix)]
+    #[test]
+    fn the_data_directory_is_created_private_and_an_open_one_is_called_out() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let base = tempfile::tempdir().unwrap();
+
+        // created by the server: 0700, parents included, nothing to warn about
+        let fresh = base.path().join("a/b/data");
+        prepare_data_dir(&fresh).unwrap();
+        assert_eq!(mode(&fresh), 0o700);
+        assert_eq!(data_dir_exposure(&fresh), None);
+
+        // an existing directory is not touched; "other" access is what gets the warning
+        let existing = base.path().join("existing");
+        std::fs::create_dir(&existing).unwrap();
+        for (bits, flagged) in [(0o755, true), (0o701, true), (0o770, false), (0o750, false), (0o700, false)] {
+            std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(bits)).unwrap();
+            prepare_data_dir(&existing).unwrap();
+            assert_eq!(mode(&existing), bits, "the directory is left as the operator made it");
+            let why = data_dir_exposure(&existing);
+            assert_eq!(why.is_some(), flagged, "{bits:o}: {why:?}");
+            if let Some(why) = why {
+                assert!(why.contains(&format!("{bits:03o}")) && why.contains("chmod 700"), "{why}");
+            }
+        }
+        // a path that cannot be created is an error, not a panic
+        let file = base.path().join("a-file");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(prepare_data_dir(&file.join("below-a-file")).is_err());
+    }
 
     /// Collects what the `tracing` subscriber writes.
     #[derive(Clone, Default)]

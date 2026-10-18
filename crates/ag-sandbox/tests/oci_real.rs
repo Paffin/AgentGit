@@ -287,14 +287,20 @@ fn the_memory_limit_is_set_in_the_cgroup_and_a_hog_is_killed_by_the_kernel() {
     // a program under the limit is fine
     let fine = r.sh_in("head -c 16000000 /dev/zero | tr '\\0' x | wc -c", w.path(), |s| s.limits.memory_bytes = limit);
     assert_eq!(fine.status, ExitStatus::Exited(0), "{}", fine.stderr_lossy());
-    // One that doubles a string until it is killed. The shell reports how its child died: 137 is SIGKILL (the
-    // kernel's OOM kill; the program's own allocation failure would end with another status).
-    let hog = r.sh_in(
-        "awk 'BEGIN { s = \"xxxxxxxxxxxxxxxx\"; while (1) s = s s }'; rc=$?; echo \"awk=$rc\" >&2; exit $rc",
-        w.path(),
-        |s| s.limits.memory_bytes = limit,
+    // One that doubles a string until it is killed. It is the container's own process (`exec`): the runtime
+    // learns of an OOM kill from the cgroup's event, and Docker's record of it is only reliable when the killed
+    // process is the one whose exit ends the container (a shell that outlives its child and exits 137 itself
+    // races the event, as the CI run of 27bbce1 showed). 137 is SIGKILL, the kernel's OOM kill; the program's
+    // own allocation failure would end with another status.
+    let hog = r.sh_in("exec awk 'BEGIN { s = \"xxxxxxxxxxxxxxxx\"; while (1) s = s s }'", w.path(), |s| {
+        s.limits.memory_bytes = limit
+    });
+    assert!(
+        matches!(hog.status, ExitStatus::MemoryLimit | ExitStatus::Exited(137)),
+        "the kernel killed the hog: {:?} {}",
+        hog.status,
+        hog.stderr_lossy()
     );
-    assert!(hog.stderr_lossy().contains("awk=137"), "the kernel killed the hog: {}", hog.stderr_lossy());
     let noted = hog.isolation.notes.iter().any(|n| n.contains("does not record one in `inspect`"));
     match (r.info.engine, hog.status) {
         // Docker records the kernel's OOM kill and the sandbox says so.

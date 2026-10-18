@@ -303,11 +303,13 @@ GitHub Actions: its first run is its test.**
 
 * a real Docker or Podman (none available);
 * cgroup v2 limits against a real delegated hierarchy;
-* macOS and other non-Linux Unix: the crate is `cargo check`ed for `x86_64-apple-darwin` (all targets,
-  warning-free), the namespace sandbox is compiled out, and `ProcessSandbox` is the only implementation
-  (macOS does not enforce `RLIMIT_DATA`, so it reports memory as unlimited). Three of its tests are meant to
-  run on macOS CI; they have **never been run on a Mac**, nor has `ag-worker`, whose dependencies cannot be
-  cross-compiled here;
+* macOS and other non-Linux Unix: the namespace sandbox is compiled out and `ProcessSandbox` is the only
+  implementation (macOS does not enforce `RLIMIT_DATA`, so it reports memory as unlimited). The `macos-latest`
+  job of CI runs the crate's unit tests (including the allocator guard on the forked child), its three
+  portable process-sandbox tests and the `ag-worker` end-to-end suite on the limits-only fallback (its isolation tests skip there; green in
+  [run 39090757957](https://github.com/Paffin/AgentGit/actions/runs/39090757957)). That is the whole of the
+  evidence: the isolation, limits and OCI suites are Linux-only, and nothing here has been run on a developer
+  Mac or on Apple Silicon outside that runner;
 * aarch64: `cargo check`ed for `aarch64-unknown-linux-gnu`, but the seccomp filter was never run on it;
 * a non-root caller on a kernel with `kernel.apparmor_restrict_unprivileged_userns=1` or similar policies,
   which make `clone(CLONE_NEWUSER)` fail — the sandbox reports `Unavailable`, and there is nothing to run.

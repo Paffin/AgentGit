@@ -9,7 +9,7 @@ use ag_client::{Client, ClientError};
 use ag_crypto::KeyPair;
 use ag_policy::CheckResult;
 use ag_protocol::{ErrorCode, v1};
-use ag_sandbox::SandboxError;
+use ag_sandbox::{Sandbox, SandboxError};
 use ag_types::{Identity, TreeId};
 use tokio::sync::{oneshot, watch};
 
@@ -20,8 +20,8 @@ use crate::profile::Profile;
 
 /// Job kind this worker understands.
 const KIND_VALIDATE: &str = "validate";
-/// How long a job that this worker could not run waits before it is offered again.
-const RETRY_AFTER_MS: i64 = 10_000;
+/// How long the first retry of a failed claim waits; it doubles up to [`Options::backoff_max`].
+const BACKOFF_START: Duration = Duration::from_secs(1);
 
 /// Connection-independent settings of a worker.
 #[derive(Clone, Debug)]
@@ -37,6 +37,10 @@ pub struct Options {
     pub wait: Duration,
     /// Number of jobs run at once.
     pub concurrency: usize,
+    /// How long a job this worker could not run waits before the server offers it again.
+    pub retry_after: Duration,
+    /// The longest the wait between two failed claim requests grows to.
+    pub backoff_max: Duration,
 }
 
 impl Default for Options {
@@ -47,6 +51,8 @@ impl Default for Options {
             lease: Duration::from_secs(120),
             wait: Duration::from_secs(20),
             concurrency: 1,
+            retry_after: Duration::from_secs(10),
+            backoff_max: Duration::from_secs(30),
         }
     }
 }
@@ -114,6 +120,8 @@ pub struct Worker {
     key: KeyPair,
     issuer: Identity,
     opts: Options,
+    /// Set by [`Worker::cancel`]: every running check is killed and every job handed back.
+    cancel: Arc<AtomicBool>,
 }
 
 impl Worker {
@@ -123,7 +131,15 @@ impl Worker {
     /// refuses an attestation whose issuer is anyone else. `key`'s public half must be listed under that
     /// identity in the policy's `trusted_issuers` for the attestations to count.
     pub fn new(client: Client, profile: Profile, key: KeyPair, issuer: Identity, opts: Options) -> Self {
-        Worker { client, profile, key, issuer, opts }
+        Worker { client, profile, key, issuer, opts, cancel: Arc::new(AtomicBool::new(false)) }
+    }
+
+    /// Stop now: the checks that are running are killed (a container is killed and removed through its runtime),
+    /// the jobs they belong to are returned to the queue, and [`run`](Self::run) returns once that is done.
+    /// This is the second signal of `ag-worker run`; the first one only stops claiming and lets the current
+    /// checks finish.
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::SeqCst);
     }
 
     /// Asks the server who the credential belongs to.
@@ -176,7 +192,7 @@ impl Worker {
     ) -> Result<Vec<JobReport>, ClientError> {
         let label = self.lane_label(index);
         let mut reports = Vec::new();
-        let mut backoff = Duration::from_secs(1);
+        let mut backoff = BACKOFF_START;
         while !*shutdown.borrow() {
             let claim = tokio::select! {
                 r = self.claim(&label) => r,
@@ -184,14 +200,14 @@ impl Worker {
             };
             match claim {
                 Ok(Some(job)) => {
-                    backoff = Duration::from_secs(1);
+                    backoff = BACKOFF_START;
                     let report = self.process(&label, job).await;
                     reports.push(report);
                     if once {
                         break;
                     }
                 }
-                Ok(None) => backoff = Duration::from_secs(1),
+                Ok(None) => backoff = BACKOFF_START,
                 Err(e) => {
                     if matches!(e.code(), Some(ErrorCode::Unauthenticated | ErrorCode::PermissionDenied)) {
                         return Err(e);
@@ -201,7 +217,7 @@ impl Worker {
                         _ = tokio::time::sleep(backoff) => {}
                         _ = shutdown.changed() => break,
                     }
-                    backoff = (backoff * 2).min(Duration::from_secs(30));
+                    backoff = (backoff * 2).min(self.opts.backoff_max);
                 }
             }
         }
@@ -249,6 +265,12 @@ impl Worker {
             return self.fail(&repo, job, label, Failure::permanent("the job carries no validation task")).await;
         };
 
+        // The directory the check's tree goes into: its name must not be guessable.
+        let job_dir = match self.job_dir(&job.id, job.attempts) {
+            Ok(d) => d,
+            Err(f) => return self.fail(&repo, job, label, f).await,
+        };
+
         // Keep the claim alive while the check runs; learn if it is taken away.
         let lost = Arc::new(AtomicBool::new(false));
         let (stop_tx, stop_rx) = oneshot::channel();
@@ -262,8 +284,7 @@ impl Worker {
             lost.clone(),
         ));
 
-        let job_dir = self.job_dir(&job.id, job.attempts);
-        let outcome = self.run_job(job, &task, label, &job_dir).await;
+        let outcome = self.run_job(job, &task, label, &job_dir, &lost).await;
         let _ = stop_tx.send(());
         let _ = beat.await;
         remove_job_dir(&job_dir);
@@ -328,6 +349,7 @@ impl Worker {
         task: &v1::ValidationTask,
         label: &str,
         job_dir: &Path,
+        lost: &Arc<AtomicBool>,
     ) -> Result<Finished, Failure> {
         let tree_id: TreeId = task
             .tree_id
@@ -336,17 +358,23 @@ impl Worker {
         let image = task.run.as_ref().map(|r| r.image.as_str()).filter(|i| !i.is_empty());
 
         // Decide whether this worker can and will run it before spending bandwidth.
-        let sandbox = self.profile.backend.sandbox_for(image).map_err(|r| Failure::retry(r.to_string()))?;
+        let sandbox: Arc<dyn Sandbox> =
+            Arc::from(self.profile.backend.sandbox_for(image).map_err(|r| Failure::retry(r.to_string()))?);
         if sandbox.isolation() < self.profile.min_isolation {
             return Err(Failure::retry(format!(
                 "this worker's sandbox ({}) is weaker than the isolation it requires",
                 sandbox.name()
             )));
         }
+        // ... and that the sandbox can run it at all (a container image is in the local store: the sandbox
+        // never pulls), before the tree is downloaded for nothing.
+        let probe = sandbox.clone();
+        tokio::task::spawn_blocking(move || probe.preflight())
+            .await
+            .map_err(|e| Failure::retry(format!("the sandbox thread panicked: {e}")))?
+            .map_err(|e| Failure::retry(e.to_string()))?;
         let workdir = job_dir.join("tree");
-        prepare_dir(job_dir.parent().unwrap_or(job_dir)).map_err(io_failure)?;
-        prepare_dir(job_dir).map_err(io_failure)?;
-        prepare_dir(&workdir).map_err(io_failure)?;
+        self.create_job_dirs(job_dir, &workdir).map_err(io_failure)?;
         let spec = plan::sandbox_spec(&self.profile, task, &workdir).map_err(|u| match u {
             Unrunnable::Invalid(m) => Failure::permanent(m),
             Unrunnable::Refused(r) => Failure::retry(r.to_string()),
@@ -359,26 +387,34 @@ impl Worker {
                 tracing::info!(job = %job.id, why = %why, "stale candidate");
                 return Ok(Finished::Stale);
             }
-            Err(e) => return Err(Failure::retry(e.to_string())),
+            Err(e) => return Err(checkout_failure(&e)),
         };
         let owner = self.profile.backend.tree_owner();
         let written =
             checkout::write_tree(&self.client, &job.repo, &manifest, &workdir, owner, self.profile.max_checkout_bytes)
                 .await
-                .map_err(|e| Failure::retry(e.to_string()))?;
+                .map_err(|e| checkout_failure(&e))?;
         tracing::debug!(job = %job.id, files = written.files, bytes = written.bytes, "tree checked out");
 
         // Run it. The sandbox call blocks until nothing of the command is left.
         let name = sandbox.name();
-        let outcome = tokio::task::spawn_blocking(move || sandbox.run(&spec))
-            .await
-            .map_err(|e| Failure::retry(format!("the sandbox thread panicked: {e}")))?
-            .map_err(|e| match e {
-                SandboxError::Exec { program, source } => Failure::retry(format!(
-                    "cannot execute '{program}' in the sandbox on this worker: {source} (is the toolchain mounted?)"
-                )),
-                other => Failure::retry(format!("the sandbox could not run the check: {other}")),
-            })?;
+        // The check is stopped (and its container killed and removed) as soon as the claim is lost, or this
+        // worker is told to stop now: nobody wants the result of a check that nobody can deliver.
+        let (lost, stop) = (lost.clone(), self.cancel.clone());
+        let outcome = tokio::task::spawn_blocking(move || {
+            sandbox.run_cancellable(&spec, &|| lost.load(Ordering::SeqCst) || stop.load(Ordering::SeqCst))
+        })
+        .await
+        .map_err(|e| Failure::retry(format!("the sandbox thread panicked: {e}")))?
+        .map_err(|e| match e {
+            SandboxError::Exec { program, source } => Failure::retry(format!(
+                "cannot execute '{program}' in the sandbox on this worker: {source} (is the toolchain mounted?)"
+            )),
+            SandboxError::Cancelled => {
+                Failure::retry("the check was stopped before it finished: this worker is shutting down")
+            }
+            other => Failure::retry(format!("the sandbox could not run the check: {other}")),
+        })?;
 
         if !task.required_environment_digest.is_empty()
             && outcome.environment_digest != task.required_environment_digest
@@ -439,7 +475,11 @@ impl Worker {
             job_id: job.id.clone(),
             worker: label.into(),
             error: f.message.clone(),
-            retry_after_ms: if f.retry { RETRY_AFTER_MS } else { 0 },
+            retry_after_ms: if f.retry {
+                i64::try_from(self.opts.retry_after.as_millis()).unwrap_or(i64::MAX)
+            } else {
+                0
+            },
         };
         match self
             .client
@@ -451,11 +491,42 @@ impl Worker {
         }
     }
 
-    fn job_dir(&self, job_id: &str, attempt: u32) -> PathBuf {
+    /// The directory of one attempt of one job. Its name carries a random nonce from the system's generator; if
+    /// that fails the job is failed (and retried) instead of using a name that a local user could predict.
+    fn job_dir(&self, job_id: &str, attempt: u32) -> Result<PathBuf, Failure> {
         let safe: String =
             job_id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
-        let nonce = ag_crypto::random_id("d").unwrap_or_else(|_| format!("d_{}", std::process::id()));
-        self.profile.scratch_dir.join(format!("{safe}-{attempt}-{nonce}"))
+        let nonce = ag_crypto::random_id("d").map_err(|e| {
+            Failure::retry(format!("cannot name the job directory: the system's random generator failed: {e}"))
+        })?;
+        Ok(self.profile.scratch_dir.join(format!("{safe}-{attempt}-{nonce}")))
+    }
+
+    /// Creates the scratch directory (if it is not there), the job directory and the working tree. The last two
+    /// must not exist yet: a directory somebody prepared is never reused. A worker that runs checks as another
+    /// user (it is root) needs them searchable; any other worker keeps the trees of the code it checks to
+    /// itself.
+    fn create_job_dirs(&self, job_dir: &Path, workdir: &Path) -> std::io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = if self.profile.backend.tree_owner().is_some() { 0o755 } else { 0o700 };
+        if let Some(parent) = job_dir.parent() {
+            create_scratch_root(parent, mode)?;
+        }
+        for dir in [job_dir, workdir] {
+            std::fs::create_dir(dir)?;
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(mode))?;
+        }
+        Ok(())
+    }
+}
+
+/// The failure for a checkout that did not work: a tree that no worker could materialize is not retried.
+fn checkout_failure(e: &CheckoutError) -> Failure {
+    match e {
+        CheckoutError::Unsafe(why) => {
+            Failure::permanent(format!("the candidate cannot be checked by any worker: {why}"))
+        }
+        other => Failure::retry(other.to_string()),
     }
 }
 
@@ -463,16 +534,16 @@ fn io_failure(e: std::io::Error) -> Failure {
     Failure::retry(format!("cannot prepare the job directory: {e}"))
 }
 
-/// Creates `dir` (and parents) if it does not exist, readable by everyone: the sandboxed command may run as
-/// another user and has to be able to walk down to its working tree. A directory that already exists is left
-/// exactly as it is (it may be somebody else's, such as `/tmp`).
-fn prepare_dir(dir: &Path) -> std::io::Result<()> {
+/// Creates the scratch directory (and parents) if it does not exist, with `mode`. One that exists is left
+/// exactly as it is (it may be somebody else's, such as `/tmp`); `Profile::scratch_problem` has already
+/// refused one the worker cannot trust.
+fn create_scratch_root(dir: &Path, mode: u32) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     if dir.exists() {
         return Ok(());
     }
     std::fs::create_dir_all(dir)?;
-    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755))
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(mode))
 }
 
 fn remove_job_dir(dir: &Path) {

@@ -251,7 +251,7 @@ pub fn namespace_works() -> bool {
 /// The namespace sandbox if the machine can run it, else the process sandbox (opted into).
 pub fn test_profile(scratch: &Path) -> Profile {
     let mut p = if namespace_works() {
-        Profile::new(Backend::Namespace { host_ids: (65534, 65534) })
+        Profile::new(Backend::namespace((65534, 65534)))
     } else {
         eprintln!("NOTE: the namespace sandbox is unavailable here; the loop is tested with the process sandbox");
         let mut p = Profile::new(Backend::Process);

@@ -502,7 +502,10 @@ fn run_plan(
     if let Some(f) = finished.failure {
         return Err(failure_error(f, &plan, spec));
     }
-    if relayed.is_none() && finished.verdict.is_none() {
+    // The kernel's OOM killer takes the whole cgroup (`memory.oom.group`), the sandbox's init with it, so
+    // that no exit status is relayed: that is the memory limit at work, not a sandbox that fell over.
+    let oom_killed = cg.as_ref().is_some_and(|c| c.oom_kills() > 0);
+    if relayed.is_none() && finished.verdict.is_none() && !oom_killed {
         return Err(SandboxError::setup(
             "sandbox init",
             io::Error::other(format!(
@@ -521,7 +524,7 @@ fn run_plan(
     }
 
     let mut status = classify(&finished, relayed, &spec.limits);
-    if finished.verdict.is_none() && cg.as_ref().is_some_and(|c| c.oom_kills() > 0) {
+    if finished.verdict.is_none() && oom_killed {
         status = ExitStatus::MemoryLimit;
     }
     let (cpu_ms, _) = sys::usage(&finished.reaped.rusage);

@@ -85,7 +85,7 @@ jobs:
           printf '#!/bin/sh\nexec sudo -n podman "$@"\n' | sudo tee /usr/local/bin/podman-rootful > /dev/null
           sudo chmod 0755 /usr/local/bin/podman-rootful
           sudo podman pull "$OCI_TEST_IMAGE"
-          sudo podman info --format '{{.Host.Security.Rootless}} seccomp={{.Host.Security.SeccompEnabled}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
+          sudo podman info --format '{{json .Host.Security}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
           echo "AG_OCI_RUNTIME=/usr/local/bin/podman-rootful" >> "$GITHUB_ENV"
       - name: Podman, rootless
         if: matrix.leg == 'podman-rootless'
@@ -101,13 +101,18 @@ jobs:
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus" >> "$GITHUB_ENV"
           podman system migrate || true
           podman pull "$OCI_TEST_IMAGE"
-          podman info --format '{{.Host.Security.Rootless}} seccomp={{.Host.Security.SeccompEnabled}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
+          podman info --format '{{json .Host.Security}} cgroups={{.Host.CgroupsVersion}} manager={{.Host.CgroupManager}}'
           cat "/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers" || true
           echo "AG_OCI_RUNTIME=podman" >> "$GITHUB_ENV"
       - name: Build the tests
-        run: cargo test -p ag-sandbox --test oci_real --no-run
+        run: cargo test -p ag-sandbox --test oci_real -p ag-worker --test oci_e2e --no-run
       - name: The sandbox against the real runtime, checked from inside the container
-        run: cargo test -p ag-sandbox --test oci_real -- --nocapture
+        run: cargo test -p ag-sandbox --test oci_real -- --nocapture --test-threads=1
+        env:
+          AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
+          AG_REQUIRE_OCI: "1"
+      - name: The worker end to end with this runtime (a check that writes its tree, a missing image, stopping now)
+        run: cargo test -p ag-worker --test oci_e2e -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
           AG_REQUIRE_OCI: "1"

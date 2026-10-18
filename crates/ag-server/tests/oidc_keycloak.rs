@@ -51,7 +51,7 @@ async fn login(client: &str, username: &str) -> (String, String) {
             .expect("Keycloak is reachable");
         let status = res.status().as_u16();
         let body: Value = res.body_mut().read_json().expect("a JSON answer");
-        assert_eq!(status, 200, "Keycloak refused the login of {username}: {body}");
+        assert_eq!(status, 200, "Keycloak refused a login through client {client}: {body}");
         (
             body["id_token"].as_str().expect("an id_token (scope openid)").to_string(),
             body["access_token"].as_str().expect("an access_token").to_string(),

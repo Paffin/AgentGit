@@ -4,7 +4,7 @@
 // `POST /v1/credentials`), the CLI commands are `ag`'s.
 
 /** What the panel shows where the agent's secret goes; the person replaces it with the `token` of step 2. */
-export const TOKEN_PLACEHOLDER = '<token from step 2>'
+export const TOKEN_SLOT = '<token from step 2>'
 /** The environment variable that holds an administrator's token in the commands of steps 1 and 2. */
 export const ADMIN_TOKEN_VAR = 'AG_ADMIN_TOKEN'
 /** How long the credential in step 2 lives. The server caps agent credentials; an hour is always allowed. */
@@ -96,7 +96,7 @@ export function connectSteps(input: ConnectInput): ConnectStep[] | null {
       title: 'Run the agent’s first change',
       note: 'Clones the repository, checks who the server thinks you are, snapshots a change and pushes it as a proposal.',
       lines: [
-        `export AG_TOKEN=${TOKEN_PLACEHOLDER}`,
+        `export AG_TOKEN=${TOKEN_SLOT}`,
         `ag clone ${shellQuote(`${origin}/${repo}`)} ${shellQuote(dir)}`,
         `cd ${shellQuote(dir)}`,
         'ag remote whoami',

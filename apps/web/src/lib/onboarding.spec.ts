@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADMIN_TOKEN_VAR,
-  TOKEN_PLACEHOLDER,
+  TOKEN_SLOT,
   connectSteps,
   directoryFor,
   shellQuote,
@@ -25,7 +25,7 @@ describe('connect steps', () => {
       `-d '{"subject":"agent:my-agent","ttl_secs":3600,"scope":{"repos":["acme/webapp"]}}'`,
     )
     expect(work?.lines).toEqual([
-      `export AG_TOKEN=${TOKEN_PLACEHOLDER}`,
+      `export AG_TOKEN=${TOKEN_SLOT}`,
       "ag clone 'http://127.0.0.1:8080/acme/webapp' 'webapp'",
       "cd 'webapp'",
       'ag remote whoami',

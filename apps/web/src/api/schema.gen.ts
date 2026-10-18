@@ -2477,6 +2477,12 @@ export interface components {
     ListCredentialsResponse: {
       /** @default [] */
       credentials: components['schemas']['Credential'][]
+      /**
+       * @description True if there were more credentials than one listing returns (the newest are listed first). Narrow the
+       *     request with `subject` to see the rest.
+       * @default false
+       */
+      truncated: boolean
     }
     ListDirectoryRequest: {
       /**
@@ -2603,6 +2609,11 @@ export interface components {
     ListRolesResponse: {
       /** @default [] */
       bindings: components['schemas']['RoleBinding'][]
+      /**
+       * @description True if there were more role bindings than one listing returns. Narrow the request with `subject` or `repo`.
+       * @default false
+       */
+      truncated: boolean
     }
     ListRunsRequest: {
       /** @default false */
@@ -3170,6 +3181,8 @@ export interface components {
       burst: number
       /**
        * Format: int64
+       * @description Largest single object (envelope included) the repository accepts, on top of the server-wide limit
+       *     (`limits.max_object_bytes`); a larger one fails with `too_large`.
        * @default 0
        */
       max_object_bytes: number
@@ -3186,6 +3199,9 @@ export interface components {
       /**
        * Format: int64
        * @description 0 = unlimited.
+       *     Total bytes of objects the repository may hold. Charged to every write that adds an object (uploads,
+       *     workspace edits, merges); a write that would pass it fails with `quota_exceeded`. The tracked total is an
+       *     estimate that garbage collection recounts.
        * @default 0
        */
       max_total_object_bytes: number
@@ -3317,12 +3333,14 @@ export interface components {
       /** @default  */
       description: string
       /**
-       * @description Human-readable durability contract of the object backend.
+       * @description Human-readable durability contract of the object backend. Filled by Describe only (it is a property of the
+       *     open object store).
        * @default
        */
       durability: string
       /**
-       * @description Storage in use: "sqlite"/"postgres" and "fs"/"s3".
+       * @description Storage in use: "sqlite"/"postgres" and "fs"/"s3", as configured for this repository (create, describe
+       *     and list all report the same).
        * @default
        */
       meta_backend: string
@@ -3342,8 +3360,7 @@ export interface components {
       quota: components['schemas']['Quota'] | null
       /**
        * Format: int32
-       * @description Filled by Describe only; listings do not open every repository and leave
-       *     both counts at 0.
+       * @description Filled by Describe only; listings and Create do not open every repository and leave both counts at 0.
        * @default 0
        */
       stream_count: number

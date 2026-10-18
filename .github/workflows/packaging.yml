@@ -85,7 +85,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Metadata of every package (crates, npm, PyPI)
-        run: python3 scripts/check_publish_metadata.py --list | tee "$RUNNER_TEMP/metadata.txt"
+        # pipefail: without it `tee` hides the checker's exit status and an incomplete crate passes this step.
+        run: |
+          set -euo pipefail
+          python3 scripts/check_publish_metadata.py --list | tee "$RUNNER_TEMP/metadata.txt"
       - name: cargo publish --dry-run for every publishable crate, in dependency order
         run: |
           set -euo pipefail

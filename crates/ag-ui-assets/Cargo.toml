@@ -11,7 +11,7 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable: embeds ../../apps/web/dist, which lies outside the crate (docs/operations/releasing.md).
+# Not publishable yet: embeds ../../apps/web/dist, which lies outside the crate (docs/operations/releasing.md).
 publish = false
 build = "build.rs"
 

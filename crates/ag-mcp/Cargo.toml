@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [lints]
 workspace = true
@@ -28,8 +32,11 @@ ureq.workspace = true
 
 [dev-dependencies]
 ag-crypto.workspace = true
-ag-server.workspace = true
-ag-storage.workspace = true
 ag-types.workspace = true
+# The end-to-end suites run against a real in-process ag-server. Those two crates are `publish = false`, so they are
+# path-only here: `cargo publish` drops a dev-dependency that has no version, whereas `.workspace = true` would carry
+# the workspace version into the published manifest and crates.io would have to resolve it.
+ag-server = { path = "../ag-server" }
+ag-storage = { path = "../ag-storage", default-features = false }
 tempfile.workspace = true
 tokio.workspace = true

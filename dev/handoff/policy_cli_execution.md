@@ -22,6 +22,9 @@ the `Blocker`/`Conflict` code vocabularies were already what the code produced a
 | `6c83241` | regenerated CLI reference, JSON help, golden |
 | `970764b`, `833294a` | the runtimes workflow runs on `main`; its actions are pinned by SHA (`check_workflows.py --strict` is a gate now) |
 | `903499d` | the `git_parse` fuzz seeds and dictionary in the new log format |
+| `28fae3d` | the `job_spec` and `policy_eval` fuzz targets build against the changed types; this page |
+| `5281a16` | the proposal view shows the conflict message, the dag test graph is iterative (Windows stack), `as_chunks` for the log records |
+| `43fb349` | the Linux test probe reports the environment `execve` passed (`/proc/self/environ`), so the coverage job's instrumented probe does not look like a leak |
 
 ## The execution-plane proof
 
@@ -146,19 +149,31 @@ Local, on the tree that was pushed (rebased on `9c84add`):
   its e2e expected the old `kind` text (the UI shows `message` now); `vue-tsc` failed on specs built before the schema gained
   `message`.
 
-CI on `main` for `903499d` (the code that this page describes; the commit that adds this page changes only the page and two
-fuzz targets):
+CI on `main`, as seen when the package was finished (every run is the newest one of its workflow for the commit; a push to
+`main` cancels the unfinished runs of the commit before it, and a cancelled run is not a failure, so the evidence below is
+the runs that completed):
 
-* **OCI runtimes and cgroup v2**: [run 39115811180](https://github.com/Paffin/AgentGit/actions/runs/39115811180) green, all four jobs
-  (docker, podman rootful, podman rootless, namespace sandbox on a delegated cgroup v2).
-* **Packaging** green ([39115811164](https://github.com/Paffin/AgentGit/actions/runs/39115811164)).
-* **Fuzz** was **red**: `fuzz/` is a workspace of its own that no local gate builds, and two targets did not compile against the
-  changed APIs (`job_spec`: `Backend` gained fields, `policy_eval`: `Facts.stream` is gone). Fixed in the commit that adds this
-  page; `cargo check --manifest-path fuzz/Cargo.toml --features heavy --bins` is clean. Lesson: build the fuzz crate when a
-  public type of the fuzzed crates changes.
-* The other workflows (CI, Docs, Windows, Web UI, Containers, Quality, Security, CodeQL) were still queued or running when this
-  page was written; a push to `main` restarts the CI of `main`, so their results are reported by the package's final report
-  and not frozen here.
+* **My last code commit `43fb349`**: **OCI runtimes and cgroup v2**
+  [39120196226](https://github.com/Paffin/AgentGit/actions/runs/39120196226) green (docker, podman rootful, podman rootless,
+  namespace sandbox on a delegated cgroup v2), **Quality** [39120196135](https://github.com/Paffin/AgentGit/actions/runs/39120196135)
+  green (the coverage job runs the sandbox suites instrumented), **CodeQL** [39120196237](https://github.com/Paffin/AgentGit/actions/runs/39120196237)
+  green, **Fuzz** [39120196199](https://github.com/Paffin/AgentGit/actions/runs/39120196199) green, **Packaging**
+  [39120196136](https://github.com/Paffin/AgentGit/actions/runs/39120196136), **Security** and **Docs** green. Its CI, Windows and
+  Containers runs were cancelled by the next push (`148a98c`).
+* **Main at `148a98c`** (a style commit of another package on top of mine; it contains every commit of this package): **CI**
+  [39120767641](https://github.com/Paffin/AgentGit/actions/runs/39120767641), **Windows**
+  [39120767560](https://github.com/Paffin/AgentGit/actions/runs/39120767560), **Containers**
+  [39120767666](https://github.com/Paffin/AgentGit/actions/runs/39120767666), **Web UI**
+  [39120767569](https://github.com/Paffin/AgentGit/actions/runs/39120767569), **Docs** and **Security** green. The OCI workflow is
+  path-filtered and did not run again (nothing under its paths changed).
+* The failures that were seen on the way and fixed: Fuzz (two fuzz targets did not compile against the changed types; `fuzz/` is
+  a workspace of its own that no local gate builds, so build it whenever a public type of a fuzzed crate changes); Windows
+  (a recursive test graph overflowed the 2 MiB test-thread stack, now iterative); Web UI e2e (the proposal view showed the
+  conflict code, now the message); clippy 1.99 `chunks_exact_to_as_chunks`; and **Quality**: under `cargo llvm-cov` the
+  instrumented test probe's own profiling runtime adds `__LLVM_PROFILE_RT_INIT_ONCE` to the probe's environment, which the two
+  "the environment is exactly what the spec passed" tests printed as if the sandbox had passed it. The probe now reads
+  `/proc/self/environ` (what `execve` received). CodeQL and the Web UI lint were red on other packages' files
+  (`apps/web/tests/security.spec.ts`) and were fixed by them.
 
 ## What is NOT verified
 

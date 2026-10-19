@@ -120,7 +120,12 @@ fn cors(router: Router, app: &App) -> Router {
 /// a replica does not repair a database outage.
 async fn readyz(State(app): State<App>) -> Response {
     match app.not_ready_reason().await {
-        None => "ready".into_response(),
+        // Ready, and - when the last health scan found something - saying what, so that a person who curls the
+        // endpoint sees it. The status stays 200: serving is not what is wrong.
+        None => match app.last_health().and_then(|h| h.problems()) {
+            Some(why) => format!("ready; needs attention: {why}").into_response(),
+            None => "ready".into_response(),
+        },
         Some(why) => (StatusCode::SERVICE_UNAVAILABLE, why).into_response(),
     }
 }
@@ -184,6 +189,23 @@ fn spawn_idempotency_sweeper(app: App) {
     });
 }
 
+/// Reads the condition of every repository every `repos.health_scan_interval_secs` until shutdown (the first scan
+/// is immediate), for `/metrics` and `/readyz`.
+fn spawn_health_scanner(app: App) {
+    let every = std::time::Duration::from_secs(app.cfg.repos.health_scan_interval_secs);
+    let mut stop = app.shutdown_signal();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(every);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => { app.refresh_health().await; }
+                _ = stop.changed() => break,
+            }
+        }
+    });
+}
+
 /// Serves until `shutdown` completes.
 async fn serve_inner(
     app: App,
@@ -198,6 +220,9 @@ async fn serve_inner(
     }
     if app.cfg.agents.reap_interval_secs > 0 {
         spawn_run_reaper(app.clone());
+    }
+    if app.cfg.repos.health_scan_interval_secs > 0 {
+        spawn_health_scanner(app.clone());
     }
     if app.cfg.repos.idempotency_ttl_secs > 0 && app.cfg.repos.idempotency_sweep_interval_secs > 0 {
         spawn_idempotency_sweeper(app.clone());

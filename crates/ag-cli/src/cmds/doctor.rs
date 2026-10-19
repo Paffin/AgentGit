@@ -256,6 +256,8 @@ fn repository_checks(layout: &Layout, a: &DoctorArgs, out: &mut Vec<Check>) {
     out.push(keys_check(&repo));
     out.push(integrity_check(&repo));
     out.push(operations_check(&repo));
+    out.push(derive_check(&repo));
+    out.push(references_check(&repo));
     let waiting: Vec<String> = repo
         .workspaces()
         .unwrap_or_default()
@@ -404,6 +406,67 @@ fn integrity_check(repo: &Repository) -> Check {
             format!("{e:#}"),
             Some("run `ag verify` for the full report; restore from `ag backup` or a mirror if it confirms damage"),
         ),
+    }
+}
+
+/// The post-commit derive pass (tree cache, outbox): events that stayed pending, and why the last pass was
+/// incomplete. Nothing is lost - the data is committed - but derived data is behind until a pass succeeds.
+fn derive_check(repo: &Repository) -> Check {
+    match repo.derive_status() {
+        Err(e) => check(
+            "derive",
+            Status::Fail,
+            format!("cannot read the derive status: {e}"),
+            Some("the metadata store is failing: `ag verify` says more"),
+        ),
+        Ok(s) if s.pending == 0 && s.last_error.is_none() => {
+            check("derive", Status::Ok, "no derive work pending, the last pass was complete", None)
+        }
+        Ok(s) => check(
+            "derive",
+            Status::Warn,
+            format!(
+                "{} derive event(s) pending{}",
+                s.pending,
+                s.last_error.map(|e| format!("; the last pass: {e}")).unwrap_or_default()
+            ),
+            Some("the next write retries them; `ag reindex` rebuilds the derived data now"),
+        ),
+    }
+}
+
+/// Pins, open proposals and workspaces that point at a changeset the object store cannot produce
+/// (`dangling_pin`, `dangling_proposal_head`, `dangling_workspace_ref`). Garbage collection starts from these
+/// references and refuses to run while one is unreadable.
+fn references_check(repo: &Repository) -> Check {
+    match repo.dangling_refs() {
+        Err(e) => check(
+            "references",
+            Status::Fail,
+            format!("cannot check the references: {e}"),
+            Some("the metadata store is failing: `ag verify` says more"),
+        ),
+        Ok(issues) if issues.is_empty() => check(
+            "references",
+            Status::Ok,
+            "every pin, open proposal and workspace points at a readable changeset",
+            None,
+        ),
+        Ok(issues) => {
+            let mut kinds: std::collections::BTreeMap<&str, usize> = Default::default();
+            for i in &issues {
+                *kinds.entry(i.kind.as_str()).or_default() += 1;
+            }
+            let counts: Vec<String> = kinds.iter().map(|(k, n)| format!("{n} {k}")).collect();
+            check(
+                "references",
+                Status::Fail,
+                format!("{}: {}", counts.join(", "), issues[0].detail),
+                Some(
+                    "garbage collection refuses to run until they are fixed; `ag verify` lists each one; restore the missing objects from `ag backup` or a mirror, or unpin / close what points at nothing",
+                ),
+            )
+        }
     }
 }
 

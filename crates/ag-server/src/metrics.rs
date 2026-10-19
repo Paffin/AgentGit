@@ -34,6 +34,16 @@ pub struct Metrics {
     pub open_repos: IntGauge,
     /// Open event subscriptions.
     pub subscriptions: IntGauge,
+    /// Outbox events (derived data to build after a commit) still pending, over all repositories (health scan).
+    pub derive_pending: IntGauge,
+    /// Repositories whose last post-commit derive pass was incomplete (health scan).
+    pub derive_failing_repos: IntGauge,
+    /// Pins, open proposals and workspaces pointing at a changeset that cannot be read, by kind (health scan).
+    pub dangling_refs: IntGaugeVec,
+    /// Repositories the last health scan could not read.
+    pub health_unreadable_repos: IntGauge,
+    /// When the last health scan finished (seconds since the epoch; 0 = none yet).
+    pub health_scan_time: IntGauge,
     /// Execution-plane job events since start: enqueued, claimed, succeeded, retried, failed. `retried` and
     /// `failed` also count the jobs taken back because a worker's lease ran out (see `job.expire`).
     pub job_events: IntCounterVec,
@@ -98,6 +108,25 @@ impl Metrics {
             "Uploads refused because the in-flight object byte budget was used up",
         )
         .expect("metric");
+        let derive_pending =
+            IntGauge::new("derive_pending_events", "Outbox events still pending, over all repositories")
+                .expect("metric");
+        let derive_failing_repos = IntGauge::new(
+            "derive_failing_repositories",
+            "Repositories whose last post-commit derive pass was incomplete",
+        )
+        .expect("metric");
+        let dangling_refs = IntGaugeVec::new(
+            Opts::new("dangling_refs", "References that point at a changeset that cannot be read, by kind"),
+            &["kind"],
+        )
+        .expect("metric");
+        let health_unreadable_repos =
+            IntGauge::new("health_scan_unreadable_repositories", "Repositories the last health scan could not read")
+                .expect("metric");
+        let health_scan_time =
+            IntGauge::new("health_scan_timestamp_seconds", "When the last health scan finished (0 = none yet)")
+                .expect("metric");
         let open_repos = IntGauge::new("open_repositories", "Repositories currently open").expect("metric");
         let subscriptions = IntGauge::new("event_subscriptions", "Open event subscriptions").expect("metric");
         let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
@@ -152,6 +181,11 @@ impl Metrics {
             Box::new(object_bytes_out.clone()),
             Box::new(inflight_object_bytes.clone()),
             Box::new(object_budget_refused.clone()),
+            Box::new(derive_pending.clone()),
+            Box::new(derive_failing_repos.clone()),
+            Box::new(dangling_refs.clone()),
+            Box::new(health_unreadable_repos.clone()),
+            Box::new(health_scan_time.clone()),
             Box::new(open_repos.clone()),
             Box::new(subscriptions.clone()),
             Box::new(job_events.clone()),
@@ -184,6 +218,11 @@ impl Metrics {
             object_bytes_out,
             inflight_object_bytes,
             object_budget_refused,
+            derive_pending,
+            derive_failing_repos,
+            dangling_refs,
+            health_unreadable_repos,
+            health_scan_time,
             open_repos,
             subscriptions,
             job_events,

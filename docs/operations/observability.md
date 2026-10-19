@@ -21,6 +21,9 @@ wires them up under `--profile observability`.
 | `agwp_object_bytes_received_total`, `agwp_object_bytes_sent_total` | counter | | object traffic |
 | `agwp_inflight_object_bytes` | gauge | | object bytes held in memory by uploads in progress, against `limits.max_inflight_object_bytes` |
 | `agwp_object_budget_refused_total` | counter | | uploads refused (`unavailable`, with a retry hint) because that budget was used up |
+| `agwp_derive_pending_events`, `agwp_derive_failing_repositories` | gauge | | outbox events still pending after commits, and repositories whose last post-commit derive pass was incomplete (nothing is lost: the data is committed, derived data is behind; the next write retries, `ag reindex` rebuilds). Refreshed by the health scan |
+| `agwp_dangling_refs` | gauge | `kind` | pins (`dangling_pin`), open proposals (`dangling_proposal_head`) and workspaces (`dangling_workspace_ref`) that point at a changeset the object store cannot produce. Garbage collection refuses to run while one exists; `ag verify` lists them. Refreshed by the health scan |
+| `agwp_health_scan_unreadable_repositories`, `agwp_health_scan_timestamp_seconds` | gauge | | repositories the last scan could not open, and when it finished (0: none yet) |
 | `agwp_open_repositories`, `agwp_event_subscriptions` | gauge | | |
 | `agwp_job_events_total` | counter | `event` | execution plane since start: `enqueued`, `claimed`, `succeeded`, `retried`, `failed` (`retried` and `failed` include the jobs taken back when a worker died holding them: a runner that crashes on its last attempt shows up here, not only a runner that reports the failure) |
 | `agwp_jobs_queued` | gauge | | queued validation jobs in repositories known to have work (counted, not listed, at scrape time; a repository that cannot be read at that moment is logged and left out of the sum) |

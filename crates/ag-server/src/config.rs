@@ -387,6 +387,10 @@ pub struct ReposSection {
     /// How often the server deletes expired idempotency records, in seconds (0 = never; expired records are
     /// then only ignored, not removed).
     pub idempotency_sweep_interval_secs: u64,
+    /// How often the server reads every repository's derive status and dangling references for `/metrics` and
+    /// `/readyz`, in seconds (0 = never). It opens every registered repository, so raise it for installations with
+    /// thousands of them.
+    pub health_scan_interval_secs: u64,
 }
 
 impl Default for ReposSection {
@@ -398,6 +402,7 @@ impl Default for ReposSection {
             storage: None,
             idempotency_ttl_secs: 7 * 24 * 3600,
             idempotency_sweep_interval_secs: 3600,
+            health_scan_interval_secs: 300,
         }
     }
 }

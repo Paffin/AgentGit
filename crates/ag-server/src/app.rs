@@ -102,6 +102,8 @@ pub struct AppState {
     pub proxies: crate::proxy::TrustedProxies,
     /// Prometheus metrics.
     pub metrics: Metrics,
+    /// What the last health scan found (`repos.health_scan_interval_secs`).
+    pub(crate) health: Mutex<Option<crate::health::Health>>,
     /// Object bytes held by uploads in progress (`limits.max_inflight_object_bytes`).
     pub inflight: Arc<crate::inflight::InflightBytes>,
     /// Bounds concurrent requests; excess is shed.
@@ -317,6 +319,7 @@ impl App {
             proxies,
             metrics,
             inflight,
+            health: Mutex::new(None),
             concurrency,
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,

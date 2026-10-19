@@ -21,6 +21,7 @@ pub mod config;
 pub mod control;
 pub mod error;
 pub mod grpc;
+pub mod health;
 pub mod http;
 pub mod inflight;
 pub mod jobs_http;

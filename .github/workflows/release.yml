@@ -484,7 +484,7 @@ jobs:
       - name: Release notes from the CHANGELOG
         run: |
           flag=""; [ "$DRY_RUN" = true ] && flag="--dry-run"
-          python3 scripts/check_release.py "$VERSION" $flag --notes > dist/RELEASE_NOTES.md
+          python3 scripts/check_release.py "v${VERSION#v}" $flag --notes > dist/RELEASE_NOTES.md
           wc -l dist/RELEASE_NOTES.md
       - name: Create the GitHub release
         run: |
@@ -493,8 +493,17 @@ jobs:
           case "$VERSION" in *-*) flags="--prerelease";; esac
           files="$(echo dist/*.tar.gz) $(echo dist/*.cdx.json) dist/SHA256SUMS dist/agentgit.rb"
           if [ "$PUBLISH" = true ]; then
-            # shellcheck disable=SC2086
-            gh release create "v$VERSION" $files --title "AgentGit v$VERSION" --notes-file dist/RELEASE_NOTES.md $flags --verify-tag
+            # A release page can already exist (the GitHub UI creates one together with a tag): fill it in
+            # instead of failing on "already exists".
+            if gh release view "v$VERSION" > /dev/null 2>&1; then
+              # shellcheck disable=SC2086
+              gh release upload "v$VERSION" $files --clobber
+              # shellcheck disable=SC2086
+              gh release edit "v$VERSION" --title "AgentGit v$VERSION" --notes-file dist/RELEASE_NOTES.md --draft=false $flags
+            else
+              # shellcheck disable=SC2086
+              gh release create "v$VERSION" $files --title "AgentGit v$VERSION" --notes-file dist/RELEASE_NOTES.md $flags --verify-tag
+            fi
           else
             echo "REHEARSAL - would run: gh release create v$VERSION --title 'AgentGit v$VERSION' --notes-file RELEASE_NOTES.md $flags <files>"
             echo "$files"

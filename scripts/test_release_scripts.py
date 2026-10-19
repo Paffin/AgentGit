@@ -116,6 +116,15 @@ class CheckRelease(unittest.TestCase):
         p = run(PY, SCRIPTS / "check_release.py", "0.0.0-rc.dry", "--dry-run")
         self.assertEqual(p.returncode, 0, p.stderr)
 
+    def test_the_workflow_never_hands_a_bare_version_to_a_real_run(self):
+        # v0.2.0-rc.1 failed "assemble the release" because the rehearsal-only form (no leading v) was used
+        # for the notes of a real run, which demands a tag like v1.2.3.
+        wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+        calls = re.findall(r"check_release\.py (\S+)", wf)
+        self.assertTrue(calls)
+        for arg in calls:
+            self.assertTrue(arg.startswith(('"$ref"', '"v')), f"bare version passed to check_release.py: {arg}")
+
 
 def stub_bin(path: pathlib.Path, name: str, version: str):
     path.mkdir(parents=True, exist_ok=True)

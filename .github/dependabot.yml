@@ -42,6 +42,10 @@ updates:
       # The runtime and the CI image are Node 22 (engines >=22.18); the types follow the runtime, not the newest Node.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # Playwright 1.56 -> 1.64 failed the end-to-end suite on all five projects (PR #13) and the browsers/snapshots are
+      # pinned to the CI image's release. Moved by hand together with a refresh of the suite.
+      - dependency-name: "@playwright/test"
+        update-types: ["version-update:semver-minor"]
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]

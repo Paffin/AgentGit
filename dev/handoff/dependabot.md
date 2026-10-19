@@ -28,7 +28,9 @@ macOS/Windows `Test` jobs of PRs opened before the flake fixes. Evidence below i
 | #32 | crazy-max/ghaction-github-runtime 3.1.0 -> 4.0.0 | merged `07f908d` | Containers green on main after #28; PR's own red job was the same cache-test flake |
 | #20 | vitest 3.2.7 -> 5.0.4 (web) | merged `7ae5771` | Web UI, CI green on the PR and on main |
 
-Open items are recorded at the end of the run in the final report (see the PR list on GitHub).
+| #27 | vitest 3.2.7 -> 5.0.5 (sdk) | merged `252e82b` | all workflows green on the rebased head (it conflicted with #15's lockfile and was rebased by Dependabot) |
+| #14 | pinia 3.0.4 -> 4.1.0 (web) | migrated by hand `1fef34e`, closed | PR failed Security/hygiene: a production npm dependency changes THIRD_PARTY_LICENSES.md; regenerated the npm section; lint, types, 365 vitest tests, build run locally |
+| #13 | @axe-core/playwright 4.13.0, @playwright/test 1.64.1 (web) | closed, ignore rule for `@playwright/test` minors | Web UI end-to-end failed on all five projects (chromium, firefox, webkit, phone, tablet); the browsers in CI/dev images are pinned to 1.56. Move with a refreshed suite |
 
 Notes
 * Local `npm install vitest@5` fails with an arborist bug in node 22's bundled npm (`edgesOut`); the PR's lockfile,

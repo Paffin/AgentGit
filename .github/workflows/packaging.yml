@@ -126,7 +126,8 @@ jobs:
           # Every publishable crate must have been packaged, verified (built from its tarball) and "uploaded" (dry run).
           want=$(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt" | tr ' ' '\n' | sort)
           for stage in Packaging Verifying Uploading; do
-            got=$(sed -n "s/^ *$stage \(agentgit-[a-z-]*\) v.*/\1/p" "$RUNNER_TEMP/publish.txt" | sort -u)
+            # CARGO_TERM_COLOR=always puts escape sequences around the stage name: strip them first.
+            got=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/publish.txt" | sed -n "s/^ *$stage \(agentgit-[a-z-]*\) v.*/\1/p" | sort -u)
             if [ "$got" != "$want" ]; then
               echo "::error::$stage covered a different set of crates than 'publish order'"
               diff <(echo "$want") <(echo "$got") || true

@@ -24,7 +24,7 @@ fn server_bin() -> PathBuf {
     let bin = exe.with_file_name(if cfg!(windows) { "ag-server.exe" } else { "ag-server" });
     // Always ask cargo: a binary left over from an older build must not be what is tested (a no-op when fresh).
     let status = Command::new(env!("CARGO"))
-        .args(["build", "-p", "ag-server"])
+        .args(["build", "-p", "agentgit-server"])
         .status()
         .expect("running cargo to build ag-server");
     assert!(status.success(), "building ag-server failed");

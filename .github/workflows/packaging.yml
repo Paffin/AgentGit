@@ -118,10 +118,11 @@ jobs:
         # `--workspace` is what makes this work before anything is on crates.io: cargo packages the members in
         # dependency order and resolves each against the tarballs of the ones before it (a single `-p` could not,
         # `agentgit-types` and the rest do not exist on the registry yet). `publish = false` members are skipped.
+        # --allow-dirty: the copied Web UI (crates/ag-ui-assets/dist, git-ignored on purpose) counts as uncommitted.
         run: |
           set -euo pipefail
-          echo "cargo publish --workspace --dry-run --locked"
-          cargo publish --workspace --dry-run --locked 2>&1 | tee "$RUNNER_TEMP/publish.txt"
+          echo "cargo publish --workspace --dry-run --locked --allow-dirty"
+          cargo publish --workspace --dry-run --locked --allow-dirty 2>&1 | tee "$RUNNER_TEMP/publish.txt"
           # Every publishable crate must have been packaged, verified (built from its tarball) and "uploaded" (dry run).
           want=$(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt" | tr ' ' '\n' | sort)
           for stage in Packaging Verifying Uploading; do

@@ -179,11 +179,12 @@ and waits for each crate to appear in the index before the next one.
 git switch --detach vX.Y.Z                                   # publish from the tag
 bash scripts/build_ui.sh && python3 scripts/sync_crate_files.py --ui && python3 scripts/sync_crate_files.py --check
 python3 scripts/check_publish_metadata.py --online           # the names are still free
-cargo publish --workspace --dry-run --locked                 # exactly what Packaging runs
-cargo publish --workspace --locked                           # for real
+cargo publish --workspace --dry-run --locked --allow-dirty   # exactly what Packaging runs
+cargo publish --workspace --locked --allow-dirty             # for real
 ```
 
-`dist/` is git-ignored, so the tree stays clean and `cargo publish` needs no `--allow-dirty`. An `-rc` version can be
+`--allow-dirty` is needed only because cargo counts the git-ignored `crates/ag-ui-assets/dist/` it was told to include
+as an uncommitted change; check that `git status` is otherwise clean first. An `-rc` version can be
 published too; crates.io cannot delete a version (only yank it), so rehearse with the dry run first.
 
 ### Limits

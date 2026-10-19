@@ -351,3 +351,42 @@ async fn defaults_and_edges_found_by_the_web_ui_work() {
     assert_eq!(v.status, 200, "{}", v.json);
     srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn retry_after_headers_agree_with_retry_after_ms() {
+    use axum::response::IntoResponse as _;
+    // Over the wire: a limit that refills in milliseconds still says "1" second (the smallest the header can
+    // say) and carries the exact delay beside it.
+    let srv = TestServer::start_with(|cfg| {
+        cfg.limits.requests_per_second = 50;
+        cfg.limits.burst = 1;
+    })
+    .await;
+    let admin = srv.admin();
+    let mut limited = None;
+    for _ in 0..20 {
+        let r = admin.get("/v1/whoami").await;
+        if r.status == 429 {
+            limited = Some(r);
+            break;
+        }
+    }
+    let r = limited.expect("a burst of calls must hit the limit");
+    let ms = r.json["error"]["retry_after_ms"].as_i64().unwrap();
+    assert!(ms > 0 && ms <= 20, "{ms}");
+    assert_eq!(r.headers["retry-after-ms"], ms.to_string());
+    assert_eq!(r.headers["retry-after"], "1");
+    srv.stop().await;
+
+    // Rounding is always up, so the header is never shorter than the exact delay.
+    for (ms, secs) in [(1, "1"), (999, "1"), (1000, "1"), (1001, "2"), (2500, "3")] {
+        let resp = ag_server::error::ApiError::new(ag_protocol::ErrorCode::RateLimited, "slow down")
+            .with_retry_after(ms)
+            .into_response();
+        assert_eq!(resp.headers()["retry-after"], secs, "{ms} ms");
+        assert_eq!(resp.headers()["retry-after-ms"], ms.to_string());
+    }
+    // No delay, no headers.
+    let resp = ag_server::error::ApiError::new(ag_protocol::ErrorCode::QuotaExceeded, "full").into_response();
+    assert!(resp.headers().get("retry-after").is_none() && resp.headers().get("retry-after-ms").is_none());
+}

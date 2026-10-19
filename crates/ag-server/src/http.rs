@@ -43,6 +43,11 @@ impl IntoResponse for ApiError {
             if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
                 resp.headers_mut().insert(header::RETRY_AFTER, v);
             }
+            // `Retry-After` can only say whole seconds (rounded up, so it is never too early); the exact delay
+            // that `retry_after_ms` carries in the body is repeated here for clients that read headers only.
+            if let Ok(v) = HeaderValue::from_str(&self.0.retry_after_ms.to_string()) {
+                resp.headers_mut().insert(HeaderName::from_static("retry-after-ms"), v);
+            }
         }
         if !self.0.request_id.is_empty()
             && let Ok(v) = HeaderValue::from_str(&self.0.request_id)

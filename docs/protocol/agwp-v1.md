@@ -59,7 +59,7 @@ directory is checked by a test, so it cannot drift from the server.
   deadline expires the operation *may still complete*: the error is `deadline_exceeded`; ask for the outcome.
   The server applies `limits.default_deadline_ms` when the client sets none.
 * **Backpressure.** `429 rate_limited`/`quota_exceeded` and `503 unavailable` carry `retry_after_ms`
-  (HTTP: `Retry-After`, whole seconds, at least 1; prefer `retry_after_ms`). Every authenticated operation
+  (HTTP: `Retry-After`, whole seconds rounded up, at least 1, never shorter than `retry_after_ms`; and `Retry-After-Ms` with the exact value; prefer `retry_after_ms`). Every authenticated operation
   takes one token from the caller's bucket (`limits.requests_per_second`: per credential, or per identity for
   OIDC sign-ins, whose tokens are short-lived), including the ones not tied to a repository. A repository may
   carry a quota of its own: `max_total_object_bytes` is charged to every write that adds an object (uploads,

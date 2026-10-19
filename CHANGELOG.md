@@ -7,6 +7,11 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.2.0-rc.1] — 2026-10-19
+
+First release candidate and the first tag of the project (the `0.1.0` section below was an alpha that was never
+tagged or published).
+
 ### Added
 
 **Network and storage**
@@ -130,6 +135,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - `ag_merge::ALGORITHM_VERSION` is `ag-merge/2+ag-diff/1` (recorded in every merge changeset).
 - The wire name of a file entry's type is `regular` or `symlink` (it said `file` on reads before the server
   was released); writes still accept `file`.
+- **Cargo packages are named `agentgit-<x>`** (directories, library names and binaries are unchanged; `cargo -p`
+  flags change). 21 crates are publishable and CI dry-runs `cargo publish --workspace`; the protocol and the migrations
+  are packaged inside their crates (`scripts/sync_crate_files.py`). Nothing is published to crates.io
+  ([names](docs/operations/releasing.md#cratesio)).
 - Container images and Compose/Kubernetes default to the image tag of the workspace version instead of `:latest`;
   Compose uses SeaweedFS instead of MinIO (whose images were withdrawn).
 - Object bytes are charged against the repository quota on every path that writes objects, atomically in the control
@@ -176,8 +185,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Known limitations
 
-- Nothing is published: no release tag, no registry image, no npm, PyPI or crates.io package, and GitHub Pages is not
-  enabled. The release workflow was rehearsed from a work branch, not from `main`.
+- This is the first tag: before it the publishing half of the release workflow (GHCR push, GitHub release,
+  attestation of the published files) had only been rehearsed from a work branch. No npm, PyPI or crates.io package is
+  published, and GitHub Pages is not enabled.
 - Replicas: mixed builds during a rolling upgrade, a PostgreSQL failover, load, and the `ha` Kubernetes overlay on a
   cluster are not tested. Rate limits are per replica; `remote` in logs is the proxy's address (no `X-Forwarded-For`).
 - Open-stream and open-proposal counts are checked just before the insert and can overshoot by the number of
@@ -197,8 +207,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - The Web UI has no screen-reader or real-device pass; OIDC was verified against Keycloak only. `ag-mcp` is stdio only
   and was not run inside Claude Code, Claude Desktop or the Agent SDKs; `--ca-file` replaces the built-in roots. The
   model-backed orchestrator was run live once with one model through one provider.
-- The nightly fuzz job and the weekly mutation run have never run on GitHub; the dependency graph is off; the Dependabot
-  pull requests opened by the first run are untriaged. No external security audit.
+- The nightly fuzz job and the weekly mutation run have never run on GitHub; the dependency graph is off. No external
+  security audit.
 - Rename detection is per file (no directory renames or copies); blame follows renames but not copies, and
   for merge parents beyond the first only the same path.
 
@@ -239,5 +249,6 @@ Local mode trusts the local user; no sandbox for `ag validate run`; flat tree ma
 detection; no network server. See [ROADMAP.md](ROADMAP.md) and
 [docs/architecture/security.md](docs/architecture/security.md).
 
-[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.2.0-rc.1...HEAD
+[0.2.0-rc.1]: https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.1
 [0.1.0]: https://github.com/Paffin/AgentGit/releases/tag/v0.1.0

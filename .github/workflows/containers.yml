@@ -118,9 +118,9 @@ jobs:
             echo "::error::the server image contains a shell"; exit 1
           fi
           v=$(docker run --rm agentgit-server:ci --version); echo "$v"
-          case "$v" in "ag-server 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
+          case "$v" in "ag-server 0.2.0-rc.1 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
           v=$(docker run --rm agentgit-cli:ci --version); echo "$v"
-          case "$v" in "ag 0.1.0 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
+          case "$v" in "ag 0.2.0-rc.1 (${GITHUB_SHA:0:12} ${{ steps.meta.outputs.date }})") ;; *) echo "::error::unexpected version string"; exit 1;; esac
           if docker history --no-trunc --format '{{.CreatedBy}}' agentgit-server:ci | grep -iqE 'token|secret|password'; then
             echo "::error::a secret-looking string is in the image history"; exit 1
           fi

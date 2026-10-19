@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agentgit-agent"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-bench"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -46,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-changeset"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-object",
  "agentgit-types",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-cli"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-client"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-crypto"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-types",
  "ed25519-dalek",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-dag"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-types",
@@ -135,14 +135,14 @@ dependencies = [
 
 [[package]]
 name = "agentgit-diff"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "agentgit-git"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-dag",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-integrate"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-mcp"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-server",
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-merge"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-diff",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-object"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-types",
  "proptest",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-policy"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-object",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-protocol"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "base64 0.23.1",
  "prost",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-sandbox"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "libc",
  "serde",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-server"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-storage"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-tree"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-types"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "hex",
  "proptest",
@@ -368,11 +368,11 @@ dependencies = [
 
 [[package]]
 name = "agentgit-ui-assets"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 
 [[package]]
 name = "agentgit-worker"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-client",

@@ -100,6 +100,12 @@ class CheckRelease(unittest.TestCase):
             )
         self.assertEqual(self.check("0.0.0-rc.dry", "--dry-run", "--notes").stdout.strip(), "- upcoming")
 
+    def test_dry_run_with_an_empty_unreleased_uses_the_workspace_versions_section(self):
+        (self.root / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.3.0] — 2026\n- three\n")
+        p = self.check("0.0.0-rc.dry", "--dry-run")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.kv(p.stdout)["notes_section"], "0.3.0")
+
     def test_dry_run_uses_the_real_section_when_there_is_one(self):
         self.assertEqual(self.kv(self.check("0.3.0", "--dry-run").stdout)["notes_section"], "0.3.0")
 

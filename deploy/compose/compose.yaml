@@ -73,7 +73,7 @@ services:
 
   ag-server:
     <<: *restart
-    image: ${AG_IMAGE:-ghcr.io/paffin/agentgit-server}:${AG_VERSION:-0.1.0}
+    image: ${AG_IMAGE:-ghcr.io/paffin/agentgit-server}:${AG_VERSION:-0.2.0-rc.1}
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile

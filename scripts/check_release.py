@@ -42,13 +42,16 @@ def workspace_version() -> str:
     return m.group(1)
 
 
-def changelog_section(name: str) -> str | None:
-    """The body of `## [name]`, or None if there is no such heading. Fails if the heading exists but is empty."""
+def changelog_section(name: str, empty_ok: bool = False) -> str | None:
+    """The body of `## [name]`, or None if there is no such heading (or, with `empty_ok`, if it is empty).
+    Fails if the heading exists but is empty."""
     text = (ROOT / "CHANGELOG.md").read_text()
     m = re.search(rf"^## \[{re.escape(name)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
     if not m:
         return None
     if not m.group(1).strip():
+        if empty_ok:
+            return None
         die(f"CHANGELOG.md has an empty section for [{name}]")
     return m.group(1).strip() + "\n"
 
@@ -67,7 +70,10 @@ def resolve(ref: str, dry_run: bool) -> dict:
     notes = changelog_section(version)
     section = version
     if notes is None and dry_run:
-        notes, section = changelog_section("Unreleased"), "Unreleased"
+        # an empty [Unreleased] (right after a release was cut) falls back to the section of the workspace version
+        notes, section = changelog_section("Unreleased", empty_ok=True), "Unreleased"
+        if notes is None:
+            notes, section = changelog_section(cargo), cargo
     if notes is None:
         die(f"CHANGELOG.md has no (non-empty) section for [{version}]" +
             (" or [Unreleased]" if dry_run else ""))

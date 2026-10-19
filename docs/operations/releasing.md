@@ -63,7 +63,7 @@ gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
 git tag -s vX.Y.Z -m "AgentGit X.Y.Z" && git push origin vX.Y.Z
 ```
 
-For the first release use an `-rc` tag (`v0.1.0-rc.1`): it publishes a pre-release and finds what only a real
+For the first release use an `-rc` tag (`v0.2.0-rc.1`): it publishes a pre-release and finds what only a real
 publish can find (see [What is not proven](#what-is-not-proven)).
 
 ## Verifying what you downloaded

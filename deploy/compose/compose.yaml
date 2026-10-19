@@ -104,7 +104,7 @@ services:
   otel-collector:
     <<: *restart
     profiles: [observability]
-    image: otel/opentelemetry-collector-contrib:0.121.0
+    image: otel/opentelemetry-collector-contrib:0.162.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ../observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
@@ -112,7 +112,7 @@ services:
   prometheus:
     <<: *restart
     profiles: [observability]
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:v3.15.0
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
@@ -134,7 +134,7 @@ services:
   grafana:
     <<: *restart
     profiles: [observability]
-    image: grafana/grafana:11.5.2
+    image: grafana/grafana:13.2.4
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"

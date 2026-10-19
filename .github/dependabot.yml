@@ -34,6 +34,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    ignore:
+      # typescript 7 conflicts with the peer ranges of openapi-typescript (typescript ^5.x) and the lint/type toolchain
+      # (npm ci fails with ERESOLVE, PR #18/#19). Move it when those accept 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # The runtime and the CI image are Node 22 (engines >=22.18); the types follow the runtime, not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
@@ -42,6 +50,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
+    ignore:
+      # typescript 7 conflicts with the peer ranges of openapi-typescript (typescript ^5.x) and the lint/type toolchain
+      # (npm ci fails with ERESOLVE, PR #18/#19). Move it when those accept 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # The runtime and the CI image are Node 22 (engines >=22.18); the types follow the runtime, not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       ts-sdk-minor-and-patch:
         update-types: [minor, patch]
@@ -82,6 +98,12 @@ updates:
     directory: /deploy/compose
     schedule:
       interval: weekly
+    ignore:
+      # The PostgreSQL suites run on 16 only (docs/operations/postgres-and-s3.md "honest limits") and a major image
+      # bump cannot reuse an existing data volume (the 18 images keep data under /var/lib/postgresql/<major>/, so the
+      # volume needs pg_upgrade or a dump and restore). Moved by hand with a migration note, not by a bot.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   # --- CI -----------------------------------------------------------------------------------------------------------
   # Every action is pinned to a commit SHA with its release in a comment (scripts/check_workflows.py); Dependabot

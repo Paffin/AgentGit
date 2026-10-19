@@ -163,8 +163,10 @@ that a hijacked agent can still only *propose*.
   checkout. Not yet detected.
 - **Availability.** In local mode limits bound single inputs only; rate limits, request-size limits and
   repository quotas belong to `ag-server` (see the controls above). The server holds an object in memory
-  while it verifies it, so the worst case is on the order of `max_concurrent_requests × max_object_bytes`
-  (by design; not measured): lower either to fit the host. With several replicas the rate limits and the concurrency
+  while it verifies it; the bytes held by uploads in progress, over all callers, are bounded by
+  `limits.max_inflight_object_bytes` (default 1 GiB; an upload that would pass it is refused with `unavailable` before its
+  body is read; `uploads_in_flight_share_one_byte_budget_that_is_returned_when_they_end`). The budget counts the bytes
+  of the objects, not the copies the verification makes (about twice that, not measured): size it to the host. With several replicas the rate limits and the concurrency
   limit apply to each replica separately (the effective limit is their sum), and PostgreSQL is a single point of failure
   unless it is run highly available: [High availability](../operations/high-availability.md#honest-limits).
 - **No external audit** has been performed.

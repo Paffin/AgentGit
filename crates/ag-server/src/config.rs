@@ -309,6 +309,10 @@ pub struct LimitsSection {
     pub max_object_bytes: u64,
     /// Requests handled concurrently; more are shed with `unavailable`.
     pub max_concurrent_requests: usize,
+    /// Object bytes the server holds in memory at once for uploads in progress, over all callers (0 = no limit). An
+    /// upload that would pass it is refused with `unavailable` and a retry hint, before its body is read. Must be
+    /// at least `max_object_bytes`, or the largest object could never be uploaded.
+    pub max_inflight_object_bytes: u64,
     /// Default per-request deadline when the client sets none (ms, 0 = none).
     pub default_deadline_ms: u64,
     /// Per-repository default for open proposals (0 = unlimited).
@@ -345,6 +349,7 @@ impl Default for LimitsSection {
             max_request_bytes: ag_protocol::limits::MAX_REQUEST_BYTES,
             max_object_bytes: engine_max_object_bytes(),
             max_concurrent_requests: 512,
+            max_inflight_object_bytes: 1 << 30,
             default_deadline_ms: 60_000,
             max_open_proposals: 0,
             max_total_object_bytes: 0,
@@ -505,6 +510,10 @@ impl ServerConfig {
         if !self.tls_enabled() && !self.server.listen.ip().is_loopback() && !self.server.allow_insecure_remote {
             return bad("refusing to listen on a non-loopback address without TLS: set tls_cert/tls_key, \
                  or allow_insecure_remote = true if TLS is terminated in front of the server");
+        }
+        let l = &self.limits;
+        if l.max_inflight_object_bytes != 0 && l.max_inflight_object_bytes < l.max_object_bytes {
+            return bad("limits.max_inflight_object_bytes must be 0 (no limit) or at least limits.max_object_bytes");
         }
         if let Err(e) = crate::proxy::TrustedProxies::parse(&self.server.trusted_proxies) {
             return Err(ConfigError::Invalid(format!("server.trusted_proxies entry {e}")));

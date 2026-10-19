@@ -22,6 +22,7 @@ pub mod control;
 pub mod error;
 pub mod grpc;
 pub mod http;
+pub mod inflight;
 pub mod jobs_http;
 pub mod limits;
 pub mod metrics;

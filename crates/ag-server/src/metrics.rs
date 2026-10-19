@@ -26,6 +26,10 @@ pub struct Metrics {
     pub object_bytes_in: IntCounter,
     /// Object bytes sent to clients.
     pub object_bytes_out: IntCounter,
+    /// Object bytes held in memory by uploads in progress (see `limits.max_inflight_object_bytes`).
+    pub inflight_object_bytes: IntGauge,
+    /// Uploads refused because the in-flight byte budget was used up.
+    pub object_budget_refused: IntCounter,
     /// Repositories currently open.
     pub open_repos: IntGauge,
     /// Open event subscriptions.
@@ -86,6 +90,14 @@ impl Metrics {
                 .expect("metric");
         let object_bytes_in = IntCounter::new("object_bytes_received_total", "Object bytes received").expect("metric");
         let object_bytes_out = IntCounter::new("object_bytes_sent_total", "Object bytes sent").expect("metric");
+        let inflight_object_bytes =
+            IntGauge::new("inflight_object_bytes", "Object bytes held in memory by uploads in progress")
+                .expect("metric");
+        let object_budget_refused = IntCounter::new(
+            "object_budget_refused_total",
+            "Uploads refused because the in-flight object byte budget was used up",
+        )
+        .expect("metric");
         let open_repos = IntGauge::new("open_repositories", "Repositories currently open").expect("metric");
         let subscriptions = IntGauge::new("event_subscriptions", "Open event subscriptions").expect("metric");
         let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
@@ -138,6 +150,8 @@ impl Metrics {
             Box::new(integrations.clone()),
             Box::new(object_bytes_in.clone()),
             Box::new(object_bytes_out.clone()),
+            Box::new(inflight_object_bytes.clone()),
+            Box::new(object_budget_refused.clone()),
             Box::new(open_repos.clone()),
             Box::new(subscriptions.clone()),
             Box::new(job_events.clone()),
@@ -168,6 +182,8 @@ impl Metrics {
             integrations,
             object_bytes_in,
             object_bytes_out,
+            inflight_object_bytes,
+            object_budget_refused,
             open_repos,
             subscriptions,
             job_events,

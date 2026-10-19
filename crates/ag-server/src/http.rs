@@ -478,6 +478,14 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
                     .dispatch(ing, "objects.put", move |call| async move {
                         a.authorize(&call, &repo, crate::authz::Cap::ObjectsWrite, None).await?;
                         let limit = usize::try_from(a.object_limit(&repo).await?).unwrap_or(usize::MAX);
+                        // The bytes this body may take are reserved from the global budget before any is read:
+                        // what the client announced, or - when it did not say - the most the limit allows.
+                        let announced = request
+                            .headers()
+                            .get(header::CONTENT_LENGTH)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<usize>().ok());
+                        let _held = a.inflight.reserve(announced.map_or(limit, |n| n.min(limit)) as u64)?;
                         let body = http_body_util::Limited::new(request.into_body(), limit)
                             .collect()
                             .await

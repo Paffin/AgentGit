@@ -102,6 +102,8 @@ pub struct AppState {
     pub proxies: crate::proxy::TrustedProxies,
     /// Prometheus metrics.
     pub metrics: Metrics,
+    /// Object bytes held by uploads in progress (`limits.max_inflight_object_bytes`).
+    pub inflight: Arc<crate::inflight::InflightBytes>,
     /// Bounds concurrent requests; excess is shed.
     pub concurrency: Semaphore,
     /// When the process started.
@@ -277,6 +279,11 @@ impl App {
         let proxies = crate::proxy::TrustedProxies::parse(&cfg.server.trusted_proxies)
             .map_err(|e| ApiError::internal(format!("server.trusted_proxies: {e}")))?;
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
+        let inflight = crate::inflight::InflightBytes::new(
+            cfg.limits.max_inflight_object_bytes,
+            metrics.inflight_object_bytes.clone(),
+            metrics.object_budget_refused.clone(),
+        );
         let replica_id = resolve_replica_id(&cfg);
         let local = Arc::new(Local::default());
         // The bus's origin must differ between processes even if two were misconfigured with one replica id.
@@ -309,6 +316,7 @@ impl App {
             auth_failures,
             proxies,
             metrics,
+            inflight,
             concurrency,
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,

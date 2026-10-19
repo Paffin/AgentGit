@@ -24,7 +24,7 @@
     "demo:server": "npm run build && node e2e/demo.ts"
   },
   "dependencies": {
-    "pinia": "3.0.4",
+    "pinia": "4.1.0",
     "vue": "3.5.44",
     "vue-router": "4.6.4"
   },

@@ -19,6 +19,7 @@ getting it wrong.
 | `server.tls_cert` | `null` | With `server.tls_key`: HTTPS and gRPC share one certificate. Server enforces: both or neither | `tls_files_must_come_as_a_pair`, `tls_serves_https_and_grpc_with_the_same_certificate` |
 | `server.tls_key` | `null` | see `server.tls_cert` | `tls_files_must_come_as_a_pair` |
 | `server.cors_origins` | `[]` | List the exact origins of browser clients served from elsewhere. Server enforces: `scheme://host[:port]` only, `*` is refused | `values_that_would_misbehave_are_refused_at_start_up` |
+| `server.trusted_proxies` | `[]` | List the addresses or CIDR ranges of the reverse proxies and load balancers in front of the server. Only a connection from one of them is believed when it names the client (`Forwarded`, else `X-Forwarded-For`, read from the right past trusted hops); everyone else's header is ignored, so a client cannot choose the address in the logs or the bucket of its failed logins. Empty: the peer of the connection is the client. Server enforces: an entry that is not an address or range is refused at start-up | `behind_a_trusted_proxy_the_client_address_is_logged_and_anyone_elses_header_is_not_believed`, `crates/ag-server/src/proxy.rs` |
 
 ## 2. Credentials
 
@@ -46,6 +47,8 @@ The limits keep one caller, or one repository, from using the whole server. Rate
 |---|---|---|---|
 | `limits.requests_per_second` | `200` | Sustained requests per second per caller. Lower it for agents | `requests_are_rate_limited_per_caller_with_a_retry_hint` |
 | `limits.burst` | `400` | Burst size; must be at least 1 when the rate is set | `requests_are_rate_limited_per_caller_with_a_retry_hint` |
+| `limits.auth_failures_per_second` | `0` | Failed authentications per second from one client address (see `server.trusted_proxies`); beyond the burst, requests from that address get `rate_limited` before their credential is looked at, a good one included. 0: no limit. Turn it on when the server is reachable by anyone who should not be guessing tokens | `failed_logins_are_counted_per_client_address_and_the_header_decides_only_behind_a_trusted_proxy` |
+| `limits.auth_failure_burst` | `20` | Burst of failed authentications per client address | `failed_logins_are_counted_per_client_address_and_the_header_decides_only_behind_a_trusted_proxy` |
 | `limits.max_concurrent_requests` | `512` | More are shed with `unavailable`. Worst-case memory is about this times `limits.max_object_bytes` (the [security model](../architecture/security.md#known-limits-read-these)): size it to the host | `crates/ag-server/src/limits.rs` |
 | `limits.max_total_object_bytes` | `0` | Per-repository default for total object bytes. Set it. Server enforces on uploads and on workspace edits alike | `workspace_edits_are_counted_and_limited_like_uploads`, `concurrent_workspace_edits_cannot_pass_the_quota_between_them` |
 | `limits.repo_max_object_bytes` | `0` | Per-repository default for the largest single object | `repository_quotas_are_enforced` |

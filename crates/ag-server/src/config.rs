@@ -75,6 +75,11 @@ pub struct ServerSection {
     pub drain_secs: u64,
     /// Name of this replica in logs and metrics. Default: `$HOSTNAME` (the pod name on Kubernetes), else random.
     pub replica_id: Option<String>,
+    /// Addresses or CIDR ranges of the reverse proxies and load balancers in front of the server. Only a
+    /// connection from one of them is believed when it says who the client is (`Forwarded`, `X-Forwarded-For`); the
+    /// client address then appears in logs and keys the failed-authentication limit. Empty (the default): the
+    /// peer of the connection is the client, and forwarding headers are ignored.
+    pub trusted_proxies: Vec<String>,
 }
 
 impl Default for ServerSection {
@@ -89,6 +94,7 @@ impl Default for ServerSection {
             cors_origins: Vec::new(),
             drain_secs: 0,
             replica_id: None,
+            trusted_proxies: Vec::new(),
         }
     }
 }
@@ -317,6 +323,12 @@ pub struct LimitsSection {
     pub repo_requests_per_second: u32,
     /// Per-repository default burst for `repo_requests_per_second`.
     pub repo_burst: u32,
+    /// Failed authentications (missing, invalid or expired credentials) per second from one client address
+    /// (see `server.trusted_proxies` for which address that is) before further requests from it are refused with
+    /// `rate_limited` without their credential being looked at. 0 = no limit.
+    pub auth_failures_per_second: u32,
+    /// Burst of failed authentications per client address.
+    pub auth_failure_burst: u32,
 }
 
 /// The largest object envelope the engine can store: its blob limit plus the envelope header. The one source
@@ -340,6 +352,8 @@ impl Default for LimitsSection {
             repo_max_streams: 0,
             repo_requests_per_second: 0,
             repo_burst: 0,
+            auth_failures_per_second: 0,
+            auth_failure_burst: 20,
         }
     }
 }
@@ -476,6 +490,9 @@ impl ServerConfig {
         if !self.tls_enabled() && !self.server.listen.ip().is_loopback() && !self.server.allow_insecure_remote {
             return bad("refusing to listen on a non-loopback address without TLS: set tls_cert/tls_key, \
                  or allow_insecure_remote = true if TLS is terminated in front of the server");
+        }
+        if let Err(e) = crate::proxy::TrustedProxies::parse(&self.server.trusted_proxies) {
+            return Err(ConfigError::Invalid(format!("server.trusted_proxies entry {e}")));
         }
         if self.repos.pool_size == 0 || self.repos.max_open == 0 {
             return bad("repos.pool_size and repos.max_open must be at least 1");

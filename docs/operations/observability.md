@@ -14,7 +14,7 @@ wires them up under `--profile observability`.
 | `agwp_requests_total` | counter | `transport`, `operation`, `code` | requests by result. `code` is `ok` or the [AGWP error code](../protocol/agwp-v1.md#errors) |
 | `agwp_request_duration_seconds` | histogram | `transport`, `operation` | latency, 1 ms to 60 s |
 | `agwp_inflight_requests` | gauge | | requests being handled |
-| `agwp_auth_failures_total` | counter | `reason` | failed authentications (`missing`, `invalid`, and `run_ended`: a credential bound to a run that is no longer running, see [ADR-0010](../adr/0010-run-bound-credentials.md)) |
+| `agwp_auth_failures_total` | counter | `reason` | failed authentications (`missing`, `invalid`, `throttled`: the client address failed too often, see `limits.auth_failures_per_second`; and `run_ended`: a credential bound to a run that is no longer running, see [ADR-0010](../adr/0010-run-bound-credentials.md)) |
 | `agwp_rate_limited_total` | counter | | requests rejected by the rate limiter |
 | `agwp_shed_total` | counter | | requests rejected because the server was saturated |
 | `agwp_integrations_total` | counter | `outcome` | `integrated`, `blocked`, `conflict`, `denied`, `invalid` |

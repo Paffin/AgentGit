@@ -82,6 +82,8 @@ fn ingress_of<T>(req: &Request<T>) -> Ingress {
         deadline_ms: get("grpc-timeout").and_then(parse_grpc_timeout),
         traceparent: get("traceparent").map(str::to_string),
         remote: req.remote_addr().map(|a| a.to_string()),
+        forwarded: get("forwarded").map(str::to_string),
+        x_forwarded_for: get("x-forwarded-for").map(str::to_string),
     }
 }
 

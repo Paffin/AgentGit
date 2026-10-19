@@ -25,6 +25,7 @@ pub mod http;
 pub mod jobs_http;
 pub mod limits;
 pub mod metrics;
+pub mod proxy;
 pub mod quota;
 pub mod repos;
 pub mod routes;

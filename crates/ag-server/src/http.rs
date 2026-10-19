@@ -81,6 +81,8 @@ pub fn ingress_from_headers(headers: &HeaderMap, remote: Option<String>) -> Ingr
         deadline_ms: get("request-timeout").and_then(|v| v.parse().ok()),
         traceparent: get("traceparent").map(str::to_string),
         remote,
+        forwarded: get("forwarded").map(str::to_string),
+        x_forwarded_for: get("x-forwarded-for").map(str::to_string),
     }
 }
 

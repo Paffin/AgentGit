@@ -374,11 +374,26 @@ pub struct ReposSection {
     /// with S3, each repository gets the key prefix `<prefix>/<owner>/<name>`.
     /// Credentials are read from the environment variables the section names.
     pub storage: Option<ag_integrate::StorageConfig>,
+    /// How long the answer to an idempotency key is remembered (seconds). Within it, the same key with the same
+    /// request returns the first answer; after it the key is free again. 0 keeps records for as long as the
+    /// repository exists. Applies to `run.start`, `task.create` and `lease.acquire`; records written before records
+    /// carried a time are kept.
+    pub idempotency_ttl_secs: u64,
+    /// How often the server deletes expired idempotency records, in seconds (0 = never; expired records are
+    /// then only ignored, not removed).
+    pub idempotency_sweep_interval_secs: u64,
 }
 
 impl Default for ReposSection {
     fn default() -> Self {
-        Self { pool_size: 4, max_open: 256, default_stream: "main".into(), storage: None }
+        Self {
+            pool_size: 4,
+            max_open: 256,
+            default_stream: "main".into(),
+            storage: None,
+            idempotency_ttl_secs: 7 * 24 * 3600,
+            idempotency_sweep_interval_secs: 3600,
+        }
     }
 }
 

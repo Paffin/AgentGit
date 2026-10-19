@@ -45,7 +45,7 @@ directory is checked by a test, so it cannot drift from the server.
   recorded response (what the first call answered — not a fresh view of the object); the same key with
   different content is refused with `idempotency_key_reused`. For `task.create`, `run.start` and `lease.acquire`
   the record is written in the same transaction as the object, so two requests racing on one key, or a crash in
-  between, never produce two objects; records are kept for the life of the repository. Every other operation either is naturally
+  between, never produce two objects; for these three, records are kept for `repos.idempotency_ttl_secs` (default 7 days; 0 = for the life of the repository), after which the key is free again and a periodic sweep (`repos.idempotency_sweep_interval_secs`, default hourly) deletes the record; the engine's own keyed operations (publish, propose, integrate) are kept as operations. Every other operation either is naturally
   idempotent (setting a policy, granting a role, pinning, finishing a task) or cannot replay its result — a
   minted credential's secret is shown once, so `credentials.mint` ignores the key; a repeated
   `stream.create` answers `already_exists`. After a lost response to a call without a key, ask for the outcome

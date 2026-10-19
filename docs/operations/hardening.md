@@ -55,6 +55,8 @@ The limits keep one caller, or one repository, from using the whole server. Rate
 | `limits.max_open_proposals` | `0` | Per-repository default for open proposals | `repository_quotas_are_enforced` |
 | `limits.repo_max_streams` | `0` | Per-repository default for streams | `repository_quotas_are_enforced` |
 | `limits.repo_requests_per_second` | `0` | Per-repository rate per caller (0: only the server-wide limit) | `new_repositories_start_with_the_configured_quota_defaults` |
+| `repos.idempotency_ttl_secs` | `604800` | How long the answer to an idempotency key of `run.start`, `task.create` or `lease.acquire` is replayed (7 days); then the key is free again. `0` keeps records for the life of the repository. Retry windows of clients are minutes, so shorten it if records pile up | `records_replay_inside_their_lifetime_and_are_gone_after_it` |
+| `repos.idempotency_sweep_interval_secs` | `3600` | How often expired records are deleted (`0` never: they are then only ignored) | `records_replay_inside_their_lifetime_and_are_gone_after_it` |
 
 ## 4. Metrics and logs
 

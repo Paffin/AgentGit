@@ -168,6 +168,22 @@ fn spawn_run_reaper(app: App) {
     });
 }
 
+/// Deletes expired idempotency records every `repos.idempotency_sweep_interval_secs` until shutdown.
+fn spawn_idempotency_sweeper(app: App) {
+    let every = std::time::Duration::from_secs(app.cfg.repos.idempotency_sweep_interval_secs);
+    let mut stop = app.shutdown_signal();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(every);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => { app.sweep_idempotency_records().await; }
+                _ = stop.changed() => break,
+            }
+        }
+    });
+}
+
 /// Serves until `shutdown` completes.
 async fn serve_inner(
     app: App,
@@ -182,6 +198,9 @@ async fn serve_inner(
     }
     if app.cfg.agents.reap_interval_secs > 0 {
         spawn_run_reaper(app.clone());
+    }
+    if app.cfg.repos.idempotency_ttl_secs > 0 && app.cfg.repos.idempotency_sweep_interval_secs > 0 {
+        spawn_idempotency_sweeper(app.clone());
     }
     let (router, _) = build_router(app.clone());
     let addr = listener.local_addr()?;

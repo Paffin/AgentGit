@@ -446,6 +446,31 @@ impl Tx<'_> {
         Ok(())
     }
 
+    /// Removes a key of the `meta` table (nothing if it is absent).
+    pub fn meta_delete(&self, key: &str) -> Result<(), MetaError> {
+        self.conn.execute("DELETE FROM meta WHERE key = ?1", &params![key])?;
+        Ok(())
+    }
+
+    /// Up to `limit` keys that start with `prefix` and whose value sorts below `bound` as text (callers that
+    /// store numbers pad them to a fixed width so that text order is numeric order).
+    pub fn meta_keys_with_value_below(
+        &self,
+        prefix: &str,
+        bound: &str,
+        limit: usize,
+    ) -> Result<Vec<String>, MetaError> {
+        let like = format!("{}%", escape_like(prefix));
+        self.conn
+            .query(
+                "SELECT key FROM meta WHERE key LIKE ?1 ESCAPE '\\' AND value < ?2 ORDER BY key LIMIT ?3",
+                &params![like, bound, limit as i64],
+            )?
+            .iter()
+            .map(|r| r.string(0))
+            .collect()
+    }
+
     /// Executes arbitrary SQL (`?1` placeholders). For tests that simulate
     /// tampering or damage; never used by the engine.
     #[doc(hidden)]

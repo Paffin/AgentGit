@@ -589,3 +589,30 @@ fn proposal_pages_are_keyset_pages_with_sql_filters_even_when_created_at_ties() 
     assert_eq!(walk(ProposalFilter { state: Some("closed"), ..Default::default() }, 3), ["prop_d"]);
     assert_eq!(walk(ProposalFilter { state: Some("open"), ..Default::default() }, 3).len(), 4);
 }
+
+#[test]
+fn meta_keys_are_found_by_prefix_and_value_order_and_deleted() {
+    let m = meta();
+    m.write(|tx| {
+        for (k, v) in [
+            ("idemt:a", "00000000000000000100"),
+            ("idemt:b", "00000000000000000200"),
+            ("idemt:c", "00000000000000000300"),
+            ("idem:a", "x"), // another prefix: never listed
+            ("idemtXd", "00000000000000000001"),
+            ("idemt_", "00000000000000000001"), // `_` is a literal in the prefix, not a wildcard
+        ] {
+            tx.meta_set(k, v)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let below = |bound: &str, limit| m.read(|tx| tx.meta_keys_with_value_below("idemt:", bound, limit)).unwrap();
+    assert_eq!(below("00000000000000000250", 10), ["idemt:a", "idemt:b"]);
+    assert_eq!(below("00000000000000000250", 1), ["idemt:a"]);
+    assert!(below("00000000000000000100", 10).is_empty(), "strictly below");
+    m.write(|tx| tx.meta_delete("idemt:a")).unwrap();
+    m.write(|tx| tx.meta_delete("absent")).unwrap();
+    assert_eq!(below("~", 10), ["idemt:b", "idemt:c"]);
+    assert_eq!(m.read(|tx| tx.meta_get("idem:a")).unwrap().as_deref(), Some("x"));
+}

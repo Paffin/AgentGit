@@ -40,6 +40,39 @@ pub(crate) struct Claim {
     slot: String,
     hash: String,
     keyed: bool,
+    idem: Idem,
+}
+
+/// How long idempotency records live (`repos.idempotency_ttl_secs`) and what time it is.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Idem {
+    /// Lifetime of a record in milliseconds (0 = forever).
+    pub ttl_ms: i64,
+    /// Now, in milliseconds.
+    pub now_ms: i64,
+}
+
+/// The key under which a record's creation time is kept (zero-padded, so that text order is time order).
+pub(crate) const IDEM_TIME_PREFIX: &str = "idemt:";
+
+fn time_slot(slot: &str) -> String {
+    format!("{IDEM_TIME_PREFIX}{}", slot.strip_prefix("idem:").unwrap_or(slot))
+}
+
+pub(crate) fn padded_ms(ms: i64) -> String {
+    format!("{:020}", ms.max(0))
+}
+
+impl Idem {
+    /// Whether the record in `slot` has outlived its lifetime. A record without a time (written before records
+    /// carried one) is kept.
+    fn expired(&self, tx: &ag_storage::meta::Tx<'_>, slot: &str) -> Result<bool, ag_storage::meta::MetaError> {
+        if self.ttl_ms <= 0 {
+            return Ok(false);
+        }
+        let created = tx.meta_get(&time_slot(slot))?.and_then(|t| t.parse::<i64>().ok());
+        Ok(created.is_some_and(|c| c.saturating_add(self.ttl_ms) <= self.now_ms))
+    }
 }
 
 impl Claim {
@@ -53,10 +86,12 @@ impl Claim {
         if !self.keyed {
             return Ok(());
         }
-        if tx.meta_get(&self.slot)?.is_some() {
+        // A record that has outlived its lifetime is replaced: the key may be used again.
+        if tx.meta_get(&self.slot)?.is_some() && !self.idem.expired(tx, &self.slot)? {
             return Err(ag_storage::meta::MetaError::AlreadyExists(format!("idempotency record {}", self.slot)));
         }
         let json = serde_json::to_string(response)?;
+        tx.meta_set(&time_slot(&self.slot), &padded_ms(self.idem.now_ms))?;
         tx.meta_set(&self.slot, &format!("{}\n{json}", self.hash))
     }
 }
@@ -66,22 +101,24 @@ impl Claim {
 /// A repeat of the same request returns the recorded response (what the first call answered, not a fresh view of
 /// the object); the same key with a different request is `idempotency_key_reused`. An empty key means "no
 /// idempotency": `create` simply runs. `create` receives the [`Claim`] and must call [`Claim::record`] in the
-/// transaction that creates the object. The record lives in the repository's own metadata.
+/// transaction that creates the object. The record lives in the repository's own metadata, for
+/// `repos.idempotency_ttl_secs`; after that the key is free again.
 pub(crate) fn keyed<T: serde::Serialize + serde::de::DeserializeOwned>(
     repo: &ag_integrate::Repository,
+    idem: Idem,
     scope: &str,
     key: &str,
     request: &str,
     create: impl FnOnce(&Claim) -> ApiResult<T>,
 ) -> ApiResult<T> {
-    let claim = match lookup::<T>(repo, scope, key, request)? {
+    let claim = match lookup::<T>(repo, idem, scope, key, request)? {
         Ok(recorded) => return Ok(recorded),
         Err(claim) => claim,
     };
     match create(&claim) {
         // Two requests with one key raced; the other one committed first. Its answer is the answer.
         Err(e) if claim.keyed && e.code() == ag_protocol::ErrorCode::AlreadyExists => {
-            match lookup::<T>(repo, scope, key, request)? {
+            match lookup::<T>(repo, idem, scope, key, request)? {
                 Ok(recorded) => Ok(recorded),
                 Err(_) => Err(e),
             }
@@ -93,6 +130,7 @@ pub(crate) fn keyed<T: serde::Serialize + serde::de::DeserializeOwned>(
 /// The recorded response for the key, or the claim to create under it.
 fn lookup<T: serde::de::DeserializeOwned>(
     repo: &ag_integrate::Repository,
+    idem: Idem,
     scope: &str,
     key: &str,
     request: &str,
@@ -101,9 +139,10 @@ fn lookup<T: serde::de::DeserializeOwned>(
     let slot = format!("idem:{scope}:{key}");
     let hash = hex::encode(Sha256::digest(request.as_bytes()));
     if key.is_empty() {
-        return Ok(Err(Claim { slot, hash, keyed: false }));
+        return Ok(Err(Claim { slot, hash, keyed: false, idem }));
     }
-    if let Some(stored) = repo.meta().read(|tx| tx.meta_get(&slot))?
+    let stored = repo.meta().read(|tx| Ok(if idem.expired(tx, &slot)? { None } else { tx.meta_get(&slot)? }))?;
+    if let Some(stored) = stored
         && let Some((h, json)) = stored.split_once('\n')
     {
         if h != hash {
@@ -114,7 +153,7 @@ fn lookup<T: serde::de::DeserializeOwned>(
         }
         return serde_json::from_str(json).map(Ok).map_err(ApiError::internal);
     }
-    Ok(Err(Claim { slot, hash, keyed: true }))
+    Ok(Err(Claim { slot, hash, keyed: true, idem }))
 }
 
 /// Whether `actor` may treat something owned by `owner` - a workspace's owner, a proposal's author, a lease's

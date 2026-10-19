@@ -75,3 +75,15 @@ tests of `agentgit-cli`, `-protocol`, `-storage`, `-types`, `-mcp` (all passed),
 * CHANGELOG (Unreleased): "Cargo packages are renamed `agentgit-<x>` (directories, library names and binaries
   unchanged; `cargo -p` flags change); 21 crates are publishable and CI dry-runs `cargo publish --workspace`; the
   protocol and migrations are packaged inside their crates (`scripts/sync_crate_files.py`)."
+
+## CI evidence (main)
+
+* `7ae5771` (contains all three commits `82aace9`, `813b250`, `62bc85c`): CI, Packaging (run 39241169893, includes
+  `cargo publish --workspace --dry-run` of 21 crates with the real UI), Containers, Security (incl. the
+  `THIRD_PARTY_LICENSES.md` freshness check), Docs, CodeQL, Web UI all succeeded. `Windows` was green at `813b250`
+  and cancelled by a later Dependabot push at `7ae5771`.
+* Fixed on the way: `ag-bench`'s smoke test ran `cargo build -p ag-server` (now `agentgit-server`); Packaging needed
+  `--allow-dirty` (git-ignored `dist/`) and ANSI stripping (`CARGO_TERM_COLOR=always`).
+* `Quality` (coverage) was red at `82aace9` (the bench smoke test above) and at `813b250` on
+  `agentgit-sandbox --test oci`, which passes locally (18/18) and does not depend on package names; it was not
+  re-run afterwards (no commit touched a path it triggers on, and workflow dispatch is not available to this token).

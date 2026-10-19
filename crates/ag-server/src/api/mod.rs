@@ -160,6 +160,27 @@ pub(crate) fn decode_offset(kind: &str, token: &str) -> ApiResult<usize> {
     n.parse().map_err(|_| bad())
 }
 
+/// A keyset page token: the sort key of the last row served (`created_at` in ms and the row id), tagged like an
+/// offset token. The next page starts strictly after it, whatever happens to the rows before.
+pub(crate) fn encode_keyset(kind: &str, at_ms: i64, id: &str) -> String {
+    URL_SAFE_NO_PAD.encode(format!("{kind}:{at_ms}:{id}"))
+}
+
+/// The key of a [`encode_keyset`] token (`None` for the first page).
+pub(crate) fn decode_keyset(kind: &str, token: &str) -> ApiResult<Option<(i64, String)>> {
+    if token.is_empty() {
+        return Ok(None);
+    }
+    let bad = || ApiError::invalid("invalid page_token");
+    let raw = String::from_utf8(URL_SAFE_NO_PAD.decode(token).map_err(|_| bad())?).map_err(|_| bad())?;
+    let mut parts = raw.splitn(3, ':');
+    let (k, at, id) = (parts.next(), parts.next(), parts.next());
+    match (k, at.and_then(|a| a.parse().ok()), id) {
+        (Some(k), Some(at), Some(id)) if k == kind && !id.is_empty() => Ok(Some((at, id.to_string()))),
+        _ => Err(bad()),
+    }
+}
+
 /// Slices `items` for the page described by `size` and `token`, returning the
 /// page and the next token.
 pub(crate) fn paginate<T>(kind: &str, items: Vec<T>, size: u32, token: &str) -> ApiResult<(Vec<T>, String)> {

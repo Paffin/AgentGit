@@ -67,7 +67,9 @@ pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
 pub use migrate::{Migration, SCHEMA_VERSION};
 pub use outbox::{AuditEntry, AuditReport, OutboxRow};
 pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_schema_name};
-pub use records::{AttestationRow, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, WorkspaceRow};
+pub use records::{
+    AttestationRow, NewProposal, PinRow, PolicyRow, ProposalFilter, ProposalRow, ReviewRow, WorkspaceRow,
+};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 
 /// Errors from the metadata store.

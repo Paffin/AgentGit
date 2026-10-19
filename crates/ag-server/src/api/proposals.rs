@@ -3,7 +3,9 @@
 use ag_protocol::v1;
 use ag_types::{ChangesetId, StreamName};
 
-use super::{convert, paginate, require};
+use ag_storage::meta::ProposalFilter;
+
+use super::{convert, decode_keyset, encode_keyset, page_size, require};
 use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
@@ -55,16 +57,24 @@ impl App {
         call: &Call,
         req: v1::ListProposalsRequest,
     ) -> ApiResult<v1::ListProposalsResponse> {
-        let (size, token) = (req.page_size, req.page_token.clone());
+        let size = page_size(req.page_size);
+        let after = decode_keyset("prop", &req.page_token)?;
         self.with_repo(call, require(&req.repo, "repo")?, Cap::ProposalRead, None, move |repo, _| {
-            let state = (!req.state.is_empty()).then_some(req.state.as_str());
-            let mut rows = repo.meta().read(|tx| tx.proposals_list(state, 100_000))?;
-            rows.retain(|p| {
-                (req.stream.is_empty() || p.stream == req.stream) && (req.author.is_empty() || p.author == req.author)
-            });
-            let (page, next) = paginate("prop", rows, size, &token)?;
+            let some = |s: &str| (!s.is_empty()).then_some(s.to_string());
+            let (state, stream, author) = (some(&req.state), some(&req.stream), some(&req.author));
+            let filter =
+                ProposalFilter { state: state.as_deref(), stream: stream.as_deref(), author: author.as_deref() };
+            let after = after.as_ref().map(|(at, id)| (*at, id.as_str()));
+            // One more than a page, to learn whether there is a next one.
+            let mut rows = repo.meta().read(|tx| tx.proposals_page(&filter, after, size + 1))?;
+            let next = if rows.len() > size {
+                rows.truncate(size);
+                rows.last().map(|p| encode_keyset("prop", p.created_at.as_millis(), &p.id)).unwrap_or_default()
+            } else {
+                String::new()
+            };
             Ok(v1::ListProposalsResponse {
-                proposals: page.iter().map(convert::proposal).collect(),
+                proposals: rows.iter().map(convert::proposal).collect(),
                 next_page_token: next,
             })
         })

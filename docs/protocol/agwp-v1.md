@@ -51,7 +51,7 @@ directory is checked by a test, so it cannot drift from the server.
   `stream.create` answers `already_exists`. After a lost response to a call without a key, ask for the outcome
   (`GET …/operations?idempotency_key=…` where a key was used) instead of blindly retrying.
 * **Pagination.** `page_size` (0 = default 100, max 1000) and an opaque `page_token`; responses carry
-  `next_page_token` (empty = last page). Tokens are only valid for the listing that produced them. A few
+  `next_page_token` (empty = last page). Tokens are only valid for the listing that produced them. Proposal listings are keyset pages (the token carries the sort key `created_at, id` of the last row; `state`, `stream` and `author` filter in SQL), so a walk neither skips nor repeats a proposal when others are opened or closed meanwhile. A few
   listings are capped instead of paged and say so with `truncated: true`: credentials (newest 1000), role
   bindings (5000) and the lease history (`limit`, default 100, at most 1000; active leases are never cut).
   Narrow the request (`subject`, `repo`) to see the rest. Authorization itself never reads a capped list.

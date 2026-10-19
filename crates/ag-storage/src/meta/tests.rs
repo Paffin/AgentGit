@@ -535,3 +535,57 @@ fn agents_runs_tasks_provenance() {
     let p = m.read(|tx| tx.provenance_for(&a)).unwrap();
     assert_eq!(p[0].record["model"], "m");
 }
+
+#[test]
+fn proposal_pages_are_keyset_pages_with_sql_filters_even_when_created_at_ties() {
+    let m = meta();
+    let (a, ca) = cs(vec![], "a");
+    m.write(|tx| {
+        tx.register_changeset(&a, &ca)?;
+        for s in ["main", "dev"] {
+            tx.create_stream(&StreamName::new(s).unwrap(), "user:t")?;
+        }
+        // The clock does not move: all of them share one `created_at`, so the id decides.
+        for (id, stream, author) in [
+            ("prop_a", "main", "user:x"),
+            ("prop_b", "dev", "user:x"),
+            ("prop_c", "main", "user:y"),
+            ("prop_d", "dev", "user:y"),
+            ("prop_e", "main", "user:x"),
+        ] {
+            tx.proposal_create(&NewProposal {
+                id,
+                stream,
+                head: &a,
+                title: id,
+                description: "",
+                author,
+                task_id: None,
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let walk = |filter: ProposalFilter<'_>, size: usize| -> Vec<String> {
+        let (mut out, mut after) = (Vec::new(), None::<(i64, String)>);
+        loop {
+            let page =
+                m.read(|tx| tx.proposals_page(&filter, after.as_ref().map(|(t, i)| (*t, i.as_str())), size)).unwrap();
+            assert!(page.len() <= size);
+            let Some(last) = page.last() else { return out };
+            after = Some((last.created_at.as_millis(), last.id.clone()));
+            out.extend(page.into_iter().map(|p| p.id));
+        }
+    };
+    let all = ["prop_e", "prop_d", "prop_c", "prop_b", "prop_a"];
+    for size in [1, 2, 5, 9] {
+        assert_eq!(walk(ProposalFilter::default(), size), all, "size {size}");
+    }
+    assert_eq!(walk(ProposalFilter { stream: Some("main"), ..Default::default() }, 2), ["prop_e", "prop_c", "prop_a"]);
+    assert_eq!(walk(ProposalFilter { author: Some("user:y"), ..Default::default() }, 1), ["prop_d", "prop_c"]);
+    let both = ProposalFilter { stream: Some("dev"), author: Some("user:x"), state: Some("open") };
+    assert_eq!(walk(both, 3), ["prop_b"]);
+    m.write(|tx| tx.proposal_set_state("prop_d", "closed", None)).unwrap();
+    assert_eq!(walk(ProposalFilter { state: Some("closed"), ..Default::default() }, 3), ["prop_d"]);
+    assert_eq!(walk(ProposalFilter { state: Some("open"), ..Default::default() }, 3).len(), 4);
+}

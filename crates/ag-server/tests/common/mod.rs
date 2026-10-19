@@ -217,3 +217,67 @@ pub async fn user_with_role(srv: &TestServer, subject: &str, repo: &str, role: &
     assert_eq!(r.status, 200, "{}", r.json);
     srv.client(r.json["token"].as_str().unwrap())
 }
+
+/// The repository's count quotas hold when many creates race: 16 concurrent stream creates against a limit of 5
+/// streams (`main` + 4) and 16 concurrent proposals against a limit of 3 open ones admit exactly that many.
+/// (Counting before the insert let the whole burst through; the count is now part of the insert's transaction.)
+pub async fn count_quotas_hold_under_concurrent_creates(srv: &TestServer, repo: &str) {
+    const N: usize = 16;
+    let admin = srv.admin();
+    let r = admin
+        .call(
+            "PATCH",
+            &format!("/v1/repos/{repo}"),
+            Some(json!({"quota": {"max_streams": 5, "max_open_proposals": 3}})),
+            &[],
+        )
+        .await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let alice = user_with_role(srv, "user:alice", repo, "writer").await;
+
+    let racing: Vec<_> = (0..N)
+        .map(|i| {
+            let alice = alice.clone();
+            let path = format!("/v1/repos/{repo}/streams");
+            tokio::spawn(async move { alice.post(&path, json!({"name": format!("s{i}")})).await })
+        })
+        .collect();
+    let mut answers = Vec::new();
+    for h in racing {
+        answers.push(h.await.unwrap());
+    }
+    let ok = answers.iter().filter(|r| r.status == 200).count();
+    let refused = answers.iter().filter(|r| r.status == 429 && r.json["error"]["code"] == "quota_exceeded").count();
+    assert_eq!((ok, refused), (4, N - 4), "{:?}", answers.iter().map(|r| r.status).collect::<Vec<_>>());
+    let streams = admin.get(&format!("/v1/repos/{repo}/streams")).await;
+    assert_eq!(streams.json["streams"].as_array().unwrap().len(), 5, "{}", streams.json);
+
+    let c = Client::new(repo);
+    let mut heads = Vec::new();
+    for i in 0..N {
+        let (head, objs) =
+            c.commit(vec![], "user:alice", "p", &[("f.txt", format!("version {i}\n").as_bytes())], 1_700_000_000_000);
+        upload(&alice, repo, &objs).await;
+        heads.push(head);
+    }
+    let racing: Vec<_> = heads
+        .iter()
+        .enumerate()
+        .map(|(i, head)| {
+            let alice = alice.clone();
+            let (path, head) = (format!("/v1/repos/{repo}/proposals"), head.to_string());
+            tokio::spawn(async move {
+                alice.post(&path, json!({"stream": "main", "head": head, "title": format!("p{i}")})).await
+            })
+        })
+        .collect();
+    let mut answers = Vec::new();
+    for h in racing {
+        answers.push(h.await.unwrap());
+    }
+    let ok = answers.iter().filter(|r| r.status == 200).count();
+    let refused = answers.iter().filter(|r| r.status == 429 && r.json["error"]["code"] == "quota_exceeded").count();
+    assert_eq!((ok, refused), (3, N - 3), "{:?}", answers.iter().map(|r| r.status).collect::<Vec<_>>());
+    let open = admin.get(&format!("/v1/repos/{repo}/proposals?state=open")).await;
+    assert_eq!(open.json["proposals"].as_array().unwrap().len(), 3, "{}", open.json);
+}

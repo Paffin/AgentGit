@@ -226,6 +226,14 @@ async fn a_repository_can_limit_the_size_of_one_object_everywhere() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn racing_creates_cannot_pass_the_stream_and_open_proposal_limits() {
+    let srv = TestServer::start().await;
+    assert_eq!(srv.admin().post("/v1/repos", json!({"name": "acme/web"})).await.status, 200);
+    count_quotas_hold_under_concurrent_creates(&srv, "acme/web").await;
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn new_repositories_start_with_the_configured_quota_defaults() {
     let srv = TestServer::start_with(|cfg| {
         cfg.limits.max_total_object_bytes = 1_000_000;

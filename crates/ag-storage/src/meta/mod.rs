@@ -135,6 +135,10 @@ pub enum MetaError {
     /// A caller-supplied value is invalid.
     #[error("invalid: {0}")]
     Invalid(String),
+    /// A count limit set by the caller (a repository quota) would be exceeded. Counted and refused inside the
+    /// transaction that would have created the row, so concurrent creates cannot pass the limit between them.
+    #[error("quota exceeded: {0}")]
+    QuotaExceeded(String),
     /// Stored data failed validation.
     #[error("metadata corruption: {0}")]
     Corrupt(String),

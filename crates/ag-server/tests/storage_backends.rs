@@ -98,6 +98,7 @@ async fn the_server_runs_on_postgres() {
     };
     let srv = TestServer::start_with(move |cfg| cfg.repos.storage = Some(template)).await;
     exercise(&srv, "acme/pg", ("postgres", "fs")).await;
+    count_quotas_hold_under_concurrent_creates(&srv, "acme/pg").await;
     let d = srv.admin().get("/v1/repos/acme/pg").await;
     assert_eq!(d.json["meta_backend"], "postgres");
     srv.stop().await;

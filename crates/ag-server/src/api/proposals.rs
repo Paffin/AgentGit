@@ -24,18 +24,12 @@ impl App {
             Cap::ProposalCreate,
             Some(&stream_s),
             move |repo, actor| {
-                // Checked just before the create (the engine creates in its own transaction), so concurrent creates
-                // can overshoot by the number in flight.
-                if max_open > 0 && repo.meta().read(|tx| tx.proposals_count("open"))? >= u64::from(max_open) {
-                    return Err(ApiError::new(
-                        ag_protocol::ErrorCode::QuotaExceeded,
-                        format!("this repository is limited to {max_open} open proposals"),
-                    ));
-                }
                 let head: ChangesetId = repo.resolve_rev(&head_rev)?;
                 let key = (!key.is_empty()).then_some(key.as_str());
+                // The limit is counted inside the transaction that inserts the proposal.
+                let cap = (max_open > 0).then_some(u64::from(max_open));
                 let (row, _) =
-                    repo.propose_idempotent(stream.as_str(), &head, &title, &desc, actor, task.as_deref(), key)?;
+                    repo.propose_capped(stream.as_str(), &head, &title, &desc, actor, task.as_deref(), key, cap)?;
                 Ok(convert::proposal(&row))
             },
         )

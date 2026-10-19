@@ -65,8 +65,8 @@ directory is checked by a test, so it cannot drift from the server.
   carry a quota of its own: `max_total_object_bytes` is charged to every write that adds an object (uploads,
   workspace edits, merges — whichever endpoint writes it, atomically across concurrent requests and replicas;
   the tracked total is an estimate that garbage collection recounts), `max_object_bytes` bounds one object,
-  `max_streams` and `max_open_proposals` bound counts (checked just before the create, so concurrent creates
-  can overshoot by the number in flight), and `requests_per_second`/`burst` add a per-repository rate limit.
+  `max_streams` and `max_open_proposals` bound counts (counted inside the transaction that inserts the row; write
+  transactions of one repository never overlap, so racing creates cannot pass the limit), and `requests_per_second`/`burst` add a per-repository rate limit.
   New repositories start with the `[limits] repo_*` / `max_*` defaults of the server configuration.
 * **`retryable`.** `retryable: true` means that doing the *logical operation* again may succeed — after
   waiting (`rate_limited`, `unavailable`), after re-reading state and redoing the change (`stream_moved`,

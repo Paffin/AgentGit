@@ -16,7 +16,26 @@ impl Repository {
 
     /// Creates a stream, optionally starting at an existing published changeset.
     pub fn create_stream(&self, name: &StreamName, from: Option<&ChangesetId>, actor: &Identity) -> Result<StreamRow> {
+        self.create_stream_capped(name, from, actor, None)
+    }
+
+    /// Like [`Repository::create_stream`], with an optional limit on the number of streams. The count and the
+    /// insert are one write transaction (which never overlaps another on the same repository, on any backend), so
+    /// concurrent creates cannot pass the limit between them: the one that would be over it gets
+    /// [`MetaError::QuotaExceeded`] and nothing is written.
+    pub fn create_stream_capped(
+        &self,
+        name: &StreamName,
+        from: Option<&ChangesetId>,
+        actor: &Identity,
+        max_streams: Option<u64>,
+    ) -> Result<StreamRow> {
         Ok(self.meta.write(|tx| {
+            if let Some(max) = max_streams
+                && tx.count_streams()? >= max
+            {
+                return Err(MetaError::QuotaExceeded(format!("this repository is limited to {max} streams")));
+            }
             let row = tx.create_stream(name, actor.as_str())?;
             let row = match from {
                 Some(h) => {
@@ -109,6 +128,25 @@ impl Repository {
         task_id: Option<&str>,
         idempotency_key: Option<&str>,
     ) -> Result<(ProposalRow, bool)> {
+        self.propose_capped(stream, head, title, description, author, task_id, idempotency_key, None)
+    }
+
+    /// Like [`Repository::propose_idempotent`], with an optional limit on the number of open proposals. The count
+    /// and the insert are one write transaction, so concurrent proposals cannot pass the limit between them
+    /// ([`MetaError::QuotaExceeded`] for the one that would). A replay of a request that was already served
+    /// returns its proposal whatever the count.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propose_capped(
+        &self,
+        stream: &str,
+        head: &ChangesetId,
+        title: &str,
+        description: &str,
+        author: &Identity,
+        task_id: Option<&str>,
+        idempotency_key: Option<&str>,
+        max_open: Option<u64>,
+    ) -> Result<(ProposalRow, bool)> {
         if title.trim().is_empty() {
             return Err(Error::Invalid("a proposal needs a title".into()));
         }
@@ -153,6 +191,11 @@ impl Repository {
                 if !created {
                     return Ok(Err(intent));
                 }
+            }
+            if let Some(max) = max_open
+                && tx.proposals_count("open")? >= max
+            {
+                return Err(MetaError::QuotaExceeded(format!("this repository is limited to {max} open proposals")));
             }
             let p = tx.proposal_create(&NewProposal {
                 id: &id,

@@ -206,7 +206,7 @@ A session that crashes leaves its run `running` and its task `in_progress`. With
 * **Finish a task** (`POST …/tasks/{id}/finish`) that another identity owns. Anyone else may only finish their own
   task, and a run may only finish the task *it* claimed. The audit entry names the operator, says `operator: true` and
   records the owner it overrode.
-* **Finish a run** for its agent: the audit entry is the caller's, flagged `operator: true`, not the agent's.
+* **Start, heartbeat or finish a run** for another agent (`POST …/runs`, `…/runs/{id}/heartbeat`, `…/runs/{id}/complete`). Without `agent.operate` the answer is `permission_denied`: an `agent:<name>` identity acts for itself only, and a person or a service with a plain `writer` role is not that agent. The audit entry of an operator finishing a run is the caller's, flagged `operator: true`, not the agent's. Finish a run the audit entry is the caller's, flagged `operator: true`, not the agent's.
 * **Reap** (`POST …/runs/reap`, `ag-server admin reap-runs <repo>`): ends the `running` runs whose last heartbeat is
   older than `stale_after_ms` as `abandoned` (`run.abandon`), releases the leases of those runs and of any run that
   already ended (`lease.reap`), and revokes the credentials bound to them. `dry_run` reports without changing

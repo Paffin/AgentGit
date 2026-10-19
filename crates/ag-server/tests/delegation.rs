@@ -430,3 +430,43 @@ async fn the_server_reaps_stale_runs_by_itself_when_it_is_told_to() {
     assert_eq!(bound.get("/v1/whoami").await.status, 401);
     w.srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn acting_on_another_agents_run_needs_agent_operate_and_a_writer_does_not_have_it() {
+    let w = world().await;
+    register(&w, "bot").await;
+    let runs = format!("/v1/repos/{REPO}/runs");
+    let alice = token_for(&w.srv, &w.admin, "user:alice").await;
+    let bot = token_for(&w.srv, &w.admin, "agent:bot").await;
+
+    // A writer (a person) may not start a run for an agent...
+    let r = alice.post(&runs, json!({"agent": "bot"})).await;
+    assert_eq!(r.status, 403, "{}", r.json);
+    assert!(r.json.to_string().contains("agent.operate"), "{}", r.json);
+    assert!(w.admin.get(&format!("{runs}?agent=bot")).await.json["runs"].as_array().unwrap().is_empty());
+
+    // ...the agent itself may, and then nobody but an operator may heartbeat or end that run for it.
+    let r = bot.post(&runs, json!({"agent": "bot"})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let run = s(&r.json["run_id"]);
+    let r = alice.post(&format!("{runs}/{run}/heartbeat"), json!({})).await;
+    assert_eq!(r.status, 403, "{}", r.json);
+    let r = alice.post(&format!("{runs}/{run}/complete"), json!({"status": "failed"})).await;
+    assert_eq!(r.status, 403, "{}", r.json);
+    assert_eq!(bot.post(&format!("{runs}/{run}/heartbeat"), json!({})).await.status, 200);
+    let still = w.admin.get(&format!("{runs}?agent=bot&active_only=true")).await;
+    assert_eq!(still.json["runs"].as_array().unwrap().len(), 1, "the writer's refused calls changed nothing");
+
+    // Another agent is held to its own runs (as before)...
+    let other = token_for(&w.srv, &w.admin, "agent:other").await;
+    assert_eq!(other.post(&format!("{runs}/{run}/heartbeat"), json!({})).await.status, 403);
+
+    // ...and an operator - a delegator, an administrator - acts for the agent.
+    assert_eq!(w.orch.post(&format!("{runs}/{run}/heartbeat"), json!({})).await.status, 200);
+    let second = start_run(&w, "bot", None).await;
+    let r = w.admin.post(&format!("{runs}/{second}/complete"), json!({"status": "completed"})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    let r = w.orch.post(&format!("{runs}/{run}/complete"), json!({"status": "failed"})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    w.srv.stop().await;
+}

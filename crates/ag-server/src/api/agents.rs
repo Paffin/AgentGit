@@ -27,6 +27,19 @@ fn check_agent_scope(actor: &Identity, agent_name: &str) -> ApiResult<()> {
     Ok(())
 }
 
+/// Acting on an agent's run is the agent's own business - or an operator's. An agent principal is held to its own
+/// runs by [`check_agent_scope`]; anyone else (a human, a service: a plain `writer`) acts for an agent only with
+/// `agent.operate`, which the `delegator` and `admin` roles carry.
+fn check_operator_for(actor: &Identity, agent_name: &str, operator: bool, what: &str) -> ApiResult<()> {
+    let p = actor.principal();
+    if operator || (p.kind() == IdentityKind::Agent && p.name() == agent_name) {
+        return Ok(());
+    }
+    Err(ApiError::denied(format!(
+        "{p} is not agent '{agent_name}': {what} for another agent requires the capability agent.operate"
+    )))
+}
+
 /// The run an actor acts as (`agent:bot#run_...`), if it acts as one.
 fn acting_run(actor: &Identity) -> Option<&str> {
     actor.as_str().split_once('#').map(|(_, run)| run)
@@ -109,8 +122,11 @@ impl App {
         let agent = require(&req.agent, "agent")?.to_string();
         let task = (!req.task_id.is_empty()).then(|| req.task_id.clone());
         let key = req.idempotency_key.clone();
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo_mut(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
             check_agent_scope(actor, &agent)?;
+            check_operator_for(actor, &agent, operator, "starting a run")?;
             // A run does not start runs: one acting as a run - a run-bound credential, or `ag-run` - would be
             // making a second identity for its agent. Runs are started with the agent's own credential, or by
             // an operator.
@@ -135,12 +151,15 @@ impl App {
         repo: &ag_integrate::Repository,
         run_id: &str,
         actor: &Identity,
+        operator: bool,
+        what: &str,
     ) -> ApiResult<ag_storage::meta::RunRow> {
         let run = repo
             .meta()
             .read(|tx| tx.run(run_id))?
             .ok_or_else(|| ApiError::not_found(format!("run '{run_id}' not found")))?;
         check_agent_scope(actor, &run.agent)?;
+        check_operator_for(actor, &run.agent, operator, what)?;
         // Acting as one run is not acting as another: the heartbeat and the end of a run are its own.
         if let Some(acting) = acting_run(actor)
             && acting != run_id
@@ -153,8 +172,10 @@ impl App {
     /// Records a heartbeat of a run.
     pub async fn heartbeat(&self, call: &Call, req: v1::HeartbeatRequest) -> ApiResult<v1::HeartbeatResponse> {
         let now = self.clock.now().as_millis();
-        self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
-            Self::check_run_owner(repo, &req.run_id, actor)?;
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
+            Self::check_run_owner(repo, &req.run_id, actor, operator, "a heartbeat")?;
             heartbeat(repo.meta(), &req.run_id)?;
             Ok(v1::HeartbeatResponse { server_time_ms: now })
         })
@@ -166,9 +187,10 @@ impl App {
     pub async fn complete_run(&self, call: &Call, req: v1::CompleteRunRequest) -> ApiResult<v1::Run> {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let run_id = req.run_id.clone();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
         let out = self
             .with_repo_mut(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
-                Self::check_run_owner(repo, &req.run_id, actor)?;
+                Self::check_run_owner(repo, &req.run_id, actor, operator, "finishing a run")?;
                 let summary = (!req.summary.is_empty()).then_some(req.summary.as_str());
                 finish_run_as(repo.meta(), &req.run_id, &req.status, summary, Some(actor.as_str()))?;
                 let row =

@@ -162,11 +162,11 @@ Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per reposito
 | Role | Grants |
 |---|---|
 | `reader` | read everything in a repository: history, trees, streams, proposals, events, policy, audit pins |
-| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent, tasks, leases, provenance |
+| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent (start, heartbeat and end the runs of **its own** agent identity only: acting for another agent needs `agent.operate`), tasks, leases, provenance |
 | `reviewer` | reader + review proposals |
 | `integrator` | reader + integrate proposals, request validation, run the queue, close proposals |
 | `runner` | reader + claim execution jobs and submit attestations (execution-plane workers) |
-| `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
+| `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: start, heartbeat or end a run for another agent, finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
 | `admin` | everything, including policy, credentials, roles, GC, fsck, stream compare-and-swap |
 
 A caller with no role at all on a repository gets `not_found`. Authorization says *who may call which API*;

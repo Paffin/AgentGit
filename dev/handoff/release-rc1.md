@@ -50,3 +50,28 @@ forgets the probe call. The test is not skipped or excluded. `Quality` at `bd044
    public (package settings) before the deploy defaults can resolve anonymously.
 4. If the Release run fails before anything was published, fix on `main` and tag `v0.2.0-rc.2` (the agents cannot
    dispatch or re-run, 403); never move a tag after assets were published.
+
+## Update: the tag was pushed, the run failed, rc.2 is prepared
+
+Run [39299147314](https://github.com/Paffin/AgentGit/actions/runs/39299147314) on `v0.2.0-rc.1` (`bd0442e`):
+* success: verify, release tooling tests, tests, SBOMs, all four `binaries`, `image (amd64)`, `image (arm64)`,
+  `multi-arch manifest`.
+* **failure: `assemble the release`**, step 7 *Release notes from the CHANGELOG*:
+  `error: '0.2.0-rc.1' is not a version tag like v1.2.3 or v1.2.3-rc.1`. Root cause: `release.yml` called
+  `check_release.py "$VERSION" --notes` (a bare version is valid only with `--dry-run`, which every rehearsal used).
+  The `install.sh` jobs were skipped. No release assets and no notes exist. A GitHub release page `v0.2.0-rc.1` does
+  exist (created 18:01:53Z, empty, pre-release), presumably made together with the tag in the UI.
+* Side effect: both images were pushed to GHCR as `:0.2.0-rc.1`. Anonymous pull works (the packages are already
+  public); the indexes list linux/amd64 and linux/arm64. Image attestation not verified (no logged-in `gh` here).
+* Fix on `main`: `202fbdd` (notes use `v$VERSION`, regression test, an existing release page is filled in with
+  `gh release upload --clobber` + `gh release edit`). The bump to `0.2.0-rc.2` and its CHANGELOG section are the next
+  commit. Local gates: `check_release.py v0.2.0-rc.2 --notes`, check_docs, `gen_cli_docs --check`,
+  check_publish_metadata, `check_workflows --strict`, test_release_scripts (38).
+
+### Owner actions for rc.2
+
+1. Take the newest commit on `main` (subject `release: 0.2.0-rc.2`, or later) once its CI is green.
+2. Do not move or delete `v0.2.0-rc.1`; optionally delete the empty `v0.2.0-rc.1` release page in the UI.
+3. `git tag -a v0.2.0-rc.2 -m "AgentGit 0.2.0-rc.2" <that commit> && git push origin v0.2.0-rc.2`.
+4. Ask for the verification pass (archives, `SHA256SUMS`, `install.sh --version 0.2.0-rc.2`, `gh attestation verify`
+   with a logged-in `gh`, image attestation, SBOM parse). GHCR visibility needs no action.

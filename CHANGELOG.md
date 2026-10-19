@@ -7,6 +7,17 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.2.0-rc.2] — 2026-10-19
+
+Second release candidate. `v0.2.0-rc.1` was tagged but its Release run failed in the last stage before anything
+was attached to a GitHub release (the release notes were requested with a bare version instead of a tag name); no
+archive was published for it. Code is otherwise identical to rc.1.
+
+### Fixed
+
+- Release workflow: the release notes step passes the tag form (`vX.Y.Z`), and an already existing release page
+  (the GitHub UI creates one with a tag) is filled in instead of making `gh release create` fail.
+
 ## [0.2.0-rc.1] — 2026-10-19
 
 First release candidate and the first tag of the project (the `0.1.0` section below was an alpha that was never

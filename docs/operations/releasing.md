@@ -211,9 +211,8 @@ is done, verify releases through the attestations, not by rebuilding.
 
 The rehearsal runs everything but the writes. These have therefore **never run**:
 
-* `docker push` of each architecture by digest to GHCR, the registry-side merge there, the `:latest` tag, and
-  the attestation of the images (`push-to-registry`). The merge logic itself is exercised against a local
-  registry; GHCR permissions (package visibility, `packages: write` for the workflow) are not.
+* The `:latest` tag on GHCR and the verification of the image attestation. (Push by digest and the registry-side
+  merge ran for real in the rc.1 run, see [Evidence](#evidence).)
 * `gh release create` with the assembled files, and the release page that users see.
 * `install.sh` and `gh attestation verify` against real release URLs (the rehearsal uses a `file://` base URL;
   `releases/latest` redirect lookup is untested because no release exists).
@@ -226,6 +225,30 @@ GitHub's attestations; shell completions and man pages are not generated yet (th
 `completions/` and `man/` as soon as they exist).
 
 ## Evidence
+
+The first real run, `v0.2.0-rc.1` ([run 39299147314](https://github.com/Paffin/AgentGit/actions/runs/39299147314),
+commit `bd0442e`, tag pushed by the owner), **failed** in `assemble the release`, step *Release notes from the
+CHANGELOG*: `'0.2.0-rc.1' is not a version tag like v1.2.3`. The rehearsal passes `--dry-run`, which accepts a bare
+version; a real run does not, and nothing had exercised that combination. Fixed in `202fbdd`: the notes step passes
+`v$VERSION`, and a test fails on a bare version in any `check_release.py` call in `release.yml`. `gh release create`
+also falls back to `upload --clobber` + `edit` when a release page already exists (the GitHub UI creates an empty one
+together with a tag, as happened for rc.1). `v0.2.0-rc.1` stays as it is: no assets, no notes. The fixed version is
+`0.2.0-rc.2`.
+
+What that real run did prove:
+
+| Stage | Result |
+|---|---|
+| verify, release tooling tests, workspace tests, SBOMs | success |
+| four native builds, archive unpack, `--version` check, end-to-end smoke | success (linux x86_64/aarch64, macOS aarch64/x86_64) |
+| images amd64 + arm64, **push to GHCR by digest, registry-side merge** | success. The anonymous token flow works without login, and `ghcr.io/paffin/agentgit-server:0.2.0-rc.1` and `…/agentgit-cli:0.2.0-rc.1` are image indexes listing `linux/amd64` and `linux/arm64` (plus attestation entries): the packages are **public** |
+| checksums, Homebrew formula, attestations of archives and SBOMs created and verified inside the run | success (the steps before the failing one) |
+| release notes, `gh release create`, `install.sh` on three OSes against the release | **not reached** |
+
+Not verified for rc.1: the image attestation (`gh attestation verify oci://…` needs a logged-in `gh`, which the agent
+environment does not have), the images were never pulled and started from GHCR, and everything about published
+archives, `SHA256SUMS` and `install.sh --version` against real release URLs (none exist for rc.1). That is the
+checklist for rc.2.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow
 runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab with their uploaded artifacts.

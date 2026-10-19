@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.2.0-rc.1"
+version = "0.2.0-rc.2"
 edition = "2024"
 rust-version = "1.89"
 license = "Apache-2.0"
@@ -16,24 +16,24 @@ readme = "README.md"
 
 [workspace.dependencies]
 # internal crates
-ag-types = { package = "agentgit-types", path = "crates/ag-types", version = "0.2.0-rc.1" }
-ag-crypto = { package = "agentgit-crypto", path = "crates/ag-crypto", version = "0.2.0-rc.1" }
-ag-object = { package = "agentgit-object", path = "crates/ag-object", version = "0.2.0-rc.1" }
-ag-changeset = { package = "agentgit-changeset", path = "crates/ag-changeset", version = "0.2.0-rc.1" }
-ag-diff = { package = "agentgit-diff", path = "crates/ag-diff", version = "0.2.0-rc.1" }
-ag-tree = { package = "agentgit-tree", path = "crates/ag-tree", version = "0.2.0-rc.1" }
-ag-dag = { package = "agentgit-dag", path = "crates/ag-dag", version = "0.2.0-rc.1" }
-ag-merge = { package = "agentgit-merge", path = "crates/ag-merge", version = "0.2.0-rc.1" }
-ag-storage = { package = "agentgit-storage", path = "crates/ag-storage", version = "0.2.0-rc.1", default-features = false }
-ag-policy = { package = "agentgit-policy", path = "crates/ag-policy", version = "0.2.0-rc.1" }
-ag-agent = { package = "agentgit-agent", path = "crates/ag-agent", version = "0.2.0-rc.1" }
-ag-integrate = { package = "agentgit-integrate", path = "crates/ag-integrate", version = "0.2.0-rc.1" }
-ag-git = { package = "agentgit-git", path = "crates/ag-git", version = "0.2.0-rc.1" }
-ag-protocol = { package = "agentgit-protocol", path = "crates/ag-protocol", version = "0.2.0-rc.1" }
-ag-client = { package = "agentgit-client", path = "crates/ag-client", version = "0.2.0-rc.1" }
-ag-server = { package = "agentgit-server", path = "crates/ag-server", version = "0.2.0-rc.1" }
-ag-ui-assets = { package = "agentgit-ui-assets", path = "crates/ag-ui-assets", version = "0.2.0-rc.1" }
-ag-sandbox = { package = "agentgit-sandbox", path = "crates/ag-sandbox", version = "0.2.0-rc.1" }
+ag-types = { package = "agentgit-types", path = "crates/ag-types", version = "0.2.0-rc.2" }
+ag-crypto = { package = "agentgit-crypto", path = "crates/ag-crypto", version = "0.2.0-rc.2" }
+ag-object = { package = "agentgit-object", path = "crates/ag-object", version = "0.2.0-rc.2" }
+ag-changeset = { package = "agentgit-changeset", path = "crates/ag-changeset", version = "0.2.0-rc.2" }
+ag-diff = { package = "agentgit-diff", path = "crates/ag-diff", version = "0.2.0-rc.2" }
+ag-tree = { package = "agentgit-tree", path = "crates/ag-tree", version = "0.2.0-rc.2" }
+ag-dag = { package = "agentgit-dag", path = "crates/ag-dag", version = "0.2.0-rc.2" }
+ag-merge = { package = "agentgit-merge", path = "crates/ag-merge", version = "0.2.0-rc.2" }
+ag-storage = { package = "agentgit-storage", path = "crates/ag-storage", version = "0.2.0-rc.2", default-features = false }
+ag-policy = { package = "agentgit-policy", path = "crates/ag-policy", version = "0.2.0-rc.2" }
+ag-agent = { package = "agentgit-agent", path = "crates/ag-agent", version = "0.2.0-rc.2" }
+ag-integrate = { package = "agentgit-integrate", path = "crates/ag-integrate", version = "0.2.0-rc.2" }
+ag-git = { package = "agentgit-git", path = "crates/ag-git", version = "0.2.0-rc.2" }
+ag-protocol = { package = "agentgit-protocol", path = "crates/ag-protocol", version = "0.2.0-rc.2" }
+ag-client = { package = "agentgit-client", path = "crates/ag-client", version = "0.2.0-rc.2" }
+ag-server = { package = "agentgit-server", path = "crates/ag-server", version = "0.2.0-rc.2" }
+ag-ui-assets = { package = "agentgit-ui-assets", path = "crates/ag-ui-assets", version = "0.2.0-rc.2" }
+ag-sandbox = { package = "agentgit-sandbox", path = "crates/ag-sandbox", version = "0.2.0-rc.2" }
 
 # external crates
 anyhow = "1"

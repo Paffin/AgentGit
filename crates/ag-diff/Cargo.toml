@@ -1,5 +1,5 @@
 [package]
-name = "ag-diff"
+name = "agentgit-diff"
 description = "AgentGit deterministic line diff (Myers' O(ND)) and unified diff output; part of the merge specification"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-diff"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_diff"
 
 [dependencies]
 

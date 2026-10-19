@@ -28,7 +28,7 @@
   <ol>
     <li>Build the UI into the binary (needs Node 22), then rebuild the server:
       <pre>scripts/build_ui.sh
-cargo build --release -p ag-server</pre>
+cargo build --release -p agentgit-server</pre>
     </li>
     <li>Build <code>apps/web</code> (<code>npm ci &amp;&amp; npm run build</code>) and point the server at the result, in the server configuration:
       <pre>[ui]

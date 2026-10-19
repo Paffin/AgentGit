@@ -1,6 +1,6 @@
 //! The cross-process object lock backed by PostgreSQL advisory locks.
 //!
-//! Needs a server: `scripts/pg-test.sh cargo test -p ag-storage --test object_lock`.
+//! Needs a server: `scripts/pg-test.sh cargo test -p agentgit-storage --test object_lock`.
 //! Without `AG_TEST_POSTGRES_URL` these print a notice and pass, unless
 //! `AG_REQUIRE_BACKENDS=1`.
 #![allow(missing_docs)]

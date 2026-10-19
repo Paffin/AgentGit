@@ -19,7 +19,7 @@ const BYTES_FIELDS: &[&str] = &["agwp.v1.ObjectChunk.data", "agwp.v1.FileChange.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let proto_root = manifest.join("../../proto");
+    let proto_root = manifest.join("proto");
     let proto = proto_root.join("agwp/v1/agwp.proto");
     println!("cargo:rerun-if-changed={}", proto.display());
 

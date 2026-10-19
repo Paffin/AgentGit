@@ -1,5 +1,5 @@
 [package]
-name = "ag-changeset"
+name = "agentgit-changeset"
 description = "AgentGit ChangesetV1: the immutable unit of history (parents, author, message and a delta of file operations)"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-changeset"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_changeset"
 
 [dependencies]
 ag-types.workspace = true

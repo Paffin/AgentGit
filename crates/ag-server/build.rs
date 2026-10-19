@@ -27,9 +27,11 @@ fn git_unchecked(args: &[&str]) -> Option<String> {
 }
 
 /// Whether the git repository around the build is this workspace (and not, say, a home directory under
-/// version control that happens to contain `~/.cargo/registry/src/…/ag-cli-0.1.0`).
+/// version control that happens to contain `~/.cargo/registry/src/…/agentgit-cli-0.1.0`).
 fn in_own_checkout() -> bool {
-    let name = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
+    // The directory name, not the package name: the packages are `agentgit-*`, the directories `ag-*`.
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let name = Path::new(&manifest).file_name().map(std::path::PathBuf::from).unwrap_or_default();
     let Some(top) = git_unchecked(&["rev-parse", "--show-toplevel"]) else { return false };
     Path::new(&top).join("crates").join(name).join("build.rs").is_file()
 }

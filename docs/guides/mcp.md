@@ -23,7 +23,7 @@ documented formats but were not run in those hosts here.
 it:
 
 ```bash
-cargo build --release -p ag-mcp        # target/release/ag-mcp
+cargo build --release -p agentgit-mcp        # target/release/ag-mcp
 ag-mcp --version
 ```
 

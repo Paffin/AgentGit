@@ -14,7 +14,7 @@ client. Nothing in the UI can do what the API would refuse.
 
 `ag-server` serves the UI itself: the build of `apps/web` is compiled into the binary (cargo feature `ui`, on by
 default), so one file is the whole product. Release and CI builds run `scripts/build_ui.sh` (Node 22.18 or newer:
-`npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p ag-server`. The
+`npm ci`, a production build, pre-compressed brotli/gzip copies) and then `cargo build --release -p agentgit-server`. The
 container image (`deploy/docker/Dockerfile`: a Node stage runs the script, the Rust stage embeds its output) is built
 that way, and CI checks that the image's server serves the app. The release workflow builds the UI before its
 binaries too (and its archive smoke test checks the app is served); that part has not been rehearsed since it was

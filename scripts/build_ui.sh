@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Builds the Web UI (apps/web -> apps/web/dist) so that the next `cargo build -p ag-server` embeds it in the
+# Builds the Web UI (apps/web -> apps/web/dist) so that the next `cargo build -p agentgit-server` embeds it in the
 # binary (cargo feature `ui`, on by default). Release and CI builds run this first.
 #
 #   scripts/build_ui.sh                         # npm ci + production build + pre-compression
 #   AG_UI_SKIP_INSTALL=1 scripts/build_ui.sh    # reuse the existing node_modules (local iteration)
-#   cargo build --release -p ag-server          # ... now contains the UI
+#   cargo build --release -p agentgit-server          # ... now contains the UI
 #
 # A server built without the UI still works: it serves a page that says how to build it.
 set -euo pipefail
@@ -39,4 +39,4 @@ fi
 
 files="$(find dist -type f ! -name '*.br' ! -name '*.gz' | wc -l | tr -d ' ')"
 echo "Web UI built: apps/web/dist ($files files)."
-echo "Next: cargo build --release -p ag-server   (the binary then serves the UI itself)"
+echo "Next: cargo build --release -p agentgit-server   (the binary then serves the UI itself)"

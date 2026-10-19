@@ -93,7 +93,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build release binary
-        run: cargo build --release -p ag-cli
+        run: cargo build --release -p agentgit-cli
       - name: CLI reference is up to date
         run: AG=target/release/ag python3 scripts/gen_cli_docs.py --check
       - name: README artwork is up to date
@@ -139,7 +139,7 @@ jobs:
       - name: Test on PostgreSQL + S3 (SeaweedFS, a real S3 server)
         run: |
           AG_REQUIRE_BACKENDS=1 AG_S3_SERVER=seaweedfs scripts/pg-test.sh scripts/s3-test.sh \
-            bash -c 'cargo test -p ag-storage -p ag-integrate && cargo test -p ag-server --test storage_backends'
+            bash -c 'cargo test -p agentgit-storage -p agentgit-integrate && cargo test -p agentgit-server --test storage_backends'
       # The multi-replica server (ADR-0007, docs/operations/high-availability.md): 2-5 real ag-server processes on one
       # PostgreSQL and one S3 server, driven over sockets - no lost update across replicas, kill -9 of a replica in
       # flight, exactly-once job claims, SSE across replicas, bounded revocation, rolling restart, migrate-control.
@@ -177,7 +177,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Shipped server configurations load with this server
-        run: cargo test -p ag-server --test deploy_configs
+        run: cargo test -p agentgit-server --test deploy_configs
 
   # The container images (both targets, health check, hardened run, end-to-end smoke, compose, kubernetes) are built
   # and proven by containers.yml, which runs on every push and pull request that can change an image. They used to
@@ -194,7 +194,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - run: cargo build -p ag-server -p ag-cli
+      - run: cargo build -p agentgit-server -p agentgit-cli
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -238,7 +238,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - run: cargo build -p ag-server
+      - run: cargo build -p agentgit-server
       - if: matrix.kind == 'node'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -272,7 +272,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - run: cargo build -p ag-server
+      - run: cargo build -p agentgit-server
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: services/agent-orchestrator/go.mod
@@ -323,7 +323,7 @@ jobs:
       - name: Install zsh and fish
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh fish
       - name: The scripts parse; bash completes real commands; the shipped copies are current
-        run: AG_REQUIRE_SHELLS=1 cargo test -p ag-cli --test completions
+        run: AG_REQUIRE_SHELLS=1 cargo test -p agentgit-cli --test completions
 
   # ag-mcp with an agent in front of it: the scripted client (no model) runs on every push; the run with a real
   # model is opt-in (it costs money and CI has no key unless the repository defines the OPENROUTER_API_KEY secret
@@ -342,7 +342,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - run: cargo build -p ag-server -p ag-mcp
+      - run: cargo build -p agentgit-server -p agentgit-mcp
       - name: The examples compile
         run: python3 -m py_compile examples/agents/*.py
       - name: Scripted agent against a real ag-server (claim, lease, edit, propose, refusals, human integrates)

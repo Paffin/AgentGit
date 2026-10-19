@@ -257,7 +257,7 @@ and local files and needs nothing else.
 cargo test --workspace                                         # SQLite + files (default)
 scripts/pg-test.sh cargo test --workspace                      # metadata on a throwaway PostgreSQL cluster
 scripts/s3-test.sh cargo test --workspace                      # objects on a throwaway S3 server (moto)
-AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p ag-storage -p ag-integrate   # … on a real one (SeaweedFS)
+AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p agentgit-storage -p agentgit-integrate   # … on a real one (SeaweedFS)
 AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace   # both, and fail if either is missing
 ```
 

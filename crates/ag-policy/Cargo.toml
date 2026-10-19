@@ -1,5 +1,5 @@
 [package]
-name = "ag-policy"
+name = "agentgit-policy"
 description = "AgentGit policy engine: a pure function from a policy document and facts to a decision"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-policy"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_policy"
 
 [dependencies]
 ag-types.workspace = true

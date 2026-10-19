@@ -12,7 +12,7 @@ stdio. Nothing is simulated. Python 3 standard library only.
 | `agentgit_stack.py` | Starts and provisions `ag-server` |
 
 ```bash
-cargo build -p ag-server -p ag-mcp
+cargo build -p agentgit-server -p agentgit-mcp
 python3 examples/agents/mcp_scripted_agent.py            # finds the binaries in target/, or --ag-server / --ag-mcp
 
 AG_LIVE_LLM=1 AG_LLM_MODEL=openai/gpt-4o-mini python3 examples/agents/mcp_llm_agent.py

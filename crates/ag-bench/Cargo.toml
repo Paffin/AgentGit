@@ -1,5 +1,5 @@
 [package]
-name = "ag-bench"
+name = "agentgit-bench"
 description = "AgentGit: benchmarks of the engine's hot paths and a load generator for ag-server"
 version.workspace = true
 edition.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://paffin.github.io/AgentGit/"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true

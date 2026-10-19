@@ -396,7 +396,7 @@ npm run check            # all of the above
 ```
 
 The tests start the server binary found in `$AG_SERVER_BIN`, `/home/user/bin/ag-server`, or
-`target/{debug,release}/ag-server` of the repository (build it with `cargo build -p ag-server`). Each test file gets
+`target/{debug,release}/ag-server` of the repository (build it with `cargo build -p agentgit-server`). Each test file gets
 its own process and temporary data directory, and the process is killed when the tests end, whether they pass or not.
 
 `src/generated/` holds `schema.ts` (message types by [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript)),

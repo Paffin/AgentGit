@@ -1,5 +1,5 @@
 [package]
-name = "ag-types"
+name = "agentgit-types"
 description = "Core value types shared by every AgentGit crate: identifiers, repository paths and identities (no I/O)"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-types"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_types"
 
 [dependencies]
 hex.workspace = true

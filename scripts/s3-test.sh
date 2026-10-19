@@ -2,7 +2,7 @@
 # Run a command against a throwaway S3-compatible server.
 #
 #   scripts/s3-test.sh cargo test --workspace                       # moto (the default)
-#   AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p ag-storage -p ag-integrate
+#   AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p agentgit-storage -p agentgit-integrate
 #   AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
 #
 # Two servers, chosen by AG_S3_SERVER; the object-store suites (crates/ag-storage/tests/s3.rs and every test that

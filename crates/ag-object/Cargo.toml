@@ -1,5 +1,5 @@
 [package]
-name = "ag-object"
+name = "agentgit-object"
 description = "AgentGit content addressing and the canonical binary encoding toolkit"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-object"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_object"
 
 [dependencies]
 ag-types.workspace = true

@@ -1,5 +1,5 @@
 // Package testutil is the shared test harness of the orchestrator. It starts
-// the REAL ag-server (the binary CI builds with `cargo build -p ag-server`) on
+// the REAL ag-server (the binary CI builds with `cargo build -p agentgit-server`) on
 // a free loopback port in a temporary data directory, and builds a small world
 // on it (a repository, people with roles, a CI worker). No part of the AGWP
 // server is imitated anywhere in the test suites.
@@ -137,9 +137,9 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	bin := FindServerBin()
 	if bin == "" {
 		if requireServer() {
-			t.Fatal("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p ag-server`")
+			t.Fatal("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
 		}
-		t.Skip("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p ag-server`")
+		t.Skip("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
 	}
 	dir := t.TempDir()
 	token := RandHex(24) // 48 characters; the server wants at least 32

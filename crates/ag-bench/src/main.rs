@@ -113,7 +113,7 @@ fn main() -> Result<()> {
             let env = report::Environment::capture();
             if !env.release_build {
                 eprintln!(
-                    "warning: a debug build; the numbers are not comparable. Use `cargo run --release -p ag-bench`."
+                    "warning: a debug build; the numbers are not comparable. Use `cargo run --release -p agentgit-bench`."
                 );
             }
             let opts = engine::Options {

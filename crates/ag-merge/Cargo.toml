@@ -1,5 +1,5 @@
 [package]
-name = "ag-merge"
+name = "agentgit-merge"
 description = "AgentGit deterministic three-way merge of text and trees, with typed conflicts"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-merge"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_merge"
 
 [dependencies]
 ag-changeset.workspace = true

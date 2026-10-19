@@ -1,6 +1,6 @@
 //! Cost of the flat tree by size. Ignored by default (a measurement, not a check):
 //!
-//!   cargo test --release -p ag-tree --test scale -- --ignored --nocapture
+//!   cargo test --release -p agentgit-tree --test scale -- --ignored --nocapture
 #![allow(missing_docs)]
 
 use std::time::Instant;

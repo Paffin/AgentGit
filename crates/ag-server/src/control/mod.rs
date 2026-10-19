@@ -28,40 +28,41 @@ use crate::authz::{Binding, Role, validate_pattern};
 use crate::config::ServerConfig;
 use crate::error::{ApiError, ApiResult};
 
-/// The control schema, per backend. Both lists are numbered from 1 and must agree (checked by a test).
+/// The control schema, per backend. Both lists are numbered from 1 and must agree (checked by a test). The SQL is this
+/// crate's copy of the top-level `migrations/control/` (`scripts/sync_crate_files.py` keeps them identical).
 pub const MIGRATIONS: Migrations = Migrations {
     sqlite: &[
         Migration {
             version: 1,
             name: "0001_init.sql",
-            sql: include_str!("../../../../migrations/control/sqlite/0001_init.sql"),
+            sql: include_str!("../../migrations/control/sqlite/0001_init.sql"),
         },
         Migration {
             version: 2,
             name: "0002_repo_config.sql",
-            sql: include_str!("../../../../migrations/control/sqlite/0002_repo_config.sql"),
+            sql: include_str!("../../migrations/control/sqlite/0002_repo_config.sql"),
         },
         Migration {
             version: 3,
             name: "0003_credential_runs.sql",
-            sql: include_str!("../../../../migrations/control/sqlite/0003_credential_runs.sql"),
+            sql: include_str!("../../migrations/control/sqlite/0003_credential_runs.sql"),
         },
     ],
     postgres: &[
         Migration {
             version: 1,
             name: "0001_init.sql",
-            sql: include_str!("../../../../migrations/control/postgres/0001_init.sql"),
+            sql: include_str!("../../migrations/control/postgres/0001_init.sql"),
         },
         Migration {
             version: 2,
             name: "0002_repo_config.sql",
-            sql: include_str!("../../../../migrations/control/postgres/0002_repo_config.sql"),
+            sql: include_str!("../../migrations/control/postgres/0002_repo_config.sql"),
         },
         Migration {
             version: 3,
             name: "0003_credential_runs.sql",
-            sql: include_str!("../../../../migrations/control/postgres/0003_credential_runs.sql"),
+            sql: include_str!("../../migrations/control/postgres/0003_credential_runs.sql"),
         },
     ],
 };
@@ -777,7 +778,7 @@ mod tests {
     fn migration_lists_agree_and_every_file_is_listed() {
         MIGRATIONS.check().unwrap();
         for (backend, list) in [("sqlite", MIGRATIONS.sqlite), ("postgres", MIGRATIONS.postgres)] {
-            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/control").join(backend);
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations/control").join(backend);
             let mut files: Vec<String> = std::fs::read_dir(dir)
                 .unwrap()
                 .map(|e| e.unwrap().file_name().into_string().unwrap())

@@ -1,5 +1,5 @@
 [package]
-name = "ag-worker"
+name = "agentgit-worker"
 description = "AgentGit: the execution-plane worker (claims validation jobs, runs checks in a sandbox, signs attestations)"
 version.workspace = true
 edition.workspace = true
@@ -8,11 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://paffin.github.io/AgentGit/"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: the name `ag-worker` is taken on crates.io; depends on ag-storage and ag-protocol (docs/operations/releasing.md).
-publish = false
 
 [lints]
 workspace = true

@@ -304,7 +304,7 @@ async fn the_openapi_document_matches_the_router_and_the_checked_in_copy() {
     assert_eq!(spec["paths"]["/v1/capabilities"]["get"]["security"], json!([]), "capabilities are public");
 
     // The checked-in copy (docs/protocol/openapi.json) is what SDKs are generated from;
-    // regenerate it with AG_UPDATE_GOLDEN=1 cargo test -p ag-server --test observability.
+    // regenerate it with AG_UPDATE_GOLDEN=1 cargo test -p agentgit-server --test observability.
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/protocol/openapi.json");
     let fresh = serde_json::to_string_pretty(&spec).unwrap() + "\n";
     if std::env::var_os("AG_UPDATE_GOLDEN").is_some() {
@@ -313,6 +313,6 @@ async fn the_openapi_document_matches_the_router_and_the_checked_in_copy() {
     let stored = std::fs::read_to_string(path).expect("docs/protocol/openapi.json (run with AG_UPDATE_GOLDEN=1)");
     assert!(
         stored == fresh,
-        "docs/protocol/openapi.json is out of date; run AG_UPDATE_GOLDEN=1 cargo test -p ag-server --test observability"
+        "docs/protocol/openapi.json is out of date; run AG_UPDATE_GOLDEN=1 cargo test -p agentgit-server --test observability"
     );
 }

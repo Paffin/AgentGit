@@ -1,5 +1,5 @@
 [package]
-name = "ag-tree"
+name = "agentgit-tree"
 description = "AgentGit trees: the verifiable state a changeset produces, derived from its history"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-tree"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_tree"
 
 [dependencies]
 ag-types.workspace = true

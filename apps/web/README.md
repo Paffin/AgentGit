@@ -33,7 +33,7 @@ npm run demo:server                                # builds, starts a real ag-se
 ```
 
 Requirements: Node 22.18 or newer. For `demo:server` and the end-to-end tests also an `ag-server` binary:
-`AG_SERVER_BIN=/path/to/ag-server`, or `target/debug/ag-server` after `cargo build -p ag-server`.
+`AG_SERVER_BIN=/path/to/ag-server`, or `target/debug/ag-server` after `cargo build -p agentgit-server`.
 
 ### Scripts
 

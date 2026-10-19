@@ -14,7 +14,7 @@ justified by numbers, not by taste. Nobody had measured.
 
 ## Measurements
 
-`cargo test --release -p ag-integrate --test scale -- --ignored --nocapture` (and the sibling `scale` tests in
+`cargo test --release -p agentgit-integrate --test scale -- --ignored --nocapture` (and the sibling `scale` tests in
 `ag-tree` and `ag-merge`) build a synthetic repository (paths `pkgNNN/modNN/fileN.rs`) and time the engine
 in-process: one thread, in-memory object store, SQLite metadata in memory. They are CPU costs of the engine,
 not of a deployment (no network, no disk latency). Release build on a 4-vCPU Intel Xeon @ 2.10 GHz cloud VM (the tests themselves are single-threaded).

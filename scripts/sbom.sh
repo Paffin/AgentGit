@@ -62,6 +62,6 @@ for f in files:
         assert len(names) > 30 and {"vue", "pinia", "vue-router"} <= names, f
     else:
         assert d["specVersion"] == "1.5", f
-        assert len(names) > 50 and "ag-types" in names and "tokio" in names, f
+        assert len(names) > 50 and "agentgit-types" in names and "tokio" in names, f
     print(f, len(names), "components")
 PY

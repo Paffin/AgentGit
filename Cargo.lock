@@ -3,16 +3,16 @@
 version = 4
 
 [[package]]
-name = "ag-agent"
+name = "agentgit-agent"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-crypto",
- "ag-dag",
- "ag-object",
- "ag-policy",
- "ag-storage",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-crypto",
+ "agentgit-dag",
+ "agentgit-object",
+ "agentgit-policy",
+ "agentgit-storage",
+ "agentgit-types",
  "serde",
  "serde_json",
  "tempfile",
@@ -20,18 +20,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-bench"
+name = "agentgit-bench"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-crypto",
- "ag-integrate",
- "ag-merge",
- "ag-object",
- "ag-protocol",
- "ag-storage",
- "ag-tree",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-crypto",
+ "agentgit-integrate",
+ "agentgit-merge",
+ "agentgit-object",
+ "agentgit-protocol",
+ "agentgit-storage",
+ "agentgit-tree",
+ "agentgit-types",
  "anyhow",
  "clap",
  "futures-util",
@@ -45,11 +45,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-changeset"
+name = "agentgit-changeset"
 version = "0.1.0"
 dependencies = [
- "ag-object",
- "ag-types",
+ "agentgit-object",
+ "agentgit-types",
  "hex",
  "proptest",
  "serde_json",
@@ -57,23 +57,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-cli"
+name = "agentgit-cli"
 version = "0.1.0"
 dependencies = [
- "ag-agent",
- "ag-changeset",
- "ag-client",
- "ag-crypto",
- "ag-diff",
- "ag-git",
- "ag-integrate",
- "ag-object",
- "ag-policy",
- "ag-protocol",
- "ag-server",
- "ag-storage",
- "ag-tree",
- "ag-types",
+ "agentgit-agent",
+ "agentgit-changeset",
+ "agentgit-client",
+ "agentgit-crypto",
+ "agentgit-diff",
+ "agentgit-git",
+ "agentgit-integrate",
+ "agentgit-object",
+ "agentgit-policy",
+ "agentgit-protocol",
+ "agentgit-server",
+ "agentgit-storage",
+ "agentgit-tree",
+ "agentgit-types",
  "anyhow",
  "clap",
  "clap_complete",
@@ -89,15 +89,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-client"
+name = "agentgit-client"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-object",
- "ag-protocol",
- "ag-server",
- "ag-storage",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-object",
+ "agentgit-protocol",
+ "agentgit-server",
+ "agentgit-storage",
+ "agentgit-types",
  "futures-util",
  "rustls",
  "serde_json",
@@ -110,10 +110,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-crypto"
+name = "agentgit-crypto"
 version = "0.1.0"
 dependencies = [
- "ag-types",
+ "agentgit-types",
  "ed25519-dalek",
  "getrandom 0.4.3",
  "hex",
@@ -124,49 +124,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-dag"
+name = "agentgit-dag"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-types",
  "proptest",
  "thiserror",
 ]
 
 [[package]]
-name = "ag-diff"
+name = "agentgit-diff"
 version = "0.1.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
-name = "ag-git"
+name = "agentgit-git"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-dag",
- "ag-integrate",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-dag",
+ "agentgit-integrate",
+ "agentgit-types",
  "tempfile",
  "thiserror",
 ]
 
 [[package]]
-name = "ag-integrate"
+name = "agentgit-integrate"
 version = "0.1.0"
 dependencies = [
- "ag-agent",
- "ag-changeset",
- "ag-crypto",
- "ag-dag",
- "ag-diff",
- "ag-merge",
- "ag-object",
- "ag-policy",
- "ag-storage",
- "ag-tree",
- "ag-types",
+ "agentgit-agent",
+ "agentgit-changeset",
+ "agentgit-crypto",
+ "agentgit-dag",
+ "agentgit-diff",
+ "agentgit-merge",
+ "agentgit-object",
+ "agentgit-policy",
+ "agentgit-storage",
+ "agentgit-tree",
+ "agentgit-types",
  "globset",
  "hex",
  "proptest",
@@ -178,13 +178,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-mcp"
+name = "agentgit-mcp"
 version = "0.1.0"
 dependencies = [
- "ag-crypto",
- "ag-server",
- "ag-storage",
- "ag-types",
+ "agentgit-crypto",
+ "agentgit-server",
+ "agentgit-storage",
+ "agentgit-types",
  "base64 0.23.1",
  "clap",
  "getrandom 0.4.3",
@@ -197,35 +197,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-merge"
+name = "agentgit-merge"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-diff",
- "ag-object",
- "ag-tree",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-diff",
+ "agentgit-object",
+ "agentgit-tree",
+ "agentgit-types",
  "proptest",
  "thiserror",
 ]
 
 [[package]]
-name = "ag-object"
+name = "agentgit-object"
 version = "0.1.0"
 dependencies = [
- "ag-types",
+ "agentgit-types",
  "proptest",
  "sha2",
  "thiserror",
 ]
 
 [[package]]
-name = "ag-policy"
+name = "agentgit-policy"
 version = "0.1.0"
 dependencies = [
- "ag-crypto",
- "ag-object",
- "ag-types",
+ "agentgit-crypto",
+ "agentgit-object",
+ "agentgit-types",
  "globset",
  "hex",
  "proptest",
@@ -235,7 +235,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-protocol"
+name = "agentgit-protocol"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
@@ -251,7 +251,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-sandbox"
+name = "agentgit-sandbox"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -263,22 +263,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-server"
+name = "agentgit-server"
 version = "0.1.0"
 dependencies = [
- "ag-agent",
- "ag-changeset",
- "ag-crypto",
- "ag-dag",
- "ag-diff",
- "ag-integrate",
- "ag-object",
- "ag-policy",
- "ag-protocol",
- "ag-storage",
- "ag-tree",
- "ag-types",
- "ag-ui-assets",
+ "agentgit-agent",
+ "agentgit-changeset",
+ "agentgit-crypto",
+ "agentgit-dag",
+ "agentgit-diff",
+ "agentgit-integrate",
+ "agentgit-object",
+ "agentgit-policy",
+ "agentgit-protocol",
+ "agentgit-storage",
+ "agentgit-tree",
+ "agentgit-types",
+ "agentgit-ui-assets",
  "anyhow",
  "axum",
  "axum-server",
@@ -317,15 +317,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-storage"
+name = "agentgit-storage"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-crypto",
- "ag-dag",
- "ag-object",
- "ag-tree",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-crypto",
+ "agentgit-dag",
+ "agentgit-object",
+ "agentgit-tree",
+ "agentgit-types",
  "hex",
  "postgres",
  "proptest",
@@ -342,12 +342,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-tree"
+name = "agentgit-tree"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-object",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-object",
+ "agentgit-types",
  "hex",
  "proptest",
  "serde_json",
@@ -355,7 +355,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-types"
+name = "agentgit-types"
 version = "0.1.0"
 dependencies = [
  "hex",
@@ -367,25 +367,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "ag-ui-assets"
+name = "agentgit-ui-assets"
 version = "0.1.0"
 
 [[package]]
-name = "ag-worker"
+name = "agentgit-worker"
 version = "0.1.0"
 dependencies = [
- "ag-changeset",
- "ag-client",
- "ag-crypto",
- "ag-integrate",
- "ag-object",
- "ag-policy",
- "ag-protocol",
- "ag-sandbox",
- "ag-server",
- "ag-storage",
- "ag-tree",
- "ag-types",
+ "agentgit-changeset",
+ "agentgit-client",
+ "agentgit-crypto",
+ "agentgit-integrate",
+ "agentgit-object",
+ "agentgit-policy",
+ "agentgit-protocol",
+ "agentgit-sandbox",
+ "agentgit-server",
+ "agentgit-storage",
+ "agentgit-tree",
+ "agentgit-types",
  "anyhow",
  "clap",
  "futures-util",

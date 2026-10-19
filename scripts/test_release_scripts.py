@@ -367,9 +367,9 @@ class BuildxCacheCheck(unittest.TestCase):
         "#7 CACHED\n"
         "#8 [ui 6/6] RUN AG_UI_SKIP_INSTALL=1 bash scripts/build_ui.sh\n"
         "#8 CACHED\n"
-        "#9 [build 3/7] RUN --mount=type=cache,target=/r     cargo chef cook --release --locked -p ag-server\n"
+        "#9 [build 3/7] RUN --mount=type=cache,target=/r     cargo chef cook --release --locked -p agentgit-server\n"
         "#9 CACHED\n"
-        "#11 [build 6/7] RUN --mount=type=cache,target=/r     cargo build --release --locked -p ag-server\n"
+        "#11 [build 6/7] RUN --mount=type=cache,target=/r     cargo build --release --locked -p agentgit-server\n"
         "#11 {state}\n"
     )
 

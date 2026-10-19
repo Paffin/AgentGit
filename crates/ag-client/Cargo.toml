@@ -1,5 +1,5 @@
 [package]
-name = "ag-client"
+name = "agentgit-client"
 description = "AgentGit: Rust client for the AGWP protocol (gRPC)"
 version.workspace = true
 edition.workspace = true
@@ -8,14 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-client"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: depends on ag-protocol (docs/operations/releasing.md).
-publish = false
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_client"
 
 [dependencies]
 ag-protocol.workspace = true

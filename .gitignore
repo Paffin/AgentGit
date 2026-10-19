@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 /site/
 .venv-docs/
+crates/ag-ui-assets/dist/

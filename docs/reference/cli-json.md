@@ -6,7 +6,7 @@ Every command that reports something accepts the global `--json` flag. The schem
 
 **The stability rule.** Within a schema version, keys are only ever *added*: never removed, renamed or retyped. A consumer ignores keys it does not know. Removing, renaming or retyping a key would be a new schema version and an entry in the changelog.
 
-**Where this is enforced.** The shapes below are the golden files `crates/ag-cli/tests/golden/json-shapes.json` and `json-shapes-remote.json`. `cargo test -p ag-cli` runs every command listed here in a scratch repository (the remote ones against a real in-process `ag-server`), compares the *shape* of its output (keys and value types, no values) with the golden file, and fails when a command of `ag --help` has neither a shape nor an entry in the list of commands whose output is not JSON.
+**Where this is enforced.** The shapes below are the golden files `crates/ag-cli/tests/golden/json-shapes.json` and `json-shapes-remote.json`. `cargo test -p agentgit-cli` runs every command listed here in a scratch repository (the remote ones against a real in-process `ag-server`), compares the *shape* of its output (keys and value types, no values) with the golden file, and fails when a command of `ag --help` has neither a shape nor an entry in the list of commands whose output is not JSON.
 
 Reading the shapes: a value is its type (`string`, `number`, `bool`, `null`); `string|null` means both were seen; an array shows the merged shape of its elements, and `[]` means the list was empty in the test run. A command printed with a suffix such as `integrate (blocked)` is the same command in another situation (here: when policy blocks the integration, exit code 3).
 

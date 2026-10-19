@@ -1,6 +1,6 @@
 # cargo-mutants configuration (https://mutants.rs), used by .github/workflows/quality.yml and by hand:
 #
-#   cargo install cargo-mutants --locked && cargo mutants -p ag-merge
+#   cargo install cargo-mutants --locked && cargo mutants -p agentgit-merge
 #
 # Every mutant must be caught by the crate's own tests. A mutant that cannot change behaviour (an equivalent mutant)
 # is excluded below, with the reason; a mutant that can is a missing test and gets one. Do not add an entry to make a

@@ -18,7 +18,7 @@ Three ready-made ways to run it, all under [`deploy/`](../../deploy):
 
 Be clear about what "ready-made" means here.
 
-| Checked in CI on every change (`ci.yml`: `scripts/check_deploy.py --strict`, `cargo test -p ag-server --test deploy_configs`) | **Not verified — treat as a starting point** |
+| Checked in CI on every change (`ci.yml`: `scripts/check_deploy.py --strict`, `cargo test -p agentgit-server --test deploy_configs`) | **Not verified — treat as a starting point** |
 |---|---|
 | Every YAML/JSON file parses | The alert thresholds are reasoned defaults, not tuned on real traffic |
 | `kustomize build` of every kustomization (base, `ci`, `prometheus-operator`, `ha`); `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |

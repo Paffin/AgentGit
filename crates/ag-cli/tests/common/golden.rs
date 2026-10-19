@@ -98,7 +98,10 @@ pub fn check_golden(name: &str, shapes: &BTreeMap<String, Value>, skip: &[&str])
         return;
     }
     let want: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap_or_else(|e| {
-        panic!("{}: {e}; generate it with AG_UPDATE_GOLDEN=1 cargo test -p ag-cli --test json_shapes", path.display())
+        panic!(
+            "{}: {e}; generate it with AG_UPDATE_GOLDEN=1 cargo test -p agentgit-cli --test json_shapes",
+            path.display()
+        )
     }))
     .unwrap();
     assert_eq!(want["schema_version"], 1, "golden schema version");
@@ -120,7 +123,7 @@ pub fn check_golden(name: &str, shapes: &BTreeMap<String, Value>, skip: &[&str])
     }
     assert!(
         problems.is_empty(),
-        "the --json output no longer matches {}:\n{}\n\nIf this is intended: AG_UPDATE_GOLDEN=1 cargo test -p ag-cli --test json_shapes, then python3 scripts/gen_cli_docs.py. Removing or retyping a key is a breaking change (see docs/reference/cli-json.md).",
+        "the --json output no longer matches {}:\n{}\n\nIf this is intended: AG_UPDATE_GOLDEN=1 cargo test -p agentgit-cli --test json_shapes, then python3 scripts/gen_cli_docs.py. Removing or retyping a key is a breaking change (see docs/reference/cli-json.md).",
         path.display(),
         problems.join("\n")
     );

@@ -412,7 +412,7 @@ go test -race ./...            # unit tests for every package, plus the integrat
 - **Integration suite** (`integration/`, Linux): starts the **real `ag-server` binary** for every test on a
   free loopback port in a temporary directory (`AG_BOOTSTRAP_TOKEN=... ag-server serve --data-dir ... --listen
   ...`), always kills it, and drives the orchestrator through it. The binary is taken from `$AG_SERVER_BIN`, then
-  `PATH`, then `target/{debug,release}/ag-server` of the checkout (`cargo build -p ag-server`); without one the
+  `PATH`, then `target/{debug,release}/ag-server` of the checkout (`cargo build -p agentgit-server`); without one the
   tests skip with a message, and fail instead when `$CI` or `$AG_REQUIRE_SERVER` is set. Scenarios:
   dependency-ordered tasks under a provenance-plus-approval policy (the real server verifies the agent's
   signature), overlap deferral and `allow` placement, a failing shell executor (environment, credential

@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       crates:
-        description: "Crates to mutate (space-separated); empty for the five default ones"
+        description: "Packages to mutate (space-separated package names, e.g. agentgit-merge); empty for the five default ones"
         default: ""
 
 permissions:
@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [ag-object, ag-diff, ag-tree, ag-merge, ag-policy]
+        crate: [agentgit-object, agentgit-diff, agentgit-tree, agentgit-merge, agentgit-policy]
     steps:
       - name: Selected by hand?
         id: pick

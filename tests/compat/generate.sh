@@ -26,7 +26,7 @@ if [ -z "$AG" ]; then
   if [ -x "$ROOT/target/release/ag" ]; then AG="$ROOT/target/release/ag"
   elif [ -x "$ROOT/target/debug/ag" ]; then AG="$ROOT/target/debug/ag"
   elif command -v ag >/dev/null 2>&1; then AG=ag
-  else echo "ag not found: cargo build -p ag-cli, or set AG=" >&2; exit 1; fi
+  else echo "ag not found: cargo build -p agentgit-cli, or set AG=" >&2; exit 1; fi
 fi
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"

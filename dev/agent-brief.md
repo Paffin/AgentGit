@@ -42,7 +42,7 @@ Read `README.md`, `CONTRIBUTING.md`, `ROADMAP.md` ("Next" section), `docs/README
   (or `-p` for the crates you touched plus anything depending on them); the tests of what you changed;
   `AG=/home/user/ag-target/debug/ag python3 scripts/check_docs.py` (build `ag-cli` first); generated artefacts you
   affect stay in sync (`scripts/gen_cli_docs.py --check`, the OpenAPI golden via
-  `AG_UPDATE_GOLDEN=1 cargo test -p ag-server --test observability`, SDK generators in `sdk/`,
+  `AG_UPDATE_GOLDEN=1 cargo test -p agentgit-server --test observability`, SDK generators in `sdk/`,
   `scripts/gen_readme_assets.py --check`).
 
 ## Integrating (you push to `main` yourself)

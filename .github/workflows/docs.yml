@@ -68,13 +68,13 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build ag and ag-server
-        run: cargo build -p ag-cli -p ag-server
+        run: cargo build -p agentgit-cli -p agentgit-server
       - name: The harness has tests of its own
         run: python3 scripts/test_doc_snippets.py
       - name: Every command in the tutorials runs, and prints what the pages show
         run: python3 scripts/doc_snippets.py --bin-dir target/debug
       - name: The cookbook's policy documents go through the real parser
-        run: cargo test -p ag-policy --test cookbook
+        run: cargo test -p agentgit-policy --test cookbook
 
   deploy:
     name: deploy to GitHub Pages

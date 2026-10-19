@@ -11,7 +11,7 @@
 //! ```text
 //! docker run --rm -p 8180:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
 //!   -v $PWD/apps/web/e2e/keycloak:/opt/keycloak/data/import quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm
-//! AG_TEST_KEYCLOAK_URL=http://localhost:8180 cargo test -p ag-server --test oidc_keycloak -- --ignored
+//! AG_TEST_KEYCLOAK_URL=http://localhost:8180 cargo test -p agentgit-server --test oidc_keycloak -- --ignored
 //! ```
 
 mod common;

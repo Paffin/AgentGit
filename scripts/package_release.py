@@ -60,7 +60,7 @@ def cmd_archive(args: argparse.Namespace) -> None:
     for b in BINARIES:
         p = bin_dir / b
         if not p.is_file():
-            die(f"{p} does not exist (build with: cargo build --release -p ag-cli -p ag-server -p ag-worker -p ag-mcp)")
+            die(f"{p} does not exist (build with: cargo build --release -p agentgit-cli -p agentgit-server -p agentgit-worker -p agentgit-mcp)")
         entries.append((b, p.read_bytes(), 0o755))
     for d in DOCS:
         entries.append((d, (ROOT / d).read_bytes(), 0o644))

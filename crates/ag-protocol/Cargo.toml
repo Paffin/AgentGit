@@ -1,5 +1,5 @@
 [package]
-name = "ag-protocol"
+name = "agentgit-protocol"
 description = "AgentGit: AGWP v1 wire protocol (protobuf messages, gRPC services, JSON mapping)"
 version.workspace = true
 edition.workspace = true
@@ -8,15 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-protocol"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: compiles ../../proto outside the crate; the name `ag-protocol` is taken on crates.io (docs/operations/releasing.md).
-publish = false
 build = "build.rs"
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_protocol"
 
 [dependencies]
 base64.workspace = true

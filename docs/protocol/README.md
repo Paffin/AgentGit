@@ -5,7 +5,7 @@
 | Document | What it is |
 |---|---|
 | [`agwp-v1.md`](agwp-v1.md) | the reference: connecting, conventions (JSON mapping, idempotency, pagination, deadlines, backpressure), errors, authentication, authorization, publication, signing formats, events |
-| [`openapi.json`](openapi.json) | the generated OpenAPI 3.1 document of the HTTP/JSON API. A test fails if it differs from what the server serves (`/openapi.json`); regenerate with `AG_UPDATE_GOLDEN=1 cargo test -p ag-server --test observability` |
+| [`openapi.json`](openapi.json) | the generated OpenAPI 3.1 document of the HTTP/JSON API. A test fails if it differs from what the server serves (`/openapi.json`); regenerate with `AG_UPDATE_GOLDEN=1 cargo test -p agentgit-server --test observability` |
 | [`proto/agwp/v1/agwp.proto`](../../proto/agwp/v1/agwp.proto) | the single source of truth for every message and gRPC service |
 
 One implementation serves two transports on one port: **gRPC** (CLI, SDKs, agents, workers) and **HTTP/JSON +

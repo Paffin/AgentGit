@@ -43,7 +43,7 @@ def find_server_binary() -> str:
     raise RuntimeError(
         "ag-server binary not found (looked in: "
         + ", ".join(c for c in candidates if c)
-        + "). Build it with `cargo build -p ag-server` or set AG_SERVER_BIN."
+        + "). Build it with `cargo build -p agentgit-server` or set AG_SERVER_BIN."
     )
 
 

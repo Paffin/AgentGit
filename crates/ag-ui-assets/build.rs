@@ -1,8 +1,8 @@
 //! Embeds the built Web UI.
 //!
-//! This script looks for the UI build (`apps/web/dist`, or the directory in the environment variable
-//! `AG_UI_DIST`) and generates a table of its files, each with its pre-compressed variants
-//! (`x.br`, `x.gz`, written by `npm run build`), as `include_bytes!` entries. When there is no build the table is
+//! This script looks for the UI build (the directory in the environment variable `AG_UI_DIST`, else `apps/web/dist`,
+//! else the crate's own `dist/`, which is how the published crate carries the UI) and generates a table of its
+//! files, each with its pre-compressed variants (`x.br`, `x.gz`, written by `npm run build`), as `include_bytes!` entries. When there is no build the table is
 //! empty: the server still compiles, and serves a page that says how to build the UI. See `scripts/build_ui.sh`.
 //!
 //! One caveat of Cargo: a missing directory cannot be watched (Cargo would re-run this script on every build), so
@@ -22,7 +22,12 @@ fn main() {
     let mut code = String::from("&[\n");
     {
         let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-        let dist = env::var_os("AG_UI_DIST").map(PathBuf::from).unwrap_or_else(|| manifest.join("../../apps/web/dist"));
+        let dist = env::var_os("AG_UI_DIST").map(PathBuf::from).unwrap_or_else(|| {
+            // In the repository: the UI build. In the published crate: the copy `scripts/sync_crate_files.py --ui`
+            // put into the package, since a crate cannot reach outside its own directory.
+            let build = manifest.join("../../apps/web/dist");
+            if build.join("index.html").is_file() { build } else { manifest.join("dist") }
+        });
         if dist.join("index.html").is_file() {
             println!("cargo:rerun-if-changed={}", dist.display());
             let mut files = BTreeMap::new();

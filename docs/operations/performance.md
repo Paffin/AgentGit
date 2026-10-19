@@ -15,7 +15,7 @@ configuration except the setting a scenario varies — creates users and credent
 it with real clients from threads of its own process:
 
 ```sh
-cargo build --release -p ag-server -p ag-bench
+cargo build --release -p agentgit-server -p agentgit-bench
 target/release/ag-bench load                            # every scenario, both protocols, 20 s each
 target/release/ag-bench load --profile smoke            # 3 s each, 4 writers: what CI runs
 target/release/ag-bench load --scenarios streams,sse --protocols http --workers 32 --duration-secs 60
@@ -179,5 +179,5 @@ gRPC clients got through far more refused requests per second in this run; this 
 
 The functional behaviour that the load run exercises — `rate_limited` rejections never exceeding the bucket, shedding
 that leaves the server ready, every subscriber receiving every `stream.integrate` event once, same-file changes
-producing `conflict` — is also asserted, with small numbers, by `cargo test -p ag-bench`
+producing `conflict` — is also asserted, with small numbers, by `cargo test -p agentgit-bench`
 (`crates/ag-bench/tests/smoke.rs`), which starts a real `ag-server` process.

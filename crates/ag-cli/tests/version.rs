@@ -73,7 +73,7 @@ fn run_build_script(env: &[(&str, &str)], manifest: &Path, path_dirs: &str) -> V
         .env_clear()
         .env("PATH", path_dirs)
         .env("CARGO_PKG_VERSION", "1.2.3")
-        .env("CARGO_PKG_NAME", "ag-cli")
+        .env("CARGO_PKG_NAME", "agentgit-cli")
         .env("CARGO_MANIFEST_DIR", manifest)
         .current_dir(manifest)
         .envs(env.iter().copied())

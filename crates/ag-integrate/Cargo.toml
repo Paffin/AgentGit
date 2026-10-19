@@ -1,5 +1,5 @@
 [package]
-name = "ag-integrate"
+name = "agentgit-integrate"
 description = "The AgentGit engine: repositories, safe publication and integration"
 version.workspace = true
 edition.workspace = true
@@ -8,14 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-integrate"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: depends on ag-storage and ag-agent (docs/operations/releasing.md).
-publish = false
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_integrate"
 
 [features]
 default = ["tls", "s3"]

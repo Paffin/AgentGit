@@ -61,8 +61,9 @@ critic's list of 65 files no scanner read was not worked through.
 * Run the release rehearsal from `main` (Actions UI: Release, Run workflow, version `0.0.0-rc.dry`, publish off); the
   agents' token gets 403 on dispatch. Decide when to cut the first tag: that publishes images, archives and (manually
   triggered) SDKs. Until then the default image tag `0.1.0` resolves nowhere.
-* crates.io: `ag-agent`, `ag-git`, `ag-protocol`, `ag-worker` are taken by others and two crates read outside their
-  directory; nine crates are `publish = false`. Decide a naming scheme (for example `agentgit-*`) before any publish.
+* crates.io: the naming scheme is decided and applied (`agentgit-<x>` for every crate, `dev/handoff/crate-names.md`): 21 crates
+  are publishable and `Packaging` dry-runs them all; nothing is published. Left to you: publish the whole set in one
+  sitting (steps in `docs/operations/releasing.md#cratesio`), because free names can be taken by anyone.
 * Delete leftover remote branches: `claude/quirky-faraday-xr6hiu`, `wip/*`, `web-product-ci`, `web-tail-ci`.
 * For the Web UI Keycloak job, the opt-in live model step (needs the `OPENROUTER_API_KEY` secret and `AG_LLM_MODEL`
   variable) and the weekly/nightly schedules: look at their first runs.

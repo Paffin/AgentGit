@@ -5,7 +5,7 @@ document you can store with `ag policy set FILE`; combine them by merging their 
 The reference for every field is the [Policy guide](../guides/policy.md); `ag help policy` is the short version.
 
 **These recipes are tested.** Every JSON block on this page is parsed by the real policy parser in the test suite
-(`cargo test -p ag-policy --test cookbook` fails if a recipe stops being valid, or if a block lacks a marker), and the
+(`cargo test -p agentgit-policy --test cookbook` fails if a recipe stops being valid, or if a block lacks a marker), and the
 recipes marked *run* are stored in a real repository by the doc-snippet harness and exercised with real proposals
 ([how](README.md#how-these-tutorials-are-tested)). What a recipe *means* is what the guide says it means; where this page
 makes a claim that goes beyond a run, it says so.

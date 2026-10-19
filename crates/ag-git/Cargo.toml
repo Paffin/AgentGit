@@ -1,5 +1,5 @@
 [package]
-name = "ag-git"
+name = "agentgit-git"
 description = "AgentGit: Git bridge (import and export through the git command line)"
 version.workspace = true
 edition.workspace = true
@@ -8,14 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-git"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: the name `ag-git` is taken on crates.io; depends on ag-integrate (docs/operations/releasing.md).
-publish = false
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_git"
 
 [dependencies]
 ag-types.workspace = true

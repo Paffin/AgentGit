@@ -55,8 +55,9 @@ cargo install --path crates/ag-server   # optional: the server
 ag --version
 ```
 
-Or just build it: `cargo build --release -p ag-cli` → `target/release/ag`. (The crates are not on crates.io
-yet; [Releasing](operations/releasing.md#cratesio) says why.)
+Or just build it: `cargo build --release -p agentgit-cli` → `target/release/ag`. (The crates are not on crates.io yet. Their packages are named `agentgit-*`, so Cargo's `-p` flag says
+`-p agentgit-cli`, while the directories (`crates/ag-cli`), binaries and library names keep the short `ag` names;
+[Releasing](operations/releasing.md#cratesio) has the scheme and the publish order.)
 
 ## Your first repository
 
@@ -140,7 +141,7 @@ See [Agents guide](guides/agents.md) for the full loop (tasks, leases, provenanc
 policy, a blocked integration, a lease, a conflict and its resolution. Run it and read its output:
 
 ```bash
-cargo build --release -p ag-cli && ./examples/quickstart.sh
+cargo build --release -p agentgit-cli && ./examples/quickstart.sh
 ```
 
 ## Machine-readable output and exit codes

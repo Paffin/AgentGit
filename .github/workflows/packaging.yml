@@ -4,8 +4,9 @@ name: Packaging
 #
 #   tooling   the release/install scripts' tests, shellcheck on install.sh, actionlint on the workflows, the
 #             Homebrew formula and Scoop manifest rendered from a fixture
-#   crates    `cargo publish --dry-run` of every publishable crate (see docs/operations/releasing.md for which
-#             are, and why the rest are `publish = false`), plus the metadata checks
+#   crates    `cargo publish --workspace --dry-run` (every publishable crate, packaged and built from its tarball in
+#             dependency order; docs/operations/releasing.md lists them and the one `publish = false`), the
+#             metadata checks, and that the copies of proto/ and migrations/ inside the crates are current
 #   sdks      the TypeScript package (`npm pack`) and the Python package (`uv build`, `twine check`)
 #
 # Publishing is a separate, manual workflow: publish-sdks.yml.
@@ -15,6 +16,9 @@ on:
     branches: [main]
     paths:
       - "crates/**"
+      - "proto/**"
+      - "migrations/**"
+      - "apps/web/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "sdk/**"
@@ -24,6 +28,9 @@ on:
   pull_request:
     paths:
       - "crates/**"
+      - "proto/**"
+      - "migrations/**"
+      - "apps/web/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "sdk/**"
@@ -95,20 +102,46 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/check_publish_metadata.py --list | tee "$RUNNER_TEMP/metadata.txt"
-      - name: cargo publish --dry-run for every publishable crate, in dependency order
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: The Web UI goes into agentgit-ui-assets, as in a release
         run: |
           set -euo pipefail
-          order=$(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt")
-          args=""
-          for c in $order; do args="$args -p $c"; done
-          echo "cargo publish --dry-run --locked$args"
-          # shellcheck disable=SC2086
-          cargo publish --dry-run --locked $args
+          bash scripts/build_ui.sh
+          python3 scripts/sync_crate_files.py --ui
+      - name: Files that crates read from outside their directory are copied into them
+        run: python3 scripts/sync_crate_files.py --check
+      - name: cargo publish --dry-run for every publishable crate, in dependency order
+        # `--workspace` is what makes this work before anything is on crates.io: cargo packages the members in
+        # dependency order and resolves each against the tarballs of the ones before it (a single `-p` could not,
+        # `agentgit-types` and the rest do not exist on the registry yet). `publish = false` members are skipped.
+        run: |
+          set -euo pipefail
+          echo "cargo publish --workspace --dry-run --locked"
+          cargo publish --workspace --dry-run --locked 2>&1 | tee "$RUNNER_TEMP/publish.txt"
+          # Every publishable crate must have been packaged, verified (built from its tarball) and "uploaded" (dry run).
+          want=$(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt" | tr ' ' '\n' | sort)
+          for stage in Packaging Verifying Uploading; do
+            got=$(sed -n "s/^ *$stage \(agentgit-[a-z-]*\) v.*/\1/p" "$RUNNER_TEMP/publish.txt" | sort -u)
+            if [ "$got" != "$want" ]; then
+              echo "::error::$stage covered a different set of crates than 'publish order'"
+              diff <(echo "$want") <(echo "$got") || true
+              exit 1
+            fi
+          done
       - name: What the crates would contain
         run: |
+          set -euo pipefail
           for c in $(sed -n 's/^publish order: //p' "$RUNNER_TEMP/metadata.txt" | tr ' ' '\n'); do
-            echo "== $c"; cargo package --list --locked -p "$c" --allow-dirty | head -30
+            echo "== $c"; cargo package --list --locked -p "$c" --allow-dirty > "$RUNNER_TEMP/list-$c.txt"; head -30 "$RUNNER_TEMP/list-$c.txt"
           done
+          grep -qx 'dist/index.html' "$RUNNER_TEMP/list-agentgit-ui-assets.txt" || { echo "::error::agentgit-ui-assets does not carry the Web UI"; exit 1; }
+          grep -qx 'proto/agwp/v1/agwp.proto' "$RUNNER_TEMP/list-agentgit-protocol.txt"
+          grep -qx 'migrations/sqlite/0001_init.sql' "$RUNNER_TEMP/list-agentgit-storage.txt"
+          grep -qx 'migrations/control/sqlite/0001_init.sql' "$RUNNER_TEMP/list-agentgit-server.txt"
 
   sdks:
     name: SDK packages (npm pack, uv build, twine check)

@@ -1,11 +1,13 @@
 //! Numbered schema migrations, one list per backend.
 //!
-//! The SQL lives in the top-level `migrations/` directory, compiled in with
-//! `include_str!`. A migration is applied exactly once, in order, inside the
+//! The SQL lives in the top-level `migrations/` directory; this crate compiles in its own copy
+//! (`crates/ag-storage/migrations/`, so that `cargo package` is self-contained), kept identical by
+//! `scripts/sync_crate_files.py` and a test, with `include_str!`. A migration is applied exactly once, in order, inside the
 //! transaction that records the new schema version; the version is kept in
 //! `PRAGMA user_version` (SQLite) and in the `meta` table, key `schema` (both).
 //!
-//! To add one: create `migrations/<backend>/NNNN_name.sql` for *both* backends,
+//! To add one: create `migrations/<backend>/NNNN_name.sql` for *both* backends, run
+//! `python3 scripts/sync_crate_files.py`,
 //! list it below and raise [`SCHEMA_VERSION`]. A test fails if a file in the
 //! directory is not listed or if the two lists disagree.
 
@@ -35,13 +37,13 @@ impl Migration {
 pub const SCHEMA_VERSION: i64 = 2;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
-    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../../../migrations/sqlite/0001_init.sql") },
-    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../../../migrations/sqlite/0002_jobs.sql") },
+    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
+    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../migrations/sqlite/0002_jobs.sql") },
 ];
 
 pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
-    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../../../migrations/postgres/0001_init.sql") },
-    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../../../migrations/postgres/0002_jobs.sql") },
+    Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/postgres/0001_init.sql") },
+    Migration { version: 2, name: "0002_jobs.sql", sql: include_str!("../../migrations/postgres/0002_jobs.sql") },
 ];
 
 #[cfg(test)]
@@ -49,7 +51,7 @@ mod tests {
     use super::*;
 
     fn files(backend: &str) -> Vec<String> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations").join(backend);
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations").join(backend);
         let mut v: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())

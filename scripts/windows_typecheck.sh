@@ -2,7 +2,7 @@
 # Type-checks the workspace for x86_64-pc-windows-msvc from a Linux or macOS machine, in about a minute.
 #
 #   scripts/windows_typecheck.sh                      # cargo check --workspace --all-targets
-#   scripts/windows_typecheck.sh -p ag-cli --tests    # anything `cargo check` takes
+#   scripts/windows_typecheck.sh -p agentgit-cli --tests    # anything `cargo check` takes
 #
 # It catches what `#[cfg(windows)]` / `#[cfg(unix)]` get wrong at compile time (a type that cannot be inferred
 # because the code that fills it is cfg'd out, a Unix-only import in a test, an unused import on Windows) and nothing

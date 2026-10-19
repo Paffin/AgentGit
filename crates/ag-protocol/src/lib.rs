@@ -1,6 +1,7 @@
 //! AGWP v1 — the AgentGit Wire Protocol.
 //!
-//! The protocol is defined once, in `proto/agwp/v1/agwp.proto`. This crate
+//! The protocol is defined once, in `proto/agwp/v1/agwp.proto` (this crate builds from an identical copy in
+//! `crates/ag-protocol/proto/`, kept in sync by `scripts/sync_crate_files.py`). This crate
 //! compiles it (no external `protoc` needed) and exposes
 //!
 //! * the **message types** ([`v1`]), which are plain Rust structs that also

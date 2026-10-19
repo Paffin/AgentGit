@@ -115,35 +115,86 @@ Both names were free on 2026-10-17 (`scripts/check_publish_metadata.py --online`
 
 ## crates.io
 
-Nothing is published to crates.io and nothing in CI can publish there. Every crate carries complete metadata
-(description, license, repository, homepage, readme, keywords, categories, rust-version —
-`scripts/check_publish_metadata.py` enforces it), and **eleven crates are publishable today**; `Packaging` runs
-`cargo publish --dry-run` on them, which packages each from its tarball and compiles it against the others'
-tarballs. Publish order (dependencies first):
+Nothing is published to crates.io and nothing in CI can publish there. The workspace is ready to be: **21 crates are
+publishable** and `Packaging` runs `cargo publish --workspace --dry-run --locked` on all of them (each is packaged,
+unpacked and built from its own tarball, in dependency order, against the tarballs of the crates before it), after
+`scripts/check_publish_metadata.py` has checked the names and metadata. The twenty-second, `ag-bench`, stays
+`publish = false` (a measurement tool for this repository: nothing depends on it and nobody installs it).
+
+### Names
+
+The unprefixed names are not ours: `ag-agent`, `ag-git`, `ag-protocol` and `ag-worker` belong to unrelated projects on
+crates.io (checked 2026-10-19 against `https://crates.io/api/v1/crates/<name>`: HTTP 200). So **every** crate is
+published as `agentgit-<x>`: the package `agentgit-<x>` lives in `crates/ag-<x>/`, keeps the library name `ag_<x>`
+(`[lib] name`), and is declared in `[workspace.dependencies]` as
+`ag-<x> = { package = "agentgit-<x>", path = "crates/ag-<x>", version = "…" }`, so no Rust source says `agentgit_`.
+All 22 `agentgit-*` names were free on 2026-10-19 (HTTP 404 from the API and from the sparse index
+`index.crates.io`); `scripts/check_publish_metadata.py --online` repeats the check for the publishable ones. Names that
+are free can be taken by anyone at any time: whoever publishes first should publish the whole set in one sitting.
+
+| Directory | Package (`cargo … -p`) | Binary |
+|---|---|---|
+| `crates/ag-cli` | `agentgit-cli` | `ag` (`cargo install agentgit-cli`) |
+| `crates/ag-server` | `agentgit-server` | `ag-server` |
+| `crates/ag-worker` | `agentgit-worker` | `ag-worker` |
+| `crates/ag-mcp` | `agentgit-mcp` | `ag-mcp` |
+| `crates/ag-<x>` (the other libraries) | `agentgit-<x>` | none |
+
+`cargo build -p …`, `cargo test -p …`, `cargo clippy -p …` take the **package** name, so they say `-p agentgit-server`;
+paths, binaries, `use ag_x::` and the directory names did not change. `cargo build --bin ag-server` and
+`cargo install --path crates/ag-cli` work as before.
+
+### Files outside a crate
+
+`cargo package` includes only files inside the crate directory, and symlinks do not survive it. Three things lived
+outside:
+
+| Needed by | From | Solution |
+|---|---|---|
+| `agentgit-protocol` (`build.rs` compiles the protocol) | `proto/agwp/` | copy in `crates/ag-protocol/proto/agwp/` |
+| `agentgit-storage` (`include_str!`) | `migrations/{sqlite,postgres}/` | copy in `crates/ag-storage/migrations/` |
+| `agentgit-server` (`include_str!`) | `migrations/control/` | copy in `crates/ag-server/migrations/control/` |
+| `agentgit-ui-assets` (embeds the built Web UI) | `apps/web/dist/` (build output) | `scripts/sync_crate_files.py --ui` copies it into the git-ignored `crates/ag-ui-assets/dist/`, which `include` ships; `build.rs` prefers `apps/web/dist`, then `dist/` |
+
+The top-level `proto/` and `migrations/` stay the source of truth (docs, the Dockerfile and the SDK generators use
+them). After changing one, run `python3 scripts/sync_crate_files.py`; `--check` (in `Packaging`) and a test in each of
+the three crates (`proto_copy`, `migrations_copy`; they run in `CI`) fail when a copy differs, is missing or is left over.
+A published `agentgit-ui-assets` made **without** the `--ui` step embeds nothing, and `agentgit-server` then serves
+the "UI not built" page: the release procedure below always runs it, and `Packaging` asserts that the package lists
+`dist/index.html`.
+
+### Publish order (dependencies first)
 
 ```
-ag-types  ag-object  ag-changeset  ag-crypto  ag-dag  ag-diff  ag-mcp  ag-tree  ag-merge  ag-policy  ag-sandbox
+agentgit-types  agentgit-object  agentgit-changeset  agentgit-crypto  agentgit-dag  agentgit-policy  agentgit-tree  agentgit-storage  agentgit-agent  agentgit-protocol  agentgit-diff  agentgit-merge  agentgit-integrate  agentgit-ui-assets  agentgit-server  agentgit-client  agentgit-git  agentgit-cli  agentgit-mcp  agentgit-sandbox  agentgit-worker
 ```
 
-The other ten crates are marked `publish = false`, each with the reason in its `Cargo.toml`. They are blocked by
-three things, two of which need a decision, not just a tag:
+`python3 scripts/check_publish_metadata.py --list` prints it (dev-dependencies count: they keep their version in
+the published manifest, so crates.io must already know them). `cargo publish --workspace` computes the same order
+and waits for each crate to appear in the index before the next one.
 
-1. **Four names are already taken on crates.io by an unrelated project** (checked 2026-10-17): `ag-agent`,
-   `ag-git`, `ag-protocol` and `ag-worker`. Publishing means renaming packages (for example `agentgit-protocol`).
-   A package can be renamed without touching Rust code — keep `[lib] name = "ag_protocol"` — but `-p ag-protocol`
-   appears in CI, the Dockerfile and the docs, so it is a coordinated change. The remaining `ag-*` names are free
-   today and unclaimed names can be taken by anyone at any time.
-2. **Two crates read files outside their own directory**, which `cargo package` does not include:
-   `ag-protocol/build.rs` compiles `../../proto`, and `ag-storage` embeds `../../migrations`. Both directories would
-   move into their crates (the migrations are also read by the HA work, so do this when it is quiet).
-3. **`ag-ui-assets` embeds `../../apps/web/dist`**, the Web UI build, which is not Rust source and lies outside the
-   crate. A published `ag-server` would need the built UI shipped inside a crate (or a build step on the user's
-   machine); until that is designed it stays in the workspace.
+### Publishing (not done; needs the owner's `cargo login` token or trusted publishing)
 
-Everything that depends on those (`ag-agent`, `ag-integrate`, `ag-git`, `ag-client`, `ag-server`, `ag-cli`,
-`ag-worker`) follows. `ag-mcp` is publishable because its only workspace dependencies are dev-dependencies, and those
-on the unpublishable `ag-server` and `ag-storage` are path-only (cargo drops a dev-dependency without a version when
-it packages; `.workspace = true` would keep the workspace version and crates.io could not resolve it). Until then `cargo install` works from a checkout (`cargo install --path crates/ag-cli`).
+```sh
+git switch --detach vX.Y.Z                                   # publish from the tag
+bash scripts/build_ui.sh && python3 scripts/sync_crate_files.py --ui && python3 scripts/sync_crate_files.py --check
+python3 scripts/check_publish_metadata.py --online           # the names are still free
+cargo publish --workspace --dry-run --locked                 # exactly what Packaging runs
+cargo publish --workspace --locked                           # for real
+```
+
+`dist/` is git-ignored, so the tree stays clean and `cargo publish` needs no `--allow-dirty`. An `-rc` version can be
+published too; crates.io cannot delete a version (only yank it), so rehearse with the dry run first.
+
+### Limits
+
+* Every crate shows the workspace `README.md` on crates.io; per-crate READMEs would be better and do not exist.
+* `cargo publish --workspace` needs Cargo 1.90+; the workspace MSRV (1.89) is for building, not for publishing.
+* The dry run proves packaging and the build from the tarballs. It does not prove that crates.io accepts the
+  upload (name ownership, rate limits for a burst of new crates). Size is not a concern: the largest package is
+  `agentgit-ui-assets` with 242 files, 880 KiB (560 KiB compressed) in the local dry run of 2026-10-19; the limit is 10 MB.
+  Nothing has been published.
+* The binaries built from the published crates are not the release archives: those come from the workflow above.
 
 ## Reproducible builds — status
 

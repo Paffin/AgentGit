@@ -13,7 +13,7 @@ There are no targets here. Numbers are reported with their conditions; nothing i
 no stub stores:
 
 ```sh
-cargo build --release -p ag-bench
+cargo build --release -p agentgit-bench
 target/release/ag-bench engine                         # 1k, 10k, 100k files; in-memory stores
 target/release/ag-bench engine --backend disk --sizes 1000,10000   # SQLite + one file per object, with fsync
 target/release/ag-bench engine --json out.json --markdown out.md
@@ -30,7 +30,7 @@ target/release/ag-bench engine --json out.json --markdown out.md
   `--backend disk` is what `ag init` creates: SQLite in WAL mode with `synchronous=FULL` and one fsynced file per
   object.
 * Every row asserts what it measured (an integration is `Strategy::FastForward` or `Strategy::Merge` as named, a
-  rename is found, a merge is clean). `cargo test -p ag-bench` runs the whole suite at 1 000 files on every CI run
+  rename is found, a merge is clean). `cargo test -p agentgit-bench` runs the whole suite at 1 000 files on every CI run
   (`crates/ag-bench/tests/smoke.rs`), so the rows cannot silently stop measuring what they say.
 
 Conditions of the numbers below: commit `ff68edb` plus the change that introduced `ag-bench` and the blame fix

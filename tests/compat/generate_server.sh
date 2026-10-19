@@ -33,7 +33,7 @@ SERVER="${AG_SERVER:-}"
 if [ -z "$SERVER" ]; then
   if [ -x "$ROOT/target/release/ag-server" ]; then SERVER="$ROOT/target/release/ag-server"
   elif [ -x "$ROOT/target/debug/ag-server" ]; then SERVER="$ROOT/target/debug/ag-server"
-  else echo "ag-server not found: cargo build -p ag-server, or set AG_SERVER=" >&2; exit 1; fi
+  else echo "ag-server not found: cargo build -p agentgit-server, or set AG_SERVER=" >&2; exit 1; fi
 fi
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 

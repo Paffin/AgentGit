@@ -72,7 +72,7 @@ ENV RUSTFLAGS="--remap-path-prefix=/src=/agentgit --remap-path-prefix=/usr/local
     CARGO_INCREMENTAL=0
 COPY --from=planner /src/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo chef cook --release --locked --recipe-path recipe.json -p ag-server -p ag-cli
+    cargo chef cook --release --locked --recipe-path recipe.json -p agentgit-server -p agentgit-cli
 COPY . .
 # The UI the server embeds (crates/ag-ui-assets/build.rs looks for ../../apps/web/dist).
 COPY --from=ui /src/apps/web/dist apps/web/dist
@@ -81,7 +81,7 @@ ARG AG_BUILD_DATE=""
 ENV AG_BUILD_COMMIT=${AG_BUILD_COMMIT} \
     AG_BUILD_DATE=${AG_BUILD_DATE}
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release --locked -p ag-server -p ag-cli \
+    cargo build --release --locked -p agentgit-server -p agentgit-cli \
  && install -D target/release/ag-server /out/ag-server \
  && install -D target/release/ag /out/ag \
  && install -d -m 0700 -o 65532 -g 65532 /out/data

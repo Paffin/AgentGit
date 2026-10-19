@@ -6,7 +6,7 @@
 //! a breaking change that needs a new version), regenerate with
 //!
 //! ```text
-//! AG_UPDATE_GOLDEN=1 cargo test -p ag-cli --test json_shapes
+//! AG_UPDATE_GOLDEN=1 cargo test -p agentgit-cli --test json_shapes
 //! ```
 //!
 //! and `python3 scripts/gen_cli_docs.py` (which renders `docs/reference/cli-json.md` from the golden files).

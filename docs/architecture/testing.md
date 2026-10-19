@@ -11,14 +11,14 @@ every number below was measured on the date given and is reproducible with the c
 | Unit and property tests | one function or type; invariants over generated inputs (`proptest`: determinism, round trips, "applying the diff gives the target") | `cargo test --workspace` | [CI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/ci.yml) *test*, Ubuntu and macOS; [Windows](../operations/windows.md) for the CLI, client and server |
 | Crate integration suites | a crate through its public API: the sandbox against the real kernel (`AG_REQUIRE_SANDBOX=1`), the engine against a real store, the policy cookbook against the real parser | the same | the same |
 | Cross-implementation conformance | the byte formats against an independent encoder written in Python (`tests/conformance/`) | the same | the same |
-| Compatibility | data written by **older builds** still opens and means the same ([Compatibility](compatibility.md)) | `cargo test -p ag-integrate --test compat; cargo test -p ag-server --test compat_control` | the same |
+| Compatibility | data written by **older builds** still opens and means the same ([Compatibility](compatibility.md)) | `cargo test -p agentgit-integrate --test compat; cargo test -p agentgit-server --test compat_control` | the same |
 | Backends | every suite on PostgreSQL 16 and on S3 objects (moto, and SeaweedFS, a real S3 server) | `scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace` | CI *PostgreSQL + S3 backends* |
 | End to end | the README demo, every command of the tutorials, the docs against the code | `examples/quickstart.sh`; `python3 scripts/check_docs.py` | CI *generated docs + demo*, *shells* |
 | Clients | the TypeScript and Python SDKs and the Go orchestrator against a **real** `ag-server`; the web UI in a real browser | `npm test` in `sdk/typescript`, `pytest` in `sdk/python`, `go test ./...` | CI *client SDKs*, *agent orchestrator*; [Web UI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/web.yml) |
 | Images and manifests | the images build and start, the Compose stack serves, the Kubernetes manifests validate | - | [Containers](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/containers.yml) and CI *deployment files* (path-filtered) |
 | Supply chain | advisories, licences, pinned actions, CodeQL ([Supply chain](../operations/supply-chain.md)) | - | [Security](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/security.yml), [CodeQL](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/codeql.yml) |
 | Fuzzing | the parsers and decoders against hostile bytes ([Fuzzing](security.md#fuzzing)) | `fuzz/run.sh 300` | [Fuzz](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/fuzz.yml): 60 s per target on changes, 15 minutes nightly |
-| Coverage and mutation | how much of the code the tests reach, and whether they notice a wrong version of it (below) | `cargo llvm-cov --workspace`; `cargo mutants -p ag-merge` | [Quality](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/quality.yml): coverage on changes and weekly, mutation weekly and by hand |
+| Coverage and mutation | how much of the code the tests reach, and whether they notice a wrong version of it (below) | `cargo llvm-cov --workspace`; `cargo mutants -p agentgit-merge` | [Quality](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/quality.yml): coverage on changes and weekly, mutation weekly and by hand |
 
 **How many.** `cargo test --workspace` ran **1 036 tests** (and ignored 3, which are measurements run on request, not
 tests) in the CI *test* job on Ubuntu for commit `148a98c`
@@ -81,7 +81,7 @@ crate's tests. A change the tests do not notice (a *survivor*) is either a missi
 alter the behaviour (an *equivalent mutant*).
 
 It is run on the five crates whose bugs are silent: `ag-object` (the byte formats), `ag-diff`, `ag-tree`, `ag-merge`
-and `ag-policy` (the gate in front of every integration). Locally: `cargo mutants -p ag-merge`; in CI the
+and `ag-policy` (the gate in front of every integration). Locally: `cargo mutants -p agentgit-merge`; in CI the
 [Quality](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/quality.yml) workflow runs the five weekly
 and by hand (it takes an hour or more; not on pull requests) and **fails when a mutant survives**.
 

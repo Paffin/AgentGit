@@ -1,6 +1,6 @@
 //! How the engine behaves as a repository grows. Ignored by default (it is a measurement, not a check):
 //!
-//!   cargo test --release -p ag-integrate --test scale -- --ignored --nocapture
+//!   cargo test --release -p agentgit-integrate --test scale -- --ignored --nocapture
 //!
 //! It reports wall-clock time for the operations whose cost depends on the number of files, so the decision
 //! about hierarchical trees (ADR-0006) rests on numbers. Memory and SQLite/object-store I/O are in-process

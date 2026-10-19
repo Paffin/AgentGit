@@ -99,7 +99,10 @@ pub fn run(args: Args) -> Result<()> {
         }
     };
     if !bin.is_file() {
-        bail!("{} not found; build it (`cargo build --release -p ag-server`) or pass --server-bin", bin.display());
+        bail!(
+            "{} not found; build it (`cargo build --release -p agentgit-server`) or pass --server-bin",
+            bin.display()
+        );
     }
     let (d, w, s) = match args.profile {
         Profile::Smoke => (3, 4, 8),

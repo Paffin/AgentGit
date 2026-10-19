@@ -1,5 +1,5 @@
 [package]
-name = "ag-ui-assets"
+name = "agentgit-ui-assets"
 description = "AgentGit: the built Web UI (apps/web/dist) as a table of embedded files"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-ui-assets"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: embeds ../../apps/web/dist, which lies outside the crate (docs/operations/releasing.md).
-publish = false
 build = "build.rs"
+# `dist/` is build output that git ignores (`scripts/sync_crate_files.py --ui` copies the Web UI there for a release);
+# cargo leaves ignored files out of a package unless they are listed here.
+include = ["src/**/*", "build.rs", "dist/**/*"]
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_ui_assets"

@@ -1,5 +1,5 @@
 [package]
-name = "ag-dag"
+name = "agentgit-dag"
 description = "AgentGit algorithms over the changeset DAG, written against a small Graph trait"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-dag"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_dag"
 
 [dependencies]
 ag-types.workspace = true

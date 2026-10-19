@@ -1,5 +1,5 @@
 //! Golden tests for the `--json` output of the commands that talk to an `ag-server` (see `json_shapes.rs`).
-//! Regenerate with `AG_UPDATE_GOLDEN=1 cargo test -p ag-cli --test json_shapes_remote`.
+//! Regenerate with `AG_UPDATE_GOLDEN=1 cargo test -p agentgit-cli --test json_shapes_remote`.
 #![allow(missing_docs)]
 
 mod common;

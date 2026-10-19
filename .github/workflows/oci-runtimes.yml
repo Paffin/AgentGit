@@ -147,15 +147,15 @@ jobs:
           sudo dmesg 2>/dev/null | grep -i -E 'out of memory|killed process|oom' | tail -n 5 || true
           "$rt" rm -f ag-oom > /dev/null
       - name: Build the tests
-        run: cargo test -p ag-sandbox --test oci_real -p ag-worker --test oci_e2e --no-run
+        run: cargo test -p agentgit-sandbox --test oci_real -p agentgit-worker --test oci_e2e --no-run
       - name: The sandbox against the real runtime, checked from inside the container
-        run: cargo test -p ag-sandbox --test oci_real -- --nocapture --test-threads=1
+        run: cargo test -p agentgit-sandbox --test oci_real -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
           AG_REQUIRE_OCI: "1"
       - name: The worker end to end with this runtime (a check that writes its tree, a missing image, stopping now)
         if: ${{ !cancelled() }}
-        run: cargo test -p ag-worker --test oci_e2e -- --nocapture --test-threads=1
+        run: cargo test -p agentgit-worker --test oci_e2e -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
           AG_REQUIRE_OCI: "1"
@@ -180,7 +180,7 @@ jobs:
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Build the tests
-        run: cargo test -p ag-sandbox --no-run
+        run: cargo test -p agentgit-sandbox --no-run
       - name: The host
         run: |
           uname -r
@@ -209,7 +209,7 @@ jobs:
           # move this step's shell (and so everything it starts) into the leaf; root may move any process
           sudo sh -c "echo $$ > $cg/main/cgroup.procs"
           cat /proc/self/cgroup
-          cargo test -p ag-sandbox -- --nocapture
+          cargo test -p agentgit-sandbox -- --nocapture
         env:
           AG_SANDBOX_CGROUP_BASE: /sys/fs/cgroup/ag-ci/sandboxes
           AG_REQUIRE_CGROUP: "1"

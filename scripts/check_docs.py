@@ -138,7 +138,7 @@ if ag:
                 errors.append(f"{rel(doc)}: `ag {cmd}` is not a command of this build ({line[:70]!r})")
 elif REQUIRE_AG:
     errors.append("the ag binary was not found, so the `ag <command>` check could not run "
-                  "(build it with `cargo build -p ag-cli` or set $AG; CI and --require-ag insist on it)")
+                  "(build it with `cargo build -p agentgit-cli` or set $AG; CI and --require-ag insist on it)")
 else:
     print("note: ag binary not found, skipping command checks (build it or set $AG)", file=sys.stderr)
 

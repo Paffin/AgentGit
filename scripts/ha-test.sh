@@ -11,4 +11,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export AG_REQUIRE_BACKENDS=1
-exec "$HERE/pg-test.sh" "$HERE/s3-test.sh" cargo test -p ag-server --test multi_replica -- --nocapture --test-threads=1 "$@"
+exec "$HERE/pg-test.sh" "$HERE/s3-test.sh" cargo test -p agentgit-server --test multi_replica -- --nocapture --test-threads=1 "$@"

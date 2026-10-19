@@ -34,13 +34,17 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo build -p ag-cli && python3 scripts/gen_cli_docs.py --check   # CLI reference, help topics, --json shapes,
+cargo build -p agentgit-cli && python3 scripts/gen_cli_docs.py --check   # CLI reference, help topics, --json shapes,
                                                                      # completions and man pages are generated
 python3 scripts/gen_readme_assets.py --check                         # the README's SVG artwork is generated
 python3 scripts/check_docs.py                                        # links, test names, `ag` commands, env vars
 python3 scripts/check_no_stubs.py                                    # no TODO/stub/mock/placeholder in product source
-cargo build -p ag-cli -p ag-server && python3 scripts/doc_snippets.py   # the tutorials' commands really run
+cargo build -p agentgit-cli -p agentgit-server && python3 scripts/doc_snippets.py   # the tutorials' commands really run
 ```
+
+Crate directories are `crates/ag-<x>`, the Cargo packages (what `-p` takes) are `agentgit-<x>`, and code says
+`use ag_<x>::`; after editing `proto/` or `migrations/` run `python3 scripts/sync_crate_files.py` (the crates build
+from copies; see [Releasing](docs/operations/releasing.md#cratesio)).
 
 If you change a command or flag, regenerate the reference with `python3 scripts/gen_cli_docs.py`
 (build the binary you want documented first; the script prefers `target/release/ag`, or set `AG=`). That one

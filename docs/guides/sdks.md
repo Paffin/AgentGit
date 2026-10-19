@@ -492,7 +492,7 @@ python3 sdk/tools/sync_doc_samples.py --check    # the code blocks of this guide
 ```
 
 The tests need a built `ag-server`; they use `$AG_SERVER_BIN`, then `/home/user/bin/ag-server`, then
-`target/debug/ag-server` or `target/release/ag-server` (`cargo build -p ag-server`). Every test file or module starts its
+`target/debug/ag-server` or `target/release/ag-server` (`cargo build -p agentgit-server`). Every test file or module starts its
 own server on `127.0.0.1` with a random port and a temporary data directory, and kills it at the end, also when a test
 fails. Nothing leaves the loopback interface.
 

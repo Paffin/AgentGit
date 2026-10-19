@@ -1,5 +1,5 @@
 [package]
-name = "ag-cli"
+name = "agentgit-cli"
 description = "AgentGit: the `ag` command-line interface"
 version.workspace = true
 edition.workspace = true
@@ -8,11 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://paffin.github.io/AgentGit/"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
-# Not publishable yet: depends on ag-storage, ag-protocol and ag-server (docs/operations/releasing.md).
-publish = false
 
 [lints]
 workspace = true

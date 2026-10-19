@@ -428,7 +428,7 @@ python3 ../tools/sync_doc_samples.py --check   # the code blocks of the docs mat
 ```
 
 The tests start the server binary found in `$AG_SERVER_BIN`, `/home/user/bin/ag-server`, or
-`target/{debug,release}/ag-server` of the repository (build it with `cargo build -p ag-server`). Each test module gets
+`target/{debug,release}/ag-server` of the repository (build it with `cargo build -p agentgit-server`). Each test module gets
 its own process and temporary data directory, and the process is killed when the tests end, whether they pass or not.
 
 `src/agentgit/_generated/` holds `models.py` (a dataclass per message), `operations.py` (the route table) and

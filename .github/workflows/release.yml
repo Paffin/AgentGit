@@ -177,7 +177,7 @@ jobs:
         env:
           # Do not embed the build directory in the binaries.
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
-        run: cargo build --release --locked --target ${{ matrix.target }} -p ag-cli -p ag-server -p ag-worker -p ag-mcp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p agentgit-cli -p agentgit-server -p agentgit-worker -p agentgit-mcp
       - name: Archive
         run: |
           python3 scripts/package_release.py archive --version "$VERSION" --target ${{ matrix.target }} \

@@ -177,7 +177,7 @@ def render_json_shapes() -> str:
         "schema version and an entry in the changelog.",
         "",
         "**Where this is enforced.** The shapes below are the golden files `crates/ag-cli/tests/golden/json-shapes.json` "
-        "and `json-shapes-remote.json`. `cargo test -p ag-cli` runs every command listed here in a scratch repository "
+        "and `json-shapes-remote.json`. `cargo test -p agentgit-cli` runs every command listed here in a scratch repository "
         "(the remote ones against a real in-process `ag-server`), compares the *shape* of its output (keys and value "
         "types, no values) with the golden file, and fails when a command of `ag --help` has neither a shape nor an "
         "entry in the list of commands whose output is not JSON.",

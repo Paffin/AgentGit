@@ -452,7 +452,7 @@ def default_bin_dir() -> Path:
     for rel in ("target/debug", "target/release"):
         if (ROOT / rel / "ag").exists():
             return ROOT / rel
-    sys.exit("ag binary not found: build it (cargo build -p ag-cli -p ag-server) or pass --bin-dir")
+    sys.exit("ag binary not found: build it (cargo build -p agentgit-cli -p agentgit-server) or pass --bin-dir")
 
 
 def main(argv: list[str] | None = None) -> int:

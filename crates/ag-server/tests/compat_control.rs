@@ -66,7 +66,7 @@ fn fixture_tars() -> Vec<PathBuf> {
 
 /// The highest migration number the control database has in this build (`migrations/control/sqlite/NNNN_*.sql`).
 fn latest_control_schema() -> i64 {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/control/sqlite");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations/control/sqlite");
     std::fs::read_dir(dir)
         .unwrap()
         .filter_map(|e| e.unwrap().file_name().to_string_lossy().split('_').next()?.parse::<i64>().ok())

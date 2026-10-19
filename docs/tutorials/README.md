@@ -31,13 +31,13 @@ A tutorial that stops working is worse than none, so these pages are executable 
   what the command printed; `...` stands for text that changes from run to run, such as ids and timestamps.
 - **A page cannot quietly stop being tested.** A page that has any marker must mark every shell block as either run
   (`<!-- doctest -->`) or skipped with a reason (`<!-- doctest-skip: why -->`).
-- **The policy documents are parsed by the real parser** (`cargo test -p ag-policy --test cookbook`), and the recipes
+- **The policy documents are parsed by the real parser** (`cargo test -p agentgit-policy --test cookbook`), and the recipes
   marked *run* in the cookbook are stored in a real repository by the harness.
 - **The refusal messages are tied to the code.** The table in the troubleshooting tutorial is checked against the Rust
   sources by `scripts/check_docs.py`.
 - **Where it runs.** The `Docs` workflow (`.github/workflows/docs.yml`) builds the binaries and runs the harness on every
-  push and pull request; `cargo test -p ag-cli` runs the pages that need only `ag`. To run them yourself:
-  `cargo build -p ag-cli -p ag-server && python3 scripts/doc_snippets.py` (add `--show` to see every statement with its
+  push and pull request; `cargo test -p agentgit-cli` runs the pages that need only `ag`. To run them yourself:
+  `cargo build -p agentgit-cli -p agentgit-server && python3 scripts/doc_snippets.py` (add `--show` to see every statement with its
   output, `--list` to see what would run).
 
 What this does **not** prove: that the commands are what you *should* run in your situation, how they behave on

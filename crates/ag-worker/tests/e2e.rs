@@ -463,7 +463,7 @@ impl Drop for Proc {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_real_server_binary_and_the_real_worker_binary_agree() {
     let Some(server_bin) = real_server_binary() else {
-        eprintln!("SKIP: no ag-server binary (build it with `cargo build -p ag-server` or set AG_SERVER_BIN)");
+        eprintln!("SKIP: no ag-server binary (build it with `cargo build -p agentgit-server` or set AG_SERVER_BIN)");
         return;
     };
     let server_bin = server_bin.to_str().unwrap().to_string();

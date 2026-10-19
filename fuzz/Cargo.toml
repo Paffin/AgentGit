@@ -22,22 +22,22 @@ heavy = ["dep:ag-agent", "dep:ag-protocol", "dep:ag-worker", "dep:ag-integrate",
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 serde_json = "1"
-ag-types = { path = "../crates/ag-types" }
-ag-crypto = { path = "../crates/ag-crypto" }
-ag-object = { path = "../crates/ag-object" }
-ag-changeset = { path = "../crates/ag-changeset" }
-ag-diff = { path = "../crates/ag-diff" }
-ag-tree = { path = "../crates/ag-tree" }
-ag-merge = { path = "../crates/ag-merge" }
-ag-policy = { path = "../crates/ag-policy" }
-ag-sandbox = { path = "../crates/ag-sandbox" }
+ag-types = { package = "agentgit-types", path = "../crates/ag-types" }
+ag-crypto = { package = "agentgit-crypto", path = "../crates/ag-crypto" }
+ag-object = { package = "agentgit-object", path = "../crates/ag-object" }
+ag-changeset = { package = "agentgit-changeset", path = "../crates/ag-changeset" }
+ag-diff = { package = "agentgit-diff", path = "../crates/ag-diff" }
+ag-tree = { package = "agentgit-tree", path = "../crates/ag-tree" }
+ag-merge = { package = "agentgit-merge", path = "../crates/ag-merge" }
+ag-policy = { package = "agentgit-policy", path = "../crates/ag-policy" }
+ag-sandbox = { package = "agentgit-sandbox", path = "../crates/ag-sandbox" }
 # heavy
 prost = { version = "0.14", optional = true }
-ag-agent = { path = "../crates/ag-agent", optional = true }
-ag-protocol = { path = "../crates/ag-protocol", optional = true }
-ag-worker = { path = "../crates/ag-worker", optional = true }
-ag-integrate = { path = "../crates/ag-integrate", default-features = false, optional = true }
-ag-git = { path = "../crates/ag-git", optional = true }
+ag-agent = { package = "agentgit-agent", path = "../crates/ag-agent", optional = true }
+ag-protocol = { package = "agentgit-protocol", path = "../crates/ag-protocol", optional = true }
+ag-worker = { package = "agentgit-worker", path = "../crates/ag-worker", optional = true }
+ag-integrate = { package = "agentgit-integrate", path = "../crates/ag-integrate", default-features = false, optional = true }
+ag-git = { package = "agentgit-git", path = "../crates/ag-git", optional = true }
 
 # cargo-fuzz builds in release mode with debug assertions and overflow checks on; keep line tables so a
 # crash report names the line.

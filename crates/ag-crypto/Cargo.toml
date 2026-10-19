@@ -1,5 +1,5 @@
 [package]
-name = "ag-crypto"
+name = "agentgit-crypto"
 description = "AgentGit signatures and randomness: Ed25519 keys and signed envelopes for attestations and provenance"
 version.workspace = true
 edition.workspace = true
@@ -8,12 +8,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/agentgit-crypto"
 keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
 [lints]
 workspace = true
+
+[lib]
+name = "ag_crypto"
 
 [dependencies]
 ag-types.workspace = true

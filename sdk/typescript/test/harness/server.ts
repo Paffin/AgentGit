@@ -21,7 +21,7 @@ export function findServerBinary(): string {
   ].filter((c): c is string => Boolean(c));
   for (const c of candidates) if (existsSync(c)) return c;
   throw new Error(
-    `ag-server binary not found (looked in: ${candidates.join(', ')}). Build it with \`cargo build -p ag-server\` or set AG_SERVER_BIN.`,
+    `ag-server binary not found (looked in: ${candidates.join(', ')}). Build it with \`cargo build -p agentgit-server\` or set AG_SERVER_BIN.`,
   );
 }
 

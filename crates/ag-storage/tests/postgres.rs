@@ -1,7 +1,7 @@
 //! PostgreSQL-specific behaviour: transaction semantics, concurrency across
 //! connections ("processes"), failure handling, TLS.
 //!
-//! These need a server: run them with `scripts/pg-test.sh cargo test -p ag-storage --test postgres`.
+//! These need a server: run them with `scripts/pg-test.sh cargo test -p agentgit-storage --test postgres`.
 //! Without `AG_TEST_POSTGRES_URL` they print a notice and pass, unless
 //! `AG_REQUIRE_BACKENDS=1`, which makes a missing server a failure.
 #![allow(missing_docs)]

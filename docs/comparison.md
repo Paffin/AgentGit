@@ -1,12 +1,13 @@
-# AgentGit compared with Git, GitHub, Gerrit and Jujutsu
+# AgentGit compared with Git, GitHub, GitLab, Bitbucket, Gerrit and Jujutsu
 
 A fair comparison is mostly a list of what the other tools are good at. This page tries to be that. Two ground rules:
 
 - **What we say about AgentGit is checkable**: each claim links to the page, and where one exists the test, that backs it,
   and what is missing or unproven is listed under "What AgentGit does not have" below. AgentGit is **alpha**; the
-  other four are mature or widely used, and for most teams today they are the right choice.
+  others are mature or widely used, and for most teams today they are the right choice.
 - **What we say about the others comes from their public documentation, as we understand it.** We keep to well-known
-  behaviour, and where we are not sure we say nothing rather than guess. If something here is wrong or out of date,
+  behaviour, and where we are not sure we say nothing rather than guess. Product names, plan tiers and features change;
+  the [sources](#sources) at the end say what was read and when. If something here is wrong or out of date,
   please [open an issue](https://github.com/Paffin/AgentGit/issues) and we will fix the page.
 
 ## The problem AgentGit is built around
@@ -29,6 +30,27 @@ hosting features and add-ons. AgentGit makes them the data model.
 | Rewrite history (rebase, amend) | yes | through Git | amending creates a new patch set | yes, with automatic rebase of descendants | **no**: changesets are immutable |
 | Runs without a server | yes | no | no | yes | yes (a server is optional) |
 | Maturity | very high | very high | high | newer and actively developed | **alpha** |
+
+### Hosting platforms
+
+GitHub, GitLab and Bitbucket are products you subscribe to or self-host, with many features beyond landing a change. The
+rows below cover only how a change lands when several actors, some of them automated, write to one codebase. Plan names
+are as in the vendors' documentation at the access date; "Premium" and similar mean the feature is not in the free tier.
+
+| | GitHub | GitLab | Bitbucket (Cloud and Data Center) | AgentGit |
+|---|---|---|---|---|
+| Unit of review | pull request | merge request | pull request | [proposal](concepts.md) |
+| Where merge rules are enforced | the platform: branch protection and rulesets | the platform: protected branches, approval rules, push rules (several need Premium) | the platform: branch permissions and merge checks (enforced on Premium in Cloud) | the stream's [policy](guides/policy.md), evaluated in the transaction that moves the head |
+| A passing check is bound to the exact tree that lands | in the merge queue, which tests a temporary merge of the queue; otherwise a commit | with merged results pipelines and merge trains (Premium and Ultimate); otherwise a pipeline | required builds on the head commit; merge queues build a merge result (Cloud: paid plan with Pipelines) | always: a signed attestation names the tree, policy version and environment ([validation](guides/validation.md)) |
+| Identity of automated actors | accounts, GitHub Apps, tokens | service accounts, access tokens | accounts, tokens | an identity per agent and per run; a credential can be bound to one run ([ADR-0010](adr/0010-run-bound-credentials.md)) |
+| Policy-bound autonomy for agents | built from branch rules and the permissions you give a bot | built from the same pieces | built from the same pieces | built in: `agent_autonomy` allowed paths and a file limit ([policy](guides/policy.md#agent-autonomy)) |
+| Tamper-evident audit | an audit log with export; its documentation makes no integrity claim | audit events, streaming on Ultimate; its documentation makes no integrity claim | an audit log; not compared here | hash-chained, checked by `ag audit` and `ag verify` ([security](architecture/security.md)) |
+| Self-contained and offline | hosted; GitHub Enterprise Server for self-management | SaaS or self-managed | Cloud or Data Center | local mode needs no server; the server is one binary ([remote](guides/remote.md)) |
+| Ecosystem and integrations | very large | very large; CI and security scanning are part of the platform | large; Jira and Pipelines | small: CLI, SDKs (unpublished), MCP, Web UI |
+| Maturity | very high | very high | very high | alpha |
+
+"Built from the same pieces" describes what the documentation covers, not that nothing can be done: all three have APIs and
+custom checks, and teams build agent guard rails on them.
 
 ## Versus Git
 
@@ -84,6 +106,98 @@ with branch rules and a merge queue, you may not need AgentGit.
 
 **Use together.** Import from and export to Git ([bridge](guides/git-bridge.md)); AgentGit has no GitHub integration of its own.
 
+## Versus GitLab
+
+**Same ideas.** A merge request is a proposal: a request to land a change that is reviewed, checked and then merged.
+Protected branches decide who may push or merge. Approval rules decide how many approvals, and from whom, a request needs;
+code owners of the changed files can become eligible approvers, and the author does not count as an approver by default.
+"Pipelines must succeed" is a required check. The stale-check problem is addressed by **merged results pipelines** (the
+pipeline runs on the merge request's changes combined with the target branch) and **merge trains**, which test each queued
+request on top of the requests ahead of it, run those pipelines in parallel (up to 20 by default) and merge in order; a
+failing request leaves the train and the ones behind it restart without it. This is the problem AgentGit solves by binding a
+check to the candidate *tree*; the mechanisms differ.
+
+**Different.**
+
+- *Where the binding lives.* On GitLab a merge train is a feature of a CI pipeline you configure: the pipeline has to be set
+  up for merge request pipelines, merged results must be enabled first, and the repository must be hosted in GitLab. In
+  AgentGit the attestation is part of the data model: it names the tree, the policy version and the environment, is signed
+  by an issuer the policy lists, and stops counting the moment the stream moves ([validation](guides/validation.md);
+  `attestation_cannot_be_reused_after_the_stream_moves`). AgentGit has no queue-wide combined testing of its own:
+  `ag integrate` checks one candidate against the current head, and the ordered integration queue serializes landing
+  ([agents guide](guides/agents.md)).
+- *Rules at landing.* Push rules (commit message and branch name patterns, secret and file-name blocks, file size, signed
+  commits; Premium) act on pushes. AgentGit has nothing like them. Its policy decides whether a *proposal* may be
+  integrated (required checks, approvals bound to the head, protected paths, who may integrate, the autonomy envelope) and
+  is evaluated in the transaction that moves the head ([publication and
+  integration](architecture/publication-and-integration.md)). The policy document is versioned and append-only.
+- *Agents.* GitLab has service accounts (in every tier, authenticating with tokens) and access tokens. AgentGit identifies
+  an agent *run*, scopes a credential to it, and limits what the agent may land alone through the autonomy envelope; it also
+  has leases with fencing tokens and path-overlap prediction ([agents guide](guides/agents.md)). On GitLab these are
+  conventions you build from protected branches, approval rules and process.
+- *Audit.* GitLab's audit events can be streamed to external destinations (an Ultimate feature on self-managed). The page we
+  read describes no tamper-evidence or signing. AgentGit's audit entries are written in the same transaction as the change
+  and form a hash chain that `ag audit` verifies ([security model](architecture/security.md);
+  `audit_chain_detects_tampering`). That detects edits; AgentGit does not stream events anywhere.
+- *Self-managed.* GitLab can be run on your own infrastructure, and so can AgentGit; the difference is scope. GitLab
+  self-managed is a large platform with many services. AgentGit's server is one binary over SQLite or PostgreSQL, and local
+  mode needs no server at all ([deployment](operations/deployment.md)).
+
+**Where GitLab wins.** Almost everything around the change: one application for repositories, issues, boards, CI/CD with
+runners, package and container registries, security scanning, environments and deployments; review of large merge
+requests; groups, permissions and compliance features at the scale of an organisation; a large user base; commercial
+support. Merge trains test the combined result of many queued requests, which AgentGit does not. AgentGit has a small Web UI
+and an SDK, no CI hosting and no issue tracker ([guide](guides/web-ui.md)).
+
+**Use together.** Import from and export to Git ([bridge](guides/git-bridge.md)); AgentGit has no GitLab integration of its
+own. We have not run AgentGit against a GitLab instance and make no claim about it.
+
+## Versus Bitbucket
+
+Bitbucket comes in two products with different documentation: Bitbucket Cloud, hosted by Atlassian, and Bitbucket Data
+Center, self-managed. Where they differ, we say which one.
+
+**Same ideas.** A pull request is a proposal. Branch permissions limit who may write to a branch or merge into it through a
+pull request, and can also block deleting a branch or rewriting its history. **Merge checks** hold a pull request until it
+meets conditions: a minimum number of approvals (also from default reviewers), no "changes requested", no open tasks, and
+successful builds. In Cloud, merge checks that block a merge need the Premium plan; on other plans they only warn. Data
+Center adds **required builds**: named builds, for example from Bamboo or Jenkins, that must pass on the latest commit before
+merging into protected branches; Code Insights reports can block a merge too. Cloud can **reset approvals when the source
+branch changes** on Premium, optionally keeping them if the diff is unchanged. Atlassian documents **merge queues**: pull
+requests wait in a queue, a merge result commit is built for each, a pipeline runs on that commit, and the target branch is
+updated only if it passes (on Cloud a paid plan with Pipelines, set up by a repository admin; Atlassian's pages and blog
+disagree on whether the feature is still beta, so check them). This is the same stale-check problem AgentGit addresses by
+binding a check to the tree.
+
+**Different.**
+
+- *What a build result is bound to.* The documented merge check is a build status on the head commit, reported through the
+  build status API by whatever CI you use; the merge queue validates a merge result commit. In AgentGit the result is a signed
+  attestation for the tree, and counts only if its issuer's identity and public key are listed in the policy; an agent
+  signing its own result proves nothing (`self_signed_agent_attestations_are_worthless`, [security
+  model](architecture/security.md)). We do not know how Bitbucket treats who reported a build status beyond what its
+  documentation says, and make no claim.
+- *Rules.* Bitbucket's merge checks and branch permissions are settings on the platform, set per project or repository, and
+  extensible with Marketplace apps. AgentGit's policy is one document per stream that is versioned, append-only, rejected on
+  load if it can never be satisfied, and evaluated as a pure function in the transaction that moves the head
+  ([policy](guides/policy.md)). There is no direct equivalent of default reviewers: AgentGit's approvals are counted through
+  the policy, and an agent-authored change outside its envelope needs a human approval.
+- *Agents.* Bitbucket has accounts and tokens, and Pipelines for running work. AgentGit models the run: an identity, a
+  credential bound to it, a lease on paths with a fencing token, signed provenance and an autonomy envelope
+  ([agents guide](guides/agents.md)).
+- *Cloud, Data Center and AgentGit.* Cloud is a hosted service; Data Center is self-managed. AgentGit is self-hosted by design
+  (a binary, or the Compose and Kubernetes files in `deploy/`), and in local mode there is no server
+  ([deployment](operations/deployment.md)). Several AgentGit replicas on PostgreSQL are supported and tested; a failover of
+  PostgreSQL itself is not ([high availability](operations/high-availability.md)).
+
+**Where Bitbucket wins.** The Atlassian ecosystem: tight Jira integration, Bitbucket Pipelines for CI/CD hosted with the
+repository, Marketplace apps, a mature review interface, support, and a long operating history at enterprise scale, with
+permissions at the project and workspace level. AgentGit has none of those: a small Web UI, an SDK, no CI hosting, no issue
+tracker and no marketplace.
+
+**Use together.** Import and export through the [Git bridge](guides/git-bridge.md). We have not run AgentGit against
+Bitbucket.
+
 ## Versus Gerrit
 
 **Same ideas.** Gerrit made the *change* the unit of review, with revisions of it (patch sets), labels such as Code-Review and Verified, and
@@ -121,7 +235,7 @@ exports to, and make no claim about it.
 Say it plainly, because the table above is flattering:
 
 - **Maturity.** Alpha: not run in production by anyone but its authors, no external security audit, nothing published to a
-  registry. The [honest limits in the README](https://github.com/Paffin/AgentGit/blob/main/README.md#status-and-honest-limits) are the list.
+  registry. The [status and limits in the README](https://github.com/Paffin/AgentGit/blob/main/README.md#status-and-limits) are the list.
 - **Local mode trusts the local user.** Identities are labels until you run a server; anyone who can write `.ag/` can bypass
   policy (tampering is detectable, not preventable). [Security model](architecture/security.md).
 - **No history rewriting, tags, submodules, LFS, partial or shallow clones.** The Git bridge reports what it cannot carry.
@@ -134,8 +248,41 @@ Say it plainly, because the table above is flattering:
 ## Choosing
 
 - *A solo developer or a team without agents*: use Git (or Jujutsu). AgentGit adds nothing you need.
-- *A team on GitHub or Gerrit with agents that work fine through your existing review and checks*: keep what works. Look at
+- *A team on GitHub, GitLab, Bitbucket or Gerrit with agents that work fine through your existing review and checks*: keep what works. Look at
   AgentGit when you need landing to be provably atomic and tree-bound, per-run identities and leases, or an autonomy
   envelope, and you are willing to run alpha software for it.
 - *Experimenting with policy-bound agent autonomy, or building something that needs a small deterministic core with a
   verifiable audit trail*: this is what it is for. Start with [the first tutorial](tutorials/first-agent-safe-repo.md).
+
+## Sources
+
+What was read for the statements above about GitHub, GitLab and Bitbucket. Accessed 2026-10-19. These pages change; if one
+disagrees with this page, the vendor's page is right and this page needs a fix.
+
+GitHub
+
+- [Managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)
+- [About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+- [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+- [Reviewing the audit log for your organization](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization)
+- [About apps](https://docs.github.com/en/apps/overview)
+
+GitLab
+
+- [Merge trains](https://docs.gitlab.com/ci/pipelines/merge_trains/)
+- [Merge request approval rules](https://docs.gitlab.com/user/project/merge_requests/approvals/rules/)
+- [Protected branches](https://docs.gitlab.com/user/project/repository/branches/protected/)
+- [Push rules](https://docs.gitlab.com/user/project/repository/push_rules/)
+- [Auto merge and "pipelines must succeed"](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- [Audit event streaming](https://docs.gitlab.com/ee/administration/compliance/audit_event_streaming.html)
+- [Service accounts](https://docs.gitlab.com/user/profile/service_accounts/)
+
+Bitbucket
+
+- [Suggest or require checks before a merge (Cloud)](https://support.atlassian.com/bitbucket-cloud/docs/suggest-or-require-checks-before-a-merge/)
+- [Use branch permissions (Cloud)](https://support.atlassian.com/bitbucket-cloud/docs/use-branch-permissions/)
+- [Manage pull requests with merge queues (Cloud)](https://support.atlassian.com/bitbucket-cloud/docs/manage-pull-requests-with-merge-queues/)
+- [Checks for merging pull requests (Data Center)](https://confluence.atlassian.com/bitbucketserver/checks-for-merging-pull-requests-776640039.html)
+
+Statements about Git, Gerrit and Jujutsu come from their public documentation as we understand it and were not re-checked
+on that date.

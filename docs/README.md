@@ -7,7 +7,7 @@
 | follow a walkthrough (every command in them is run by the tests) | [Tutorials](tutorials/README.md): [your first agent-safe repository](tutorials/first-agent-safe-repo.md), [run a team server](tutorials/team-server.md), [policy cookbook](tutorials/policy-cookbook.md), [migrating a Git repository](tutorials/migrating-from-git.md), [troubleshooting a blocked integration](tutorials/troubleshooting-blocked-integration.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md), [Glossary](glossary.md) |
 | get a quick answer | [FAQ](faq.md) |
-| see how it differs from Git, GitHub, Gerrit and Jujutsu | [AgentGit compared](comparison.md) |
+| see how it differs from Git, GitHub, GitLab, Bitbucket, Gerrit and Jujutsu | [AgentGit compared](comparison.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |
 | give an agent AgentGit through MCP (Claude Code, Claude Desktop, the Agent SDKs) | [MCP guide](guides/mcp.md): install, configuration, what the allow-list protects and what it does not, troubleshooting, a recorded run with a real model |
 | run the Go agent platform (scheduler, sessions, advisor, reviewers, semantic index; optional model mode) | [Orchestrator guide](guides/orchestrator.md) |

@@ -234,7 +234,7 @@ jobs:
         run: echo "date=$(git show -s --format=%cs HEAD)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       # Makes ACTIONS_CACHE_URL / ACTIONS_RUNTIME_TOKEN visible to the plain `docker buildx` CLI below.
-      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - name: Rebuild on a fresh runner from the gha cache only
         run: |
           set -o pipefail

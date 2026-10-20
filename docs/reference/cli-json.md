@@ -821,6 +821,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "string"
   ],
   "conflicts": [],
+  "notes": [],
   "problem": "null",
   "strategy": "string"
 }

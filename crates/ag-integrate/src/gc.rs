@@ -157,6 +157,12 @@ impl Repository {
                 tx.audit_append(actor, "gc.run", "store", &json!({"deleted": report.deleted.len(), "bytes": report.bytes, "reachable_changesets": changesets}))?;
                 Ok(())
             })?;
+            // A removed changeset must not still be answered from memory.
+            if !deleted_changesets.is_empty()
+                && let Some(trees) = &self.trees
+            {
+                trees.clear();
+            }
         }
         Ok(report)
     }

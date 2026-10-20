@@ -44,6 +44,8 @@ pub struct Options {
     pub backend: Backend,
     /// Only rows whose name contains this text (all if empty). The setup still runs.
     pub filter: String,
+    /// Budget of the decoded-tree cache in bytes (0 = no cache).
+    pub tree_cache_bytes: usize,
 }
 
 /// One measured operation at one size.
@@ -143,9 +145,14 @@ fn time<T>(f: impl FnOnce() -> T) -> (T, Duration) {
 fn open_repo(opts: &Options, dir: &Path) -> Result<Repository> {
     let ns = Namespace::new("bench/app")?;
     let stream = StreamName::new("main")?;
-    Ok(match opts.backend {
+    let repo = match opts.backend {
         Backend::Memory => Repository::ephemeral(ns, stream, std::sync::Arc::new(SystemClock))?,
         Backend::Disk => Repository::init(dir, &InitOptions::new(ns, stream, actor("user:alice")))?,
+    };
+    Ok(if opts.tree_cache_bytes > 0 {
+        repo.with_tree_cache(ag_storage::DecodedTrees::new(opts.tree_cache_bytes).scope("bench"))
+    } else {
+        repo
     })
 }
 

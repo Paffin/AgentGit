@@ -391,6 +391,17 @@ pub struct ReposSection {
     /// `/readyz`, in seconds (0 = never). It opens every registered repository, so raise it for installations with
     /// thousands of them.
     pub health_scan_interval_secs: u64,
+    /// Memory (bytes, estimated) the server may spend on decoded trees kept between requests, shared by all
+    /// repositories (`docs/architecture/performance.md`). A hit saves reading and verifying a stored tree - about a
+    /// third of a fast-forward at 100 000 files; a tree of that size takes 15-20 MB. 0 turns the cache off.
+    pub tree_cache_bytes: u64,
+    /// How often an integration tries again, recomputing its candidate, when other writers move the same stream
+    /// under it, before it answers `aborted` (which the client may retry). Under many writers on one stream the
+    /// answer used to come after 8 lost attempts.
+    pub integrate_attempts: usize,
+    /// The longest wait between two such attempts, in milliseconds (0 = retry at once). The wait is spread per
+    /// operation so that the colliding writers stop colliding.
+    pub integrate_backoff_ms: u64,
 }
 
 impl Default for ReposSection {
@@ -403,6 +414,9 @@ impl Default for ReposSection {
             idempotency_ttl_secs: 7 * 24 * 3600,
             idempotency_sweep_interval_secs: 3600,
             health_scan_interval_secs: 300,
+            tree_cache_bytes: 256 * 1024 * 1024,
+            integrate_attempts: 24,
+            integrate_backoff_ms: 32,
         }
     }
 }

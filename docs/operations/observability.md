@@ -27,6 +27,8 @@ wires them up under `--profile observability`.
 | `agwp_open_repositories`, `agwp_event_subscriptions` | gauge | | |
 | `agwp_job_events_total` | counter | `event` | execution plane since start: `enqueued`, `claimed`, `succeeded`, `retried`, `failed` (`retried` and `failed` include the jobs taken back when a worker died holding them: a runner that crashes on its last attempt shows up here, not only a runner that reports the failure) |
 | `agwp_jobs_queued` | gauge | | queued validation jobs in repositories known to have work (counted, not listed, at scrape time; a repository that cannot be read at that moment is logged and left out of the sum) |
+| `agwp_tree_cache_bytes` / `agwp_tree_cache_entries` | gauge | | decoded trees held in memory (estimated bytes, against `repos.tree_cache_bytes`; entries) |
+| `agwp_tree_cache_hits_total` / `agwp_tree_cache_misses_total` / `agwp_tree_cache_evictions_total` | counter | | tree lookups answered from memory, not found there, and trees dropped to stay inside the budget |
 | `agwp_agent_runs_reaped_total` | counter | | agent runs ended as `abandoned` by a reap (an operator's `ReapRuns`, `ag-server admin reap-runs`, or the periodic reaper of `[agents] reap_interval_secs`) |
 | `agwp_trace_spans_exported_total`, `agwp_trace_spans_dropped_total`, `agwp_trace_export_failures_total` | counter | | trace exporter health |
 | `agwp_uptime_seconds` | gauge | | |

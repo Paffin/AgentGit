@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use ag_integrate::{InitOptions, MetaConfig, ObjectsConfig, RepoConfig, Repository, StorageConfig};
 use ag_protocol::v1;
-use ag_storage::Clock;
+use ag_storage::{Clock, DecodedTrees};
 use ag_types::{Identity, Namespace, StreamName};
 
 use crate::control::{Control, RepoRow};
@@ -109,6 +109,21 @@ pub fn derive_storage(template: &StorageConfig, repo: &str) -> StorageConfig {
     out
 }
 
+/// What every hosted repository shares: the process-wide cache of decoded trees and how integrations retry.
+pub struct HostedOptions {
+    /// The decoded-tree cache (`repos.tree_cache_bytes`).
+    pub trees: Arc<DecodedTrees>,
+    /// Retry policy of integrations that lose races (`repos.integrate_attempts`, `repos.integrate_backoff_ms`).
+    pub contention: ag_integrate::ContentionPolicy,
+}
+
+impl Default for HostedOptions {
+    /// No tree cache, the engine's default retry policy.
+    fn default() -> Self {
+        Self { trees: DecodedTrees::new(0), contention: Default::default() }
+    }
+}
+
 /// Opens, creates and caches hosted repositories.
 pub struct RepoManager {
     root: PathBuf,
@@ -117,6 +132,8 @@ pub struct RepoManager {
     pool_size: usize,
     max_open: usize,
     storage: Option<StorageConfig>,
+    trees: Arc<DecodedTrees>,
+    contention: ag_integrate::ContentionPolicy,
     open: Mutex<HashMap<String, Arc<RepoPool>>>,
 }
 
@@ -129,8 +146,11 @@ impl RepoManager {
         pool_size: usize,
         max_open: usize,
         storage: Option<StorageConfig>,
+        shared: HostedOptions,
     ) -> Self {
         Self {
+            trees: shared.trees,
+            contention: shared.contention,
             storage,
             root: data_dir.join("repos"),
             control,
@@ -284,10 +304,16 @@ impl RepoManager {
         };
         self.ensure_local_marker(&row)?;
         let dir = self.dir(name);
-        let first = Repository::open_with_clock(&dir, self.clock.clone())?;
+        // Every handle of the pool shares the repository's part of the server-wide tree cache.
+        let scope = self.trees.scope(name);
+        let first = Repository::open_with_clock(&dir, self.clock.clone())?
+            .with_tree_cache(scope.clone())
+            .with_contention_policy(self.contention);
         let mut handles = vec![Arc::new(first)];
         for _ in 1..self.pool_size {
-            handles.push(Arc::new(handles[0].reopen()?));
+            handles.push(Arc::new(
+                handles[0].reopen()?.with_tree_cache(scope.clone()).with_contention_policy(self.contention),
+            ));
         }
         let pool =
             Arc::new(RepoPool { handles, next: AtomicUsize::new(0), last_used: Mutex::new(std::time::Instant::now()) });
@@ -315,6 +341,11 @@ impl RepoManager {
     pub fn close_all(&self) {
         let pools: Vec<_> = self.open.lock().unwrap_or_else(|e| e.into_inner()).drain().collect();
         drop(pools);
+    }
+
+    /// The decoded-tree cache the repositories share (its counters feed `/metrics`).
+    pub fn tree_cache(&self) -> &Arc<DecodedTrees> {
+        &self.trees
     }
 
     /// Number of repositories currently open.
@@ -394,7 +425,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
         let control = Arc::new(Control::open_in_memory(clock.clone()).unwrap());
-        let mgr = RepoManager::new(dir.path(), control, clock, 2, 1, None);
+        let mgr = RepoManager::new(dir.path(), control, clock, 2, 1, None, Default::default());
         let actor = Identity::new("user:root").unwrap();
         mgr.create("acme/web", "main", "d", &actor, Default::default()).unwrap();
         assert!(mgr.create("acme/web", "main", "d", &actor, Default::default()).is_err());

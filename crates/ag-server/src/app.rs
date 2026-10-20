@@ -260,6 +260,13 @@ impl App {
             cfg.repos.pool_size,
             cfg.repos.max_open,
             cfg.repos.storage.clone(),
+            crate::repos::HostedOptions {
+                trees: ag_storage::DecodedTrees::new(usize::try_from(cfg.repos.tree_cache_bytes).unwrap_or(usize::MAX)),
+                contention: ag_integrate::ContentionPolicy {
+                    attempts: cfg.repos.integrate_attempts,
+                    max_backoff_ms: cfg.repos.integrate_backoff_ms,
+                },
+            },
         );
         let metrics = Metrics::new();
         let tracer = (!cfg.telemetry.otlp_endpoint.is_empty()).then(|| {

@@ -152,6 +152,18 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
         Err(e) => tracing::error!(error = %e, "counting the queued jobs failed"),
     }
     app.metrics.open_repos.set(app.repos.open_count() as i64);
+    {
+        // The cache keeps cumulative counts; the exported counters follow them.
+        let s = app.repos.tree_cache().stats();
+        let m = &app.metrics;
+        m.tree_cache_bytes.set(i64::try_from(s.bytes).unwrap_or(i64::MAX));
+        m.tree_cache_entries.set(i64::try_from(s.entries).unwrap_or(i64::MAX));
+        for (counter, total) in
+            [(&m.tree_cache_hits, s.hits), (&m.tree_cache_misses, s.misses), (&m.tree_cache_evictions, s.evictions)]
+        {
+            counter.inc_by(total.saturating_sub(counter.get()));
+        }
+    }
     app.metrics.uptime.set(app.started.elapsed().as_secs() as i64);
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
 }

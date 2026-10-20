@@ -17,7 +17,6 @@
 //! dispatched on the next pass. The external event feed is the audit log.
 
 use ag_changeset::ChangesetSource;
-use ag_storage::MetaTreeCache;
 use ag_tree::resolve_tree;
 use ag_types::ChangesetId;
 use serde::Serialize;
@@ -69,7 +68,7 @@ impl Repository {
         let mut problems = Vec::new();
         // The tree of the new head is computed here and stored in the same commit that acknowledges the events.
         let head_tree =
-            head.and_then(|head| match resolve_tree(&self.history, &MetaTreeCache(&self.meta), head, &self.limits) {
+            head.and_then(|head| match resolve_tree(&self.history, &self.tree_cache(), head, &self.limits) {
                 Ok(tree) => Some((*head, tree)),
                 Err(e) => {
                     problems.push(format!("caching the tree of {head}: {e}"));
@@ -165,7 +164,7 @@ impl Repository {
 
     /// Unconditionally caches the tree of `id` (used for live heads).
     pub(crate) fn cache_tree(&self, id: &ChangesetId) -> Result<()> {
-        let tree = resolve_tree(&self.history, &MetaTreeCache(&self.meta), id, &self.limits)?;
+        let tree = resolve_tree(&self.history, &self.tree_cache(), id, &self.limits)?;
         self.meta.write(|tx| tx.put_derived_tree(id, &tree).map(|_| ()))?;
         Ok(())
     }

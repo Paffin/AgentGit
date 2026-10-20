@@ -28,6 +28,7 @@ mod object_store;
 pub mod s3;
 pub mod sqldb;
 pub mod testing;
+mod tree_cache;
 
 pub use clock::{Clock, ManualClock, SystemClock};
 pub use error::StoreError;
@@ -37,3 +38,4 @@ pub use meta::Meta;
 pub use object_store::{Durability, FsObjectStore, MemoryObjectStore, ObjectInfo, ObjectStatus, ObjectStore};
 #[cfg(feature = "s3")]
 pub use s3::{Credentials, S3Config, S3ObjectStore};
+pub use tree_cache::{DecodedTrees, TreeCacheStats, TreeScope};

@@ -49,6 +49,16 @@ pub struct Metrics {
     pub job_events: IntCounterVec,
     /// Queued jobs in repositories known to have work (refreshed on scrape).
     pub jobs_queued: IntGauge,
+    /// Estimated bytes of decoded trees held in memory (budget: `repos.tree_cache_bytes`).
+    pub tree_cache_bytes: IntGauge,
+    /// Decoded trees held in memory.
+    pub tree_cache_entries: IntGauge,
+    /// Tree lookups answered from memory.
+    pub tree_cache_hits: IntCounter,
+    /// Tree lookups not found in memory.
+    pub tree_cache_misses: IntCounter,
+    /// Trees dropped from memory to stay inside the budget.
+    pub tree_cache_evictions: IntCounter,
     /// Agent runs ended as abandoned by a reap (an operator's `ReapRuns`, or `agents.reap_interval_secs`).
     pub runs_reaped: IntCounter,
     /// Seconds since the server started.
@@ -132,6 +142,16 @@ impl Metrics {
         let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
             .expect("metric");
         let jobs_queued = IntGauge::new("jobs_queued", "Queued execution-plane jobs").expect("metric");
+        let tree_cache_bytes =
+            IntGauge::new("tree_cache_bytes", "Estimated bytes of decoded trees held in memory").expect("metric");
+        let tree_cache_entries = IntGauge::new("tree_cache_entries", "Decoded trees held in memory").expect("metric");
+        let tree_cache_hits =
+            IntCounter::new("tree_cache_hits_total", "Tree lookups answered from memory").expect("metric");
+        let tree_cache_misses =
+            IntCounter::new("tree_cache_misses_total", "Tree lookups not found in memory").expect("metric");
+        let tree_cache_evictions =
+            IntCounter::new("tree_cache_evictions_total", "Trees dropped from memory to stay inside the budget")
+                .expect("metric");
         let runs_reaped =
             IntCounter::new("agent_runs_reaped_total", "Agent runs ended as abandoned by a reap").expect("metric");
         let uptime = IntGauge::new("uptime_seconds", "Seconds since start").expect("metric");
@@ -190,6 +210,11 @@ impl Metrics {
             Box::new(subscriptions.clone()),
             Box::new(job_events.clone()),
             Box::new(jobs_queued.clone()),
+            Box::new(tree_cache_bytes.clone()),
+            Box::new(tree_cache_entries.clone()),
+            Box::new(tree_cache_hits.clone()),
+            Box::new(tree_cache_misses.clone()),
+            Box::new(tree_cache_evictions.clone()),
             Box::new(runs_reaped.clone()),
             Box::new(uptime.clone()),
             Box::new(trace_exported.clone()),
@@ -227,6 +252,11 @@ impl Metrics {
             subscriptions,
             job_events,
             jobs_queued,
+            tree_cache_bytes,
+            tree_cache_entries,
+            tree_cache_hits,
+            tree_cache_misses,
+            tree_cache_evictions,
             runs_reaped,
             uptime,
             trace_exported,

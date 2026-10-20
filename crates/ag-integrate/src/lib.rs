@@ -49,6 +49,7 @@ pub use failpoints::{Failpoints, GateHandle};
 pub use fsck::{FsckIssue, FsckReport};
 pub use gc::{DEFAULT_GC_GRACE_MS, DEFAULT_REFLOG_RETENTION_MS, GcOptions, GcReport};
 pub use history::{HybridGraph, LogEntry};
+pub use integrate::ContentionPolicy;
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};
 pub use prepare::{Preparation, PrepareContext, ValidationState};

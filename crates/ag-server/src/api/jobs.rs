@@ -100,6 +100,16 @@ pub(super) fn validation_jobs_in(
 }
 
 /// `<principal>|<label>`: the label is the worker's own name for this loop.
+/// The claim a request names (`fencing_token`): `None` when it names none (0), as every client did before the field.
+fn claim_of(token: u64) -> ApiResult<Option<u32>> {
+    match token {
+        0 => Ok(None),
+        t => {
+            u32::try_from(t).map(Some).map_err(|_| ApiError::invalid("fencing_token is not a claim number of this job"))
+        }
+    }
+}
+
 fn worker_id(call: &Call, label: &str) -> ApiResult<String> {
     let label = if label.is_empty() { "default" } else { label };
     if label.len() > 64 || !label.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
@@ -390,9 +400,10 @@ impl App {
         let worker = worker_id(call, &req.worker)?;
         let lease_ms = if req.lease_ms <= 0 { DEFAULT_LEASE_MS } else { req.lease_ms.min(MAX_LEASE_MS) };
         let repo = require(&req.repo, "repo")?.to_string();
+        let claim = claim_of(req.fencing_token)?;
         let name = repo.clone();
         self.with_repo_mut(call, &repo, Cap::JobsClaim, None, move |r, _| {
-            let j = r.meta().write(|tx| tx.job_heartbeat(&req.job_id, &worker, lease_ms))?;
+            let j = r.meta().write(|tx| tx.job_heartbeat(&req.job_id, &worker, claim, lease_ms))?;
             Ok(job_to_wire(&name, &j))
         })
         .await
@@ -402,6 +413,7 @@ impl App {
     pub async fn complete_job(&self, call: &Call, req: v1::CompleteJobRequest) -> ApiResult<v1::Job> {
         let worker = worker_id(call, &req.worker)?;
         let repo = require(&req.repo, "repo")?.to_string();
+        let claim = claim_of(req.fencing_token)?;
         let issuer_ok = call.principal.identity.principal();
         let name = repo.clone();
         let events = self.metrics.job_events.clone();
@@ -415,7 +427,10 @@ impl App {
                 .meta()
                 .read(|tx| tx.job_get(&req.job_id))?
                 .ok_or_else(|| ApiError::not_found(format!("job '{}' not found", req.job_id)))?;
-            if job.state != JobState::Claimed || job.claimed_by.as_deref() != Some(worker.as_str()) {
+            if job.state != JobState::Claimed
+                || job.claimed_by.as_deref() != Some(worker.as_str())
+                || claim.is_some_and(|c| c != job.attempts)
+            {
                 return Err(ApiError::new(
                     ag_protocol::ErrorCode::FailedPrecondition,
                     "this worker does not hold the job (it finished, was cancelled, or its lease was taken over)",
@@ -463,7 +478,7 @@ impl App {
                 }
             }
             let done = r.meta().write(|tx| {
-                let j = tx.job_complete(&job.id, &worker, &result)?;
+                let j = tx.job_complete(&job.id, &worker, claim, &result)?;
                 events.with_label_values(&["succeeded"]).inc();
                 tx.audit_append(actor.as_str(), "job.complete", &j.id, &json!({"result": result}))?;
                 Ok(j)
@@ -477,6 +492,7 @@ impl App {
     pub async fn fail_job(&self, call: &Call, req: v1::FailJobRequest) -> ApiResult<v1::Job> {
         let worker = worker_id(call, &req.worker)?;
         let repo = require(&req.repo, "repo")?.to_string();
+        let claim = claim_of(req.fencing_token)?;
         let name = repo.clone();
         let events = self.metrics.job_events.clone();
         // What a worker reports is untrusted and as large as a request: the job keeps - and the append-only,
@@ -486,7 +502,7 @@ impl App {
             .with_repo_mut(call, &repo, Cap::JobsClaim, None, move |r, actor| {
                 let retry = (req.retry_after_ms > 0).then_some(req.retry_after_ms);
                 let j = r.meta().write(|tx| {
-                    let j = tx.job_fail(&req.job_id, &worker, &error, retry)?;
+                    let j = tx.job_fail(&req.job_id, &worker, claim, &error, retry)?;
                     events.with_label_values(&[if j.state == JobState::Queued { "retried" } else { "failed" }]).inc();
                     tx.audit_append(
                         actor.as_str(),

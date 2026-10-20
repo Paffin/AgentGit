@@ -371,3 +371,58 @@ async fn asking_again_finds_the_queued_validation_however_many_jobs_came_after_i
     assert_eq!(prep.json["validations"][0]["job_id"], job_id.as_str());
     srv.stop().await;
 }
+
+/// The same worker name claims, loses its lease, and claims the job again: the zombie that still holds the first
+/// claim's number cannot touch the second claim, though its name is the same; a request without a number is checked
+/// as before (by name).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stale_claim_of_the_same_worker_is_fenced_off() {
+    let srv = TestServer::start().await;
+    let ci_key = KeyPair::generate().unwrap();
+    let (alice, _carol, pid) = seed(&srv, "acme/web", &ci_key).await;
+    let ci = user_with_role(&srv, "service:ci-1", "acme/web", "runner").await;
+    alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+
+    let first = ci.post("/v1/jobs/claim", json!({"worker": "w", "lease_ms": 50})).await.json["job"].clone();
+    let (jid, first_claim) = (first["id"].as_str().unwrap().to_string(), first["attempts"].as_u64().unwrap());
+    assert_eq!(first_claim, 1);
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let second = ci.post("/v1/jobs/claim", json!({"worker": "w", "lease_ms": 60000})).await.json["job"].clone();
+    assert_eq!(second["id"], first["id"], "the same job, claimed again by the same worker name");
+    let second_claim = second["attempts"].as_u64().unwrap();
+    assert_eq!(second_claim, 2);
+
+    let path = |what: &str| format!("/v1/repos/acme/web/jobs/{jid}/{what}");
+    // The old claim's number is turned away on every route; the job is untouched.
+    let beat = ci.post(&path("heartbeat"), json!({"worker": "w", "fencing_token": first_claim})).await;
+    assert_ne!(beat.status, 200, "{}", beat.json);
+    let fail = ci.post(&path("fail"), json!({"worker": "w", "fencing_token": first_claim, "error": "late"})).await;
+    assert_ne!(fail.status, 200, "{}", fail.json);
+    let done = ci
+        .post(
+            &path("complete"),
+            json!({"worker": "w", "fencing_token": first_claim, "stale": true, "result_json": "{}"}),
+        )
+        .await;
+    assert_eq!(done.status, 412, "{}", done.json);
+    assert_eq!(done.json["error"]["code"], "failed_precondition", "{}", done.json);
+    let now = alice.get(&format!("/v1/repos/acme/web/jobs/{jid}")).await.json;
+    assert_eq!((now["state"].as_str(), now["attempts"].as_u64()), (Some("claimed"), Some(2)), "{now}");
+
+    // The current claim's number works; so does a request without one (the identity check of before).
+    let beat = ci.post(&path("heartbeat"), json!({"worker": "w", "fencing_token": second_claim})).await;
+    assert_eq!(beat.status, 200, "{}", beat.json);
+    let beat = ci.post(&path("heartbeat"), json!({"worker": "w"})).await;
+    assert_eq!(beat.status, 200, "{}", beat.json);
+    // A number that cannot be a claim of any job is refused as invalid, not read as "no number".
+    let huge = ci.post(&path("heartbeat"), json!({"worker": "w", "fencing_token": 1u64 << 40})).await;
+    assert_eq!(huge.status, 400, "{}", huge.json);
+    let done = ci
+        .post(
+            &path("complete"),
+            json!({"worker": "w", "fencing_token": second_claim, "stale": true, "result_json": "{}"}),
+        )
+        .await;
+    assert_eq!(done.status, 200, "{}", done.json);
+    srv.stop().await;
+}

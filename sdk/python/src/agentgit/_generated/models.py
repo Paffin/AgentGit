@@ -401,6 +401,7 @@ class CompareAndSwapRequest:
 class CompleteJobRequest:
     """The `CompleteJobRequest` message."""
     attestation: Attestation | None = field(default=None)
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     repo: str = field(default="")
     result: dict[str, Any] = field(default_factory=dict)
@@ -597,6 +598,7 @@ class ExtendLeaseRequest:
 class FailJobRequest:
     """The `FailJobRequest` message."""
     error: str = field(default="")
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     repo: str = field(default="")
     retry_after_ms: int = field(default=0)
@@ -784,6 +786,7 @@ class GrantRoleRequest:
 @dataclass(kw_only=True)
 class HeartbeatJobRequest:
     """The `HeartbeatJobRequest` message."""
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     lease_ms: int = field(default=0)
     repo: str = field(default="")

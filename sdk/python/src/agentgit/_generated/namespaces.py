@@ -686,13 +686,14 @@ class JobsApi:
         repo: str,
         job_id: str,
         attestation: Attestation | Mapping[str, Any] | None = None,
+        fencing_token: int | None = None,
         result: Mapping[str, Any] | None = None,
         stale: bool | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Complete a job (with its signed attestation) (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/complete`, operation `jobs.complete`)."""
-        return self._c._call("jobs.complete", {"repo": repo, "job_id": job_id, "attestation": attestation, "result": result, "stale": stale, "worker": worker}, options, Job)
+        return self._c._call("jobs.complete", {"repo": repo, "job_id": job_id, "attestation": attestation, "fencing_token": fencing_token, "result": result, "stale": stale, "worker": worker}, options, Job)
 
     def fail(
         self,
@@ -700,12 +701,13 @@ class JobsApi:
         repo: str,
         job_id: str,
         error: str | None = None,
+        fencing_token: int | None = None,
         retry_after_ms: int | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Fail a job, optionally scheduling a retry (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/fail`, operation `jobs.fail`)."""
-        return self._c._call("jobs.fail", {"repo": repo, "job_id": job_id, "error": error, "retry_after_ms": retry_after_ms, "worker": worker}, options, Job)
+        return self._c._call("jobs.fail", {"repo": repo, "job_id": job_id, "error": error, "fencing_token": fencing_token, "retry_after_ms": retry_after_ms, "worker": worker}, options, Job)
 
     def get(
         self,
@@ -722,12 +724,13 @@ class JobsApi:
         *,
         repo: str,
         job_id: str,
+        fencing_token: int | None = None,
         lease_ms: int | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Extend the claim on a job (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/heartbeat`, operation `jobs.heartbeat`)."""
-        return self._c._call("jobs.heartbeat", {"repo": repo, "job_id": job_id, "lease_ms": lease_ms, "worker": worker}, options, Job)
+        return self._c._call("jobs.heartbeat", {"repo": repo, "job_id": job_id, "fencing_token": fencing_token, "lease_ms": lease_ms, "worker": worker}, options, Job)
 
     def list(
         self,
@@ -1948,13 +1951,14 @@ class AsyncJobsApi:
         repo: str,
         job_id: str,
         attestation: Attestation | Mapping[str, Any] | None = None,
+        fencing_token: int | None = None,
         result: Mapping[str, Any] | None = None,
         stale: bool | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Complete a job (with its signed attestation) (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/complete`, operation `jobs.complete`)."""
-        return await self._c._call("jobs.complete", {"repo": repo, "job_id": job_id, "attestation": attestation, "result": result, "stale": stale, "worker": worker}, options, Job)
+        return await self._c._call("jobs.complete", {"repo": repo, "job_id": job_id, "attestation": attestation, "fencing_token": fencing_token, "result": result, "stale": stale, "worker": worker}, options, Job)
 
     async def fail(
         self,
@@ -1962,12 +1966,13 @@ class AsyncJobsApi:
         repo: str,
         job_id: str,
         error: str | None = None,
+        fencing_token: int | None = None,
         retry_after_ms: int | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Fail a job, optionally scheduling a retry (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/fail`, operation `jobs.fail`)."""
-        return await self._c._call("jobs.fail", {"repo": repo, "job_id": job_id, "error": error, "retry_after_ms": retry_after_ms, "worker": worker}, options, Job)
+        return await self._c._call("jobs.fail", {"repo": repo, "job_id": job_id, "error": error, "fencing_token": fencing_token, "retry_after_ms": retry_after_ms, "worker": worker}, options, Job)
 
     async def get(
         self,
@@ -1984,12 +1989,13 @@ class AsyncJobsApi:
         *,
         repo: str,
         job_id: str,
+        fencing_token: int | None = None,
         lease_ms: int | None = None,
         worker: str | None = None,
         options: CallOptions | None = None,
     ) -> Job:
         """Extend the claim on a job (`POST /v1/repos/{owner}/{rname}/jobs/{job_id}/heartbeat`, operation `jobs.heartbeat`)."""
-        return await self._c._call("jobs.heartbeat", {"repo": repo, "job_id": job_id, "lease_ms": lease_ms, "worker": worker}, options, Job)
+        return await self._c._call("jobs.heartbeat", {"repo": repo, "job_id": job_id, "fencing_token": fencing_token, "lease_ms": lease_ms, "worker": worker}, options, Job)
 
     async def list(
         self,

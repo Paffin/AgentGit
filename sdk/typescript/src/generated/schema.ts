@@ -1631,6 +1631,12 @@ export interface components {
         CompleteJobRequest: {
             /** @default null */
             attestation: components["schemas"]["Attestation"] | null;
+            /**
+             * Format: int64
+             * @description The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /** @default  */
@@ -1977,6 +1983,12 @@ export interface components {
         FailJobRequest: {
             /** @default  */
             error: string;
+            /**
+             * Format: int64
+             * @description The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /** @default  */
@@ -2282,6 +2294,15 @@ export interface components {
             subject: string;
         };
         HeartbeatJobRequest: {
+            /**
+             * Format: int64
+             * @description The claim this request is for: the `attempts` of the Job that ClaimJob returned (every claim of a job, by any
+             *     worker including the same one, has a larger number than the one before). If it is not the job's current claim the
+             *     request is refused (`failed_precondition`: the claim was lost), so a worker whose lease expired and whose job
+             *     was claimed again cannot act on the new claim. 0 = not given: only the worker's identity is checked, as before.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /**
@@ -2388,6 +2409,8 @@ export interface components {
         Job: {
             /**
              * Format: int32
+             * @description How many times the job has been claimed. While the job is `claimed` this is the number of the current claim -
+             *     the fencing token for HeartbeatJob, CompleteJob and FailJob.
              * @default 0
              */
             attempts: number;

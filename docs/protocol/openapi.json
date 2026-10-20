@@ -636,6 +636,13 @@
               }
             ]
           },
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "job_id": {
             "default": "",
             "type": "string"
@@ -1181,6 +1188,13 @@
             "default": "",
             "type": "string"
           },
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "job_id": {
             "default": "",
             "type": "string"
@@ -1656,6 +1670,13 @@
       },
       "HeartbeatJobRequest": {
         "properties": {
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for: the `attempts` of the Job that ClaimJob returned (every claim of a job, by any\nworker including the same one, has a larger number than the one before). If it is not the job's current claim the\nrequest is refused (`failed_precondition`: the claim was lost), so a worker whose lease expired and whose job\nwas claimed again cannot act on the new claim. 0 = not given: only the worker's identity is checked, as before.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "job_id": {
             "default": "",
             "type": "string"
@@ -1832,6 +1853,7 @@
         "properties": {
           "attempts": {
             "default": 0,
+            "description": "How many times the job has been claimed. While the job is `claimed` this is the number of the current claim -\nthe fencing token for HeartbeatJob, CompleteJob and FailJob.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"

@@ -1475,6 +1475,8 @@ message Job {
   ValidationTask validation = 5;
   string result_json = 6;
   string error = 7;
+  // How many times the job has been claimed. While the job is `claimed` this is the number of the current claim -
+  // the fencing token for HeartbeatJob, CompleteJob and FailJob.
   uint32 attempts = 8;
   string claimed_by = 9;
   int64 claimed_until_ms = 10;
@@ -1517,6 +1519,11 @@ message HeartbeatJobRequest {
   string worker = 3;
   // The new lease (<= 0 = 120000; at most 3600000, larger values are lowered).
   int64 lease_ms = 4;
+  // The claim this request is for: the `attempts` of the Job that ClaimJob returned (every claim of a job, by any
+  // worker including the same one, has a larger number than the one before). If it is not the job's current claim the
+  // request is refused (`failed_precondition`: the claim was lost), so a worker whose lease expired and whose job
+  // was claimed again cannot act on the new claim. 0 = not given: only the worker's identity is checked, as before.
+  uint64 fencing_token = 5;
 }
 
 message CompleteJobRequest {
@@ -1530,6 +1537,8 @@ message CompleteJobRequest {
   Attestation attestation = 5;
   // The candidate no longer matched the job's tree id: no attestation.
   bool stale = 6;
+  // The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+  uint64 fencing_token = 7;
 }
 
 message FailJobRequest {
@@ -1539,6 +1548,8 @@ message FailJobRequest {
   string error = 4;
   // Retry after this many ms (0 = fail permanently).
   int64 retry_after_ms = 5;
+  // The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+  uint64 fencing_token = 6;
 }
 
 message GetJobRequest {

@@ -211,11 +211,10 @@ is done, verify releases through the attestations, not by rebuilding.
 
 The rehearsal runs everything but the writes. These have therefore **never run**:
 
-* The `:latest` tag on GHCR and the verification of the image attestation. (Push by digest and the registry-side
-  merge ran for real in the rc.1 run, see [Evidence](#evidence).)
-* `gh release create` with the assembled files, and the release page that users see.
-* `install.sh` and `gh attestation verify` against real release URLs (the rehearsal uses a `file://` base URL;
-  `releases/latest` redirect lookup is untested because no release exists).
+* The `:latest` tag on GHCR (a pre-release does not move it) and `releases/latest` lookup by `install.sh` (only
+  pre-releases exist). Push by digest, the registry-side merge, `gh release create` and `install.sh` against real
+  release URLs ran for real in the rc.2 run, see [Evidence](#evidence).
+* A person's `gh attestation verify` of the archives and images (the workflow verifies them in its run).
 * npm and PyPI trusted publishing (needs the one-time registry setup above), and any crates.io publish.
 * A Homebrew tap, a Scoop bucket, a Windows archive, musl/Alpine, 32-bit and FreeBSD builds.
 
@@ -227,28 +226,35 @@ GitHub's attestations; shell completions and man pages are not generated yet (th
 ## Evidence
 
 The first real run, `v0.2.0-rc.1` ([run 39299147314](https://github.com/Paffin/AgentGit/actions/runs/39299147314),
-commit `bd0442e`, tag pushed by the owner), **failed** in `assemble the release`, step *Release notes from the
-CHANGELOG*: `'0.2.0-rc.1' is not a version tag like v1.2.3`. The rehearsal passes `--dry-run`, which accepts a bare
+commit `bd0442e`), **failed** in `assemble the release`, step *Release notes from the CHANGELOG*:
+`'0.2.0-rc.1' is not a version tag like v1.2.3`. The rehearsal passes `--dry-run`, which accepts a bare
 version; a real run does not, and nothing had exercised that combination. Fixed in `202fbdd`: the notes step passes
 `v$VERSION`, and a test fails on a bare version in any `check_release.py` call in `release.yml`. `gh release create`
 also falls back to `upload --clobber` + `edit` when a release page already exists (the GitHub UI creates an empty one
-together with a tag, as happened for rc.1). `v0.2.0-rc.1` stays as it is: no assets, no notes. The fixed version is
-`0.2.0-rc.2`.
+together with a tag, as happened for rc.1). `v0.2.0-rc.1` stays as it is: no assets, no notes.
 
-What that real run did prove:
+The second real run, `v0.2.0-rc.2` ([run 39434938489](https://github.com/Paffin/AgentGit/actions/runs/39434938489),
+commit `0ad4753`), **succeeded in all 15 jobs** and published the pre-release
+[v0.2.0-rc.2](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): four archives, three SBOMs (`ag`,
+`ag-server`, `ag-worker`; none for `ag-mcp`), `SHA256SUMS`, `agentgit.rb`.
 
-| Stage | Result |
+What the published rc.2 proved (checked afterwards from outside the workflow, on 2026-10-20, with the downloaded files):
+
+| Check | Result |
 |---|---|
-| verify, release tooling tests, workspace tests, SBOMs | success |
-| four native builds, archive unpack, `--version` check, end-to-end smoke | success (linux x86_64/aarch64, macOS aarch64/x86_64) |
-| images amd64 + arm64, **push to GHCR by digest, registry-side merge** | success. The anonymous token flow works without login, and `ghcr.io/paffin/agentgit-server:0.2.0-rc.1` and `…/agentgit-cli:0.2.0-rc.1` are image indexes listing `linux/amd64` and `linux/arm64` (plus attestation entries): the packages are **public** |
-| checksums, Homebrew formula, attestations of archives and SBOMs created and verified inside the run | success (the steps before the failing one) |
-| release notes, `gh release create`, `install.sh` on three OSes against the release | **not reached** |
+| `sha256sum -c SHA256SUMS` on the downloaded files | all 7 listed files OK (`agentgit.rb` is not listed) |
+| SBOMs | valid CycloneDX 1.5 JSON, 305 / 333 / 209 components, root version `0.2.0-rc.2` |
+| linux x86_64 archive | `ag`, `ag-server`, `ag-worker` report `0.2.0-rc.2 (0ad475333ee2 …)`; `ag doctor` passes; the README quick start (`init`, `snapshot`, `propose`, `integrate`, `log`) works; `ag-server` `create-repo`/`grant`/`mint`/`serve`, `/healthz` 200, `/readyz` 200, `ag clone`, `ag push --title …`, `/metrics` work |
+| `scripts/install.sh --version 0.2.0-rc.2` against the real release URL | `--dry-run` installs nothing; the real run checks the checksum and installs four working binaries; also works piped from `raw.githubusercontent.com` |
+| GHCR, anonymous | `agentgit-server:0.2.0-rc.2` and `agentgit-cli:0.2.0-rc.2` are OCI indexes with linux/amd64 + linux/arm64 (+ attestation manifests) |
+| Attestations | the attestations API returns SLSA provenance v1 for the archives and for both image digests, naming `release.yml` at `refs/tags/v0.2.0-rc.2`; subject digests match the downloaded files |
+| `install.sh` in the run | success on Linux x86_64, Linux aarch64 and macOS, against the assembled release |
 
-Not verified for rc.1: the image attestation (`gh attestation verify oci://…` needs a logged-in `gh`, which the agent
-environment does not have), the images were never pulled and started from GHCR, and everything about published
-archives, `SHA256SUMS` and `install.sh --version` against real release URLs (none exist for rc.1). That is the
-checklist for rc.2.
+Not verified by that pass: `gh attestation verify` (the agent environment has no working `gh` login, so signatures
+and certificates were only inspected, not verified; the workflow verified them inside the run); the macOS and
+aarch64 archives were not run outside CI; the images were not pulled or started from GHCR; the Homebrew formula
+was not installed; `install.sh` without `--version` cannot work while only pre-releases exist (`releases/latest`
+skips them). Details: `dev/handoff/release-rc2.md`.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow
 runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab with their uploaded artifacts.

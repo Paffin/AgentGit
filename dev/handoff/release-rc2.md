@@ -1,4 +1,6 @@
-# Handoff: first release candidate `v0.2.0-rc.1`
+# Handoff: release candidates `v0.2.0-rc.1` (failed) and `v0.2.0-rc.2` (published, verified)
+
+Current state: **`v0.2.0-rc.2` is published and verified**, see the last section. The rest is the history of rc.1.
 
 State: **prepared and green on `main`, tag NOT pushed.** `git push origin v0.2.0-rc.1` fails through the agent proxy
 (`HTTP 403`, "unexpected disconnect while reading sideband packet", twice). Nothing was published; no tag exists on the
@@ -75,3 +77,45 @@ Run [39299147314](https://github.com/Paffin/AgentGit/actions/runs/39299147314) o
 3. `git tag -a v0.2.0-rc.2 -m "AgentGit 0.2.0-rc.2" <that commit> && git push origin v0.2.0-rc.2`.
 4. Ask for the verification pass (archives, `SHA256SUMS`, `install.sh --version 0.2.0-rc.2`, `gh attestation verify`
    with a logged-in `gh`, image attestation, SBOM parse). GHCR visibility needs no action.
+
+## Result: `v0.2.0-rc.2` published and verified (2026-10-20)
+
+Run [39434938489](https://github.com/Paffin/AgentGit/actions/runs/39434938489) on tag `v0.2.0-rc.2`
+(commit `0ad475333ee2`): **all 15 jobs success** (verify, tooling tests, tests, SBOMs, 4 binaries, 2 images, manifest
+merge, assemble, `install.sh` on ubuntu x86_64, ubuntu arm64, macOS). The release
+<https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2> is a pre-release with notes cut from the CHANGELOG and
+9 assets: 4 archives (linux x86_64/aarch64, macOS aarch64/x86_64), 3 SBOMs (`ag`, `ag-server`, `ag-worker`),
+`SHA256SUMS`, `agentgit.rb`. Verified from this environment, with the published files only (downloaded to `/dev/shm`):
+
+* `sha256sum -c SHA256SUMS`: all 7 listed files OK (4 archives, 3 SBOMs). `agentgit.rb` is not in `SHA256SUMS`.
+* SBOMs: valid JSON, `bomFormat` CycloneDX, `specVersion` 1.5, 305 / 333 / 209 components for `ag` / `ag-server` /
+  `ag-worker`, root component version `0.2.0-rc.2`. There is no SBOM for `ag-mcp` (the workflow builds three).
+* Linux x86_64 archive: contents `ag ag-server ag-worker ag-mcp LICENSE NOTICE README.md`. `ag`, `ag-server`,
+  `ag-worker` report `0.2.0-rc.2 (0ad475333ee2 2026-10-19)` (the tag's commit), `ag-mcp` `0.2.0-rc.2`.
+  `ag doctor`: 4 ok, 1 skip (not in a repository), exit 0.
+* README quick start with the released `ag`: `init`, `snapshot`, `propose`, `integrate` (fast-forward), `log`: all work.
+* Server flow with the released `ag-server`: `admin create-repo/grant/mint`, `serve`; `/healthz` 200 `ok`,
+  `/readyz` 200 `ready`; `ag clone`, `snapshot`, `ag push --title …` opened a proposal; `/metrics` answers; the Web UI
+  is embedded and served at `/`. Note the README's server snippet says `ag push` but `--title` is required.
+* `scripts/install.sh --version 0.2.0-rc.2 --prefix <scratch>` against the real release URL: `--dry-run` prints the
+  right URL and installs nothing; the real run verifies the checksum, installs four binaries that run. Also works
+  piped from `raw.githubusercontent.com/…/main/scripts/install.sh`. Without `--version` it fails with "no published
+  release found" because `releases/latest` skips pre-releases (expected, documented).
+* GHCR, anonymous token + manifest GET: `agentgit-server:0.2.0-rc.2` (`sha256:ac40b0ca5a5e…`) and
+  `agentgit-cli:0.2.0-rc.2` (`sha256:94b055a70989…`) are OCI indexes with linux/amd64, linux/arm64 and two
+  attestation manifests each. No image was pulled or started.
+* Attestations: `gh` is not authenticated here (its token is rejected), so `gh attestation verify` could not run. The
+  unauthenticated attestations API returns one SLSA provenance v1 statement for the archives (subjects include
+  `SHA256SUMS` and the archives, whose digests match), and one for each image digest; each names workflow
+  `.github/workflows/release.yml` at `refs/tags/v0.2.0-rc.2` in `Paffin/AgentGit` and has a transparency-log entry.
+  **Signatures and certificates were not verified here.** The workflow itself verified every one in its run.
+
+Not verified: the macOS and aarch64 archives were not run by me (the `install.sh` CI jobs did that); Homebrew
+formula not installed; `:latest` does not exist for a pre-release; `gh attestation verify` by a person; pulling and
+starting the images from GHCR.
+
+### Owner actions
+
+None are required for rc.2. Optional: delete the empty `v0.2.0-rc.1` release page; run
+`gh attestation verify agentgit-0.2.0-rc.2-<target>.tar.gz --repo Paffin/AgentGit` and
+`gh attestation verify oci://ghcr.io/paffin/agentgit-server:0.2.0-rc.2 --repo Paffin/AgentGit` with a logged-in `gh`.

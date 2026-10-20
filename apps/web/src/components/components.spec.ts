@@ -162,6 +162,39 @@ describe('ProposalCard', () => {
     expect(w.find('[data-state="mergeable"]').attributes('data-tone')).toBe('failed')
   })
 
+  it('words a directory rename conflict even when the server sent no message', () => {
+    const p = proposal()
+    const prep = {
+      data: {
+        proposal: p.id,
+        strategy: '',
+        candidate_tree: '',
+        conflicts: [{ path: 'lib/new.ts', kind: 'directory_rename_collision', message: '' }],
+        base: 'b',
+        changed_files: [],
+        problem: '',
+        algorithm: '',
+        policy_version: 1,
+        blockers: [],
+        validations: [],
+        jobs: [],
+      },
+    }
+    const w = mount(ProposalCard, {
+      props: {
+        repo: 'a/b',
+        proposal: p,
+        prep,
+        states: deriveFourStates({ proposal: p, prep: prep.data }),
+      },
+      global,
+    })
+    expect(w.text()).toContain('lib/new.ts')
+    expect(w.text()).toContain(
+      'directory rename: a moved file lands on a path that is already taken',
+    )
+  })
+
   it('treats title, author and conflicts from the server as text only', () => {
     const p = proposal({ title: EVIL, author: `user:${EVIL}` })
     const prep = {

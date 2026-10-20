@@ -10,6 +10,7 @@ import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Dialog from '@/ui/Dialog.vue'
 import TextField from '@/ui/TextField.vue'
+import { conflictLabel } from '@/lib/conflict-label'
 
 const props = defineProps<{
   modelValue: boolean
@@ -172,7 +173,7 @@ const finished = computed(() => status.value === 'integrated')
           </p>
           <ul class="conf">
             <li v-for="c in outcome.conflicts" :key="c.path" class="mono">
-              {{ c.path }} <span class="faint">({{ c.message || c.kind.replace('_', ' ') }})</span>
+              {{ c.path }} <span class="faint">({{ conflictLabel(c) }})</span>
             </li>
           </ul>
         </Alert>

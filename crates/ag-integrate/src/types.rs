@@ -22,7 +22,8 @@ pub struct ConflictInfo {
     /// The path.
     pub path: String,
     /// The kind of conflict as a stable code (`content`, `both_added`, `delete_modify`, `binary`, `type_change`,
-    /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`): see `ag_merge::ConflictKind::code`.
+    /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`,
+    /// `directory_rename_ambiguous`, `directory_rename_collision`): see `ag_merge::ConflictKind::code`.
     pub kind: String,
     /// The same, in words for a person (`content conflict (2 region(s))`). Outcomes stored before this field
     /// existed have none.

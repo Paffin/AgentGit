@@ -1691,7 +1691,9 @@ export interface components {
         Conflict: {
             /**
              * @description A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
-             *     "too_large", "file_directory", "rename_rename" or "rename_delete". Clients may switch on it;
+             *     "too_large", "file_directory", "rename_rename", "rename_delete", "directory_rename_ambiguous"
+             *     or "directory_rename_collision" (the last two: ag-merge/3 found a directory move it cannot follow
+             *     without guessing). The set is open: tolerate a code you do not know. Clients may switch on it;
              *     `message` is for people.
              * @default
              */

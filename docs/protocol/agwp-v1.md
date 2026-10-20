@@ -120,6 +120,12 @@ sync that cannot merge) lists `Conflict`s: each has a `path`, a stable machine-r
 `rename_delete`, `directory_rename_ambiguous`, `directory_rename_collision`; new kinds may be added, so a client must tolerate one it does not know — and a `message` for
 people (region counts, which side deleted); a client branches on `kind` and shows `message`.
 
+The two `directory_rename_*` kinds come from `ag-merge/3` ([ADR-0013](../adr/0013-directory-renames.md)): one side
+moved a directory and the other changed files under its old name in a way the merge cannot follow without guessing.
+A merge that *did* follow a move is not a conflict; it is reported as a typed note (`directory_rename`) by
+`ag preview` and in the `Directory-Rename:` lines of the merge changeset message. Notes are not part of AGWP v1
+messages yet (`Preparation` carries conflicts only), so the Web UI shows the conflicts and not the notes.
+
 ## Authentication
 
 Three kinds of bearer credentials; all end up as an **identity** (`user:alice`, `agent:refactor-bot`,

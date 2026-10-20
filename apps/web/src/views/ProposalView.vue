@@ -32,6 +32,7 @@ import RelativeTime from '@/ui/RelativeTime.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import Tabs from '@/ui/Tabs.vue'
 import type { TabItem } from '@/ui/types'
+import { conflictLabel, isDirectoryRenameConflict } from '@/lib/conflict-label'
 
 const props = defineProps<{ id: string }>()
 const { repo } = useRepoName()
@@ -269,9 +270,17 @@ function changed() {
             <ul role="list">
               <li v-for="c in prepData.conflicts" :key="c.path">
                 <code class="mono">{{ c.path }}</code>
-                <Badge size="sm" tone="bad">{{ c.message || c.kind.replace('_', ' ') }}</Badge>
+                <Badge size="sm" tone="bad">{{ conflictLabel(c) }}</Badge>
               </li>
             </ul>
+            <p
+              v-if="prepData.conflicts.some(isDirectoryRenameConflict)"
+              class="faint"
+              data-testid="dir-rename-hint"
+            >
+              One side moved a whole directory while the other changed files under its old name; the
+              merge follows such a move only when it is unambiguous and nothing is in the way.
+            </p>
             <p class="faint">
               Nothing guessed: resolve these in the author’s workspace (sync with resolutions) and
               update the proposal.

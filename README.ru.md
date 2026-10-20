@@ -99,7 +99,7 @@ ag-server admin --data-dir ./ag-data create-repo acme/web
 ag-server admin --data-dir ./ag-data grant --subject user:alice --repo 'acme/*' --role admin
 export AG_TOKEN=$(ag-server admin --data-dir ./ag-data mint --subject user:alice --ttl 86400 | tail -n 1)
 ag-server serve --data-dir ./ag-data &                      # 127.0.0.1:8080, gRPC + HTTP/JSON
-ag clone http://127.0.0.1:8080/acme/web web && cd web      # дальше правьте, `ag snapshot`, `ag push`
+ag clone http://127.0.0.1:8080/acme/web web && cd web      # дальше правьте, `ag snapshot`, `ag push -t "my change"`
 ```
 
 Сервер говорит на одном протоколе, [AGWP v1](docs/protocol/agwp-v1.md), по gRPC и HTTP/JSON на одном порту и отдаёт на

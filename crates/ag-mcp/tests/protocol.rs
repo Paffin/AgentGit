@@ -247,7 +247,7 @@ fn closing_stdin_ends_the_process_cleanly() {
     assert!(status.success(), "{status:?}");
     assert!(started.elapsed() < Duration::from_secs(5));
     // The banner and nothing else went to stderr; stdout carried only protocol messages (the harness parses every line).
-    assert!(m.stderr_text().contains("serving MCP over stdio"));
+    assert!(m.stderr_with("serving MCP over stdio").contains("serving MCP over stdio"));
 }
 
 #[test]

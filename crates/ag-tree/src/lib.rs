@@ -129,15 +129,6 @@ impl Tree {
         self.entries.len()
     }
 
-    /// An estimate of the memory this tree holds, in bytes: per entry the path's text and handle, the entry itself
-    /// and the map's per-entry share (three machine words of node bookkeeping). Close enough to size a cache by; it
-    /// is not an allocator measurement.
-    pub fn approx_bytes(&self) -> usize {
-        let per_entry =
-            std::mem::size_of::<RepoPath>() + std::mem::size_of::<Entry>() + 3 * std::mem::size_of::<usize>();
-        std::mem::size_of::<Self>() + self.entries.keys().map(|p| per_entry + p.as_str().len()).sum::<usize>()
-    }
-
     /// True if there are no entries.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()

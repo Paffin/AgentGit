@@ -661,7 +661,7 @@ fn cached_trees_are_the_trees_by_definition_at_every_point_of_a_history() {
 fn a_budget_too_small_for_the_history_evicts_and_stays_correct() {
     let (probe, _) = fx_cached(0);
     let heads = eventful_history(&probe);
-    let one = probe.repo.tree_of(heads.last().unwrap()).unwrap().approx_bytes();
+    let one = ag_storage::approx_tree_bytes(&probe.repo.tree_of(heads.last().unwrap()).unwrap());
     let (f, cache) = fx_cached(one * 3);
     let heads = eventful_history(&f);
     for id in heads.iter().chain(heads.iter().rev()) {

@@ -38,4 +38,4 @@ pub use meta::Meta;
 pub use object_store::{Durability, FsObjectStore, MemoryObjectStore, ObjectInfo, ObjectStatus, ObjectStore};
 #[cfg(feature = "s3")]
 pub use s3::{Credentials, S3Config, S3ObjectStore};
-pub use tree_cache::{DecodedTrees, TreeCacheStats, TreeScope};
+pub use tree_cache::{DecodedTrees, TreeCacheStats, TreeScope, approx_tree_bytes};

@@ -159,7 +159,7 @@ memory:
   empties a repository's entries;
 * `Repository::tree_of` and the derive pass look in memory first, then in the derived-tree table, and remember what
   they find or compute (`LayeredTrees` also serves as the starting point of an uncached chain's replay);
-* the size of a tree is an estimate (`Tree::approx_bytes`: path text and handle, entry, map overhead). Checked once
+* the size of a tree is an estimate (`approx_tree_bytes`: path text and handle, entry, map overhead). Checked once
   against the resident memory of ten clones of a 100 000-file tree: 9.79 MB estimated, 9.20 MB measured (ratio
   0.94). The process's peak resident memory exceeds the budget by the working set (trees being built, clones handed
   to callers).

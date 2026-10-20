@@ -12,7 +12,7 @@
 //!   other scopes, so a repository can never be answered with a tree that belongs to another one).
 //! * **Least recently used out first.** An insertion that does not fit evicts the coldest entries until it does;
 //!   a tree larger than the whole budget is not cached at all (and is counted as `rejected`).
-//! * **The size is an estimate** ([`Tree::approx_bytes`]), not an allocator measurement; the real footprint is
+//! * **The size is an estimate** ([`approx_tree_bytes`]), not an allocator measurement; the real footprint is
 //!   within a small factor of it.
 //! * Hits return a clone of the tree (`Tree` owns its map); cloning is about 7 ms at 100 000 files against about
 //!   105 ms to decode and verify.
@@ -41,6 +41,16 @@ pub struct TreeCacheStats {
     pub entries: u64,
     /// The budget, in bytes.
     pub budget: u64,
+}
+
+/// An estimate of the memory a tree holds, in bytes: per entry the path's text and handle, the entry itself and
+/// the map's per-entry share (three machine words of node bookkeeping). Close enough to size a cache by; it is not an
+/// allocator measurement.
+pub fn approx_tree_bytes(tree: &Tree) -> usize {
+    let per_entry = std::mem::size_of::<ag_types::RepoPath>()
+        + std::mem::size_of::<ag_tree::Entry>()
+        + 3 * std::mem::size_of::<usize>();
+    std::mem::size_of::<Tree>() + tree.iter().map(|(path, _)| per_entry + path.as_str().len()).sum::<usize>()
 }
 
 type Key = (u64, ChangesetId);
@@ -141,7 +151,7 @@ impl DecodedTrees {
     }
 
     fn put(&self, key: Key, tree: Arc<Tree>) {
-        let bytes = tree.approx_bytes();
+        let bytes = approx_tree_bytes(&tree);
         if self.budget == 0 {
             return;
         }
@@ -251,12 +261,12 @@ mod tests {
         assert_eq!(scope.get(&cid(1)).as_ref(), Some(&t), "the very tree that was stored");
         let s = cache.stats();
         assert_eq!((s.hits, s.misses, s.entries), (1, 1, 1));
-        assert_eq!(s.bytes, t.approx_bytes() as u64);
+        assert_eq!(s.bytes, approx_tree_bytes(&t) as u64);
     }
 
     #[test]
     fn the_coldest_trees_go_first_and_the_budget_holds() {
-        let one = tree(40, "x").approx_bytes();
+        let one = approx_tree_bytes(&tree(40, "x"));
         let cache = DecodedTrees::new(one * 3 + one / 2); // room for three
         let scope = cache.scope("r");
         for n in 1..=3 {
@@ -314,12 +324,12 @@ mod tests {
         for _ in 0..5 {
             scope.put(&cid(1), &t);
         }
-        assert_eq!((cache.stats().entries, cache.stats().bytes), (1, t.approx_bytes() as u64));
+        assert_eq!((cache.stats().entries, cache.stats().bytes), (1, approx_tree_bytes(&t) as u64));
     }
 
     #[test]
     fn concurrent_use_keeps_the_accounting_exact() {
-        let one = tree(20, "z").approx_bytes();
+        let one = approx_tree_bytes(&tree(20, "z"));
         let cache = DecodedTrees::new(one * 8);
         std::thread::scope(|s| {
             for t in 0..4u8 {

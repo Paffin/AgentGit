@@ -138,8 +138,11 @@ impl Repository {
             "head": prop.head,
             "tokens": req.fencing_tokens,
         });
-        let (intent, _) = self.meta.write(|tx| {
-            tx.intent_create(&NewIntent {
+        // The record of a new operation whose head is already published is written in the state `ready`: the two
+        // steps (`prepared`, then `ready`) were two durable commits for what is one fact, and no crash window
+        // between them has a different recovery than the one after them.
+        let (intent, created) = self.meta.write(|tx| {
+            let (intent, created) = tx.intent_create(&NewIntent {
                 operation_id: &op,
                 idempotency_key: &key,
                 request_hash: &request_hash,
@@ -147,8 +150,22 @@ impl Repository {
                 actor: req.actor.as_str(),
                 stream: Some(&prop.stream),
                 payload: &payload,
-            })
+            })?;
+            if created && tx.is_ready(&prop.head)? {
+                let ready = tx.intent_transition(
+                    &intent.operation_id,
+                    &[IntentState::Prepared],
+                    IntentState::Ready,
+                    None,
+                    None,
+                )?;
+                return Ok((ready, created));
+            }
+            Ok((intent, created))
         })?;
+        if created && intent.state == IntentState::Ready {
+            self.failpoints.hit("integrate.after_ready")?;
+        }
         self.advance_integrate(&intent.operation_id, &req.actor, Some(&req.fencing_tokens))
     }
 
@@ -213,16 +230,24 @@ impl Repository {
         tokens: Option<&[u64]>,
     ) -> Result<IntegrationResult> {
         if let Some(t) = tokens {
-            self.meta.write(|tx| {
-                if let Some(i) = tx.intent(op)?
-                    && !i.state.is_terminal()
-                {
-                    let mut p = i.payload.clone();
-                    p["tokens"] = json!(t);
-                    tx.intent_set_payload(op, &p)?;
-                }
-                Ok(())
-            })?;
+            // Only a change is written: a new operation already carries these tokens in its payload.
+            let wanted = json!(t);
+            let current = self.meta.read(|tx| tx.intent(op))?;
+            if let Some(i) = current
+                && !i.state.is_terminal()
+                && i.payload["tokens"] != wanted
+            {
+                self.meta.write(|tx| {
+                    if let Some(i) = tx.intent(op)?
+                        && !i.state.is_terminal()
+                    {
+                        let mut p = i.payload.clone();
+                        p["tokens"] = wanted.clone();
+                        tx.intent_set_payload(op, &p)?;
+                    }
+                    Ok(())
+                })?;
+            }
         }
         for _ in 0..MAX_CAS_ATTEMPTS {
             let intent =

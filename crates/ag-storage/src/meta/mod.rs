@@ -214,6 +214,8 @@ pub struct Meta {
     backend: Backend,
     clock: Arc<dyn Clock>,
     limits: Limits,
+    /// Write transactions committed through this handle (see [`Meta::committed_writes`]).
+    writes: std::sync::atomic::AtomicU64,
 }
 
 fn migrate_sqlite(conn: &mut Connection, now: Timestamp) -> Result<(), MetaError> {
@@ -282,7 +284,7 @@ impl Meta {
         opts: &PgOptions,
     ) -> Result<Self, MetaError> {
         let backend = pg::PgBackend::open(url, schema, opts, clock.now())?;
-        Ok(Self { backend: Backend::Postgres(Box::new(backend)), clock, limits })
+        Ok(Self { backend: Backend::Postgres(Box::new(backend)), clock, limits, writes: Default::default() })
     }
 
     fn init_sqlite(mut conn: Connection, clock: Arc<dyn Clock>, limits: Limits) -> Result<Self, MetaError> {
@@ -293,7 +295,7 @@ impl Meta {
         conn.pragma_update(None, "trusted_schema", "OFF")?;
         conn.set_prepared_statement_cache_capacity(128);
         migrate_sqlite(&mut conn, clock.now())?;
-        Ok(Self { backend: Backend::Sqlite(Mutex::new(conn)), clock, limits })
+        Ok(Self { backend: Backend::Sqlite(Mutex::new(conn)), clock, limits, writes: Default::default() })
     }
 
     /// The database engine behind this handle.
@@ -376,7 +378,7 @@ impl Meta {
     /// Write transactions of one repository never overlap, on any backend; the
     /// closure may therefore read a fact and act on it without it changing.
     pub fn write<T>(&self, f: impl FnOnce(&Tx<'_>) -> Result<T, MetaError>) -> Result<T, MetaError> {
-        match &self.backend {
+        let out = match &self.backend {
             Backend::Sqlite(m) => {
                 let mut guard = Self::sqlite(m);
                 let tx = guard.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -385,10 +387,19 @@ impl Meta {
                     f(&Tx::new(&conn, self.clock.now(), &self.limits))?
                 };
                 tx.commit()?;
-                Ok(out)
+                out
             }
-            Backend::Postgres(p) => p.run(pg::TxKind::Write, &*self.clock, &self.limits, f),
-        }
+            Backend::Postgres(p) => p.run(pg::TxKind::Write, &*self.clock, &self.limits, f)?,
+        };
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(out)
+    }
+
+    /// How many write transactions this handle has committed since it was opened. Each is one durable commit
+    /// (one fsync with SQLite's `synchronous=FULL`, one WAL flush on PostgreSQL), so the difference across an
+    /// operation is the number of flushes it cost; the engine's tests pin it for the operations that were batched.
+    pub fn committed_writes(&self) -> u64 {
+        self.writes.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Number of open PostgreSQL connections (0 for SQLite). Diagnostics and tests.

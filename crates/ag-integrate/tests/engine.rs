@@ -539,3 +539,66 @@ fn stored_outcomes_without_a_message_still_read() {
         serde_json::from_str(r#"{"path":"f.txt","kind":"content conflict (1 region(s))"}"#).unwrap();
     assert_eq!((old.path.as_str(), old.message.as_str()), ("f.txt", ""));
 }
+
+/// Every committed write transaction is a durable flush, so the cost of an integration is the number of them. The
+/// operation record and its move to `ready` are one commit, the tokens are not rewritten when they did not change,
+/// and the post-commit derive pass acknowledges its events, caches the new head's tree and prunes in one commit:
+/// a fast-forward costs the record, the stream update and that derive commit.
+#[test]
+fn an_integration_is_a_few_durable_commits() {
+    let f = fx();
+    let c = f.snap(None, &[("a", "1")], "user:alice");
+    let p = f.propose(c, "first", "user:alice");
+    let before = f.repo.meta().committed_writes();
+    let r = f.integrate(&p, "user:alice");
+    let ff = f.repo.meta().committed_writes() - before;
+    assert!(matches!(r.outcome, Outcome::Integrated { strategy: Strategy::FastForward, .. }), "{:?}", r.outcome);
+    assert_eq!(
+        ff, 3,
+        "operation record, stream update, derive pass (it was 7: record, tokens, ready, update, tree, ack, prune)"
+    );
+
+    // A three-way merge: two proposals on the same base.
+    let base = f.head().unwrap();
+    let left = f.snap(Some(base), &[("a", "1"), ("l", "1")], "user:alice");
+    let right = f.snap(Some(base), &[("a", "1"), ("r", "1")], "user:bob");
+    let (pl, pr) = (f.propose(left, "left", "user:alice"), f.propose(right, "right", "user:bob"));
+    f.integrate(&pl, "user:alice");
+    let before = f.repo.meta().committed_writes();
+    let r = f.integrate(&pr, "user:bob");
+    let merge = f.repo.meta().committed_writes() - before;
+    assert!(matches!(r.outcome, Outcome::Integrated { strategy: Strategy::Merge, .. }), "{:?}", r.outcome);
+    assert_eq!(merge, 3, "the merge changeset and its events ride in the stream-update and derive commits (it was 8)");
+}
+
+/// An operation recorded by an earlier build is still in the state `prepared` (it wrote `prepared` and `ready` as two
+/// commits): recovery must carry it through, as it carries one that stopped between the two.
+#[test]
+fn an_operation_left_prepared_by_an_earlier_build_is_still_recovered() {
+    use ag_storage::meta::NewIntent;
+    let f = fx();
+    let c = f.snap(None, &[("a", "1")], "user:alice");
+    let p = f.propose(c, "t", "user:alice");
+    let payload = serde_json::json!({"proposal": p, "stream": "main", "head": c, "tokens": []});
+    f.repo
+        .meta()
+        .write(|tx| {
+            tx.intent_create(&NewIntent {
+                operation_id: "op_old",
+                idempotency_key: "old-key",
+                request_hash: "hash-of-the-old-request",
+                kind: "integrate",
+                actor: "user:alice",
+                stream: Some("main"),
+                payload: &payload,
+            })
+            .map(|_| ())
+        })
+        .unwrap();
+    assert_eq!(f.repo.operation("op_old").unwrap().state, IntentState::Prepared);
+    let rep = f.repo.recover(3_600_000).unwrap();
+    assert!(rep.errors.is_empty(), "{rep:?}");
+    assert_eq!(f.repo.operation("op_old").unwrap().state, IntentState::Integrated);
+    assert_eq!(f.head(), Some(c));
+    assert_eq!(f.version(), 1);
+}

@@ -208,6 +208,31 @@ pub struct ProposalFilter<'a> {
     pub author: Option<&'a str>,
 }
 
+/// The `WHERE … ORDER BY … LIMIT` of [`Tx::proposals_page`] and its arguments (separate so that a test can ask the
+/// database how it would run exactly this statement).
+pub(crate) fn proposals_page_clause<'a>(
+    filter: &ProposalFilter<'a>,
+    after: Option<(i64, &'a str)>,
+    limit: usize,
+) -> (String, Vec<Param<'a>>) {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut args: Vec<Param<'_>> = Vec::new();
+    for (column, value) in [("state", filter.state), ("stream", filter.stream), ("author", filter.author)] {
+        if let Some(v) = value {
+            args.push(Param::from(v));
+            clauses.push(format!("{column} = ?{}", args.len()));
+        }
+    }
+    if let Some((created, id)) = after {
+        args.push(Param::from(created));
+        args.push(Param::from(id));
+        clauses.push(format!("(created_at, id) < (?{}, ?{})", args.len() - 1, args.len()));
+    }
+    args.push(Param::from(limit as i64));
+    let where_ = if clauses.is_empty() { "1 = 1".to_string() } else { clauses.join(" AND ") };
+    (format!("{where_} ORDER BY created_at DESC, id DESC LIMIT ?{}", args.len()), args)
+}
+
 impl Tx<'_> {
     // ---- proposals -------------------------------------------------------
 
@@ -253,22 +278,8 @@ impl Tx<'_> {
         after: Option<(i64, &str)>,
         limit: usize,
     ) -> Result<Vec<ProposalRow>, MetaError> {
-        let mut clauses: Vec<String> = Vec::new();
-        let mut args: Vec<Param<'_>> = Vec::new();
-        for (column, value) in [("state", filter.state), ("stream", filter.stream), ("author", filter.author)] {
-            if let Some(v) = value {
-                args.push(Param::from(v));
-                clauses.push(format!("{column} = ?{}", args.len()));
-            }
-        }
-        if let Some((created, id)) = after {
-            args.push(Param::from(created));
-            args.push(Param::from(id));
-            clauses.push(format!("(created_at, id) < (?{}, ?{})", args.len() - 1, args.len()));
-        }
-        args.push(Param::from(limit as i64));
-        let where_ = if clauses.is_empty() { "1 = 1".to_string() } else { clauses.join(" AND ") };
-        self.proposals_where(&format!("{where_} ORDER BY created_at DESC, id DESC LIMIT ?{}", args.len()), &args)
+        let (clause, args) = proposals_page_clause(filter, after, limit);
+        self.proposals_where(&clause, &args)
     }
 
     /// Every open proposal of `stream`, newest first. No cap: a prediction that silently ignored the oldest

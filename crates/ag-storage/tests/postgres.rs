@@ -57,7 +57,7 @@ fn opening_twice_at_once_migrates_exactly_once() {
             .collect();
         let metas: Vec<Meta> = handles.into_iter().map(|h| h.join().unwrap()).collect();
         let m = &metas[0];
-        assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+        assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
         let tables = m
             .read(|tx| {
                 tx.raw_query(
@@ -85,6 +85,10 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     let m = open(&url, schema.name());
     m.write(|tx| {
         tx.raw_execute("DROP TABLE jobs", &[])?;
+        tx.raw_execute(
+            "DROP INDEX proposals_by_created, proposals_by_state_created, proposals_by_stream_created",
+            &[],
+        )?;
         tx.raw_execute("UPDATE meta SET value = '1' WHERE key = 'schema'", &[])
     })
     .unwrap();
@@ -92,14 +96,14 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     drop(m);
 
     let m = open(&url, schema.name());
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "data survives the migration");
     let job = m.write(|tx| tx.job_enqueue("k", &serde_json::json!({}), None, Timestamp::from_millis(0))).unwrap();
     assert_eq!(job.attempts, 0, "the jobs table exists again");
 
     m.write(|tx| tx.raw_execute("UPDATE meta SET value = '99' WHERE key = 'schema'", &[])).unwrap();
     let err = Meta::open_postgres(&url, schema.name(), Arc::new(SystemClock), Limits::default()).err().unwrap();
-    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 2 }), "{err}");
+    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 3 }), "{err}");
 }
 
 #[test]
@@ -316,7 +320,7 @@ fn idle_pooled_connections_that_died_are_replaced_transparently() {
         .unwrap();
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(m.write(|tx| tx.next_counter("c")).unwrap(), 4, "the first use after the kill just works");
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
 }
 
 #[test]

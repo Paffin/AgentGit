@@ -154,6 +154,7 @@ nav:
           - "0008 MCP server": adr/0008-mcp-server.md
           - "0009 Identity names": adr/0009-identity-names-and-principals.md
           - "0010 Run-bound credentials": adr/0010-run-bound-credentials.md
+          - "0011 Paging indexes and leases": adr/0011-proposal-paging-indexes-and-background-leases.md
   - Protocol:
       - Overview: protocol/README.md
       - AGWP v1: protocol/agwp-v1.md

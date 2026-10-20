@@ -19,6 +19,8 @@ use crate::error::{ApiError, ApiResult};
 
 /// Records one sweep deletes per repository (a bound on the length of its write transaction).
 const SWEEP_BATCH: usize = 1000;
+/// Marks a repository whose idempotency records written before they carried a time have been dated.
+const IDEM_BACKFILL_DONE: &str = "backfill:idem-times";
 
 /// An agent principal may only act for itself; humans and services (an
 /// orchestrator, an operator) may act for any agent.
@@ -125,6 +127,15 @@ impl App {
                 let handle = app.repos.handle(&repo)?;
                 let bound = padded_ms(idem.now_ms.saturating_sub(idem.ttl_ms));
                 Ok(handle.meta().write(|tx| {
+                    // Records written before they carried a time can never be judged; once per repository they get
+                    // the time of this first sweep, so they live one more lifetime and are then removed.
+                    if tx.meta_get(IDEM_BACKFILL_DONE)?.is_none() {
+                        let n = tx.meta_fill_companions("idem:", IDEM_TIME_PREFIX, &padded_ms(idem.now_ms))?;
+                        tx.meta_set(IDEM_BACKFILL_DONE, "1")?;
+                        if n > 0 {
+                            tracing::info!(repo = %repo, records = n, "idempotency sweep: dated records that had no time");
+                        }
+                    }
                     let stale = tx.meta_keys_with_value_below(IDEM_TIME_PREFIX, &bound, SWEEP_BATCH)?;
                     for time_key in &stale {
                         tx.meta_delete(time_key)?;

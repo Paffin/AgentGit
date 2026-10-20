@@ -64,3 +64,46 @@ async fn a_lifetime_of_zero_keeps_records_forever() {
     assert_eq!(srv.app.sweep_idempotency_records().await, 0);
     srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn records_written_before_they_carried_a_time_are_dated_once_and_then_expire() {
+    let srv = TestServer::start_with(|cfg| {
+        cfg.repos.idempotency_ttl_secs = 2;
+        cfg.repos.idempotency_sweep_interval_secs = 0;
+    })
+    .await;
+    let admin = srv.admin();
+    assert_eq!(admin.post("/v1/repos", json!({"name": "acme/web"})).await.status, 200);
+    let make = || admin.call("POST", "/v1/repos/acme/web/tasks", Some(json!({"title": "one task"})), &KEY);
+    let first = make().await;
+    // Make it a record of an older build: the answer is there, its time is not.
+    let repo = srv.app.repos.handle("acme/web").unwrap();
+    let times = |repo: &ag_integrate::Repository| {
+        repo.meta().read(|tx| tx.meta_keys_with_value_below("idemt:", "~", 100)).unwrap()
+    };
+    repo.meta()
+        .write(|tx| {
+            for k in tx.meta_keys_with_value_below("idemt:", "~", 100)? {
+                tx.meta_delete(&k)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    assert!(times(&repo).is_empty(), "the record has no time: {:?}", times(&repo));
+    tokio::time::sleep(Duration::from_millis(2300)).await;
+    assert_eq!(make().await.json["id"], first.json["id"], "without a time it never expires by itself");
+
+    // The first sweep dates it (and removes nothing); the dated record then lives one lifetime and expires.
+    assert_eq!(srv.app.sweep_idempotency_records().await, 0);
+    assert_eq!(times(&repo).len(), 1, "the record got a time");
+    assert_eq!(make().await.json["id"], first.json["id"], "still replayed inside the new lifetime");
+    tokio::time::sleep(Duration::from_millis(2300)).await;
+    assert_eq!(srv.app.sweep_idempotency_records().await, 1, "now it is past its lifetime");
+    assert_ne!(make().await.json["id"], first.json["id"], "and the key is free");
+
+    // One time only: a record without a time written after the backfill is not dated again.
+    repo.meta().write(|tx| tx.meta_set("idem:tasks:late", "h\n{}")).unwrap();
+    assert_eq!(srv.app.sweep_idempotency_records().await, 0);
+    assert!(repo.meta().read(|tx| tx.meta_get("idemt:tasks:late")).unwrap().is_none(), "the backfill ran once");
+    srv.stop().await;
+}

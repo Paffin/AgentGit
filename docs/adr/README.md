@@ -18,3 +18,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0008](0008-mcp-server.md) | `ag-mcp`: the remote workflow as a Model Context Protocol server |
 | [0009](0009-identity-names-and-principals.md) | An identity's name cannot start with the run separator |
 | [0010](0010-run-bound-credentials.md) | Credentials bound to a run, a delegator role, operator calls on tasks and runs |
+| [0011](0011-proposal-paging-indexes-and-background-leases.md) | Proposal paging indexes (metadata schema 3), dated idempotency records, a lease for background work |

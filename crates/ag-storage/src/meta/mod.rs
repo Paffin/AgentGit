@@ -471,6 +471,22 @@ impl Tx<'_> {
             .collect()
     }
 
+    /// For every key that starts with `prefix` and has no counterpart `companion_prefix` + the rest of the key, writes
+    /// the counterpart with `value`; returns how many it wrote. One statement, so it is atomic and cheap to repeat.
+    /// (The backfill of idempotency records that were written before they carried a time.)
+    pub fn meta_fill_companions(&self, prefix: &str, companion_prefix: &str, value: &str) -> Result<u64, MetaError> {
+        let like = format!("{}%", escape_like(prefix));
+        let from = prefix.chars().count() as i64 + 1;
+        self.conn.execute(
+            "INSERT INTO meta (key, value)
+             SELECT CAST(?2 AS TEXT) || substr(m.key, CAST(?4 AS INTEGER)), CAST(?3 AS TEXT) FROM meta m
+             WHERE m.key LIKE ?1 ESCAPE '\\'
+               AND NOT EXISTS (SELECT 1 FROM meta t WHERE t.key = CAST(?2 AS TEXT) || substr(m.key, CAST(?4 AS INTEGER)))
+             ON CONFLICT (key) DO NOTHING",
+            &params![like, companion_prefix, value, from],
+        )
+    }
+
     /// Executes arbitrary SQL (`?1` placeholders). For tests that simulate
     /// tampering or damage; never used by the engine.
     #[doc(hidden)]

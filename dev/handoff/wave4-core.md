@@ -61,9 +61,16 @@ Numbers and conditions are in [architecture/performance.md](../../docs/architect
 * The retry makes the tail longer; a per-stream in-process queue would make same-stream writers take turns instead.
 * Fencing is opt-in per request (an old worker is as exposed as before); no server option yet to require it.
 * The Go orchestrator and the MCP server are not affected (they use run heartbeats, not job claims).
-* CI: `a64f608`, `2c26f2d` and `c82dd26` had their CI/Windows runs cancelled by later pushes (the repository cancels
-  superseded runs); `f87756d` had a red PostgreSQL + S3 job from the `ag-mcp` flake above (fixed in `47271e4`);
-  `c82dd26` had a red Quality job (the coverage floor above). See the final report for the runs of the head commit.
+* CI: `a64f608`, `2c26f2d`, `c82dd26` and `67b0e1e` had their CI/Windows runs cancelled by later pushes (the repository
+  cancels superseded runs). Red on the way, all fixed: `f87756d` (PostgreSQL + S3 job: the `ag-mcp` stderr race, `47271e4`);
+  `c82dd26`..`67b0e1e` (Quality: the `ag-tree` coverage floor, see above, `affa522`); `affa522` (PostgreSQL + S3 and
+  Quality: `app::tests::log_lines_of_a_request_carry_its_trace_id_and_the_peer_address` lost a log line to the shared
+  tracing callsite, and `sigterm_and_sigint_stop_the_server_gracefully` sent SIGINT before tokio had installed its
+  handler; neither reproduced locally in 6 + 3 runs; fixed in `ce114df` by recomputing the interest cache in the
+  capture tests and installing the signal handlers before binding the listener). **Head `ce114df`: CI, Quality,
+  Windows, CodeQL, Security, Docs, Packaging, Containers, Performance, Web UI all green** (run 39457215570 for CI,
+  39457215732 for Quality). The two server flakes were present before this wave's work and are fixed by reasoning plus
+  one green run, not by a reproduction.
 
 ## Evidence
 

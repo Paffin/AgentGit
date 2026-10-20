@@ -251,11 +251,14 @@ async fn main() -> Result<()> {
                     cfg.metrics.token_env
                 );
             }
+            // Registered before the server says it is listening: a stop request that arrives right after that line
+            // (a supervisor, a test) must be a graceful stop, not the default action of the signal.
+            let stop = shutdown_signal().context("installing the signal handlers")?;
             let listener = tokio::net::TcpListener::bind(cfg.server.listen)
                 .await
                 .with_context(|| format!("binding {}", cfg.server.listen))?;
             let shutdown = async {
-                wait_for_shutdown_signal().await;
+                stop.await;
                 tracing::info!("shutting down");
             };
             ag_server::server::serve(app, listener, shutdown).await
@@ -298,18 +301,32 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Resolves when the process is asked to stop, so the server drains in-flight requests and flushes telemetry.
+/// Starts listening for a request to stop and returns the future that resolves when one arrives, so the server
+/// drains in-flight requests and flushes telemetry. The handlers are installed by this call, not by the first poll
+/// of the future: a signal that comes in between must not take the default action (ending the process).
 ///
 /// Unix: SIGINT (Ctrl+C) and SIGTERM. Windows, where a console process gets control events instead of
 /// signals: Ctrl+C, Ctrl+Break, closing the console window, and logoff/shutdown of the machine.
+fn shutdown_signal() -> std::io::Result<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut interrupt = signal(SignalKind::interrupt())?;
+        let mut terminate = signal(SignalKind::terminate())?;
+        Ok(Box::pin(async move {
+            tokio::select! { _ = interrupt.recv() => {}, _ = terminate.recv() => {} }
+        }))
+    }
+    #[cfg(not(unix))]
+    {
+        Ok(Box::pin(wait_for_shutdown_signal()))
+    }
+}
+
+/// The console control events of Windows (and, elsewhere without signals, nothing but Ctrl+C).
+#[cfg(not(unix))]
 async fn wait_for_shutdown_signal() {
     let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
-    #[cfg(unix)]
-    let term = async {
-        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            s.recv().await;
-        }
-    };
     #[cfg(windows)]
     let term = async {
         use tokio::signal::windows;
@@ -329,7 +346,7 @@ async fn wait_for_shutdown_signal() {
             _ = async { wait(windows::ctrl_logoff().map(|mut s| async move { s.recv().await })).await } => {}
         }
     };
-    #[cfg(not(any(unix, windows)))]
+    #[cfg(not(windows))]
     let term = std::future::pending::<()>();
     tokio::select! { _ = ctrl_c => {}, _ = term => {} }
 }

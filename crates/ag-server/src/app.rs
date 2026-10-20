@@ -856,6 +856,9 @@ mod tests {
             .with_max_level(tracing::Level::INFO)
             .finish();
         let _installed = tracing::subscriber::set_default(subscriber);
+        // Tests run in parallel and share every callsite: one that another test reached while no subscriber
+        // wanted it can keep a cached "never" until the interest is recomputed, which would swallow a line below.
+        tracing::callsite::rebuild_interest_cache();
 
         let ing = Ingress {
             transport: "http",
@@ -926,6 +929,7 @@ mod tests {
             .with_max_level(tracing::Level::INFO)
             .finish();
         let _installed = tracing::subscriber::set_default(subscriber);
+        tracing::callsite::rebuild_interest_cache(); // see log_lines_of_a_request_carry_its_trace_id_and_the_peer_address
 
         // From the proxy: the client it names.
         assert!(app.dispatch(bad_login("10.0.0.5:3333", "198.51.100.7"), "t", |_c| async { Ok(()) }).await.is_err());
@@ -1007,6 +1011,7 @@ mod tests {
         let sink = captured.clone();
         let subscriber = tracing_subscriber::fmt().with_writer(move || sink.clone()).with_ansi(false).finish();
         let _installed = tracing::subscriber::set_default(subscriber);
+        tracing::callsite::rebuild_interest_cache(); // see log_lines_of_a_request_carry_its_trace_id_and_the_peer_address
         let parsed = parse_headers("Authorization=Bearer abc, bad name=secret-value,=nothing,noequals,x-key=v");
         assert_eq!(
             parsed,

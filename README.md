@@ -49,7 +49,7 @@ $ ag integrate prop_6eed… --fencing-token 1                              # as 
 Integrated (merge): stream is now at 793a03b6da69 (version 3, was 70e31c72a4d0), 1 file(s) changed.
 
 $ ag preview prop_2b19…                                                  # a concurrent edit to the same line
-strategy: Merge   (algorithm ag-merge/2+ag-diff/1)
+strategy: Merge   (algorithm ag-merge/3+ag-diff/1)
 conflict: src/main.rs (content conflict (1 region(s)))                   # exit code 4 — the stream was not touched
 ```
 

@@ -58,5 +58,6 @@ versions, Copies, Cost). User docs: `docs/guides/history.md`.
 * ROADMAP "Merge and history": remove "directory renames and copy detection"; keep as open: copies in merges (not
   planned), `copies` over the server API and MCP, merge notes in the Web UI, regenerating the OpenAPI/SDK comment for
   the two new conflict codes.
-* README: the `strategy: Merge (algorithm ag-merge/2+ag-diff/1)` sample line becomes `ag-merge/3+ag-diff/1` (also
-  in README.ru.md; the README demo is generated: `scripts/gen_readme_assets.py --check` was not re-run here).
+* README: the demo transcript line `strategy: Merge (algorithm ag-merge/3+ag-diff/1)` was the one README/README.ru edit made
+  here, because `crates/ag-cli/tests/quickstart.rs` compares the transcript with the real demo output (CI was red
+  without it). Add the directory-rename feature row / limit changes yourself.

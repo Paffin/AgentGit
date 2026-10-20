@@ -65,9 +65,16 @@ pub enum AgentCmd {
     },
     /// Abandon runs with no recent heartbeat and release their leases.
     Reap {
-        /// Heartbeat timeout.
-        #[arg(long, default_value = "10m")]
-        timeout: String,
+        /// Heartbeat timeout (default 10m here; with `--remote`, the server's `agents.run_stale_after_secs`).
+        #[arg(long)]
+        timeout: Option<String>,
+        /// Say what would be abandoned without changing anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin).
+        /// The server also revokes the credentials bound to the reaped runs.
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
     },
     /// Stop an agent from starting new runs.
     Disable {
@@ -153,13 +160,39 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
                 s
             })?;
         }
-        AgentCmd::Reap { timeout } => {
-            let reaped = registry::reap_stale_runs(meta, parse_duration_ms(timeout)?, ctx.me.as_str())?;
-            ctx.out(&reaped, || {
+        AgentCmd::Reap { timeout, dry_run, remote } => {
+            if let Some(name) = remote {
+                let stale_after_ms = match timeout {
+                    Some(t) => {
+                        u64::try_from(parse_duration_ms(t)?).map_err(|_| anyhow!("the timeout must not be negative"))?
+                    }
+                    None => 0,
+                };
+                let r = crate::cmds::remote::reap_runs(ctx, name, stale_after_ms, *dry_run)?;
+                ctx.out(&r, || {
+                    let mut s = format!(
+                        "{} {} run(s), {} lease(s) released, {} credential(s) revoked",
+                        if r.dry_run { "Would abandon" } else { "Abandoned" },
+                        r.runs.len(),
+                        r.released_leases.len(),
+                        r.revoked_credentials
+                    );
+                    for run in &r.runs {
+                        let _ = write!(s, "\n  {}  {}", run.run_id, run.agent);
+                    }
+                    s
+                })?;
+                return Ok(exit::OK);
+            }
+            let timeout = parse_duration_ms(timeout.as_deref().unwrap_or("10m"))?;
+            let reaped = registry::reap_runs(meta, timeout, ctx.me.as_str(), *dry_run)?;
+            let ids: Vec<String> = reaped.runs.into_iter().map(|r| r.run_id).collect();
+            ctx.out(&ids, || {
                 format!(
-                    "Abandoned {} run(s){}",
-                    reaped.len(),
-                    reaped.iter().map(|r| format!("\n  {r}")).collect::<String>()
+                    "{} {} run(s){}",
+                    if *dry_run { "Would abandon" } else { "Abandoned" },
+                    ids.len(),
+                    ids.iter().map(|r| format!("\n  {r}")).collect::<String>()
                 )
             })?;
         }

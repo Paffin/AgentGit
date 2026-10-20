@@ -24,10 +24,15 @@ struct Server {
 
 impl Server {
     fn start() -> Self {
+        Self::start_with(|_| {})
+    }
+
+    fn start_with(tweak: impl FnOnce(&mut ServerConfig)) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let mut cfg = ServerConfig::default();
         cfg.server.data_dir = dir.path().to_path_buf();
         cfg.limits.requests_per_second = 0;
+        tweak(&mut cfg);
         let app =
             App::with_options(cfg, Arc::new(SystemClock), Some("bootstrap-token-0123456789abcdef".into())).unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
@@ -280,4 +285,56 @@ fn tokens_can_be_stored_with_restricted_permissions() {
         assert!(!o.status.success());
         assert!(text(&o).contains("readable by other users"), "{}", text(&o));
     }
+}
+
+#[test]
+fn an_operator_reaps_the_stale_runs_of_a_server_from_the_command_line() {
+    let srv = Server::start_with(|cfg| cfg.agents.min_stale_after_secs = 1);
+    let repo = "acme/demo";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let key = ag_crypto::KeyPair::generate().unwrap();
+    let meta = srv.app.repos.handle(repo).unwrap();
+    ag_agent::registry::register_agent_with_key(meta.meta(), "bot", &key.public(), "agent", "system:test").unwrap();
+    let run = ag_agent::registry::start_run(meta.meta(), "bot", None).unwrap().run_id;
+    std::thread::sleep(std::time::Duration::from_millis(1300));
+
+    let boss = srv.user("user:boss", repo, Role::Delegator);
+    let writer = srv.user("user:alice", repo, Role::Writer);
+    let url = format!("{}/{repo}", srv.url);
+    let dir = tempfile::tempdir().unwrap();
+    ok(ag(dir.path(), "user:boss", &boss, &["init", "--namespace", repo]));
+    ok(ag(dir.path(), "user:boss", &boss, &["remote", "add", "origin", &url, "--token-env", "AG_TOKEN"]));
+
+    // Only an operator reaps: a plain writer is refused, naming the permission, and nothing changes.
+    let o = ag(dir.path(), "user:alice", &writer, &["agent", "reap", "--remote"]);
+    assert!(!o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains("agent.operate"), "{}", text(&o));
+    // A threshold below the server's minimum is refused, not applied.
+    let o = ag(dir.path(), "user:boss", &boss, &["agent", "reap", "--remote", "--timeout", "100ms"]);
+    assert!(!o.status.success() && text(&o).contains("min_stale_after_secs"), "{}", text(&o));
+
+    // A dry run says what it would do and changes nothing.
+    let dry: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:boss",
+        &boss,
+        &["--json", "agent", "reap", "--remote", "--dry-run", "--timeout", "1s"],
+    )))
+    .unwrap();
+    assert_eq!(dry["dry_run"], true, "{dry}");
+    assert_eq!(dry["runs"][0]["run_id"], run.as_str(), "{dry}");
+    assert_eq!(meta.meta().read(|tx| tx.run(&run)).unwrap().unwrap().status, "running");
+
+    let out = ok(ag(dir.path(), "user:boss", &boss, &["agent", "reap", "--remote", "origin", "--timeout", "1s"]));
+    assert!(out.contains("Abandoned 1 run(s)") && out.contains(&run), "{out}");
+    assert_eq!(meta.meta().read(|tx| tx.run(&run)).unwrap().unwrap().status, "abandoned");
+    // It is on the record, under the operator's identity.
+    let audit = meta.meta().read(|tx| tx.audit_after(0, 1000)).unwrap();
+    assert!(audit.iter().any(|e| e.action == "run.abandon" && e.actor == "user:boss"), "{audit:?}");
+    // Nothing left to reap the second time.
+    let again = ok(ag(dir.path(), "user:boss", &boss, &["agent", "reap", "--remote", "--timeout", "1s"]));
+    assert!(again.contains("Abandoned 0 run(s)"), "{again}");
 }

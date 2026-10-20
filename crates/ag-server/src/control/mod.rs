@@ -722,6 +722,58 @@ impl Control {
         Ok(())
     }
 
+    // ---- leases of background work -------------------------------------------
+
+    /// Takes (or renews) the lease `name` for `holder` for `ttl`, and says whether `holder` has it now. Background
+    /// work that must run on one replica at a time (the run reaper, ADR-0010) asks before every pass. The lease is a
+    /// `kv` row `lease/<name>` = `<holder>|<expires_at_ms>`; every change is one conditional statement
+    /// (`INSERT … DO NOTHING`, or `UPDATE … WHERE value = <what was read>`), so of several replicas racing for an
+    /// expired lease exactly one wins, on SQLite and on PostgreSQL alike, and there is no schema to migrate.
+    /// A lease is time-based: replicas must agree on the time within a fraction of `ttl`. A holder that dies loses
+    /// the lease when it expires; nothing is lost meanwhile, because the work the lease guards is idempotent.
+    pub fn try_lease(&self, name: &str, holder: &str, ttl: Duration) -> ApiResult<bool> {
+        let holder = holder.replace('|', "_");
+        let holder = holder.as_str();
+        let key = format!("lease/{name}");
+        let now = self.now_ms();
+        let mine = format!("{holder}|{}", now.saturating_add(i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX)));
+        match self.kv_get(&key)? {
+            None => {
+                let n = db(self.db.execute(
+                    "INSERT INTO kv (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO NOTHING",
+                    &sql_params![key.as_str(), mine.as_str()],
+                ))?;
+                Ok(n > 0)
+            }
+            Some(current) => {
+                let (who, expires) = current.split_once('|').unwrap_or((current.as_str(), "0"));
+                let expired = expires.parse::<i64>().map_or(true, |e| e <= now);
+                if who != holder && !expired {
+                    return Ok(false);
+                }
+                let n = db(self.db.execute(
+                    "UPDATE kv SET value = ?2 WHERE key = ?1 AND value = ?3",
+                    &sql_params![key.as_str(), mine.as_str(), current.as_str()],
+                ))?;
+                Ok(n > 0)
+            }
+        }
+    }
+
+    /// Gives the lease back if `holder` has it (a clean shutdown), so another replica need not wait for it to expire.
+    pub fn release_lease(&self, name: &str, holder: &str) -> ApiResult<()> {
+        let key = format!("lease/{name}");
+        let prefix = format!("{}|", holder.replace('|', "_"));
+        if let Some(current) = self.kv_get(&key)?.filter(|v| v.starts_with(&prefix)) {
+            // Only if it is still the value read: a lease taken over meanwhile is not the caller's to delete.
+            db(self.db.execute(
+                "DELETE FROM kv WHERE key = ?1 AND value = ?2",
+                &sql_params![key.as_str(), current.as_str()],
+            ))?;
+        }
+        Ok(())
+    }
+
     /// The underlying database (dump/import and tests).
     pub(crate) fn database(&self) -> &Database {
         &self.db
@@ -787,6 +839,49 @@ mod tests {
             files.sort();
             let listed: Vec<&str> = list.iter().map(|m| m.name).collect();
             assert_eq!(files, listed, "{backend}: migrations/control/ and the list in control/mod.rs disagree");
+        }
+    }
+
+    #[test]
+    fn a_lease_has_one_holder_until_it_expires_or_is_released() {
+        for (c, extra) in backends() {
+            let ttl = Duration::from_secs(60);
+            assert!(c.try_lease("reaper", "a", ttl).unwrap(), "free lease is taken");
+            assert!(c.try_lease("reaper", "a", ttl).unwrap(), "the holder renews");
+            assert!(!c.try_lease("reaper", "b", ttl).unwrap(), "another replica is refused while it is held");
+            assert!(c.try_lease("other", "b", ttl).unwrap(), "leases are per name");
+            c.release_lease("reaper", "b").unwrap();
+            assert!(!c.try_lease("reaper", "b", ttl).unwrap(), "only the holder can release");
+            c.release_lease("reaper", "a").unwrap();
+            assert!(c.try_lease("reaper", "b", ttl).unwrap(), "a released lease is free at once");
+            // An expired lease is taken over; ttl 0 expires immediately.
+            assert!(c.try_lease("short", "a", Duration::ZERO).unwrap());
+            assert!(c.try_lease("short", "b", ttl).unwrap(), "expired lease changes hands");
+            assert!(!c.try_lease("short", "a", ttl).unwrap());
+            cleanup(extra);
+        }
+    }
+
+    #[test]
+    fn replicas_racing_for_an_expired_lease_get_exactly_one_winner() {
+        for (c, extra) in backends() {
+            let c = Arc::new(c);
+            assert!(c.try_lease("race", "old", Duration::ZERO).unwrap());
+            for round in 0..5 {
+                let wins: usize = std::thread::scope(|s| {
+                    let hs: Vec<_> = (0..4)
+                        .map(|i| {
+                            let c = c.clone();
+                            s.spawn(move || c.try_lease("race", &format!("r{i}"), Duration::from_secs(60)).unwrap())
+                        })
+                        .collect();
+                    hs.into_iter().map(|h| usize::from(h.join().unwrap())).sum()
+                });
+                assert_eq!(wins, 1, "round {round}");
+                // Expire it again for the next round.
+                c.database().execute("UPDATE kv SET value = 'x|0' WHERE key = 'lease/race'", &[]).unwrap();
+            }
+            cleanup(extra);
         }
     }
 

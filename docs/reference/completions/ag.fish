@@ -675,12 +675,14 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l timeout -d 'Heartbeat timeout' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l timeout -d 'Heartbeat timeout (default 10m here; with `--remote`, the server\'s `agents.run_stale_after_secs`)' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l remote -d 'Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin). The server also revokes the credentials bound to the reaped runs' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l dry-run -d 'Say what would be abandoned without changing anything'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'

@@ -316,6 +316,22 @@ impl App {
     /// Reaps every registered repository on behalf of the server itself (`agents.reap_interval_secs`). A
     /// repository that cannot be read is logged and skipped; the next pass tries again.
     pub async fn reap_all_repos(&self) {
+        // One replica at a time: the lease is renewed by its holder on every pass and expires after two intervals if
+        // the holder dies. A control database that cannot be asked skips the pass (the next one tries again).
+        let (control, holder) = (self.control.clone(), self.lease_holder.clone());
+        let ttl = std::time::Duration::from_secs(self.cfg.agents.reap_interval_secs.saturating_mul(2).max(2));
+        match tokio::task::spawn_blocking(move || control.try_lease(crate::app::RUN_REAPER_LEASE, &holder, ttl)).await {
+            Ok(Ok(true)) => {}
+            Ok(Ok(false)) => return,
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e.0.message, "run reaper: cannot take the lease");
+                return;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "run reaper: the lease task failed");
+                return;
+            }
+        }
         let Ok(stale_after) = i64::try_from(self.cfg.agents.run_stale_after_secs.saturating_mul(1000)) else {
             return;
         };

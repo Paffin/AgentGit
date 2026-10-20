@@ -599,13 +599,17 @@ _ag() {
             return 0
             ;;
         ag__subcmd__agent__subcmd__reap)
-            opts="-C -q -v -h -V --timeout --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --timeout --dry-run --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --timeout)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

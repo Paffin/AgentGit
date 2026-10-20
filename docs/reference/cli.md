@@ -1410,9 +1410,11 @@ Usage: ag agent reap [OPTIONS]
 
 Options:
   -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
-      --timeout <TIMEOUT>  Heartbeat timeout [default: 10m]
+      --timeout <TIMEOUT>  Heartbeat timeout (default 10m here; with `--remote`, the server's `agents.run_stale_after_secs`)
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --dry-run            Say what would be abandoned without changing anything
       --json               Machine-readable JSON output
+      --remote [<NAME>]    Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin). The server also revokes the credentials bound to the reaped runs
       --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
   -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing

@@ -156,8 +156,9 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
 }
 
-/// Ends the stale runs of every repository every `agents.reap_interval_secs` until shutdown (ADR-0010). Running it
-/// on several replicas is harmless: a reap that finds nothing stale changes nothing.
+/// Ends the stale runs of every repository every `agents.reap_interval_secs` until shutdown (ADR-0010). Of several
+/// replicas on one control database only the holder of the `run-reaper` lease reaps (`App::reap_all_repos`); a reap
+/// is idempotent anyway, so a moment with two holders (clock skew, a lease expiring mid-pass) changes nothing.
 fn spawn_run_reaper(app: App) {
     let every = std::time::Duration::from_secs(app.cfg.agents.reap_interval_secs);
     let mut stop = app.shutdown_signal();
@@ -170,6 +171,9 @@ fn spawn_run_reaper(app: App) {
                 _ = stop.changed() => break,
             }
         }
+        // A clean stop hands the lease over at once instead of making the others wait for it to expire.
+        let (control, holder) = (app.control.clone(), app.lease_holder.clone());
+        let _ = tokio::task::spawn_blocking(move || control.release_lease(crate::app::RUN_REAPER_LEASE, &holder)).await;
     });
 }
 

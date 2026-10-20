@@ -946,11 +946,13 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;agent;reap'= {
-            cand --timeout 'Heartbeat timeout'
+            cand --timeout 'Heartbeat timeout (default 10m here; with `--remote`, the server''s `agents.run_stale_after_secs`)'
+            cand --remote 'Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin). The server also revokes the credentials bound to the reaped runs'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
             cand --color 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never'
+            cand --dry-run 'Say what would be abandoned without changing anything'
             cand --json 'Machine-readable JSON output'
             cand -q 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
             cand --quiet 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

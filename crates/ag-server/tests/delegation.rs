@@ -432,6 +432,33 @@ async fn the_server_reaps_stale_runs_by_itself_when_it_is_told_to() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn only_the_replica_holding_the_reaper_lease_reaps() {
+    // Reaping is driven by hand: `reap_interval_secs` stays 0, so no background reaper competes with the test.
+    let w = world_with(|cfg| cfg.agents.run_stale_after_secs = 1).await;
+    register(&w, "bot").await;
+    let run = start_run(&w, "bot", None).await;
+    tokio::time::sleep(Duration::from_millis(1300)).await;
+    let status =
+        || async { w.orch.get(&format!("/v1/repos/{REPO}/runs?agent=bot")).await.json["runs"][0]["status"].clone() };
+
+    // Another replica holds the lease: this one leaves the stale run alone.
+    let app = &w.srv.app;
+    let long = Duration::from_secs(3600);
+    assert!(app.control.try_lease(ag_server::app::RUN_REAPER_LEASE, "replica-b", long).unwrap());
+    app.reap_all_repos().await;
+    assert_eq!(status().await, "running", "reaped without the lease: {run}");
+
+    // It lets go (or its lease runs out): this replica takes over and reaps, audited as the reaper.
+    app.control.release_lease(ag_server::app::RUN_REAPER_LEASE, "replica-b").unwrap();
+    app.reap_all_repos().await;
+    assert_eq!(status().await, "abandoned");
+    assert_eq!(audit(&w, "run.abandon").await[0]["actor"], "system:reaper");
+    // It keeps the lease between passes, so replica-b cannot take it while this one is alive.
+    assert!(!app.control.try_lease(ag_server::app::RUN_REAPER_LEASE, "replica-b", long).unwrap());
+    w.srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn acting_on_another_agents_run_needs_agent_operate_and_a_writer_does_not_have_it() {
     let w = world().await;
     register(&w, "bot").await;

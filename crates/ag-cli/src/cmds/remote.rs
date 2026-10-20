@@ -205,6 +205,20 @@ pub(crate) fn server_head(root: &Path, name: &str, remote: &Remote, stream: &str
     })
 }
 
+/// `ag agent reap --remote NAME`: asks the server to abandon the stale runs of the remote's repository
+/// (`AgentService.ReapRuns`; needs `agent.operate`). `stale_after_ms` 0 = the server's own threshold.
+pub(crate) fn reap_runs(ctx: &Ctx, remote: &str, stale_after_ms: u64, dry_run: bool) -> Result<v1::ReapRunsResponse> {
+    let (name, r) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let c = connect(&ctx.root, &name, &r).await?;
+        c.agents()
+            .reap_runs(c.req(v1::ReapRunsRequest { repo: r.repo.clone(), stale_after_ms, dry_run }))
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(|s| anyhow!("{}", ClientError::from(s)))
+    })
+}
+
 fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
     let all = load_remotes(root)?;
     let name = name.unwrap_or("origin").to_string();

@@ -4,7 +4,7 @@
 .SH NAME
 ag\-agent\-reap \- Abandon runs with no recent heartbeat and release their leases
 .SH SYNOPSIS
-\fBag agent reap\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-timeout\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
+\fBag agent reap\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-timeout\fR] [\fB\-\-as\fR] [\fB\-\-dry\-run\fR] [\fB\-\-json\fR] [\fB\-\-remote\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
 .SH DESCRIPTION
 Abandon runs with no recent heartbeat and release their leases
 .SH OPTIONS
@@ -12,14 +12,20 @@ Abandon runs with no recent heartbeat and release their leases
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
 .TP
-\fB\-\-timeout\fR \fI<TIMEOUT>\fR [default: 10m]
-Heartbeat timeout
+\fB\-\-timeout\fR \fI<TIMEOUT>\fR
+Heartbeat timeout (default 10m here; with `\-\-remote`, the server\*(Aqs `agents.run_stale_after_secs`)
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
 .TP
+\fB\-\-dry\-run\fR
+Say what would be abandoned without changing anything
+.TP
 \fB\-\-json\fR
 Machine\-readable JSON output
+.TP
+\fB\-\-remote\fR [\fI<NAME>\fR]
+Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin). The server also revokes the credentials bound to the reaped runs
 .TP
 \fB\-\-color\fR \fI<WHEN>\fR
 Colour the output: auto (a terminal, unless NO_COLOR is set), always or never

@@ -151,8 +151,11 @@ reap_interval_secs = 0       # > 0: reap every repository this often, audited as
 
 `ag-server admin reap-runs <owner/name> [--stale-after-secs N] [--dry-run]` does the same offline. A reap releases
 the leases of the ended runs, revokes the credentials bound to them and writes `run.abandon` / `lease.reap` audit
-entries; the counter is `agwp_agent_runs_reaped_total` ([observability](observability.md)). Several replicas may
-reap at once: a reap that finds nothing stale changes nothing. See the
+entries; the counter is `agwp_agent_runs_reaped_total` ([observability](observability.md)). From a workstation,
+`ag agent reap --remote [NAME] [--timeout 10m] [--dry-run]` calls the same route (needs `agent.operate`; the server
+enforces its `min_stale_after_secs`). With `reap_interval_secs > 0` on several replicas of one installation, only the
+holder of the `run-reaper` lease (a row of the control database, renewed on every pass, free after two intervals if
+its holder dies or at once on a clean stop) reaps; a reap that finds nothing stale changes nothing anyway. See the
 [agents guide](../guides/agents.md#8-against-a-server-credentials-delegation-and-operators).
 
 ## Upgrading

@@ -29,6 +29,8 @@ use crate::repos::RepoManager;
 
 /// The identity under which the server's own periodic run reaper (`agents.reap_interval_secs`) is audited.
 pub const REAPER_IDENTITY: &str = "system:reaper";
+/// The control-database lease that makes the periodic run reaper run on one replica at a time.
+pub const RUN_REAPER_LEASE: &str = "run-reaper";
 
 /// The deadline given to long-lived streams (event subscriptions): effectively none. It is a marker, not a time
 /// anyone waits for, and it is left out of the trace attributes.
@@ -120,6 +122,8 @@ pub struct AppState {
     bus: Bus,
     /// Name of this replica (logs, metrics).
     pub replica_id: String,
+    /// Names this process (not just this replica id) as the holder of background-work leases in the control database.
+    pub lease_holder: String,
     /// Set from SIGTERM until exit: `/readyz` says "not ready" so balancers stop sending requests.
     draining: AtomicBool,
 }
@@ -327,6 +331,7 @@ impl App {
             local,
             job_rescan: Mutex::new(Instant::now()),
             bus,
+            lease_holder: format!("{replica_id}.{}", random_hex()),
             replica_id,
             draining: AtomicBool::new(false),
         })))

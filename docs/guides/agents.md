@@ -225,7 +225,9 @@ A task is worked on by one run at a time: starting a second run for a task that 
 owned, blocked or finished is `failed_precondition` too.
 
 The local `ag agent reap --timeout 10m` of section 1 ends silent runs and frees their leases in a repository you have on
-disk (there are no credentials to revoke there).
+disk (there are no credentials to revoke there). `ag agent reap --remote [NAME]` does what `POST …/runs/reap` does, for
+an operator: it reaps the runs of the remote's repository, revokes their credentials, and prints what it did
+(`--dry-run` only reports; without `--timeout` the server's `run_stale_after_secs` applies).
 
 ## 9. Embedding instead of shelling out
 

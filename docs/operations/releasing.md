@@ -214,7 +214,8 @@ The rehearsal runs everything but the writes. These have therefore **never run**
 * The `:latest` tag on GHCR (a pre-release does not move it) and `releases/latest` lookup by `install.sh` (only
   pre-releases exist). Push by digest, the registry-side merge, `gh release create` and `install.sh` against real
   release URLs ran for real in the rc.2 run, see [Evidence](#evidence).
-* A person's `gh attestation verify` of the archives and images (the workflow verifies them in its run).
+* A person's `gh attestation verify` of the **archives** (the workflow verifies them in its run). The owner has run it
+  for both images, see [Evidence](#evidence).
 * npm and PyPI trusted publishing (needs the one-time registry setup above), and any crates.io publish.
 * A Homebrew tap, a Scoop bucket, a Windows archive, musl/Alpine, 32-bit and FreeBSD builds.
 
@@ -249,11 +250,12 @@ What the published rc.2 proved (checked afterwards from outside the workflow, on
 | GHCR, anonymous | `agentgit-server:0.2.0-rc.2` and `agentgit-cli:0.2.0-rc.2` are OCI indexes with linux/amd64 + linux/arm64 (+ attestation manifests) |
 | Attestations | the attestations API returns SLSA provenance v1 for the archives and for both image digests, naming `release.yml` at `refs/tags/v0.2.0-rc.2`; subject digests match the downloaded files |
 | `install.sh` in the run | success on Linux x86_64, Linux aarch64 and macOS, against the assembled release |
+| `gh attestation verify oci://ghcr.io/paffin/agentgit-server:0.2.0-rc.2` and the same for `agentgit-cli`, **by the owner** with a logged-in `gh` | both verified: SLSA provenance v1, built by `.github/workflows/release.yml` at `refs/tags/v0.2.0-rc.2` in `Paffin/AgentGit` |
 
-Not verified by that pass: `gh attestation verify` (the agent environment has no working `gh` login, so signatures
-and certificates were only inspected, not verified; the workflow verified them inside the run); the macOS and
-aarch64 archives were not run outside CI; the images were not pulled or started from GHCR; the Homebrew formula
-was not installed; `install.sh` without `--version` cannot work while only pre-releases exist (`releases/latest`
+Not verified by that pass: `gh attestation verify` of the **archives** (the agent environment has no working `gh`
+login; the owner later verified the two images, the archives' signatures were only inspected, and the workflow
+verified them inside the run); the macOS and aarch64 archives were not run outside CI; the images were not pulled
+or started from GHCR; the Homebrew formula was not installed; there is no SBOM for `ag-mcp`; `install.sh` without `--version` cannot work while only pre-releases exist (`releases/latest`
 skips them). Details: `dev/handoff/release-rc2.md`.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow

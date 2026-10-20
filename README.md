@@ -65,9 +65,19 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-Release archives, `scripts/install.sh`, container images and a Homebrew formula exist and have been rehearsed by the
-release workflow, but nothing is published: there is no release tag yet, so none of them can be downloaded.
-[Install options](docs/getting-started.md#install) says what is and is not proven.
+Or take the pre-release [`v0.2.0-rc.2`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): archives for
+Linux and macOS (x86_64 and aarch64) with `ag`, `ag-server`, `ag-worker` and `ag-mcp`, `SHA256SUMS`, SBOMs, and multi-arch
+images `ghcr.io/paffin/agentgit-server` and `agentgit-cli`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2
+docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.2
+```
+
+`--version` is needed while only pre-releases exist. Checked on the published files: checksums, the quick start and the
+server flow below, `install.sh`, and the attestations of both images (`gh attestation verify`, by the owner). Not
+verified: the archive attestations, the macOS and aarch64 archives outside CI, the Homebrew formula.
+[Install options](docs/getting-started.md#install) has the details.
 
 ## Quick start
 
@@ -243,7 +253,7 @@ The threat model and its known limits are in [Security](docs/architecture/securi
 
 The docs are checked in CI: the CLI reference is generated from the binary, tutorial commands are run against real
 binaries, and `scripts/check_docs.py` verifies links, test names, `ag` commands and `AG_*` variables. The site builds with
-`mkdocs build --strict`, but has never been deployed because GitHub Pages is not enabled for the repository.
+`mkdocs build --strict` and deploys to GitHub Pages from `main`.
 
 ## Status and limits
 
@@ -257,16 +267,20 @@ not been run in production by anyone but its authors, and there has been no exte
   failover, mixed versions during a rolling upgrade, load, and the Kubernetes `ha` overlay on a real cluster are not
   proven ([high availability](docs/operations/high-availability.md)).
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
-  per client, and a writer can still act on another agent's run (it is audited, not prevented).
-- Nothing is published: no release tag, no registry, npm, PyPI or crates.io package. The release workflow has been
-  rehearsed end to end from a work branch, not from `main` ([releasing](docs/operations/releasing.md)).
+  per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
+  job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
+- Only a pre-release is published (`v0.2.0-rc.2`: GitHub release and images on GHCR). No stable release, and no
+  crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
+  ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
+  build first.
 - `ag validate run` is not a sandbox. Untrusted code goes through [`ag-worker`](docs/guides/workers.md), whose sandbox
   shares the host kernel. Verified against real Docker and Podman and cgroup v2; not verified for microVMs, Windows
   (the worker refuses to run) or macOS beyond a limits-only fallback ([sandbox](docs/architecture/sandbox.md)).
 - PostgreSQL and S3 are tested against a real PostgreSQL and SeaweedFS, not against Amazon S3, MinIO, Ceph or R2.
 - Trees are flat manifests, measured at 100,000 files ([ADR-0006](docs/adr/0006-flat-trees-measured.md)). Performance
   numbers come from one shared 4-vCPU VM and are not targets ([engine](docs/architecture/performance.md),
-  [server](docs/operations/performance.md)); PostgreSQL, S3, TLS and multi-replica throughput are not measured.
+  [server](docs/operations/performance.md)); PostgreSQL, S3, TLS and multi-replica throughput are not measured. The decoded-tree
+  cache and the 3 durable commits per integration were measured on the memory and disk backends only.
 - No history rewriting, tags, submodules or LFS; the Git bridge reports what it cannot carry.
 - The Web UI is tested in Chromium, Firefox and WebKit; OIDC only against Keycloak. There has been no screen-reader pass.
   `ag-mcp` was not run inside real hosts. The SDKs are unpublished.

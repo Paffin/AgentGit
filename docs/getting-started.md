@@ -7,10 +7,11 @@ This takes about five minutes and ends with a change landed through policy, revi
 AgentGit ships three programs: `ag` (the command line, all you need to start), `ag-server` (the network
 server) and `ag-worker` (runs validation jobs). Pick the way that suits you:
 
-> **Status.** No release has been published yet: the first `v*` tag will publish everything below. Until then
-> the release pipeline has only been run as a *rehearsal* (it builds, checks and installs the real archives but
-> publishes nothing — see [Releasing](operations/releasing.md)), so the installer and the container images
-> have not been used against a real release. **Building from source always works.**
+> **Status.** The only published release is the pre-release `v0.2.0-rc.2`; there is no stable release yet. Checksums,
+> `install.sh`, the quick start and the server flow were checked on its published files, and the attestations of both
+> images were verified with `gh attestation verify`. Not verified: the archive attestations, the macOS and aarch64
+> archives outside CI, the Homebrew formula (see [Releasing](operations/releasing.md#evidence)).
+> **Building from source always works.**
 
 **1. Release archive (Linux and macOS, x86_64 and aarch64)** — a script that checks what it downloads:
 

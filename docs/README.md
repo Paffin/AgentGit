@@ -29,7 +29,7 @@
 | deploy and monitor the server | [Deployment](operations/deployment.md) (binary, Compose, Kubernetes), [Observability](operations/observability.md), [Releasing & distribution](operations/releasing.md) (release pipeline and its rehearsal, installers, SBOMs, what is not proven), [Hardening checklist](operations/hardening.md) (every setting and default checked against the server), [Supply chain](operations/supply-chain.md) (vulnerability, licence and workflow gates, accepted exceptions) |
 | talk to the server from your own code | [AGWP v1 reference](protocol/agwp-v1.md), [`openapi.json`](protocol/openapi.json) |
 | see what is built and what is planned | [Roadmap](../ROADMAP.md), [Protocol overview](protocol/README.md) |
-| learn why decisions were made | [ADRs](adr/README.md) |
+| learn why decisions were made (identity names, run-bound credentials, paging indexes and background leases, job-claim fencing: ADR-0009 to 0012) | [ADRs](adr/README.md) |
 
 ## Keeping the docs true
 

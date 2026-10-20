@@ -7,16 +7,110 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- **`ag agent reap --remote [NAME] [--timeout D] [--dry-run]`**: reaps the silent runs of a server from the command
+  line (`AgentService.ReapRuns`, needs `agent.operate`, audited under the caller as `run.abandon`); the local form
+  gained `--dry-run`. The periodic reaper takes a `run-reaper` lease in the control database before each pass, so one
+  replica of several reaps (the lease is time-based; two replicas briefly reaping together is harmless because a
+  reap is idempotent). [ADR-0011](docs/adr/0011-proposal-paging-indexes-and-background-leases.md).
+- **Metadata schema 3**: three indexes so that every page of `list_proposals` is read in index order without sorting,
+  and idempotency records written before they carried a time are dated once by the first sweep and then expire.
+  Metadata schema 3 is **not readable by builds that only know schema 2**: in a rolling upgrade start the new build
+  first ([ADR-0007](docs/adr/0007-multi-replica-server.md)). The control schema stays at 3.
+- **Decoded-tree cache** with a memory budget (`repos.tree_cache_bytes`, default 256 MiB; `0` switches it off) and
+  metrics `agwp_tree_cache_*`. At 100 000 files a fast-forward went from about 330 to about 180 ms, a three-way merge
+  from 880-1 050 to about 200 ms and the publish of one file from 86 to 32-38 ms; peak RSS of that run grew from
+  168 to 714 MiB with a 512 MiB budget ([numbers](docs/architecture/performance.md)).
+- **Bounded retry of same-stream contention** inside the call (`repos.integrate_attempts`, default 24;
+  `repos.integrate_backoff_ms`, default 32; `1` means one attempt). `aborted` answers at 16 writers went from 14-16 %
+  to 3-4 %; the tail is longer because losers now wait inside the call (p99 0.5-0.6 s to 0.8-1.5 s).
+- **Job-claim fencing token** ([ADR-0012](docs/adr/0012-job-claim-fencing.md)): optional `fencing_token` on job
+  heartbeat, complete and fail, no schema change; a stale claimant of the same worker name is refused. `ag-worker`
+  sends it; the OpenAPI document, both SDKs and the Web UI types are regenerated. It is opt-in per request: an old
+  worker is as exposed as before.
+
+### Changed
+
+- **An integration costs 3 durable commits** instead of 7 (fast-forward) or 8 (merge): the intent is written `ready`,
+  tokens only if they changed, one derive commit. `ag-bench load streams` (16 clients over HTTP, 3 alternating rounds):
+  87.6 to 100.0 integrations/s (+14 %, on a shared VM where less than 30 % is noise). Crash recovery at every step and
+  recovery of an operation left `prepared` by an earlier build are unchanged and tested.
+- Storage API: `Tx::job_heartbeat/complete/fail` take a `claim: Option<u32>` argument;
+  `Repository::with_tree_cache`, `with_contention_policy` and `Meta::committed_writes` are new; the tree-size estimate
+  lives in `agentgit-storage` (`approx_tree_bytes`).
+- The README (English and Russian) and the release documents state the published `v0.2.0-rc.2` and what was verified
+  about it; `docs/operations/releasing.md` records the owner's `gh attestation verify` of both images.
+
+### Fixed
+
+- Test races found by CI (no product code changed): `ag-mcp`'s `closing_stdin_ends_the_process_cleanly` waited for
+  nothing and raced the stderr drain thread; the server's log-capturing tests lost a line to the shared tracing
+  callsite and `sigterm_and_sigint_stop_the_server_gracefully` sent SIGINT before tokio had installed its handler
+  (the server now installs the stop-signal handlers before it listens).
+
+### Known limitations
+
+- The tree cache clones a tree on every hit (7 ms at 100 000 files); the disk backend and PostgreSQL were not
+  measured with it. Batching and the cache were not measured on PostgreSQL or S3. The reaper lease is not tested with
+  real replicas on PostgreSQL and S3. Schema 3 adds three index entries per proposal write (not measured as a load).
+- Fencing for job claims is not required by any server option yet (an old worker is as exposed as before).
+
 ## [0.2.0-rc.2] — 2026-10-19
 
-Second release candidate. `v0.2.0-rc.1` was tagged but its Release run failed in the last stage before anything
-was attached to a GitHub release (the release notes were requested with a bare version instead of a tag name); no
-archive was published for it. Code is otherwise identical to rc.1.
+Second release candidate, **published** as a GitHub pre-release (tag `v0.2.0-rc.2`, commit `0ad4753`; Release run
+[39434938489](https://github.com/Paffin/AgentGit/actions/runs/39434938489), all 15 jobs green). `v0.2.0-rc.1` was
+tagged but its Release run failed in the last stage, before anything was attached to a release (the release notes
+were requested with a bare version instead of a tag name); no archive was ever published for it. rc.2 is rc.1 plus
+the release fix and the server-hardening items below.
+
+What the release carries: four archives (Linux x86_64 and aarch64, macOS aarch64 and x86_64), CycloneDX SBOMs for
+`ag`, `ag-server` and `ag-worker` (none for `ag-mcp`), `SHA256SUMS`, the rendered Homebrew formula `agentgit.rb`,
+multi-arch images `ghcr.io/paffin/agentgit-server` and `agentgit-cli` (`:0.2.0-rc.2`), and build-provenance
+attestations. See [Releasing](docs/operations/releasing.md#evidence) for what was and was not verified.
+
+### Breaking
+
+- **Acting on another agent's run requires `agent.operate`** (held by `delegator` and `admin`). A person or service
+  with a plain `writer` role can no longer start, heartbeat or finish a run for an agent (`permission_denied`, naming
+  `agent.operate`); an `agent:<name>` identity still acts for itself. Clients that drove agents with a writer token
+  need the `delegator` role.
+- Page tokens of the proposal listing changed (opaque; an old token is `invalid_argument`).
+
+### Added
+
+- **Trusted proxies**: `server.trusted_proxies` decides when `X-Forwarded-For` is believed; the client address is on
+  request log lines and keys a new per-address limit on failed authentications (`limits.auth_failures_per_second`,
+  `auth_failure_burst`; off by default).
+- **Idempotency records expire** (`repos.idempotency_ttl_secs`, 7 days; swept every
+  `repos.idempotency_sweep_interval_secs`, 1 h). Records written by earlier builds carry no time and were never swept
+  in rc.2 (dated in the next release).
+- **A global budget for object bytes held by uploads in flight** (`limits.max_inflight_object_bytes`, 1 GiB; HTTP PUT
+  and gRPC upload).
+- **`derive_status` and dangling references** are shown by `ag doctor` (checks `derive` and `references`), `/readyz`
+  and metrics (`agwp_derive_*`, `agwp_dangling_refs{kind}`); the server scans every
+  `repos.health_scan_interval_secs` (300).
+- `Retry-After-Ms` beside `Retry-After`; the seconds are rounded up and tested against `retry_after_ms`.
+- A 1280x640 social preview image.
+
+### Changed
+
+- Open-stream and open-proposal quotas are counted in the transaction that inserts the row, so racing creates cannot
+  pass the limit; a replay of a keyed proposal that already exists is served even at the limit.
+- `list_proposals` filters in SQL and pages by key (stable while proposals are opened).
 
 ### Fixed
 
 - Release workflow: the release notes step passes the tag form (`vX.Y.Z`), and an already existing release page
   (the GitHub UI creates one with a tag) is filled in instead of making `gh release create` fail.
+
+### Known limitations
+
+- Everything in the rc.1 list below that is not changed above still applies, except that open-stream and
+  open-proposal counts are exact, idempotency records expire, there is a global byte budget and `remote` honours
+  trusted proxies. Not verified for rc.2: the archive attestations, the macOS and aarch64 archives outside CI, the
+  Homebrew formula; no `ag-mcp` SBOM. Image attestations (server and CLI) were verified by the owner with
+  `gh attestation verify` (SLSA provenance v1, `release.yml` at `refs/tags/v0.2.0-rc.2`).
 
 ## [0.2.0-rc.1] — 2026-10-19
 

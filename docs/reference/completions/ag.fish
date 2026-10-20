@@ -152,6 +152,7 @@ complete -c ag -n "__fish_ag_using_subcommand show" -l as -d 'Act as this identi
 complete -c ag -n "__fish_ag_using_subcommand show" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand show" -l copies -d 'Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the bytes in common with another file (co-modified and neighbouring files are tried first)'
 complete -c ag -n "__fish_ag_using_subcommand show" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand show" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand show" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
@@ -187,6 +188,7 @@ complete -c ag -n "__fish_ag_using_subcommand blame" -l as -d 'Act as this ident
 complete -c ag -n "__fish_ag_using_subcommand blame" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand blame" -l copies -d 'Follow files that were created as copies of another file: lines a copy took over are blamed on whoever wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or co-modified file)'
 complete -c ag -n "__fish_ag_using_subcommand blame" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand blame" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand blame" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'

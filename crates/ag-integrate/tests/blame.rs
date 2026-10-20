@@ -244,3 +244,82 @@ fn blame_over_a_long_uncached_chain_with_a_delete_and_a_recreate() {
     let log = f.repo.log(&head, 200, Some("a.txt")).unwrap();
     assert!(log.iter().any(|e| e.id == recreated));
 }
+
+// ---- copies (`BlameOptions::copies`) --------------------------------------------------------------------
+
+fn blame_copies(f: &Fx, rev: &ChangesetId, path: &str) -> Blame {
+    let b = f.repo.blame(rev, path, &BlameOptions { copies: true, ..Default::default() }).unwrap();
+    assert_consistent(&f.repo, &b);
+    b
+}
+
+#[test]
+fn a_copy_hands_its_lines_back_to_the_source_only_when_asked_to() {
+    let f = fx();
+    let c1 = step(&f, &[], &[("a.txt", "alpha\nbeta\ngamma\ndelta\n")], "user:alice", "write a");
+    let c2 = step(&f, &[c1], &[("a.txt", "alpha\nBETA\ngamma\ndelta\n")], "user:bob", "edit a");
+    // carol copies a.txt, with one new line
+    let c3 = step(
+        &f,
+        &[c2],
+        &[("a.txt", "alpha\nBETA\ngamma\ndelta\n"), ("copy/b.txt", "alpha\nBETA\ngamma\ndelta\nextra\n")],
+        "user:carol",
+        "copy a to b",
+    );
+
+    // by default a copy is a new file: every line is carol's
+    let plain = blame(&f, &c3, "copy/b.txt");
+    assert!(plain.lines.iter().all(|l| l.changeset == c3));
+
+    let b = blame_copies(&f, &c3, "copy/b.txt");
+    assert_eq!(who(&b), ["alice:write a", "bob:edit a", "alice:write a", "alice:write a", "carol:copy a to b"]);
+    assert_eq!(b.lines[1].path, "a.txt", "the path reported is the source's");
+    assert_eq!(b.lines[1].original_line, 2);
+    assert_eq!(b.lines[4].path, "copy/b.txt");
+}
+
+#[test]
+fn a_rename_beats_a_copy_and_a_dissimilar_file_is_no_copy() {
+    let f = fx();
+    let body: String = (0..10).map(|i| format!("line {i}\n")).collect();
+    let z = "unrelated\ncontent\n";
+    let c1 = step(&f, &[], &[("a.txt", &body), ("z.txt", z)], "user:alice", "base");
+    // moved, not copied: the file is gone from its old path
+    let c2 = step(&f, &[c1], &[("b.txt", &body), ("z.txt", z)], "user:bob", "move");
+    assert!(blame_copies(&f, &c2, "b.txt").lines.iter().all(|l| l.changeset == c1 && l.path == "a.txt"));
+    // a new file sharing 3 of 10 lines with a neighbour is below the threshold
+    let thin: String = (0..3).map(|i| format!("line {i}\n")).chain((0..7).map(|i| format!("new {i}\n"))).collect();
+    let c3 = step(&f, &[c2], &[("b.txt", &body), ("z.txt", z), ("c.txt", &thin)], "user:carol", "thin");
+    assert!(blame_copies(&f, &c3, "c.txt").lines.iter().all(|l| l.changeset == c3));
+    // 8 of 10 lines is enough
+    let near: String = (0..8).map(|i| format!("line {i}\n")).chain(["x\n".to_string(), "y\n".to_string()]).collect();
+    let c4 = step(&f, &[c3], &[("b.txt", &body), ("z.txt", z), ("d.txt", &near)], "user:dave", "near");
+    let b = blame_copies(&f, &c4, "d.txt");
+    assert_eq!(b.lines.iter().filter(|l| l.changeset == c1).count(), 8);
+    assert_eq!(b.lines.iter().filter(|l| l.changeset == c4).count(), 2);
+}
+
+#[test]
+fn copies_are_listed_for_a_changeset_and_are_never_renames() {
+    let f = fx();
+    let c1 = step(&f, &[], &[("a.txt", "one\ntwo\nthree\n"), ("old.txt", "moved\nme\nplease\n")], "user:alice", "base");
+    let c2 = step(
+        &f,
+        &[c1],
+        &[("a.txt", "one\ntwo\nthree\n"), ("sub/a-copy.txt", "one\ntwo\nthree\n"), ("new.txt", "moved\nme\nplease\n")],
+        "user:bob",
+        "copy and move",
+    );
+    let cs = f.repo.changeset(&c2).unwrap();
+    let renames: Vec<_> =
+        f.repo.changeset_renames(&cs).unwrap().into_iter().map(|r| (r.from.to_string(), r.to.to_string())).collect();
+    assert_eq!(renames, [("old.txt".to_string(), "new.txt".to_string())]);
+    let copies: Vec<_> = f
+        .repo
+        .changeset_copies(&cs)
+        .unwrap()
+        .into_iter()
+        .map(|r| (r.from.to_string(), r.to.to_string(), r.similarity))
+        .collect();
+    assert_eq!(copies, [("a.txt".to_string(), "sub/a-copy.txt".to_string(), 100)]);
+}

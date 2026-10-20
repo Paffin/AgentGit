@@ -42,6 +42,30 @@ impl ConflictInfo {
     }
 }
 
+/// A note of the merge: something it decided on its own and a person may want to check.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NoteInfo {
+    /// A stable code (`directory_rename`): see `ag_merge::MergeNote::code`.
+    pub code: String,
+    /// The note in words for a person.
+    pub message: String,
+    /// The paths involved, as `[from, to]` pairs (files moved along by a directory rename), possibly cut.
+    #[serde(default)]
+    pub moves: Vec<[String; 2]>,
+}
+
+impl NoteInfo {
+    /// The wire description of a merge note.
+    pub fn from_note(n: &ag_merge::MergeNote) -> Self {
+        let moves = match n {
+            ag_merge::MergeNote::DirectoryRename { relocated, .. } => {
+                relocated.iter().map(|(a, b)| [a.to_string(), b.to_string()]).collect()
+            }
+        };
+        NoteInfo { code: n.code().to_string(), message: n.to_string(), moves }
+    }
+}
+
 /// A reason an integration cannot proceed (yet).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Blocker {

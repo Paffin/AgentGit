@@ -413,6 +413,18 @@ fn every_kind_of_conflict_has_a_sentence() {
         ),
         (ConflictKind::RenameDelete { ours_renamed: true }, "renamed on our side, deleted on theirs"),
         (ConflictKind::RenameDelete { ours_renamed: false }, "deleted on our side, renamed on theirs"),
+        (
+            ConflictKind::DirectoryRenameAmbiguous {
+                ours_renamed: true,
+                directory: p("lib"),
+                candidates: vec![p("other"), p("src")],
+            },
+            "added on theirs beneath 'lib', which our side emptied by moving files to several places ('other', 'src') or only some of them",
+        ),
+        (
+            ConflictKind::DirectoryRenameCollision { ours_renamed: false, directory: p("lib"), target: p("src/n") },
+            "added on ours beneath 'lib', which their side renamed, but 'src/n' is already taken",
+        ),
     ];
     for (kind, text) in cases {
         assert_eq!(kind.to_string(), text);
@@ -904,7 +916,7 @@ mod strategies_agree {
             let io = Mem::default();
             let (Some(b), Some(o), Some(t)) = (build(&io, &base), build(&io, &ours), build(&io, &theirs)) else { return Ok(()) };
             let (oc, tc) = (b.changes(&o), b.changes(&t));
-            let plan = plan_renames(&b, &o, &t, &oc, &tc, &io).unwrap();
+            let plan = plan_renames(Algorithm::CURRENT, &b, &o, &t, &oc, &tc, &io).unwrap();
             let full = merge_full(&b, &o, &t, &plan, &io, &lim()).unwrap();
             let fast = merge_incremental(&o, &tc, &plan, &io, &lim()).unwrap();
             let structural = full.conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. }));
@@ -952,7 +964,7 @@ mod tight_limits {
         assert!(is_too_many(&err, 6), "{err}");
 
         let (oc, tc) = (base.changes(&ours), base.changes(&theirs));
-        let plan = plan_renames(&base, &ours, &theirs, &oc, &tc, &io).unwrap();
+        let plan = plan_renames(Algorithm::CURRENT, &base, &ours, &theirs, &oc, &tc, &io).unwrap();
         let err = merge_full(&base, &ours, &theirs, &plan, &io, &limits).expect_err("the reference algorithm");
         assert!(is_too_many(&err, 6), "{err}");
         let err = merge_incremental(&ours, &tc, &plan, &io, &limits).expect_err("the fast path");
@@ -999,7 +1011,7 @@ mod tight_limits {
             let (b, o, t) = (build(&io, &base, "same\n"), build(&io, &ours, "ours\n"), build(&io, &theirs, "theirs\n"));
             let limits = tight(max);
             let (oc, tc) = (b.changes(&o), b.changes(&t));
-            let plan = plan_renames(&b, &o, &t, &oc, &tc, &io).unwrap();
+            let plan = plan_renames(Algorithm::CURRENT, &b, &o, &t, &oc, &tc, &io).unwrap();
             let full = merge_full(&b, &o, &t, &plan, &io, &limits);
             let fast = merge_incremental(&o, &tc, &plan, &io, &limits);
             match (&fast, &full) {
@@ -1057,6 +1069,22 @@ fn every_conflict_kind_has_its_own_stable_code() {
         ),
         (ConflictKind::RenameDelete { ours_renamed: true }, "rename_delete"),
         (ConflictKind::RenameDelete { ours_renamed: false }, "rename_delete"),
+        (
+            ConflictKind::DirectoryRenameAmbiguous {
+                ours_renamed: true,
+                directory: RepoPath::new("d").unwrap(),
+                candidates: vec![],
+            },
+            "directory_rename_ambiguous",
+        ),
+        (
+            ConflictKind::DirectoryRenameCollision {
+                ours_renamed: true,
+                directory: RepoPath::new("d").unwrap(),
+                target: RepoPath::new("e").unwrap(),
+            },
+            "directory_rename_collision",
+        ),
     ];
     for (kind, code) in &all {
         assert_eq!(kind.code(), *code);
@@ -1064,5 +1092,7 @@ fn every_conflict_kind_has_its_own_stable_code() {
         assert_ne!(kind.to_string(), *code, "the prose is separate from the code");
     }
     let distinct: std::collections::BTreeSet<_> = all.iter().map(|(_, c)| *c).collect();
-    assert_eq!(distinct.len(), 9, "nine kinds, nine codes");
+    assert_eq!(distinct.len(), 11, "eleven kinds, eleven codes");
 }
+
+mod directory_renames;

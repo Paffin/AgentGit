@@ -39,7 +39,7 @@ exclude_re = [
 
     # ag-merge, `detect_renames_in`: with nothing deleted, or nothing added, the rest of the function finds no pair
     # either; the early return only saves building two empty collections.
-    "ag-merge/src/rename\\.rs:73:27: replace \\|\\| with && in detect_renames_in",
+    "ag-merge/src/rename\\.rs:\\d+:27: replace \\|\\| with && in detect_renames_in",
     # ag-merge, `merge_text`: `j = i * 1` starts the scan for the end of a cluster at the cluster's own first hunk,
     # which is inside it by definition, so the cluster is the same.
     "ag-merge/src/text\\.rs:\\d+:\\d+: replace \\+ with \\* in merge_text",

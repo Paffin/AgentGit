@@ -144,7 +144,7 @@ fn independent_proposals_merge_with_the_head_as_first_parent() {
 
     let merge = f.repo.changeset(&new_head).unwrap();
     assert_eq!(merge.parents, vec![pa, pb], "first parent is the previous stream head");
-    assert!(merge.message.contains("Merge-Algorithm: ag-merge/2+ag-diff/1"));
+    assert!(merge.message.contains("Merge-Algorithm: ag-merge/3+ag-diff/1"));
     assert_eq!(f.read(&new_head, "a.txt").as_deref(), Some("A\n"));
     assert_eq!(f.read(&new_head, "b.txt").as_deref(), Some("B\n"));
 
@@ -471,7 +471,45 @@ fn a_rename_and_a_concurrent_edit_integrate_as_one_merged_file() {
     assert_eq!(strategy, Strategy::Merge);
     assert_eq!(f.read(&new_head, "src/new.rs").as_deref(), Some(edited_body.as_str()));
     assert_eq!(f.read(&new_head, "src/old.rs"), None, "the file moved");
-    assert!(f.repo.changeset(&new_head).unwrap().message.contains("Merge-Algorithm: ag-merge/2"));
+    assert!(f.repo.changeset(&new_head).unwrap().message.contains("Merge-Algorithm: ag-merge/3"));
+    assert!(f.repo.fsck().unwrap().is_ok());
+}
+
+#[test]
+fn a_file_added_to_a_renamed_directory_follows_it_and_the_merge_says_so() {
+    let f = fx();
+    let (a, b, c) = ("fn a() {}\n".repeat(3), "fn b() {}\n".repeat(3), "fn c() {}\n".repeat(3));
+    let base = f.land(None, &[("lib/a.rs", &a), ("lib/b.rs", &b), ("lib/c.rs", &c), ("README", "r\n")]);
+    let moved =
+        f.snap(Some(base), &[("src/a.rs", &a), ("src/b.rs", &b), ("src/c.rs", &c), ("README", "r\n")], "user:alice");
+    let added = f.snap(
+        Some(base),
+        &[("lib/a.rs", &a), ("lib/b.rs", &b), ("lib/c.rs", &c), ("lib/d.rs", "fn d() {}\n"), ("README", "r\n")],
+        "user:bob",
+    );
+    let prop_moved = f.propose(moved, "move lib to src", "user:alice");
+    let prop_added = f.propose(added, "add d", "user:bob");
+    f.integrate(&prop_moved, "user:alice");
+
+    // the preview already explains it
+    let pv = f.repo.merge_preview(&prop_added).unwrap();
+    assert!(pv.conflicts.is_empty(), "{:?}", pv.conflicts);
+    assert_eq!(pv.algorithm, "ag-merge/3+ag-diff/1");
+    let [note] = pv.notes.as_slice() else { panic!("{:?}", pv.notes) };
+    assert_eq!(note.code, "directory_rename");
+    assert_eq!(note.moves, [["lib/d.rs".to_string(), "src/d.rs".to_string()]]);
+
+    let r = f.integrate(&prop_added, "user:alice");
+    let Outcome::Integrated { new_head, strategy, .. } = r.outcome else { panic!("{:?}", r.outcome) };
+    assert_eq!(strategy, Strategy::Merge);
+    assert_eq!(f.read(&new_head, "src/d.rs").as_deref(), Some("fn d() {}\n"));
+    assert_eq!(f.read(&new_head, "lib/d.rs"), None);
+    let msg = f.repo.changeset(&new_head).unwrap().message.clone();
+    assert!(msg.contains("Merge-Algorithm: ag-merge/3+ag-diff/1"), "{msg}");
+    assert!(
+        msg.contains("Directory-Rename: lib -> src (ours renamed it; 3 of 3 files; 1 added and 0 edited followed)"),
+        "{msg}"
+    );
     assert!(f.repo.fsck().unwrap().is_ok());
 }
 
@@ -526,6 +564,8 @@ fn every_kind_of_conflict_has_a_stable_code_on_the_wire() {
         "file_directory",
         "rename_rename",
         "rename_delete",
+        "directory_rename_ambiguous",
+        "directory_rename_collision",
     ];
     for c in &conflicts {
         assert!(all.contains(&c.kind.as_str()), "{}", c.kind);

@@ -14,7 +14,14 @@ ag show <rev>                   # message, parents, and what changed
 `ag show` lists each change as `A` (added), `M` (modified), `D` (deleted) or **`R old -> new (NN% similar)`**
 for a rename: a path the changeset deleted paired with a similar path it created (the same
 [rename detection](../architecture/merge-semantics.md#renames) the merge uses; renames are display, not
-history — the stored changeset is still a delete and a put).
+history — the stored changeset is still a delete and a put). With `--copies` a file the changeset created as a
+**copy** of another file is listed as **`C old -> new (NN% similar)`** (JSON: `"op": "C"`): identical content, or at
+least 50 % of the bytes in common with one of at most 200 candidate files ([how](../architecture/merge-semantics.md#copies)).
+Copies are off by default and are never used by a merge.
+
+A merge changeset whose directory rename was followed carries a `Directory-Rename:` line in its message, and
+`ag preview <proposal>` prints the same as a `note:` before anything is integrated
+([directory renames](../architecture/merge-semantics.md#directory-renames)).
 
 ## `ag blame`
 
@@ -23,6 +30,7 @@ ag blame src/lib.rs                  # the workspace head (or the default stream
 ag blame main:src/lib.rs             # a specific revision: [REV:]PATH
 ag blame -L 40,60 src/lib.rs         # only lines 40 to 60
 ag blame --json src/lib.rs           # machine-readable
+ag blame --copies src/copy.rs        # follow a file that was created as a copy of another
 ```
 
 ```text
@@ -45,8 +53,14 @@ How the answer is built:
   write itself — a conflict resolution — not for lines either side brought.
 - **Renames are followed**: when a changeset creates the path and deletes a similar file, blame continues in
   the old file. For merge parents other than the first only the same path is considered.
+- **Copies are followed with `--copies`**: when a changeset creates the path and no deleted file matches, blame
+  compares it with the files of the first parent (identical content, or at least 50 % of the bytes in common with one
+  of at most 200 candidates: files the changeset modified, then the new file's directory, then path order). Lines
+  the copy took over are blamed on whoever wrote them in the source file, and the path column shows the source's
+  path; the rest are blamed on the changeset that made the copy. Without the flag a copy is a new file. Over a
+  server (`ag remote blame`, MCP) copies are not followed yet.
 - A line that moved within a file is a delete plus an insert in the diff, so it is blamed on the changeset
-  that moved it. There is no copy/move detection across files.
+  that moved it. Moving lines *between* files is not detected.
 
 Limits, always reported: files over 4 MiB, binary files and files with more than 100 000 lines are refused;
 after `--max-commits` changesets (default 100 000) the walk stops and the remaining lines are marked `^`

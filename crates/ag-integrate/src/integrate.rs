@@ -32,7 +32,7 @@ use serde_json::{Value, json};
 use crate::derive::DERIVE_BATCH_AFTER_INTEGRATE;
 use crate::publish::hash_request;
 use crate::repo::RepoBlobs;
-use crate::types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
+use crate::types::{Blocker, ConflictInfo, IntegrationResult, NoteInfo, Outcome, Strategy};
 use crate::{Error, Repository, Result};
 
 /// How an integration behaves when other writers keep moving its stream's head under it.
@@ -89,6 +89,11 @@ pub struct IntegrateRequest {
     pub fencing_tokens: Vec<u64>,
 }
 
+/// The merge notes as message lines (`Directory-Rename: ...`), each ending in a newline.
+pub(crate) fn note_trailers(notes: &[ag_merge::MergeNote]) -> String {
+    notes.iter().map(|n| format!("{}\n", n.trailer())).collect()
+}
+
 /// What integrating a proposal *would* do right now. No stream is touched.
 #[derive(Clone, Debug, Serialize)]
 pub struct MergePreview {
@@ -106,6 +111,8 @@ pub struct MergePreview {
     pub problem: Option<String>,
     /// Merge algorithm version.
     pub algorithm: &'static str,
+    /// What the merge decided on its own and a person may want to check (a directory rename followed, ...).
+    pub notes: Vec<NoteInfo>,
     /// The candidate tree itself (for checkout by validators).
     #[serde(skip)]
     pub tree: Option<Tree>,
@@ -126,9 +133,24 @@ pub struct RecoveryReport {
 
 enum Candidate {
     AlreadyIntegrated,
-    FastForward { new_head: ChangesetId, new_tree: Tree, head_tree: Tree },
-    Merge { id: ChangesetId, cs: Box<Changeset>, new_tree: Tree, head_tree: Tree, base: ChangesetId },
-    Conflict { conflicts: Vec<ConflictInfo>, base: ChangesetId },
+    FastForward {
+        new_head: ChangesetId,
+        new_tree: Tree,
+        head_tree: Tree,
+    },
+    Merge {
+        id: ChangesetId,
+        cs: Box<Changeset>,
+        new_tree: Tree,
+        head_tree: Tree,
+        base: ChangesetId,
+        notes: Vec<NoteInfo>,
+    },
+    Conflict {
+        conflicts: Vec<ConflictInfo>,
+        base: ChangesetId,
+        notes: Vec<NoteInfo>,
+    },
     Invalid(String),
 }
 
@@ -341,7 +363,7 @@ impl Repository {
             let candidate = self.compute_candidate(&prop, &st, Some(&meta_for_merge))?;
             match &candidate {
                 Candidate::AlreadyIntegrated => return self.finish_already_integrated(op, actor, &prop, &st),
-                Candidate::Conflict { conflicts, base } => {
+                Candidate::Conflict { conflicts, base, .. } => {
                     let outcome = Outcome::Conflict { conflicts: conflicts.clone(), base: Some(*base) };
                     return self.reject(op, actor, &outcome, "integrate.conflict");
                 }
@@ -476,7 +498,8 @@ impl Repository {
             .map_err(|e| Error::Invalid(format!("merge failed: {e}")))?;
         if !merged.is_clean() {
             let conflicts = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
-            return Ok(Candidate::Conflict { conflicts, base });
+            let notes = merged.notes.iter().map(NoteInfo::from_note).collect();
+            return Ok(Candidate::Conflict { conflicts, base, notes });
         }
         let ops = head_tree.diff(&merged.tree);
         let default_meta;
@@ -492,8 +515,14 @@ impl Repository {
             }
         };
         let message = format!(
-            "Integrate {}: {}\n\nProposal-Head: {}\nMerge-Base: {}\nMerge-Algorithm: {}\nOperation: {}\n",
-            prop.id, prop.title, p, base, ALGORITHM_VERSION, mm.operation_id
+            "Integrate {}: {}\n\nProposal-Head: {}\nMerge-Base: {}\nMerge-Algorithm: {}\n{}Operation: {}\n",
+            prop.id,
+            prop.title,
+            p,
+            base,
+            ALGORITHM_VERSION,
+            note_trailers(&merged.notes),
+            mm.operation_id
         );
         let cs = Changeset::build(
             self.config.namespace.clone(),
@@ -508,7 +537,8 @@ impl Repository {
         if merge_meta.is_some() {
             self.put_changeset(&cs)?;
         }
-        Ok(Candidate::Merge { id, cs: Box::new(cs), new_tree: merged.tree, head_tree, base })
+        let notes = merged.notes.iter().map(NoteInfo::from_note).collect();
+        Ok(Candidate::Merge { id, cs: Box::new(cs), new_tree: merged.tree, head_tree, base, notes })
     }
 
     /// Dry run: reports what integrating `proposal_id` would do now.
@@ -527,6 +557,7 @@ impl Repository {
             changed_files: vec![],
             problem: None,
             algorithm: ALGORITHM_VERSION,
+            notes: vec![],
             tree: None,
         };
         match self.compute_candidate(&prop, &st, None)? {
@@ -538,15 +569,17 @@ impl Repository {
                 preview.candidate_tree = Some(new_tree.id());
                 preview.tree = Some(new_tree);
             }
-            Candidate::Merge { new_tree, head_tree, base, .. } => {
+            Candidate::Merge { new_tree, head_tree, base, notes, .. } => {
                 preview.strategy = Strategy::Merge;
+                preview.notes = notes;
                 preview.base = Some(base);
                 preview.changed_files = head_tree.diff(&new_tree).iter().map(|o| o.path().to_string()).collect();
                 preview.candidate_tree = Some(new_tree.id());
                 preview.tree = Some(new_tree);
             }
-            Candidate::Conflict { conflicts, base } => {
+            Candidate::Conflict { conflicts, base, notes } => {
                 preview.strategy = Strategy::Merge;
+                preview.notes = notes;
                 preview.base = Some(base);
                 preview.conflicts = conflicts;
             }

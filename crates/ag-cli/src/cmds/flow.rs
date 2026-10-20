@@ -382,6 +382,12 @@ pub fn preview(ctx: &Ctx, a: &PreviewArgs) -> Result<u8> {
         for c in &pv.conflicts {
             let _ = writeln!(s, "conflict: {} ({})", c.path, c.describe());
         }
+        for n in &pv.notes {
+            let _ = writeln!(s, "note: {}", n.message);
+            for [from, to] in &n.moves {
+                let _ = writeln!(s, "  {from} -> {to}");
+            }
+        }
         if !pv.changed_files.is_empty() {
             let _ = writeln!(s, "would change {} file(s): {}", pv.changed_files.len(), pv.changed_files.join(", "));
         }

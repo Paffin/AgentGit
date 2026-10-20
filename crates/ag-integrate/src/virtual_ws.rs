@@ -212,9 +212,10 @@ impl Repository {
             vec![ws_head, stream_head],
             author,
             &format!(
-                "Sync {} into workspace '{name}'\n\nMerge-Base: {base}\nMerge-Algorithm: {}\n",
+                "Sync {} into workspace '{name}'\n\nMerge-Base: {base}\nMerge-Algorithm: {}\n{}",
                 ws.stream,
-                ag_merge::ALGORITHM_VERSION
+                ag_merge::ALGORITHM_VERSION,
+                crate::integrate::note_trailers(&merged.notes)
             ),
             ops,
         )?;

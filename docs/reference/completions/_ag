@@ -162,6 +162,7 @@ _arguments "${_arguments_options[@]}" : \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
+'--copies[Also report files created as copies of another file (\`C\` lines)\: identical content, or at least 50% of the bytes in common with another file (co-modified and neighbouring files are tried first)]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
 '(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
@@ -230,6 +231,7 @@ _arguments "${_arguments_options[@]}" : \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
+'--copies[Follow files that were created as copies of another file\: lines a copy took over are blamed on whoever wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or co-modified file)]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
 '(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \

@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use ag_integrate::{BlameOptions, Repository};
-use ag_merge::{BlobIo, IoError, merge_trees};
+use ag_merge::{Algorithm, BlobIo, IoError, merge_trees_with};
 use ag_types::{BlobId, ChangesetId, TreeId};
 use serde_json::Value;
 
@@ -199,8 +199,12 @@ fn every_merge_the_old_build_made_is_reproduced_by_this_one() {
                 f.repo.tree_of(&cs.parents[0]).unwrap(),
                 f.repo.tree_of(&cs.parents[1]).unwrap(),
             );
-            let merged =
-                merge_trees(&base_t, &ours_t, &theirs_t, &Blobs(&f.repo), f.repo.limits()).expect("merge runs");
+            // A recorded merge is verified by the algorithm version it names, not by today's.
+            let recorded = Algorithm::parse(algorithm).unwrap_or_else(|| {
+                panic!("fixture {}: merge {} names an unknown algorithm {algorithm}", f.label, id.short())
+            });
+            let merged = merge_trees_with(recorded, &base_t, &ours_t, &theirs_t, &Blobs(&f.repo), f.repo.limits())
+                .expect("merge runs");
             assert!(
                 merged.is_clean(),
                 "fixture {}: merge {} now conflicts: {:?}",

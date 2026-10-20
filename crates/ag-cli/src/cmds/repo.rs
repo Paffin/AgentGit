@@ -351,6 +351,10 @@ fn op_marker(parent: &Tree, op: &Op) -> &'static str {
 pub struct ShowArgs {
     /// Revision (default: the workspace head).
     pub rev: Option<String>,
+    /// Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the
+    /// bytes in common with another file (co-modified and neighbouring files are tried first).
+    #[arg(long)]
+    pub copies: bool,
 }
 
 pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
@@ -362,13 +366,16 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
     let renames = ctx.repo.changeset_renames(&cs)?;
     let renamed_to: std::collections::BTreeMap<_, _> = renames.iter().map(|r| (r.to.clone(), r)).collect();
     let renamed_from: std::collections::BTreeSet<_> = renames.iter().map(|r| r.from.clone()).collect();
+    let copies = if a.copies { ctx.repo.changeset_copies(&cs)? } else { Vec::new() };
+    let copied_to: std::collections::BTreeMap<_, _> = copies.iter().map(|r| (r.to.clone(), r)).collect();
     let changes: Vec<_> = cs
         .ops
         .iter()
         .filter(|op| !renamed_from.contains(op.path()))
-        .map(|op| match renamed_to.get(op.path()) {
-            Some(r) => json!({"op": "R", "path": op.path(), "from": r.from, "similarity": r.similarity}),
-            None => json!({"op": op_marker(&parent, op), "path": op.path()}),
+        .map(|op| match (renamed_to.get(op.path()), copied_to.get(op.path())) {
+            (Some(r), _) => json!({"op": "R", "path": op.path(), "from": r.from, "similarity": r.similarity}),
+            (None, Some(r)) => json!({"op": "C", "path": op.path(), "from": r.from, "similarity": r.similarity}),
+            (None, None) => json!({"op": op_marker(&parent, op), "path": op.path()}),
         })
         .collect();
     ctx.out(
@@ -390,11 +397,14 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
             }
             s.push('\n');
             for op in cs.ops.iter().filter(|op| !renamed_from.contains(op.path())) {
-                match renamed_to.get(op.path()) {
-                    Some(r) => {
+                match (renamed_to.get(op.path()), copied_to.get(op.path())) {
+                    (Some(r), _) => {
                         let _ = writeln!(s, "  R {} -> {}  ({}% similar)", r.from, r.to, r.similarity);
                     }
-                    None => {
+                    (None, Some(r)) => {
+                        let _ = writeln!(s, "  C {} -> {}  ({}% similar)", r.from, r.to, r.similarity);
+                    }
+                    (None, None) => {
                         let _ = writeln!(s, "  {} {}", op_marker(&parent, op), op.path());
                     }
                 }
@@ -535,6 +545,11 @@ pub struct BlameArgs {
     /// Visit at most this many changesets; older lines are marked as a boundary.
     #[arg(long, default_value_t = ag_integrate::DEFAULT_BLAME_COMMITS)]
     pub max_commits: usize,
+    /// Follow files that were created as copies of another file: lines a copy took over are blamed on whoever
+    /// wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or
+    /// co-modified file).
+    #[arg(long)]
+    pub copies: bool,
 }
 
 pub fn blame(ctx: &Ctx, a: &BlameArgs) -> Result<u8> {
@@ -554,7 +569,11 @@ pub fn blame(ctx: &Ctx, a: &BlameArgs) -> Result<u8> {
             Some((s, e))
         }
     };
-    let b = ctx.repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits: a.max_commits, range })?;
+    let b = ctx.repo.blame(
+        &id,
+        &path,
+        &ag_integrate::BlameOptions { max_commits: a.max_commits, range, copies: a.copies },
+    )?;
     ctx.out(&b, || {
         let width = b.lines.last().map(|l| l.line.to_string().len()).unwrap_or(1);
         let author_w = b.lines.iter().map(|l| l.author.len()).max().unwrap_or(0).min(28);

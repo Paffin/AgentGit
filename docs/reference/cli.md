@@ -359,6 +359,7 @@ Arguments:
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --copies         Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the bytes in common with another file (co-modified and neighbouring files are tried first)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
       --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
@@ -428,6 +429,7 @@ Options:
   -L, --lines <START,END>          Only these lines, `START,END` (1-based, inclusive)
       --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --max-commits <MAX_COMMITS>  Visit at most this many changesets; older lines are marked as a boundary [default: 100000]
+      --copies                     Follow files that were created as copies of another file: lines a copy took over are blamed on whoever wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or co-modified file)
       --json                       Machine-readable JSON output
       --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown

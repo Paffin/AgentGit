@@ -4,13 +4,16 @@
 .SH NAME
 ag\-show \- Show one changeset and what it changed
 .SH SYNOPSIS
-\fBag show\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIREV\fR] 
+\fBag show\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-copies\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIREV\fR] 
 .SH DESCRIPTION
 Show one changeset and what it changed
 .SH OPTIONS
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-copies\fR
+Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the bytes in common with another file (co\-modified and neighbouring files are tried first)
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY

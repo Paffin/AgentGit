@@ -811,7 +811,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__blame)
-            opts="-L -C -q -v -h -V --lines --max-commits --repo --as --json --color --quiet --verbose --help --version"
+            opts="-L -C -q -v -h -V --lines --max-commits --copies --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3575,7 +3575,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__show)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --copies --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

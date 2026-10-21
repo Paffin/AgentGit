@@ -87,6 +87,8 @@ test.describe('the sign-in link of ag-server dev', () => {
     const dev = await startDev(join(dir, 'data'))
     try {
       await page.goto(dev.link)
+      // Let the page finish loading before leaving it (a dynamic import cut off mid-way is logged by Firefox).
+      await expect(page.getByRole('heading', { name: /demo\/welcome/ }).first()).toBeVisible()
       const r = await page.request.get(`${dev.base}/v1/repos/demo/welcome/tree/list?rev=main`, {
         headers: { Authorization: `Bearer ${new URL(dev.link).hash.replace('#token=', '')}` },
       })

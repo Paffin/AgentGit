@@ -128,7 +128,7 @@ test('a person without a group is signed in but sees nothing', async ({ browser 
   await page.goto('/signin')
   await signInAtKeycloak(page, 'nobody', 'nobody-password')
   await expect(page.getByTestId('user-menu')).toContainText('user:nobody')
-  await page.goto('/')
+  await page.goto('/repos')
   await expect(page.getByText('No repositories yet')).toBeVisible()
   await ctx.close()
 })

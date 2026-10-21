@@ -85,6 +85,13 @@ reason = "The namespace sandbox is Linux-only; macOS and Windows have no user na
 owner = "sandbox"
 runs_for_real = "ci.yml test (ubuntu; AG_REQUIRE_COMPONENTS includes namespace-sandbox) and the cgroup job"
 
+[[skip]]
+component = "mkdocs"
+jobs = ["ci/scripts-py39"]
+reason = "The Python 3.9 job installs only PyYAML; the real MkDocs build is not importable there."
+owner = "docs"
+runs_for_real = "docs.yml site (the pinned venv; AG_REQUIRE_COMPONENTS=mkdocs)"
+
 # ---- by design --------------------------------------------------------------------------------------------------
 
 [[skip]]

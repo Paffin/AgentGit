@@ -98,7 +98,7 @@ Not applicable (`n/a:`) markers, which never fail but are listed and reviewed:
 | `rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc` in `ag-integrate/tests/lifecycle.rs` | `n/a:s3-clock` | S3 objects age on the server's clock | its `_on_s3` counterpart, in *backends* |
 | the pages that need `ag-server` in `ag-cli/tests/docs_snippets.rs` | `n/a:doc-pages-needing-ag-server` | the Rust harness runs the CLI only | *docs* workflow, snippets job |
 | the Windows variants of `docs_snippets.rs` and `quickstart.rs` | `platform:windows` | they drive bash | Ubuntu and macOS; Windows has the PowerShell demo |
-| `test_the_paginate_overloads_cover_exactly_the_paginated_operations` in the Python SDK | `n/a:python-version` | `typing.get_overloads` is Python 3.11+ | *client SDKs* on 3.11 and later |
+| the test of the `paginate` overloads in the Python SDK (`sdk/python/tests/test_generated.py`) | `n/a:python-version` | `typing.get_overloads` is Python 3.11+ | *client SDKs* on 3.11 and later |
 | `#[ignore = "measurement"]` in the `scale.rs` files of `ag-merge` (2), `ag-tree`, `ag-integrate` | none (a reviewed `[[native]]` entry) | timings, not tests | on request: `cargo test --test scale -- --ignored` |
 
 ## What this does not cover

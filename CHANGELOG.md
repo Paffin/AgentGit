@@ -9,6 +9,33 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- **Zero-setup start.** `ag-server dev` makes a data directory, an administrator with a fresh 8-hour credential (replaced
+  and the old one revoked at every start), the demo repository `demo/welcome` with the `agents` preset, and a reviewer
+  `user:reviewer`, then prints a link that signs you in (`...#token=...`; the Web UI takes the credential out of the
+  address bar at once) and the exact commands. Loopback only unless `--allow-non-loopback`. `ag login URL --token-file
+  FILE` / `ag logout URL` keep a credential per server in `credentials.json` (mode 0600), which `clone`, `fetch`, `pull`,
+  `push` and `ag remote` find on their own after `AG_TOKEN*`. The link is not one-time (that needs a new endpoint).
+- **Policy presets** `solo`, `team`, `agents`, `strict`, as data in `ag-policy`: `ag policy preset list|show|apply`,
+  `ag init --preset`, `ag remote policy --preset`, `ag-server admin policy-preset`. `ag policy explain [FILE|current]` and
+  `ag remote policy --explain` read any policy document in plain words; a test fails when `Policy` gains a field without a
+  sentence.
+- **`ag explain [PROPOSAL]`** turns a refusal into plain words and the exact next commands (one explanation per refusal
+  code, checked against the variants); the hints under `ag integrate` and `ag remote integrate|prepare` use the same
+  strings. Local repositories only.
+- **A Web UI a first-time user can use** (`docs/design/web-ux-review.md`): Home ("needs your attention") and navigation by
+  job (Overview, Change requests, Agents & work, Code, Settings); plain labels with the AgentGit word in a tooltip
+  (`lib/glossary.ts`, checked against the guide); every blocker carries its fix as an action (request validation, ask a
+  reviewer, take the lease) and a "Next:" line; guided flows (new-repository wizard, getting-started checklist, "Give an
+  agent work" that grants the role and mints the credential); a rules editor with presets and sentences, raw JSON under
+  Advanced; editing a file and proposing it from the browser, with a conflict resolver; empty states that say what to do.
+  Proven by `e2e/jobs.spec.ts`: a fresh user does each of the five jobs in a real browser against a real server, using
+  only what the screen says. No server change.
+- **Tests that cannot pass by not testing.** A shared helper per language (`ag-testkit`, Go `testutil`, `ag_testkit.py`,
+  `e2e/support/components.ts`): a missing component fails when `AG_REQUIRE_COMPONENTS` names it (or `all`), otherwise it
+  skips with an `AG-SKIP` marker and a JSON report. `scripts/check_skips.py` fails a CI job on a skip not in
+  `tests/skip-allowlist.toml` (reason, owner and where it runs for real are mandatory) and, with `--scan`, on any raw
+  skip outside the helpers; every test job runs it. Inventory: `docs/architecture/test-skips.md`.
+
 - **`ag agent reap --remote [NAME] [--timeout D] [--dry-run]`**: reaps the silent runs of a server from the command
   line (`AgentService.ReapRuns`, needs `agent.operate`, audited under the caller as `run.abandon`); the local form
   gained `--dry-run`. The periodic reaper takes a `run-reaper` lease in the control database before each pass, so one
@@ -32,6 +59,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Changed
 
+- The Go suite requires `ag-server` in CI (`ag-server-binary`) and finds it through `cargo metadata`; the Keycloak Rust
+  tests are no longer `#[ignore]` (they skip in plain `cargo test` and are required in the identity-provider job); the
+  scripts run on Python 3.9 (`scripts-py39` job, `from __future__ import annotations`). The Web UI opens on Home; the
+  old words (proposal, integrate) became Change requests and Land, with the old word in a tooltip.
 - **An integration costs 3 durable commits** instead of 7 (fast-forward) or 8 (merge): the intent is written `ready`,
   tokens only if they changed, one derive commit. `ag-bench load streams` (16 clients over HTTP, 3 alternating rounds):
   87.6 to 100.0 integrations/s (+14 %, on a shared VM where less than 30 % is noise). Crash recovery at every step and
@@ -44,6 +75,12 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Found by the new gate: the `PostgreSQL + S3 backends` job never lifted the AppArmor restriction on user namespaces, so
+  every namespace-sandbox test had been silently skipping there; it does now and requires `namespace-sandbox`.
+- Test flakes: replicas of one test cluster could be given the same port ("Address already in use"); the `ag-server dev`
+  tests expected a clean exit from a killed process on Windows.
+- Dependencies: `rustls-webpki` 0.103.16 and `webpki-roots` 1.0.10 (RUSTSEC-2026-0381, -0382), `certifi` 2026.10.19 in
+  the Python SDK lock; a CodeQL alert in the rules-change sentence of the Web UI.
 - Test races found by CI (no product code changed): `ag-mcp`'s `closing_stdin_ends_the_process_cleanly` waited for
   nothing and raced the stderr drain thread; the server's log-capturing tests lost a line to the shared tracing
   callsite and `sigterm_and_sigint_stop_the_server_gracefully` sent SIGINT before tokio had installed its handler
@@ -51,6 +88,12 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Known limitations
 
+- Browser editing is one text file per change request (no rename, delete or multi-file); tab labels and table headers have
+  no tooltips; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
+  the raw JSON; no screen-reader pass. `ag explain` works on local repositories only (no `ag remote explain`). The
+  Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
+  is in the `v0.2.0-rc.2` archives. The root-only halves of the sandbox tests run in no CI job, and the four scripts
+  that read TOML need Python 3.11 and are not in the 3.9 job.
 - The tree cache clones a tree on every hit (7 ms at 100 000 files); the disk backend and PostgreSQL were not
   measured with it. Batching and the cache were not measured on PostgreSQL or S3. The reaper lease is not tested with
   real replicas on PostgreSQL and S3. Schema 3 adds three index entries per proposal write (not measured as a load).

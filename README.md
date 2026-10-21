@@ -94,6 +94,19 @@ ag log
 Next, add a [policy](docs/guides/policy.md), start an [agent](docs/guides/agents.md), or run the whole story with
 `./examples/quickstart.sh`. The full walkthrough is [Getting started](docs/getting-started.md).
 
+### Five minutes with a server, nothing to build
+
+```bash
+ag-server dev                                            # data directory, administrator, demo repository, a sign-in link
+ag login http://127.0.0.1:8080 --token-file ./ag-dev-data/dev/token
+ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, `ag push -t "my change"`, `ag explain` if refused
+```
+
+`ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is on `main` and **not in the `v0.2.0-rc.2`
+archives**: until the next tag, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+start on rc.2 in a few more lines.
+
 ### As a server
 
 ```bash
@@ -151,6 +164,11 @@ public documentation; the page linked below has the sources, the access date and
 The full comparison, including Git, Gerrit and Jujutsu: [AgentGit compared](docs/comparison.md).
 
 ## The Web UI
+
+A new user starts on a home page that says what needs attention, with plain labels (the AgentGit word is in a tooltip),
+blockers that come with their fix as a button, guided flows to start a repository or give an agent work, rules presets
+instead of raw JSON, and editing a file and proposing it from the browser. These are in `main`, not in the rc.2 archives.
+What is still missing is on the [roadmap](ROADMAP.md).
 
 A live board of runs, leases, tasks and the merge queue, with four independent verdicts per proposal. These are real
 screenshots of the UI running against a real server, captured by the end-to-end suite.

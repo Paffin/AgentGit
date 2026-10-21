@@ -1,7 +1,7 @@
 # Project status and handoff
 
-Maintainer working notes, not user documentation. Rewritten 2026-10-20 after waves 3 and 4, the crate renaming, the
-README redesign and the `v0.2.0-rc.2` release. Everything durable is in git: this file, `dev/agent-brief.md`,
+Maintainer working notes, not user documentation. Rewritten 2026-10-21 after the three first-time-user tracks (Web UI, zero-setup start,
+test honesty) landed and `main` was made green; before that 2026-10-20 (waves 3 and 4, crate renaming, `v0.2.0-rc.2`). Everything durable is in git: this file, `dev/agent-brief.md`,
 `dev/handoff/*.md` (authoritative per-package state, evidence, run links), `dev/audit/`. User-facing truth:
 `README.md` (limits), `CHANGELOG.md`, `ROADMAP.md` (Next).
 
@@ -29,23 +29,31 @@ README redesign and the `v0.2.0-rc.2` release. Everything durable is in git: thi
   Quality, Windows, CodeQL, Security, Docs, Packaging, Containers, Performance, Web UI.
 * **Dependabot**: all 25 pull requests resolved, none open (`dev/handoff/dependabot.md`). Pages is enabled by the owner
   (the site answers 200).
+* **First-time-user work** (on `main`, not in rc.2; `dev/handoff/web-ux.md`, `onboarding.md`, `test-honesty.md`): the Web UI
+  (Home, plain labels, blockers with fixes, wizards, rules presets, browser editing, `e2e/jobs.spec.ts`); `ag-server dev`,
+  `ag login/logout`, policy presets, `ag policy explain`, `ag explain`; the skip gate (`AG_REQUIRE_COMPONENTS`,
+  `tests/skip-allowlist.toml`, `scripts/check_skips.py`). Making `main` green afterwards: patched `rustls-webpki`,
+  `webpki-roots`, `certifi`, the licence list, a port race in the multi-replica test, a Windows `dev` test, two CodeQL alerts.
 * README (EN and RU) redesigned and kept in step; docs fold of this wave (CHANGELOG, ROADMAP, README, traceability,
   releasing evidence).
 * Earlier packages (server hardening and audit, HA, core/storage, execution plane, SDKs/ops, Web UI, MCP, orchestrator,
   security gates, docs site, performance, Windows): all done, limits in their `dev/handoff/` files.
 
 ## Open
+* Leftovers of the first-time-user work are the first item of `ROADMAP.md` "Next" (one text file per browser edit, no
+  tooltips on tab labels, Home polled, no screen-reader pass, `ag explain` local only, dev link not one-time, Docker
+  one-liner unverified, rc.2 archives lack `dev`/`login`/`explain`). Test-gate leftovers: root-only sandbox halves run in no
+  CI job, TOML scripts not in the Python 3.9 job.
 * Unverified for rc.2: archive attestations, macOS and aarch64 archives outside CI, the Homebrew formula; no `ag-mcp`
   SBOM; no Windows archive; no stable tag (`install.sh` needs `--version`).
-* Not proven: `ha` and Prometheus Operator overlays on a real cluster, mixed builds in a rolling upgrade (schema 3 needs
-  the new build first), PostgreSQL failover, reaper lease with real replicas, PostgreSQL/S3/TLS/multi-replica load,
-  cache on disk and PostgreSQL, first nightly fuzz and weekly mutation runs, `perf.yml` on a runner, `ag-mcp` in real
-  hosts, a second OIDC provider, a screen-reader pass.
+* Not proven: `ha` and Prometheus Operator overlays on a real cluster, mixed builds in a rolling upgrade, PostgreSQL
+  failover, reaper lease with real replicas, PostgreSQL/S3/TLS/multi-replica load, first nightly fuzz and weekly mutation
+  runs, `perf.yml` on a runner, `ag-mcp` in real hosts, a second OIDC provider, a screen-reader pass.
 * Engineering follow-ups: server option requiring the job-claim fencing token; client address in the audit chain;
-  `Arc<Tree>` in the cache; per-stream queue. The critic's list of 65 files no scanner read was not worked through.
+  `Arc<Tree>` in the cache; per-stream queue.
 
 ## Owner actions
-* Push tags (agents cannot). Next candidate: tag the newest green `main` after bumping version and CHANGELOG with
+* Push tags (agents cannot). Next candidate (it would carry `ag-server dev`): tag the newest green `main` after bumping version and CHANGELOG with
   `scripts/check_release.py vX.Y.Z --notes`; never move a published tag.
 * Optional: `gh attestation verify` of an archive; delete the empty `v0.2.0-rc.1` release page; delete leftover remote
   branches (`claude/quirky-faraday-xr6hiu`, `wip/*`, `web-product-ci`, `web-tail-ci`).

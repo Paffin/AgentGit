@@ -49,6 +49,24 @@ realistic team and four agents, and prints a token for each of them (see the
 
 ## Signing in
 
+**A sign-in link (`ag-server dev`).** The evaluation server prints a link such as
+`http://127.0.0.1:8080/repos/demo/welcome#token=agt_…`. The credential is in the *fragment*, the part of a URL after `#`,
+which a browser never sends to a server: it is in no access log and no `Referer` (the server also sends
+`Referrer-Policy: no-referrer`). The UI reads it before anything else runs, removes it from the address bar and from the
+page's history entry (`history.replaceState`), checks it with the server like a pasted token, keeps it in the tab's session
+storage like one, and opens the page the link names without the "You are signed in" step. A link that does not work (for
+example the one from before a restart) is explained on the sign-in page, and nothing is stored. The trade-offs, which is why
+this is for evaluation only and the credential `ag-server dev` issues lives eight hours and is replaced at every start:
+
+- whoever can see the terminal (or its scrollback) where the link was printed can use it until it expires;
+- the browser's own history database may keep the address as it was before the page loaded and removed the fragment;
+- `ag-server dev --open` passes the link to the browser as a command-line argument, so any user of the same machine can
+  read it in the process list for a moment;
+- it is plain HTTP on the loopback interface, so nothing crosses a network, and the link is useless from another machine.
+
+A production server uses single sign-on or a token you paste, and never prints a link. The link is not a general feature: only
+the `#token=` fragment is read, and only when the page loads.
+
 **Single sign-on (redirect).** When the server lists an identity provider, the sign-in page offers "Sign in with
 <name>": OpenID Connect authorization code with PKCE (S256), `state` and `nonce` checked by the browser, then the
 code is exchanged at the provider's token endpoint. The server still verifies every token with the provider's keys
@@ -231,8 +249,9 @@ than the cut-off tab; the diff and blame views are read-only on a phone (they sc
   end-to-end suite seeds a repository full of hostile markup and checks that none of it runs.
 - **Content-Security-Policy.** The UI needs nothing outside its own origin (no CDN, no web fonts, no inline scripts), so the
   server's strict policy applies in full.
-- **Tokens** live in the tab's session storage and in an `Authorization` header only; they are never written to a URL, local
-  storage, a log or the page after the one-time reveal.
+- **Tokens** live in the tab's session storage and in an `Authorization` header only; they are never written to local
+  storage, a log or the page after the one-time reveal, and never sent in a URL. The one place a token arrives in a URL is the
+  fragment of the sign-in link of `ag-server dev` (see "Signing in"), which is cleared at once.
 - **Permissions** shown in the UI come from your roles and are a convenience. The server decides, and refuses
   anything you may not do whatever the page offers.
 - **Same origin.** The UI is served by the server it talks to, so no CORS configuration is needed. If you serve it from

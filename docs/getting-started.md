@@ -1,17 +1,186 @@
 # Getting started
 
-This takes about five minutes and ends with a change landed through policy, review and validation.
+Five minutes, and nothing to build: **no Rust, no Node, no tokens to make by hand.** You download the programs, start an
+evaluation server that sets itself up, sign in, land a first change, and see a policy say no and tell you why.
+
+> **Status.** The commands below were run against a build of `main`. The only published release, the pre-release
+> `v0.2.0-rc.2`, does not have `ag-server dev`, `ag login`, `ag explain` or policy presets yet; they arrive with the next
+> release. Until then, [the same start on 0.2.0-rc.2](#on-020-rc2-until-the-next-release) takes a few more lines and is
+> also verified. What has **not** been run is marked where it appears.
+
+## 1. Get the programs
+
+A release archive for Linux or macOS (x86_64 and aarch64). The script checks the checksum before it installs anything and
+puts `ag`, `ag-server`, `ag-worker` and `ag-mcp` in `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2   # use the newest version
+ag --version
+```
+
+(No stable release exists yet, so `latest` skips pre-releases and the script needs `--version`. More ways, including
+the container images, Homebrew and building from source, are under [Install](#install).)
+
+## 2. Start the evaluation server
+
+```bash
+ag-server dev
+```
+
+```text
+AgentGit dev server: for trying AgentGit out, not for real work
+  - loopback only (127.0.0.1), plain HTTP; do not expose this port
+  - one administrator (user:dev); its credential lives 8 hours, is replaced at every start and is kept in /home/you/ag-dev-data/dev/token
+  - the demo repository demo/welcome has the `agents` policy preset (`ag remote policy main --explain` says what it means); data in /home/you/ag-dev-data
+
+Open in a browser (signs you in; the link carries the credential, so do not share it):
+  http://127.0.0.1:8080/repos/demo/welcome#token=agt_…
+
+A second user, user:reviewer, can approve what user:dev proposes (nobody's own approval counts); its credential is in /home/you/ag-dev-data/dev/reviewer-token.
+
+Command line:
+  ag login http://127.0.0.1:8080 --token-file /home/you/ag-dev-data/dev/token
+  ag clone http://127.0.0.1:8080/demo/welcome
+
+Credential expires 2026-10-21T10:16:50.403Z. Stop with Ctrl-C; start again with the same --data-dir to keep everything.
+```
+
+That one command made the data directory `./ag-dev-data` (delete it to start over), an administrator with a fresh
+credential, a demo repository with four sample files, and the `agents` [policy preset](guides/policy.md#start-from-a-preset).
+Start it again with the same directory and your repository, history and any policy changes stay; only the credential is replaced, and the old one stops working.
+Options: `--port N` (`0` picks a free one), `--data-dir DIR`, `--open` (opens the browser for you).
+
+**What differs from a real deployment**, and why you should not keep anything you care about here: it listens on
+`127.0.0.1` only and speaks plain HTTP (it refuses another address unless you add `--allow-non-loopback`); its single
+administrator credential lives 8 hours, where a deployment's default is 24 hours and its cap 30 days, and changes at every start; the
+policy is a fixed preset; there is no single sign-on, no TLS, no backups. For a real server see [Deploying `ag-server`](operations/deployment.md).
+
+*Containers (not run here: this machine has no Docker daemon).* In a container the server has to listen on all of its own
+interfaces, so publish the port to your loopback only:
+`docker run --rm -p 127.0.0.1:8080:8080 ghcr.io/paffin/agentgit-server:<a version that has `dev`> dev --data-dir /data --host 0.0.0.0 --allow-non-loopback`.
+The browser link works as printed; for the command line, fetch the credential from the container's `/data/dev/token`
+(`docker cp CONTAINER:/data/dev/token -` writes it as a tar stream) and pass it to `ag login --token-stdin`.
+
+## 3. Sign in
+
+**In the browser**, open the link from the banner. It signs you in and opens the demo repository's live board. The
+credential is in the part of the address after `#`, which a browser never sends to a server; the page removes it from the
+address bar at once. The trade-offs are written down in [The Web UI](guides/web-ui.md#signing-in).
+
+**On the command line**, run the two commands from the banner:
+
+```bash
+ag login http://127.0.0.1:8080 --token-file ~/ag-dev-data/dev/token
+ag clone http://127.0.0.1:8080/demo/welcome
+cd welcome
+```
+
+```text
+Logged in to http://127.0.0.1:8080 as user:dev (the credential expires 2026-10-21T10:16:50.403Z).
+Saved in ~/.config/agentgit/credentials.json (readable by you only); `ag clone`, `ag fetch`, `ag push` and `ag remote` to this server use it.
+Cloned demo/welcome into welcome (1 changeset(s), 4 blob(s)); stream 'main' at acdaaa5b59af.
+```
+
+`ag login` asks the server who the credential belongs to before it saves anything, and the saved file is yours alone
+(mode 0600). From now on `ag clone`, `ag fetch`, `ag push` and `ag remote …` to this server need no token. A variable such as
+`AG_TOKEN` still takes precedence, so a script can say which credential it wants. `ag logout URL` forgets it.
+
+## 4. Your first change
+
+```bash
+sed -i.bak 's/Hello/Hi/' src/greeting.py && rm src/greeting.py.bak    # or edit it with any editor
+ag status                                  # shows: modified  src/greeting.py
+ag snapshot -m "A friendlier greeting"     # record the working directory (no staging area)
+ag push -t "A friendlier greeting"         # publish it and open a proposal on the server
+ag remote proposals                        # the id is the first column; any unique prefix works
+ag remote integrate prop_90168b            # the policy decides; here it lets a person land their own change
+ag pull
+```
+
+```text
+Snapshot fe468b68f68b in workspace 'default'
+Uploaded 2 object(s) and opened proposal prop_90168b6ce4176298a007 -> 'main'.
+Integrated (fast_forward): stream is now at fe468b68f68b (version 2), 1 file(s) changed.
+```
+
+You made a **snapshot** (a private record of your directory), **published** it as a **proposal**, and the server
+**integrated** it: it checked the **policy** and moved the stream `main` with a compare-and-swap. Refresh the live board in the
+browser and the change is there. [Concepts](concepts.md) has the vocabulary; [Git to AgentGit](concepts-cheatsheet.md) maps it
+from what you already know.
+
+## 5. See the policy say no, and why
+
+The demo policy protects `SECURITY.md`: a change to it needs an approval from somebody other than its author.
+
+```bash
+echo "Report problems to security@example.org." >> SECURITY.md
+ag snapshot -m "Contact address"
+ag push -t "Contact address"
+ag remote integrate prop_05ff36       # exit status 3: blocked (the id from `ag push`, or the newest in `ag remote proposals`)
+```
+
+```text
+Blocked (policy v1); the stream was not changed:
+  - approvals (SECURITY.md): 0 of 1 required
+Provide what is missing, then run `ag remote integrate prop_05ff36` again.
+  ag remote review prop_05ff36 --approve
+`ag remote prepare prop_05ff36` shows what is still missing.
+```
+
+Nobody's own approval counts, so the demo made a second user for you. Review as her, then land it as yourself:
+
+```bash
+AG_TOKEN=$(cat ~/ag-dev-data/dev/reviewer-token) ag remote review prop_05ff36 --approve
+ag remote integrate prop_05ff36
+```
+
+Exit status **3** means *blocked*: something you can provide is missing, and the output names the command that provides it.
+**4** means *refused*: a conflict or a denial. Scripts and agents branch on those, not on the text.
+
+What the policy allows and refuses, in plain words, read from the policy document itself:
+
+```bash
+ag remote policy main --explain
+```
+
+For a proposal in a repository of your own, `ag explain [PROPOSAL]` says why it does not land yet and lists the exact
+commands that fix each reason (a check to run, a review to ask for, a lease to take, a conflict to resolve).
+
+## Where to go next
+
+- **Let an agent in.** `ag agent register`, `ag agent start`, and the autonomy envelope the `agents` preset sets: [Running agents](guides/agents.md), and
+  [Your first agent-safe repository](tutorials/first-agent-safe-repo.md) (its commands are run by the tests).
+- **Choose a policy.** `ag policy preset list` shows `solo`, `team`, `agents` and `strict`; [Policy](guides/policy.md#start-from-a-preset).
+- **Come from Git.** [Git to AgentGit](concepts-cheatsheet.md) and [Migrating from Git](tutorials/migrating-from-git.md).
+- **Run it for a team.** [Deploying `ag-server`](operations/deployment.md) and the [team-server tutorial](tutorials/team-server.md).
+
+## On 0.2.0-rc.2 (until the next release)
+
+The pre-release has no `dev` command, so the server needs three steps of its own. These were run against the published
+`v0.2.0-rc.2` Linux archive (checksum verified by `install.sh`):
+
+```bash
+export AG_BOOTSTRAP_TOKEN=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')   # the administrator secret, from the environment
+ag-server admin --data-dir ./ag-data create-repo demo/welcome
+ag-server serve --data-dir ./ag-data &                                           # 127.0.0.1:8080
+export AG_TOKEN=$AG_BOOTSTRAP_TOKEN                                              # every ag command below uses it
+ag clone http://127.0.0.1:8080/demo/welcome && cd welcome
+echo "# welcome" > README.md
+ag snapshot -m "first" && ag push -t "First change"
+ag remote integrate prop_…           # there is no policy yet, so a person's change lands
+```
+
+In the browser, open `http://127.0.0.1:8080/` and paste `$AG_BOOTSTRAP_TOKEN` as the access token. The bootstrap token is
+all-powerful; use it only to make real credentials (`ag-server admin mint`), then unset it.
+There is no `ag login` in rc.2: keep `AG_TOKEN` set, or use `--token-stdin` with `ag clone`. Stop the server with `kill %1` (or Ctrl-C if it runs in its own terminal).
 
 ## Install
 
-AgentGit ships three programs: `ag` (the command line, all you need to start), `ag-server` (the network
-server) and `ag-worker` (runs validation jobs). Pick the way that suits you:
+AgentGit ships three programs: `ag` (the command line), `ag-server` (the network server, with `ag-server dev` for trying it
+out) and `ag-worker` (runs validation jobs), and `ag-mcp` for agents. Pick the way that suits you:
 
-> **Status.** The only published release is the pre-release `v0.2.0-rc.2`; there is no stable release yet. Checksums,
-> `install.sh`, the quick start and the server flow were checked on its published files, and the attestations of both
-> images were verified with `gh attestation verify`. Not verified: the archive attestations, the macOS and aarch64
-> archives outside CI, the Homebrew formula (see [Releasing](operations/releasing.md#evidence)).
-> **Building from source always works.**
+> **Building from source always works.** What was verified about the release files is in
+> [Releasing](operations/releasing.md#evidence).
 
 **1. Release archive (Linux and macOS, x86_64 and aarch64)** — a script that checks what it downloads:
 
@@ -60,7 +229,7 @@ Or just build it: `cargo build --release -p agentgit-cli` → `target/release/ag
 `-p agentgit-cli`, while the directories (`crates/ag-cli`), binaries and library names keep the short `ag` names;
 [Releasing](operations/releasing.md#cratesio) has the scheme and the publish order.)
 
-## Your first repository
+## Your first repository, without a server
 
 ```bash
 mkdir hello && cd hello
@@ -107,18 +276,24 @@ stream untouched. Run `ag sync`: the clean parts are applied and conflicting fil
 
 ## Making "landed" mean something
 
-By default anyone can integrate. Add a policy to require reviews and validation:
+By default anyone who is not an agent can integrate. Pick a [preset](guides/policy.md#start-from-a-preset) to require
+reviews, or reviews and a signed check, and read back what it means:
 
 ```bash
-ag validate keygen ci            # a signing key for your CI; prints the public key to trust
-ag policy example > policy.json  # edit: trusted_issuers, required_validations, approvals…
-ag policy set policy.json
+ag policy preset list                       # solo, team, agents, strict
+ag policy preset apply team --ci-key ci    # one approval from somebody else, and a signed check named "tests"
+ag policy explain                           # the policy in plain words, read from the document itself
 
 ag integrate <proposal>          # exit code 3: "check 'tests' has no trusted passing attestation…"
+ag explain <proposal>            # why, and the exact commands that fix each reason
 ag validate run <proposal> --check tests --key ci -- cargo test
-ag proposal review <proposal> --approve
+ag --as user:bob proposal review <proposal> --approve     # somebody else: your own approval does not count
 ag integrate <proposal>          # lands; the attestation names the exact tree that was checked
 ```
+
+A preset is an ordinary policy document, so you can `ag policy preset show team > policy.json`, edit it and
+`ag policy set policy.json`; `ag init --preset team` chooses one when the repository is made. Or write one by hand:
+`ag policy example > policy.json`.
 
 Details: [Policy reference](guides/policy.md), [Validation](guides/validation.md).
 

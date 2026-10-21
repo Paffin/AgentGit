@@ -104,6 +104,7 @@ nav:
           - Troubleshooting a blocked integration: tutorials/troubleshooting-blocked-integration.md
       - FAQ: faq.md
       - Glossary: glossary.md
+      - Git to AgentGit: concepts-cheatsheet.md
       - AgentGit compared: comparison.md
   - Guides:
       - Running agents: guides/agents.md

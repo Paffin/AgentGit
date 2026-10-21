@@ -6,6 +6,7 @@
 | try it in five minutes | [Getting started](getting-started.md) |
 | follow a walkthrough (every command in them is run by the tests) | [Tutorials](tutorials/README.md): [your first agent-safe repository](tutorials/first-agent-safe-repo.md), [run a team server](tutorials/team-server.md), [policy cookbook](tutorials/policy-cookbook.md), [migrating a Git repository](tutorials/migrating-from-git.md), [troubleshooting a blocked integration](tutorials/troubleshooting-blocked-integration.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md), [Glossary](glossary.md) |
+| map what you know from Git (commands, concepts, what is different) | [Git to AgentGit](concepts-cheatsheet.md) |
 | get a quick answer | [FAQ](faq.md) |
 | see how it differs from Git, GitHub, GitLab, Bitbucket, Gerrit and Jujutsu | [AgentGit compared](comparison.md) |
 | run agents safely against a shared repository | [Agents guide](guides/agents.md) |

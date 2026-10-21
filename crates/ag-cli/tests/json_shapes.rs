@@ -50,6 +50,13 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("policy set", &a.ag(&["--json", "policy", "set", "policy.json"]).ok());
     r.rec("policy show", &a.ag(&["--json", "policy", "show"]).ok());
     r.rec("policy history", &a.ag(&["--json", "policy", "history"]).ok());
+    r.rec("policy explain", &a.ag(&["--json", "policy", "explain"]).ok());
+    r.rec("policy preset list", &a.ag(&["--json", "policy", "preset", "list"]).ok());
+    r.rec("policy preset show", &a.ag(&["--json", "policy", "preset", "show", "team"]).ok());
+    // Applying a preset replaces the policy this scenario relies on: do it in a repository of its own.
+    let presets = Ag::new();
+    r.rec("policy preset apply", &presets.ag(&["--json", "policy", "preset", "apply", "agents"]).ok());
+    r.rec("init#preset", &Ag::bare().ag(&["--json", "init", "--namespace", "acme/preset", "--preset", "team"]).ok());
     let blocked = r.rec("integrate#blocked", &a.ag(&["--json", "integrate", &p1]).code_is(3));
     let op = blocked["operation_id"].as_str().unwrap().to_string();
     r.rec("op show", &a.ag(&["--json", "op", "show", &op]).ok());

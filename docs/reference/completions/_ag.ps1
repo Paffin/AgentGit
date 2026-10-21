@@ -89,6 +89,10 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Repository namespace, e.g. `acme/webapp` (default: `local/<directory name>`)')
             [CompletionResult]::new('--stream', '--stream', [CompletionResultType]::ParameterName, 'Name of the first stream')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`')
+            [CompletionResult]::new('--preset', '--preset', [CompletionResultType]::ParameterName, 'Store a ready-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`)')
+            [CompletionResult]::new('--admin', '--admin', [CompletionResultType]::ParameterName, 'Identity pattern allowed to change the policy (repeatable). Default: you')
+            [CompletionResult]::new('--issuer', '--issuer', [CompletionResultType]::ParameterName, 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>')
+            [CompletionResult]::new('--ci-key', '--ci-key', [CompletionResultType]::ParameterName, 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -734,6 +738,8 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Replace the policy with the contents of a JSON file (needs an admin)')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'List policy versions')
             [CompletionResult]::new('example', 'example', [CompletionResultType]::ParameterValue, 'Print an example policy document')
+            [CompletionResult]::new('preset', 'preset', [CompletionResultType]::ParameterValue, 'Ready-made policies: solo, team, agents, strict')
+            [CompletionResult]::new('explain', 'explain', [CompletionResultType]::ParameterValue, 'Say in plain language what a policy allows, requires and refuses')
             break
         }
         'ag;policy;show' {
@@ -788,6 +794,97 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;policy;example' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            break
+        }
+        'ag;policy;preset' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List the presets and who each is for')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Print the policy document a preset makes, and what it means')
+            [CompletionResult]::new('apply', 'apply', [CompletionResultType]::ParameterValue, 'Store a preset as the stream''s next policy version (needs an admin)')
+            break
+        }
+        'ag;policy;preset;list' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            break
+        }
+        'ag;policy;preset;show' {
+            [CompletionResult]::new('--admin', '--admin', [CompletionResultType]::ParameterName, 'Identity pattern allowed to change the policy (repeatable). Default: you')
+            [CompletionResult]::new('--issuer', '--issuer', [CompletionResultType]::ParameterName, 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>')
+            [CompletionResult]::new('--ci-key', '--ci-key', [CompletionResultType]::ParameterName, 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME')
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            break
+        }
+        'ag;policy;preset;apply' {
+            [CompletionResult]::new('--admin', '--admin', [CompletionResultType]::ParameterName, 'Identity pattern allowed to change the policy (repeatable). Default: you')
+            [CompletionResult]::new('--issuer', '--issuer', [CompletionResultType]::ParameterName, 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>')
+            [CompletionResult]::new('--ci-key', '--ci-key', [CompletionResultType]::ParameterName, 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME')
+            [CompletionResult]::new('--stream', '--stream', [CompletionResultType]::ParameterName, 'Stream (default: the default stream)')
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            break
+        }
+        'ag;policy;explain' {
+            [CompletionResult]::new('--stream', '--stream', [CompletionResultType]::ParameterName, 'Stream whose policy `current` means (default: the default stream)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -1901,6 +1998,10 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
         }
         'ag;remote;policy' {
             [CompletionResult]::new('--set', '--set', [CompletionResultType]::ParameterName, 'Replace the policy with the JSON document in this file')
+            [CompletionResult]::new('--preset', '--preset', [CompletionResultType]::ParameterName, 'Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`)')
+            [CompletionResult]::new('--admin', '--admin', [CompletionResultType]::ParameterName, 'Identity pattern allowed to change the policy (repeatable). Default: you')
+            [CompletionResult]::new('--issuer', '--issuer', [CompletionResultType]::ParameterName, 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>')
+            [CompletionResult]::new('--ci-key', '--ci-key', [CompletionResultType]::ParameterName, 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME')
             [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Remote to use (default: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')

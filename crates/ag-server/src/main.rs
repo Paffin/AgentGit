@@ -117,6 +117,27 @@ enum AdminAction {
     },
     /// List repositories.
     Repos,
+    /// Store a ready-made policy (solo, team, agents, strict) as the next policy version of a stream, and say in
+    /// plain language what it allows and refuses. `ag policy preset list` shows what each is for.
+    PolicyPreset {
+        /// owner/name
+        repo: String,
+        /// solo, team, agents or strict.
+        name: String,
+        /// Stream (default: the repository's default stream).
+        #[arg(long)]
+        stream: Option<String>,
+        /// Identity pattern allowed to change the policy afterwards (repeatable). Default: the identity in --as.
+        #[arg(long = "admin")]
+        admins: Vec<String>,
+        /// Trusted CI issuer for the `tests` check: IDENTITY=PUBLIC_KEY (required by `strict`).
+        #[arg(long)]
+        issuer: Option<String>,
+        /// Who is recorded as changing the policy. The engine only lets an administrator of the current policy do
+        /// it: with none configured any `user:` identity is one.
+        #[arg(long = "as", default_value = "user:cli-admin")]
+        actor: String,
+    },
     /// End the runs of a repository that stopped heartbeating, release the leases of ended runs and revoke the
     /// credentials bound to them (what `POST /v1/repos/{repo}/runs/reap` does; audited as `system:cli-admin`).
     ReapRuns {
@@ -496,6 +517,31 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
             for r in app.control.all_repos().map_err(|e| anyhow::anyhow!("{e}"))? {
                 println!("{}\t{}", r.name, r.description);
             }
+        }
+        AdminAction::PolicyPreset { repo, name, stream, admins, issuer, actor } => {
+            use ag_policy::presets::{Preset, PresetOptions, parse_issuer};
+            let actor = ag_types::Identity::new(actor)?;
+            let preset = Preset::parse(&name)?;
+            let ci = issuer.as_deref().map(parse_issuer).transpose().map_err(|e| anyhow::anyhow!("--issuer: {e}"))?;
+            let admins = if admins.is_empty() { vec![actor.principal().to_string()] } else { admins };
+            let policy = preset.build(&PresetOptions { admins, ci }).map_err(|e| match e {
+                ag_policy::presets::PresetError::NeedsIssuer(n) => anyhow::anyhow!(
+                    "the preset '{n}' requires a passing check on every change: pass --issuer IDENTITY=PUBLIC_KEY"
+                ),
+                other => anyhow::anyhow!(other),
+            })?;
+            if app.control.repo(&repo).map_err(|e| anyhow::anyhow!("{e}"))?.is_none() {
+                bail!("repository '{repo}' not found");
+            }
+            let handle = app.repos.handle(&repo).map_err(|e| anyhow::anyhow!("{e}"))?;
+            let stream = stream.unwrap_or_else(|| handle.default_stream().to_string());
+            let row = handle.set_policy(&stream, &policy.to_json(), &actor)?;
+            println!(
+                "policy of {repo} '{stream}' is version {} (the preset '{name}', hash {})",
+                row.version,
+                &row.doc_hash[..12]
+            );
+            println!("{}", ag_policy::explain::render(&ag_policy::explain::explain(&policy)));
         }
         AdminAction::ReapRuns { repo, stale_after_secs, dry_run } => {
             let cfg = &app.cfg.agents;

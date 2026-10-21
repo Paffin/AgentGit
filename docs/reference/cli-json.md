@@ -462,6 +462,21 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 {
   "durability": "string",
   "namespace": "string",
+  "policy_version": "null",
+  "preset": "null",
+  "root": "string",
+  "stream": "string"
+}
+```
+
+### ag init (preset)
+
+```json
+{
+  "durability": "string",
+  "namespace": "string",
+  "policy_version": "number",
+  "preset": "string",
   "root": "string",
   "stream": "string"
 }
@@ -722,6 +737,22 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ## ag policy
 
+### ag policy explain
+
+```json
+{
+  "explanation": [
+    {
+      "effect": "string",
+      "field": "string",
+      "text": "string"
+    }
+  ],
+  "source": "string",
+  "version": "number"
+}
+```
+
 ### ag policy history
 
 ```json
@@ -735,6 +766,73 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "version": "number"
   }
 ]
+```
+
+### ag policy preset apply
+
+```json
+{
+  "hash": "string",
+  "preset": "string",
+  "stream": "string",
+  "version": "number"
+}
+```
+
+### ag policy preset list
+
+```json
+[
+  {
+    "for": "string",
+    "name": "string",
+    "needs_ci_issuer": "bool"
+  }
+]
+```
+
+### ag policy preset show
+
+```json
+{
+  "explanation": [
+    {
+      "effect": "string",
+      "field": "string",
+      "text": "string"
+    }
+  ],
+  "policy": {
+    "admins": [
+      "string"
+    ],
+    "agent_autonomy": {
+      "allowed_paths": [],
+      "auto_integrate": "bool",
+      "max_files": "number"
+    },
+    "allowed_authors": [
+      "string"
+    ],
+    "approvals": {
+      "approvers": [
+        "string"
+      ],
+      "forbid_self_approval": "bool",
+      "min": "number",
+      "min_for_agents": "number"
+    },
+    "integrators": [
+      "string"
+    ],
+    "max_changed_files": "number",
+    "protected_paths": [],
+    "require_provenance_for_agents": "bool",
+    "required_validations": [],
+    "trusted_issuers": []
+  },
+  "preset": "string"
+}
 ```
 
 ### ag policy set

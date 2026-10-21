@@ -77,6 +77,12 @@ policies that can never be satisfied are rejected when you set them.
     ag policy set policy.json           needs an admin of the current version
     ag policy show
 
+You do not have to write the first one: four presets are built in (solo, team, agents, strict).
+
+    ag policy preset list               who each is for
+    ag policy preset apply agents       store one (or `ag init --preset team`); `--ci-key ci` also requires a signed check
+    ag policy explain                   the policy in force in plain language, read from the document itself
+
 The fields
 
     integrators / admins / allowed_authors   who may integrate, change policy, author proposals

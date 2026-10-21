@@ -4,7 +4,7 @@
 .SH NAME
 ag\-init \- Create a repository in the current directory
 .SH SYNOPSIS
-\fBag init\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-namespace\fR] [\fB\-\-as\fR] [\fB\-\-stream\fR] [\fB\-\-json\fR] [\fB\-\-storage\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
+\fBag init\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-namespace\fR] [\fB\-\-as\fR] [\fB\-\-stream\fR] [\fB\-\-json\fR] [\fB\-\-storage\fR] [\fB\-\-color\fR] [\fB\-\-preset\fR] [\fB\-\-admin\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-\-issuer\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-ci\-key\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] 
 .SH DESCRIPTION
 Create a repository in the current directory
 .SH OPTIONS
@@ -30,11 +30,23 @@ JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); se
 \fB\-\-color\fR \fI<WHEN>\fR
 Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
 .TP
+\fB\-\-preset\fR \fI<NAME>\fR
+Store a ready\-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`)
+.TP
+\fB\-\-admin\fR \fI<IDENTITY>\fR
+Identity pattern allowed to change the policy (repeatable). Default: you
+.TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
 .TP
+\fB\-\-issuer\fR \fI<IDENTITY=KEY>\fR
+Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+.TP
 \fB\-v\fR, \fB\-\-verbose\fR
 Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-\-ci\-key\fR \fI<NAME>\fR
+Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

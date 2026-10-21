@@ -183,6 +183,16 @@
     "init": {
       "durability": "string",
       "namespace": "string",
+      "policy_version": "null",
+      "preset": "null",
+      "root": "string",
+      "stream": "string"
+    },
+    "init#preset": {
+      "durability": "string",
+      "namespace": "string",
+      "policy_version": "number",
+      "preset": "string",
       "root": "string",
       "stream": "string"
     },
@@ -360,6 +370,17 @@
         "reason": "string"
       }
     ],
+    "policy explain": {
+      "explanation": [
+        {
+          "effect": "string",
+          "field": "string",
+          "text": "string"
+        }
+      ],
+      "source": "string",
+      "version": "number"
+    },
     "policy history": [
       {
         "created_at": "number",
@@ -370,6 +391,58 @@
         "version": "number"
       }
     ],
+    "policy preset apply": {
+      "hash": "string",
+      "preset": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "policy preset list": [
+      {
+        "for": "string",
+        "name": "string",
+        "needs_ci_issuer": "bool"
+      }
+    ],
+    "policy preset show": {
+      "explanation": [
+        {
+          "effect": "string",
+          "field": "string",
+          "text": "string"
+        }
+      ],
+      "policy": {
+        "admins": [
+          "string"
+        ],
+        "agent_autonomy": {
+          "allowed_paths": [],
+          "auto_integrate": "bool",
+          "max_files": "number"
+        },
+        "allowed_authors": [
+          "string"
+        ],
+        "approvals": {
+          "approvers": [
+            "string"
+          ],
+          "forbid_self_approval": "bool",
+          "min": "number",
+          "min_for_agents": "number"
+        },
+        "integrators": [
+          "string"
+        ],
+        "max_changed_files": "number",
+        "protected_paths": [],
+        "require_provenance_for_agents": "bool",
+        "required_validations": [],
+        "trusted_issuers": []
+      },
+      "preset": "string"
+    },
     "policy set": {
       "created_at": "number",
       "created_by": "string",

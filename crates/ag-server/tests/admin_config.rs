@@ -183,3 +183,41 @@ fn reap_runs_works_offline_and_says_what_it_did() {
     let audit = repo.meta().read(|tx| tx.audit_list(Some("run.abandon"), 10)).unwrap();
     assert_eq!((audit[0].actor.as_str(), audit[0].target.as_str()), ("system:cli-admin", run.run_id.as_str()));
 }
+
+#[test]
+fn a_policy_preset_is_stored_offline_and_explained() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let d = data.to_str().unwrap();
+    assert!(admin(None, &["--data-dir", d, "create-repo", "acme/web"]).status.success());
+
+    let o = admin(None, &["--data-dir", d, "policy-preset", "acme/web", "agents", "--admin", "user:root"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let out = text(&o);
+    assert!(out.contains("version 1") && out.contains("Required before a change lands"), "{out}");
+
+    // What the server stored is the document the preset builds, readable by the engine like any other policy.
+    let repo = ag_integrate::Repository::open(&data.join("repos/acme/web")).unwrap();
+    let (stored, version) = repo.policy("main").unwrap();
+    assert_eq!(version, 1);
+    let expected = ag_policy::presets::Preset::Agents
+        .build(&ag_policy::presets::PresetOptions { admins: vec!["user:root".into()], ci: None })
+        .unwrap();
+    assert_eq!(stored, expected);
+    drop(repo);
+
+    // The same preset again is not a new version; a stranger may not replace it; a preset that needs an issuer says so.
+    let o = admin(
+        None,
+        &["--data-dir", d, "policy-preset", "acme/web", "agents", "--admin", "user:root", "--as", "user:root"],
+    );
+    assert!(text(&o).contains("is version 1"), "{}", text(&o));
+    let o = admin(None, &["--data-dir", d, "policy-preset", "acme/web", "team"]);
+    assert!(!o.status.success() && text(&o).contains("not allowed"), "{}", text(&o));
+    let o = admin(None, &["--data-dir", d, "policy-preset", "acme/web", "strict", "--as", "user:root"]);
+    assert!(!o.status.success() && text(&o).contains("--issuer"), "{}", text(&o));
+    let o = admin(None, &["--data-dir", d, "policy-preset", "acme/web", "lax"]);
+    assert!(text(&o).contains("solo, team, agents, strict"), "{}", text(&o));
+    let o = admin(None, &["--data-dir", d, "policy-preset", "acme/missing", "solo"]);
+    assert!(text(&o).contains("not found"), "{}", text(&o));
+}

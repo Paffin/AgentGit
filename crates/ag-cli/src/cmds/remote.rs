@@ -715,8 +715,13 @@ pub enum RemoteCmd {
         /// Stream.
         stream: String,
         /// Replace the policy with the JSON document in this file.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "preset")]
         set: Option<PathBuf>,
+        /// Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`).
+        #[arg(long, value_name = "NAME")]
+        preset: Option<String>,
+        #[command(flatten)]
+        flags: crate::cmds::policy::PresetFlags,
     },
     /// Show history of a revision on the server.
     Log {
@@ -1111,22 +1116,31 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     })?;
                 }
             }
-            RemoteCmd::Policy { stream, set } => {
-                let v = match set {
-                    Some(file) => {
-                        let doc =
-                            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-                        c.admin()
-                            .set_policy(c.req(v1::SetPolicyRequest {
-                                repo,
-                                stream: stream.clone(),
-                                document: doc,
-                                idempotency_key: String::new(),
-                            }))
-                            .await
-                            .map_err(s)?
-                            .into_inner()
+            RemoteCmd::Policy { stream, set, preset, flags } => {
+                let document = match (set, preset) {
+                    (Some(file), _) => {
+                        Some(std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?)
                     }
+                    (None, Some(name)) => {
+                        // The signing key of `--ci-key` lives in the clone, if there is one.
+                        let local = Repository::open(root).ok();
+                        let me = identity(cli)?;
+                        Some(crate::cmds::policy::build_preset(name, flags, &me, local.as_ref(), true)?.to_json())
+                    }
+                    (None, None) => None,
+                };
+                let v = match document {
+                    Some(doc) => c
+                        .admin()
+                        .set_policy(c.req(v1::SetPolicyRequest {
+                            repo,
+                            stream: stream.clone(),
+                            document: doc,
+                            idempotency_key: String::new(),
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner(),
                     None => c
                         .admin()
                         .get_policy(c.req(v1::GetPolicyRequest { repo, stream: stream.clone() }))

@@ -86,6 +86,10 @@ complete -c ag -n "__fish_ag_needs_command" -f -a "help" -d 'Show help for a com
 complete -c ag -n "__fish_ag_using_subcommand init" -l namespace -d 'Repository namespace, e.g. `acme/webapp` (default: `local/<directory name>`)' -r
 complete -c ag -n "__fish_ag_using_subcommand init" -l stream -d 'Name of the first stream' -r
 complete -c ag -n "__fish_ag_using_subcommand init" -l storage -d 'JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`' -r -F
+complete -c ag -n "__fish_ag_using_subcommand init" -l preset -d 'Store a ready-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`)' -r
+complete -c ag -n "__fish_ag_using_subcommand init" -l admin -d 'Identity pattern allowed to change the policy (repeatable). Default: you' -r
+complete -c ag -n "__fish_ag_using_subcommand init" -l issuer -d 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>' -r
+complete -c ag -n "__fish_ag_using_subcommand init" -l ci-key -d 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME' -r
 complete -c ag -n "__fish_ag_using_subcommand init" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand init" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand init" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -489,20 +493,22 @@ complete -c ag -n "__fish_ag_using_subcommand queue; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand queue; and __fish_seen_subcommand_from run" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand queue; and __fish_seen_subcommand_from run" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand queue; and __fish_seen_subcommand_from run" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -f -a "show" -d 'Show the policy in force'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -f -a "set" -d 'Replace the policy with the contents of a JSON file (needs an admin)'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -f -a "history" -d 'List policy versions'
-complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example" -f -a "example" -d 'Print an example policy document'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "show" -d 'Show the policy in force'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "set" -d 'Replace the policy with the contents of a JSON file (needs an admin)'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "history" -d 'List policy versions'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "example" -d 'Print an example policy document'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "preset" -d 'Ready-made policies: solo, team, agents, strict'
+complete -c ag -n "__fish_ag_using_subcommand policy; and not __fish_seen_subcommand_from show set history example preset explain" -f -a "explain" -d 'Say in plain language what a policy allows, requires and refuses'
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from show" -l stream -d 'The stream, as an option (the same as the positional STREAM)' -r
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from show" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from show" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -546,6 +552,30 @@ complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from example" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from example" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from example" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -f -a "list" -d 'List the presets and who each is for'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -f -a "show" -d 'Print the policy document a preset makes, and what it means'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from preset" -f -a "apply" -d 'Store a preset as the stream\'s next policy version (needs an admin)'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -l stream -d 'Stream whose policy `current` means (default: the default stream)' -r
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand policy; and __fish_seen_subcommand_from explain" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand validate; and not __fish_seen_subcommand_from keygen run list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand validate; and not __fish_seen_subcommand_from keygen run list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand validate; and not __fish_seen_subcommand_from keygen run list" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -1274,6 +1304,10 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l set -d 'Replace the policy with the JSON document in this file' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l preset -d 'Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l admin -d 'Identity pattern allowed to change the policy (repeatable). Default: you' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l issuer -d 'Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l ci-key -d 'Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r

@@ -235,14 +235,29 @@ _ag() {
             ag__subcmd__policy,example)
                 cmd="ag__subcmd__policy__subcmd__example"
                 ;;
+            ag__subcmd__policy,explain)
+                cmd="ag__subcmd__policy__subcmd__explain"
+                ;;
             ag__subcmd__policy,history)
                 cmd="ag__subcmd__policy__subcmd__history"
+                ;;
+            ag__subcmd__policy,preset)
+                cmd="ag__subcmd__policy__subcmd__preset"
                 ;;
             ag__subcmd__policy,set)
                 cmd="ag__subcmd__policy__subcmd__set"
                 ;;
             ag__subcmd__policy,show)
                 cmd="ag__subcmd__policy__subcmd__show"
+                ;;
+            ag__subcmd__policy__subcmd__preset,apply)
+                cmd="ag__subcmd__policy__subcmd__preset__subcmd__apply"
+                ;;
+            ag__subcmd__policy__subcmd__preset,list)
+                cmd="ag__subcmd__policy__subcmd__preset__subcmd__list"
+                ;;
+            ag__subcmd__policy__subcmd__preset,show)
+                cmd="ag__subcmd__policy__subcmd__preset__subcmd__show"
                 ;;
             ag__subcmd__proposal,close)
                 cmd="ag__subcmd__proposal__subcmd__close"
@@ -1461,7 +1476,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__init)
-            opts="-C -q -v -h -V --namespace --stream --storage --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --namespace --stream --storage --preset --admin --issuer --ci-key --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1476,6 +1491,22 @@ _ag() {
                     return 0
                     ;;
                 --storage)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --preset)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --admin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --issuer)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --ci-key)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -2017,7 +2048,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__policy)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version show set history example"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version show set history example preset explain"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2076,6 +2107,40 @@ _ag() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ag__subcmd__policy__subcmd__explain)
+            opts="-C -q -v -h -V --stream --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --stream)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ag__subcmd__policy__subcmd__history)
             opts="-C -q -v -h -V --stream --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -2084,6 +2149,154 @@ _ag() {
             fi
             case "${prev}" in
                 --stream)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__policy__subcmd__preset)
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version list show apply"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__policy__subcmd__preset__subcmd__apply)
+            opts="-C -q -v -h -V --admin --issuer --ci-key --stream --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --admin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --issuer)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --ci-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --stream)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__policy__subcmd__preset__subcmd__list)
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__policy__subcmd__preset__subcmd__show)
+            opts="-C -q -v -h -V --admin --issuer --ci-key --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --admin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --issuer)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --ci-key)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -3287,13 +3500,29 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote__subcmd__policy)
-            opts="-C -q -v -h -V --set --remote --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --set --preset --admin --issuer --ci-key --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --set)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --preset)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --admin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --issuer)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --ci-key)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

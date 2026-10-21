@@ -61,6 +61,11 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag policy set`](#ag-policy-set)
 - [`ag policy history`](#ag-policy-history)
 - [`ag policy example`](#ag-policy-example)
+- [`ag policy preset`](#ag-policy-preset)
+- [`ag policy preset list`](#ag-policy-preset-list)
+- [`ag policy preset show`](#ag-policy-preset-show)
+- [`ag policy preset apply`](#ag-policy-preset-apply)
+- [`ag policy explain`](#ag-policy-explain)
 - [`ag validate`](#ag-validate)
 - [`ag validate keygen`](#ag-validate-keygen)
 - [`ag validate run`](#ag-validate-run)
@@ -255,8 +260,12 @@ Options:
       --json                   Machine-readable JSON output
       --storage <FILE>         JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`
       --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --preset <NAME>          Store a ready-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`)
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
   -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
   -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
   -h, --help                   Print help
   -V, --version                Print version
 ```
@@ -1029,6 +1038,8 @@ Commands:
   set      Replace the policy with the contents of a JSON file (needs an admin)
   history  List policy versions
   example  Print an example policy document
+  preset   Ready-made policies: solo, team, agents, strict
+  explain  Say in plain language what a policy allows, requires and refuses
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -1125,6 +1136,123 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag policy preset
+
+```text
+Ready-made policies: solo, team, agents, strict
+
+Usage: ag policy preset [OPTIONS] <COMMAND>
+
+Commands:
+  list   List the presets and who each is for
+  show   Print the policy document a preset makes, and what it means
+  apply  Store a preset as the stream's next policy version (needs an admin)
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag policy preset list
+
+```text
+List the presets and who each is for
+
+Usage: ag policy preset list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag policy preset show
+
+```text
+Print the policy document a preset makes, and what it means
+
+Usage: ag policy preset show [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  solo, team, agents or strict
+
+Options:
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag policy preset apply
+
+```text
+Store a preset as the stream's next policy version (needs an admin)
+
+Usage: ag policy preset apply [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  solo, team, agents or strict
+
+Options:
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --stream <STREAM>        Stream (default: the default stream)
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag policy explain
+
+```text
+Say in plain language what a policy allows, requires and refuses
+
+Usage: ag policy explain [OPTIONS] [TARGET]
+
+Arguments:
+  [TARGET]  A policy file, or `current` (the default) for the policy in force
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  Stream whose policy `current` means (default: the default stream)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+
+Examples:
+  ag policy explain                  the policy in force
+  ag policy explain policy.json      a document, before you set it
+  ag --json policy explain current   the same sentences as data
 ```
 
 ## ag validate
@@ -2512,16 +2640,20 @@ Arguments:
   <STREAM>  Stream
 
 Options:
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --set <SET>        Replace the policy with the JSON document in this file
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>        Remote to use (default: origin)
+      --set <SET>              Replace the policy with the JSON document in this file
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --preset <NAME>          Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`)
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
 
 ## ag remote log

@@ -280,6 +280,11 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Man(a) => return cmds::shell::man(a),
         Version => return cmds::shell::version(&cli),
         Help(a) => return cmds::topics::help(a),
+        Policy(c) => {
+            if let Some(code) = cmds::policy::offline(&cli, c)? {
+                return Ok(code);
+            }
+        }
         _ => {}
     }
     let ctx = Ctx::open(&cli)?;

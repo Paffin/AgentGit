@@ -4,7 +4,7 @@
 .SH NAME
 ag\-remote\-policy \- Show or set a stream\*(Aqs policy
 .SH SYNOPSIS
-\fBag remote policy\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-set\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISTREAM\fR> 
+\fBag remote policy\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-set\fR] [\fB\-\-as\fR] [\fB\-\-preset\fR] [\fB\-\-admin\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-\-issuer\fR] [\fB\-\-ci\-key\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISTREAM\fR> 
 .SH DESCRIPTION
 Show or set a stream\*(Aqs policy
 .SH OPTIONS
@@ -21,11 +21,23 @@ Replace the policy with the JSON document in this file
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
 .TP
+\fB\-\-preset\fR \fI<NAME>\fR
+Replace the policy with a ready\-made one: solo, team, agents or strict (`ag policy preset list`)
+.TP
+\fB\-\-admin\fR \fI<IDENTITY>\fR
+Identity pattern allowed to change the policy (repeatable). Default: you
+.TP
 \fB\-\-json\fR
 Machine\-readable JSON output
 .TP
 \fB\-\-color\fR \fI<WHEN>\fR
 Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-\-issuer\fR \fI<IDENTITY=KEY>\fR
+Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+.TP
+\fB\-\-ci\-key\fR \fI<NAME>\fR
+Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
 .TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Print only what was asked for: no confirmations or hints. Errors and refusals are still shown

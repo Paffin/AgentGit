@@ -21,7 +21,9 @@
 mod attestation;
 mod document;
 mod eval;
+pub mod explain;
 mod matcher;
+pub mod presets;
 
 pub use attestation::{Attestation, AttestationError, CheckResult};
 pub use document::{

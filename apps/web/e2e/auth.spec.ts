@@ -41,7 +41,7 @@ test.describe('signing in', () => {
 
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page).toHaveURL(/\/$/)
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
   })
 
   test('the token lives in sessionStorage only and never in a URL, and survives a reload', async ({
@@ -53,7 +53,7 @@ test.describe('signing in', () => {
     await page.getByLabel('Access token').fill(token)
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
 
     const stores = await page.evaluate(() => {
       const dump = (s: Storage) => Object.fromEntries(Object.entries(s))
@@ -64,7 +64,7 @@ test.describe('signing in', () => {
     expect(stores.url).not.toContain(token)
 
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
     await expect(page.getByTestId('user-menu')).toContainText('user:alice')
   })
 
@@ -152,7 +152,7 @@ test.describe('signing in', () => {
     await page.getByLabel('Access token').fill(minted.token)
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
 
     await admin.ok_(admin.del(`/v1/credentials/${minted.credential.id}`), 'revoke')
     // The next request the app makes is answered with 401 (it may already have made one on its own).

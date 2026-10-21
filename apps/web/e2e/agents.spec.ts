@@ -10,7 +10,10 @@ test.describe('agents', () => {
     state,
   }) => {
     await page.goto(`/repos/${state.demo.repo}/agents`)
-    await expect(page.getByRole('tab', { name: /Runs/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tab', { name: /Agent sessions/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
     const table = page.getByRole('table').first()
     await expect(table.getByRole('row')).toHaveCount(5) // header + four active
     await expect(table).toContainText('Fix the flaky invoice test')
@@ -45,7 +48,7 @@ test.describe('agents', () => {
     state,
   }) => {
     await page.goto(`/repos/${state.demo.repo}/agents`)
-    await page.getByRole('tab', { name: /Leases/ }).click()
+    await page.getByRole('tab', { name: /Reservations/ }).click()
     const table = page.getByRole('table').first()
     await expect(table.getByRole('row')).toHaveCount(6) // header + five
     await expect(table).toContainText('src/auth/**')

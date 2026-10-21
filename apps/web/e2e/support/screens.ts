@@ -18,8 +18,21 @@ export interface Screen {
 
 export const screens: Screen[] = [
   {
-    name: 'repositories',
+    name: 'home (what needs you)',
     path: () => '/',
+    ready: async (p) => {
+      await expect(p.getByTestId('attention-summary')).toContainText('need your attention')
+      await expect(p.getByTestId('attention-blocked')).toBeVisible()
+    },
+  },
+  {
+    name: 'start a repository',
+    path: () => '/repos/new',
+    ready: async (p) => expect(p.getByTestId('new-repo-steps')).toBeVisible(),
+  },
+  {
+    name: 'repositories',
+    path: () => '/repos',
     ready: async (p) => {
       await expect(p.getByRole('link', { name: 'acme/webapp' })).toBeVisible()
       // The counts arrive after the list; on a narrow screen their columns are not shown at all.
@@ -46,7 +59,7 @@ export const screens: Screen[] = [
     name: 'proposals list',
     path: (s) => `/repos/${s.demo.repo}/proposals`,
     ready: async (p) =>
-      expect(p.getByRole('heading', { name: 'Proposals', level: 1 })).toBeVisible(),
+      expect(p.getByRole('heading', { name: 'Change requests', level: 1 })).toBeVisible(),
   },
   {
     name: 'proposal detail (changes)',
@@ -124,9 +137,9 @@ export const screens: Screen[] = [
     },
   },
   {
-    name: 'connect your first agent (empty repository)',
+    name: 'getting started (empty repository)',
     path: () => `/repos/${EMPTY_REPO}`,
-    ready: async (p) => expect(p.getByTestId('connect-cmd-work')).toBeVisible(),
+    ready: async (p) => expect(p.getByTestId('getting-started')).toBeVisible(),
   },
   {
     name: 'credentials and roles',

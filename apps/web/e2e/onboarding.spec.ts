@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { rmSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import { newShell } from './support/cli.ts'
@@ -10,7 +11,14 @@ import { suffix } from './support/world.ts'
 
 const PLACEHOLDER = '<token from step 2>'
 
-test.describe('the first-run panel', () => {
+// The command-line-only variant of connecting an agent, kept under "Prefer the command line only?" on Agents & work.
+// The guided version (the page does steps 1 and 2 itself) is tested in jobs.spec.ts.
+const openPanel = async (page: Page, repo: string) => {
+  await page.goto(`/repos/${repo}/agents`)
+  await page.getByText('Prefer the command line only?').click()
+}
+
+test.describe('the command-line variant', () => {
   test('shows on a repository nobody has pushed to, and its commands work', async ({
     page,
     cast,
@@ -21,7 +29,7 @@ test.describe('the first-run panel', () => {
     const admin = cast.as('admin')
     await admin.ok_(admin.post('/v1/repos', { name: repo }), 'create the repository')
 
-    await page.goto(`/repos/${repo}`)
+    await openPanel(page, repo)
     const panel = page.getByTestId('connect-agent')
     await expect(panel).toBeVisible()
     await expect(panel.getByRole('heading', { name: 'Connect your first agent' })).toBeVisible()
@@ -51,18 +59,18 @@ test.describe('the first-run panel', () => {
       rmSync(shell.dir, { recursive: true, force: true })
     }
 
-    // The proposal the agent pushed is on the board, and the panel has done its job.
+    // The proposal the agent pushed is on the board.
+    await page.goto(`/repos/${repo}`)
     await expect(page.getByTestId('proposals-panel').getByText('First change')).toBeVisible({
       timeout: 15_000,
     })
-    await expect(panel).toHaveCount(0)
   })
 
   test('refuses an identity it could not put safely into a shell line', async ({ page, cast }) => {
     const repo = `acme/first-${suffix()}`
     const admin = cast.as('admin')
     await admin.ok_(admin.post('/v1/repos', { name: repo }), 'create the repository')
-    await page.goto(`/repos/${repo}`)
+    await openPanel(page, repo)
     const panel = page.getByTestId('connect-agent')
     await panel.getByLabel('Agent identity').fill("agent:x'; rm -rf ~; '")
     await expect(panel.getByText('Use agent:<name>')).toBeVisible()
@@ -71,10 +79,13 @@ test.describe('the first-run panel', () => {
     await expect(page.getByTestId('connect-cmd-role')).toContainText('"subject":"agent:build-bot"')
   })
 
-  test('is not shown on a repository that has history', async ({ page, state }) => {
+  test('the getting-started checklist is not shown on a repository that has history', async ({
+    page,
+    state,
+  }) => {
     await page.goto(`/repos/${state.demo.repo}`)
     await expect(page.getByTestId('board-summary')).toBeVisible()
-    await expect(page.getByTestId('connect-agent')).toHaveCount(0)
+    await expect(page.getByTestId('getting-started')).toHaveCount(0)
   })
 
   test('tells a non-administrator to ask for steps 1 and 2', async ({ cast, openAs }) => {
@@ -82,7 +93,7 @@ test.describe('the first-run panel', () => {
     const admin = cast.as('admin')
     await admin.ok_(admin.post('/v1/repos', { name: repo }), 'create the repository')
     const alice = await openAs('alice')
-    await alice.goto(`/repos/${repo}`)
+    await openPanel(alice, repo)
     await expect(alice.getByTestId('connect-agent')).toContainText(
       'Steps 1 and 2 need an administrator',
     )

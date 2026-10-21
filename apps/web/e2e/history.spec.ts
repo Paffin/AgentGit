@@ -27,11 +27,11 @@ test.describe('streams', () => {
   }) => {
     const { repo } = await freshRepo(cast, 'streams')
     await page.goto(`/repos/${repo}/streams`)
-    await page.getByRole('button', { name: 'New stream' }).click()
-    const dialog = page.getByRole('dialog', { name: /New stream/ })
+    await page.getByRole('button', { name: 'New branch' }).click()
+    const dialog = page.getByRole('dialog', { name: /New branch/ })
     await dialog.getByLabel('Name').fill('release-1')
     await dialog.getByLabel(/Start at/).fill('main')
-    await dialog.getByRole('button', { name: 'Create stream' }).click()
+    await dialog.getByRole('button', { name: 'Create branch' }).click()
     await expect(
       page.getByRole('table', { name: 'Streams' }).getByRole('button', { name: 'release-1' }),
     ).toBeVisible()
@@ -158,7 +158,7 @@ test.describe('files', () => {
   test('an empty repository has an empty-state, not an error', async ({ page }) => {
     // The server lists a stream with no commits as empty (older servers answered 404); no console noise either way.
     await page.goto('/repos/acme/mobile/files')
-    await expect(page.getByText('This stream has no files yet')).toBeVisible()
+    await expect(page.getByText('This branch has no files yet')).toBeVisible()
     await page.goto('/repos/acme/mobile/history')
     await expect(page.getByText('No history yet')).toBeVisible()
   })

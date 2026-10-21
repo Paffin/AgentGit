@@ -101,15 +101,15 @@ test.describe('the live board of the demo repository', () => {
     for (const name of ['mergeable', 'validated', 'approved', 'integrated']) {
       await expect(docs.locator(`[data-state="${name}"]`)).toHaveCount(1)
     }
-    await expect(docs).toContainText('Nothing blocks integration right now.')
+    await expect(docs).toContainText('Nothing is in the way. It can land now.')
     const formal = panel.locator(`article[data-proposal="${state.demo.proposals.formal}"]`)
     await expect(formal).toContainText('Conflicting paths')
     await expect(formal).toContainText('src/index.ts')
     // The stale approval is called out instead of being counted.
     const rounding = panel.locator(`article[data-proposal="${state.demo.proposals.rounding}"]`)
     await expect(rounding).toContainText('1 stale approval')
-    // Recently integrated work is listed below.
-    await expect(page.getByText('Recently integrated')).toBeVisible()
+    // Recently landed work is listed below.
+    await expect(page.getByText('Recently landed')).toBeVisible()
     await expect(page.getByRole('link', { name: 'Friendlier startup message' })).toBeVisible()
   })
 
@@ -140,9 +140,9 @@ test.describe('the board follows the repository live', () => {
     await page.evaluate(() => ((window as unknown as { __kept: number }).__kept = 1))
 
     const proposals = page.getByTestId('proposals-panel')
-    await expect(proposals).toContainText('No open proposals')
+    await expect(proposals).toContainText('No open change requests')
     await expect(page.getByTestId('runs-panel')).toContainText('No agent is running')
-    await expect(page.getByTestId('lease-map')).toContainText(/No (active )?leases/i)
+    await expect(page.getByTestId('lease-map')).toContainText(/No active reservations/i)
 
     // 1. someone opens a proposal through the API
     const alice = cast.as('alice')
@@ -155,7 +155,7 @@ test.describe('the board follows the repository live', () => {
     const p = await openProposal(alice, repo, { head: c.head, title: 'Add a triple helper' })
     await expect(proposals.locator(`article[data-proposal="${p.id}"]`)).toBeVisible()
     await expect(proposals).toContainText('Add a triple helper')
-    await expect(page.getByTestId('board-summary')).toContainText('Open proposals')
+    await expect(page.getByTestId('board-summary')).toContainText('Open change requests')
 
     // 2. an agent starts a run on a task and takes a lease
     const task = await alice.ok_(
@@ -187,7 +187,7 @@ test.describe('the board follows the repository live', () => {
 
     // The proposal now edits a file inside someone else's lease: the blocker shows up on its card.
     await expect(proposals.locator(`article[data-proposal="${p.id}"]`)).toContainText(
-      'exclusive lease on src/util.ts',
+      'exclusive reservation on src/util.ts',
     )
 
     // 3. a soft lease from a person overlaps it
@@ -235,7 +235,7 @@ test.describe('the board follows the repository live', () => {
     const live = page.getByTestId('live-indicator')
     await expect(live).toHaveAttribute('data-status', 'reconnecting', { timeout: 20_000 })
     await expect(live).toContainText('Reconnecting')
-    await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
+    await expect(page.getByTestId('proposals-panel')).toContainText('No open change requests')
 
     // While the stream is down the world moves on.
     const alice = cast.as('alice')
@@ -262,7 +262,7 @@ test.describe('the board follows the repository live', () => {
     const { repo } = await freshRepo(cast, 'quiet', SKELETON)
     await page.goto(`/repos/${repo}`)
     await waitLive(page)
-    await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
+    await expect(page.getByTestId('proposals-panel')).toContainText('No open change requests')
     await expect(page.getByTestId('runs-panel')).toContainText('No agent is running')
     await expect(page.getByTestId('task-graph')).toContainText('No open tasks')
     await expect(page.getByTestId('queue-panel')).toContainText(

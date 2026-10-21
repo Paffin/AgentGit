@@ -65,7 +65,7 @@ const staleOptions = computed(() => {
 
 <template>
   <Card
-    title="Agent runs"
+    title="Agent sessions"
     icon="bot"
     :subtitle="`${rows.length} active${staleCount ? ` · ${staleCount} quiet` : ''}`"
     flush
@@ -85,7 +85,7 @@ const staleOptions = computed(() => {
       </div>
       <ErrorState
         v-else-if="board.load.runs.status === 'error' && rows.length === 0"
-        what="agent runs"
+        what="agent sessions"
         :error="board.load.runs.error"
         compact
         @retry="board.refreshAll()"
@@ -95,7 +95,7 @@ const staleOptions = computed(() => {
         icon="bot"
         compact
         title="No agent is running"
-        description="When an agent starts a run it appears here with its task, heartbeat and leases."
+        description="When an agent starts working it appears here with its task, how recently it reported in, and the files it reserved."
       />
       <ul v-else class="list" role="list">
         <li
@@ -131,7 +131,7 @@ const staleOptions = computed(() => {
             v-if="r.leases.length"
             class="leases"
             role="list"
-            :aria-label="`Leases held by ${r.run.identity}`"
+            :aria-label="`Reservations held by ${r.run.identity}`"
           >
             <li v-for="l in r.leases" :key="l.id" class="chip" :class="{ ex: l.exclusive }">
               <Icon :name="l.exclusive ? 'lock' : 'unlock'" :size="12" />

@@ -16,7 +16,7 @@ usePageTitle(() => 'No access')
       title="You do not have access to this"
       :description="`${auth.identity || 'This credential'} has no role that allows it. The server also answers “not found” for repositories you may not know exist, so ask an administrator if you expected to see it.`"
     >
-      <Button to="/" variant="primary" icon="home">Go to repositories</Button>
+      <Button to="/" variant="primary" icon="home">Go to your home page</Button>
       <Button to="/access" icon="key">See my roles</Button>
     </EmptyState>
   </div>

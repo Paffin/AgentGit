@@ -74,7 +74,7 @@ test.describe('redirect sign-in', () => {
     // Back in the app, signed in as the identity the server derived from the token, at the page we asked for.
     await expect(page).toHaveURL(`${baseURL}/repos/${state.demo.repo}/proposals`)
     await expect(page.getByTestId('user-menu')).toContainText(`user:${name}`)
-    await expect(page.getByRole('heading', { name: 'Proposals', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Change requests', level: 1 })).toBeVisible()
     // The `staff` group maps to a read-only role on acme/*, and that is all the server gave this person.
     await expect(page.getByTestId('user-menu')).toBeVisible()
 

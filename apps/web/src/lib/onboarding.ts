@@ -108,3 +108,35 @@ export function connectSteps(input: ConnectInput): ConnectStep[] | null {
     },
   ]
 }
+
+export interface AgentWorkInput {
+  origin: string
+  /** `owner/name`. */
+  repo: string
+  /** The agent's secret, `agt_…` (shown once by the server). */
+  token: string
+  /** What the agent should do, in the task's own words. */
+  title: string
+}
+
+/**
+ * What a person pastes into the agent's shell: the credential, a clone, and the two commands that publish a first
+ * change. The values come from the server and from the form, so each goes through `shellQuote`.
+ * Returns `null` when the address, repository or token could not be put into a shell line safely.
+ */
+export function agentWorkLines(input: AgentWorkInput): string[] | null {
+  const origin = input.origin.replace(/\/+$/, '')
+  if (!REPO.test(input.repo) || !/^https?:\/\/[^\s'"\\]+$/.test(origin)) return null
+  if (!/^agt_[A-Za-z0-9_-]+$/.test(input.token)) return null
+  const dir = directoryFor(input.repo)
+  const title = input.title.replace(/[\r\n]+/g, ' ').trim() || 'Change'
+  return [
+    `export AG_TOKEN=${shellQuote(input.token)}`,
+    `ag clone ${shellQuote(`${origin}/${input.repo}`)} ${shellQuote(dir)}`,
+    `cd ${shellQuote(dir)}`,
+    'ag remote whoami',
+    '# ...the agent makes its changes here...',
+    `ag snapshot -m ${shellQuote(title)}`,
+    `ag push -t ${shellQuote(title)}`,
+  ]
+}

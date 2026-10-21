@@ -56,9 +56,9 @@ const items = computed(() => {
       v-else-if="items.length === 0"
       icon="history"
       compact
-      title="No events for this proposal yet"
+      title="No events for this change request yet"
     />
-    <ol v-else class="tl" aria-label="Events for this proposal, newest first">
+    <ol v-else class="tl" aria-label="Events for this change request, newest first">
       <li v-for="e in items" :key="e.seq" class="r">
         <ActivityRow :event="e" :repo="repo" />
       </li>

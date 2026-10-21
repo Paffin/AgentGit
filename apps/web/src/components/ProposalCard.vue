@@ -49,7 +49,7 @@ const reviews = computed(() =>
         v-if="proposal.state !== 'open'"
         size="sm"
         :tone="proposal.state === 'integrated' ? 'ok' : 'neutral'"
-        >{{ proposal.state }}</Badge
+        >{{ proposal.state === 'integrated' ? 'landed' : proposal.state }}</Badge
       >
     </header>
     <p class="meta">
@@ -70,7 +70,7 @@ const reviews = computed(() =>
     </div>
     <BlockerList v-if="blockers.length" :blockers="blockers" :max="3" />
     <p v-else-if="proposal.state === 'open' && prep?.data && !conflicts.length" class="ready">
-      <Icon name="check" :size="14" /> Nothing blocks integration right now.
+      <Icon name="check" :size="14" /> Nothing is in the way. It can land now.
     </p>
     <footer class="foot faint">
       <span v-if="files"><Icon name="file" :size="13" /> {{ plural(files, 'file') }}</span>

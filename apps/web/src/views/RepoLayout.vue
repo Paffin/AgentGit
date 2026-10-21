@@ -7,6 +7,7 @@ import Badge from '@/ui/Badge.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
+import { termLabel } from '@/lib/glossary'
 
 const props = defineProps<{ owner: string; name: string }>()
 const board = useBoard()
@@ -29,22 +30,40 @@ interface Tab {
   label: string
   icon: IconName
   exact?: boolean
+  /** Route names that keep this tab highlighted besides its own. */
+  group?: string[]
 }
+// Navigation by job, not by object: where things stand, the work to review, the agents and their tasks, the code,
+// and the settings. Routes are unchanged, so bookmarks and links keep working.
+const CODE_ROUTES = ['files', 'history', 'streams', 'compare']
+const base = computed(
+  () => `/repos/${encodeURIComponent(props.owner)}/${encodeURIComponent(props.name)}`,
+)
 const tabs = computed<Tab[]>(() => {
-  const base = `/repos/${encodeURIComponent(props.owner)}/${encodeURIComponent(props.name)}`
+  const b = base.value
   const list: Tab[] = [
-    { to: base, label: 'Live board', icon: 'activity', exact: true },
-    { to: `${base}/proposals`, label: 'Proposals', icon: 'proposal' },
-    { to: `${base}/streams`, label: 'Streams', icon: 'branch' },
-    { to: `${base}/history`, label: 'History', icon: 'history' },
-    { to: `${base}/files`, label: 'Files', icon: 'folder' },
-    { to: `${base}/compare`, label: 'Compare', icon: 'diff' },
-    { to: `${base}/agents`, label: 'Agents', icon: 'bot' },
+    { to: b, label: 'Overview', icon: 'activity', exact: true },
+    { to: `${b}/proposals`, label: termLabel('proposal', true), icon: 'proposal' },
+    { to: `${b}/agents`, label: 'Agents & work', icon: 'bot' },
+    { to: `${b}/files`, label: 'Code', icon: 'folder', group: CODE_ROUTES },
   ]
   if (auth.hasRole(full.value, 'admin'))
-    list.push({ to: `${base}/admin`, label: 'Admin', icon: 'shield' })
+    list.push({ to: `${b}/admin`, label: 'Settings', icon: 'shield' })
   return list
 })
+const codeLinks = computed(() => [
+  { to: `${base.value}/files`, label: 'Files' },
+  { to: `${base.value}/history`, label: 'History' },
+  { to: `${base.value}/streams`, label: termLabel('stream', true) },
+  { to: `${base.value}/compare`, label: 'Compare' },
+])
+const inCode = computed(() => CODE_ROUTES.includes(String(route.name)))
+const isCurrent = (t: Tab) =>
+  t.group
+    ? t.group.includes(String(route.name))
+    : t.exact
+      ? route.path === t.to
+      : route.path.startsWith(t.to)
 
 // On a narrow screen the tab strip scrolls sideways: keep the current tab in view instead of off to one side.
 const strip = ref<HTMLElement | null>(null)
@@ -71,7 +90,7 @@ const repoError = computed(() =>
   <div class="repo">
     <div class="strip">
       <div class="crumb">
-        <RouterLink to="/" class="back" aria-label="All repositories"
+        <RouterLink to="/repos" class="back" aria-label="All repositories"
           ><Icon name="chevron-left" :size="16"
         /></RouterLink>
         <span class="path mono" data-testid="repo-name"
@@ -90,12 +109,22 @@ const repoError = computed(() =>
         :key="t.to"
         :to="t.to"
         class="tab"
-        :exact-active-class="t.exact ? 'current' : undefined"
-        :active-class="t.exact ? undefined : 'current'"
+        :class="{ current: isCurrent(t) }"
+        :aria-current="isCurrent(t) ? 'page' : undefined"
       >
         <Icon :name="t.icon" :size="15" />
         {{ t.label }}
       </RouterLink>
+    </nav>
+    <nav v-if="inCode" class="subtabs" aria-label="Code">
+      <RouterLink
+        v-for="l in codeLinks"
+        :key="l.to"
+        :to="l.to"
+        class="subtab"
+        active-class="current"
+        >{{ l.label }}</RouterLink
+      >
     </nav>
 
     <ErrorState
@@ -104,7 +133,7 @@ const repoError = computed(() =>
       :error="repoError"
       @retry="board.refreshAll()"
     >
-      <RouterLink to="/" class="back-link">Back to repositories</RouterLink>
+      <RouterLink to="/repos" class="back-link">Back to repositories</RouterLink>
     </ErrorState>
     <RouterView v-else :key="full" />
   </div>
@@ -189,6 +218,31 @@ const repoError = computed(() =>
 .tab.current {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+.subtabs {
+  display: flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  margin-top: calc(var(--s-2) * -1);
+}
+.subtab {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-weight: 560;
+  font-size: var(--fs-sm);
+}
+.subtab:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  text-decoration: none;
+}
+.subtab.current {
+  background: var(--accent-soft, var(--surface-3));
+  color: var(--accent-text, var(--text));
 }
 .back-link {
   font-weight: 560;

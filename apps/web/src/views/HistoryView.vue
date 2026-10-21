@@ -156,7 +156,7 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
           v-else-if="empty || rows.length === 0"
           icon="history"
           title="No history yet"
-          description="Nothing has been integrated into this stream."
+          description="Nothing has landed on this branch yet."
         />
         <template v-else>
           <ol class="log" aria-label="Changesets, newest first" data-testid="history-log">

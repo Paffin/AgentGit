@@ -126,7 +126,7 @@ const names = computed(() => board.streams.map((s) => s.name))
       v-else-if="!error"
       icon="diff"
       title="Pick two revisions"
-      description="A stream name, a changeset id or prefix, a proposal id, or an expression like main~2 or prop_…^2."
+      description="A branch name, a version id or prefix, a change request id, or an expression like main~2 or prop_…^2."
     />
   </div>
 </template>

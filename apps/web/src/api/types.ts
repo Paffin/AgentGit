@@ -31,6 +31,8 @@ export type ProposalDetail = S['ProposalDetail']
 type OpenObject = Record<string, unknown>
 export type Blocker = Omit<S['Blocker'], 'detail'> & { detail?: OpenObject }
 export type Conflict = S['Conflict']
+export type Workspace = S['Workspace']
+export type SyncWorkspaceResponse = S['SyncWorkspaceResponse']
 export type ValidationStatus = S['ValidationStatus']
 export type Attestation = S['Attestation']
 export type QueueEntry = S['QueueEntry']
@@ -62,6 +64,8 @@ export type Operation = S['Operation']
 
 /** Request bodies: every field is optional on the wire (missing = zero value), so callers pass only what they mean. */
 export type Req<K extends keyof S> = Partial<S[K]>
+/** A file change as a request carries it: only what the operation needs. */
+export type FileChange = Req<'FileChange'>
 
 export type Role =
   'reader' | 'writer' | 'reviewer' | 'integrator' | 'runner' | 'delegator' | 'admin'

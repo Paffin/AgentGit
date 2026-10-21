@@ -72,7 +72,7 @@ async function submit() {
       })
     outcome.value = o
     if (o.status === 'integrated')
-      toasts.ok('Integrated', `${props.proposal.stream} is now at ${shortId(o.new_head, 10)}`)
+      toasts.ok('Landed', `${props.proposal.stream} is now at ${shortId(o.new_head, 10)}`)
     // Refresh the page behind either way: a blocked attempt is still a recorded operation.
     emit('done')
   } catch (e) {
@@ -92,7 +92,7 @@ const finished = computed(() => status.value === 'integrated')
 <template>
   <Dialog
     :model-value="modelValue"
-    title="Integrate this proposal"
+    title="Land this change request"
     size="lg"
     :dismissable="!busy"
     @update:model-value="emit('update:modelValue', $event)"
@@ -119,7 +119,7 @@ const finished = computed(() => status.value === 'integrated')
       <TextField
         v-if="!finished"
         v-model="tokens"
-        label="Fencing tokens (optional)"
+        label="Reservation keys (optional)"
         mono
         placeholder="e.g. 7, 9"
         :error="tokenError"
@@ -128,7 +128,7 @@ const finished = computed(() => status.value === 'integrated')
       <Alert
         v-if="!finished && leasesError"
         tone="warn"
-        title="The author’s leases could not be read"
+        title="The author’s reservations could not be read"
       >
         {{ leasesError }}. If an exclusive lease covers files this change touches, enter its fencing
         token yourself.
@@ -140,13 +140,13 @@ const finished = computed(() => status.value === 'integrated')
         >
       </p>
 
-      <Alert v-if="error" tone="bad" live="alert" title="The integration request failed">
+      <Alert v-if="error" tone="bad" live="alert" title="Landing failed">
         {{ error.message }}
         <p v-if="error.requestId" class="faint mono">request {{ error.requestId }}</p>
       </Alert>
 
       <section v-if="outcome" class="result" :data-status="outcome.status" aria-live="polite">
-        <Alert v-if="outcome.status === 'integrated'" tone="ok" title="Integrated">
+        <Alert v-if="outcome.status === 'integrated'" tone="ok" title="Landed">
           <p>
             <strong class="mono">{{ proposal.stream }}</strong> is now at
             <code class="mono">{{ shortId(outcome.new_head, 12) }}</code> (version
@@ -157,7 +157,7 @@ const finished = computed(() => status.value === 'integrated')
         <Alert
           v-else-if="outcome.status === 'blocked'"
           tone="warn"
-          title="Blocked: the stream was not changed"
+          title="Blocked: the branch was not changed"
         >
           <p>Provide what is missing and run it again; the same operation resumes.</p>
           <BlockerList :blockers="outcome.blockers" hints />
@@ -165,7 +165,7 @@ const finished = computed(() => status.value === 'integrated')
         <Alert
           v-else-if="outcome.status === 'conflict'"
           tone="bad"
-          title="Conflict: the stream was not changed"
+          title="Conflict: the branch was not changed"
         >
           <p>
             The change and the stream edited the same places. Resolve these paths in the author’s
@@ -180,7 +180,7 @@ const finished = computed(() => status.value === 'integrated')
         <Alert
           v-else-if="outcome.status === 'denied'"
           tone="bad"
-          title="Refused by policy: the stream was not changed"
+          title="Refused by the rules: the branch was not changed"
         >
           <BlockerList :blockers="outcome.blockers" hints />
         </Alert>
@@ -201,7 +201,7 @@ const finished = computed(() => status.value === 'integrated')
         :disabled="!!tokenError"
         @click="submit"
       >
-        {{ outcome ? 'Try again' : 'Integrate' }}
+        {{ outcome ? 'Try again' : 'Land' }}
       </Button>
     </template>
   </Dialog>

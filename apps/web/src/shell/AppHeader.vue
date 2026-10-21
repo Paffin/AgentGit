@@ -47,7 +47,7 @@ async function onSelect(id: string) {
 <template>
   <header class="top">
     <div class="inner">
-      <RouterLink to="/" class="brand" aria-label="AgentGit, repositories">
+      <RouterLink to="/" class="brand" aria-label="AgentGit, home">
         <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false">
           <rect width="32" height="32" rx="8" fill="var(--accent)" />
           <path
@@ -63,7 +63,8 @@ async function onSelect(id: string) {
       </RouterLink>
 
       <nav v-if="auth.isAuthenticated" class="nav" aria-label="Main">
-        <RouterLink to="/" class="navlink" exact-active-class="current">Repositories</RouterLink>
+        <RouterLink to="/" class="navlink" exact-active-class="current">Home</RouterLink>
+        <RouterLink to="/repos" class="navlink" active-class="current">Repositories</RouterLink>
       </nav>
 
       <span class="spacer" />

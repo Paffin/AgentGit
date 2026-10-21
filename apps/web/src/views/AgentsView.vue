@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import GiveAgentWork from '@/components/agents/GiveAgentWork.vue'
 import AgentsList from '@/components/agents/AgentsList.vue'
 import LeaseTable from '@/components/agents/LeaseTable.vue'
 import RunsTable from '@/components/agents/RunsTable.vue'
@@ -13,14 +14,24 @@ import type { TabItem } from '@/ui/types'
 
 const { repo } = useRepoName()
 const board = useBoard()
-usePageTitle(() => `Agents · ${repo.value}`)
+usePageTitle(() => `Agents & work · ${repo.value}`)
 
 type TabId = 'runs' | 'tasks' | 'leases' | 'agents'
 const tab = ref<TabId>('runs')
 const tabs = computed<TabItem<TabId>[]>(() => [
-  { id: 'runs', label: 'Runs', icon: 'play', count: board.activeRuns.length || undefined },
+  {
+    id: 'runs',
+    label: 'Agent sessions',
+    icon: 'play',
+    count: board.activeRuns.length || undefined,
+  },
   { id: 'tasks', label: 'Tasks', icon: 'task' },
-  { id: 'leases', label: 'Leases', icon: 'lock', count: board.activeLeases.length || undefined },
+  {
+    id: 'leases',
+    label: 'Reservations',
+    icon: 'lock',
+    count: board.activeLeases.length || undefined,
+  },
   {
     id: 'agents',
     label: 'Registered agents',
@@ -33,11 +44,10 @@ const tabs = computed<TabItem<TabId>[]>(() => [
 <template>
   <div class="page">
     <div>
-      <h1>Agents</h1>
-      <p class="muted">
-        Who is registered, what they are running, what they own and what they have claimed.
-      </p>
+      <h1>Agents &amp; work</h1>
+      <p class="muted">Give agents work, see who is working on what, and what each has reserved.</p>
     </div>
+    <GiveAgentWork :repo="repo" />
     <Card>
       <Tabs v-model="tab" :tabs="tabs" label="Agent coordination">
         <template #runs><RunsTable :repo="repo" /></template>

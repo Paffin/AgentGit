@@ -19,7 +19,7 @@ describe('blockers in plain language', () => {
       ),
     )
     expect(e.title).toContain('“tests”')
-    expect(e.hint).toMatch(/attestation/)
+    expect(e.hint).toMatch(/signed result/)
     expect(e.severity).toBe('provide')
     expect(e.message).toContain('no trusted passing attestation')
   })
@@ -47,7 +47,7 @@ describe('blockers in plain language', () => {
     )
     expect(stale.title).toContain('src/**')
     expect(stale.title).toContain('agent:bot#run_1')
-    expect(stale.hint).toMatch(/fencing token/)
+    expect(stale.hint).toMatch(/reservation holder’s current key/)
   })
 
   it('separates what can be provided from what is refused', () => {

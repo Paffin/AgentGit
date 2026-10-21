@@ -55,13 +55,13 @@ test.describe('a read-only user', () => {
   })
 
   test('cannot create repositories, streams or tokens for others', async ({ page, state }) => {
-    await page.goto('/')
+    await page.goto('/repos')
     await expect(page.getByRole('button', { name: 'New repository' })).toHaveAttribute(
       'aria-disabled',
       'true',
     )
     await page.goto(`/repos/${state.demo.repo}/streams`)
-    await expect(page.getByRole('button', { name: 'New stream' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'New branch' })).toHaveAttribute(
       'aria-disabled',
       'true',
     )

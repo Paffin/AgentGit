@@ -103,7 +103,7 @@ test.describe('hostile text from the server', () => {
   })
 
   test('the repository list shows a hostile description as text', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/repos')
     const row = page.getByRole('row').filter({ hasText: HOSTILE_REPO })
     await expect(row).toContainText(HOSTILE.description)
     await noMarkupFromServerText(page)
@@ -188,7 +188,7 @@ test.describe('hostile text from the server', () => {
     expect(sent.ok).toBe(true)
     void state
     await page.goto(`/repos/${HOSTILE_REPO}/proposals/${p.id}`)
-    await page.getByRole('tab', { name: /Provenance/ }).click()
+    await page.getByRole('tab', { name: /Where it came from/ }).click()
     await expect(page.getByTestId('provenance-tab')).toContainText(
       HOSTILE.proposalBody.split('\n')[0]!,
     )

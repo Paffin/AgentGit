@@ -84,7 +84,7 @@ const tree = computed(() => props.prep?.candidate_tree ?? '')
           }}</Badge>
         </span>
         <span v-else-if="row.state === 'missing'" class="faint"
-          >nothing yet: no attestation, no job</span
+          >nothing yet: no result, no job</span
         >
         <span v-else class="faint">–</span>
       </template>
@@ -94,7 +94,7 @@ const tree = computed(() => props.prep?.candidate_tree ?? '')
       icon="shield"
       compact
       title="No checks required"
-      description="The stream’s policy lists no required validations, so nothing needs an attestation."
+      description="The rules for this branch require no checks, so nothing needs a result."
     />
 
     <section v-if="(prep?.jobs ?? []).length" aria-labelledby="jobs-h" class="sec">
@@ -117,12 +117,12 @@ const tree = computed(() => props.prep?.candidate_tree ?? '')
     </section>
 
     <section aria-labelledby="att-h" class="sec">
-      <h3 id="att-h">Attestations for this tree</h3>
+      <h3 id="att-h">Check results for these exact files</h3>
       <EmptyState
         v-if="attestations.length === 0"
         icon="shield"
         compact
-        title="No attestations yet"
+        title="No check results yet"
         :description="
           rows.length
             ? 'A runner with the runner role signs one when a check finishes.'

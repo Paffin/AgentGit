@@ -81,6 +81,7 @@ test.describe('administration', () => {
     await page.goto(`/repos/${repo}/admin`)
     const editor = page.getByTestId('policy-editor')
     await expect(editor).toContainText('Version 0 is in force (the built-in default)')
+    await page.getByTestId('policy-advanced').locator('summary').click()
     const text = page.getByTestId('policy-text')
     await expect(text).toHaveValue(/approvals/) // a starter document to edit
 

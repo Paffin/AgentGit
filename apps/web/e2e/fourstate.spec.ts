@@ -54,7 +54,9 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'validated')).toContainText('none required')
     await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'na')
     await expect(pill(page, 'integrated')).toHaveAttribute('data-tone', 'pending')
-    await expect(page.getByText('Nothing blocks integration right now.')).toBeVisible()
+    await expect(
+      page.getByText('Nothing is in the way. This change request can land now.'),
+    ).toBeVisible()
 
     // An administrator sets a policy that needs the tests and one approval. Nothing is reloaded:
     // the open page hears about it and re-checks.
@@ -70,15 +72,15 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'ok')
     const blockers = page.getByTestId('blockers')
     await expect(blockers).toContainText('Needs 1 more approval')
-    await expect(blockers).toContainText('has not passed on this exact tree')
+    await expect(blockers).toContainText('has not passed on these exact files')
 
     // Integrating now is refused, in words, and the stream does not move.
     const headBefore = (await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head
     await page.getByTestId('act-integrate').click()
-    const integrate = page.getByRole('dialog', { name: 'Integrate this proposal' })
+    const integrate = page.getByRole('dialog', { name: 'Land this change request' })
     await expect(integrate).toContainText('Needs 1 more approval')
-    await integrate.getByRole('button', { name: 'Integrate', exact: true }).click()
-    await expect(integrate.getByText('Blocked: the stream was not changed')).toBeVisible()
+    await integrate.getByRole('button', { name: 'Land', exact: true }).click()
+    await expect(integrate.getByText('Blocked: the branch was not changed')).toBeVisible()
     await integrate.getByRole('button', { name: 'Cancel' }).click()
     expect((await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head).toBe(
       headBefore,
@@ -115,18 +117,20 @@ test.describe('the four states of a proposal change independently', () => {
       approved: 'ok',
       integrated: 'pending',
     })
-    await expect(page.getByText('Nothing blocks integration right now.')).toBeVisible()
+    await expect(
+      page.getByText('Nothing is in the way. This change request can land now.'),
+    ).toBeVisible()
 
     // Integrate through the dialog.
     await page.getByTestId('act-integrate').click()
-    await integrate.getByRole('button', { name: 'Integrate', exact: true }).click()
-    await expect(integrate.getByText('Integrated', { exact: true })).toBeVisible()
+    await integrate.getByRole('button', { name: 'Land', exact: true }).click()
+    await expect(integrate.getByText('Landed', { exact: true })).toBeVisible()
     await expect(integrate).toContainText(/version \d+, fast-forward/)
     await integrate.getByRole('button', { name: 'Close', exact: true }).click()
 
     await expect(pill(page, 'integrated')).toHaveAttribute('data-tone', 'ok')
     await expect(pill(page, 'integrated')).toContainText('yes')
-    await expect(page.getByTestId('proposal-state')).toHaveText('integrated')
+    await expect(page.getByTestId('proposal-state')).toHaveText('landed')
     await expect(page.getByTestId('act-integrate')).toHaveCount(0)
     const headAfter = (await dana.get(`/v1/repos/${repo}/streams/head?stream=main`)).json.head
     expect(headAfter).not.toBe(headBefore)
@@ -212,11 +216,11 @@ test.describe('the four states of a proposal change independently', () => {
     await expect(pill(page, 'validated')).toHaveAttribute('data-tone', 'failed')
     await expect(pill(page, 'approved')).toHaveAttribute('data-tone', 'ok')
     await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'ok')
-    await expect(page.getByTestId('blockers')).toContainText('failed on this exact tree')
+    await expect(page.getByTestId('blockers')).toContainText('failed on these exact files')
     // Failure is a denial, not something an integrator can fix by retrying.
     await page.getByTestId('act-integrate').click()
-    const dialog = page.getByRole('dialog', { name: 'Integrate this proposal' })
-    await dialog.getByRole('button', { name: 'Integrate', exact: true }).click()
-    await expect(dialog.getByText('Refused by policy: the stream was not changed')).toBeVisible()
+    const dialog = page.getByRole('dialog', { name: 'Land this change request' })
+    await dialog.getByRole('button', { name: 'Land', exact: true }).click()
+    await expect(dialog.getByText('Refused by the rules: the branch was not changed')).toBeVisible()
   })
 })

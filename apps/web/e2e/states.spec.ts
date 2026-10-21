@@ -75,7 +75,7 @@ test.describe('loading', () => {
       }).observe({ type: 'layout-shift', buffered: true })
     })
     await slow(page, /\/v1\/repos\?/, 1200)
-    await page.goto('/')
+    await page.goto('/repos')
     const table = page.getByRole('table', { name: 'Repositories' })
     await expect(table).toHaveAttribute('aria-busy', 'true')
     await expect(page.getByRole('link', { name: 'acme/webapp' })).toBeVisible({ timeout: 15_000 })
@@ -133,7 +133,7 @@ test.describe('trouble', () => {
         })
       } else await route.continue()
     })
-    await page.goto('/')
+    await page.goto('/repos')
     await expect(page.getByText('the database is on fire')).toBeVisible()
     await expect(page.getByText('req_e2e500')).toBeVisible()
     broken = false
@@ -163,7 +163,7 @@ test.describe('trouble', () => {
         })
       } else await route.continue()
     })
-    await page.goto('/')
+    await page.goto('/repos')
     // No error is ever shown: the client retried after the advertised delay.
     await expect(page.getByRole('link', { name: 'acme/webapp' })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('slow down')).toHaveCount(0)

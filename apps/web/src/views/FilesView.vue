@@ -8,6 +8,8 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import { useRepoName } from '@/composables/useRepoName'
 import { useResource } from '@/composables/useResource'
 import { formatBytes } from '@/lib/format'
+import FileEditor from '@/components/files/FileEditor.vue'
+import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import Badge from '@/ui/Badge.vue'
 import Button from '@/ui/Button.vue'
@@ -24,6 +26,7 @@ const { repo } = useRepoName()
 const route = useRoute()
 const router = useRouter()
 const board = useBoard()
+const auth = useAuth()
 usePageTitle(() => `Files · ${repo.value}`)
 
 const qRev = computed(() => (typeof route.query.rev === 'string' ? route.query.rev : ''))
@@ -37,7 +40,7 @@ const draft = ref(qRev.value)
 watch(qRev, (v) => (draft.value = v))
 
 // What is at this path? (A directory, a file, or nothing.)
-const where = useResource<{ kind: string }>(
+const where = useResource<{ kind: string; entry?: { executable?: boolean } | null }>(
   async () => {
     if (!path.value || !rev.value) return { kind: 'dir' }
     return api.tree.resolve(repo.value, rev.value, path.value)
@@ -118,6 +121,12 @@ function applyRev() {
   void router.push({ query: { ...route.query, rev: draft.value.trim() || undefined } })
 }
 const streamNames = computed(() => board.streams.map((s) => s.name))
+// Editing needs a branch to propose to: the revision on screen must be one.
+const canEdit = computed(
+  () => auth.can(repo.value, 'editFiles') && streamNames.value.includes(rev.value),
+)
+const writing = ref(false)
+watch([rev, path, repo], () => (writing.value = false))
 </script>
 
 <template>
@@ -127,7 +136,9 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
         <h1>Files</h1>
         <p class="muted">
           The tree at <code class="mono">{{ rev || '…' }}</code
-          >, read from the server. Read-only.
+          >, read from the server.
+          <template v-if="canEdit">Open a file and press Edit to propose a change.</template>
+          <template v-else>Read-only here.</template>
         </p>
       </div>
       <form class="rev" @submit.prevent="applyRev">
@@ -140,11 +151,30 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
           hint="Stream, changeset id or main~2"
         />
         <Button type="submit" icon="search">Open</Button>
+        <Button
+          v-if="canEdit && where.data.value?.kind === 'dir'"
+          icon="plus"
+          data-testid="new-file"
+          @click="writing = true"
+          >New file</Button
+        >
         <datalist id="rev-list">
           <option v-for="s in streamNames" :key="s" :value="s" />
         </datalist>
       </form>
     </div>
+
+    <Card v-if="writing && canEdit" title="New file" icon="file">
+      <FileEditor
+        is-new
+        :repo="repo"
+        :path="path"
+        original=""
+        :rev="rev"
+        :stream="rev"
+        @cancel="writing = false"
+      />
+    </Card>
 
     <Card flush>
       <template #header>
@@ -184,15 +214,21 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
         </EmptyState>
       </div>
       <div v-else-if="where.data.value && where.data.value.kind !== 'dir'" class="pad">
-        <FileViewer :repo="repo" :rev="rev" :path="path" />
+        <FileViewer
+          :repo="repo"
+          :rev="rev"
+          :path="path"
+          :can-edit="canEdit"
+          :executable="where.data.value?.entry?.executable === true"
+        />
       </div>
       <template v-else>
         <ErrorState v-if="listError" what="the directory" :error="listError" @retry="list()" />
         <EmptyState
           v-else-if="emptyRepo"
           icon="folder"
-          title="This stream has no files yet"
-          description="Nothing has been integrated into it."
+          title="This branch has no files yet"
+          description="Nothing has landed on it yet."
         />
         <template v-else>
           <DataTable
@@ -253,6 +289,7 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
 }
 .rev {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   align-items: flex-end;
 }

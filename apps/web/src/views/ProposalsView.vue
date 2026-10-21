@@ -32,9 +32,9 @@ const error = ref<unknown>(null)
 let serial = 0
 
 const columns: Column[] = [
-  { key: 'title', label: 'Proposal', width: 'minmax(0, 2.4fr)' },
+  { key: 'title', label: 'Change request', width: 'minmax(0, 2.4fr)' },
   { key: 'author', label: 'Author', width: 'minmax(0, 1.2fr)', hideBelow: 760 },
-  { key: 'stream', label: 'Stream', width: '8rem', hideBelow: 900 },
+  { key: 'stream', label: 'Branch', width: '8rem', hideBelow: 900 },
   { key: 'state', label: 'State', width: '7rem' },
   { key: 'updated_at_ms', label: 'Updated', width: '7rem', align: 'end' },
 ]
@@ -72,11 +72,12 @@ watch([state, author, repo], () => {
 })
 void load()
 
+const stateWord = (s: string) => (s === 'integrated' ? 'landed' : s)
 const TONE = { open: 'info', integrated: 'ok', closed: 'neutral' } as const
 const tone = (s: string) => (s in TONE ? TONE[s as keyof typeof TONE] : 'neutral')
 const statusOptions = [
   { value: 'open', label: 'Open' },
-  { value: 'integrated', label: 'Integrated' },
+  { value: 'integrated', label: 'Landed' },
   { value: 'closed', label: 'Closed' },
   { value: 'all', label: 'All' },
 ] as const
@@ -85,7 +86,7 @@ const rows = computed(() => items.value)
 
 <template>
   <div class="page">
-    <h1>Proposals</h1>
+    <h1>Change requests</h1>
     <div class="tools">
       <Segmented v-model="state" legend="State" :options="statusOptions" />
       <TextField
@@ -98,7 +99,7 @@ const rows = computed(() => items.value)
       />
     </div>
     <Card flush>
-      <ErrorState v-if="error" what="proposals" :error="error" @retry="load()" />
+      <ErrorState v-if="error" what="change requests" :error="error" @retry="load()" />
       <template v-else>
         <DataTable
           :columns="columns"
@@ -123,7 +124,7 @@ const rows = computed(() => items.value)
           >
           <template #cell-state="{ row }"
             ><Badge size="sm" :tone="tone((row as Proposal).state)">{{
-              (row as Proposal).state
+              stateWord((row as Proposal).state)
             }}</Badge></template
           >
           <template #cell-updated_at_ms="{ row }"
@@ -132,8 +133,8 @@ const rows = computed(() => items.value)
           <template #empty>
             <EmptyState
               icon="proposal"
-              :title="`No ${state === 'all' ? '' : state + ' '}proposals`"
-              description="Nothing matches. Change the filter, or wait for an agent to propose something."
+              :title="`No ${state === 'all' ? '' : state + ' '}change requests`"
+              description="Nothing matches. Change the filter, or wait for an agent to propose something. To start one yourself, edit a file under Code, or give an agent work."
             />
           </template>
         </DataTable>

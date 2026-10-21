@@ -21,6 +21,38 @@ test.describe('documentation screenshots', () => {
     await page.addInitScript(() => localStorage.setItem('agentgit.staleAfterSec', '10'))
   })
 
+  test('home: what needs you', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 })
+    await page.goto('/')
+    await expect(page.getByTestId('attention-summary')).toContainText('need your attention')
+    await expect(page.getByTestId('attention-blocked')).toBeVisible()
+    await page.mouse.move(0, 0)
+    await page.screenshot({ path: out('ui-home.png') })
+  })
+
+  test('start a repository: choosing the rules', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 760 })
+    await page.goto('/repos/new')
+    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('acme/billing')
+    await page.getByRole('button', { name: 'Next: choose the rules' }).click()
+    await page.getByTestId('new-preset-agents').click()
+    await page.mouse.move(0, 0)
+    await page.screenshot({ path: out('ui-new-repo.png') })
+  })
+
+  test('give an agent work', async ({ page, state }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`/repos/${state.demo.repo}/agents`)
+    const box = page.getByTestId('give-work')
+    await box.getByLabel('What should the agent do?').fill('Add rate limiting to the sessions API')
+    await expect(box).toBeVisible()
+    await page.mouse.move(0, 0)
+    await page.screenshot({
+      path: out('ui-give-work.png'),
+      clip: { x: 0, y: 130, width: 1280, height: 560 },
+    })
+  })
+
   test('live board', async ({ page, state }) => {
     await page.setViewportSize({ width: 1440, height: 1500 })
     await page.goto(`/repos/${state.demo.repo}`)
@@ -56,7 +88,7 @@ test.describe('documentation screenshots', () => {
     await expect(
       page.getByRole('list', { name: /four independent states/ }).getByText('checking'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('blockers')).toContainText('fencing token')
+    await expect(page.getByTestId('blockers')).toContainText('reservation')
     await page.mouse.move(0, 0)
     await page.screenshot({ path: out('ui-proposal.png') })
     // Just the "Where it stands" card (README): the four verdicts and what is in the way.
@@ -72,6 +104,9 @@ test.describe('documentation screenshots', () => {
     await expect(page.getByTestId('policy-text')).toHaveValue(/protected_paths/)
     await expect(page.getByTestId('policy-diff')).toContainText('protected_paths')
     await page.screenshot({ path: out('ui-admin.png') })
+    await page.getByTestId('preset-strict').click()
+    await expect(page.getByTestId('policy-effects')).toBeVisible()
+    await page.screenshot({ path: out('ui-rules.png') })
   })
 
   test('file blame', async ({ page, state }) => {

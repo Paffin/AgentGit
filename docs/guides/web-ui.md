@@ -4,6 +4,11 @@ The Web UI is a browser interface to an AgentGit server. It is made for watching
 work**: who is running, who holds which part of the repository, what is waiting for what, and, for every
 proposal, whether it can land and if not, why, in plain language.
 
+You do not need to know AgentGit's vocabulary to use it: the screens say "change request", "land", "branch" and
+"reservation", and the AgentGit word is in a tooltip and in [Plain words](#plain-words). The first page after signing
+in is **Home**, which lists what needs *you*. The reasoning behind the layout is in the
+[Web UI review](../design/web-ux-review.md).
+
 It is a static app. `ag-server` serves it; it talks to the server only through the public
 [HTTP/JSON API](../protocol/README.md), with the same credentials and the same permission checks as any other
 client. Nothing in the UI can do what the API would refuse.
@@ -106,7 +111,31 @@ A pasted token stays in this tab's session storage (closing the tab signs you ou
 `Authorization` header and never appears in a URL. If a credential expires or is revoked while you work, the session
 ends with an explanation instead of a page full of errors.
 
-## The live board
+## Home: what needs you
+
+The first page after signing in. Across the repositories you can read (the 30 newest), it lists, most urgent first:
+
+- **Failures**: a required check failed, or an agent session ended with an error in the last day.
+- **Waiting for your review**: changes that need an approval you are allowed to give (not your own, not already decided).
+- **Blocked**: every other change that cannot land, with the first reason in a sentence and a button for the next
+  step (open it, run the check, land with the reservation key, resolve the conflict).
+- **Ready to land**: nothing in the way, and you may land it.
+- **Agents gone silent**: sessions that are running but have not reported in.
+
+Each row says which repository, who (and whether it is an agent waiting), and for how long. Opening a row's button
+takes you to the change request with the review or land dialog already open; it never starts work by itself (running a
+check is one click further, on the page). Home is re-read every 15 seconds while it is open, not live, because it spans
+many repositories. With nothing to do it says so and suggests where to go; without any repository it says how to get one.
+
+![Home: what needs you](../assets/ui-home.png)
+
+## Finding your way
+
+Inside a repository the navigation is by job: **Overview** (where things stand), **Change requests** (the work to
+review), **Agents & work** (give an agent work, sessions, reservations), **Code** (Files, History, Branches, Compare as a
+second row) and, for administrators, **Settings** (rules, access, maintenance). Routes are unchanged, so old links work.
+
+## The overview of a repository
 
 Open a repository and you land on its board. It follows the repository over a live event stream; the indicator at
 the top right says whether it is **Live**, **Reconnecting** (it retries with backoff and catches up on what it
@@ -132,7 +161,7 @@ A dark theme is available from the toggle in the header; by default the UI follo
 
 ![The live board in the dark theme](../assets/ui-board-dark.png)
 
-## A proposal
+## A change request
 
 ![A proposal](../assets/ui-proposal.png)
 
@@ -161,14 +190,20 @@ attestation (who signed, for which tree, under which policy version, in which en
 what the agent said about itself (rationale, inputs, parameters), always as untrusted text, with whether the signature
 verified; *Timeline* is the history of the proposal.
 
-**Actions** are *Review*, *Request validation*, *Integrate*, *Add to queue* and *Close*. Each is enabled only if your
-roles allow it and otherwise says which role it needs. *Integrate* shows the strategy (fast-forward or merge), asks for fencing
+**Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your
+roles allow it; the buttons that are off are explained in words under the row ("Land: requires the integrator role"),
+not only in a tooltip. A **Next:** line picks the one thing to do first (a conflict before checks, checks before approvals).
+
+**Every blocker has its fix next to it.** *Run the check* runs the missing check; *Review this change* opens the review
+dialog (not offered to the author); *Copy link to ask a reviewer*; *Land with the reservation key* opens the land
+dialog; *Resolve the conflict* opens the resolver (below). A fix is a button only when your role allows it. Otherwise
+the row says who to ask ("Ask someone with the reviewer role") instead of showing a button that would fail. *Integrate* shows the strategy (fast-forward or merge), asks for fencing
 tokens when a lease is involved, and reports the outcome the server decided: integrated, blocked (nothing changed, with
 the blockers), conflict (with the paths) or refused by policy.
 
-## Streams and history
+## Branches and history
 
-- **Streams** lists streams with their heads and the policy version in force, and the **reflog**, the append-only
+- **Branches** lists branches (streams) with their heads and the policy version in force, and the **reflog**, the append-only
   record of every move of a head.
 - **History** shows the changesets of a stream as a graph; merge commits show their parents. Opening a changeset shows
   its message, files and the diff it made.
@@ -179,10 +214,18 @@ the blockers), conflict (with the paths) or refused by policy.
 
 ![Blame](../assets/ui-blame.png)
 
-## Agents
+## Agents & work
 
-*Runs* (active, or the history of finished ones with their summaries), *Tasks* (a board by state, with what each is
-waiting for), *Leases*, and *Registered agents* with their identities and public keys.
+At the top, **Give an agent work** walks the whole job with a progress list: describe the task (what to do, which files),
+connect an agent (the page grants the writer role on this repository and mints a one-hour credential scoped to it, which
+needs the admin role), then copy the commands or the plain-words instruction it shows (the credential is displayed once
+and can be hidden). It then watches for the agent to start and for its change request, and links to it. The older
+command-line-only version is under *Prefer the command line only?*
+
+![Give an agent work](../assets/ui-give-work.png)
+
+Below: *Agent sessions* (active, or the history of finished ones with their summaries), *Tasks* (a board by state, with what each is
+waiting for), *Reservations*, and *Registered agents* with their identities and public keys.
 
 ## Administration
 
@@ -190,7 +233,19 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
 
 ![Administration](../assets/ui-admin.png)
 
-- **Policy.** An editor for the stream's policy with checks while you type (JSON errors, unknown fields with a
+![The rules form: choosing a preset shows what saving it changes](../assets/ui-rules.png)
+
+- **Rules.** Start from a preset (**Solo**, **Team**, **Agents with guardrails**, **Strict**, each described in two
+  sentences) and adjust plain fields: approvals needed for a person's and for an agent's change, whether authors may
+  approve their own, whether agents may land small changes by themselves (and for which paths and how many files),
+  whether an agent's change must say where it came from, extra care for some paths, a file limit. A preset keeps the
+  checks, trusted runners and who-may lists the branch already has. Under the fields, **What these rules mean** is the
+  document in sentences, and once you change something, **What saving this changes** lists what it now allows and
+  asks for more of ("Landing now needs 2 approvals (was 1)", "Agents may now land changes by themselves when…"). The
+  form edits the same JSON the server stores; the raw document stays under **Advanced**, with checks while you type
+  (JSON errors, unknown fields with a suggestion, settings that can never be satisfied), and the server's own refusal
+  is shown verbatim if it still rejects the document. Required checks are shown but added under Advanced (they need a
+  trusted runner). The older text: an editor for the stream's policy with checks while you type (JSON errors, unknown fields with a
   suggestion, settings that can never be satisfied), the server's own refusal shown verbatim if it still rejects the
   document, and a **version history with a diff between any two versions**. Saving creates a new version. Attestations made
   under an older version stop counting, on purpose, and the UI says so.
@@ -228,6 +283,7 @@ the header, tab strips and tables adapt: tables that do not fit scroll sideways 
 
 | Claim | Evidence |
 | --- | --- |
+| A first-time user does each job using only what the screen offers: start a repository, give an agent work (the commands are taken from the page and run with the real `ag`), review, unblock, land; edit a file and propose; resolve a conflict; choose rules | `e2e/jobs.spec.ts` |
 | Whole end-to-end suite (about 300 tests) against a real `ag-server` with the UI embedded | CI job "end-to-end (chromium)" |
 | Same suite in Firefox and WebKit | CI jobs "end-to-end (firefox)", "end-to-end (webkit)"; engine differences, if any, are named in the spec that handles them |
 | Layout and axe at 768 and 390 px | CI jobs "tablet", "phone" (Chromium with touch emulation, not a real device) |
@@ -257,7 +313,58 @@ than the cut-off tab; the diff and blame views are read-only on a phone (they sc
 - **Same origin.** The UI is served by the server it talks to, so no CORS configuration is needed. If you serve it from
   elsewhere, list that origin under `cors_origins` in `[server]` and keep the same CSP.
 
+## Start a repository
+
+Administrators: **Start a repository** (on Home and on Repositories) is three steps with a progress list: name it (the
+page explains what a name looks like before anything is sent), choose the rules (the four presets), review what the
+choice means in sentences, create. The rules are stored with the repository. The new repository's overview shows a
+**Getting started** checklist (repository created, rules chosen, work started, a change request open, first change
+landed) that ticks itself and offers the button for the next step.
+
+![Choosing the rules of a new repository](../assets/ui-new-repo.png)
+
+## Edit a file and propose a change
+
+With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
+asks for a title and description and opens a change request; nothing lands until it is reviewed and landed like any other.
+This uses the server's virtual workspaces: a draft is opened on the branch (from exactly what was on screen), the edit is
+applied as one version, the change request is opened from it, and the draft is removed. Only text files can be edited;
+renaming and deleting files, and several files in one change, are not in the browser yet.
+
+**Resolve the conflict.** When a change request no longer merges with its branch, its author sees *Resolve the
+conflict* (everyone else sees *Copy link to send to the author*). The resolver shows, per file, the branch's version and
+yours, with *Keep the branch's*, *Keep mine*, *Delete the file* and a text box for the result. Saving applies the
+resolutions through the draft and moves the change request to the merged version. Conflicts that are not about text
+(binary files, renames, type changes) say to use the command line.
+
+## Plain words
+
+The screens use the left-hand label; the AgentGit word is in the tooltip. The CLI, the protocol and the API keep the
+AgentGit words. This table is generated from `apps/web/src/lib/glossary.ts` (a test fails if they drift apart).
+
+| AgentGit word | Plain label | Meaning |
+| --- | --- | --- |
+| proposal | Change request | A set of file changes waiting to be reviewed and landed. |
+| integrate | Land | Move the change into the branch. |
+| integrated | Landed | Has the change been moved into the branch? |
+| stream | Branch | A line of work that changes land on, like a Git branch. |
+| verdict (the four states) | Status | Four separate questions: does it merge cleanly, did the checks pass, is it approved, has it landed. One being true does not make another true. |
+| mergeable | Merge | Does the change combine with the branch as it is now, without conflicts? |
+| validated | Checks | Has every check the rules require passed, with a trusted result for these exact files? |
+| approved | Approval | Does the change have the approvals the rules ask for, from reviewers who looked at its latest version? |
+| validation | Check | A test or other check the rules require before a change may land. |
+| attestation | Check result | A signed result from a trusted runner for one check on one exact version of the files. |
+| provenance | Where it came from | What the agent says about its own change: model, reason and inputs, signed by the agent. Treat it as a claim, not a fact. |
+| lease | Reservation | A temporary claim on some files so that two agents do not edit them at once. |
+| exclusive lease | Exclusive reservation | Nobody else may land changes to these files until it ends or is released. |
+| fencing token | Reservation key | A number that proves you hold the newest reservation. Landing a change under an exclusive reservation needs it. |
+| policy | Rules | Who may land changes to a branch, and which checks and approvals are needed first. |
+| changeset | Version | One saved state of the files. |
+| run | Agent session | One working session of an agent on a task. |
+| workspace | Draft | A private working copy of a branch, where edits collect before they are proposed. |
+| quiet (stale heartbeat) | Silent | The agent has not reported in for a while. It may be stuck; this is a hint, not a verdict. |
+
 ## Not in the UI
 
-- Writing code. The UI shows and steers; agents and people write through workspaces, the CLI and the SDKs.
+- A full editor. Editing is one text file at a time; for more, use a clone, a workspace through the CLI, or the SDKs.
 - Email or chat notifications. The board is live while it is open.

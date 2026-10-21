@@ -4,6 +4,7 @@ import type { StateInfo, StateTone } from '@/lib/fourstate'
 import Icon from './Icon.vue'
 import type { IconName } from './icons'
 import Tooltip from './Tooltip.vue'
+import { termLabel } from '@/lib/glossary'
 
 const props = withDefaults(defineProps<{ state: StateInfo; compact?: boolean }>(), {
   compact: false,
@@ -25,7 +26,7 @@ const icon = computed(() => ICON[props.state.tone])
   <Tooltip :text="state.summary" inline>
     <span class="state" :class="`t-${state.tone}`" :data-state="state.key" :data-tone="state.tone">
       <Icon :name="icon" :size="compact ? 12 : 14" />
-      <span class="name">{{ state.name }}</span>
+      <span class="name">{{ termLabel(state.key) }}</span>
       <span class="value">{{ state.value }}</span>
       <span class="sr-only">. {{ state.summary }}</span>
     </span>

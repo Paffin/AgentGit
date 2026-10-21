@@ -117,6 +117,7 @@ button:disabled {
     --touch-min: 44px;
   }
   button,
+  a.btn,
   [role='tab'],
   [role='menuitem'],
   summary,

@@ -8,12 +8,22 @@ import { decodeUtf8, imageMime, looksBinary, toDataUrl, baseName } from '@/lib/t
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import BlameTable from './BlameTable.vue'
+import FileEditor from './FileEditor.vue'
 import CodeBlock from '@/ui/CodeBlock.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Segmented from '@/ui/Segmented.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
-const props = defineProps<{ repo: string; rev: string; path: string }>()
+const props = defineProps<{
+  repo: string
+  rev: string
+  path: string
+  /** The person may edit here: they hold a writing role and `rev` is a branch (so a change request has a target). */
+  canEdit?: boolean
+  executable?: boolean
+}>()
+/** Editing the text in place; leaving the file ends it. */
+const editing = ref(false)
 
 /**
  * Whatever the listing says about size, the guard works while downloading: a declared Content-Length over
@@ -34,6 +44,7 @@ watch(
   () => {
     limit.value = DEFAULT_LIMIT
     view.value = 'contents'
+    editing.value = false
   },
 )
 
@@ -123,9 +134,27 @@ onBeforeUnmount(() => {
         <RouterLink :to="{ path: `/repos/${repo}/history`, query: { rev, path } }" class="hist"
           >File history</RouterLink
         >
+        <Button
+          v-if="canEdit && !content.binary && !editing"
+          size="sm"
+          icon="edit"
+          data-testid="edit-file"
+          @click="editing = true"
+          >Edit</Button
+        >
         <Button size="sm" icon="download" @click="download">Download</Button>
       </div>
-      <figure v-if="image" class="img">
+      <FileEditor
+        v-if="editing && !content.binary"
+        :repo="repo"
+        :path="path"
+        :original="content.text"
+        :rev="rev"
+        :stream="rev"
+        :executable="executable"
+        @cancel="editing = false"
+      />
+      <figure v-else-if="image" class="img">
         <img :src="image" :alt="`Preview of ${baseName(path)}`" />
       </figure>
       <Alert v-else-if="content.binary" tone="info" title="Binary file">

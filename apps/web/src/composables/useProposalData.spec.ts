@@ -3,7 +3,7 @@ import type { Proposal } from '@/api/types'
 
 const api = vi.hoisted(() => ({
   history: { mergeBase: vi.fn(), changeset: vi.fn() },
-  streams: { reflog: vi.fn() },
+  streams: { reflog: vi.fn(), head: vi.fn() },
 }))
 vi.mock('@/api/instance', () => ({ api }))
 
@@ -25,13 +25,22 @@ const proposal = (over: Partial<Proposal> = {}): Proposal => ({
 })
 
 describe('diffBase', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(() => {
+    vi.resetAllMocks()
+    api.streams.head.mockResolvedValue({ head: 'main-head' })
+  })
 
   it('is the merge base of an open proposal, and the empty tree only when the server says there is none', async () => {
     api.history.mergeBase.mockResolvedValueOnce(['b1'])
     expect(await diffBase('r', proposal())).toBe('b1')
     api.history.mergeBase.mockResolvedValueOnce([])
     expect(await diffBase('r', proposal())).toBe('')
+  })
+
+  it('an open proposal on a branch nothing has landed on has the empty tree as its base, without asking for a merge base', async () => {
+    api.streams.head.mockResolvedValueOnce({ head: '' })
+    expect(await diffBase('r', proposal())).toBe('')
+    expect(api.history.mergeBase).not.toHaveBeenCalled()
   })
 
   it('fails when the merge base cannot be read, instead of showing the whole tree as added', async () => {

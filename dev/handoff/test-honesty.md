@@ -24,7 +24,8 @@ Evidence
 - Deviation: the brief said setup-python 3.9; its SHA could not be resolved from here, so the job uses the already pinned `astral-sh/setup-uv` to install 3.9.
 
 Not verified / open
-- `PostgreSQL + S3 backends` caught itself: it never lifted the AppArmor restriction, so every namespace-sandbox test had been silently skipping there; fixed (sysctl step, `namespace-sandbox` required). Other CI runs were cancelled by concurrent pushes; `test (ubuntu|macos)` and `Windows` were green with the gate only in the run of 887da45 (all jobs but backends).
+- `PostgreSQL + S3 backends` caught itself: it never lifted the AppArmor restriction, so every namespace-sandbox test had been silently skipping there; fixed (sysctl step, `namespace-sandbox` required). On a61336a its moto leg and both gates passed; the SeaweedFS multi-replica step failed once on a port race (`Address already in use`) in `replicas_started_together_migrate_once_and_refuse_a_newer_schema`, a pre-existing flake of that test.
+- CI runs of the other commits were often cancelled by concurrent pushes. Seen green with the gate: ci.yml run of 887da45 (all jobs except backends), OCI runtimes, Quality. Windows was not seen to finish with the gate (its step is `python scripts/check_skips.py`, untested on a Windows runner).
 - Web UI Keycloak browser job and Firefox e2e were red on 3e77965 for reasons of the UI commit (`No repositories yet` text, a `dev-link` console error), not the skip work.
 - The root-only halves of the sandbox tests (`n/a:host-privilege`) run in no CI job.
 - Bare `if !cond { return }` in a new Rust test is not detectable by the scan; review aid: `grep -rn "else { return" crates/*/tests`.

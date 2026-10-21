@@ -29,7 +29,7 @@ What is verified, and where:
 
 - The scripts for bash, zsh and fish are syntax-checked by the shell itself (`bash -n`, `zsh -n`, `fish --no-execute`)
   and the PowerShell script is parsed by PowerShell's own parser, in CI (the `shells` job installs zsh and fish and
-  sets `AG_REQUIRE_SHELLS=1`, so a missing shell fails instead of being skipped). The elvish script is generated
+  sets `AG_REQUIRE_COMPONENTS=shell`, so a missing shell fails instead of being skipped). The elvish script is generated
   and compared with the stored copy, but no elvish is installed anywhere to parse it.
 - bash completion is exercised for real: the test sources the script and asks it to complete a command prefix, a
   subcommand prefix, the values of `--color` and the shell names after `ag completions`.

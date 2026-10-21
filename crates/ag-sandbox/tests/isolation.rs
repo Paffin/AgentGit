@@ -1,14 +1,13 @@
 //! Proof that the namespace sandbox isolates: every test runs a real program inside a real sandbox and
 //! asserts what the *kernel* reports from the inside, plus what is observable from the outside.
 //!
-//! See `tests/common/mod.rs` for how hosts without namespace support are handled (`AG_REQUIRE_SANDBOX`).
+//! See `tests/common/mod.rs` for how hosts without namespace support are handled (`AG_REQUIRE_COMPONENTS=namespace-sandbox`).
 #![allow(unsafe_code)] // a few tests create host-side kernel objects (inheritable descriptors, SysV shm) to prove they stay unreachable
 #![cfg(target_os = "linux")] // the namespace and container sandboxes are exercised on Linux only
 
 mod common;
 
 use std::collections::BTreeSet;
-use std::io::Write as _;
 use std::net::TcpListener;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
@@ -586,9 +585,10 @@ fn setuid_programs_cannot_gain_privilege() {
     // The real thing needs a set-user-ID file owned by somebody else, which only root can create.
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
-        let _ = writeln!(
-            std::io::stderr(),
-            "NOTE setuid_programs_cannot_gain_privilege: the set-user-ID demonstration needs root to create the file; only the flag checks ran"
+        ag_testkit::not_applicable(
+            "host-privilege",
+            "setuid_programs_cannot_gain_privilege",
+            "the set-user-ID demonstration needs root to create the file; only the flag checks ran",
         );
         return;
     }
@@ -614,10 +614,10 @@ fn setuid_programs_cannot_gain_privilege() {
         .expect("the file stays busy")
         .unwrap();
     if String::from_utf8_lossy(&out.stdout).trim() != "1" {
-        let _ = writeln!(
-            std::io::stderr(),
-            "NOTE setuid_programs_cannot_gain_privilege: {} does not honour set-user-ID here; demonstration skipped",
-            dir.path().display()
+        ag_testkit::not_applicable(
+            "host-filesystem",
+            "setuid_programs_cannot_gain_privilege",
+            &format!("{} does not honour set-user-ID here; demonstration skipped", dir.path().display()),
         );
         return;
     }

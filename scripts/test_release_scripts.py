@@ -18,6 +18,9 @@ import tarfile
 import tempfile
 import unittest
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import ag_testkit  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 PY = sys.executable
@@ -237,8 +240,7 @@ class Packaging(unittest.TestCase):
         self.assertEqual(list((prefix / "bin").glob(".*")), [], "no temporary files left behind")
 
     def test_install_sh_works_under_dash_when_available(self):
-        if not shutil.which("dash"):
-            self.skipTest("dash is not installed")
+        ag_testkit.require_component("dash", self.id(), shutil.which("dash"), "dash is not installed")
         p, prefix = self.install(shell="dash")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 

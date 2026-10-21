@@ -2,31 +2,16 @@
 //!
 //! The tests run real programs inside real sandboxes. When the host cannot support the namespace sandbox
 //! (no unprivileged user namespaces, a container runtime that forbids them, a non-Linux machine) each test
-//! prints a `SKIP` line with the reason straight to the terminal's stderr — which `cargo test` does not
-//! capture — and passes. Setting `AG_REQUIRE_SANDBOX=1` (CI does) turns every skip into a failure, so that
-//! a runner that silently lost its isolation cannot go green.
+//! leaves an `AG-SKIP` marker (`ag-testkit`) with the reason and passes. `AG_REQUIRE_COMPONENTS` naming
+//! `namespace-sandbox` (CI does) turns every skip into a failure, so that a runner that silently lost its
+//! isolation cannot go green.
 #![allow(dead_code)]
 
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use ag_sandbox::{
     Availability, Mount, NamespaceSandbox, Outcome, ProcessSandbox, Sandbox, SandboxSpec, standard_system_mounts,
 };
-
-/// Is a skip forbidden? (`AG_REQUIRE_SANDBOX` set to anything but empty / `0` / `false`.)
-pub fn skips_are_failures() -> bool {
-    std::env::var("AG_REQUIRE_SANDBOX").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"))
-}
-
-/// Report that a test cannot run here: fail under `AG_REQUIRE_SANDBOX`, otherwise print the reason.
-pub fn skip(test: &str, reason: &str) {
-    if skips_are_failures() {
-        panic!("AG_REQUIRE_SANDBOX is set, but {test} cannot run on this host: {reason}");
-    }
-    // Written to the real stderr: the test harness would swallow `eprintln!` output of passing tests.
-    let _ = writeln!(std::io::stderr(), "SKIP {test}: {reason}");
-}
 
 /// The namespace sandbox, or `None` (after reporting the skip) when this host cannot run it.
 pub fn namespace(test: &str) -> Option<NamespaceSandbox> {
@@ -34,7 +19,7 @@ pub fn namespace(test: &str) -> Option<NamespaceSandbox> {
     match sb.availability() {
         Availability::Available => Some(sb),
         Availability::Unavailable(reason) => {
-            skip(test, &format!("the namespace sandbox is unavailable: {reason}"));
+            ag_testkit::skip("namespace-sandbox", test, &format!("the namespace sandbox is unavailable: {reason}"));
             None
         }
     }

@@ -420,7 +420,13 @@ mod tests {
 
     #[test]
     fn postgres_runs_migrations_serializes_starters_and_notifies() {
-        let Some(url) = crate::testing::postgres_url() else { return };
+        let Some(url) = ag_testkit::require_here(
+            "postgres",
+            "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+            crate::testing::postgres_url(),
+        ) else {
+            return;
+        };
         let schema = crate::testing::unique("agdb");
         let opts = PgOptions { pool_size: 4, ..PgOptions::default() };
         // Eight starters at once: one migrates, nobody fails.

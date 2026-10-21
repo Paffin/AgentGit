@@ -308,7 +308,13 @@ mod tests {
 
     #[test]
     fn a_notice_on_one_replica_wakes_the_other_through_postgres() {
-        let Some(url) = ag_storage::testing::postgres_url() else { return };
+        let Some(url) = ag_testkit::require_here(
+            "postgres",
+            "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+            ag_storage::testing::postgres_url(),
+        ) else {
+            return;
+        };
         let schema = ag_storage::testing::unique("agbus");
         let target = PostgresTarget {
             url: url.clone(),

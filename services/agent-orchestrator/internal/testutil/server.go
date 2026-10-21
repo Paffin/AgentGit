@@ -15,9 +15,11 @@
 //     Everything it does not break reaches the real server unchanged.
 //
 // The tests look for the server binary in $AG_SERVER_BIN, then on PATH, then in
-// the cargo target directory of the repository. When none exists they skip,
-// unless $CI or $AG_REQUIRE_SERVER is set, in which case they fail: CI must
-// never silently skip the real-server tests.
+// the cargo target directory of the repository (wherever cargo is configured to
+// put it). When none exists they print the command that builds it and skip with
+// an AG-SKIP marker (components.go), unless AG_REQUIRE_COMPONENTS names
+// ag-server-binary (or $CI / $AG_REQUIRE_SERVER is set), in which case they
+// fail: CI must never silently skip the real-server tests.
 package testutil
 
 import (
@@ -52,7 +54,9 @@ func RandHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// FindServerBin locates the ag-server binary; "" when there is none.
+// FindServerBin locates the ag-server binary; "" when there is none. The order: $AG_SERVER_BIN, `ag-server` on
+// PATH, then the cargo target directory of this repository, wherever it is: $CARGO_TARGET_DIR, <repo>/target, and
+// the one cargo itself reports (`build.target-dir` of a shared ~/.cargo/config.toml). debug before release.
 func FindServerBin() string {
 	if p := os.Getenv("AG_SERVER_BIN"); p != "" {
 		return p
@@ -60,16 +64,15 @@ func FindServerBin() string {
 	if p, err := exec.LookPath("ag-server"); err == nil {
 		return p
 	}
-	// <repo>/target/debug/ag-server, found by walking up to the Cargo workspace; $CARGO_TARGET_DIR wins.
+	root := repoRoot()
 	var dirs []string
 	if d := os.Getenv("CARGO_TARGET_DIR"); d != "" {
 		dirs = append(dirs, d)
 	}
-	_, file, _, _ := runtime.Caller(0)
-	for d := filepath.Dir(file); d != filepath.Dir(d); d = filepath.Dir(d) {
-		if _, err := os.Stat(filepath.Join(d, "Cargo.toml")); err == nil {
-			dirs = append(dirs, filepath.Join(d, "target"))
-			break
+	if root != "" {
+		dirs = append(dirs, filepath.Join(root, "target"))
+		if d := cargoTargetDir(root); d != "" {
+			dirs = append(dirs, d)
 		}
 	}
 	for _, d := range dirs {
@@ -83,7 +86,56 @@ func FindServerBin() string {
 	return ""
 }
 
-func requireServer() bool { return os.Getenv("CI") != "" || os.Getenv("AG_REQUIRE_SERVER") != "" }
+// repoRoot is the Cargo workspace this source tree lives in; "" when it is not part of one.
+func repoRoot() string {
+	_, file, _, _ := runtime.Caller(0)
+	for d := filepath.Dir(file); d != filepath.Dir(d); d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "Cargo.toml")); err == nil {
+			return d
+		}
+	}
+	return ""
+}
+
+var (
+	targetOnce sync.Once
+	targetDir  string
+)
+
+// cargoTargetDir asks cargo where it builds (`cargo metadata`), once; "" when cargo is not there or says nothing.
+func cargoTargetDir(root string) string {
+	targetOnce.Do(func() {
+		cargo, err := exec.LookPath("cargo")
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, cargo, "metadata", "--format-version", "1", "--no-deps", "--offline")
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			return
+		}
+		var meta struct {
+			TargetDirectory string `json:"target_directory"`
+		}
+		if json.Unmarshal(out, &meta) == nil {
+			targetDir = meta.TargetDirectory
+		}
+	})
+	return targetDir
+}
+
+// serverBinMissing is what a test says when it found no ag-server: the exact command that builds one.
+func serverBinMissing() error {
+	build := "cargo build -p agentgit-server"
+	if root := repoRoot(); root != "" {
+		build = "cd " + root + " && " + build
+	}
+	return fmt.Errorf("these tests run against the real ag-server and none was found: build it with `%s` (it is then found by itself), "+
+		"or set AG_SERVER_BIN=/path/to/ag-server, or put ag-server on PATH", build)
+}
 
 // FreePort returns a loopback TCP port that was free a moment ago.
 func FreePort(t testing.TB) int {
@@ -136,10 +188,7 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	t.Helper()
 	bin := FindServerBin()
 	if bin == "" {
-		if requireServer() {
-			t.Fatal("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
-		}
-		t.Skip("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
+		RequireComponent(t, "ag-server-binary", serverBinMissing())
 	}
 	dir := t.TempDir()
 	token := RandHex(24) // 48 characters; the server wants at least 32

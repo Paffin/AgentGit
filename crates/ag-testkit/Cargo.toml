@@ -1,0 +1,22 @@
+[package]
+name = "agentgit-testkit"
+description = "AgentGit: the one way a test says that an external component it needs is missing (skip with a marker, or fail)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+homepage.workspace = true
+documentation = "https://paffin.github.io/AgentGit/"
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+# Not publishable yet: test support for this repository, a dev-dependency of its crates (the published crates drop it).
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "ag_testkit"

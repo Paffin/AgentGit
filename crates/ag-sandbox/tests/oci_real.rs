@@ -8,7 +8,8 @@
 //!   `docker`, `podman` found on `PATH`);
 //! * `AG_OCI_IMAGE` — a digest-pinned reference to a BusyBox image (`busybox@sha256:...`); the CI workflow
 //!   (`.github/workflows/oci-runtimes.yml`) pulls it before the tests run;
-//! * `AG_REQUIRE_OCI=1` — a host that cannot run them fails instead of skipping. CI sets it.
+//! * `AG_REQUIRE_COMPONENTS=oci:docker` (or `oci:podman`) — a host that cannot run them fails instead of
+//!   skipping. CI sets it.
 //!
 //! Without a usable runtime and image each test prints `SKIP <name>: <reason>` and passes, so a laptop
 //! without Docker stays green; it also does not count as having verified anything.
@@ -19,7 +20,6 @@
 
 mod common;
 
-use std::io::Write as _;
 use std::net::TcpListener;
 use std::path::Path;
 use std::process::Command;
@@ -43,15 +43,10 @@ struct Real {
     _guard: std::sync::MutexGuard<'static, ()>,
 }
 
-fn require() -> bool {
-    std::env::var("AG_REQUIRE_OCI").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"))
-}
-
-fn skip(test: &str, reason: &str) -> Option<Real> {
-    if require() {
-        panic!("AG_REQUIRE_OCI is set, but {test} cannot run on this host: {reason}");
-    }
-    let _ = writeln!(std::io::stderr(), "SKIP {test}: {reason}");
+/// Fails when the runtime (`component`: `oci:docker`, `oci:podman`, or `oci` when none was found) is required,
+/// otherwise leaves the skip marker.
+fn skip(component: &str, test: &str, reason: &str) -> Option<Real> {
+    ag_testkit::skip(component, test, reason);
     None
 }
 
@@ -65,20 +60,21 @@ fn real(test: &str) -> Option<Real> {
             });
             match found {
                 Some(rt) => rt.to_string(),
-                None => return skip(test, "neither docker nor podman is on PATH (set AG_OCI_RUNTIME)"),
+                None => return skip("oci", test, "neither docker nor podman is on PATH (set AG_OCI_RUNTIME)"),
             }
         }
     };
+    let component = ag_testkit::oci_component(&runtime);
     let Ok(image) = std::env::var("AG_OCI_IMAGE") else {
-        return skip(test, "AG_OCI_IMAGE (a digest-pinned BusyBox image in the local store) is not set");
+        return skip(&component, test, "AG_OCI_IMAGE (a digest-pinned BusyBox image in the local store) is not set");
     };
     let probe = OciSandbox::new(&runtime, &image).expect("a valid runtime and image reference");
     let info = match probe.probe() {
         Ok(i) => i,
-        Err(e) => return skip(test, &format!("the runtime is not usable: {e}")),
+        Err(e) => return skip(&component, test, &format!("the runtime is not usable: {e}")),
     };
     if let Err(e) = probe.image_present() {
-        return skip(test, &format!("the image is not available: {e}"));
+        return skip(&component, test, &format!("the image is not available: {e}"));
     }
     let (euid, egid) = ag_sandbox::effective_ids();
     let user = info.user_for_tree(euid, egid, "65534:65534");

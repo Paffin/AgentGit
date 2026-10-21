@@ -4,7 +4,7 @@
 //! filesystem (or memory); with `AG_TEST_POSTGRES_URL` the metadata moves to a
 //! fresh PostgreSQL schema per test, with `AG_TEST_S3_ENDPOINT` the objects move
 //! to a fresh S3 key prefix per test (see `ag_storage::testing`, and
-//! `scripts/pg-test.sh` / `scripts/s3-test.sh`). With `AG_REQUIRE_BACKENDS=1` a
+//! `scripts/pg-test.sh` / `scripts/s3-test.sh`). With `AG_REQUIRE_COMPONENTS=postgres,s3` a
 //! missing server fails the test instead of silently falling back.
 #![allow(dead_code, missing_docs)]
 

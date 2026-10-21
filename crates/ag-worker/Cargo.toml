@@ -43,6 +43,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+ag-testkit.workspace = true
 ag-server.workspace = true
 ag-storage.workspace = true
 ag-changeset.workspace = true

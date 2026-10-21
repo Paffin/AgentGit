@@ -157,7 +157,13 @@ async fn a_preparation_is_one_reading_even_when_a_validation_finishes_while_it_i
 /// `AG_TEST_POSTGRES_URL` is set (see `scripts/pg-test.sh`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_preparation_is_one_reading_on_postgres_too() {
-    let Some(url) = ag_storage::testing::postgres_url() else { return };
+    let Some(url) = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        ag_storage::testing::postgres_url(),
+    ) else {
+        return;
+    };
     let schema = ag_storage::testing::unique("agprep");
     let template = ag_integrate::StorageConfig {
         meta: ag_integrate::MetaConfig::Postgres {

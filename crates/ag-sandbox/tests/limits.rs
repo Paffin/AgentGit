@@ -9,8 +9,6 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use std::io::Write as _;
-
 use ag_sandbox::{Enforcement, ExitStatus, Limits, Sandbox, SandboxError, SandboxSpec};
 use common::*;
 
@@ -166,9 +164,10 @@ fn a_root_host_maps_the_command_to_an_unprivileged_user_on_request() {
     let test = "a_root_host_maps_the_command_to_an_unprivileged_user_on_request";
     let Some((sb, w)) = exact_sandbox(test) else { return };
     if euid_egid().0 != 0 {
-        let _ = writeln!(
-            std::io::stderr(),
-            "NOTE {test}: only meaningful for a root host; other users already run as themselves"
+        ag_testkit::not_applicable(
+            "host-privilege",
+            test,
+            "the root-host half is only meaningful for a root host; other users already run as themselves",
         );
         // ... but they cannot ask for somebody else's ids
         let other = ag_sandbox::NamespaceSandbox::new().with_host_ids(0, 0);
@@ -195,8 +194,11 @@ fn the_task_limit_is_sampled_where_the_kernel_exempts_the_user() {
     let test = "the_task_limit_is_sampled_where_the_kernel_exempts_the_user";
     let Some(sb) = namespace(test) else { return };
     if euid_egid().0 != 0 {
-        let _ =
-            writeln!(std::io::stderr(), "NOTE {test}: the kernel enforces the limit for this user; nothing is sampled");
+        ag_testkit::not_applicable(
+            "host-privilege",
+            test,
+            "the kernel enforces the limit for this user; nothing is sampled (only a root host is sampled)",
+        );
         return;
     }
     // Root, default mapping: the command is kernel uid 0 and RLIMIT_NPROC does not apply to it. The probe

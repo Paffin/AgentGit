@@ -34,6 +34,8 @@ ag-client = { package = "agentgit-client", path = "crates/ag-client", version = 
 ag-server = { package = "agentgit-server", path = "crates/ag-server", version = "0.2.0-rc.2" }
 ag-ui-assets = { package = "agentgit-ui-assets", path = "crates/ag-ui-assets", version = "0.2.0-rc.2" }
 ag-sandbox = { package = "agentgit-sandbox", path = "crates/ag-sandbox", version = "0.2.0-rc.2" }
+# test support, never published (a path-only dev-dependency is dropped from a published manifest)
+ag-testkit = { package = "agentgit-testkit", path = "crates/ag-testkit" }
 
 # external crates
 anyhow = "1"

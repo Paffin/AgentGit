@@ -61,6 +61,8 @@ jobs:
           persist-credentials: false
       - name: Tests (check_release, package_release, render_packaging, install.sh)
         run: python3 scripts/test_release_scripts.py
+        env:
+          AG_REQUIRE_COMPONENTS: dash
       - name: shellcheck (POSIX sh for install.sh)
         run: |
           shellcheck --version

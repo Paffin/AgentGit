@@ -8,7 +8,6 @@
 
 mod common;
 
-use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
@@ -152,9 +151,10 @@ fn the_task_limit_works_for_unprivileged_users_only() {
         assert_eq!(o.isolation.tasks, Enforcement::None);
         assert!(o.isolation.host_root);
         assert!(o.isolation.notes.iter().any(|n| n.contains("exempts root")), "{:?}", o.isolation.notes);
-        let _ = writeln!(
-            std::io::stderr(),
-            "NOTE the_task_limit_works_for_unprivileged_users_only: root host, fork bomb skipped"
+        ag_testkit::not_applicable(
+            "host-privilege",
+            "the_task_limit_works_for_unprivileged_users_only",
+            "root host, fork bomb skipped (the kernel exempts uid 0 from RLIMIT_NPROC)",
         );
         return;
     }
@@ -174,7 +174,11 @@ fn a_set_user_id_file_cannot_raise_privileges() {
     // Needs root to build the file. Under no_new_privs a root process stays root; without it, it would become
     // the file's owner. (The namespace sandbox's variant of this test is in isolation.rs.)
     if euid_egid().0 != 0 {
-        let _ = writeln!(std::io::stderr(), "NOTE a_set_user_id_file_cannot_raise_privileges: needs root");
+        ag_testkit::not_applicable(
+            "host-privilege",
+            "a_set_user_id_file_cannot_raise_privileges",
+            "needs root to create the set-user-ID file",
+        );
         return;
     }
     let dir = workdir();
@@ -191,9 +195,10 @@ fn a_set_user_id_file_cannot_raise_privileges() {
         other => Some(other.unwrap()),
     });
     if String::from_utf8_lossy(&control.expect("busy").stdout).trim() != "1" {
-        let _ = writeln!(
-            std::io::stderr(),
-            "NOTE a_set_user_id_file_cannot_raise_privileges: this file system ignores set-user-ID"
+        ag_testkit::not_applicable(
+            "host-filesystem",
+            "a_set_user_id_file_cannot_raise_privileges",
+            "this file system ignores set-user-ID",
         );
         return;
     }

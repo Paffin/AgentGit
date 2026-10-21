@@ -8,6 +8,9 @@ provisioned datasource and dashboard, and the OpenTelemetry collector is up.
 Run after scripts/e2e_smoke.py (so there are requests to see) and `docker compose --profile observability up`.
 Python 3 standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import base64
 import json

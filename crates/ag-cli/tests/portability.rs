@@ -75,8 +75,7 @@ fn empty(dir: &Path) -> bool {
 
 #[test]
 fn portability_lists_what_each_platform_cannot_hold_and_checkout_enforces_it_on_this_one() {
-    if !have_git() {
-        eprintln!("skipping: git is required");
+    if ag_testkit::require_here("git", "git is not installed", have_git().then_some(())).is_none() {
         return;
     }
     let src = tempfile::tempdir().unwrap();

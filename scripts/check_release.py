@@ -18,6 +18,9 @@ A real release needs the tag to equal the workspace version and a non-empty `## 
 `--dry-run` (the release workflow's rehearsal, which publishes nothing) relaxes both: the version is only
 checked for being semver, and without a section of its own the notes come from `## [Unreleased]`.
 """
+
+from __future__ import annotations
+
 import os
 import pathlib
 import re

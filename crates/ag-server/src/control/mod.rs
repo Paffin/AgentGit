@@ -793,7 +793,11 @@ mod tests {
     /// The same checks on whichever backend: SQLite always, PostgreSQL when `AG_TEST_POSTGRES_URL` is set.
     fn backends() -> Vec<(Control, Option<(String, String)>)> {
         let mut v = vec![(control(), None)];
-        if let Some(url) = ag_storage::testing::postgres_url() {
+        if let Some(url) = ag_testkit::require_here(
+            "postgres",
+            "AG_TEST_POSTGRES_URL is not set: the PostgreSQL leg of this test did not run (use scripts/pg-test.sh)",
+            ag_storage::testing::postgres_url(),
+        ) {
             let schema = ag_storage::testing::unique("agctl");
             let target = PostgresTarget {
                 url: url.clone(),

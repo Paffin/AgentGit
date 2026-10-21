@@ -140,6 +140,7 @@ nav:
       - Security model: architecture/security.md
       - Compatibility: architecture/compatibility.md
       - Testing: architecture/testing.md
+      - Test skips: architecture/test-skips.md
       - Performance of the engine: architecture/performance.md
       - The sandbox: architecture/sandbox.md
       - ADR traceability: architecture/adr-traceability.md

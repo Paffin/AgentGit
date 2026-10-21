@@ -545,7 +545,11 @@ mod tests {
         );
 
         // Into PostgreSQL and back out into SQLite: the data survives both moves.
-        if let Some(url) = ag_storage::testing::postgres_url() {
+        if let Some(url) = ag_testkit::require_here(
+            "postgres",
+            "AG_TEST_POSTGRES_URL is not set: the PostgreSQL leg of this test did not run (use scripts/pg-test.sh)",
+            ag_storage::testing::postgres_url(),
+        ) {
             let schema = ag_storage::testing::unique("agctl");
             let target = PostgresTarget {
                 url: url.clone(),

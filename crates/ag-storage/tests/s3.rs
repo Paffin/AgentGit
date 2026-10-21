@@ -1,8 +1,8 @@
 //! The S3 object store against a real S3-compatible server (`scripts/s3-test.sh`
 //! starts one, with request signatures verified by the server).
 //!
-//! Without `AG_TEST_S3_ENDPOINT` these print a notice and pass, unless
-//! `AG_REQUIRE_BACKENDS=1`, which turns a missing server into a failure.
+//! Without `AG_TEST_S3_ENDPOINT` these skip with an `AG-SKIP` marker (`ag-testkit`), unless
+//! `AG_REQUIRE_COMPONENTS` names `s3`, which turns a missing server into a failure.
 #![cfg(feature = "s3")]
 #![allow(missing_docs)]
 
@@ -18,11 +18,7 @@ use ag_storage::{
 use ag_types::{Limits, Timestamp};
 
 fn config(prefix: &str) -> Option<S3Config> {
-    let cfg = s3_config(prefix);
-    if cfg.is_none() {
-        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
-    }
-    cfg
+    ag_testkit::require_here("s3", "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)", s3_config(prefix))
 }
 
 /// A store on a fresh prefix, emptied again when the guard drops.
@@ -317,8 +313,11 @@ fn durability_is_stated_honestly() {
 fn https_works_with_the_private_ca_and_no_other_certificate_is_trusted() {
     // The production configuration is TLS; everything above ran over plain HTTP. Only a server that can serve TLS
     // with a private CA takes part (scripts/s3-test.sh with AG_S3_SERVER=seaweedfs).
-    let Some(cfg) = ag_storage::testing::s3_tls_config(&unique("agtest")) else {
-        eprintln!("skipped: the S3 server under test offers no TLS (AG_TEST_S3_TLS_ENDPOINT, AG_TEST_S3_CA)");
+    let Some(cfg) = ag_testkit::require_here(
+        "s3-tls",
+        "the S3 server under test offers no TLS (AG_TEST_S3_TLS_ENDPOINT, AG_TEST_S3_CA)",
+        ag_storage::testing::s3_tls_config(&unique("agtest")),
+    ) else {
         return;
     };
     assert!(cfg.endpoint.starts_with("https://"), "{}", cfg.endpoint);

@@ -241,11 +241,21 @@ impl World {
 }
 
 pub fn namespace_works() -> bool {
-    let works = ag_sandbox::NamespaceSandbox::new().availability().is_available();
-    // CI sets AG_REQUIRE_SANDBOX on Linux: a runner that silently lost its isolation must not go green.
-    let required = std::env::var("AG_REQUIRE_SANDBOX").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"));
-    assert!(works || !required, "AG_REQUIRE_SANDBOX is set, but the namespace sandbox is unavailable on this host");
-    works
+    use ag_sandbox::Availability;
+    match ag_sandbox::NamespaceSandbox::new().availability() {
+        Availability::Available => true,
+        Availability::Unavailable(why) => {
+            // CI requires `namespace-sandbox` on Linux: a runner that silently lost its isolation must not go green.
+            ag_testkit::skip(
+                "namespace-sandbox",
+                &ag_testkit::current_test(),
+                &format!(
+                    "the namespace sandbox is unavailable ({why}); the process sandbox stands in or the test is left out"
+                ),
+            );
+            false
+        }
+    }
 }
 
 /// The namespace sandbox if the machine can run it, else the process sandbox (opted into).
@@ -253,7 +263,6 @@ pub fn test_profile(scratch: &Path) -> Profile {
     let mut p = if namespace_works() {
         Profile::new(Backend::namespace((65534, 65534)))
     } else {
-        eprintln!("NOTE: the namespace sandbox is unavailable here; the loop is tested with the process sandbox");
         let mut p = Profile::new(Backend::Process);
         p.min_isolation = IsolationLevel::None;
         p

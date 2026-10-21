@@ -695,7 +695,11 @@ mod tests {
         assert!(out.success(), "{:?} {}", out.status, out.stderr_lossy());
         let ns = NamespaceSandbox::new();
         if let crate::Availability::Unavailable(why) = ns.availability() {
-            eprintln!("SKIP namespace half of the allocator test: {why}");
+            ag_testkit::skip(
+                "namespace-sandbox",
+                "the_child_never_touches_the_allocator",
+                &format!("namespace half: {why}"),
+            );
             return;
         }
         let out = ns.run(&spec).expect("namespace sandbox runs");

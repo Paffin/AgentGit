@@ -5,13 +5,15 @@
 //! signed with the key it generates and publishes, and the server finds that key the way production does: through
 //! discovery (`.well-known/openid-configuration`, then the JWKS it names). Nothing is configured by hand.
 //!
-//! They need a running Keycloak with the realm in `apps/web/e2e/keycloak/agentgit-realm.json`, so they are
-//! `#[ignore]`d in a plain `cargo test` and run by the "real identity provider" job of `.github/workflows/web.yml`:
+//! They need a running Keycloak with the realm in `apps/web/e2e/keycloak/agentgit-realm.json`. Without
+//! `AG_TEST_KEYCLOAK_URL` each test leaves an `AG-SKIP` marker (component `keycloak`, see `ag-testkit`) and passes;
+//! the "real identity provider" job of `.github/workflows/web.yml` sets `AG_REQUIRE_COMPONENTS=keycloak`, so there
+//! a missing Keycloak is a failure:
 //!
 //! ```text
 //! docker run --rm -p 8180:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
 //!   -v $PWD/apps/web/e2e/keycloak:/opt/keycloak/data/import quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm
-//! AG_TEST_KEYCLOAK_URL=http://localhost:8180 cargo test -p agentgit-server --test oidc_keycloak -- --ignored
+//! AG_TEST_KEYCLOAK_URL=http://localhost:8180 AG_REQUIRE_COMPONENTS=keycloak cargo test -p agentgit-server --test oidc_keycloak
 //! ```
 
 mod common;
@@ -21,6 +23,17 @@ use std::time::Duration;
 use ag_server::config::{GroupRole, OidcProvider};
 use common::*;
 use serde_json::{Value, json};
+
+/// Is there a Keycloak to talk to? Otherwise the running test skips (or fails, when `keycloak` is required).
+fn have_keycloak() -> bool {
+    let url = std::env::var("AG_TEST_KEYCLOAK_URL").ok().filter(|u| !u.trim().is_empty());
+    ag_testkit::require_here(
+        "keycloak",
+        "AG_TEST_KEYCLOAK_URL is not set (the real identity provider CI job sets it)",
+        url,
+    )
+    .is_some()
+}
 
 fn keycloak() -> String {
     std::env::var("AG_TEST_KEYCLOAK_URL")
@@ -93,8 +106,10 @@ fn tamper(jwt: &str, which: usize) -> String {
 }
 
 #[tokio::test]
-#[ignore = "needs a Keycloak: AG_TEST_KEYCLOAK_URL (run by the real identity provider CI job)"]
 async fn a_token_keycloak_issued_is_accepted_and_its_groups_become_roles() {
+    if !have_keycloak() {
+        return;
+    }
     let srv = TestServer::start_with(|cfg| cfg.auth.oidc.push(provider("agentgit-api", 30))).await;
     let caps = srv.client("").get("/v1/capabilities").await;
     assert!(caps.json["auth_methods"].as_array().unwrap().iter().any(|m| m == "oidc"));
@@ -126,8 +141,10 @@ async fn a_token_keycloak_issued_is_accepted_and_its_groups_become_roles() {
 }
 
 #[tokio::test]
-#[ignore = "needs a Keycloak: AG_TEST_KEYCLOAK_URL (run by the real identity provider CI job)"]
 async fn tokens_that_are_wrong_in_any_way_are_refused() {
+    if !have_keycloak() {
+        return;
+    }
     let srv = TestServer::start_with(|cfg| cfg.auth.oidc.push(provider("agentgit-api", 30))).await;
     let (good, access) = login("agentgit-api", "dana").await;
     assert_eq!(srv.client(&good).get("/v1/whoami").await.status, 200);
@@ -157,8 +174,10 @@ async fn tokens_that_are_wrong_in_any_way_are_refused() {
 }
 
 #[tokio::test]
-#[ignore = "needs a Keycloak: AG_TEST_KEYCLOAK_URL (run by the real identity provider CI job)"]
 async fn a_token_stops_working_when_it_expires() {
+    if !have_keycloak() {
+        return;
+    }
     // No tolerance for clock skew, so that the token's own `exp` (three seconds after it was issued) decides.
     let srv = TestServer::start_with(|cfg| cfg.auth.oidc.push(provider("agentgit-api-short", 0))).await;
     let (token, _) = login("agentgit-api-short", "alice").await;

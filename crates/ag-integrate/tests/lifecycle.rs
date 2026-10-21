@@ -106,6 +106,11 @@ fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc() {
         // S3 objects age on the server's clock, which a test cannot move forward; the same
         // guarantee is tested against S3 with real time in
         // `rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3`.
+        ag_testkit::not_applicable(
+            "s3-clock",
+            &ag_testkit::current_test(),
+            "S3 objects age on the server's clock; the S3 counterpart of this test runs in real time",
+        );
         return;
     }
     let blob = f.repo.put_blob(b"old but suddenly wanted".to_vec()).unwrap();
@@ -124,8 +129,13 @@ fn rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3() {
     // The S3 counterpart, in real time: objects age on the server's clock. The collector's
     // delete is serialized with writers by the repository's object lock (see
     // `s3_gc_cannot_delete_an_object_a_writer_just_reput` in ag-storage for the interleaving).
-    if ag_storage::testing::s3_endpoint().is_none() {
-        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
+    if ag_testkit::require_here(
+        "s3",
+        "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)",
+        ag_storage::testing::s3_endpoint(),
+    )
+    .is_none()
+    {
         return;
     }
     let dir = tempdir();
@@ -596,8 +606,13 @@ fn backup_is_consistent_verified_and_independent_of_later_changes() {
 #[cfg(feature = "s3")]
 #[test]
 fn backup_downloads_s3_objects_into_a_self_contained_local_repository() {
-    if ag_storage::testing::s3_endpoint().is_none() {
-        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
+    if ag_testkit::require_here(
+        "s3",
+        "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)",
+        ag_storage::testing::s3_endpoint(),
+    )
+    .is_none()
+    {
         return;
     }
     let dir = tempdir();

@@ -22,6 +22,9 @@ restart the server (or the pod) in between to prove that credentials, the reposi
 script grant roles and mint credentials with the offline admin tool inside the container instead of the HTTP
 API (the path docs/operations/deployment.md documents). Python 3 standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import json
 import os

@@ -9,7 +9,7 @@ every number below was measured on the date given and is reproducible with the c
 | Layer | What it proves | Run it | Where it runs in CI |
 |---|---|---|---|
 | Unit and property tests | one function or type; invariants over generated inputs (`proptest`: determinism, round trips, "applying the diff gives the target") | `cargo test --workspace` | [CI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/ci.yml) *test*, Ubuntu and macOS; [Windows](../operations/windows.md) for the CLI, client and server |
-| Crate integration suites | a crate through its public API: the sandbox against the real kernel (`AG_REQUIRE_SANDBOX=1`), the engine against a real store, the policy cookbook against the real parser | the same | the same |
+| Crate integration suites | a crate through its public API: the sandbox against the real kernel (`AG_REQUIRE_COMPONENTS=namespace-sandbox`), the engine against a real store, the policy cookbook against the real parser | the same | the same |
 | Cross-implementation conformance | the byte formats against an independent encoder written in Python (`tests/conformance/`) | the same | the same |
 | Compatibility | data written by **older builds** still opens and means the same ([Compatibility](compatibility.md)) | `cargo test -p agentgit-integrate --test compat; cargo test -p agentgit-server --test compat_control` | the same |
 | Backends | every suite on PostgreSQL 16 and on S3 objects (moto, and SeaweedFS, a real S3 server) | `scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace` | CI *PostgreSQL + S3 backends* |
@@ -29,6 +29,27 @@ tests and the tests of the scripts are counted by their own runners and are not 
 The scripts under `scripts/` that guard the repository have tests of their own, and those tests use **recorded output
 of the real tools** (`npm audit`, `pip-audit`, `govulncheck`, `cargo llvm-cov`): `scripts/testdata/`. They run in the
 Security and Quality workflows.
+
+## A test cannot pass by not running
+
+A test that needs an external component (PostgreSQL, S3, a container runtime, Keycloak, the `ag-server` binary, a
+model, a shell) asks one helper per language (`ag-testkit` for Rust, `internal/testutil` for Go, `scripts/ag_testkit.py`,
+`apps/web/e2e/support/components.ts`) instead of returning early. A missing component **fails** the test when the job
+sets `AG_REQUIRE_COMPONENTS` for it, and otherwise skips it with a machine-readable `AG-SKIP` marker. Every CI job
+that runs tests collects the markers (`AG_SKIP_REPORT`), prints a table of what skipped and why in its summary, and
+**fails when a skip is not on the reviewed list** `tests/skip-allowlist.toml` (reason, owner and the job that runs it for
+real, per entry; live-model tests are there because they are opt-in by design). A source scan fails the build on any
+skip construct outside the helpers. The mechanism, the component names, the full list of skipping tests and what the
+gate does not cover are on [Test skips](test-skips.md).
+
+The jobs and what each requires: *test* (Ubuntu: `namespace-sandbox`, `git`, `bash`, `python3`, `ag-server-binary`; macOS the
+same without the sandbox), *backends* (`postgres`, `s3`; `s3-tls` on SeaweedFS), the *OCI runtimes* legs (`oci:docker`
+or `oci:podman`; the cgroup job `cgroup-v2`, `namespace-sandbox`), *Web UI* identity provider (`keycloak`), *shells*
+(`shell`), the Go orchestrator job (`ag-server-binary`; the live step adds `model`). What still skips in each job is
+listed in the allow-list, not assumed. The root-only halves of the sandbox tests run in no CI job.
+
+The lightweight scripts also run on Python 3.9 (*scripts on Python 3.9*, `scripts/test_py39_compat.py` plus the unit
+tests of the scripts); the scripts that read TOML need 3.11 (`tomllib`).
 
 ## Coverage
 

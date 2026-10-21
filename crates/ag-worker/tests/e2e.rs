@@ -193,8 +193,7 @@ async fn the_environment_digest_in_the_attestation_is_the_sandboxs_and_can_be_pi
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_check_cannot_see_the_workers_key_or_run_as_the_worker() {
     if !namespace_works() {
-        eprintln!("SKIP: needs the namespace sandbox");
-        return;
+        return; // the skip (or the failure, when `namespace-sandbox` is required) was reported by namespace_works
     }
     let keyfile = tempfile::tempdir().unwrap();
     let key_path = keyfile.path().join("worker-key.json");
@@ -462,8 +461,11 @@ impl Drop for Proc {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_real_server_binary_and_the_real_worker_binary_agree() {
-    let Some(server_bin) = real_server_binary() else {
-        eprintln!("SKIP: no ag-server binary (build it with `cargo build -p agentgit-server` or set AG_SERVER_BIN)");
+    let Some(server_bin) = ag_testkit::require_here(
+        "ag-server-binary",
+        "no ag-server binary (build it with `cargo build -p agentgit-server` or set AG_SERVER_BIN)",
+        real_server_binary(),
+    ) else {
         return;
     };
     let server_bin = server_bin.to_str().unwrap().to_string();

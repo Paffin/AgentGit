@@ -3,7 +3,7 @@
 #
 #   scripts/s3-test.sh cargo test --workspace                       # moto (the default)
 #   AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p agentgit-storage -p agentgit-integrate
-#   AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
+#   AG_REQUIRE_COMPONENTS=postgres,s3 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
 #
 # Two servers, chosen by AG_S3_SERVER; the object-store suites (crates/ag-storage/tests/s3.rs and every test that
 # moves its objects to S3 when AG_TEST_S3_ENDPOINT is set) are meant to pass on both:

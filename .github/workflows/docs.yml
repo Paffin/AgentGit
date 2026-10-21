@@ -48,8 +48,11 @@ jobs:
           .venv-docs/bin/pip install --require-hashes -r docs/requirements.txt
       - name: Build the site (strict)
         run: .venv-docs/bin/mkdocs build --strict
+      # AG_REQUIRE_COMPONENTS=mkdocs: the real-build tests fail, not skip, if MkDocs is not importable here.
       - name: The hooks that adapt docs/ to the site have tests
         run: .venv-docs/bin/python scripts/test_mkdocs_hooks.py
+        env:
+          AG_REQUIRE_COMPONENTS: mkdocs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: docs-site

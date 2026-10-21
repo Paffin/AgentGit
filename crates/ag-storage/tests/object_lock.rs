@@ -1,8 +1,8 @@
 //! The cross-process object lock backed by PostgreSQL advisory locks.
 //!
 //! Needs a server: `scripts/pg-test.sh cargo test -p agentgit-storage --test object_lock`.
-//! Without `AG_TEST_POSTGRES_URL` these print a notice and pass, unless
-//! `AG_REQUIRE_BACKENDS=1`.
+//! Without `AG_TEST_POSTGRES_URL` these skip with an `AG-SKIP` marker (`ag-testkit`), unless
+//! `AG_REQUIRE_COMPONENTS` names `postgres`.
 #![allow(missing_docs)]
 
 use std::sync::Arc;
@@ -15,11 +15,7 @@ use ag_storage::{ObjectLock, PostgresAdvisoryLock, SystemClock};
 use ag_types::Limits;
 
 fn url() -> Option<String> {
-    let u = postgres_url();
-    if u.is_none() {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
-    }
-    u
+    ag_testkit::require_here("postgres", "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)", postgres_url())
 }
 
 fn kill_sessions_of(url: &str, app: &str) {

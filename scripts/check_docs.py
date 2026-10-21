@@ -22,6 +22,9 @@ the CI environment variable is set: a green run in CI must mean that the command
 
 The generated reference pages (docs/reference/*, see gen_cli_docs.py) are checked by that script, not here.
 """
+
+from __future__ import annotations
+
 import os
 import re
 import subprocess

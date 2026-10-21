@@ -158,11 +158,14 @@ fn init_with_a_storage_file_checks_it_and_never_stores_secrets() {
     ag(&["init", "--storage", "missing.json"]).code_is(1);
 
     // with a server: a PostgreSQL repository, usable through the CLI, whose backup is refused
-    let Some(_) = ag_storage::testing::postgres_url() else {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
+    let Some(pg_url) = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        ag_storage::testing::postgres_url(),
+    ) else {
         return;
     };
-    let schema = ag_storage::testing::TempSchema::new(&ag_storage::testing::postgres_url().unwrap());
+    let schema = ag_storage::testing::TempSchema::new(&pg_url);
     fs::write(
         dir.path().join("pg.json"),
         format!(r#"{{"meta":{{"kind":"postgres","url_env":"AG_TEST_POSTGRES_URL","schema":"{}"}}}}"#, schema.name()),

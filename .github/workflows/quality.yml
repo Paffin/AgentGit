@@ -71,13 +71,16 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Run the workspace tests with coverage
         env:
-          AG_REQUIRE_SANDBOX: "1"
-          AG_REQUIRE_DOC_SNIPPETS: "1"
+          AG_REQUIRE_COMPONENTS: namespace-sandbox,git,bash,python3,ag-server-binary
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
         run: |
           # --no-fail-fast: one failing test must not hide the ones after it (a failure still fails the job)
           cargo llvm-cov --workspace --no-report --no-fail-fast
           cargo llvm-cov report --json --summary-only --output-path coverage.json
           cargo llvm-cov report --lcov --output-path lcov.info
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job quality/coverage --report "$RUNNER_TEMP/skips.jsonl"
       - name: Coverage by crate, and the floors
         run: python3 scripts/coverage_summary.py coverage.json --floors scripts/coverage_floors.toml --markdown "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

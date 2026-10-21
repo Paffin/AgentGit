@@ -72,6 +72,7 @@ dependencies = [
  "agentgit-protocol",
  "agentgit-server",
  "agentgit-storage",
+ "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
  "anyhow",
@@ -165,6 +166,7 @@ dependencies = [
  "agentgit-object",
  "agentgit-policy",
  "agentgit-storage",
+ "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
  "globset",
@@ -254,6 +256,7 @@ dependencies = [
 name = "agentgit-sandbox"
 version = "0.2.0-rc.2"
 dependencies = [
+ "agentgit-testkit",
  "libc",
  "serde",
  "serde_json",
@@ -276,6 +279,7 @@ dependencies = [
  "agentgit-policy",
  "agentgit-protocol",
  "agentgit-storage",
+ "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
  "agentgit-ui-assets",
@@ -324,6 +328,7 @@ dependencies = [
  "agentgit-crypto",
  "agentgit-dag",
  "agentgit-object",
+ "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
  "hex",
@@ -340,6 +345,10 @@ dependencies = [
  "ureq",
  "webpki-roots",
 ]
+
+[[package]]
+name = "agentgit-testkit"
+version = "0.2.0-rc.2"
 
 [[package]]
 name = "agentgit-tree"
@@ -384,6 +393,7 @@ dependencies = [
  "agentgit-sandbox",
  "agentgit-server",
  "agentgit-storage",
+ "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
  "anyhow",

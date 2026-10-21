@@ -2,8 +2,8 @@
 //! connections ("processes"), failure handling, TLS.
 //!
 //! These need a server: run them with `scripts/pg-test.sh cargo test -p agentgit-storage --test postgres`.
-//! Without `AG_TEST_POSTGRES_URL` they print a notice and pass, unless
-//! `AG_REQUIRE_BACKENDS=1`, which makes a missing server a failure.
+//! Without `AG_TEST_POSTGRES_URL` they skip with an `AG-SKIP` marker (`ag-testkit`), unless
+//! `AG_REQUIRE_COMPONENTS` names `postgres`, which makes a missing server a failure.
 #![allow(missing_docs)]
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -17,11 +17,7 @@ use ag_storage::{Clock, ManualClock, SystemClock};
 use ag_types::{Limits, StreamName, Timestamp};
 
 fn url() -> Option<String> {
-    let u = postgres_url();
-    if u.is_none() {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
-    }
-    u
+    ag_testkit::require_here("postgres", "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)", postgres_url())
 }
 
 fn open(url: &str, schema: &str) -> Meta {
@@ -541,11 +537,11 @@ fn a_server_that_refuses_the_login_is_an_unavailable_database_not_an_internal_er
 #[cfg(feature = "tls")]
 fn tls_urls() -> Option<(String, String, String)> {
     let base = url()?;
-    let Ok(ca) = std::env::var("AG_TEST_POSTGRES_CA") else {
-        eprintln!("skipped: AG_TEST_POSTGRES_CA is not set (use scripts/pg-test.sh)");
-        assert!(!ag_storage::testing::backends_required(), "AG_REQUIRE_BACKENDS: no TLS-enabled server");
-        return None;
-    };
+    let ca = ag_testkit::require_here(
+        "postgres:tls",
+        "AG_TEST_POSTGRES_CA is not set (scripts/pg-test.sh provides a TLS-enabled server when openssl is installed)",
+        std::env::var("AG_TEST_POSTGRES_CA").ok(),
+    )?;
     let host_port = base.split('@').nth(1)?.split('/').next()?.to_string();
     let (_, port) = host_port.rsplit_once(':')?;
     let user = "postgres";

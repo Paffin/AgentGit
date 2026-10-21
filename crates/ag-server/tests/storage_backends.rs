@@ -1,8 +1,8 @@
 //! The server on PostgreSQL metadata and S3 objects.
 //!
 //! These run only when `AG_TEST_POSTGRES_URL` / `AG_TEST_S3_ENDPOINT` are set (see
-//! `scripts/pg-test.sh` and `scripts/s3-test.sh`); with `AG_REQUIRE_BACKENDS=1` a missing
-//! variable fails the test instead of skipping it.
+//! `scripts/pg-test.sh` and `scripts/s3-test.sh`); with `AG_REQUIRE_COMPONENTS=postgres,s3` a
+//! missing variable fails the test instead of skipping it (each skip leaves an `AG-SKIP` marker, see `ag-testkit`).
 
 mod common;
 
@@ -11,7 +11,11 @@ use common::*;
 use serde_json::json;
 
 fn s3_template() -> Option<ObjectsConfig> {
-    let endpoint = ag_storage::testing::s3_endpoint()?;
+    let endpoint = ag_testkit::require_here(
+        "s3",
+        "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)",
+        ag_storage::testing::s3_endpoint(),
+    )?;
     let var = |k: &str, d: &str| std::env::var(k).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| d.to_string());
     Some(ObjectsConfig::S3 {
         endpoint,
@@ -84,7 +88,13 @@ async fn exercise(srv: &TestServer, repo: &str, backends: (&str, &str)) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_server_runs_on_postgres() {
-    let Some(url) = ag_storage::testing::postgres_url() else { return };
+    let Some(url) = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        ag_storage::testing::postgres_url(),
+    ) else {
+        return;
+    };
     // The template reads the URL from the environment variable it names.
     let schema = ag_storage::testing::unique("agsrv");
     let template = StorageConfig {

@@ -219,7 +219,7 @@ jobs:
     name: client SDKs (TypeScript, Python)
     runs-on: ubuntu-latest
     env:
-      AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -251,7 +251,7 @@ jobs:
         run: python3 sdk/tools/sync_doc_samples.py --check
       - name: Skipped tests
         if: ${{ !cancelled() }}
-        run: python3 scripts/check_skips.py --job ci/sdk --report "$RUNNER_TEMP/skips.jsonl"
+        run: python3 scripts/check_skips.py --job ci/sdk --report /tmp/ag-skips.jsonl
 
   # The README of each SDK names the runtimes it supports; these legs are what makes that sentence true. The
   # `sdk` job above runs the full checks on one interpreter; here only the test suites run on the others.
@@ -259,7 +259,7 @@ jobs:
     name: client SDK tests (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     env:
-      AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
     strategy:
       fail-fast: false
       matrix:
@@ -298,7 +298,7 @@ jobs:
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
       - name: Skipped tests
         if: ${{ !cancelled() }}
-        run: python3 scripts/check_skips.py --job "ci/sdk-runtimes-${{ matrix.kind }}-${{ matrix.version }}" --report "$RUNNER_TEMP/skips.jsonl"
+        run: python3 scripts/check_skips.py --job "ci/sdk-runtimes-${{ matrix.kind }}-${{ matrix.version }}" --report /tmp/ag-skips.jsonl
 
   orchestrator:
     name: agent orchestrator (Go)
@@ -309,7 +309,7 @@ jobs:
       # The integration suite runs against the real server: no binary is a failure, not a skip. The live-model tests
       # skip here by design (tests/skip-allowlist.toml) and run in the live step.
       AG_REQUIRE_COMPONENTS: ag-server-binary
-      AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -331,7 +331,7 @@ jobs:
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race -count=1 ./...
       - name: Skipped tests
         if: ${{ !cancelled() }}
-        run: python3 scripts/check_skips.py --job ci/orchestrator --report "$RUNNER_TEMP/skips.jsonl"
+        run: python3 scripts/check_skips.py --job ci/orchestrator --report /tmp/ag-skips.jsonl
       # The model-backed advisor, reviewer and index judge against a real endpoint: opt-in (it costs money). Runs on a
       # push only when the repository defines the OPENROUTER_API_KEY secret and the AG_LLM_MODEL variable.
       - name: model-backed components against a real model (only when a key and a model are configured)
@@ -421,7 +421,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AG_REQUIRE_COMPONENTS: dash
-      AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -446,4 +446,4 @@ jobs:
           "$RUNNER_TEMP/py39/bin/python" scripts/check_skips.py --validate --scan
       - name: Skipped tests
         if: ${{ !cancelled() }}
-        run: python3 scripts/check_skips.py --job ci/scripts-py39 --report "$RUNNER_TEMP/skips.jsonl"
+        run: python3 scripts/check_skips.py --job ci/scripts-py39 --report /tmp/ag-skips.jsonl

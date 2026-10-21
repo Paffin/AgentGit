@@ -63,16 +63,24 @@ impl Dev {
         (status, r.body_mut().read_json().unwrap_or(Value::Null))
     }
 
-    fn stop(mut self) -> std::process::ExitStatus {
+    /// Stops the server and, where a graceful stop exists, checks that it exited cleanly. On Unix that is SIGINT (what
+    /// Ctrl-C sends) and a zero exit status. Windows has no signal a child can be sent here, so the process is killed
+    /// and its status (always a failure) says nothing about the shutdown.
+    fn stop_cleanly(mut self) {
         #[cfg(unix)]
         {
             Command::new("kill").args(["-INT", &self.child.id().to_string()]).status().unwrap();
+            assert!(self.child.wait().unwrap().success(), "the server did not exit cleanly on SIGINT");
         }
         #[cfg(not(unix))]
         {
             self.child.kill().unwrap();
+            self.child.wait().unwrap();
         }
-        self.child.wait().unwrap()
+    }
+
+    fn stop(self) {
+        self.stop_cleanly()
     }
 }
 
@@ -151,7 +159,7 @@ fn one_command_makes_everything_and_the_banner_says_what_it_is() {
     assert_eq!(policy["version"], 1);
 
     // Ctrl-C is a clean stop.
-    assert!(dev.stop().success());
+    dev.stop();
 }
 
 #[test]
@@ -171,7 +179,7 @@ fn a_second_start_keeps_the_data_and_replaces_the_credential() {
     assert_eq!(r.status().as_u16(), 200);
     let old_token = first.token.clone();
     let old_reviewer = std::fs::read_to_string(data.join("dev/reviewer-token")).unwrap().trim().to_string();
-    assert!(first.stop().success());
+    first.stop();
 
     let second = Dev::start(&data, &[]);
     assert_ne!(second.token, old_token, "the credential is replaced at every start");
@@ -187,7 +195,7 @@ fn a_second_start_keeps_the_data_and_replaces_the_credential() {
     let (_, policy) = second.get(&second.token, "/v1/repos/demo/welcome/policy?stream=main");
     assert_eq!(policy["version"], 2, "your policy change survived");
     assert_eq!(ag_policy::Policy::parse(policy["document"].as_str().unwrap()).unwrap().approvals.min, 3);
-    assert!(second.stop().success());
+    second.stop();
 }
 
 #[test]

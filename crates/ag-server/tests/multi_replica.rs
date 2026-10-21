@@ -222,8 +222,19 @@ struct Cluster {
     replicas: Vec<Replica>,
 }
 
+/// A port nobody listens on. The listener is closed before the replica binds, and the kernel may hand the same
+/// number to the next caller while the first replica is still starting (two replicas of one cluster then fight for
+/// it: "Address already in use"). So no number is given out twice by this process.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    static GIVEN: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
+    let mut given = GIVEN.lock().unwrap();
+    loop {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        if !given.contains(&port) {
+            given.push(port);
+            return port;
+        }
+    }
 }
 
 impl Cluster {

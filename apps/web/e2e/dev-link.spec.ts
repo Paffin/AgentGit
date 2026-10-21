@@ -31,7 +31,7 @@ async function startDev(dataDir: string): Promise<Dev> {
     await new Promise((r) => setTimeout(r, 50))
   }
   const link = /(http:\/\/127\.0\.0\.1:\d+\/repos\/demo\/welcome#token=\S+)/.exec(out)?.[1]
-  if (!link) throw new Error(`no sign-in link in the banner (is the Web UI embedded?):\n${out}`)
+  if (!link) throw new Error(`no sign-in link in the banner (the server binary must embed the Web UI: scripts/build_ui.sh, then cargo build):\n${out}`)
   return {
     base: new URL(link).origin,
     link,
@@ -45,10 +45,6 @@ async function startDev(dataDir: string): Promise<Dev> {
 
 test.describe('the sign-in link of ag-server dev', () => {
   test.use({ persona: null })
-  test.skip(
-    () => process.env.AG_E2E_UI !== 'embedded',
-    'ag-server dev serves the UI embedded in its binary: run with AG_E2E_UI=embedded',
-  )
 
   test('signs in, lands where the link points, and leaves no credential in the address bar', async ({
     page,

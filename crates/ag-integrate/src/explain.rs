@@ -16,7 +16,7 @@ use crate::types::{Blocker, ConflictInfo};
 /// One command that moves the proposal forward, and what it does.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Fix {
-    /// The command, exactly as to be typed (placeholders in `<angle brackets>` are for the reader to fill).
+    /// The command, exactly as to be typed (a word in `<angle brackets>` is for the reader to fill in).
     pub command: String,
     /// What it achieves.
     pub note: String,

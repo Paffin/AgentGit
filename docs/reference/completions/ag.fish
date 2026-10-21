@@ -1327,6 +1327,7 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l explain -d 'Also say in plain language what the policy allows, requires and refuses'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from policy" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'

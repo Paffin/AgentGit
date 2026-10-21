@@ -31,6 +31,28 @@ enum Command {
         #[arg(long)]
         data_dir: Option<PathBuf>,
     },
+    /// Try AgentGit out: one command makes a data directory, an administrator and a demo repository with a sample
+    /// policy, and starts the server on 127.0.0.1 (plain HTTP). For evaluation, not for real work: the credential
+    /// it prints lives eight hours and changes at every start. Run it again with the same --data-dir to keep your data.
+    Dev {
+        /// Where the data lives (made if missing). Delete it to start over.
+        #[arg(long, default_value = "./ag-dev-data")]
+        data_dir: PathBuf,
+        /// Port to listen on (0: any free one).
+        #[arg(long, default_value_t = 8080)]
+        port: u16,
+        /// Address to listen on. Anything but a loopback address needs --allow-non-loopback.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: std::net::IpAddr,
+        /// Listen on a non-loopback address anyway (for example 0.0.0.0 inside a container whose port you publish
+        /// only to 127.0.0.1). The server speaks plain HTTP and the link it prints carries a credential.
+        #[arg(long)]
+        allow_non_loopback: bool,
+        /// Open the sign-in link in your browser. The link carries the credential, so it is briefly visible in the
+        /// process list of this machine.
+        #[arg(long)]
+        open: bool,
+    },
     /// Probe a running server's /readyz and exit 0 (ready) or 1. For container health checks,
     /// where the image has no curl.
     Healthcheck {
@@ -236,6 +258,57 @@ async fn main() -> Result<()> {
             );
             let _ = std::fs::remove_dir_all(&cfg.server.data_dir);
             Ok(())
+        }
+        Command::Dev { data_dir, port, host, allow_non_loopback, open } => {
+            let listen = std::net::SocketAddr::new(host, port);
+            ag_server::dev::check_listen(listen, allow_non_loopback)?;
+            let mut cfg = ServerConfig::default();
+            cfg.server.listen = listen;
+            cfg.server.allow_insecure_remote = allow_non_loopback;
+            // A directory this command makes holds the hash of every credential: private. One that exists is left as it is.
+            if !data_dir.exists() {
+                ag_crypto::private_file::create_dir_all(&data_dir)
+                    .with_context(|| format!("creating {}", data_dir.display()))?;
+            }
+            cfg.server.data_dir = data_dir.canonicalize().unwrap_or(data_dir);
+            // The banner is the output; keep the log to warnings unless RUST_LOG asks for more.
+            cfg.telemetry.log_filter = "warn".into();
+            cfg.validate()?;
+            init_tracing(&cfg);
+            let stop = shutdown_signal().context("installing the signal handlers")?;
+            let listener = tokio::net::TcpListener::bind(listen).await.with_context(|| {
+                format!(
+                    "binding {listen}: is another server using the port? choose one with --port (0 picks a free one)"
+                )
+            })?;
+            let bound = listener.local_addr()?;
+            let (app, done) = {
+                let cfg = cfg.clone();
+                tokio::task::spawn_blocking(move || -> Result<(App, ag_server::dev::Bootstrapped)> {
+                    let app = App::new(cfg.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
+                    let done = ag_server::dev::bootstrap(&app, &cfg.server.data_dir)?;
+                    Ok((app, done))
+                })
+                .await??
+            };
+            let base = format!("http://{bound}");
+            let expires = ag_types::Timestamp::from_millis(done.expires_at_ms).to_string();
+            let ui = ag_server::ui::mode(&app.cfg) != ag_server::ui::Mode::Disabled
+                && (ag_server::ui::embedded() || app.cfg.ui_dir().is_some());
+            {
+                use std::io::Write as _;
+                let mut out = std::io::stdout().lock();
+                writeln!(out, "{}", ag_server::dev::banner(&base, &done, &cfg.server.data_dir, ui, &expires))?;
+                out.flush()?;
+            }
+            if open && let Err(e) = ag_server::dev::open_browser(&ag_server::dev::sign_in_url(&base, &done.token)) {
+                eprintln!("note: {e}");
+            }
+            let shutdown = async {
+                stop.await;
+                println!("\nstopping");
+            };
+            ag_server::server::serve(app, listener, shutdown).await
         }
         Command::Serve { config, listen, data_dir } => {
             let mut cfg = match config {

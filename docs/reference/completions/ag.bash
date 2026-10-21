@@ -3607,7 +3607,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote__subcmd__policy)
-            opts="-C -q -v -h -V --set --preset --admin --issuer --ci-key --remote --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --set --preset --explain --admin --issuer --ci-key --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

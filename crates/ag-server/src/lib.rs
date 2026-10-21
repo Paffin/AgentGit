@@ -19,6 +19,7 @@ pub mod authz;
 pub mod cluster;
 pub mod config;
 pub mod control;
+pub mod dev;
 pub mod error;
 pub mod grpc;
 pub mod health;

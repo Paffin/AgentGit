@@ -2026,6 +2026,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
             [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--explain', '--explain', [CompletionResultType]::ParameterName, 'Also say in plain language what the policy allows, requires and refuses')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
             [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')

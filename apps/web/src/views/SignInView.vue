@@ -101,6 +101,15 @@ async function proceed() {
       </p>
     </div>
 
+    <Alert
+      v-if="!who && auth.linkError"
+      tone="warn"
+      live="alert"
+      title="The sign-in link did not work"
+    >
+      {{ auth.linkError }}
+    </Alert>
+
     <Card v-if="!who && providers.length" title="Single sign-on" icon="shield" :level="2">
       <div class="form">
         <Alert v-if="ssoError" tone="warn" live="alert" title="Single sign-on did not complete">

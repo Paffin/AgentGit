@@ -736,6 +736,9 @@ pub enum RemoteCmd {
         /// Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`).
         #[arg(long, value_name = "NAME")]
         preset: Option<String>,
+        /// Also say in plain language what the policy allows, requires and refuses.
+        #[arg(long)]
+        explain: bool,
         #[command(flatten)]
         flags: crate::cmds::policy::PresetFlags,
     },
@@ -1137,7 +1140,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     })?;
                 }
             }
-            RemoteCmd::Policy { stream, set, preset, flags } => {
+            RemoteCmd::Policy { stream, set, preset, explain, flags } => {
                 let document = match (set, preset) {
                     (Some(file), _) => {
                         Some(std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?)
@@ -1169,7 +1172,21 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .map_err(s)?
                         .into_inner(),
                 };
-                print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
+                if *explain {
+                    let policy = ag_policy::Policy::parse(&v.document).context("the server's policy does not parse")?;
+                    let statements = ag_policy::explain::explain(&policy);
+                    print(cli, &serde_json::json!({"version": v.version, "stream": v.stream, "explanation": statements}), || {
+                        format!(
+                            "# policy v{} of '{}'{}\n{}",
+                            v.version,
+                            v.stream,
+                            if v.version == 0 { " (the built-in default; nothing stored yet)" } else { "" },
+                            ag_policy::explain::render(&statements)
+                        )
+                    })?;
+                } else {
+                    print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
+                }
             }
             RemoteCmd::Log { rev, limit } => {
                 // The server clamps a page; ask for as many pages as `-n` needs instead of getting fewer entries

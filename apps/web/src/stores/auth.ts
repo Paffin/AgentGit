@@ -52,6 +52,8 @@ export const useAuth = defineStore('auth', () => {
   const endedBecause = ref<'expired' | 'rejected' | 'signed-out' | 'sso' | ''>('')
   /** The message of a failed redirect sign-in (`endedBecause === 'sso'`). */
   const ssoMessage = ref('')
+  /** Why a sign-in link (`#token=…`, printed by `ag-server dev`) did not sign in; shown on the sign-in page. */
+  const linkError = ref('')
   const expiryWarned = ref(false)
   /** What the server said when it stopped accepting the credential mid-session (shown on /unauthorized). */
   const rejection = ref<{ message: string; requestId: string } | null>(null)
@@ -187,6 +189,27 @@ export const useAuth = defineStore('auth', () => {
     } catch (e) {
       status.value = 'anonymous'
       throw e
+    }
+  }
+
+  /**
+   * Signs in with the credential of a sign-in link (see `lib/login-link.ts`, which has already removed it from the
+   * address bar). Never throws: a link that does not work, typically one from an earlier start of `ag-server dev`,
+   * leaves the session anonymous and says so in `linkError`.
+   */
+  async function signInFromLink(raw: string): Promise<boolean> {
+    linkError.value = ''
+    try {
+      await signIn(raw)
+      return true
+    } catch (e) {
+      linkError.value =
+        e instanceof ApiError && e.isUnauthenticated
+          ? 'The server did not accept the credential in that link. If you restarted ag-server dev, the old link no longer works: use the new one it printed.'
+          : e instanceof ApiError && e.isNetwork
+            ? 'Could not reach the server to check the sign-in link.'
+            : 'That sign-in link did not work. Paste a token instead.'
+      return false
     }
   }
 
@@ -421,6 +444,7 @@ export const useAuth = defineStore('auth', () => {
     status,
     endedBecause,
     ssoMessage,
+    linkError,
     method,
     config,
     expiryWarned,
@@ -434,6 +458,7 @@ export const useAuth = defineStore('auth', () => {
     hasRole,
     can,
     signIn,
+    signInFromLink,
     loadAuthConfig,
     signInWithSso,
     completeSso,

@@ -1916,6 +1916,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
             cand --color 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never'
+            cand --explain 'Also say in plain language what the policy allows, requires and refuses'
             cand --json 'Machine-readable JSON output'
             cand -q 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
             cand --quiet 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

@@ -2679,12 +2679,13 @@ Options:
       --set <SET>              Replace the policy with the JSON document in this file
       --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --preset <NAME>          Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`)
-      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+      --explain                Also say in plain language what the policy allows, requires and refuses
       --json                   Machine-readable JSON output
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
       --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
-      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
   -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
   -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version

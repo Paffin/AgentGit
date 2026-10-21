@@ -142,10 +142,14 @@ jobs:
       # Every suite on PostgreSQL metadata and S3 objects; a missing server fails the run
       # instead of silently falling back to SQLite and files. The S3 server here is moto, a Python
       # re-implementation of the API that recomputes every request's SigV4 signature.
+      # The whole workspace runs here, so the sandbox suites do too. Until the skip report existed this job did not
+      # lift the AppArmor restriction (see the test job) and every namespace-sandbox test silently skipped in it.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Test on PostgreSQL + S3 (moto)
         run: scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
         env:
-          AG_REQUIRE_COMPONENTS: postgres,s3
+          AG_REQUIRE_COMPONENTS: postgres,s3,namespace-sandbox
           AG_SKIP_REPORT: ${{ runner.temp }}/skips-moto.jsonl
       - name: Skipped tests (moto)
         if: ${{ !cancelled() }}

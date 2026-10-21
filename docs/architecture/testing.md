@@ -43,7 +43,7 @@ skip construct outside the helpers. The mechanism, the component names, the full
 gate does not cover are on [Test skips](test-skips.md).
 
 The jobs and what each requires: *test* (Ubuntu: `namespace-sandbox`, `git`, `bash`, `python3`, `ag-server-binary`; macOS the
-same without the sandbox), *backends* (`postgres`, `s3`; `s3-tls` on SeaweedFS), the *OCI runtimes* legs (`oci:docker`
+same without the sandbox), *backends* (`postgres`, `s3`, and `namespace-sandbox` on the moto leg, which runs the whole workspace; `s3-tls` on SeaweedFS), the *OCI runtimes* legs (`oci:docker`
 or `oci:podman`; the cgroup job `cgroup-v2`, `namespace-sandbox`), *Web UI* identity provider (`keycloak`), *shells*
 (`shell`), the Go orchestrator job (`ag-server-binary`; the live step adds `model`). What still skips in each job is
 listed in the allow-list, not assumed. The root-only halves of the sandbox tests run in no CI job.

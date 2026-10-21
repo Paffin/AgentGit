@@ -318,7 +318,7 @@ Precedence, highest first
                 CLICOLOR=0, then whether the output is a terminal
     repository  -C DIR / --repo DIR, else the nearest parent directory that contains .ag/
     credential  the variable named by the remote's token_env, the remote's token file,
-                AG_TOKEN_<REMOTE>, AG_TOKEN
+                AG_TOKEN_<REMOTE>, AG_TOKEN, then the login saved by `ag login` (credentials.json beside the user file)
 
 Environment variables
 

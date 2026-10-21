@@ -110,8 +110,23 @@ pub(crate) fn credential_source(root: &Path, name: &str, r: &Remote) -> Result<(
             return Ok((v.trim().to_string(), format!("environment variable {var}")));
         }
     }
+    if let Some(login) = crate::credstore::find(&r.url)? {
+        let key = crate::credstore::server_key(&r.url)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        if login.expires_at_ms > 0 && login.expires_at_ms <= now {
+            bail!(
+                "the saved login for {key} expired on {}; run `ag login {key}` again",
+                ag_types::Timestamp::from_millis(login.expires_at_ms)
+            );
+        }
+        return Ok((login.token, format!("saved login for {key} ({})", login.identity)));
+    }
     bail!(
-        "no credential for remote '{name}': set AG_TOKEN (or AG_TOKEN_{upper}), or pass --token-stdin to `ag clone` / `ag remote add`"
+        "no credential for remote '{name}': run `ag login {}`, or set AG_TOKEN (or AG_TOKEN_{upper}), or pass --token-stdin to `ag clone` / `ag remote add`",
+        crate::credstore::server_key(&r.url).unwrap_or_else(|_| r.url.clone())
     )
 }
 
@@ -133,7 +148,7 @@ fn split_url(url: &str) -> Result<(String, Option<String>)> {
     Ok((format!("{scheme}://{authority}"), repo))
 }
 
-fn rt() -> Result<tokio::runtime::Runtime> {
+pub(crate) fn rt() -> Result<tokio::runtime::Runtime> {
     Ok(tokio::runtime::Builder::new_current_thread().enable_all().build()?)
 }
 
@@ -159,7 +174,7 @@ async fn connect(root: &Path, name: &str, r: &Remote) -> Result<Client> {
 }
 
 /// How `ag` connects to a remote: the one place that sets the agent run (`AG_RUN`), the user agent and the CA.
-fn options_for(r: &Remote, token: String, timeout: std::time::Duration) -> Options {
+pub(crate) fn options_for(r: &Remote, token: String, timeout: std::time::Duration) -> Options {
     Options {
         endpoint: r.url.clone(),
         token,

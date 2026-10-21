@@ -52,6 +52,8 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag integrate`](#ag-integrate)
 - [`ag lease`](#ag-lease)
 - [`ag log`](#ag-log)
+- [`ag login`](#ag-login)
+- [`ag logout`](#ag-logout)
 - [`ag ls`](#ag-ls)
 - [`ag op`](#ag-op)
 - [`ag pin`](#ag-pin)
@@ -655,6 +657,31 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "timestamp": "number"
   }
 ]
+```
+
+## ag login
+
+### ag login
+
+```json
+{
+  "expires_at": "string",
+  "file": "string",
+  "identity": "string",
+  "server": "string"
+}
+```
+
+## ag logout
+
+### ag logout
+
+```json
+{
+  "forgotten": [
+    "string"
+  ]
+}
 ```
 
 ## ag ls

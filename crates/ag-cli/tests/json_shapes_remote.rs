@@ -80,5 +80,20 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     r.rec("status#remote", &run_in(&dir, cfg.path(), "user:alice", &["--json", "status"], &[]).ok());
     r.rec("doctor#remote", &run_in(&dir, cfg.path(), "user:alice", &["--json", "doctor"], &env).ok());
 
+    // A saved login: the credential comes from a private file, as `ag-server dev` leaves it.
+    let token_file = parent.path().join("token");
+    std::fs::write(&token_file, &alice).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&token_file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let login = ["--json", "login", srv.url.as_str(), "--token-file", token_file.to_str().unwrap()];
+    r.rec("login", &run_in(parent.path(), cfg.path(), "user:alice", &login, &[]).ok());
+    r.rec(
+        "logout",
+        &run_in(parent.path(), cfg.path(), "user:alice", &["--json", "logout", srv.url.as_str()], &[]).ok(),
+    );
+
     check_golden("json-shapes-remote.json", &r.shapes, &[]);
 }

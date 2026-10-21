@@ -2,6 +2,7 @@
 //! `ag` — the AgentGit command-line interface.
 
 mod cmds;
+mod credstore;
 mod ctx;
 mod errors;
 mod ui;
@@ -186,6 +187,13 @@ pub enum Command {
     Push(cmds::remote::PushArgs),
     /// Manage remotes and work with proposals, events and policy on a server.
     Remote(cmds::remote::RemoteArgs),
+    /// Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing.
+    #[command(
+        after_help = "The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.\nAn environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:\n  ag login http://127.0.0.1:8080 --token-file ag-dev-data/dev/token\n  echo \"$TOKEN\" | ag login https://ag.example.com --token-stdin"
+    )]
+    Login(cmds::login::LoginArgs),
+    /// Forget a saved server credential.
+    Logout(cmds::login::LogoutArgs),
     /// Pin a revision so garbage collection keeps it.
     Pin(cmds::admin::PinArgs),
     /// Remove a pin.
@@ -280,6 +288,8 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Init(args) => return cmds::repo::init(&cli, args),
         Clone(args) => return cmds::remote::clone(&cli, args),
         Remote(args) => return cmds::remote::remote(&cli, args),
+        Login(a) => return cmds::login::login(&cli, a),
+        Logout(a) => return cmds::login::logout(&cli, a),
         Doctor(args) => return cmds::doctor::doctor(&cli, args),
         Config(c) => return cmds::config::config(&cli, c),
         Completions(a) => return cmds::shell::completions(a),
@@ -295,7 +305,8 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) | Clone(_) | Remote(_) | Doctor(_) | Config(_) | Completions(_) | Man(_) | Version | Help(_) => {
+        Init(_) | Clone(_) | Remote(_) | Login(_) | Logout(_) | Doctor(_) | Config(_) | Completions(_) | Man(_)
+        | Version | Help(_) => {
             unreachable!()
         }
         Fetch(a) => cmds::remote::fetch(&ctx, a),

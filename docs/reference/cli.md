@@ -131,6 +131,8 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote log`](#ag-remote-log)
 - [`ag remote blame`](#ag-remote-blame)
 - [`ag remote cat`](#ag-remote-cat)
+- [`ag login`](#ag-login)
+- [`ag logout`](#ag-logout)
 - [`ag pin`](#ag-pin)
 - [`ag unpin`](#ag-unpin)
 - [`ag pins`](#ag-pins)
@@ -194,6 +196,8 @@ Commands:
   pull         Fetch, then fast-forward the local stream and bring the workspace up to date
   push         Upload your snapshot and open a proposal on the server
   remote       Manage remotes and work with proposals, events and policy on a server
+  login        Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+  logout       Forget a saved server credential
   pin          Pin a revision so garbage collection keeps it
   unpin        Remove a pin
   pins         List pins
@@ -2753,6 +2757,57 @@ Options:
   -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag login
+
+```text
+Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+
+Usage: ag login [OPTIONS] <SERVER>
+
+Arguments:
+  <SERVER>  The server, e.g. `http://127.0.0.1:8080` (a repository URL works too; only the server part is used)
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --token-stdin        Read the credential from standard input (`echo "$TOKEN" | ag login URL --token-stdin`)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --token-file <FILE>  Read the credential from a file (`ag-server dev` writes one and prints the command)
+      --ca-file <CA_FILE>  Extra CA certificate (PEM) to trust when checking the credential
+      --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+
+The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.
+An environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:
+  ag login http://127.0.0.1:8080 --token-file ag-dev-data/dev/token
+  echo "$TOKEN" | ag login https://ag.example.com --token-stdin
+```
+
+## ag logout
+
+```text
+Forget a saved server credential
+
+Usage: ag logout [OPTIONS] [SERVER]
+
+Arguments:
+  [SERVER]  The server whose saved login to forget
+
+Options:
+      --all            Forget every saved login
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
 ```
 
 ## ag pin

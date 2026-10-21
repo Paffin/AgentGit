@@ -7,6 +7,7 @@ pub mod doctor;
 pub mod explain;
 pub mod flow;
 pub mod gitbridge;
+pub mod login;
 pub mod overview;
 pub mod policy;
 pub mod remote;

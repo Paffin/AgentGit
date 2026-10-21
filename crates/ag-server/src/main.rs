@@ -291,7 +291,13 @@ async fn main() -> Result<()> {
                 })
                 .await??
             };
-            let base = format!("http://{bound}");
+            // "Listen on every interface" is not an address to browse to: a link says where this machine is.
+            let shown = if bound.ip().is_unspecified() {
+                std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), bound.port())
+            } else {
+                bound
+            };
+            let base = format!("http://{shown}");
             let expires = ag_types::Timestamp::from_millis(done.expires_at_ms).to_string();
             let ui = ag_server::ui::mode(&app.cfg) != ag_server::ui::Mode::Disabled
                 && (ag_server::ui::embedded() || app.cfg.ui_dir().is_some());

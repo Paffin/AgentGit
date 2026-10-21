@@ -25,6 +25,8 @@ use crate::control::CredentialRow;
 
 /// The administrator `dev` signs you in as.
 pub const ADMIN: &str = "user:dev";
+/// A second person, so that one evaluator can see a review happen (an author's own approval never counts).
+pub const REVIEWER: &str = "user:reviewer";
 /// The demo repository.
 pub const DEMO_REPO: &str = "demo/welcome";
 /// How long the credential lives (eight hours; a deployment's default is 24 hours, its cap 30 days).
@@ -73,6 +75,8 @@ pub struct Bootstrapped {
     pub token: String,
     /// The private file that holds it.
     pub token_file: PathBuf,
+    /// The private file that holds the credential of [`REVIEWER`].
+    pub reviewer_token_file: PathBuf,
     /// When it expires (milliseconds since the epoch).
     pub expires_at_ms: i64,
     /// The demo repository was created by this start (not found from an earlier one).
@@ -92,34 +96,24 @@ pub fn bootstrap(app: &App, data_dir: &Path) -> Result<Bootstrapped> {
     let by = "system:dev";
     let now = app.clock.now().as_millis();
 
-    // The administrator, and a credential that replaces the last one.
+    // The administrator and a reviewer, each with a credential that replaces the last one.
     app.control.grant_role(ADMIN, "*", Role::Admin, by).map_err(|e| anyhow!("{e}"))?;
+    app.control.grant_role(REVIEWER, DEMO_REPO, Role::Reviewer, by).map_err(|e| anyhow!("{e}"))?;
     app.invalidate_bindings();
     let mut revoked = 0;
-    for old in app.control.credentials(Some(ADMIN), false).map_err(|e| anyhow!("{e}"))?.rows {
-        if old.description == DESCRIPTION && app.control.revoke_credential(&old.id, now).map_err(|e| anyhow!("{e}"))? {
-            revoked += 1;
+    for who in [ADMIN, REVIEWER] {
+        for old in app.control.credentials(Some(who), false).map_err(|e| anyhow!("{e}"))?.rows {
+            if old.description == DESCRIPTION
+                && app.control.revoke_credential(&old.id, now).map_err(|e| anyhow!("{e}"))?
+            {
+                revoked += 1;
+            }
         }
     }
-    let ttl = app.cfg.auth.credential_ttl(me.kind(), TOKEN_TTL_SECS).map_err(|e| anyhow!("{e}"))?;
-    let minted = crate::auth::mint_token().map_err(|e| anyhow!("{e}"))?;
-    let expires_at_ms = now + i64::from(ttl) * 1000;
-    app.control
-        .insert_credential(&CredentialRow {
-            id: minted.credential_id.clone(),
-            secret_hash: minted.secret_hash,
-            subject: ADMIN.into(),
-            kind: me.kind().prefix().into(),
-            description: DESCRIPTION.into(),
-            scope: Default::default(),
-            created_at_ms: now,
-            expires_at_ms,
-            revoked_at_ms: None,
-            last_used_ms: 0,
-            created_by: by.into(),
-        })
-        .map_err(|e| anyhow!("{e}"))?;
-    let token_file = write_token(data_dir, &minted.token)?;
+    let (token, expires_at_ms) = mint(app, ADMIN, now)?;
+    let (reviewer_token, _) = mint(app, REVIEWER, now)?;
+    let token_file = write_token(data_dir, "token", &token)?;
+    let reviewer_token_file = write_token(data_dir, "reviewer-token", &reviewer_token)?;
 
     // The demo repository, its content, then its policy (so that the content lands under the open default).
     let repo_created = if app.control.repo(DEMO_REPO).map_err(|e| anyhow!("{e}"))?.is_none() {
@@ -153,7 +147,16 @@ pub fn bootstrap(app: &App, data_dir: &Path) -> Result<Bootstrapped> {
     } else {
         false
     };
-    Ok(Bootstrapped { token: minted.token, token_file, expires_at_ms, repo_created, seeded, policy_applied, revoked })
+    Ok(Bootstrapped {
+        token,
+        token_file,
+        reviewer_token_file,
+        expires_at_ms,
+        repo_created,
+        seeded,
+        policy_applied,
+        revoked,
+    })
 }
 
 /// Lands the sample files through a virtual workspace, a proposal and an integration.
@@ -187,11 +190,35 @@ fn seed(repo: &ag_integrate::Repository, stream: &str, me: &Identity) -> Result<
     Ok(())
 }
 
-/// Writes the credential where only you can read it: `<data-dir>/dev/token`.
-fn write_token(data_dir: &Path, token: &str) -> Result<PathBuf> {
+/// Mints a credential for `subject` that lives [`TOKEN_TTL_SECS`] seconds; returns the token and its expiry.
+fn mint(app: &App, subject: &str, now: i64) -> Result<(String, i64)> {
+    let identity = Identity::new(subject)?;
+    let ttl = app.cfg.auth.credential_ttl(identity.kind(), TOKEN_TTL_SECS).map_err(|e| anyhow!("{e}"))?;
+    let minted = crate::auth::mint_token().map_err(|e| anyhow!("{e}"))?;
+    let expires_at_ms = now + i64::from(ttl) * 1000;
+    app.control
+        .insert_credential(&CredentialRow {
+            id: minted.credential_id.clone(),
+            secret_hash: minted.secret_hash,
+            subject: subject.into(),
+            kind: identity.kind().prefix().into(),
+            description: DESCRIPTION.into(),
+            scope: Default::default(),
+            created_at_ms: now,
+            expires_at_ms,
+            revoked_at_ms: None,
+            last_used_ms: 0,
+            created_by: "system:dev".into(),
+        })
+        .map_err(|e| anyhow!("{e}"))?;
+    Ok((minted.token, expires_at_ms))
+}
+
+/// Writes a credential where only you can read it: `<data-dir>/dev/<name>`.
+fn write_token(data_dir: &Path, name: &str, token: &str) -> Result<PathBuf> {
     let dir = data_dir.join("dev");
     ag_crypto::private_file::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    let path = dir.join("token");
+    let path = dir.join(name);
     let mut f = ag_crypto::private_file::create(&path, false).with_context(|| format!("writing {}", path.display()))?;
     f.write_all(token.as_bytes())?;
     f.write_all(b"\n")?;
@@ -229,6 +256,10 @@ pub fn banner(base: &str, b: &Bootstrapped, data_dir: &Path, ui: bool, expires: 
     } else {
         s.push_str("This build has no Web UI embedded; the API and the command line work.\n\n");
     }
+    s.push_str(&format!(
+        "A second user, {REVIEWER}, can approve what {ADMIN} proposes (nobody's own approval counts); its credential is in {}.\n\n",
+        b.reviewer_token_file.display()
+    ));
     s.push_str("Command line:\n");
     s.push_str(&format!("  ag login {base} --token-file {token_file}\n"));
     s.push_str(&format!("  ag clone {base}/{DEMO_REPO}\n"));

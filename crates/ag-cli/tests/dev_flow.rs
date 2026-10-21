@@ -51,12 +51,17 @@ fn from_nothing_to_a_landed_change_with_no_hand_made_token() {
     let out = blocked.stdout();
     assert!(out.contains("approvals (SECURITY.md)") || out.contains("approvals (default)"), "{out}");
     assert!(out.contains(&format!("ag remote review {id} --approve")), "{out}");
+    // Nobody's own approval counts, so the demo has a second user for the review; with her credential it lands.
+    let reviewer = std::fs::read_to_string(&done.reviewer_token_file).unwrap();
+    let as_reviewer = [("AG_TOKEN", reviewer.trim())];
+    run_in(&clone, cfg.path(), "user:me", &["remote", "review", &id, "--approve"], &as_reviewer).ok();
+    ag(&clone, &["remote", "integrate", &id]).ok();
 
     // Starting again replaces the credential; the saved login then says so rather than failing obscurely.
     let again = ag_server::dev::bootstrap(&server.app, data.path()).unwrap();
     assert_ne!(again.token, done.token);
     assert!(!again.repo_created && !again.seeded && !again.policy_applied, "{again:?}");
-    assert_eq!(again.revoked, 1);
+    assert_eq!(again.revoked, 2, "both credentials of the earlier start are revoked");
     let stale = ag(&clone, &["fetch"]).code_is(1);
     assert!(!stale.stderr().is_empty());
     ag(work.path(), &["login", &server.url, "--token-file", token_file]).ok();

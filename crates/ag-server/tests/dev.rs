@@ -128,6 +128,14 @@ fn one_command_makes_everything_and_the_banner_says_what_it_is() {
         "the credential lives about eight hours, not {ttl_ms} ms"
     );
     assert_eq!(dev.get("agt_wrong_wrong_wrong_0123456789", "/v1/whoami").0, 401);
+    // A second user for the review (nobody's own approval counts): reviewer of the demo repository only.
+    let reviewer = std::fs::read_to_string(data.join("dev/reviewer-token")).unwrap().trim().to_string();
+    let (status, who) = dev.get(&reviewer, "/v1/whoami");
+    assert_eq!(status, 200);
+    assert_eq!(who["identity"], "user:reviewer");
+    assert_eq!(who["roles"], serde_json::json!(["demo/welcome:reviewer"]));
+    assert!(b.contains("user:reviewer") && b.contains("reviewer-token"), "{b}");
+    assert_eq!(dev.get(&reviewer, "/v1/repos/demo/welcome").0, 200);
 
     // The demo repository has sample files and the preset's policy.
     let (status, tree) = dev.get(&dev.token, "/v1/repos/demo/welcome/tree/list?rev=main");
@@ -162,11 +170,16 @@ fn a_second_start_keeps_the_data_and_replaces_the_credential() {
         .unwrap();
     assert_eq!(r.status().as_u16(), 200);
     let old_token = first.token.clone();
+    let old_reviewer = std::fs::read_to_string(data.join("dev/reviewer-token")).unwrap().trim().to_string();
     assert!(first.stop().success());
 
     let second = Dev::start(&data, &[]);
     assert_ne!(second.token, old_token, "the credential is replaced at every start");
     assert_eq!(second.get(&old_token, "/v1/whoami").0, 401, "and the old one is revoked");
+    assert_eq!(second.get(&old_reviewer, "/v1/whoami").0, 401, "the reviewer's too");
+    let new_reviewer = std::fs::read_to_string(data.join("dev/reviewer-token")).unwrap().trim().to_string();
+    assert_ne!(new_reviewer, old_reviewer);
+    assert_eq!(second.get(&new_reviewer, "/v1/whoami").0, 200);
     assert_eq!(second.get(&second.token, "/v1/whoami").0, 200);
     let (_, repo2) = second.get(&second.token, "/v1/repos/demo/welcome");
     assert_eq!(repo2["changeset_count"], repo1["changeset_count"], "the sample content is not landed twice");
@@ -212,9 +225,9 @@ fn it_refuses_a_public_address_unless_that_is_asked_for_and_says_what_to_do_abou
 fn a_non_loopback_address_is_possible_when_asked_for_explicitly() {
     let tmp = tempfile::tempdir().unwrap();
     let dev = Dev::start(&tmp.path().join("data"), &["--host", "0.0.0.0", "--allow-non-loopback"]);
-    assert!(dev.base.starts_with("http://0.0.0.0:"), "{}", dev.base);
-    let port = dev.base.rsplit(':').next().unwrap();
-    let (status, _) = Dev { base: format!("http://127.0.0.1:{port}"), ..dev }.get_with_self();
+    // The banner points a browser at this machine, not at "every interface".
+    assert!(dev.base.starts_with("http://127.0.0.1:"), "{}", dev.base);
+    let (status, _) = dev.get_with_self();
     assert_eq!(status, 200);
 }
 

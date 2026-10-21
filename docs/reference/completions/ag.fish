@@ -51,6 +51,7 @@ complete -c ag -n "__fish_ag_needs_command" -f -a "propose" -d 'Publish a snapsh
 complete -c ag -n "__fish_ag_needs_command" -f -a "proposal" -d 'List, review, update or close proposals'
 complete -c ag -n "__fish_ag_needs_command" -f -a "integrate" -d 'Integrate a proposal into its stream'
 complete -c ag -n "__fish_ag_needs_command" -f -a "preview" -d 'Show what integrating a proposal would do, without doing it'
+complete -c ag -n "__fish_ag_needs_command" -f -a "explain" -d 'Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason'
 complete -c ag -n "__fish_ag_needs_command" -f -a "op" -d 'Inspect or resume operations'
 complete -c ag -n "__fish_ag_needs_command" -f -a "recover" -d 'Resume interrupted operations and expire stale ones'
 complete -c ag -n "__fish_ag_needs_command" -f -a "queue" -d 'The ordered integration queue'
@@ -392,6 +393,16 @@ complete -c ag -n "__fish_ag_using_subcommand preview" -s q -l quiet -d 'Print o
 complete -c ag -n "__fish_ag_using_subcommand preview" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand preview" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand preview" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand explain" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand explain" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand explain" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand explain" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand explain" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand explain" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand explain" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand explain" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand op; and not __fish_seen_subcommand_from show resume list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand op; and not __fish_seen_subcommand_from show resume list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand op; and not __fish_seen_subcommand_from show resume list" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'

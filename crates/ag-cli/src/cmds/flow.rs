@@ -2,6 +2,7 @@
 
 use std::fmt::Write as _;
 
+use ag_integrate::explain::{Where, explain_blocked, explain_conflict};
 use ag_integrate::{IntegrateRequest, IntegrationResult, Outcome, Strategy};
 use ag_storage::meta::IntentState;
 use ag_types::StreamName;
@@ -303,19 +304,12 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>, co
                 }
                 let _ = writeln!(s, "candidate tree: {candidate_tree}");
                 if let Some(p) = proposal {
+                    let ex: Vec<_> = blockers.iter().map(|b| explain_blocked(b, p, Where::Local)).collect();
                     let _ = writeln!(
                         s,
                         "Provide what is missing, then run `ag integrate {p}` again (it resumes this operation)."
                     );
-                    if blockers.iter().any(|b| b.code == "missing_validation") {
-                        let _ = writeln!(
-                            s,
-                            "  validate:  ag validate run {p} --check <name> --key <issuer-key> -- <command>"
-                        );
-                    }
-                    if blockers.iter().any(|b| b.code == "insufficient_approvals") {
-                        let _ = writeln!(s, "  approve:   ag proposal review {p} --approve");
-                    }
+                    let _ = writeln!(s, "{}", crate::cmds::explain::hints(&ex, p, Where::Local));
                 }
                 let _ = write!(s, "operation {}", r.operation_id);
             }
@@ -328,13 +322,28 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>, co
                 if let Some(b) = base {
                     let _ = writeln!(s, "merge base: {}", b.short());
                 }
-                let _ =
-                    write!(s, "Fix: `ag sync`, resolve the marked files, `ag snapshot`, `ag proposal update <id>`.");
+                match (proposal, conflicts.first()) {
+                    (Some(p), Some(c)) => {
+                        let e = explain_conflict(c, p, Where::Local);
+                        let steps: Vec<String> = e.fixes.iter().map(|f| format!("`{}`", f.command)).collect();
+                        let _ = write!(s, "Fix: {}.\n`ag explain {p}` says why, step by step.", steps.join(", "));
+                    }
+                    _ => {
+                        let _ = write!(
+                            s,
+                            "Fix: `ag sync`, resolve the marked files, `ag snapshot`, `ag proposal update <id>`."
+                        );
+                    }
+                }
             }
             Outcome::Denied { blockers } => {
                 let _ = writeln!(s, "Denied by policy; the stream was not changed:");
                 for b in blockers {
                     let _ = writeln!(s, "  - {}", b.message);
+                }
+                if let Some(p) = proposal {
+                    let ex: Vec<_> = blockers.iter().map(|b| explain_blocked(b, p, Where::Local)).collect();
+                    let _ = write!(s, "What to do:\n{}", crate::cmds::explain::hints(&ex, p, Where::Local));
                 }
             }
             Outcome::Invalid { reason } => {

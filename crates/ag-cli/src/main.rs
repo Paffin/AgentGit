@@ -26,6 +26,7 @@ Common workflow:
   ag snapshot -m \"message\"       record the working directory
   ag propose -t \"title\"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance
@@ -124,6 +125,11 @@ pub enum Command {
     Integrate(cmds::flow::IntegrateArgs),
     /// Show what integrating a proposal would do, without doing it.
     Preview(cmds::flow::PreviewArgs),
+    /// Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason.
+    #[command(
+        after_help = "Exit codes: 0 nothing is in the way, 3 blocked (something can be provided), 4 refused (conflict or denial).\nChanges nothing. Examples:\n  ag explain                 your newest open proposal\n  ag explain prop_8f3a1c     a specific one\n  ag --json explain          codes, sentences and commands for a program"
+    )]
+    Explain(cmds::explain::ExplainArgs),
     /// Inspect or resume operations.
     #[command(subcommand)]
     Op(cmds::flow::OpCmd),
@@ -311,6 +317,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Proposal(c) => cmds::flow::proposal(&ctx, c),
         Integrate(a) => cmds::flow::integrate(&ctx, a),
         Preview(a) => cmds::flow::preview(&ctx, a),
+        Explain(a) => cmds::explain::explain(&ctx, a),
         Op(c) => cmds::flow::op(&ctx, c),
         Recover(a) => cmds::flow::recover(&ctx, a),
         Queue(c) => cmds::flow::queue(&ctx, c),

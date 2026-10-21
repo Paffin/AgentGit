@@ -158,6 +158,39 @@
       },
       "version": "string"
     },
+    "explain": {
+      "explanations": [],
+      "next": [],
+      "policy_version": "number",
+      "proposal": "string",
+      "standing": "string",
+      "stream": "string",
+      "title": "string"
+    },
+    "explain#blocked": {
+      "explanations": [
+        {
+          "code": "string",
+          "fixes": [
+            {
+              "command": "string",
+              "note": "string"
+            }
+          ],
+          "kind": "string",
+          "summary": "string",
+          "why": "string"
+        }
+      ],
+      "next": [
+        "string"
+      ],
+      "policy_version": "number",
+      "proposal": "string",
+      "standing": "string",
+      "stream": "string",
+      "title": "string"
+    },
     "gc": {
       "bytes": "number",
       "deleted": [],

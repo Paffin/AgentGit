@@ -44,6 +44,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("proposal show", &a.ag(&["--json", "proposal", "show", &p1]).ok());
     let preview = r.rec("preview", &a.ag(&["--json", "preview", &p1]).ok());
     let tree = preview["candidate_tree"].as_str().unwrap().to_string();
+    r.rec("explain", &a.ag(&["--json", "explain", &p1]).ok());
 
     // -- policy: a blocked integration, a review, then success ----------------------------------------
     a.write("policy.json", r#"{"approvals": {"min": 1}}"#);
@@ -59,6 +60,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("init#preset", &Ag::bare().ag(&["--json", "init", "--namespace", "acme/preset", "--preset", "team"]).ok());
     let blocked = r.rec("integrate#blocked", &a.ag(&["--json", "integrate", &p1]).code_is(3));
     let op = blocked["operation_id"].as_str().unwrap().to_string();
+    r.rec("explain#blocked", &a.ag(&["--json", "explain", &p1]).code_is(3));
     r.rec("op show", &a.ag(&["--json", "op", "show", &op]).ok());
     r.rec(
         "proposal review",

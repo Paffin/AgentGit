@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use ag_changeset::Changeset;
 use ag_client::{Client, ClientError, Options};
+use ag_integrate::explain::Where;
 use ag_integrate::{InitOptions, Repository, SyncOutcome};
 use ag_object::RawObject;
 use ag_protocol::v1;
@@ -942,6 +943,9 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     }
                     if p.blockers.is_empty() && p.conflicts.is_empty() && p.problem.is_empty() {
                         t.push_str("nothing blocks this integration.\n");
+                    } else {
+                        let ex = crate::cmds::explain::from_wire(&p.blockers, &p.conflicts, id);
+                        t.push_str(&format!("What to do:\n{}\n", crate::cmds::explain::steps(&ex, id, Where::Remote)));
                     }
                     t
                 })?;
@@ -995,9 +999,10 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         o.changed_files
                     ),
                     "blocked" => format!(
-                        "Blocked (policy v{}); the stream was not changed:\n{}",
+                        "Blocked (policy v{}); the stream was not changed:\n{}\nProvide what is missing, then run `ag remote integrate {id}` again.\n{}",
                         o.policy_version,
-                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n"),
+                        crate::cmds::explain::hints(&crate::cmds::explain::from_wire(&o.blockers, &[], id), id, Where::Remote)
                     ),
                     "conflict" => format!(
                         "Conflict:\n{}",
@@ -1012,8 +1017,9 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                             .join("\n")
                     ),
                     "denied" => format!(
-                        "Denied by policy; the stream was not changed:\n{}",
-                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                        "Denied by policy; the stream was not changed:\n{}\nWhat to do:\n{}",
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n"),
+                        crate::cmds::explain::hints(&crate::cmds::explain::from_wire(&o.blockers, &[], id), id, Where::Remote)
                     ),
                     _ => format!("Not integrated: {}", o.reason),
                 };

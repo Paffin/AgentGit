@@ -44,6 +44,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag config`](#ag-config)
 - [`ag diff`](#ag-diff)
 - [`ag doctor`](#ag-doctor)
+- [`ag explain`](#ag-explain)
 - [`ag fetch`](#ag-fetch)
 - [`ag gc`](#ag-gc)
 - [`ag git`](#ag-git)
@@ -395,6 +396,51 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "warn": "number"
   },
   "version": "string"
+}
+```
+
+## ag explain
+
+### ag explain
+
+```json
+{
+  "explanations": [],
+  "next": [],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "stream": "string",
+  "title": "string"
+}
+```
+
+### ag explain (blocked)
+
+```json
+{
+  "explanations": [
+    {
+      "code": "string",
+      "fixes": [
+        {
+          "command": "string",
+          "note": "string"
+        }
+      ],
+      "kind": "string",
+      "summary": "string",
+      "why": "string"
+    }
+  ],
+  "next": [
+    "string"
+  ],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "stream": "string",
+  "title": "string"
 }
 ```
 

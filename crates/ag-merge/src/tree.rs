@@ -83,6 +83,21 @@ pub enum ConflictKind {
 }
 
 impl ConflictKind {
+    /// Every code [`ConflictKind::code`] can return (a test keeps the list in step with the variants).
+    pub const CODES: [&'static str; 11] = [
+        "content",
+        "both_added",
+        "delete_modify",
+        "binary",
+        "type_change",
+        "too_large",
+        "file_directory",
+        "rename_rename",
+        "rename_delete",
+        "directory_rename_ambiguous",
+        "directory_rename_collision",
+    ];
+
     /// The stable, machine-readable name of the kind, as it appears on the wire (`Conflict.kind` of the
     /// protocol) and in the Web UI: `content`, `both_added`, `delete_modify`, `binary`, `type_change`,
     /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`, `directory_rename_ambiguous` or

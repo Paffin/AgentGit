@@ -106,6 +106,19 @@ pub enum Unmet {
 }
 
 impl Unmet {
+    /// Every code [`Unmet::code`] can return. A test keeps this list in step with the variants, and the
+    /// explanations of `ag explain` are tested against it, so a new requirement cannot go unexplained.
+    pub const CODES: [&'static str; 8] = [
+        "actor_not_allowed",
+        "author_not_allowed",
+        "failed_validation",
+        "missing_validation",
+        "insufficient_approvals",
+        "changes_requested",
+        "missing_provenance",
+        "too_many_changed_files",
+    ];
+
     /// The stable name of the requirement, as a blocker's `code` on the wire: `actor_not_allowed`,
     /// `author_not_allowed`, `failed_validation`, `missing_validation`, `insufficient_approvals`,
     /// `changes_requested`, `missing_provenance` or `too_many_changed_files`. Fixed strings, so that renaming a

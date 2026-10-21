@@ -47,6 +47,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag proposal close`](#ag-proposal-close)
 - [`ag integrate`](#ag-integrate)
 - [`ag preview`](#ag-preview)
+- [`ag explain`](#ag-explain)
 - [`ag op`](#ag-op)
 - [`ag op show`](#ag-op-show)
 - [`ag op resume`](#ag-op-resume)
@@ -169,6 +170,7 @@ Commands:
   proposal     List, review, update or close proposals
   integrate    Integrate a proposal into its stream
   preview      Show what integrating a proposal would do, without doing it
+  explain      Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
   op           Inspect or resume operations
   recover      Resume interrupted operations and expire stale ones
   queue        The ordered integration queue
@@ -232,6 +234,7 @@ Common workflow:
   ag snapshot -m "message"       record the working directory
   ag propose -t "title"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance
@@ -832,6 +835,33 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag explain
+
+```text
+Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
+
+Usage: ag explain [OPTIONS] [PROPOSAL]
+
+Arguments:
+  [PROPOSAL]  Proposal id (any unique prefix). Default: your newest open proposal
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+
+Exit codes: 0 nothing is in the way, 3 blocked (something can be provided), 4 refused (conflict or denial).
+Changes nothing. Examples:
+  ag explain                 your newest open proposal
+  ag explain prop_8f3a1c     a specific one
+  ag --json explain          codes, sentences and commands for a program
 ```
 
 ## ag op

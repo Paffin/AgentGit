@@ -85,6 +85,9 @@ Integrate a proposal into its stream
 ag\-preview(1)
 Show what integrating a proposal would do, without doing it
 .TP
+ag\-explain(1)
+Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
+.TP
 ag\-op(1)
 Inspect or resume operations
 .TP
@@ -186,6 +189,7 @@ Common workflow:
   ag snapshot \-m "message"       record the working directory
   ag propose \-t "title"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance

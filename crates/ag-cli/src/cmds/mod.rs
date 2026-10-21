@@ -4,6 +4,7 @@ pub mod admin;
 pub mod agents;
 pub mod config;
 pub mod doctor;
+pub mod explain;
 pub mod flow;
 pub mod gitbridge;
 pub mod overview;

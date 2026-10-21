@@ -110,6 +110,8 @@ means validating again. Approvals are bound to the proposal head: pushing a new 
 changes_requested, missing_provenance, lease, failed_validation, actor_not_allowed, author_not_allowed,
 too_many_changed_files.
 
+`ag explain [PROPOSAL]` puts every reason in words and lists the commands that fix it.
+
 Command help: `ag policy --help`. More: docs/guides/policy.md and docs/tutorials/policy-cookbook.md
 ```
 

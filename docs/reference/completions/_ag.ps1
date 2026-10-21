@@ -51,6 +51,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('proposal', 'proposal', [CompletionResultType]::ParameterValue, 'List, review, update or close proposals')
             [CompletionResult]::new('integrate', 'integrate', [CompletionResultType]::ParameterValue, 'Integrate a proposal into its stream')
             [CompletionResult]::new('preview', 'preview', [CompletionResultType]::ParameterValue, 'Show what integrating a proposal would do, without doing it')
+            [CompletionResult]::new('explain', 'explain', [CompletionResultType]::ParameterValue, 'Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason')
             [CompletionResult]::new('op', 'op', [CompletionResultType]::ParameterValue, 'Inspect or resume operations')
             [CompletionResult]::new('recover', 'recover', [CompletionResultType]::ParameterValue, 'Resume interrupted operations and expire stale ones')
             [CompletionResult]::new('queue', 'queue', [CompletionResultType]::ParameterValue, 'The ordered integration queue')
@@ -549,6 +550,22 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;preview' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            break
+        }
+        'ag;explain' {
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')

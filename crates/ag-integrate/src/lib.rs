@@ -24,6 +24,7 @@ mod backup;
 mod blame;
 mod derive;
 mod error;
+pub mod explain;
 mod failpoints;
 mod fsck;
 mod gc;

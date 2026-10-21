@@ -48,6 +48,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand proposal 'List, review, update or close proposals'
             cand integrate 'Integrate a proposal into its stream'
             cand preview 'Show what integrating a proposal would do, without doing it'
+            cand explain 'Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason'
             cand op 'Inspect or resume operations'
             cand recover 'Resume interrupted operations and expire stale ones'
             cand queue 'The ordered integration queue'
@@ -520,6 +521,21 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;preview'= {
+            cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
+            cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
+            cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
+            cand --color 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never'
+            cand --json 'Machine-readable JSON output'
+            cand -q 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+            cand --quiet 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+            cand -v 'Explain what is happening on standard error: repository, identity, remote, timing'
+            cand --verbose 'Explain what is happening on standard error: repository, identity, remote, timing'
+            cand -h 'Print help'
+            cand --help 'Print help'
+            cand -V 'Print version'
+            cand --version 'Print version'
+        }
+        &'ag;explain'= {
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'

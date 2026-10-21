@@ -49,6 +49,9 @@ _ag() {
             ag,doctor)
                 cmd="ag__subcmd__doctor"
                 ;;
+            ag,explain)
+                cmd="ag__subcmd__explain"
+                ;;
             ag,fetch)
                 cmd="ag__subcmd__fetch"
                 ;;
@@ -392,7 +395,7 @@ _ag() {
 
     case "${cmd}" in
         ag)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version init status snapshot sync log show diff cat blame ls checkout portability stream propose proposal integrate preview op recover queue policy validate agent task lease provenance predict workspace trace audit verify gc reindex backup git clone fetch pull push remote pin unpin pins doctor config completions man version help"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version init status snapshot sync log show diff cat blame ls checkout portability stream propose proposal integrate preview explain op recover queue policy validate agent task lease provenance predict workspace trace audit verify gc reindex backup git clone fetch pull push remote pin unpin pins doctor config completions man version help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1244,6 +1247,36 @@ _ag() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__explain)
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

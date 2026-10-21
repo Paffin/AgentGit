@@ -565,4 +565,7 @@ fn every_unmet_requirement_has_a_fixed_wire_code_equal_to_its_serde_tag() {
         assert!(seen.insert(u.code()), "codes are distinct");
     }
     assert_eq!(seen.len(), 8);
+    let mut listed: Vec<&str> = Unmet::CODES.to_vec();
+    listed.sort_unstable();
+    assert_eq!(seen.into_iter().collect::<Vec<_>>(), listed, "Unmet::CODES lists exactly the codes of the variants");
 }

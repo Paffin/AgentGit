@@ -7,7 +7,7 @@ generated from the lock files by `scripts/third_party_licenses.sh`; CI fails whe
 
 ### Rust crates
 
-- Apache License 2.0 (`Apache-2.0`): 169 crate(s)
+- Apache License 2.0 (`Apache-2.0`): 170 crate(s)
 - MIT License (`MIT`): 52 crate(s)
 - ISC License (`ISC`): 21 crate(s)
 - BSD 3-Clause "New" or "Revised" License (`BSD-3-Clause`): 5 crate(s)
@@ -4412,6 +4412,7 @@ Used by:
 - [agentgit-sandbox 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
 - [agentgit-server 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
 - [agentgit-storage 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
+- [agentgit-testkit 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
 - [agentgit-tree 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
 - [agentgit-types 0.2.0-rc.2](https://github.com/Paffin/AgentGit)
 - [agentgit-ui-assets 0.2.0-rc.2](https://github.com/Paffin/AgentGit)

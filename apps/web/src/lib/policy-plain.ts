@@ -412,7 +412,7 @@ export function describeChange(before: PolicyDoc, after: PolicyDoc): Effect[] {
         kind: 'changes',
         text: y.length
           ? `Who may ${who}: ${list(y)}.`
-          : `Anyone allowed by default may now ${who.replace('change these rules', 'change these rules')}.`,
+          : `Anyone allowed by default may now ${who}.`,
       })
   }
   return out

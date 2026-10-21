@@ -211,6 +211,14 @@ describe('sign in from a link (ag-server dev)', () => {
     expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull()
   })
 
+  it('no link means no attempt and no message', async () => {
+    const auth = useAuth()
+    whoami.mockClear()
+    await expect(auth.signInFromLink(null)).resolves.toBe(false)
+    expect(whoami).not.toHaveBeenCalled()
+    expect(auth.linkError).toBe('')
+  })
+
   it('an unreachable server and a malformed credential each get their own message and never throw', async () => {
     const auth = useAuth()
     whoami.mockRejectedValue(new ApiError({ status: 0, code: 'unavailable', message: 'offline' }))

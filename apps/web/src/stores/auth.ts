@@ -197,9 +197,11 @@ export const useAuth = defineStore('auth', () => {
    * address bar). Never throws: a link that does not work, typically one from an earlier start of `ag-server dev`,
    * leaves the session anonymous and says so in `linkError`.
    */
-  async function signInFromLink(raw: string): Promise<boolean> {
+  async function signInFromLink(raw: string | null): Promise<boolean> {
     linkError.value = ''
+    // No link, nothing to try. Whatever there is goes to the server, which is what decides.
     try {
+      if (raw === null) return false
       await signIn(raw)
       return true
     } catch (e) {

@@ -115,6 +115,7 @@ nav:
       - Git bridge: guides/git-bridge.md
       - Execution-plane workers: guides/workers.md
       - The Web UI: guides/web-ui.md
+      - Web UI review (first-time user): design/web-ux-review.md
       - Client SDKs: guides/sdks.md
       - The orchestrator: guides/orchestrator.md
   - Operations:

@@ -410,8 +410,10 @@ go test -race ./...            # unit tests for every package, plus the integrat
   described under [Model mode](#model-mode-optional) (`testutil.LLMServer`, a double of a third-party API; live
   tests with a real model are opt-in via `AG_LLM_LIVE=1`).
 - **Integration suite** (`integration/`, Linux): starts the **real `ag-server` binary** for every test on a
-  free loopback port in a temporary directory (`AG_BOOTSTRAP_TOKEN=... ag-server serve --data-dir ... --listen
-  ...`), always kills it, and drives the orchestrator through it. The binary is taken from `$AG_SERVER_BIN`, then
+  server-allocated loopback port in a temporary directory (`AG_BOOTSTRAP_TOKEN=... ag-server serve --data-dir ...
+  --listen 127.0.0.1:0`), reads the bound address from its listening event, verifies the bootstrap credential,
+  always kills it, and drives the orchestrator through it. The harness enables startup logs even when the caller
+  has `RUST_LOG=error`. The binary is taken from `$AG_SERVER_BIN`, then
   `PATH`, then `target/{debug,release}/ag-server` of the checkout (`cargo build -p agentgit-server`); without one the
   tests skip with a message, and fail instead when `$CI` or `$AG_REQUIRE_SERVER` is set. Scenarios:
   dependency-ordered tasks under a provenance-plus-approval policy (the real server verifies the agent's

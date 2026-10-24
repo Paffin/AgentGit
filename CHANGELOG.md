@@ -83,6 +83,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Orchestrator integration tests let each server bind its own ephemeral port, discover its listening address,
+  and authenticate before proceeding. Parallel starts no longer race over a temporarily free port.
+
 - Python and TypeScript SDK integration harnesses enable the startup log used to discover ephemeral ports;
   an inherited `RUST_LOG=error` no longer causes false server-start timeouts.
 - The orchestrator's process-group timeout test distinguishes a running child from a dead, unreaped Linux

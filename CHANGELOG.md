@@ -9,6 +9,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
+  after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
+  runs also cover server/core pull requests and fail on execution or integrity errors without timing thresholds.
+
 - **Zero-setup start.** `ag-server dev` makes a data directory, an administrator with a fresh 8-hour credential (replaced
   and the old one revoked at every start), the demo repository `demo/welcome` with the `agents` preset, and a reviewer
   `user:reviewer`, then prints a link that signs you in (`...#token=...`; the Web UI takes the credential out of the
@@ -74,6 +78,15 @@ on-disk formats are versioned and refuse to open when newer than the build under
   about it; `docs/operations/releasing.md` records the owner's `gh attestation verify` of both images.
 
 ### Fixed
+
+- Python and TypeScript SDK integration harnesses enable the startup log used to discover ephemeral ports;
+  an inherited `RUST_LOG=error` no longer causes false server-start timeouts.
+- The orchestrator's process-group timeout test distinguishes a running child from a dead, unreaped Linux
+  child, avoiding false failures in containers whose PID 1 does not reap orphans.
+- Server log-capture tests share a persistent subscriber with per-thread buffers so concurrent tests do not
+  invalidate each other's tracing callsite cache. The startup-warning test also ignores inherited log filters.
+- Update `ctutils` to 0.4.4 in both Cargo lock files (RUSTSEC-2026-0385) and the UI's `happy-dom` to 21.0.4
+  (GHSA-834v-8h66-3h79). Remove the obsolete tinypool exceptions after both npm dependency trees became clean.
 
 - Found by the new gate: the `PostgreSQL + S3 backends` job never lifted the AppArmor restriction on user namespaces, so
   every namespace-sandbox test had been silently skipping there; it does now and requires `namespace-sandbox`.

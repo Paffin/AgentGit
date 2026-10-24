@@ -148,6 +148,7 @@ impl Process {
             .arg(&config)
             .env("AG_BOOTSTRAP_TOKEN", common::ADMIN_TOKEN)
             .env_remove("AG_METRICS_TOKEN")
+            .env_remove("RUST_LOG") // this test asserts the server's default startup warning
             .stdout(out.try_clone().unwrap())
             .stderr(out);
         if let Some(t) = metrics_token {

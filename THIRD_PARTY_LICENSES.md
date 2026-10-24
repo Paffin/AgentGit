@@ -20,7 +20,7 @@ generated from the lock files by `scripts/third_party_licenses.sh`; CI fails whe
 Used by:
 
 - [cmov 0.5.4](https://github.com/RustCrypto/utils)
-- [ctutils 0.4.3](https://github.com/RustCrypto/utils)
+- [ctutils 0.4.4](https://github.com/RustCrypto/utils)
 - [flagset 0.4.7](https://github.com/enarx/flagset)
 - [siphasher 1.0.4](https://github.com/jedisct1/rust-siphash)
 - [tinyvec 1.13.3](https://github.com/Lokathor/tinyvec)

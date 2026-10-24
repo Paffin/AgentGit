@@ -224,6 +224,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+      # Harnesses must discover the server even when the caller suppresses INFO logs.
+      RUST_LOG: error
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -264,6 +266,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+      RUST_LOG: error
     strategy:
       fail-fast: false
       matrix:

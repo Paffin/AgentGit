@@ -165,7 +165,8 @@ The full comparison, including Git, Gerrit and Jujutsu: [AgentGit compared](docs
 
 ## The Web UI
 
-A new user starts on a home page that says what needs attention, with plain labels (the AgentGit word is in a tooltip),
+A new user starts on an operational queue with status tabs, search, repository filters, and an explicit refresh time.
+It says what needs attention, with plain labels (the AgentGit word is in a tooltip),
 blockers that come with their fix as a button, guided flows to start a repository or give an agent work, rules presets
 instead of raw JSON, and editing a file and proposing it from the browser. These are in `main`, not in the rc.2 archives.
 What is still missing is on the [roadmap](ROADMAP.md).

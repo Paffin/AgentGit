@@ -9,6 +9,11 @@ It is a static single-page app (Vue 3, TypeScript, Vite) that talks to the serve
 HTTP/JSON API ([`docs/protocol/openapi.json`](../../docs/protocol/openapi.json)). There is no backend of its
 own: `ag-server` serves the built files itself.
 
+Home collects work across repositories into a searchable queue. Status tabs and a repository selector filter
+the loaded summary; counts in the tabs remain global. It polls every 15 seconds while visible, shows the last
+successful update, and preserves filters on refresh. See `src/composables/useAttention.ts` for summary limits
+and concurrency, and `e2e/home-workspace.spec.ts` for real-server filtering and phone coverage.
+
 ![The live board](../../docs/assets/ui-board.png)
 
 A user tour with more pictures is in [`docs/guides/web-ui.md`](../../docs/guides/web-ui.md). This file is for

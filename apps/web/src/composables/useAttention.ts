@@ -14,7 +14,7 @@ const POLL_MS = 15_000
 
 /**
  * What needs the signed-in person, across the repositories they can read. There is one event stream per
- * repository and the home page spans many, so it re-reads every few seconds while visible instead of following
+ * repository and the home page spans many, so it re-reads every 15 seconds while visible instead of following
  * them all; the page says so.
  */
 export function useAttention() {
@@ -23,6 +23,8 @@ export function useAttention() {
   const items = shallowRef<AttentionItem[]>([])
   const loading = ref(true)
   const settled = ref(false)
+  const refreshing = ref(false)
+  const lastUpdated = ref<number | null>(null)
   const error = shallowRef<unknown>(null)
   /** Repositories the summary did not read because there are more than it reads. */
   const skipped = ref(0)
@@ -33,6 +35,7 @@ export function useAttention() {
 
   async function load() {
     const mine = ++serial
+    refreshing.value = true
     try {
       if (!auth.isAuthenticated) return
       const page = await api.repos.list({ page_size: 100 })
@@ -85,6 +88,7 @@ export function useAttention() {
       items.value = all
       unreadable.value = failures
       error.value = null
+      lastUpdated.value = serverNow()
     } catch (e) {
       if (mine !== serial) return
       error.value = e
@@ -92,6 +96,7 @@ export function useAttention() {
       if (mine === serial) {
         loading.value = false
         settled.value = true
+        refreshing.value = false
       }
     }
   }
@@ -99,7 +104,7 @@ export function useAttention() {
   onMounted(() => {
     void load()
     timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void load()
+      if (document.visibilityState === 'visible' && !refreshing.value) void load()
     }, POLL_MS)
   })
   onBeforeUnmount(() => {
@@ -107,5 +112,16 @@ export function useAttention() {
     clearInterval(timer)
   })
 
-  return { repos, items, loading, settled, error, skipped, unreadable, reload: load }
+  return {
+    repos,
+    items,
+    loading,
+    settled,
+    refreshing,
+    lastUpdated,
+    error,
+    skipped,
+    unreadable,
+    reload: load,
+  }
 }

@@ -9,6 +9,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Home now provides an operational queue with status tabs, multi-word search, repository filtering, a repository
+  rail, and a last-successful-refresh timestamp. Filters survive refresh; mobile controls wrap without horizontal
+  overflow, and overlapping background refreshes are avoided.
+
 - Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
   after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
   runs also cover server/core pull requests and fail on execution or integrity errors without timing thresholds.

@@ -122,6 +122,12 @@ The first page after signing in. Across the repositories you can read (the 30 ne
 - **Ready to land**: nothing in the way, and you may land it.
 - **Agents gone silent**: sessions that are running but have not reported in.
 
+Use the status tabs, text search, and repository selector to narrow the queue. Search matches all entered words across
+the title, blocker, repository, and author. Counts in the status tabs describe the whole queue; the filtered result
+count describes your current selection. Clear filters restores the complete queue. The repository rail opens your
+repositories directly. The last successful update is shown beside the summary; Refresh checks immediately without
+resetting your filters.
+
 Each row says which repository, who (and whether it is an agent waiting), and for how long. Opening a row's button
 takes you to the change request with the review or land dialog already open; it never starts work by itself (running a
 check is one click further, on the page). Home is re-read every 15 seconds while it is open, not live, because it spans

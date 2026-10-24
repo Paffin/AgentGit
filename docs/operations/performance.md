@@ -7,6 +7,33 @@ saturated. The cost of the engine itself, by repository size, is in
 
 These are measurements with their conditions, not service-level objectives. AgentGit promises none of these numbers.
 
+## Qualification run: 24 October 2026
+
+The load-verification changes in commit `e8ea6db3` were exercised in a release build on an AMD EPYC 9V74 host,
+with a 4-vCPU quota and a 16-GiB container memory limit (the generator reported 18,007 MiB of host-visible memory).
+Linux 6.18.55, Rust 1.99.1, loopback transport, generator and server on the same machine. The recorded build label
+is `f112682 + uncommitted changes`: the tested patch was subsequently committed as `e8ea6db3`. This is a new
+measurement on different hardware, **not a speed comparison with the older results below**.
+
+| Scenario | HTTP | gRPC |
+|---|---:|---:|
+| Authenticated reads, 32 clients, 20 seconds | 7,414/s | 9,665/s |
+| Independent streams, 16 writers, 20 seconds | 307/s | 279/s |
+| Shared stream, 32 writers, 60 seconds | 68.6/s | 71.3/s |
+| Shared-stream integration p99, 32 writers | 952 ms | 848 ms |
+| Shared-stream integration maximum, 32 writers | 14.2 s | 9.3 s |
+| Retryable aborted responses, 32 writers | 3.39% | 3.05% |
+
+The full profile and extended contention runs verified 29,137 acknowledged integrations against stream versions
+and worker-owned file contents. All 100 SSE subscribers received all 2,229 integration events, without duplicates.
+Both shedding scenarios remained ready, and rate limiting preserved the second credential's access.
+
+Same-stream contention still has long latency tails and retryable aborts; these results do not establish a
+production SLO. The next performance investigation should profile that path under the deployment's actual
+storage and network conditions. This run used isolated services, not an external production deployment.
+Reproduce with `ag-bench load --profile full` and
+`ag-bench load --scenarios contention --protocols http,grpc --workers 32 --duration-secs 60`.
+
 ## How it is measured
 
 `ag-bench load` (`crates/ag-bench`) starts a **real `ag-server` process** for each scenario — fresh data directory,

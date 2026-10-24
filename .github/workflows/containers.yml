@@ -64,6 +64,8 @@ concurrency:
 
 env:
   CACHE_SCOPE: agentgit-image
+  # The verification job must read this run's export, not a shared scope another build can replace.
+  CACHE_CHECK_SCOPE: agentgit-image-check-${{ github.run_id }}
 
 jobs:
   image:
@@ -90,7 +92,9 @@ jobs:
             AG_BUILD_COMMIT=${{ github.sha }}
             AG_BUILD_DATE=${{ steps.meta.outputs.date }}
           cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
-          cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+          cache-to: |
+            type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+            type=gha,scope=${{ env.CACHE_CHECK_SCOPE }},mode=max
       - name: Build the CLI image (shares every layer but the last)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -241,7 +245,7 @@ jobs:
           start=$(date +%s)
           docker buildx build --progress=plain -f deploy/docker/Dockerfile --target server \
             --build-arg "AG_BUILD_COMMIT=${GITHUB_SHA}" --build-arg "AG_BUILD_DATE=${{ steps.meta.outputs.date }}" \
-            --cache-from "type=gha,scope=${CACHE_SCOPE}" --output type=cacheonly . 2>&1 | tee build.log
+            --cache-from "type=gha,scope=${CACHE_CHECK_SCOPE}" --output type=cacheonly . 2>&1 | tee build.log
           echo "rebuild took $(( $(date +%s) - start )) s"
       - name: The cargo layers were restored, not rebuilt
         run: python3 scripts/check_buildx_cache.py build.log

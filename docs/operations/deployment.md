@@ -38,6 +38,9 @@ Be clear about what "ready-made" means here.
 | `docker compose up` of `deploy/compose` (server, PostgreSQL, SeaweedFS as the S3 store): the same smoke, rows in the repository's PostgreSQL schema and objects in the bucket, a restart that loses nothing, and the `observability` profile (Prometheus scrapes with the token file, rules load, Grafana and the collector answer) | |
 | `deploy/kubernetes` (base through the `ci` overlay) applied to a kind cluster (Kubernetes 1.33): `restricted` Pod Security, no restarts, the same smoke through a port-forward, a rollout restart that keeps the data | |
 
+The image job exports both the shared build cache and a snapshot scoped to its run (shared by retries). The fresh-runner
+cache check reads only that snapshot, so it verifies the export from the same build even while other runs finish.
+
 If something here fails on your cluster, that is a bug in these files — please report it.
 
 ## Secrets

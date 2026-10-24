@@ -83,6 +83,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Container cache verification reads a run-specific export, so concurrent builds cannot replace the cache
+  under the cross-runner check. The shared cache remains available for subsequent builds.
+
 - Orchestrator integration tests let each server bind its own ephemeral port, discover its listening address,
   and authenticate before proceeding. Parallel starts no longer race over a temporarily free port.
 

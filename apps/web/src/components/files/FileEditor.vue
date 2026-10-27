@@ -8,6 +8,8 @@ import { useBoard } from '@/stores/board'
 import { useToasts } from '@/stores/toasts'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useResource } from '@/composables/useResource'
+import { useFileDraft } from '@/composables/useFileDraft'
+import { useAuth } from '@/stores/auth'
 import ErrorState from '@/ui/ErrorState.vue'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
@@ -38,17 +40,31 @@ const emit = defineEmits<{ cancel: [] }>()
 const router = useRouter()
 const board = useBoard()
 const toasts = useToasts()
+const auth = useAuth()
+const draft = useFileDraft({
+  identity: auth.identity,
+  repo: props.repo,
+  stream: props.stream,
+  path: props.path,
+  isNew: !!props.isNew,
+})
+const recovered = draft.initial
+const originalText = recovered?.original ?? props.original
+const executable = recovered?.executable ?? props.executable === true
+const fileType = recovered?.fileType ?? (props.fileType === 'symlink' ? 'symlink' : 'regular')
 
 const initialPath = props.isNew ? (props.path ? `${props.path}/` : '') : props.path
-const newPath = ref(initialPath)
-const text = ref(props.original)
+const newPath = ref(recovered?.path ?? initialPath)
+const text = ref(recovered?.text ?? props.original)
 const filePath = computed(() => (props.isNew ? newPath.value.trim() : props.path))
 const problem = computed(() => (props.isNew && newPath.value ? pathProblem(newPath.value) : null))
-const changed = computed(() =>
-  props.isNew ? filePath.value !== '' : text.value !== props.original,
-)
+const changed = computed(() => (props.isNew ? filePath.value !== '' : text.value !== originalText))
 const base = useResource(async () =>
-  props.isNew ? (await api.streams.head(props.repo, props.stream)).head : props.rev,
+  recovered
+    ? recovered.base
+    : props.isNew
+      ? (await api.streams.head(props.repo, props.stream)).head
+      : props.rev,
 )
 const canPropose = computed(
   () =>
@@ -59,15 +75,48 @@ const canPropose = computed(
 )
 
 const asking = ref(false)
-const title = ref('')
-const description = ref('')
+const title = ref(recovered?.title ?? '')
+const description = ref(recovered?.description ?? '')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 const submitted = ref(false)
 const dirty = computed(
-  () => !submitted.value && (text.value !== props.original || newPath.value !== initialPath),
+  () => !submitted.value && (text.value !== originalText || newPath.value !== initialPath),
 )
+const replaceDraft = ref(false)
+function persistDraft() {
+  if (submitted.value) {
+    draft.clear()
+    return
+  }
+  if (!dirty.value) {
+    if (!draft.blocked.value) draft.clear()
+    return
+  }
+  if (!base.settled.value || base.error.value || base.data.value === undefined) return
+  draft.save({
+    text: text.value,
+    original: originalText,
+    path: newPath.value,
+    base: base.data.value,
+    executable,
+    fileType,
+    title: title.value,
+    description: description.value,
+  })
+}
+watch([text, newPath, title, description, base.data, base.settled, submitted], persistDraft, {
+  flush: 'sync',
+})
 const { askingToLeave, requestLeave, decide } = useUnsavedChanges(dirty, busy)
+function discardAndLeave() {
+  if (draft.clear()) decide(true)
+}
+function confirmReplaceDraft() {
+  if (!draft.clear()) return
+  replaceDraft.value = false
+  persistDraft()
+}
 watch(askingToLeave, (open) => {
   if (open) asking.value = false
 })
@@ -92,8 +141,7 @@ onBeforeUnmount(() => {
 })
 
 function ask() {
-  title.value = props.isNew ? `Add ${filePath.value}` : `Update ${filePath.value}`
-  description.value = ''
+  if (!title.value) title.value = props.isNew ? `Add ${filePath.value}` : `Update ${filePath.value}`
   error.value = null
   asking.value = true
 }
@@ -111,8 +159,8 @@ async function propose() {
         putFile(
           filePath.value,
           text.value,
-          props.executable === true,
-          props.fileType === 'symlink' ? 'symlink' : undefined,
+          executable,
+          fileType === 'symlink' ? 'symlink' : undefined,
         ),
       ],
       title: title.value.trim(),
@@ -140,6 +188,19 @@ async function propose() {
 
 <template>
   <div class="editor" data-testid="file-editor">
+    <Alert v-if="draft.restored.value" tone="info" title="Draft recovered">
+      Your text and its original starting revision were recovered from this tab.
+      <p v-if="recovered && recovered.base !== props.rev && !isNew">
+        The branch has moved since this draft started. Its original base is preserved so concurrent
+        changes can be checked during review.
+      </p>
+    </Alert>
+    <Alert v-if="draft.error.value" tone="warn" title="Draft needs attention" live="alert">
+      {{ draft.error.value }}
+      <Button v-if="draft.blocked.value" @click="replaceDraft = true"
+        >Replace the unreadable draft</Button
+      >
+    </Alert>
     <ErrorState
       v-if="base.error.value"
       what="the starting revision"
@@ -172,6 +233,10 @@ async function propose() {
             ? 'Nothing is saved to the branch yet. “Propose change” opens a change request for review.'
             : 'No changes yet.'
         }}
+        <span v-if="draft.saved.value" role="status" data-testid="draft-saved">
+          Draft saved in this tab. It survives reload and sign-in here; download it before closing
+          the tab.</span
+        >
       </p>
       <div class="btns">
         <Button :disabled="!dirty" icon="download" @click="downloadDraft">Download draft</Button>
@@ -196,10 +261,25 @@ async function propose() {
       @update:model-value="decide(false)"
     >
       <p>You can download a copy of your draft before leaving.</p>
+      <Alert v-if="draft.error.value" tone="warn" title="Draft storage">{{
+        draft.error.value
+      }}</Alert>
       <Button icon="download" @click="downloadDraft">Download draft</Button>
       <template #footer>
-        <Button variant="danger" @click="decide(true)">Discard changes</Button>
+        <Button variant="danger" @click="discardAndLeave">Discard changes</Button>
+        <Button v-if="draft.saved.value" @click="decide(true)">Keep draft and leave</Button>
         <Button variant="primary" data-autofocus @click="decide(false)">Keep editing</Button>
+      </template>
+    </Dialog>
+
+    <Dialog v-model="replaceDraft" title="Replace the unreadable draft?" size="sm" alert>
+      <p>
+        The stored copy will be removed and replaced with the text currently in this editor.
+        Download any text you want to keep first.
+      </p>
+      <template #footer>
+        <Button @click="replaceDraft = false">Cancel</Button>
+        <Button variant="danger" @click="confirmReplaceDraft">Replace draft</Button>
       </template>
     </Dialog>
 

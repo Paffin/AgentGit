@@ -1,0 +1,542 @@
+[
+  {
+    "path": "README.md",
+    "sha256": "610d23072d49ae782515d5102635c3111491d9b0622bd6a29554547bc5f0a2b9",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "ROADMAP.md",
+    "sha256": "9b5a87ef3aa43a424ad43385cbefa1c046d107a6bdeed956e332b82742757e92",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "sha256": "8a22c2130a5ee5307c0886c1d51388a84ac3831be956a3fb94bdabbdf8bdb342",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/README.md",
+    "sha256": "24f6b22d18d12024f3a7946f73d98e6353b2826a477d80d42760c907659d8d61",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/comparison.md",
+    "sha256": "2bf9871d699c425e625e61c85511c51ac2e10c181b6b3546a0473c5607d2b011",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/concepts.md",
+    "sha256": "1d9590ee67d47190c6af11ec756f0d26f782a1ffea30b7d9aaa170457de8bd6e",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/glossary.md",
+    "sha256": "e333cd92243cbe2fb8cd47901ad037e3f667cc1fe7b782ff89b821c4911cbf55",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/faq.md",
+    "sha256": "5442048544690eab59a13fa3a03a315857044a942c2650ec01e2072f83a9de3b",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/concepts-cheatsheet.md",
+    "sha256": "1320e669fbc7a0dbdd9cf223d78f798fb67fdd22248a6dd7d8d8981138a4d2c2",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/getting-started.md",
+    "sha256": "9ca2ac483a9be65559b1c99220c223f2ea2f16e682cf020581c4f52cdb724983",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/policy-cookbook.md",
+    "sha256": "b36cc62a721ad6346f1f1accdf46a27ec7d9784e8b759a16a7252fe2d416fdc1",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/README.md",
+    "sha256": "51e8b0680ad32ef0adaa809ff2f881a47eacf8fd8ef119d3756e5637bddf2a59",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/team-server.md",
+    "sha256": "53b7457100d462b77f08beee99e2278370644cc7747ae3f964fb8d28cd198f8d",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/troubleshooting-blocked-integration.md",
+    "sha256": "c1b5b831eaed0075e5dd9e89faceacf970aaea726f805fa59572a2a2846ffc59",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/first-agent-safe-repo.md",
+    "sha256": "1809d71e0cf33e9a66b9ae6f1b85ee3933fbd77be2b22971712028cf5df9857b",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/tutorials/migrating-from-git.md",
+    "sha256": "d9bffb5b143c84529133e3bf6427997715d4a92e4c04ee86b9a7c267659b20db",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/protocol/agwp-v1.md",
+    "sha256": "9f7595325d8c9927442010304ec27c1fad51e695ff4c3508f536239ca64f0c33",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/protocol/README.md",
+    "sha256": "58d9852810240963dff248aba8e1e607bb42b1995c3fbbb9aef47559b85afda4",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/community/beta.md",
+    "sha256": "c5a8a43f84498aff035a10a48cba3537217547c81c8f0e022fcde86007b6eebb",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/community/demo.md",
+    "sha256": "84245360c8bc0481fbd8d5ddff1a308a7fb99b1f747ec59f65de1ea83b0bdb05",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/community/launch-kit.md",
+    "sha256": "822808d98e5810a4b13021dd19dba40930dd20f12d21a922f4d02fab62109fc7",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/community/start-here.md",
+    "sha256": "9d8f746187c7ba7fa8d72249557f1ce9da8e8b46dcabbe0b31a80414c34e65fe",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0001-final-architecture.md",
+    "sha256": "2576ea9bef7832ed933ee1bd76448c95b06b8fc495cd219a833318b06ab8947f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/README.md",
+    "sha256": "3992b56d5c3f354287910702f1e8003b6bad6059d91bad2b789a5ce665222852",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0004-postgres-and-s3-backends.md",
+    "sha256": "7c0f8a779a1e0792665697604fdf663b659ec181829e7f29e1f749cdf880b7b3",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0007-multi-replica-server.md",
+    "sha256": "fdf84662b1e0b08b159976fe0bf0c4d3610c8103e85a66ad906be3aa31fbfbb3",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0003-sparse-derived-tree-cache.md",
+    "sha256": "b780fa8145f5aa3d534e8d4446c2b23fff6bc815cfe8734aab3b1c695b7863e6",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0008-mcp-server.md",
+    "sha256": "96f38a6b03f276f19e8069aa7c8f8926987aa04123cea707d7424c2e92d38c48",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0009-identity-names-and-principals.md",
+    "sha256": "c683dd9f2976333f5382c8187ecfbfb8df7dae389c9575dd61509cd550689506",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0011-proposal-paging-indexes-and-background-leases.md",
+    "sha256": "f5b9c5e4c6016c2f7b423d4c972830046442d8cb8b8011ce6f52d85ecfeccdf0",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0013-directory-renames.md",
+    "sha256": "335eacf07babad0ae0cf2547751a2511b956939e675ae8f31b69de40426dfd39",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0010-run-bound-credentials.md",
+    "sha256": "b6ddd251073582fc1cefa2cf87e634436c6d9b0b500f8bb2d7ca1aac210d8e66",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0005-rename-aware-merge.md",
+    "sha256": "f2c02e5fdc5e2b732c4ba94457945cbd319829387181d1864be449c42ea06664",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0002-embedded-engine-first.md",
+    "sha256": "a4eec9e7ee65dc45fff6418b63d519b86ed3e81847e84a0035cdefbaba22347e",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0012-job-claim-fencing.md",
+    "sha256": "da16f7e65ed1e755e018efd6425313ad79e0ae84be997e31e615ae888331a6c8",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/adr/0006-flat-trees-measured.md",
+    "sha256": "2ba2837729fb84803c7a07704803a8ff0257a6d2ed174661c845edad079ed4e2",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/history.md",
+    "sha256": "b603730c9c71b2fbe0bfccc41b9f011757affcd34daa56592a6f9ab2a0b30909",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/web-ui.md",
+    "sha256": "7f0c9f41dba538ed6a82de6d9604ff7e24f7fc1726665c7cecbe00394f89c168",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/remote.md",
+    "sha256": "ea2acc4e77adcdad2e3bfd11e3480e28f2e8130d63c0d5c5756ea0b8a0837191",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/migrate-from-git.md",
+    "sha256": "0d400e64ccc39b36db8d1fe7e434796c8909377ecd8201556c15623bde0e7ee2",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/policy.md",
+    "sha256": "839351de4235f77080520103360ab1bbd2f7b0844a2d709193848578453bb05f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/mcp.md",
+    "sha256": "5a1f836d01cf8c27c13353cfcd44f154e58e0ae039120014de3d56f93f237682",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/validation.md",
+    "sha256": "5b7029677063ba055814c7ae9e91f27670c677a92f02b068c3017421a523498a",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/workers.md",
+    "sha256": "547f92bb956977e70a5ab75575684227bea6495370f3da3fb7a5505c59e3eed4",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/agents.md",
+    "sha256": "ee47e21ea47fc8888b3dbe1c4a2c65ea319d31e0d97275dd5f87eda0c965824b",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/git-bridge.md",
+    "sha256": "aa4d2d0e597cdf4332d266eec0eebe2fe631b78eebb75fe98b1e3285955800f1",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/orchestrator.md",
+    "sha256": "d78d7f4e421911b19d7c2b72df400317d00b3f20d2f161edfccd6cef39f277a6",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/guides/sdks.md",
+    "sha256": "9f3390f3db64da76057e802d8644e7b9e2972d88723ff4c33d8ee7eeee2a0985",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/troubleshooting.md",
+    "sha256": "39071399d9291f188af406623ff33e2cee47d389a3e81f63f9b93b56765d7af4",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/durability.md",
+    "sha256": "5c7d2418b314e02cb740f824eea08ecc05c127850c42fe1c783201db2d90fec9",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/performance.md",
+    "sha256": "75cd66f65e703fd617b082f6fcb6ea06dcd171d521bc2e4ee9615a01e82bceb9",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/releasing.md",
+    "sha256": "97c4e1997ceb2c58c363eddc73bdbd050aa209a6fd68a16dcd14d9866a9010bd",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/supply-chain.md",
+    "sha256": "1537f8b555d4831d77e8e3de12d8c8032ba1a184ea071f8884fce67d0c42b6a1",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/hardening.md",
+    "sha256": "727e69de0bfa0c48e0ea988cc20d0960b08569ef3ccf82b4bd0a28b590ff43e4",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/gc-and-retention.md",
+    "sha256": "0c654174db739d0530c73af50dbb3df08b040af62a9d5fd0f09ff19eca87ec00",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/windows.md",
+    "sha256": "7c3cbb4283f54f5321ab3d9918252ff055b83a2954d04d21b36d255de2ac32be",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/observability.md",
+    "sha256": "d6a7b725ebe2fd50f2a6211089fa2f51b58fb74ae023f5cd7ffc79a0a29b1327",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/high-availability.md",
+    "sha256": "59121cb224bdce28693cf22a0fe2ca086991ab67a5e9981175911c42259db30d",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/deployment.md",
+    "sha256": "1a49ba8434ac535d3db3c19d23cb847cf4d2429ec57412661154bc10826e5a62",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/operations/postgres-and-s3.md",
+    "sha256": "69ed153486473d8053316f8dcc636753eb5bc680316e3024aa6d9b0eb63af82b",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/reference/cli.md",
+    "sha256": "50617ae8de464a89dfbb176d5758b43503df08524da166bb65ea6be72008a19f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/reference/cli-json.md",
+    "sha256": "5d240f7b26b002d7f79ab422ae1e50fb405025ab72c3e89c166fc34fbb6e06fd",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/reference/completions.md",
+    "sha256": "85526c99b1c1c9d2263de6b0cdbe7c72527e99b7da687ef57db1b76e1805517c",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/reference/help-topics.md",
+    "sha256": "0686d01cdab1c42245dc5db9f0f4767a4114d0fbaba08e736485d50ae353a075",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/reference/configuration.md",
+    "sha256": "3fff0e53b5cd48efe7cde727bf4fbfb06ba426c0db505d1b5cd6ab688ba670af",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/design/web-ux-review.md",
+    "sha256": "4caa80531c58a61674d79caf634643a85c795f544084ce110ca1f0e57cf5b492",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/testing.md",
+    "sha256": "8fee86cbe760091591a28708ccfb1f8bbb5bbbddc9cd39031e39afadd0b8f270",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/sandbox.md",
+    "sha256": "e797e5d9e8af2892b3c0fc5d8e0486e053a8bba657f25eaf7042533d5da102a3",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/object-format.md",
+    "sha256": "47d81f69452d2a44114d2e6ceb2aa24e4abfa25eebf65bb990758929febaabce",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/performance.md",
+    "sha256": "1d1e795932a63a053929e871b966f8c5ecba7de3d47946968b4d41ddbc8ccd64",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/test-skips.md",
+    "sha256": "0555884354b5a7acdd92997deaa5d40ae1f050b8e80695229a529c9ba2f0419a",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/storage.md",
+    "sha256": "d33d40670b3a58cd9128203c973d4721f26cedfdc219a2f4959d50de2934eb7e",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/overview.md",
+    "sha256": "66b679639171fe7e1819f997a409902267fb0e1af104a5ff6a70e4582ecfa991",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/merge-semantics.md",
+    "sha256": "70bfa2d88ed4c535b25e7608d2197e2333da71dbd7a3f5a40a2106af3b896e9b",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/compatibility.md",
+    "sha256": "b22a9df12a2cbb6a52e9f2df64d99f18cfa6b9e6ab51fa535bff90db71e1cbda",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/adr-traceability.md",
+    "sha256": "f5085b6b1bb6fb6b3d391dc46f5e75c0b1604235ff7c46ce8e495bcc3e9a815f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/security.md",
+    "sha256": "c60c69bac30a945bdecd3dc3f723a2650e0b1fd675b3bb00e60c717046799e72",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "docs/architecture/publication-and-integration.md",
+    "sha256": "ae98001fe64fbc5e8a0871b0e649f1db95f64372986c6b3d11d0b9dfbef338b6",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/perf.md",
+    "sha256": "cef1bf1ae0aae8b73a2affce5d0f77b727cb1796efa9895d7eb202ee48482797",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/server_audit.md",
+    "sha256": "7c86057415ad9ff730b22b56b18f34753ff889d42a8c8b8880eb853361ce9769",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/security_tail.md",
+    "sha256": "4fc3eac2a31b93dd1f732f02c28b57a2c46dd3b84c5b6a3374eec89e046ffdf7",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/wave4-core.md",
+    "sha256": "e033c0b1c53b999e323f7c1233ded4d2a982a11bf5355711ff4c2db78a84d6df",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/dependabot.md",
+    "sha256": "7ef3f26dac9abbd6ff77c29c3e67a58e2376d40522ef7c88eed7709581b651e2",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/onboarding.md",
+    "sha256": "9bca1bea909a48994cb4d53954a319c2e9bb5fc6420d3fce5d9ed7c6c4d1968f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/web.md",
+    "sha256": "4c73cd9f808e2bf38e970a348dcbcb102c8f79931d9351fc753371586cf2b032",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/core-engine-storage.md",
+    "sha256": "ef1f025f5e8f4737497d7cbe7884b09a0112bd27a9ccd0e1997c34b72f25b31e",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/crate-names.md",
+    "sha256": "f849eeada319bd913850a46e646700e6614ce08f689d1338e2c31788479ac3cd",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/release.md",
+    "sha256": "b1e1bdf1b34f31f3c22d512601a17e6fbce1a24e2072f9a802e289da43b073ac",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/policy_cli_execution.md",
+    "sha256": "20274948fceb329d633e99ad1192a0d4f9077a5052c6981bd7a100965269440e",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/web-ux.md",
+    "sha256": "e6bae8eb0621015310485d0a0409f9d003eb0d0944eb35860167e54c3d131fe0",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/generic-fix.md",
+    "sha256": "e539489f12e7d96f39b7100f34b096a04aac8818629245e13d53c714430af303",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/mcp.md",
+    "sha256": "62435a48d57a3d0bd8712ffce3d96c62c89a2ec047e7267dfc61dddbfa2b0ee8",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/ha_tail.md",
+    "sha256": "eb8b1a7bbfe509aa6dda668754099f429e364bc1820e84e28ccef26d750c2662",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/server_hardening.md",
+    "sha256": "5d58919d114e7c6e7c8b5b252a477cab6f795a39b84f5d8b8abede3e43b06e7f",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/test-honesty.md",
+    "sha256": "cd128142ab62ff229d05793ab5a0a320c68908398a60bc27ef8fc208042a2c47",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/wave4-merge.md",
+    "sha256": "6ce330032cfa5a8275c448facb44d9011b434ed23848fead98978a6d9c005a97",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/wave3-server.md",
+    "sha256": "4c7f59ecd0c77e9a8c34a145b753eff4621c97471cea60eed977785577b2d0ac",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/web_tail.md",
+    "sha256": "5d21ab6581a9e45827161757142474ad07e733ba1eeb119e9989de16270d48ba",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/windows.md",
+    "sha256": "83dee64b8c0082bfe03184195597ac351a51fab85749b1d8b6162f3657c2b7a7",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/docs_site.md",
+    "sha256": "ea8cb0ab820e9709f7265dac7f19b5d297304f09e13539ab17392f71feb106c8",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/clients_ops.md",
+    "sha256": "3c5c9f7df2d788c32b2fe25c7a40183c8463db591a5034beeae1b5f17bc6a934",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/release-rc2.md",
+    "sha256": "e222b40e12588e17b49706125e4ab07ac9e4d2df173940f33b3cbc3dc349b0f1",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/orchestrator.md",
+    "sha256": "c400cf43b2b7d23185daa503608885a0b45b0c8da37c9eff008a7360f79f4381",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/security.md",
+    "sha256": "26a0ebdfd126c087f447c790dc66515693679944b3879d201fa4c5c5935e475d",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/mcp_tail.md",
+    "sha256": "0c71a385fd5522558c2eb65be30c9f56451859a521e528694322065bcfd93aee",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/handoff/cli-docs.md",
+    "sha256": "3516199bb7f42053effb1806b557cf3e21aae444b0492fd3f4d9666d2ea90270",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/audit/audit-final.json",
+    "sha256": "879b9e9a3357c3968c6e66b779f8d94001b93d622df92f2675c349c250ecbb7c",
+    "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/audit/CONFIRMED.md",
+    "sha256": "6a42beae6fb2902e9e45adba988e328bbbfb1c5c9ace01040c726a432c6ea085",
+    "review": "inventory only; detailed review not claimed"
+  }
+]

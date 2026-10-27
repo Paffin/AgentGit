@@ -113,7 +113,7 @@ ends with an explanation instead of a page full of errors.
 
 ## Home: what needs you
 
-The first page after signing in. Across the repositories you can read (the 30 newest), it lists, most urgent first:
+The first page after signing in. It initially summarizes the 30 newest repositories. Selecting a repository loads its work even if it is older; **Load more repositories** expands the combined summary. It lists, most urgent first:
 
 - **Failures**: a required check failed, or an agent session ended with an error in the last day.
 - **Waiting for your review**: changes that need an approval you are allowed to give (not your own, not already decided).
@@ -328,14 +328,14 @@ landed) that ticks itself and offers the button for the next step.
 With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
 asks for a title and description and opens a change request; nothing lands until it is reviewed and landed like any other.
 This uses the server's virtual workspaces: a draft is opened on the branch (from exactly what was on screen), the edit is
-applied as one version, the change request is opened from it, and the draft is removed. Only text files can be edited;
-renaming and deleting files, and several files in one change, are not in the browser yet.
+applied as one version, the change request is opened from it, and the server workspace is removed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
 revision or cancelling asks before discarding unfinished text; closing the tab uses the browser's warning.
-**Download draft** saves your current text to a local file without opening a change request. Text is not
-automatically stored in browser storage: keep the tab open or download it before closing.
+Text edits, their original revision, path and proposal description are saved in this tab's session storage, separately for each account and repository. Reopen **Edit** after reloading or signing back in to recover them. The original revision stays pinned, including when another user advanced the branch. **Keep draft and leave** retains the draft; **Discard changes** removes it. Storage errors are shown explicitly and never reported as a successful save.
+
+**Download draft** saves your current text to a local file without opening a change request. Tab storage is not a server backup and does not promise recovery after closing the tab or moving to another device. Download important unfinished work before closing the tab. Authentication tokens are not copied into draft records.
 
 **Filter this folder** narrows the directory listing by name, without changing the branch or path. For a paginated
 folder it explicitly filters the loaded entries; **Load more** includes the next page. Clearing the filter restores

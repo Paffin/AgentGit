@@ -19,6 +19,7 @@ from agentgit import (
     OPERATIONS,
     AgentGitClient,
     AsyncAgentGitClient,
+    CallOptions,
     PutOp,
     blob_object,
     build_changeset,
@@ -314,6 +315,18 @@ def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     assert admin.admin.gc(repo=REPO, dry_run=True).dry_run
 
 
+def test_git_migration(tour: dict[str, AgentGitClient]) -> None:
+    admin = tour["admin"]
+    data = (REPO_ROOT / "sdk/fixtures/git-migration.bundle").read_bytes()
+    options = CallOptions(idempotency_key="python-migration-tour", timeout_ms=300_000)
+    plan = admin.migrations.prepare(name="tour/migrated", data=data, options=options)
+    assert admin.migrations.prepare(name="tour/migrated", data=data, options=options).id == plan.id
+    assert admin.migrations.status(id=plan.id).state == "ready"
+    assert admin.migrations.commit(id=plan.id, accept_lossy=False).state == "imported"
+    assert admin.migrations.commit(id=plan.id, accept_lossy=False).state == "imported"
+    assert admin.tree.file(repo="tour/migrated", path="hello.txt", rev="main") == b"hello from migration\n"
+
+
 def test_the_async_client_reaches_the_operations_too(server: RunningServer) -> None:
     import asyncio
 
@@ -322,6 +335,12 @@ def test_the_async_client_reaches_the_operations_too(server: RunningServer) -> N
         async with AsyncAgentGitClient(
             server.base_url, server.bootstrap_token, http_client=httpx.AsyncClient(transport=net)
         ) as c:
+            plan = await c.migrations.prepare(
+                name="tour/migrated-async",
+                data=(REPO_ROOT / "sdk/fixtures/git-migration.bundle").read_bytes(),
+            )
+            assert (await c.migrations.status(id=plan.id)).state == "ready"
+            assert (await c.migrations.commit(id=plan.id, accept_lossy=False)).state == "imported"
             await c.session.negotiate()
             await c.session.whoami()
             await c.repos.create(name="tour/async")

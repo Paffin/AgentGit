@@ -81,3 +81,12 @@ def test_signing(capsys: pytest.CaptureFixture[str]) -> None:
     assert ns["signing_result"]["valid"] is True
     assert ns["signing_result"]["tampered"] is False
     assert out[0] == "6fdfa63ccd7aa33065dcfab8c0f7b1b605226c87833b50de3345f921122a4545"
+
+
+def test_migration(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENTGIT_BUNDLE", str(EXAMPLES.parents[1] / "fixtures/git-migration.bundle"))
+    monkeypatch.setenv("AGENTGIT_REPO", "examples/migration")
+    monkeypatch.setenv("AGENTGIT_PUBLISH", "1")
+    ns, _ = run("migration.py", capsys)
+    assert ns["migration_result"].state == "imported"
+    assert len(ns["migration_result"].report["branches"]) == 2

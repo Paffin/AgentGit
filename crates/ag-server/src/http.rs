@@ -1637,6 +1637,7 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     );
 
     crate::jobs_http::add_routes(&mut r, &mut meta);
+    crate::migration::add_routes(&mut r, &mut meta);
 
     (r.with_state(app), meta)
 }

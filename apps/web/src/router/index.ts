@@ -52,6 +52,12 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: 'Start a repository' },
   },
   {
+    path: '/import',
+    name: 'import-repo',
+    component: () => import('@/views/ImportRepoView.vue'),
+    meta: { title: 'Import a repository' },
+  },
+  {
     path: '/access',
     name: 'access',
     component: () => import('@/views/AccessView.vue'),

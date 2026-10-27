@@ -7,7 +7,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Paffin/AgentGit/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/docs.yml?branch=main&style=flat-square&label=docs)](docs/README.md)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-yellow?style=flat-square)](#статус-и-ограничения)
+[![Status: beta](https://img.shields.io/badge/status-beta-blue?style=flat-square)](#статус-и-ограничения)
 
 [English](README.md) · **Русский** · [Документация](docs/README.md) · [Roadmap](ROADMAP.md) · [Сравнение](docs/comparison.md)
 
@@ -26,8 +26,12 @@ AgentGit — система контроля версий для репозит�
 попадает в журнал аудита, который можно проверить. Ядро, которое хранит, сливает и восстанавливает данные, никогда не
 обращается к языковой модели; всё «умное» живёт поверх него и может только предлагать.
 
-Проект в стадии alpha: [статус и ограничения](#статус-и-ограничения) ниже, и в продакшене его не запускал никто,
+Открытая ранняя бета: [статус и ограничения](#статус-и-ограничения) ниже, и в продакшене его не запускал никто,
 кроме авторов.
+
+## Переезд с GitHub или GitLab
+
+В **Repositories → Import from GitHub / GitLab** загрузите полный Git bundle, проверьте соответствие веток и тегов и подтвердите публикацию. Либо выполните `ag migrate repository.bundle ./project --namespace team/project`. Источник не изменяется, оригинальный bundle сохраняется в резервных копиях. [Руководство и ограничения переноса метаданных](docs/guides/migrate-from-git.md).
 
 ## Как это выглядит
 
@@ -71,19 +75,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # ставит бинарник `ag`
 ```
 
-Или возьмите пре-релиз [`v0.2.0-rc.2`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): архивы для Linux
-и macOS (x86_64 и aarch64) с `ag`, `ag-server`, `ag-worker` и `ag-mcp`, `SHA256SUMS`, SBOM и мультиархитектурные образы
-`ghcr.io/paffin/agentgit-server` и `agentgit-cli`.
+Опубликованный кандидат — [`v0.3.0-beta.1`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.1). Архивы доступны для установки. Они содержат `ag`, `ag-server`, `ag-worker` и `ag-mcp` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2
-docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.2
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.1
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.1
 ```
 
-Пока есть только пре-релизы, `--version` обязателен. На опубликованных файлах проверены: контрольные суммы, быстрый
-старт и серверный сценарий ниже, `install.sh` и аттестации обоих образов (`gh attestation verify`, владельцем).
-Не проверены: аттестации архивов, архивы для macOS и aarch64 вне CI, формула Homebrew.
-[Варианты установки](docs/getting-started.md#install) описывают подробности.
+Пока есть только пре-релизы, `--version` обязателен. Если у вас установлена rc.2, используйте [инструкцию для rc.2](docs/getting-started.md#on-020-rc2-until-the-next-release). [Отчёт о проверке rc.2](docs/operations/releasing.md) относится только к тому выпуску и не подтверждает готовность rc.3. Подробности — в [вариантах установки](docs/getting-started.md#install).
 
 ## Быстрый старт
 
@@ -105,12 +104,11 @@ ag log
 ```bash
 ag-server dev                                            # каталог данных, администратор, демо-репозиторий, ссылка для входа
 ag login http://127.0.0.1:8080 --token-file ./ag-dev-data/dev/token
-ag clone http://127.0.0.1:8080/demo/welcome              # правьте, `ag snapshot`, `ag push -t "my change"`, при отказе `ag explain`
+ag clone http://127.0.0.1:8080/demo/welcome              # правьте, `ag snapshot`, `ag push -t "my change"`, при отказе `ag remote explain <id>`
 ```
 
 `ag-server dev` печатает ссылку, которая входит в Web UI, и те же команды. Это режим для знакомства (только loopback,
-обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он есть в `main`, но **не в архивах `v0.2.0-rc.2`**: до
-следующего тега [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
+обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он включён в кандидат `v0.3.0-beta.1`. Для прежних архивов `v0.2.0-rc.2` [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
 rc.2 несколькими строками длиннее.
 
 ### Как сервер
@@ -167,7 +165,7 @@ GitHub, GitLab и Bitbucket — зрелые платформы хостинга
 | Аудит, в котором видна подмена | журнал аудита с экспортом; в документации нет утверждений о целостности | события аудита (Ultimate); утверждений о целостности нет | журнал аудита; не сравнивали | хеш-цепочка, проверяется `ag audit` и `ag verify` |
 | Самодостаточность и офлайн | облако; для своей установки Enterprise Server | SaaS или своя установка | Cloud или Data Center | локальному режиму сервер не нужен; сервер — один бинарник |
 | Экосистема | очень большая | очень большая, CI и безопасность встроены | большая, Jira и Pipelines | небольшая: CLI, SDK (не опубликованы), MCP, Web UI |
-| Зрелость | очень высокая | очень высокая | очень высокая | alpha |
+| Зрелость | очень высокая | очень высокая | очень высокая | beta |
 
 Полное сравнение, включая Git, Gerrit и Jujutsu: [AgentGit compared](docs/comparison.md) (на английском).
 
@@ -284,7 +282,7 @@ flowchart LR
 
 ## Статус и ограничения
 
-AgentGit — alpha. Ядро и перечисленные гарантии реализованы и протестированы, как и платформа вокруг него. В продакшене
+AgentGit — ранняя публичная бета для одного Linux-сервера с SQLite и файловым хранилищем. Ядро и перечисленные гарантии реализованы и протестированы, как и платформа вокруг него. В продакшене
 проект не использовал никто, кроме авторов, внешнего аудита безопасности не было. Полный список — в
 [ROADMAP.md](ROADMAP.md) и [CHANGELOG.md](CHANGELOG.md); то, от чего зависит, можно ли пользоваться уже сейчас:
 
@@ -298,7 +296,7 @@ AgentGit — alpha. Ядро и перечисленные гарантии ре
   включается на стороне клиента; действовать в чужом запуске можно только с `agent.operate`, которого у обычного
   writer нет. Токен ограждения (fencing) для захвата заданий передаётся по желанию клиента
   ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Опубликован только пре-релиз (`v0.2.0-rc.2`: релиз на GitHub и образы в GHCR). Стабильного релиза нет, пакетов в
+- Доступны только пре-релизы; текущий кандидат — `v0.3.0-beta.1` (GitHub и GHCR). Стабильного релиза нет, пакетов в
   crates.io, npm и PyPI нет; 21 крейт `agentgit-<x>` проверен только пробной публикацией
   ([релизы](docs/operations/releasing.md)). Схема метаданных 3 не читается старыми сборками: при обновлении реплик
   сначала запускайте новую сборку.
@@ -314,11 +312,18 @@ AgentGit — alpha. Ядро и перечисленные гарантии ре
 - Нет переписывания истории, тегов, submodules и LFS; мост с Git сообщает, что не может перенести.
 - Web UI проверен в Chromium, Firefox и WebKit; OIDC только с Keycloak. Проверки со скринридером не было. `ag-mcp` не
   запускали внутри настоящих хостов. SDK не опубликованы.
-- Ночной фаззинг и еженедельное мутационное тестирование на GitHub ещё не запускались.
+- Ночной фаззинг и еженедельное мутационное тестирование запускаются на GitHub. Проверяйте результаты на коммите релиза: успешное покрытие само по себе не означает, что все мутации обнаруживаются тестами.
 
 Сейчас подойдёт: команда и её агенты на одной машине, одном сервере или нескольких репликах, процессы с проверками в
 CI, эксперименты с автономностью агентов в рамках политики. Пока не подойдёт: хостинг взаимно недоверяющих арендаторов и
 роль единственной копии данных, которые нельзя потерять. Делайте копии через `ag backup` и держите зеркало в Git.
+
+## Подготовка беты
+
+Открыт публичный бета-тест. Для беты зафиксированы [поддерживаемый сценарий и критерии готовности](docs/community/beta.md),
+создан [milestone](https://github.com/Paffin/AgentGit/milestone/1) и [вход для участников](docs/community/start-here.md).
+Нужны внешние проверки установки и реальных задач с агентами; полезны и отчёты о том, где процесс непонятен.
+Независимые пилоты ещё нужны; метка beta не означает подтверждённую готовность к критичной эксплуатации.
 
 ## Участие
 

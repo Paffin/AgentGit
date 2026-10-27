@@ -79,6 +79,16 @@ fn the_engine_benchmark_measures_every_hot_path() {
     assert!(rep["environment"]["cpus"].as_u64().unwrap() >= 1);
 }
 
+#[test]
+fn empty_load_runs_are_rejected() {
+    for flag in ["--duration-secs", "--workers"] {
+        let output = bench().args(["load", flag, "0"]).output().unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains(flag) && error.contains("invalid value"), "{error}");
+    }
+}
+
 // The generator starts `ag-server` as a process and reads /proc; it is a Unix measurement tool and has not been
 // run on Windows.
 #[cfg(unix)]
@@ -130,14 +140,18 @@ fn the_load_generator_drives_a_real_server_over_both_protocols() {
         assert!(r["completed"].as_u64().unwrap() > 0, "{r}");
         assert_eq!(count(r, "integrated (fast_forward)"), r["completed"].as_u64().unwrap(), "{r}");
         assert!(r["errors"].as_object().unwrap().is_empty(), "{r}");
+        assert_eq!(r["notes"]["acknowledged updates verified"], "true", "{r}");
+        assert!(r["notes"]["acknowledged files verified"].as_str().unwrap().parse::<usize>().unwrap() > 0, "{r}");
 
         // One stream: everything that was answered was integrated, and stale bases were merged by the server.
         let r = find("contention", proto);
+        assert_eq!(r["notes"]["acknowledged updates verified"], "true", "{r}");
         assert_eq!(count(r, "integrated"), r["completed"].as_u64().unwrap(), "{r}");
         assert!(count(r, "integrated (merge)") > 0, "three workers on one stream never raced: {r}");
 
         // One file: someone won, and the losers were told so instead of being dropped or merged silently.
         let r = find("conflict", proto);
+        assert_eq!(r["notes"]["acknowledged updates verified"], "true", "{r}");
         assert!(count(r, "integrated") >= 1, "{r}");
         assert!(r["completed"].as_u64().unwrap() > count(r, "integrated"), "no conflict outcome was reported: {r}");
 

@@ -286,7 +286,7 @@ def build_ops() -> list[Op]:
                     params.append(
                         Param(py_name(wire), wire, input_type(prop), False, prop.get("description", ""))
                     )
-            elif body == "none":
+            elif body in ("none", "bytes"):
                 for p in parameters:
                     if p["in"] != "query" or p["name"] in used:
                         continue
@@ -299,16 +299,8 @@ def build_ops() -> list[Op]:
                             p.get("description", ""),
                         )
                     )
-            if op_id == "objects.put":
-                params.append(
-                    Param(
-                        "data",
-                        "data",
-                        "bytes",
-                        True,
-                        "The object envelope (`AGOB` + kind + version + payload).",
-                    )
-                )
+            if body == "bytes":
+                params.append(Param("data", "data", "bytes", True, "The binary request body."))
             if op_id == "events.subscribe":
                 params = []
             result = res_name or "Any"
@@ -330,7 +322,8 @@ def build_ops() -> list[Op]:
                     response=response,
                     retry=classify(op_id, http),
                     retry_when_field=POLICY["retry"]["naturalWhenFieldPresent"].get(op_id),
-                    idempotency_key="idempotency_key" in req_schema.get("properties", {}),
+                    idempotency_key="idempotency_key" in req_schema.get("properties", {})
+                    or op_id in POLICY["retry"]["keyed"],
                     public=isinstance(o.get("security"), list) and len(o["security"]) == 0,
                     items_key=paginated,
                     result=result,
@@ -351,12 +344,13 @@ def build_ops() -> list[Op]:
 def check_hand_written_operations(ops: list[Op]) -> None:
     """The operations that are not plain JSON have hand-written methods; the document must keep matching them."""
     non_json = {o.id for o in ops if o.body not in ("json", "none") or o.response != "json"}
-    hand_written = {"objects.put", "objects.get", "tree.file", "events.subscribe"}
+    hand_written = {"objects.put", "objects.get", "tree.file", "events.subscribe", "migration.prepare"}
     if non_json != hand_written:
         raise SystemExit(
             f"non-JSON operations in the document: {sorted(non_json)}, expected {sorted(hand_written)}"
         )
     expected_query = {
+        "migration.prepare": {"name"},
         "objects.put": set(),
         "objects.get": set(),
         "tree.file": {"rev"},

@@ -81,6 +81,48 @@ impl Repository {
         })?)
     }
 
+    /// Atomically adopts a complete imported branch/tag set into an empty repository.
+    /// Objects must already be published. An occupied branch rolls back every ref.
+    pub fn adopt_imported_refs(
+        &self,
+        branches: &[(StreamName, ChangesetId)],
+        tags: &[(String, ChangesetId)],
+        actor: &Identity,
+    ) -> Result<()> {
+        self.meta.write(|tx| {
+            if tx.list_streams()?.iter().any(|s| s.state.head.is_some()) || !tx.pins()?.is_empty() {
+                return Err(MetaError::Invalid("Git migration requires an empty repository".into()));
+            }
+            for (name, head) in branches {
+                if !tx.is_ready(head)? {
+                    return Err(MetaError::Invalid(format!("imported head {head} is not published")));
+                }
+                let row = match tx.stream(name.as_str())? {
+                    Some(row) => row,
+                    None => tx.create_stream(name, actor.as_str())?,
+                };
+                if row.state.head.is_some() {
+                    return Err(MetaError::Invalid(format!("stream '{name}' already has history")));
+                }
+                tx.cas_stream(name.as_str(), &row.state, head, None, actor.as_str(), "Git repository migration")?;
+            }
+            for (name, head) in tags {
+                if !tx.is_ready(head)? {
+                    return Err(MetaError::Invalid(format!("imported tag {head} is not published")));
+                }
+                tx.pin_put(name, head, "Imported Git tag")?;
+            }
+            tx.audit_append(
+                actor.as_str(),
+                "repository.import",
+                "git",
+                &json!({"branches":branches.len(), "tags":tags.len()}),
+            )?;
+            Ok(())
+        })?;
+        Ok(())
+    }
+
     // ---- proposals -----------------------------------------------------------
 
     /// Resolves a proposal by exact id or by a unique prefix of at least 6

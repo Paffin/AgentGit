@@ -21,26 +21,6 @@
 #   added      YYYY-MM-DD
 #   expires    YYYY-MM-DD
 
-[[exception]]
-id = "GHSA-5gmw-xhrv-c9v3"
-ecosystem = "npm"
-package = "tinypool"
-scope = "dev dependency (vitest's worker pool) of apps/web and sdk/typescript; not part of any shipped bundle"
-reason = "Prototype pollution in the options of a worker pool only matters if an attacker controls those options; vitest passes its own configuration, and the test runners execute only our own tests. The fix is vitest 5, a breaking upgrade that belongs to the web and SDK owners."
-owner = "maintainers"
-added = "2026-10-17"
-expires = "2027-01-15"
-
-[[exception]]
-id = "GHSA-85c8-ppgw-ccpr"
-ecosystem = "npm"
-package = "tinypool"
-scope = "dev dependency (vitest's worker pool) of apps/web and sdk/typescript; not part of any shipped bundle"
-reason = "Same package and the same reasoning as GHSA-5gmw-xhrv-c9v3: options of run() are set by vitest, not by input. Resolved by the vitest 5 upgrade."
-owner = "maintainers"
-added = "2026-10-17"
-expires = "2027-01-15"
-
 # --- CodeQL (ecosystem "codeql": id is the rule, package the file) ----------------------------------------------------
 # The gate is `security_exceptions.py codeql` in .github/workflows/codeql.yml: a medium or worse alert fails the job unless
 # it is listed here. All four below are in test tooling, not in anything shipped, and were read, not assumed.

@@ -121,7 +121,8 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     args.push('--config', file);
   }
   const child = spawn(binary, args, {
-    env: { ...process.env, AG_BOOTSTRAP_TOKEN: token, NO_COLOR: '1', RUST_BACKTRACE: '0' },
+    // Address discovery consumes the INFO listening event, regardless of the caller's log filter.
+    env: { ...process.env, AG_BOOTSTRAP_TOKEN: token, NO_COLOR: '1', RUST_BACKTRACE: '0', RUST_LOG: 'info' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

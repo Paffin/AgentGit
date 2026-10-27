@@ -682,6 +682,11 @@ pub enum RemoteCmd {
         #[arg(long)]
         validate: bool,
     },
+    /// Explain why a server proposal cannot land, with the next commands. Changes nothing.
+    Explain {
+        /// Proposal id (any unique prefix).
+        id: String,
+    },
     /// Review a proposal's current head.
     Review {
         /// Proposal id.
@@ -786,6 +791,72 @@ fn print_done<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String
         return Ok(());
     }
     print(cli, value, human)
+}
+
+async fn explain_remote(cli: &Cli, client: &Client, repo: &str, id: &str) -> Result<u8> {
+    use crate::cmds::explain::{from_wire, render};
+    let detail = client
+        .proposals()
+        .get(client.req(v1::GetProposalRequest { repo: repo.into(), id: id.into() }))
+        .await
+        .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+        .into_inner();
+    let proposal = detail.proposal.ok_or_else(|| anyhow!("server returned no proposal"))?;
+    if proposal.state != "open" {
+        let state = if proposal.state == "integrated" { "already landed" } else { "closed" };
+        let summary = format!("{} is {state}; there is nothing to fix.", proposal.id);
+        print(
+            cli,
+            &serde_json::json!({ "proposal": proposal.id, "state": proposal.state,
+            "standing": "refused", "explanations": [], "next": [], "summary": summary }),
+            || summary,
+        )?;
+        return Ok(exit::REFUSED);
+    }
+    let prep = client
+        .integration()
+        .prepare(client.req(v1::PrepareRequest {
+            repo: repo.into(),
+            proposal: proposal.id.clone(),
+            enqueue_validations: false,
+            idempotency_key: String::new(),
+        }))
+        .await
+        .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+        .into_inner();
+    let mut explanations = from_wire(&prep.blockers, &prep.conflicts, &proposal.id);
+    if !prep.problem.is_empty() {
+        explanations.push(ag_integrate::explain::Explanation {
+            code: "invalid".into(),
+            kind: "denied",
+            summary: "The candidate cannot be prepared.".into(),
+            why: prep.problem.clone(),
+            fixes: vec![],
+        });
+    }
+    let (standing, code) = if explanations.is_empty() {
+        ("ready", exit::OK)
+    } else if explanations.iter().all(|e| e.kind == "blocked") {
+        ("blocked", exit::BLOCKED)
+    } else {
+        ("refused", exit::REFUSED)
+    };
+    let next: Vec<&str> = explanations.iter().filter_map(|e| e.fixes.first()).map(|f| f.command.as_str()).collect();
+    let body = serde_json::json!({ "proposal": proposal.id, "title": proposal.title, "stream": proposal.stream,
+        "standing": standing, "policy_version": prep.policy_version, "candidate_tree": prep.candidate_tree,
+        "explanations": explanations, "next": next });
+    print(cli, &body, || {
+        let heading = format!(
+            "Proposal {} \"{}\" -> {}: {standing} (policy v{}).",
+            proposal.id, proposal.title, proposal.stream, prep.policy_version
+        );
+        if code == exit::OK {
+            format!("{heading}\nNext:\n  ag remote integrate {}", proposal.id)
+        } else {
+            format!("{heading}\n\n{}", render(&explanations))
+        }
+    })?;
+    Ok(code)
 }
 
 pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
@@ -929,6 +1000,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     t
                 })?;
             }
+            RemoteCmd::Explain { id } => return explain_remote(cli, &c, &repo, id).await,
             RemoteCmd::Prepare { id, validate } => {
                 let p = c
                     .integration()

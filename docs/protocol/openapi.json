@@ -1651,6 +1651,41 @@
         },
         "type": "object"
       },
+      "GitMigrationDecision": {
+        "properties": {
+          "accept_lossy": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GitMigrationPlan": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "report": {
+            "type": "object"
+          },
+          "source_sha256": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_sha256",
+          "report",
+          "state"
+        ],
+        "type": "object"
+      },
       "GrantRoleRequest": {
         "properties": {
           "repo": {
@@ -4932,6 +4967,153 @@
         "summary": "Claim the next queued job (long-poll with wait_ms); repo is optional",
         "tags": [
           "Execution"
+        ]
+      }
+    },
+    "/v1/migrations/git": {
+      "put": {
+        "operationId": "migration.prepare",
+        "parameters": [
+          {
+            "description": "New destination, owner/name",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only)",
+        "tags": [
+          "Migration"
+        ]
+      }
+    },
+    "/v1/migrations/{id}": {
+      "get": {
+        "operationId": "migration.status",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a private migration report",
+        "tags": [
+          "Migration"
+        ]
+      }
+    },
+    "/v1/migrations/{id}/commit": {
+      "post": {
+        "operationId": "migration.commit",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitMigrationDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Publish a preflighted repository; body: accept_lossy boolean",
+        "tags": [
+          "Migration"
         ]
       }
     },

@@ -67,6 +67,11 @@ export const NAMESPACE_METHODS = {
     list: 'lease.list',
     release: 'lease.release',
   },
+  migrations: {
+    commit: 'migration.commit',
+    prepare: 'migration.prepare',
+    status: 'migration.status',
+  },
   objects: {
     get: 'objects.get',
     missing: 'objects.missing',
@@ -248,6 +253,14 @@ export interface Api {
     list(request: Req<'lease.list'>, options?: CallOptions): Promise<Res<'lease.list'>>;
     /** Release a lease (`DELETE /v1/repos/{owner}/{rname}/leases/{lease_id}`, operation `lease.release`) */
     release(request: Req<'lease.release'>, options?: CallOptions): Promise<Res<'lease.release'>>;
+  };
+  readonly migrations: {
+    /** Publish a preflighted repository; body: accept_lossy boolean (`POST /v1/migrations/{id}/commit`, operation `migration.commit`) */
+    commit(request: Req<'migration.commit'>, options?: CallOptions): Promise<Res<'migration.commit'>>;
+    /** Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only) (`PUT /v1/migrations/git`, operation `migration.prepare`) */
+    prepare(request: { name: string; data: Uint8Array }, options?: CallOptions): Promise<Res<'migration.prepare'>>;
+    /** Read a private migration report (`GET /v1/migrations/{id}`, operation `migration.status`) */
+    status(request: Req<'migration.status'>, options?: CallOptions): Promise<Res<'migration.status'>>;
   };
   readonly objects: {
     /** Download one object envelope (binary body) (`GET /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.get`) */

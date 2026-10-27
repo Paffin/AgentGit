@@ -545,8 +545,8 @@ impl Control {
         let quota = serde_json::to_string(&r.quota).map_err(ApiError::internal)?;
         let n = db(self.db.execute(
             "INSERT INTO repos (name, namespace, default_stream, description, created_at, created_by, quota_json, object_bytes, config_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8) ON CONFLICT (name) DO NOTHING",
-            &sql_params![&r.name, &r.namespace, &r.default_stream, &r.description, r.created_at_ms, &r.created_by, quota, &r.config_json],
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?8) ON CONFLICT (name) DO NOTHING",
+            &sql_params![&r.name, &r.namespace, &r.default_stream, &r.description, r.created_at_ms, &r.created_by, quota, &r.config_json, r.object_bytes as i64],
         ))?;
         if n == 0 {
             return Err(ApiError::new(

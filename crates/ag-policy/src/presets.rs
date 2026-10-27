@@ -154,7 +154,6 @@ fn solo() -> Policy {
     Policy {
         integrators: people(),
         // A person's own change needs nobody; an agent's change needs a person (never the agent itself).
-        approvals: ApprovalRules { min: 0, min_for_agents: 1, approvers: people(), forbid_self_approval: true },
         ..Policy::default()
     }
 }
@@ -174,7 +173,6 @@ fn agents() -> Policy {
         allowed_authors: vec!["user:*".into(), "agent:*".into()],
         // A person's change lands at once; an agent's change must be reviewed by a person unless it stays inside
         // the envelope below.
-        approvals: ApprovalRules { min: 0, min_for_agents: 1, approvers: people(), forbid_self_approval: true },
         protected_paths: protected(1),
         agent_autonomy: AgentAutonomy {
             auto_integrate: true,
@@ -194,7 +192,6 @@ fn strict() -> Policy {
         approvals: ApprovalRules { min: 2, min_for_agents: 2, approvers: people(), forbid_self_approval: true },
         protected_paths: protected(3),
         // No envelope: an agent never lands anything by itself.
-        agent_autonomy: AgentAutonomy::default(),
         require_provenance_for_agents: true,
         max_changed_files: 200,
         ..Policy::default()

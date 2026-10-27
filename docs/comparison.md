@@ -3,7 +3,7 @@
 A fair comparison is mostly a list of what the other tools are good at. This page tries to be that. Two ground rules:
 
 - **What we say about AgentGit is checkable**: each claim links to the page, and where one exists the test, that backs it,
-  and what is missing or unproven is listed under "What AgentGit does not have" below. AgentGit is **alpha**; the
+  and what is missing or unproven is listed under "What AgentGit does not have" below. AgentGit is **early public beta**; the
   others are mature or widely used, and for most teams today they are the right choice.
 - **What we say about the others comes from their public documentation, as we understand it.** We keep to well-known
   behaviour, and where we are not sure we say nothing rather than guess. Product names, plan tiers and features change;
@@ -29,7 +29,7 @@ hosting features and add-ons. AgentGit makes them the data model.
 | Identity of an automated actor | the author and committer strings (unauthenticated unless signed) | accounts, apps and tokens | accounts | the configured user | an identity per agent and per run, with keys; credentials on a server |
 | Rewrite history (rebase, amend) | yes | through Git | amending creates a new patch set | yes, with automatic rebase of descendants | **no**: changesets are immutable |
 | Runs without a server | yes | no | no | yes | yes (a server is optional) |
-| Maturity | very high | very high | high | newer and actively developed | **alpha** |
+| Maturity | very high | very high | high | newer and actively developed | **early public beta** |
 
 ### Hosting platforms
 
@@ -47,7 +47,7 @@ are as in the vendors' documentation at the access date; "Premium" and similar m
 | Tamper-evident audit | an audit log with export; its documentation makes no integrity claim | audit events, streaming on Ultimate; its documentation makes no integrity claim | an audit log; not compared here | hash-chained, checked by `ag audit` and `ag verify` ([security](architecture/security.md)) |
 | Self-contained and offline | hosted; GitHub Enterprise Server for self-management | SaaS or self-managed | Cloud or Data Center | local mode needs no server; the server is one binary ([remote](guides/remote.md)) |
 | Ecosystem and integrations | very large | very large; CI and security scanning are part of the platform | large; Jira and Pipelines | small: CLI, SDKs (unpublished), MCP, Web UI |
-| Maturity | very high | very high | very high | alpha |
+| Maturity | very high | very high | very high | early beta |
 
 "Built from the same pieces" describes what the documentation covers, not that nothing can be done: all three have APIs and
 custom checks, and teams build agent guard rails on them.
@@ -234,7 +234,7 @@ exports to, and make no claim about it.
 
 Say it plainly, because the table above is flattering:
 
-- **Maturity.** Alpha: not run in production by anyone but its authors, no external security audit, nothing published to a
+- **Maturity.** Early beta: not run in production by anyone but its authors, no external security audit, nothing published to a
   registry. The [status and limits in the README](https://github.com/Paffin/AgentGit/blob/main/README.md#status-and-limits) are the list.
 - **Local mode trusts the local user.** Identities are labels until you run a server; anyone who can write `.ag/` can bypass
   policy (tampering is detectable, not preventable). [Security model](architecture/security.md).
@@ -250,7 +250,7 @@ Say it plainly, because the table above is flattering:
 - *A solo developer or a team without agents*: use Git (or Jujutsu). AgentGit adds nothing you need.
 - *A team on GitHub, GitLab, Bitbucket or Gerrit with agents that work fine through your existing review and checks*: keep what works. Look at
   AgentGit when you need landing to be provably atomic and tree-bound, per-run identities and leases, or an autonomy
-  envelope, and you are willing to run alpha software for it.
+  envelope, and you are willing to run early beta software for it.
 - *Experimenting with policy-bound agent autonomy, or building something that needs a small deterministic core with a
   verifiable audit trail*: this is what it is for. Start with [the first tutorial](tutorials/first-agent-safe-repo.md).
 

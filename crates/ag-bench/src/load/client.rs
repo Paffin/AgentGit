@@ -99,6 +99,21 @@ fn agent(timeout: Duration) -> ureq::Agent {
 }
 
 impl Session {
+    /// Reads the bytes back through HTTP after the load, independently of the writer's protocol.
+    pub fn file_bytes(&self, repo: &str, rev: &str, path: &str) -> CallResult<Vec<u8>> {
+        let url = format!("{}/v1/repos/{repo}/files/{path}?rev={rev}", self.base);
+        let mut reply = self
+            .agent
+            .get(url)
+            .header("authorization", format!("Bearer {}", self.token))
+            .call()
+            .map_err(CallError::transport)?;
+        if reply.status().as_u16() != 200 {
+            return Err(CallError::transport(format!("file read returned HTTP {}", reply.status())));
+        }
+        reply.body_mut().read_to_vec().map_err(CallError::transport)
+    }
+
     /// A session for `token`. A gRPC session connects to `base` (`http://host:port`) now.
     pub fn connect(proto: Proto, base: &str, token: &str, rt: &tokio::runtime::Handle) -> anyhow::Result<Self> {
         let grpc = match proto {

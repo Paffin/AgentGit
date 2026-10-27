@@ -14,6 +14,11 @@ class BrowserPipeline(unittest.TestCase):
         self.jobs = yaml.safe_load((ROOT / '.github/workflows/web.yml').read_text())['jobs']
         self.browser = self.jobs['e2e']
 
+    def test_the_pipeline_contract_is_executed_by_ci(self):
+        ci = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        commands = '\n'.join(step.get('run', '') for job in ci['jobs'].values() for step in job['steps'])
+        self.assertIn('test_web_e2e_workflow', commands)
+
     def test_runtime_matches_the_browser_library_and_is_immutable(self):
         image = self.browser.get('container', {}).get('image', '')
         match = re.fullmatch(r'mcr\.microsoft\.com/playwright:v([^/]+)-noble@sha256:[0-9a-f]{64}', image)

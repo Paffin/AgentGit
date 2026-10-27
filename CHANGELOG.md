@@ -16,6 +16,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Import instructions use the shared clipboard fallback; changing the source URL no longer leaves a misleading copied confirmation.
 - Repository setup keeps its selected rules and initiating session. Leaving the wizard stops unsent follow-up work and late redirects; a failed rule update clearly reports that the repository was still created.
 - Change-request filters are preserved in the URL for bookmarks and returning from a request. Updating a filter keeps keyboard focus in the current field.
+- Browser tab titles retain the current repository when filters or anchors change, while navigation to another page still updates the title.
 - Long tab strips retain readable labels, and keyboard selection brings the whole tab into view without shifting the page vertically.
 
 ## [0.3.0-beta.2] — 2026-10-27

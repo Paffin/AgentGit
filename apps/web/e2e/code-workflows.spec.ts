@@ -28,6 +28,7 @@ test('change request filters survive detail navigation without stealing editing 
   await authorFilter.fill('user:alice')
   await expect.poll(() => new URL(page.url()).searchParams.get('author')).toBe('user:alice')
   await expect(authorFilter).toBeFocused()
+  await expect(page).toHaveTitle(`Proposals · ${repo} · AgentGit`)
   const search = page.getByRole('searchbox', { name: 'Search loaded change requests', exact: true })
   await search.fill('Preserve')
   await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Preserve')
@@ -53,6 +54,7 @@ test('change request filters survive detail navigation without stealing editing 
   await expect(authorFilter).toHaveValue('user:alice')
   await expect(search).toHaveValue('Preserve')
   await expect(row).toBeVisible()
+  await expect(page).toHaveTitle(`Proposals · ${repo} · AgentGit`)
 })
 
 test('editing a symbolic link preserves its file type', async ({ page, cast }) => {

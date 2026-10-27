@@ -21,6 +21,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Browser tab titles retain the current repository when filters or anchors change, while navigation to another page still updates the title.
 - Long tab strips retain readable labels, and keyboard selection brings the whole tab into view without shifting the page vertically.
 
+### Changed
+
+- The real Keycloak browser job reuses the pinned Playwright runtime, avoiding repeated system-package downloads while retaining real-provider, embedded-server and reviewed-skip checks.
+
 ## [0.3.0-beta.2] — 2026-10-27
 
 ### Added

@@ -199,6 +199,7 @@ jobs:
     timeout-minutes: 40
     env:
       # Tag and digest: the tag says what it is, the digest makes sure that is what runs.
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
       KEYCLOAK_IMAGE: quay.io/keycloak/keycloak:26.0.7@sha256:4388e2379b7e870a447adbe7b80bd61f5fbf04e925832b19669fda4957f05a81
       AG_E2E_KEYCLOAK: http://localhost:8180
       AG_TEST_KEYCLOAK_URL: http://localhost:8180
@@ -227,9 +228,8 @@ jobs:
         run: scripts/build_ui.sh
       - name: Build the server (with the UI inside) and the CLI
         run: cargo build -p agentgit-server -p agentgit-cli
-      - name: Install the browser
-        run: npx playwright install --with-deps chromium
-        working-directory: apps/web
+      - name: Pull the pinned browser runtime
+        run: docker pull "$PLAYWRIGHT_IMAGE"
       - name: Wait for Keycloak
         run: |
           for i in $(seq 1 90); do
@@ -247,15 +247,18 @@ jobs:
           AG_REQUIRE_COMPONENTS: keycloak
           AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
       - name: The browser round trip, token expiry and sign-out with Keycloak
-        run: npx playwright test --project=chromium --no-deps keycloak.spec.ts
-        working-directory: apps/web
-        env:
-          AG_SERVER_BIN: ${{ github.workspace }}/target/debug/ag-server
-          AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
-          AG_E2E_UI: embedded
-          CI: "true"
-          AG_REQUIRE_COMPONENTS: keycloak
-          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+        # Host networking keeps both the provider and the test server's dynamic ports reachable.
+        # Reuse the checked browser image instead of downloading OS packages on every runner.
+        run: |
+          docker run --rm --network=host --ipc=host \
+            --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/work" --volume "$RUNNER_TEMP:/evidence" \
+            --workdir /work/apps/web \
+            --env AG_E2E_KEYCLOAK="$AG_E2E_KEYCLOAK" \
+            --env AG_SERVER_BIN=/work/target/debug/ag-server --env AG_CLI_BIN=/work/target/debug/ag \
+            --env AG_E2E_UI=embedded --env CI=true --env AG_REQUIRE_COMPONENTS=keycloak \
+            --env AG_SKIP_REPORT=/evidence/skips.jsonl \
+            "$PLAYWRIGHT_IMAGE" npx playwright test --project=chromium --no-deps keycloak.spec.ts
       # Nothing may skip here: the whole point of this job is the real identity provider.
       - name: Skipped tests
         if: ${{ !cancelled() }}

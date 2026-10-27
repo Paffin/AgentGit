@@ -65,19 +65,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-Or take the pre-release [`v0.2.0-rc.2`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): archives for
-Linux and macOS (x86_64 and aarch64) with `ag`, `ag-server`, `ag-worker` and `ag-mcp`, `SHA256SUMS`, SBOMs, and multi-arch
-images `ghcr.io/paffin/agentgit-server` and `agentgit-cli`.
+The next candidate is [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). Check that its release assets are published before running these commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2
-docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.2
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3
+docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.3
 ```
 
-`--version` is needed while only pre-releases exist. Checked on the published files: checksums, the quick start and the
-server flow below, `install.sh`, and the attestations of both images (`gh attestation verify`, by the owner). Not
-verified: the archive attestations, the macOS and aarch64 archives outside CI, the Homebrew formula.
-[Install options](docs/getting-started.md#install) has the details.
+`--version` is needed while only pre-releases exist. If this candidate is not published yet, use the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
 
 ## Quick start
 
@@ -103,8 +98,7 @@ ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, 
 ```
 
 `ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
-(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is on `main` and **not in the `v0.2.0-rc.2`
-archives**: until the next tag, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in the `v0.2.0-rc.3` candidate. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
 start on rc.2 in a few more lines.
 
 ### As a server
@@ -167,7 +161,7 @@ The full comparison, including Git, Gerrit and Jujutsu: [AgentGit compared](docs
 
 A new user starts on a home page that says what needs attention, with plain labels (the AgentGit word is in a tooltip),
 blockers that come with their fix as a button, guided flows to start a repository or give an agent work, rules presets
-instead of raw JSON, and editing a file and proposing it from the browser. These are in `main`, not in the rc.2 archives.
+instead of raw JSON, and editing a file and proposing it from the browser. These are included in the rc.3 candidate; rc.2 does not include them.
 What is still missing is on the [roadmap](ROADMAP.md).
 
 A live board of runs, leases, tasks and the merge queue, with four independent verdicts per proposal. These are real
@@ -287,7 +281,7 @@ not been run in production by anyone but its authors, and there has been no exte
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
   per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
   job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Only a pre-release is published (`v0.2.0-rc.2`: GitHub release and images on GHCR). No stable release, and no
+- Only prereleases are available; `v0.2.0-rc.3` is the next candidate (check the release assets above). No stable release, and no
   crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
   ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
   build first.
@@ -302,11 +296,17 @@ not been run in production by anyone but its authors, and there has been no exte
 - No history rewriting, tags, submodules or LFS; the Git bridge reports what it cannot carry.
 - The Web UI is tested in Chromium, Firefox and WebKit; OIDC only against Keycloak. There has been no screen-reader pass.
   `ag-mcp` was not run inside real hosts. The SDKs are unpublished.
-- The nightly fuzz and weekly mutation jobs have not run on GitHub yet.
+- Nightly fuzzing and weekly mutation checks run in GitHub Actions. Inspect the results on the release commit; a successful coverage run alone does not establish passing mutation checks.
 
 Reasonable today: a team and its agents on one machine, one server or a few replicas, with CI-gated workflows, or
 experimenting with policy-bound autonomy. Not yet: hosting mutually untrusting tenants, or being the only copy of data you
 cannot lose. Keep `ag backup` copies and a Git mirror.
+
+## Try the beta workflow
+
+The project is still alpha. We are preparing a focused beta for small teams: see the
+[scope and release gates](docs/community/beta.md), [start here](docs/community/start-here.md), and the
+[beta milestone](https://github.com/Paffin/AgentGit/milestone/1). Installation problems and confusing workflows are useful feedback.
 
 ## Contributing
 

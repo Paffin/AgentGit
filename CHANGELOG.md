@@ -7,7 +7,15 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.2.0-rc.3] — 2026-10-27
+
 ### Added
+
+- Home now supports searching visible work, filtering by repository and category, manual refresh and a last-successful-refresh timestamp. Partial reads and truncated summaries are explicitly marked; failures never imply that the work queue is clear.
+- Change-request search and role-aware links to editing files or giving an agent work; glossary hints in repository navigation and table headers.
+- A focused beta programme with public acceptance gates, pilot reporting, contributor entry points and a launch kit. Alpha status remains until external evidence meets the gates.
+- `ag remote explain PROPOSAL` reports a server proposal's blockers, reasons and next commands with machine-readable output and distinct ready/blocked/refused exit codes.
+- Policy regression coverage for preset actor/author restrictions, provenance, file limits, approval explanations and validation age formatting.
 
 - Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
   after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
@@ -25,7 +33,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
   sentence.
 - **`ag explain [PROPOSAL]`** turns a refusal into plain words and the exact next commands (one explanation per refusal
   code, checked against the variants); the hints under `ag integrate` and `ag remote integrate|prepare` use the same
-  strings. Local repositories only.
+  strings. The remote workflow also supports `ag remote explain PROPOSAL`.
 - **A Web UI a first-time user can use** (`docs/design/web-ux-review.md`): Home ("needs your attention") and navigation by
   job (Overview, Change requests, Agents & work, Code, Settings); plain labels with the AgentGit word in a tooltip
   (`lib/glossary.ts`, checked against the guide); every blocker carries its fix as an action (request validation, ask a
@@ -79,6 +87,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Include the shipped `ag-mcp` executable in the release SBOM inventory.
+- Reject incomplete archives before replacing installed binaries and explain when an older GitHub CLI cannot verify attestations.
+- Keep readable proposals when another detail or the agent-run list cannot be loaded.
+
 - Python and TypeScript SDK integration harnesses enable the startup log used to discover ephemeral ports;
   an inherited `RUST_LOG=error` no longer causes false server-start timeouts.
 - The orchestrator's process-group timeout test distinguishes a running child from a dead, unreaped Linux
@@ -101,10 +113,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Known limitations
 
-- Browser editing is one text file per change request (no rename, delete or multi-file); tab labels and table headers have
-  no tooltips; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
-  the raw JSON; no screen-reader pass. `ag explain` works on local repositories only (no `ag remote explain`). The
-  Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
+- Browser editing is one text file per change request (no rename, delete or multi-file); some tab labels and table headers still need glossary hints; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
+  the raw JSON; no screen-reader pass. The Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
   is in the `v0.2.0-rc.2` archives. The root-only halves of the sandbox tests run in no CI job, and the four scripts
   that read TOML need Python 3.11 and are not in the 3.9 job.
 - The tree cache clones a tree on every hit (7 ms at 100 000 files); the disk backend and PostgreSQL were not

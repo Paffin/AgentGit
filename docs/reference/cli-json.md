@@ -1357,6 +1357,38 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag remote explain
+
+```json
+{
+  "candidate_tree": "string",
+  "explanations": [
+    {
+      "code": "string",
+      "fixes": [
+        {
+          "command": "string",
+          "note": "string"
+        }
+      ],
+      "kind": "string",
+      "summary": "string",
+      "why": "string"
+    }
+  ],
+  "next": [
+    "string"
+  ],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "state": "string",
+  "stream": "string",
+  "summary": "string",
+  "title": "string"
+}
+```
+
 ### ag remote integrate
 
 ```json

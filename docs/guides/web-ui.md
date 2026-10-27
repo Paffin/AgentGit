@@ -368,3 +368,16 @@ AgentGit words. This table is generated from `apps/web/src/lib/glossary.ts` (a t
 
 - A full editor. Editing is one text file at a time; for more, use a clone, a workspace through the CLI, or the SDKs.
 - Email or chat notifications. The board is live while it is open.
+
+
+## Finding work across repositories
+
+Home shows work that needs attention across the repositories you can read. Search by words in a change title,
+reason, author or repository; every search word must match. Choose a repository or a category to narrow the list.
+Category counts follow the search and repository selection. **Clear filters** returns to all loaded work.
+
+The summary refreshes every 15 seconds while visible and shows its last successful refresh time. **Refresh** checks
+again immediately. If a repository or proposal cannot be read, or a summary limit is reached, an incomplete-data
+notice remains visible. An incomplete summary is never evidence that no work needs attention. Open the repository
+for its complete paginated list. The change-request list also offers a search over loaded results and direct links
+to editing files or giving an agent work when your role permits it.

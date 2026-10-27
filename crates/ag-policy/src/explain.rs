@@ -147,7 +147,8 @@ pub fn explain(p: &Policy) -> Vec<Statement> {
     if envelope && a.min == 0 {
         say(Effect::Allows, "approvals", "Inside the autonomy envelope an agent's change needs no approval.".into());
     }
-    if a.min > 0 || for_agents > 0 {
+    // for_agents is max(min, min_for_agents), so it already covers the global minimum.
+    if for_agents > 0 {
         if a.forbid_self_approval {
             say(Effect::Denies, "approvals", "An author's own approval does not count.".into());
         } else {
@@ -440,7 +441,7 @@ mod tests {
         };
         let t = text(&p);
         assert!(t.contains("'lint'") && t.contains("service:ci") && t.contains("no more than 1 day ago"), "{t}");
-        assert!(t.contains(&short_key(&key.to_hex())), "{t}");
+        assert!(t.contains(&key.to_hex()[..8]), "{t}");
     }
 
     #[test]
@@ -451,5 +452,90 @@ mod tests {
         for st in &s {
             assert!(r.contains(&st.text), "{}", st.text);
         }
+    }
+    #[test]
+    fn validation_age_is_readable_at_each_unit_boundary() {
+        for (seconds, expected) in [
+            (1, "1 seconds"),
+            (59, "59 seconds"),
+            (60, "1 minute"),
+            (120, "2 minutes"),
+            (3599, "3599 seconds"),
+            (3600, "1 hour"),
+            (7200, "2 hours"),
+            (86400, "1 day"),
+            (172800, "2 days"),
+        ] {
+            let p = Policy {
+                required_validations: vec![RequiredValidation {
+                    check: "tests".into(),
+                    issuers: vec![],
+                    environment_digest: None,
+                    max_age_secs: Some(seconds),
+                    run: None,
+                }],
+                ..Policy::default()
+            };
+            let explanation = text(&p);
+            assert!(explanation.contains(&format!("no more than {expected} ago")), "{explanation}");
+        }
+    }
+
+    #[test]
+    fn zero_approvals_do_not_claim_that_a_review_is_required() {
+        for min in [0, 1] {
+            for min_for_agents in [0, 1] {
+                for envelope in [false, true] {
+                    let mut p = Policy::default();
+                    p.approvals.min = min;
+                    p.approvals.min_for_agents = min_for_agents;
+                    if envelope {
+                        p.agent_autonomy = AgentAutonomy {
+                            auto_integrate: false,
+                            max_files: 1,
+                            allowed_paths: vec!["docs/**".into()],
+                        };
+                    }
+                    let t = text(&p);
+                    let review_required = min > 0 || min_for_agents > 0;
+                    assert_eq!(t.contains("An author's own approval does not count"), review_required, "{t}");
+                    assert_eq!(t.contains("a reviewer asking for changes"), review_required, "{t}");
+                    assert_eq!(
+                        t.contains("Inside the autonomy envelope an agent's change needs no approval"),
+                        envelope && min == 0,
+                        "{t}"
+                    );
+                    assert_eq!(t.contains("A change by an agent needs no approval."), !review_required, "{t}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rendering_places_each_statement_under_its_own_heading() {
+        let statements = [
+            Statement { effect: Effect::Denies, field: "approvals", text: "denied only".into() },
+            Statement { effect: Effect::Allows, field: "admins", text: "allowed only".into() },
+            Statement { effect: Effect::Requires, field: "approvals", text: "required only".into() },
+        ];
+        assert_eq!(
+            render(&statements),
+            "Allowed:\n  - allowed only\n\nRequired before a change lands:\n  - required only\n\nRefused:\n  - denied only"
+        );
+        assert_eq!(render(&[]), "");
+    }
+
+    #[test]
+    fn failing_check_warning_requires_a_configured_check() {
+        assert!(!text(&Policy::default()).contains("A trusted failing result"));
+        let mut p = Policy::default();
+        p.required_validations.push(RequiredValidation {
+            check: "tests".into(),
+            issuers: vec![],
+            environment_digest: None,
+            max_age_secs: None,
+            run: None,
+        });
+        assert!(text(&p).contains("A trusted failing result"));
     }
 }

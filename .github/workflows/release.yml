@@ -197,6 +197,7 @@ jobs:
             case "$v" in *"${GITHUB_SHA:0:12}"*) ;; *) echo "::error::$b does not report this commit"; exit 1;; esac
           done
           "$bin/ag-worker" doctor || true
+          python3 scripts/onboarding_smoke.py --ag "$bin/ag" --server "$bin/ag-server"
           # ag-mcp has no build script, so its version line carries no commit: check the crate version only.
           v=$("$bin/ag-mcp" --version); echo "$v"
           [ "$v" = "ag-mcp $CARGO_VERSION" ] || { echo "::error::ag-mcp --version is '$v'"; exit 1; }
@@ -237,7 +238,7 @@ jobs:
         with:
           tool: cargo-cyclonedx@0.5.9
       # The same script the Security workflow runs on every change (so a break shows up there, not at release time).
-      # The web UI SBOM it can also write is not a release asset yet: the release job below expects exactly three.
+      # The web UI SBOM it can also write is not a release asset yet: the release job below expects four binary inventories.
       - name: One SBOM per shipped binary (from Cargo.lock; build-time dependencies included)
         run: scripts/sbom.sh --version "$VERSION" --out dist --no-web
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -461,7 +462,7 @@ jobs:
           set -euo pipefail
           ls -la dist
           set -- dist/*.tar.gz; test $# = 4
-          set -- dist/*.cdx.json; test $# = 3
+          set -- dist/*.cdx.json; test $# = 4
           python3 scripts/package_release.py sums dist/*.tar.gz dist/*.cdx.json | tee dist/SHA256SUMS
           (cd dist && sha256sum -c SHA256SUMS)
           python3 scripts/render_packaging.py --version "$VERSION" --sums dist/SHA256SUMS --out dist --only homebrew

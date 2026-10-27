@@ -21,9 +21,32 @@ You need Rust **1.89+** (the MSRV), a C compiler (SQLite is built from source), 
 ```bash
 git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo build --workspace
-cargo test --workspace          # ~200 tests, a few seconds
+cargo test --workspace          # full Rust suite; external backends need their documented setup
 ./examples/quickstart.sh        # the end-to-end demo shown in the README
 ```
+
+## Pick a first contribution
+
+Start at [Community](docs/community/start-here.md) or the [beta milestone](https://github.com/Paffin/AgentGit/milestone/1).
+An installation report, a keyboard accessibility reproduction or a verified MCP host configuration is useful work.
+Claim an unassigned issue before coding; include the exact version and a small reproduction. Never post credentials.
+
+## Run the checks for your component first
+
+You do not need every service running to improve one component. These are the fast starting checks; the full CI remains
+required before merging. Tests that need PostgreSQL, S3, OCI runtimes or a real model must explicitly report missing
+components, rather than being described as a passing external integration.
+
+| Change | Starting checks |
+|---|---|
+| Rust crate | `cargo test -p agentgit-<name>`; then format and lint the affected code |
+| Web UI | In `apps/web`: `npm ci`, `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` |
+| Rendered UI behavior | Build `ag-server`, then in `apps/web`: `npx playwright test --project=chromium --no-deps <spec>` |
+| Release/install scripts | `python3 scripts/test_release_scripts.py` and `python3 scripts/test_sbom_release.py` |
+| Documentation | `python3 scripts/check_docs.py`, then the strict MkDocs build described in `docs/README.md` |
+
+Before sending a UI change, exercise its success, empty, loading and failure states, keyboard use and a narrow viewport.
+For a fix, show a regression test failing before the change and passing after it. Avoid tests that only restate implementation.
 
 ## Before you open a pull request
 

@@ -1,6 +1,6 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH ag-remote 1  "remote 0.2.0-rc.2" 
+.TH ag-remote 1  "remote 0.2.0-rc.3" 
 .SH NAME
 ag\-remote \- Manage remotes and work with proposals, events and policy on a server
 .SH SYNOPSIS
@@ -58,6 +58,9 @@ Show a proposal with its reviews
 ag\-remote\-prepare(1)
 What would integrating do now, and what is missing?
 .TP
+ag\-remote\-explain(1)
+Explain why a server proposal cannot land, with the next commands. Changes nothing
+.TP
 ag\-remote\-review(1)
 Review a proposal\*(Aqs current head
 .TP
@@ -85,4 +88,4 @@ Show which changeset introduced each line of a file on the server: `ag remote bl
 ag\-remote\-cat(1)
 Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
 .SH VERSION
-v0.2.0\-rc.2
+v0.2.0\-rc.3

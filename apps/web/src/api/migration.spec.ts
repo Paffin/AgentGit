@@ -4,6 +4,9 @@ import type { MigrationReport } from './migration'
 
 describe('migration guidance', () => {
   it('keeps the source a shell-quoted argument and does not allow credentials or local protocols', () => {
+    expect(bundleCommands('ssh://git@gitlab.example/team/app.git')).toContain(
+      "'ssh://git@gitlab.example/team/app.git'",
+    )
     expect(bundleCommands('https://gitlab.example/team/app.git')).toContain(
       "-- 'https://gitlab.example/team/app.git'",
     )

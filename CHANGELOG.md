@@ -19,6 +19,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Lazy route imports no longer preload their own entry twice; dependency and CSS preloads remain, and chunk hashes include the preload policy. Mutation workers now execute their own source copies instead of resolving relative imports into the original tree.
+
+- Content-hashed UI assets with dots in their names now keep immutable caching, including source maps. Reloads no longer revalidate these unchanged Vite chunks.
+
 - Reopening a file removed by another participant still recovers its saved tab draft, including the original revision and review conflict checks.
 - Browser qualification uses Playwright 1.64.1 after a native WebKit reload assertion on 1.56.1; the original recovery scenario passes without disabling crash, console or persistence checks.
 - Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.

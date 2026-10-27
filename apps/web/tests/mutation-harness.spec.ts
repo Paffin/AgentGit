@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { spawnSync } from 'node:child_process'
 import { stripVTControlCharacters } from 'node:util'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -26,6 +26,27 @@ describe('mutation harness qualification', () => {
     const result = run(root, 'this-test-does-not-exist.spec.ts')
     expect(result.status).toBe(2)
     expect(result.stderr).toContain('UNVERIFIED')
+  }, 25_000)
+  it('executes a changed helper reached through a symlinked test', () => {
+    const directory = join(root, 'target/mutation-workers')
+    mkdirSync(directory, { recursive: true })
+    const worker = mkdtempSync(join(directory, 'relative-helper-'))
+    try {
+      mkdirSync(join(worker, 'scripts'))
+      for (const name of ['src', 'node_modules', 'tests'])
+        symlinkSync(join(root, name), join(worker, name), 'junction')
+      writeFileSync(join(worker, 'package.json'), readFileSync(join(root, 'package.json')))
+      writeFileSync(
+        join(worker, 'scripts/preload-policy.ts'),
+        "export const preloadPolicy = { name: 'test-mutant' }; export function preloadDependencies() { throw new Error('mutated helper was loaded') }\n",
+      )
+      const result = run(worker, 'tests/preload-policy.spec.ts')
+      expect(result.status, result.stdout + result.stderr).toBe(1)
+      expect(result.stdout).toContain('mutated helper was loaded')
+      expect(result.stderr).not.toContain('UNVERIFIED')
+    } finally {
+      rmSync(worker, { recursive: true, force: true })
+    }
   }, 25_000)
   it('does not credit a worker bootstrap failure as a killed mutant', () => {
     const directory = join(root, 'target/mutation-workers')

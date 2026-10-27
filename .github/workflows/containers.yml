@@ -203,7 +203,7 @@ jobs:
         run: |
           docker save agentgit-server:ci | gzip -1 > artifacts/server-image.tar.gz
           ls -la artifacts
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: container-artifacts
           path: artifacts
@@ -217,7 +217,7 @@ jobs:
           docker logs ag > diag/server.log 2>&1 || true
           docker inspect ag > diag/inspect.json 2>&1 || true
           cp -r smoke-work diag/ 2>/dev/null || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: image-diagnostics
@@ -249,7 +249,7 @@ jobs:
           echo "rebuild took $(( $(date +%s) - start )) s"
       - name: The cargo layers were restored, not rebuilt
         run: python3 scripts/check_buildx_cache.py build.log
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: cache-diagnostics
@@ -348,7 +348,7 @@ jobs:
           docker compose --profile observability logs --no-color --timestamps > "$RUNNER_TEMP/diag/compose.log" 2>&1 || true
           docker compose --profile observability config 2>/dev/null | sed -E 's/(PASSWORD|TOKEN|SECRET|KEY)([A-Z_]*): .*/\1\2: <redacted>/' > "$RUNNER_TEMP/diag/config.redacted.yaml" || true
           cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: compose-diagnostics
@@ -439,7 +439,7 @@ jobs:
           kubectl -n agentgit logs deploy/ag-server --previous --tail=-1 > "$RUNNER_TEMP/diag/server-previous.log" 2>&1 || true
           cp "$RUNNER_TEMP"/port-forward*.log "$RUNNER_TEMP/diag/" 2>/dev/null || true
           cp -r "$RUNNER_TEMP/smoke-work" "$RUNNER_TEMP/diag/" 2>/dev/null || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: kubernetes-diagnostics

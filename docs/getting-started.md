@@ -3,9 +3,8 @@
 Five minutes, and nothing to build: **no Rust, no Node, no tokens to make by hand.** You download the programs, start an
 evaluation server that sets itself up, sign in, land a first change, and see a policy say no and tell you why.
 
-> **Version.** This guide targets the `v0.2.0-rc.3` candidate, which includes `ag-server dev`, `ag login`,
-> `ag explain` and policy presets. Before downloading, check that the candidate's assets have been published on
-> [Releases](https://github.com/Paffin/AgentGit/releases). For the previous published candidate, use
+> **Version.** This guide targets the published [`v0.2.0-rc.3` candidate](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3), which includes `ag-server dev`, `ag login`,
+> `ag explain` and policy presets. If you still use the previous candidate, use
 > [the 0.2.0-rc.2 procedure](#on-020-rc2-until-the-next-release). A candidate is still alpha software.
 
 ## 1. Get the programs

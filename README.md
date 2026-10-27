@@ -65,14 +65,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-The next candidate is [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). Check that its release assets are published before running these commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+The published candidate is [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3
 docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.3
 ```
 
-`--version` is needed while only pre-releases exist. If this candidate is not published yet, use the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
+`--version` is needed while only pre-releases exist. For an existing rc.2 installation, see the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
 
 ## Quick start
 
@@ -281,7 +281,7 @@ not been run in production by anyone but its authors, and there has been no exte
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
   per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
   job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Only prereleases are available; `v0.2.0-rc.3` is the next candidate (check the release assets above). No stable release, and no
+- Only prereleases are available; the current candidate is `v0.2.0-rc.3`. No stable release, and no
   crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
   ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
   build first.

@@ -71,14 +71,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # ставит бинарник `ag`
 ```
 
-Следующий кандидат — [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). Перед установкой убедитесь, что архивы опубликованы. Они содержат `ag`, `ag-server`, `ag-worker` и `ag-mcp` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+Опубликованный кандидат — [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). Архивы доступны для установки. Они содержат `ag`, `ag-server`, `ag-worker` и `ag-mcp` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3
 docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.3
 ```
 
-Пока есть только пре-релизы, `--version` обязателен. Если кандидат ещё не опубликован, используйте [инструкцию для rc.2](docs/getting-started.md#on-020-rc2-until-the-next-release). [Отчёт о проверке rc.2](docs/operations/releasing.md) относится только к тому выпуску и не подтверждает готовность rc.3. Подробности — в [вариантах установки](docs/getting-started.md#install).
+Пока есть только пре-релизы, `--version` обязателен. Если у вас установлена rc.2, используйте [инструкцию для rc.2](docs/getting-started.md#on-020-rc2-until-the-next-release). [Отчёт о проверке rc.2](docs/operations/releasing.md) относится только к тому выпуску и не подтверждает готовность rc.3. Подробности — в [вариантах установки](docs/getting-started.md#install).
 
 ## Быстрый старт
 
@@ -292,7 +292,7 @@ AgentGit — alpha. Ядро и перечисленные гарантии ре
   включается на стороне клиента; действовать в чужом запуске можно только с `agent.operate`, которого у обычного
   writer нет. Токен ограждения (fencing) для захвата заданий передаётся по желанию клиента
   ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Опубликован только пре-релиз (`v0.2.0-rc.2`: релиз на GitHub и образы в GHCR). Стабильного релиза нет, пакетов в
+- Доступны только пре-релизы; текущий кандидат — `v0.2.0-rc.3` (GitHub и GHCR). Стабильного релиза нет, пакетов в
   crates.io, npm и PyPI нет; 21 крейт `agentgit-<x>` проверен только пробной публикацией
   ([релизы](docs/operations/releasing.md)). Схема метаданных 3 не читается старыми сборками: при обновлении реплик
   сначала запускайте новую сборку.

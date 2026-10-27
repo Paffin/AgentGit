@@ -88,6 +88,16 @@ The earlier full local desktop run completed with 619 passes, 18 reviewed Keyclo
 
 Merged the checked Vite 8.3.4 upgrade into the browser branch. With locked dependencies, all 525 unit cases pass (shuffled seed 2054) and the production build succeeds. Both WebKit scenarios that failed in the earlier broad local run pass five repetitions each with strict console checks and no retries. The read-only scenario now waits for the actual board before checking that Admin is absent, so it neither asserts against an unfinished page nor cancels its initial module load. Vite's native-config warning is addressed with an explicit TypeScript import extension, not a warning override. This is targeted verification; a full current-tree browser/CI run is still required.
 
+
+## Checked release requests
+
+A main-only release request workflow waits for successful CI, CodeQL, Containers, Docs, Packaging, Quality, Security, Web UI and Windows for the exact commit, including other triggered workflows. It creates a version tag only after validation, refuses to move an existing tag, and dispatches the existing release pipeline rather than publishing unchecked artifacts itself. The workflow uses neither pull_request_target nor workflow_run, and never checks out pull-request code with its write token.
+
+Twenty-three behavior/contract tests pass. Fifty-three selected mutations are caught, including missing/failed checks, stale main, tag mismatch, incomplete assets and progress output before a wait. Measured Python CRAP is at most 7; no duplicate candidates were found. The actual beta.1 release payload is recognized as complete (four archives, four SBOMs, checksums and Homebrew formula), so installing the workflow does not republish it. Workflow pin/permission checks and release-tooling tests pass. A live request and next release remain pending until the workflow and a version bump are merged; no new release is claimed here.
+
+
+Release-gate follow-up: two negative tests demonstrated that a second workflow with the same display name could mask a failed required workflow or be mistaken for the request workflow itself. Selection now uses exact workflow paths. The final set has 26 passing tests and 59 detected mutations; measured maximum CRAP is 8. Actual GitHub run metadata confirms the expected workflow-path format.
+
 ## Directory and pending-action isolation
 
 Integrated the agent's clipboard-generation guard, directory-reset and pagination-retry changes, plus immutable pending-review inputs. A root regression showed that a capability request resolving after unmount could still start a review POST; a context check now prevents that unsent mutation. Two tests failed before the fix, then passed. An already transmitted POST is not claimed cancellable. The agent separately verified delayed clipboard APIs, real directory resolution and real paginated requests with temporary 503 responses on desktop/phone. New-directory links never reuse previous rows, and failed Load more requests preserve the existing rows and cursor.

@@ -1,0 +1,38 @@
+name: Request release
+
+# A reviewed version bump on main is the release request. Never runs PR code with a write token.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "CHANGELOG.md"
+      - "scripts/request_release.py"
+      - ".github/workflows/request-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: request-release-main
+  cancel-in-progress: true
+
+jobs:
+  request:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    permissions:
+      contents: write # create the immutable version tag after validation
+      actions: write # dispatch the existing release workflow on that exact tag
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Wait for the exact main commit, tag it, and request the existing release pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python3 scripts/request_release.py

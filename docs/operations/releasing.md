@@ -49,8 +49,8 @@ Evidence (all on `main`'s code, nothing published): see [Evidence](#evidence) at
 ## Cutting a release
 
 ```sh
-# 1. bump the version in Cargo.toml ([workspace.package]) and in sdk/typescript/package.json and
-#    sdk/python/pyproject.toml (scripts/check_publish_metadata.py insists they agree), refresh Cargo.lock
+# 1. bump Cargo.toml workspace/package versions, apps/web/package.json, sdk/typescript/package.json
+#    and sdk/python/pyproject.toml; refresh Cargo.lock and the affected npm lockfile root versions
 cargo update -w
 # 2. move [Unreleased] into a dated [X.Y.Z] section of CHANGELOG.md
 # 3. check what the workflow will check
@@ -59,12 +59,12 @@ python3 scripts/check_publish_metadata.py
 cargo test --workspace --locked
 # 4. rehearse on the exact commit you are about to tag
 gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
-# 5. tag after the commit is on main and the rehearsal is green
-git tag -s vX.Y.Z -m "AgentGit X.Y.Z" && git push origin vX.Y.Z
+# 5. merge the reviewed version bump into main
+# Request release waits for that exact commit's checks, then creates the immutable tag and dispatches Release.
+# Observe both workflows; only a completed Release with its assets is a published version.
 ```
 
-For the first release use an `-rc` tag (`v0.2.0-rc.1`): it publishes a pre-release and finds what only a real
-publish can find (see [What is not proven](#what-is-not-proven)).
+Use a prerelease suffix for release candidates and betas. The published beta remains the installation target until the next release has completed; see [What is not proven](#what-is-not-proven).
 
 ## Verifying what you downloaded
 
@@ -219,10 +219,7 @@ The rehearsal runs everything but the writes. These have therefore **never run**
 * npm and PyPI trusted publishing (needs the one-time registry setup above), and any crates.io publish.
 * A Homebrew tap, a Scoop bucket, a Windows archive, musl/Alpine, 32-bit and FreeBSD builds.
 
-Also not done: actions are referenced by major version tag, not by commit SHA (Dependabot keeps them current; pin
-by SHA if your threat model includes a compromised action tag); no signing of Git tags or of the SBOM beyond
-GitHub's attestations; shell completions and man pages are not generated yet (the archive builder includes
-`completions/` and `man/` as soon as they exist).
+Actions are pinned to commit SHAs and checked by `scripts/check_workflows.py --strict`. Release tags are not cryptographically signed by the automatic request, and SBOMs have no separate signature beyond GitHub's attestations. Shell completions and man pages are not included in release archives; the archive builder supports optional `completions/` and `man/` inputs, but the release workflow does not pass them.
 
 ## Evidence
 
@@ -260,3 +257,13 @@ skips them). Details: `dev/handoff/release-rc2.md`.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow
 runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab with their uploaded artifacts.
+
+## Release requests from main
+
+A reviewed version bump on `main`, with matching package versions and a nonempty changelog section, requests the next release automatically. `Request release` waits for successful CI, CodeQL, Containers, Docs, Packaging, Quality, Security, Web UI and Windows runs for that exact push, plus any other workflows triggered by it. A newer main commit cancels the request; a failed or timed-out check creates no tag.
+
+After the checks pass, the request creates `v<version>` at the checked commit and dispatches the existing Release workflow on that tag. That workflow still builds, tests, attests and verifies the actual archives and images before publication. The request itself is not a successful release. Existing published versions are skipped; an existing tag is never moved. If a request failed after creating its tag, rerun Request release on the same main commit. If main has moved, run Release manually on the existing tag with its matching version. Rehearsals remain available through Release with `publish=false`.
+
+The request uses a write token only on trusted main pushes or a manual run on main; it has no pull-request or workflow-run trigger and does not persist checkout credentials.
+
+Required checks are identified by their workflow file paths, so another workflow using the same display name cannot hide a failed or unfinished check. Optional workflows triggered by the same commit must finish successfully too.

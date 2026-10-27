@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Role grants retain the submitted binding and initiating session while pending. Late results cannot affect a different repository or account; failures preserve the form for retry.
+
 - Repository search survives opening a result, browser Back and page reload; bookmarked filters keep searching the loaded list without extra requests.
 
 - Git import instructions accept the copied SSH addresses from GitHub and nested GitLab groups, with shell-safe commands and editable destination suggestions.

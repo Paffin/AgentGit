@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { RoleBinding } from '@/api/types'
 import { ROLES } from '@/api/types'
 import { useResource } from '@/composables/useResource'
 import { repoPatternMatches } from '@/lib/glob'
+import { useAuth } from '@/stores/auth'
 import { useToasts } from '@/stores/toasts'
 import Alert from '@/ui/Alert.vue'
 import Badge from '@/ui/Badge.vue'
@@ -23,6 +24,7 @@ import type { Column } from '@/ui/types'
 
 const props = defineProps<{ repo?: string }>()
 const toasts = useToasts()
+const auth = useAuth()
 
 const bindings = useResource<RoleBinding[]>(() => api.admin.roles(), { watch: [() => props.repo] })
 const rows = computed(() => {
@@ -45,35 +47,58 @@ const role = ref('reader')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 
+let context = 0
+watch(
+  [() => props.repo, () => auth.identity, () => auth.status],
+  () => {
+    context++
+    granting.value = false
+    busy.value = false
+    error.value = null
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  context++
+})
+
 function openGrant() {
+  if (busy.value) return
   subject.value = ''
   repoPattern.value = props.repo ?? ''
   role.value = 'reader'
   error.value = null
   granting.value = true
 }
+function reportGrantError(mine: number, cause: unknown) {
+  if (mine !== context) return
+  error.value =
+    cause instanceof ApiError
+      ? cause
+      : new ApiError({ status: 0, code: 'internal', message: describeError(cause) })
+}
+
 async function grant() {
+  if (busy.value || auth.status !== 'ready' || error.value?.status === 401) return
+  const mine = context
+  const binding = {
+    subject: subject.value.trim(),
+    repo: repoPattern.value.trim(),
+    role: role.value,
+  }
+  const options = { token: auth.token, quietUnauthenticated: true }
   busy.value = true
   error.value = null
   try {
-    await api.admin.grantRole({
-      subject: subject.value.trim(),
-      repo: repoPattern.value.trim(),
-      role: role.value,
-    })
+    await api.admin.grantRole(binding, options)
+    if (mine !== context) return
     granting.value = false
-    toasts.ok(
-      'Role granted',
-      `${subject.value.trim()} is now ${role.value} on ${repoPattern.value.trim()}`,
-    )
+    toasts.ok('Role granted', `${binding.subject} is now ${binding.role} on ${binding.repo}`)
     await bindings.reload()
   } catch (e) {
-    error.value =
-      e instanceof ApiError
-        ? e
-        : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
+    reportGrantError(mine, e)
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 
@@ -111,7 +136,13 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
     flush
   >
     <template #actions>
-      <Button size="sm" icon="plus" variant="primary" data-testid="grant-open" @click="openGrant"
+      <Button
+        size="sm"
+        icon="plus"
+        variant="primary"
+        data-testid="grant-open"
+        :disabled="busy"
+        @click="openGrant"
         >Grant a role</Button
       >
     </template>
@@ -173,6 +204,7 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
       <form id="grant-form" class="form" @submit.prevent="grant">
         <TextField
           v-model="subject"
+          :disabled="busy"
           label="Who"
           mono
           required
@@ -182,6 +214,7 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
         />
         <TextField
           v-model="repoPattern"
+          :disabled="busy"
           label="Repository"
           mono
           required
@@ -190,17 +223,34 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
         />
         <SelectField
           v-model="role"
+          :disabled="busy"
           label="Role"
           :options="roleOptions"
           hint="reader · writer · reviewer · integrator · runner · delegator · admin"
         />
-        <Alert v-if="error" tone="bad" live="alert" title="Could not grant the role">{{
-          error.message
-        }}</Alert>
+        <Alert
+          v-if="error"
+          tone="bad"
+          live="alert"
+          :title="error.status === 401 ? 'Sign in again' : 'Could not grant the role'"
+        >
+          <template v-if="error.status === 401">
+            Your session was rejected. Sign in again before granting a role.
+            <Button to="/signin">Sign in</Button>
+          </template>
+          <template v-else>{{ error.message }}</template>
+        </Alert>
       </form>
       <template #footer>
         <Button :disabled="busy" @click="granting = false">Cancel</Button>
-        <Button type="submit" form="grant-form" variant="primary" :loading="busy">Grant</Button>
+        <Button
+          type="submit"
+          form="grant-form"
+          variant="primary"
+          :loading="busy"
+          :disabled="error?.status === 401"
+          >Grant</Button
+        >
       </template>
     </Dialog>
 

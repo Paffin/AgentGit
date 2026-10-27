@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/errors'
 import type { BlameLine, BlameResponse } from '@/api/types'
+
+enableAutoUnmount(afterEach)
 
 const blame = vi.fn()
 vi.mock('@/api/instance', () => ({ api: { history: { blame: (...a: unknown[]) => blame(...a) } } }))
@@ -45,6 +47,42 @@ beforeEach(() => {
 })
 
 describe('BlameTable', () => {
+  it.each(['repo', 'rev', 'path'] as const)(
+    'cancels obsolete blame when %s changes',
+    async (key) => {
+      const pending: { signal: AbortSignal; resolve: (value: BlameResponse) => void }[] = []
+      blame.mockImplementation(
+        (_repo, _query, options) =>
+          new Promise<BlameResponse>((resolve) => {
+            pending.push({ signal: options?.signal, resolve })
+          }),
+      )
+      const w = mountIt()
+      expect(pending[0]!.signal).toBeInstanceOf(AbortSignal)
+      await w.setProps({ [key]: 'changed' })
+      expect(pending[0]!.signal.aborted).toBe(true)
+      expect(pending[1]!.signal.aborted).toBe(false)
+      pending[1]!.resolve(reply([line(1, 'current', { text: 'Current file' })]))
+      await flushPromises()
+      pending[0]!.resolve(reply([line(1, 'obsolete', { text: 'Obsolete file' })]))
+      await flushPromises()
+      expect(w.text()).toContain('Current file')
+      expect(w.text()).not.toContain('Obsolete file')
+    },
+  )
+
+  it('cancels pending blame when leaving the file', () => {
+    let signal: AbortSignal | undefined
+    blame.mockImplementation((_repo, _query, options) => {
+      signal = options?.signal
+      return new Promise(() => {})
+    })
+    const w = mountIt()
+    expect(signal).toBeInstanceOf(AbortSignal)
+    w.unmount()
+    expect(signal!.aborted).toBe(true)
+  })
+
   it('asks for the path at the revision and shows one author block per run of lines', async () => {
     blame.mockResolvedValue(
       reply([
@@ -55,7 +93,11 @@ describe('BlameTable', () => {
     )
     const w = mountIt()
     await flushPromises()
-    expect(blame).toHaveBeenCalledWith('acme/webapp', { path: 'src/a.ts', rev: 'main' })
+    expect(blame).toHaveBeenCalledWith(
+      'acme/webapp',
+      { path: 'src/a.ts', rev: 'main' },
+      { signal: expect.any(AbortSignal) },
+    )
     expect(w.findAll('tbody tr')).toHaveLength(3)
     expect(w.findAll('td.who')).toHaveLength(2)
     expect(w.find('td.who').attributes('rowspan')).toBe('2')

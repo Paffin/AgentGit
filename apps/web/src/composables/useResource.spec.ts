@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { useResource } from './useResource'
 import type { Resource } from './useResource'
+import { ApiError } from '@/api/errors'
+
+enableAutoUnmount(afterEach)
 
 function host<T>(make: () => Resource<T>) {
   let res!: Resource<T>
@@ -22,6 +25,38 @@ const settle = async () => {
 }
 
 describe('useResource', () => {
+  it('does not start a deferred first request after its owner unmounts', async () => {
+    const load = vi.fn().mockResolvedValue('unwanted')
+    const { w, res } = host(() => useResource(load, { immediate: false }))
+    w.unmount()
+    await res().reload()
+    expect(load).not.toHaveBeenCalled()
+    expect(res().data.value).toBeUndefined()
+  })
+
+  it('aborts pending work and ignores later reloads and results after unmount', async () => {
+    let finish!: (value: string) => void
+    let signal!: AbortSignal
+    const load = vi.fn((requestSignal: AbortSignal) => {
+      signal = requestSignal
+      return new Promise<string>((resolve) => {
+        finish = resolve
+      })
+    })
+    const { w, res } = host(() => useResource(load))
+    w.unmount()
+    expect(signal.aborted).toBe(true)
+    const firstReload = res().reload()
+    expect(load).toHaveBeenCalledTimes(1)
+    await firstReload
+    await res().reload()
+    expect(load).toHaveBeenCalledTimes(1)
+    finish('obsolete')
+    await settle()
+    expect(res().data.value).toBeUndefined()
+    expect(res().error.value).toBeNull()
+  })
+
   it('loads once and keeps the data', async () => {
     const load = vi.fn().mockResolvedValue(42)
     const { res } = host(() => useResource(load))
@@ -83,6 +118,35 @@ describe('useResource', () => {
     resolvers[1]!('first')
     await settle()
     expect(res().data.value).toBe('second')
+  })
+
+  it('ignores a failed older request after a newer request succeeds', async () => {
+    let fail!: (error: Error) => void
+    const load = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject
+          }),
+      )
+      .mockResolvedValue('current')
+    const { res } = host(() => useResource(load))
+    await res().reload()
+    fail(new Error('obsolete failure'))
+    await settle()
+    expect(res().error.value).toBeNull()
+    expect(res().data.value).toBe('current')
+  })
+
+  it('does not display a cancelled request as an error', async () => {
+    const { res } = host(() =>
+      useResource(async () => {
+        throw new ApiError({ status: 0, code: 'cancelled', message: 'Cancelled' })
+      }),
+    )
+    await settle()
+    expect(res().error.value).toBeNull()
   })
 
   it('keeps the error of a failed load', async () => {

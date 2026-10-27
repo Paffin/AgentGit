@@ -28,7 +28,8 @@ watch(
 )
 
 const blame = useResource<BlameResponse>(
-  () => api.history.blame(props.repo, { path: props.path, rev: props.rev || undefined }),
+  (signal) =>
+    api.history.blame(props.repo, { path: props.path, rev: props.rev || undefined }, { signal }),
   { watch: [() => props.repo, () => props.rev, () => props.path] },
 )
 

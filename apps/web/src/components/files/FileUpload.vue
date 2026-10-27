@@ -16,6 +16,7 @@ import TextArea from '@/ui/TextArea.vue'
 import Alert from '@/ui/Alert.vue'
 import Checkbox from '@/ui/Checkbox.vue'
 import Dialog from '@/ui/Dialog.vue'
+import ErrorState from '@/ui/ErrorState.vue'
 
 const props = defineProps<{ repo: string; stream: string; path: string }>()
 const emit = defineEmits<{ cancel: [] }>()
@@ -71,6 +72,9 @@ watch(
 )
 function choose(values: FileList | null) {
   files.value = values ? Array.from(values) : []
+}
+function retryBase() {
+  if (!base.loading.value) void base.reload()
 }
 async function cancel() {
   if (await requestLeave()) emit('cancel')
@@ -142,13 +146,20 @@ async function submit() {
       hint="Leave empty to upload at the root of this branch."
       mono
     />
-    <Alert
-      v-if="selected.error || error || base.error.value"
-      tone="bad"
-      live="alert"
-      title="Upload needs attention"
-      >{{ selected.error || error || describeError(base.error.value) }}</Alert
+    <Alert v-if="selected.error || error" tone="bad" live="alert" title="Upload needs attention">{{
+      selected.error || error
+    }}</Alert>
+    <ErrorState
+      v-if="base.error.value"
+      what="the upload branch"
+      :error="base.error.value"
+      :retryable="false"
+      compact
     >
+      <Button :loading="base.loading.value" :disabled="base.loading.value" @click="retryBase">
+        Retry branch
+      </Button>
+    </ErrorState>
     <ul v-if="selected.files.length" class="files" aria-label="Files in this upload">
       <li v-for="(item, index) in selected.files" :key="item.path">
         <span class="mono">{{ item.path }}</span

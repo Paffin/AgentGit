@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 /**
@@ -30,59 +30,28 @@ export function useScrollRegion(label: () => string): {
   const setEl = (node: unknown) => {
     el.value = node instanceof HTMLElement ? node : null
   }
-  let resizes: ResizeObserver | undefined
-  let mutations: MutationObserver | undefined
-  const watched = new Set<Element>()
-
   function measure() {
     const box = el.value
     scrolls.value = !!box && box.scrollWidth > box.clientWidth + 1
   }
 
-  /** Watches the size of the box and of each of its children (new ones included, gone ones dropped). */
-  function observeSizes() {
-    const box = el.value
-    if (!box || !resizes) return
-    const now = new Set<Element>([box, ...Array.from(box.children)])
-    for (const node of now) {
-      if (!watched.has(node)) {
-        watched.add(node)
-        resizes.observe(node)
-      }
-    }
-    for (const node of Array.from(watched)) {
-      if (!now.has(node)) {
-        watched.delete(node)
-        resizes.unobserve(node)
-      }
-    }
-  }
-  function onContentChange() {
-    observeSizes()
-    measure()
-  }
+  // Each conditional/replaced DOM node owns its observers and cleanup.
+  watch(
+    el,
+    (box, _previous, onCleanup) => {
+      if (box) onCleanup(observeBox(box, measure))
+      measure()
+    },
+    { flush: 'post' },
+  )
 
+  let stopFonts = () => {}
   onMounted(() => {
-    measure()
-    if (typeof ResizeObserver !== 'undefined' && el.value) {
-      resizes = new ResizeObserver(measure)
-      observeSizes()
-    }
-    if (typeof MutationObserver !== 'undefined' && el.value) {
-      mutations = new MutationObserver(onContentChange)
-      mutations.observe(el.value, { childList: true, subtree: true, characterData: true })
-    }
-    if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', measure)
+    stopFonts = observeFonts(measure)
   })
+  onBeforeUnmount(() => stopFonts())
   // The content can outgrow the box without the box resizing: measure again after every render.
   onUpdated(() => void nextTick(measure))
-  onBeforeUnmount(() => {
-    resizes?.disconnect()
-    mutations?.disconnect()
-    watched.clear()
-    if (typeof document !== 'undefined')
-      document.fonts?.removeEventListener?.('loadingdone', measure)
-  })
 
   const attrs = computed(() =>
     scrolls.value
@@ -94,4 +63,51 @@ export function useScrollRegion(label: () => string): {
       : {},
   )
   return { setEl, scrolls, attrs, measure }
+}
+
+/** Observe the current children, dropping references to children that were removed. */
+function observeSizes(
+  box: HTMLElement,
+  resizes: ResizeObserver | undefined,
+  watched: Set<Element>,
+) {
+  if (!resizes) return
+  const now = new Set<Element>([box, ...Array.from(box.children)])
+  for (const node of now) {
+    if (!watched.has(node)) {
+      watched.add(node)
+      resizes.observe(node)
+    }
+  }
+  for (const node of watched) {
+    if (!now.has(node)) {
+      watched.delete(node)
+      resizes.unobserve(node)
+    }
+  }
+}
+
+function observeBox(box: HTMLElement, measure: () => void) {
+  const watched = new Set<Element>()
+  const resizes = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+  const contentChanged = () => {
+    observeSizes(box, resizes, watched)
+    measure()
+  }
+  const mutations =
+    typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(contentChanged)
+  observeSizes(box, resizes, watched)
+  mutations?.observe(box, { childList: true, subtree: true, characterData: true })
+  return () => {
+    resizes?.disconnect()
+    mutations?.disconnect()
+    watched.clear()
+  }
+}
+
+function observeFonts(measure: () => void) {
+  if (typeof document === 'undefined') return () => {}
+  const fonts = document.fonts
+  fonts?.addEventListener?.('loadingdone', measure)
+  return () => fonts?.removeEventListener?.('loadingdone', measure)
 }

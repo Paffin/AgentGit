@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
-import type { Changeset } from '@/api/types'
+import type { Changeset, Page } from '@/api/types'
 import ChangesetDetail from '@/components/history/ChangesetDetail.vue'
 import GraphCell from '@/components/history/GraphCell.vue'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -38,7 +38,7 @@ const lanes = ref(1)
 const next = ref('')
 const loading = ref(true)
 const more = ref(false)
-const error = ref<unknown>(null)
+const error = ref<{ cause: unknown; append: boolean } | null>(null)
 const empty = ref(false)
 let state: GraphState = emptyGraphState()
 let serial = 0
@@ -46,14 +46,15 @@ let serial = 0
 // The repository's own default stream; until its record has loaded there is nothing to ask for.
 const effectiveRev = computed(() => rev.value || board.repo?.default_stream || '')
 
-async function load(append = false) {
+function startLoad(append: boolean): number | null {
+  if (append && (loading.value || more.value)) return null
   const mine = ++serial
   if (!effectiveRev.value) {
     if (board.load.repo.status === 'error') {
-      error.value = board.load.repo.error
+      error.value = { cause: board.load.repo.error, append: false }
       loading.value = false
     }
-    return
+    return null
   }
   if (append) more.value = true
   else {
@@ -62,6 +63,24 @@ async function load(append = false) {
   }
   error.value = null
   empty.value = false
+  return mine
+}
+
+function applyPage(page: Page<Changeset>, append: boolean) {
+  const built = buildGraph(
+    page.items.map((c) => ({ id: c.id, parents: c.parents })),
+    state,
+  )
+  state = built.state
+  const add = page.items.map((cs, i) => ({ cs, graph: built.rows[i] as GraphRow }))
+  rows.value = append ? [...rows.value, ...add] : add
+  lanes.value = Math.max(append ? lanes.value : 1, built.laneCount)
+  next.value = page.nextPageToken
+}
+
+async function load(append = false) {
+  const mine = startLoad(append)
+  if (mine === null) return
   try {
     const page = await api.history.log(repo.value, {
       rev: effectiveRev.value,
@@ -70,18 +89,10 @@ async function load(append = false) {
       page_token: append ? next.value : undefined,
     })
     if (mine !== serial) return
-    const built = buildGraph(
-      page.items.map((c) => ({ id: c.id, parents: c.parents })),
-      state,
-    )
-    state = built.state
-    const add = page.items.map((cs, i) => ({ cs, graph: built.rows[i] as GraphRow }))
-    rows.value = append ? [...rows.value, ...add] : add
-    lanes.value = Math.max(append ? lanes.value : 1, built.laneCount)
-    next.value = page.nextPageToken
+    applyPage(page, append)
   } catch (e) {
     if (mine !== serial) return
-    error.value = e
+    error.value = { cause: e, append }
   } finally {
     if (mine === serial) {
       loading.value = false
@@ -91,7 +102,7 @@ async function load(append = false) {
 }
 
 watch(
-  [() => board.repo?.default_stream, () => board.load.repo.status, rev, path, repo],
+  [effectiveRev, () => (effectiveRev.value ? null : board.load.repo.status), rev, path, repo],
   () => void load(),
   { immediate: true },
 )
@@ -157,7 +168,12 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
 
     <div class="layout" :class="{ split: !!selected }">
       <Card :title="`Changesets · ${effectiveRev}`" icon="history" flush>
-        <ErrorState v-if="error" what="history" :error="error" @retry="load()" />
+        <ErrorState
+          v-if="error && !error.append"
+          what="history"
+          :error="error.cause"
+          @retry="load()"
+        />
         <div v-else-if="loading" class="sk">
           <Skeleton :height="40" /><Skeleton :height="40" /><Skeleton :height="40" />
         </div>
@@ -189,6 +205,13 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
               <code class="id mono faint">{{ shortId(r.cs.id, 8) }}</code>
             </li>
           </ol>
+          <ErrorState
+            v-if="error?.append"
+            what="more history"
+            :error="error.cause"
+            :retryable="false"
+            compact
+          />
           <LoadMore
             :has-more="!!next"
             :loading="more"

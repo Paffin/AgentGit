@@ -7,6 +7,14 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Fixed
+
+- History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.
+- Obsolete blame and changeset requests are cancelled when their view closes. Large diff expansion follows the selected patch, and comparison labels explain the default first-parent base.
+- Uploads can retry a failed branch lookup without losing selected files. Pending branch creation, settings saves and integration attempts keep their submitted values; settings and integration results stay attached to their original target.
+- Staged Git imports recover after temporary failures, keep separate references for each account and preserve request ownership across retries. Starting a new import clears only the local reference.
+- Long tab strips retain readable labels, and keyboard selection brings the whole tab into view without shifting the page vertically.
+
 ## [0.3.0-beta.2] — 2026-10-27
 
 ### Added

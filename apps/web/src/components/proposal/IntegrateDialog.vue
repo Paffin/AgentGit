@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { IntegrationOutcome, Lease, Preparation, Proposal } from '@/api/types'
@@ -31,9 +31,12 @@ const error = ref<ApiError | null>(null)
 
 const leaseBlocked = computed(() => (props.prep?.blockers ?? []).some((b) => b.code === 'lease'))
 
+let context = 0
 watch(
-  () => props.modelValue,
-  (open) => {
+  [() => props.modelValue, () => props.repo, () => props.proposal.id],
+  ([open]) => {
+    context++
+    busy.value = false
     if (!open) return
     outcome.value = null
     error.value = null
@@ -42,7 +45,11 @@ watch(
       ? props.authorLeases.map((l) => l.fencing_token).join(', ')
       : ''
   },
+  { immediate: true },
 )
+onBeforeUnmount(() => {
+  context++
+})
 
 function parseTokens(text: string): number[] | null {
   const parts = text.split(/[\s,]+/).filter(Boolean)
@@ -55,33 +62,43 @@ const tokenError = computed(() =>
     : '',
 )
 
+function showOutcome(value: IntegrationOutcome | null, stream: string) {
+  if (!value)
+    throw new ApiError({
+      status: 200,
+      code: 'bad_response',
+      message: 'The server answered without an outcome.',
+    })
+  outcome.value = value
+  if (value.status === 'integrated')
+    toasts.ok('Landed', `${stream} is now at ${shortId(value.new_head, 10)}`)
+  // A blocked attempt is also a recorded operation; refresh the page behind the dialog.
+  emit('done')
+}
+
 async function submit() {
+  if (busy.value || !props.modelValue) return
+  const mine = context
+  const { repo, proposal } = props
+  const stream = proposal.stream
+  const id = proposal.id
   const parsed = parseTokens(tokens.value)
   if (parsed === null) return
   busy.value = true
   error.value = null
   outcome.value = null
   try {
-    const res = await api.integration.integrate(props.repo, props.proposal.id, parsed)
-    const o = res.outcome
-    if (!o)
-      throw new ApiError({
-        status: 200,
-        code: 'bad_response',
-        message: 'The server answered without an outcome.',
-      })
-    outcome.value = o
-    if (o.status === 'integrated')
-      toasts.ok('Landed', `${props.proposal.stream} is now at ${shortId(o.new_head, 10)}`)
-    // Refresh the page behind either way: a blocked attempt is still a recorded operation.
-    emit('done')
+    const res = await api.integration.integrate(repo, id, parsed)
+    if (mine !== context) return
+    showOutcome(res.outcome, stream)
   } catch (e) {
+    if (mine !== context) return
     error.value =
       e instanceof ApiError
         ? e
         : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 
@@ -119,6 +136,7 @@ const finished = computed(() => status.value === 'integrated')
       <TextField
         v-if="!finished"
         v-model="tokens"
+        :disabled="busy"
         label="Reservation keys (optional)"
         mono
         placeholder="e.g. 7, 9"

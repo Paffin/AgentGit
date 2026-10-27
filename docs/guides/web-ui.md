@@ -212,7 +212,7 @@ the blockers), conflict (with the paths) or refused by policy.
 - **Files** browses the tree at any revision, with file sizes, and shows files as text. A **Blame** switch shows, for each
   line, the changeset, author and time that last changed it (renames are followed; lines whose origin is further back
   than the server looked are marked *older than shown*). If a server does not offer blame, the page says so.
-- **Compare** shows the diff between any two revisions (`main~3` and `main`, two changeset ids, ...).
+- **Compare** shows the diff between any two revisions (`main~3` and `main`, two changeset ids, ...). With **From** empty, it shows the changes introduced by **To**, compared with its first parent. Set both revisions to use **Swap**.
 
 In **Files**, choose **Find file** or press **t** to search paths throughout the repository. Arrow Down and Arrow Up move between the search field and matching files; Home and End jump to the first and last result. Enter opens the focused file. Escape closes the finder and returns focus to its opener. The results remain normal links, including Ctrl/Cmd-click to open another tab.
 
@@ -266,6 +266,7 @@ it back, a visible focus ring everywhere, and screen-reader announcements for ro
 indicator. State is never colour alone: states have icons and words, diffs have `+`/`−`. The UI follows your system's
 colour scheme and `prefers-reduced-motion`. Below 820 px wide (or on a touch screen) every control is at least 44 px and
 the header, tab strips and tables adapt: tables that do not fit scroll sideways as a labelled region the keyboard can reach.
+Long tab strips scroll inside their own row. Home and End select the first and last enabled tab and bring it fully into view.
 
 ## First run, version check, ended sessions
 
@@ -327,12 +328,19 @@ landed) that ticks itself and offers the button for the next step.
 
 ![Choosing the rules of a new repository](../assets/ui-new-repo.png)
 
+### Import from GitHub or GitLab
+
+Choose **Import from GitHub / GitLab** on Home or Repositories to upload a full Git bundle. **Check the import** stages it for review; only **Publish repository** makes the destination available. See the [Git migration guide](migrate-from-git.md) for what transfers and what needs a separate migration.
+
+Reopening the import page resumes the saved import for your account. After a temporary error, **Retry previous import** opens the same staged result; an expired credential offers **Sign in again**. **Start new import** clears only this account's local reference, without deleting the staged import on the server. Recovery references are kept in this tab, separately by account; switching accounts hides the previous report. If browser storage is unavailable, keep the page open and save the report before leaving.
+
 ## Edit a file and propose a change
 
 With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
 asks for a title and description and opens a change request; nothing lands until it is reviewed and landed like any other.
 This uses the server's virtual workspaces: a draft is opened on the branch (from exactly what was on screen), the edit is
 applied as one version, the change request is opened from it, and the server workspace is removed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
+If the upload cannot read the branch, **Retry branch** keeps your selected files, destination, title and description.
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
@@ -405,6 +413,7 @@ History filters follow the URL: Back and Forward restore the revision and path. 
 
 Copy buttons keep keyboard focus when the browser falls back to legacy clipboard support. If copying fails, the temporary field is removed and the button reports the failure instead of retaining an earlier success message.
 
-A failed next-page request keeps files already loaded in the directory. Use **Load more** to retry that page; changing the folder or revision clears the old listing immediately, so its links cannot point into the new folder.
+A failed next-page request keeps the loaded directory, history or change-request rows. Use **Load more** to retry that page; changing the repository, revision or server-side filter clears the old listing immediately, so its links cannot point into the new context. Large patches start collapsed when you change the comparison; refreshing the same patch preserves your manual expansion.
 
 Review controls pause while the decision is being sent. The decision and comment are fixed when you submit; switching to another change request cannot redirect a pending send to that request. Responses from an earlier page do not clear the current draft.
+Branch creation, settings saves and landing also pause their editable controls while a request is pending. Failed attempts retain their values for correction and retry. Settings and landing results stay attached to the repository or change request that submitted them.

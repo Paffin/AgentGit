@@ -172,9 +172,16 @@ test.describe('compare', () => {
   }) => {
     allowConsole(/status of 4\d\d/)
     await page.goto(`/repos/${state.demo.repo}/compare`)
-    await expect(page.getByText('Pick two revisions')).toBeVisible()
-    await page.getByRole('combobox', { name: 'From', exact: true }).fill('main~3')
+    await expect(page.getByText('Choose a target revision')).toBeVisible()
+    const from = page.getByRole('combobox', { name: 'From', exact: true })
+    await expect(from).toHaveAttribute('placeholder', 'First parent of To')
+    await expect(page.getByRole('button', { name: /^Swap revisions/ })).toBeDisabled()
     await page.getByRole('combobox', { name: 'To', exact: true }).fill('main')
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    await expect(page.getByText('Changes introduced by', { exact: false })).toBeVisible()
+    await expect(page.getByRole('region', { name: /Changes to/ }).first()).toBeVisible()
+
+    await from.fill('main~3')
     await page.getByRole('button', { name: 'Compare' }).click()
     await expect(page.getByText(/files? changed/)).toBeVisible()
     await expect(page.getByRole('region', { name: /Changes to/ }).first()).toBeVisible()

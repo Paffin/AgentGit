@@ -102,7 +102,7 @@ async function load(append = false) {
 }
 
 watch(
-  [() => board.repo?.default_stream, () => board.load.repo.status, rev, path, repo],
+  [effectiveRev, () => (effectiveRev.value ? null : board.load.repo.status), rev, path, repo],
   () => void load(),
   { immediate: true },
 )

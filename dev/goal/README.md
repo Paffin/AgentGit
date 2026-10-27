@@ -26,4 +26,4 @@ Pin **GitLab Community Edition 18.4.0**, source tag `gitlabhq/gitlabhq:v18.4.0`,
 
 Open issues #50–#55 (excluding absent #54) concern real MCP-host, independent pilot, clean macOS installer, screen-reader and real-device qualification; they remain open. Ten open PRs were inventoried, including #47 and dependency updates; none is considered resolved merely by existing. Hosted migration still omits issues/discussions/permissions/releases/CI settings and external LFS payloads. Older roadmap and comparison text includes already-fixed claims (file rename/delete, Home's fixed 30-repository limit, release status); reconcile documents as each capability is qualified.
 
-No production deployment, external messaging, registry publication or secret publication is part of this stage. No subagents are used.
+No production deployment, external messaging, registry publication or secret publication is part of this stage. The user subsequently requested one additional agent for Web UI. That agent handled file-finder keyboard navigation; the primary agent owned test throughput, CI, integration and verification.

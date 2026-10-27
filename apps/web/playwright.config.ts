@@ -10,8 +10,9 @@ import { defineConfig, devices } from '@playwright/test'
 //
 // Browsers: the whole suite runs in Chromium, Firefox and WebKit (projects of the same name). Locally only a
 // Chromium is usually installed: AG_E2E_CHROMIUM names a binary, else /opt/pw-browsers/chromium when present,
-// else Playwright's own (`npx playwright install chromium`). Firefox and WebKit are installed by CI
-// (`npx playwright install --with-deps firefox webkit`). Run one with `npx playwright test --project=firefox`
+// else Playwright's own (`npx playwright install chromium`). CI uses the matching official Playwright
+// container with all three browsers. Locally install them with `npx playwright install --with-deps`.
+// Run one with `npx playwright test --project=firefox`
 // (add `--no-deps` to skip the screenshots project, which needs Chromium).
 //
 // Responsive: the `tablet` (768) and `phone` (390, touch) projects run the layout and accessibility specs at

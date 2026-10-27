@@ -21,8 +21,13 @@ fn move_exclusively(source: &Path, destination: &Path) -> io::Result<()> {
 
 #[cfg(windows)]
 fn move_exclusively(source: &Path, destination: &Path) -> io::Result<()> {
-    // Windows does not replace an existing directory in a rename, even when it is empty.
-    std::fs::rename(source, destination)
+    use std::os::windows::ffi::OsStrExt;
+    // atomicwrites uses MoveFileExW without REPLACE_EXISTING, unlike std::fs::rename.
+    // Validate before its NUL-terminated Win32 path conversion.
+    if [source, destination].iter().any(|path| path.as_os_str().encode_wide().any(|unit| unit == 0)) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "directory path contains NUL"));
+    }
+    atomicwrites::move_atomic(source, destination)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]

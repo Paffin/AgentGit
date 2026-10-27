@@ -11,6 +11,7 @@ import Icon from '@/ui/Icon.vue'
 
 const props = defineProps<{ modelValue: boolean; repo: string; rev: string; branch?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; select: [path: string] }>()
+const finder = ref<HTMLElement | null>(null)
 const query = ref('')
 const entries = ref<TreeEntry[]>([])
 const total = ref(0)
@@ -108,6 +109,51 @@ function choose(path: string) {
   emit('update:modelValue', false)
   emit('select', path)
 }
+function ignoresKey(event: KeyboardEvent) {
+  return (
+    event.isComposing ||
+    event.keyCode === 229 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  )
+}
+function focusResult(index: number) {
+  finder.value?.querySelectorAll<HTMLAnchorElement>('.results a')[index]?.focus()
+}
+function searchKey(event: KeyboardEvent) {
+  if (ignoresKey(event) || !shown.value.length) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    choose(shown.value[0]!.path)
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    focusResult(event.key === 'ArrowDown' ? 0 : shown.value.length - 1)
+  }
+}
+function resultKey(event: KeyboardEvent, index: number) {
+  if (ignoresKey(event)) return
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusResult(Math.min(index + 1, shown.value.length - 1))
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      if (index) focusResult(index - 1)
+      else finder.value?.querySelector<HTMLInputElement>('input')?.focus()
+      break
+    case 'Home':
+      event.preventDefault()
+      focusResult(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusResult(shown.value.length - 1)
+      break
+  }
+}
 function follow(event: MouseEvent, path: string) {
   if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
   event.preventDefault()
@@ -123,14 +169,15 @@ function follow(event: MouseEvent, path: string) {
     size="lg"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <div class="finder">
+    <div ref="finder" class="finder">
       <TextField
         v-model="query"
         label="File name or path"
         type="search"
         placeholder="For example: src auth"
         autofocus
-        @keydown.enter.prevent="shown[0] && choose(shown[0].path)"
+        hint="Use arrow keys to choose a file, then Enter to open it."
+        @keydown="searchKey"
       />
       <p class="faint" role="status">
         {{ entries.length.toLocaleString()
@@ -149,10 +196,11 @@ function follow(event: MouseEvent, path: string) {
         @retry="load(!revision)"
       />
       <ul class="results" aria-label="Matching files">
-        <li v-for="entry in shown" :key="entry.path">
+        <li v-for="(entry, index) in shown" :key="entry.path">
           <a
             :href="`/repos/${repo}/files?rev=${encodeURIComponent(rev)}&path=${encodeURIComponent(entry.path)}`"
             @click="follow($event, entry.path)"
+            @keydown="resultKey($event, index)"
           >
             <Icon name="file" :size="16" /><span class="mono">{{ entry.path }}</span>
           </a>

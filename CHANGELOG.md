@@ -7,8 +7,21 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.2] — 2026-10-27
+
 ### Added
 
+- Reviewed version bumps on main can request the existing release pipeline after all checks pass for the exact commit. Existing complete releases are skipped, incomplete releases can be retried, and version tags are never moved.
+
+- Reviews can require the exact inspected head through the negotiated `proposals.review_head` capability; stale submissions are rejected atomically without a review or audit entry.
+
+- File search supports arrow keys, Home/End and Enter on any result, preserves IME input and modified link actions, and explains the keyboard controls in the dialog.
+
+- Faster Web UI test execution with isolated, bounded VM workers, Node environments for pure functions, and cancellable test-worker shutdown. Browser CI shares one verified embedded build and runs each project once in a pinned runtime.
+
+- Tab-scoped file drafts preserve text, original base, path and proposal description across reload and sign-in; storage failures are explicit and drafts remain separated by account/repository/branch/path.
+- Repository-wide file finding, reviewed rename/move/delete, binary-safe multi-file upload with replacement review, comparison history/swap, and expandable Home summaries with older-repository selection.
+- A platform goal ledger with a 142-row initial coverage inventory, staged backlog and explicit unverified acceptance work. A qualified Vitest mutation adapter detects empty test runs rather than crediting them as killed mutations.
 - `ag migrate --dry-run` verifies a full Git conversion and shows its reconciliation report before creating a destination. Previewing losses does not authorize a later lossy import.
 
 - `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
@@ -16,6 +29,24 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Python CI and package checks require the committed lockfile; release metadata includes the normalized Python version and regenerated licence list.
+
+- Account and task-graph controls derive their accessible names from matching text; the account identity remains available to assistive technology when its visible label is hidden on a small screen.
+
+- Shared browser code is bundled once while views stay lazy; lazy JavaScript no longer adds speculative preload links. Keyboard focus checks poll rendered styles instead of depending on animation frames.
+
+- Directory navigation removes stale links immediately and retains loaded files after a next-page error. Review submission captures its target and content before waiting; clipboard feedback ignores obsolete requests.
+
+- History follows Back/Forward filters, isolates each changeset's lazy diff, and preserves revision/path context in native parent links. Clipboard fallback restores keyboard focus and cleans up on failure.
+
+- Closing a review dialog keeps unfinished text and decisions. A changed head requires explicit re-review; failed submissions preserve the draft, and successful submissions clear it.
+
+- Lazy route imports no longer preload their own entry twice; dependency and CSS preloads remain, and chunk hashes include the preload policy. Mutation workers now execute their own source copies instead of resolving relative imports into the original tree.
+
+- Content-hashed UI assets with dots in their names now keep immutable caching, including source maps. Reloads no longer revalidate these unchanged Vite chunks.
+
+- Reopening a file removed by another participant still recovers its saved tab draft, including the original revision and review conflict checks.
+- Browser qualification uses Playwright 1.64.1 after a native WebKit reload assertion on 1.56.1; the original recovery scenario passes without disabling crash, console or persistence checks.
 - Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
 
 ## [0.3.0-beta.1] — 2026-10-27

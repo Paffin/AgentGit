@@ -46,21 +46,28 @@ test.describe('the UI served from the binary', () => {
     const html = await page.text()
     expect(html).toContain('<div id="app">')
 
-    // The page names its script and style; both are served, typed, compressed and cacheable forever.
+    // Every script, stylesheet and module preload must be typed, compressed and cacheable forever.
     const script = /<script[^>]+src="([^"]+)"/.exec(html)?.[1]
     const style = /<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/.exec(html)?.[1]
     expect(script, 'a module script').toBeTruthy()
     expect(style, 'a stylesheet').toBeTruthy()
-    for (const [url, type] of [
+    const preloads = [...html.matchAll(/<link[^>]+rel="modulepreload"[^>]+href="([^"]+)"/g)].map(
+      (match) => [match[1]!, 'text/javascript'] as const,
+    )
+    const assets = [
       [script ?? '', 'text/javascript'],
       [style ?? '', 'text/css'],
-    ] as const) {
-      const res = await request.get(`${server.baseURL}${url}`)
-      expect(res.status(), url).toBe(200)
-      expect(res.headers()['content-type'], url).toContain(type)
-      expect(res.headers()['cache-control'], url).toBe('public, max-age=31536000, immutable')
-      expect(res.headers()['content-encoding'], url).toBe('br')
-    }
+      ...preloads,
+    ] as const
+    await Promise.all(
+      assets.map(async ([url, type]) => {
+        const res = await request.get(`${server.baseURL}${url}`)
+        expect(res.status(), url).toBe(200)
+        expect(res.headers()['content-type'], url).toContain(type)
+        expect(res.headers()['cache-control'], url).toBe('public, max-age=31536000, immutable')
+        expect(res.headers()['content-encoding'], url).toBe('br')
+      }),
+    )
 
     // A conditional request is answered with 304.
     const again = await request.get(`${server.baseURL}/`, {

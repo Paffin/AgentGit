@@ -222,3 +222,8 @@ so a long run of other entries never hides a matching event, and a replay page w
 the end of the matching events up to `latest_seq`. The stream ends with an `error` event when its credential is
 revoked or expires — checked before every batch is delivered, and every few seconds while idle. A query value
 that is not a number (`after_seq=abc`, a bad `Last-Event-ID`) is `invalid_argument`, never a default.
+
+
+### Review head precondition
+
+Servers advertising `proposals.review_head` accept `expected_head` on review requests. A nonempty value is an exact changeset ID. The server compares it with the proposal head in the same metadata write transaction as the review and audit insertion; a mismatch returns `failed_precondition` (HTTP 412) and creates neither. An empty value preserves legacy behavior. Negotiate the capability before relying on the precondition: older servers may ignore an unknown JSON or protobuf field. This does not add idempotency to reviews. See [ADR-0014](../adr/0014-review-head-precondition.md).

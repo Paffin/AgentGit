@@ -61,7 +61,7 @@ test.describe('the live board of the demo repository', () => {
     await expect(redis).toContainText('Blocked')
     await expect(redis).toContainText('1 to wait')
     await expect(redis).toHaveAccessibleName(
-      /Migrate sessions to Redis.*waiting for Extract the session store/,
+      /Blocked.*1 to wait.*Migrate sessions to Redis.*waiting for Extract the session store/,
     )
     const runbook = graph.locator(`[data-task="${state.demo.tasks.runbook}"]`)
     await expect(runbook).toContainText('2 to wait') // waits for the Redis migration and the metrics

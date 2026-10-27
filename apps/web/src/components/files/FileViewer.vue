@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import { useResource } from '@/composables/useResource'
+import { useAuth } from '@/stores/auth'
+import { readDraft } from '@/lib/drafts'
 import { formatBytes } from '@/lib/format'
 import { decodeUtf8, imageMime, looksBinary, toDataUrl, baseName } from '@/lib/text'
 import Alert from '@/ui/Alert.vue'
@@ -25,6 +27,23 @@ const props = defineProps<{
 }>()
 /** Editing the text in place; leaving the file ends it. */
 const editing = ref(false)
+const auth = useAuth()
+const hasDraft = computed(() => {
+  if (editing.value || !auth.identity) return false
+  try {
+    return (
+      readDraft(sessionStorage, {
+        identity: auth.identity,
+        repo: props.repo,
+        stream: props.rev,
+        path: props.path,
+        isNew: false,
+      }) !== null
+    )
+  } catch {
+    return false // Opening the editor explains an unreadable stored draft without discarding it.
+  }
+})
 
 /**
  * Whatever the listing says about size, the guard works while downloading: a declared Content-Length over
@@ -169,7 +188,7 @@ onBeforeUnmount(() => {
           icon="edit"
           data-testid="edit-file"
           @click="editing = true"
-          >Edit</Button
+          >{{ hasDraft ? 'Resume draft' : 'Edit' }}</Button
         >
         <FileActions
           v-if="canEdit && !editing && file.data.value?.entry"

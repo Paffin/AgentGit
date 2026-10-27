@@ -112,7 +112,12 @@ test.describe('redirect sign-in', () => {
     await signInAtProvider(page, name)
     await expect(page.getByTestId('user-menu')).toContainText(`user:${name}`)
 
+    // Wait for the signed-in destination before testing a separate document reload.
+    await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible()
     await page.goto(`${baseURL}/repos/${state.demo.repo}/streams`)
+    await expect(
+      page.getByRole('heading', { name: 'Branches', exact: true, level: 1 }),
+    ).toBeVisible()
     await expect(page.getByTestId('user-menu')).toContainText(`user:${name}`)
     await expect(page).toHaveURL(`${baseURL}/repos/${state.demo.repo}/streams`)
 

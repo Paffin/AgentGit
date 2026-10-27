@@ -67,6 +67,45 @@ test('finds files throughout the repository from the keyboard, including for rea
   await expect(page.getByRole('button', { name: 'Rename or move' })).toHaveCount(0)
 })
 
+test('selects a non-first file by keyboard and restores finder focus', async ({ cast, openAs }) => {
+  const { repo } = await freshRepo(cast, 'finder-keys', {
+    'a-first.txt': 'First file\n',
+    'b-target.txt': 'The selected second file\n',
+    'c-last.txt': 'Last file\n',
+  })
+  const page = await openAs('erin')
+  await page.goto(`/repos/${repo}/files`)
+  const opener = page.getByRole('button', { name: 'Find file', exact: true })
+  await opener.click()
+  const finder = page.getByRole('dialog', { name: 'Find a file' })
+  const search = finder.getByRole('searchbox', { name: 'File name or path' })
+  await expect(finder.getByRole('link')).toHaveCount(3)
+  await search.press('ArrowDown')
+  await expect(finder.getByRole('link', { name: 'a-first.txt', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(finder.getByRole('link', { name: 'b-target.txt', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('file-viewer')).toContainText('The selected second file')
+  await expect(finder).not.toBeVisible()
+
+  await opener.click()
+  await search.fill('not-present')
+  await expect(finder.getByRole('link')).toHaveCount(0)
+  await search.press('Enter')
+  await expect(finder).toBeVisible()
+  await search.fill('')
+  await expect(finder.getByRole('link')).toHaveCount(3)
+  await search.press('ArrowDown')
+  await page.keyboard.press('End')
+  await expect(finder.getByRole('link', { name: 'c-last.txt', exact: true })).toBeFocused()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowUp')
+  await expect(search).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(finder).not.toBeVisible()
+  await expect(opener).toBeFocused()
+})
+
 test('renames a binary using its exact stored blob and never overwrites an existing destination', async ({
   page,
   cast,

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { QueueEntry } from '@/api/types'
 import { QUEUE_TONE, summarizeQueueRun } from './queue'

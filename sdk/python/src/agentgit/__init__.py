@@ -77,7 +77,7 @@ from agentgit.signing import (
 )
 from agentgit.sse import SseFrame, SseParser
 
-__version__ = "0.3.0-beta.1"
+__version__ = "0.3.0-beta.2"
 
 __all__ = [
     "NAMESPACE_METHODS",

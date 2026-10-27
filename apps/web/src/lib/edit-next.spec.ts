@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import type { Api } from '@/api/endpoints'
 import type { Blocker, Conflict } from '@/api/types'

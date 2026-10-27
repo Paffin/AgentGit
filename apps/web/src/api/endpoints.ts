@@ -203,8 +203,12 @@ export function createApi(c: ApiClient) {
       },
       get: (repo: string, id: string, o?: Opts) =>
         c.get<ProposalDetail>(r(repo, `/proposals/${encodeURIComponent(id)}`), undefined, o),
-      review: (repo: string, id: string, body: { decision: string; body?: string }, o?: Opts) =>
-        c.post<Review>(r(repo, `/proposals/${encodeURIComponent(id)}/reviews`), body, o),
+      review: (
+        repo: string,
+        id: string,
+        body: { decision: string; body?: string; expected_head?: string },
+        o?: Opts,
+      ) => c.post<Review>(r(repo, `/proposals/${encodeURIComponent(id)}/reviews`), body, o),
       close: (repo: string, id: string, o?: Opts) =>
         c.post<Proposal>(r(repo, `/proposals/${encodeURIComponent(id)}/close`), {}, o),
       /** Moves a proposal to a newer head (only its author may). */

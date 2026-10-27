@@ -3674,6 +3674,12 @@ export interface components {
             body: string;
             /** @default  */
             decision: string;
+            /**
+             * @description Optional exact head inspected by the reviewer. A mismatch rejects the review atomically.
+             *     Empty retains the legacy current-head behavior; negotiate proposals.review_head first.
+             * @default
+             */
+            expected_head: string;
             /** @default  */
             id: string;
             /**

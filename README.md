@@ -28,6 +28,8 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).
 
+The current source also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These source changes are prepared for beta.2 and tracked in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
+
 ## See it work
 
 A person, two agents and a CI service share one stream. The output is trimmed from

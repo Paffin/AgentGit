@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw, Router } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { ApiError } from '@/api/errors'
+import { safeNext } from './redirect'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -177,9 +178,4 @@ export function createAppRouter(history = createWebHistory()): Router {
     document.title = `${base} · AgentGit`
   })
   return router
-}
-
-/** Only same-origin app paths may be used as a post-sign-in destination (no open redirects). */
-export function safeNext(next: string): string {
-  return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/'
 }

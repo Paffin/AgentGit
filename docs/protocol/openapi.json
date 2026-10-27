@@ -3984,6 +3984,11 @@
             "default": "",
             "type": "string"
           },
+          "expected_head": {
+            "default": "",
+            "description": "Optional exact head inspected by the reviewer. A mismatch rejects the review atomically.\nEmpty retains the legacy current-head behavior; negotiate proposals.review_head first.",
+            "type": "string"
+          },
           "id": {
             "default": "",
             "type": "string"

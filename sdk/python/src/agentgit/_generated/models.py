@@ -1617,6 +1617,7 @@ class ReviewProposalRequest:
     """The `ReviewProposalRequest` message."""
     body: str = field(default="")
     decision: str = field(default="")
+    expected_head: str = field(default="")
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")

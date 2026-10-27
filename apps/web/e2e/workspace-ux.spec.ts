@@ -60,7 +60,7 @@ test('directory filter is clear, local to the folder, and retains navigation', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
-test('an edit stays based on the version read when another user advances the branch', async ({
+test('a recovered edit retains its original base when another user advances the branch', async ({
   page,
   cast,
 }) => {
@@ -80,6 +80,13 @@ test('an edit stays based on the version read when another user advances the bra
     title: 'Concurrent edit',
   })
   const landed = await integrate(cast.as('carol'), repo, change.id)
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.reload()
+  await page.getByTestId('edit-file').click()
+  await expect(page.getByLabel('Contents of README.md')).toHaveValue('My version\n')
+  await expect(
+    page.getByText('The branch has moved since this draft started.', { exact: false }),
+  ).toBeVisible()
   await page.getByTestId('propose-change').click()
   await page.getByTestId('propose-submit').click()
   await expect(page.getByTestId('proposal-title')).toHaveText('Update README.md')
@@ -131,6 +138,11 @@ test('a branch populated during a new-file edit cannot silently become its base'
     title: 'First file',
   })
   await integrate(cast.as('carol'), repo, change.id)
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.reload()
+  await page.getByTestId('new-file').click()
+  await expect(page.getByLabel('File path')).toHaveValue('README.md')
+  await expect(page.getByLabel('Contents', { exact: true })).toHaveValue('My first file\n')
   await page.getByTestId('propose-change').click()
   await page.getByTestId('propose-submit').click()
   await expect(page.getByRole('alert')).toContainText('branch changed')

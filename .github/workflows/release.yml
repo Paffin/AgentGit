@@ -81,6 +81,8 @@ jobs:
                 exit 1
               fi
               publish=true
+              # A real run validates the actual tag, even when the input omits its v.
+              ref="$REF_NAME"
             fi
           else
             ref="0.0.0-rc.dry" # a push to a rehearsal branch
@@ -214,7 +216,7 @@ jobs:
           # The unpacked ag-server carries the Web UI (the server from the smoke above is still running).
           page=$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/)
           case "$page" in *'<div id="app">'*) echo "ag-server serves the embedded Web UI";; *) echo "$page" | head -20; echo "::error::the archive's ag-server has no Web UI"; exit 1;; esac
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: archive-${{ matrix.target }}
           path: dist/*.tar.gz
@@ -241,7 +243,7 @@ jobs:
       # The web UI SBOM it can also write is not a release asset yet: the release job below expects four binary inventories.
       - name: One SBOM per shipped binary (from Cargo.lock; build-time dependencies included)
         run: scripts/sbom.sh --version "$VERSION" --out dist --no-web
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom
           path: dist/*.cdx.json
@@ -345,7 +347,7 @@ jobs:
             cp "$RUNNER_TEMP"/server-${{ matrix.arch }}.tar "$RUNNER_TEMP"/cli-${{ matrix.arch }}.tar "$RUNNER_TEMP/handoff/"
           fi
           ls -la "$RUNNER_TEMP/handoff"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-${{ matrix.arch }}
           path: ${{ runner.temp }}/handoff
@@ -366,7 +368,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: image-*
           path: handoff
@@ -452,7 +454,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           pattern: "{archive-*,sbom}"
@@ -509,7 +511,7 @@ jobs:
             echo "REHEARSAL - would run: gh release create v$VERSION --title 'AgentGit v$VERSION' --notes-file RELEASE_NOTES.md $flags <files>"
             echo "$files"
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-dist
           path: dist
@@ -545,7 +547,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-dist
           path: dist

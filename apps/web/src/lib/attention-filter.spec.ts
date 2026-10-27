@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { filterAttention } from './attention-filter'
 import type { AttentionItem } from './attention'

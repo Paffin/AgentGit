@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@/api/types'
 import { DEFAULT_DAG, layoutDag, taskStatus } from './dag'

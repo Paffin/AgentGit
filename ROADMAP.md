@@ -80,7 +80,7 @@ gate that stops a test from passing by not running are built and on `main` (see 
 they left open is listed first.
 
 1. **Finish the first-time-user work.**
-   Browser editing covers one text file per change request (no rename, delete, multi-file or non-text conflicts);
+   Browser text editing still covers one file per change request. Reviewed rename/delete and multi-file upload are built; a multi-file text editor, account-backed drafts and non-text conflict resolution remain open.
    Home has filters and glossary hints, but is polled every 15 s, not live; the rules form leaves
    protected-path approvers and check timing in the raw JSON; no screen-reader pass; the `ag-server dev` sign-in link is not one-time (needs an exchange
    endpoint); the Docker one-liner is not verified (no Docker daemon yet) and `dev`, `login` and `explain` are missing

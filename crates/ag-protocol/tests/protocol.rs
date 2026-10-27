@@ -87,3 +87,15 @@ fn missing_fields_default_so_old_clients_and_new_servers_interoperate() {
 fn version_is_stable() {
     assert_eq!(VERSION, "agwp.v1");
 }
+
+#[test]
+fn review_head_precondition_is_optional_and_survives_both_transports() {
+    let legacy: ag_protocol::v1::ReviewProposalRequest =
+        serde_json::from_str(r#"{"repo":"acme/web","id":"p1","decision":"approve"}"#).unwrap();
+    assert!(legacy.expected_head.is_empty());
+    let guarded = ag_protocol::v1::ReviewProposalRequest { expected_head: "inspected-head".into(), ..legacy };
+    let bytes = guarded.encode_to_vec();
+    assert_eq!(ag_protocol::v1::ReviewProposalRequest::decode(bytes.as_slice()).unwrap(), guarded);
+    let json = serde_json::to_string(&guarded).unwrap();
+    assert_eq!(serde_json::from_str::<ag_protocol::v1::ReviewProposalRequest>(&json).unwrap(), guarded);
+}

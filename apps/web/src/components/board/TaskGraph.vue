@@ -35,9 +35,9 @@ const ICON: Record<TaskStatus, IconName> = {
   cancelled: 'x',
 }
 
-function nodeLabel(n: DagNode): string {
+function blockerNames(n: DagNode): string {
   const blockers = n.blockedBy.map((id) => board.taskById.get(id)?.title ?? id)
-  return `${n.task.title}. ${LABEL[n.status]}${blockers.length ? `, waiting for ${blockers.join(', ')}` : ''}`
+  return blockers.join(', ')
 }
 
 const selected = ref<DagNode | null>(null)
@@ -123,7 +123,6 @@ const summary = computed(() => {
                 type="button"
                 class="node"
                 :class="`s-${n.status}`"
-                :aria-label="nodeLabel(n)"
                 :data-task="n.id"
                 @click="selected = n"
               >
@@ -135,6 +134,9 @@ const summary = computed(() => {
                   >
                 </span>
                 <span class="title">{{ n.task.title }}</span>
+                <span v-if="n.blockedBy.length" class="sr-only">
+                  waiting for {{ blockerNames(n) }}
+                </span>
               </button>
             </li>
           </ul>

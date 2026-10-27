@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -119,14 +120,56 @@ class CheckRelease(unittest.TestCase):
         p = run(PY, SCRIPTS / "check_release.py", "0.0.0-rc.dry", "--dry-run")
         self.assertEqual(p.returncode, 0, p.stderr)
 
-    def test_the_workflow_never_hands_a_bare_version_to_a_real_run(self):
-        # v0.2.0-rc.1 failed "assemble the release" because the rehearsal-only form (no leading v) was used
-        # for the notes of a real run, which demands a tag like v1.2.3.
-        wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
-        calls = re.findall(r"check_release\.py (\S+)", wf)
-        self.assertTrue(calls)
-        for arg in calls:
-            self.assertTrue(arg.startswith(('"$ref"', '"v')), f"bare version passed to check_release.py: {arg}")
+    def workflow_mode(self, *, event="workflow_dispatch", ref_type="tag", ref_name="v0.3.0",
+                      version="0.3.0", publish="true"):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        step = workflow.split("      - id: mode\n", 1)[1].split("      - id: v\n", 1)[0]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        output, environment = self.root / "output", self.root / "environment"
+        result = run("bash", "-c", script, cwd=ROOT, env={
+            "EVENT": event, "REF_TYPE": ref_type, "REF_NAME": ref_name,
+            "INPUT_VERSION": version, "INPUT_PUBLISH": publish,
+            "GITHUB_OUTPUT": str(output), "GITHUB_ENV": str(environment),
+        })
+        values = self.kv(environment.read_text()) if environment.exists() else {}
+        facts = self.kv(output.read_text()) if output.exists() else {}
+        return result, values, facts
+
+    def test_manual_publish_accepts_bare_version_and_validates_the_actual_tag(self):
+        result, values, facts = self.workflow_mode()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(facts["publish"], "true")
+        checked = self.check(values["ref"])
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(values["ref"], "v0.3.0")
+
+    def test_manual_publish_accepts_prefixed_version(self):
+        result, values, facts = self.workflow_mode(version="v0.3.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((values["ref"], facts["publish"]), ("v0.3.0", "true"))
+
+    def test_manual_publish_refuses_a_branch(self):
+        result, values, facts = self.workflow_mode(ref_type="branch", ref_name="main")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Nothing was published", result.stdout)
+        self.assertEqual((values, facts), ({}, {}))
+
+    def test_manual_publish_refuses_a_different_version(self):
+        result, values, facts = self.workflow_mode(version="0.2.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((values, facts), ({}, {}))
+
+    def test_manual_rehearsal_keeps_its_independent_version(self):
+        result, values, facts = self.workflow_mode(ref_type="branch", ref_name="main",
+                                                   version="0.0.0-rc.dry", publish="false")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((values["ref"], facts["publish"]), ("0.0.0-rc.dry", "false"))
+        self.assertEqual(self.check(values["ref"], "--dry-run").returncode, 0)
+
+    def test_pushed_tag_uses_its_own_version(self):
+        result, values, facts = self.workflow_mode(event="push", version="ignored", publish="false")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((values["ref"], facts["publish"]), ("v0.3.0", "true"))
 
 
 def stub_bin(path: pathlib.Path, name: str, version: str):

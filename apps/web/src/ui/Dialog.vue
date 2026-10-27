@@ -182,6 +182,7 @@ onBeforeUnmount(() => {
 }
 .foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--s-2);
   padding: var(--s-3) var(--s-4);

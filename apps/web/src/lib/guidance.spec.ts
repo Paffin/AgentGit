@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { Blocker, Preparation, Proposal, Review, Run } from '@/api/types'
 import { attentionForRepo, groupAttention } from './attention'

@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import type { Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
+import { preloadDependencies, preloadPolicy } from './scripts/preload-policy.ts'
 
 // `npm run dev` proxies the API to a local ag-server. Override with AG_SERVER_URL.
 const target = process.env.AG_SERVER_URL ?? 'http://127.0.0.1:8080'
@@ -27,7 +29,7 @@ const versionFile: Plugin = {
 }
 
 export default defineConfig({
-  plugins: [vue(), versionFile],
+  plugins: [vue(), versionFile, preloadPolicy],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
@@ -46,8 +48,31 @@ export default defineConfig({
     // The server's CSP forbids inline scripts; keep every asset a real file.
     assetsInlineLimit: 0,
     cssCodeSplit: true,
+    // Shared application code loads with the entry. Lazy views use native imports;
+    // keep their CSS hints without speculative script requests that can go unused.
+    modulePreload: {
+      resolveDependencies: preloadDependencies,
+    },
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'framework', test: /node_modules/ },
+            {
+              name: 'shared',
+              test: /src[\\/](?:ui|components|composables|lib|stores|api|router)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
+    // Each file gets an isolated VM; reuse bounded workers instead of starting a process per file.
+    pool: 'vmThreads',
+    isolate: true,
+    maxWorkers: Math.min(4, availableParallelism()),
+    vmMemoryLimit: '512MB',
     environment: 'happy-dom',
     include: ['src/**/*.spec.ts', 'tests/**/*.spec.ts'],
     setupFiles: ['./tests/setup.ts'],

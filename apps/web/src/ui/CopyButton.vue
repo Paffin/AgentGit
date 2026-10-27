@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import Button from './Button.vue'
 
 const props = withDefaults(
@@ -17,28 +17,37 @@ const copied = ref(false)
 const failed = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 
-async function copy() {
+let attempt = 0
+
+function reset() {
+  attempt++
+  clearTimeout(timer)
+  copied.value = false
   failed.value = false
+}
+
+async function copy() {
+  reset()
+  const mine = attempt
+  const text = props.text
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(props.text)
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        if (mine !== attempt) return
+        legacyCopy(text)
+      }
     } else {
-      legacyCopy(props.text)
+      legacyCopy(text)
     }
+    if (mine !== attempt) return
     copied.value = true
   } catch {
-    try {
-      legacyCopy(props.text)
-      copied.value = true
-    } catch {
-      failed.value = true
-    }
+    if (mine !== attempt) return
+    failed.value = true
   }
-  clearTimeout(timer)
-  timer = setTimeout(() => {
-    copied.value = false
-    failed.value = false
-  }, 1800)
+  timer = setTimeout(reset, 1800)
 }
 
 /** Fallback for insecure contexts (plain http on a LAN address), where the async clipboard API is unavailable. */
@@ -49,13 +58,20 @@ function legacyCopy(text: string) {
   ta.style.position = 'fixed'
   ta.style.opacity = '0'
   document.body.appendChild(ta)
-  ta.select()
-  const ok = document.execCommand('copy')
-  document.body.removeChild(ta)
-  if (!ok) throw new Error('copy failed')
+  // Capture focus now: an async clipboard rejection may arrive after the user moved on.
+  const previous = document.activeElement
+  try {
+    ta.select()
+    if (!document.execCommand('copy')) throw new Error('copy failed')
+  } finally {
+    ta.remove()
+    if (previous instanceof HTMLElement && previous.isConnected)
+      previous.focus({ preventScroll: true })
+  }
 }
 
-onBeforeUnmount(() => clearTimeout(timer))
+watch(() => props.text, reset)
+onBeforeUnmount(reset)
 </script>
 
 <template>

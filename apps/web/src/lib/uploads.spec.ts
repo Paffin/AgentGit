@@ -3,6 +3,24 @@ import { uploadFiles, uploadChanges, checkUploads, UPLOAD_LIMIT } from './upload
 import type { Api } from '@/api/endpoints'
 
 describe('browser file uploads', () => {
+  it('accepts the exact count and byte limits, and rejects the next item', () => {
+    const files = Array.from({ length: 100 }, (_, i) => new File([''], `${i}.txt`))
+    expect(uploadFiles(files, '')).toHaveLength(100)
+    expect(() => uploadFiles([...files, new File([''], 'extra')], '')).toThrow('at most 100')
+    expect(uploadFiles([new File([new Uint8Array(UPLOAD_LIMIT)], 'exact')], '')).toHaveLength(1)
+  })
+  it('recognizes empty branches and absent files as new non-executable uploads', async () => {
+    const resolve = vi.fn().mockResolvedValue({ kind: 'missing', entry: null })
+    const api = { tree: { resolve } } as unknown as Api
+    const files = uploadFiles([new File(['new'], 'new.txt')], '')
+    expect(await checkUploads(api, 'team/repo', '', files)).toMatchObject([
+      { replaces: false, executable: false },
+    ])
+    expect(resolve).not.toHaveBeenCalled()
+    expect(await checkUploads(api, 'team/repo', 'base', files)).toMatchObject([
+      { replaces: false, executable: false },
+    ])
+  })
   it('keeps binary bytes and destination paths exactly', async () => {
     const file = new File([new Uint8Array([0, 255, 13, 10])], 'asset.bin')
     const selected = uploadFiles([file], 'assets/')

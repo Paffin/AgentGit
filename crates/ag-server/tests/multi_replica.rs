@@ -468,7 +468,12 @@ fn next_ts() -> i64 {
 /// Author a new file on top of the stream's current head, propose it and integrate it; every step retried
 /// across replicas with idempotency keys. Returns the new head the integration reported.
 fn land_one(users: &Users, via: usize, repo: &str, tag: &str, path: &str, content: &[u8]) -> String {
-    let head = s(&users.alice.get(via, &format!("/v1/repos/{repo}/streams/head?stream=main")).json["head"]).to_string();
+    let reply = users.alice.get(via, &format!("/v1/repos/{repo}/streams/head?stream=main"));
+    assert_eq!(reply.status, 200, "read head for {tag} through replica {via}: {}", reply.json);
+    let head = reply.json["head"]
+        .as_str()
+        .unwrap_or_else(|| panic!("read head for {tag} through replica {via}: missing string head: {}", reply.json))
+        .to_string();
     let parents: Vec<ChangesetId> = if head.is_empty() { vec![] } else { vec![head.parse().unwrap()] };
     let c = Client::new(repo);
     let (id, objs) = c.commit(parents, "user:alice", &format!("add {path}"), &[(path, content)], next_ts());
@@ -486,7 +491,11 @@ fn land_one(users: &Users, via: usize, repo: &str, tag: &str, path: &str, conten
         json!({"idempotency_key": format!("int-{tag}")}),
     );
     assert_eq!(r.status, 200, "integrate {tag}: {}", r.json);
-    assert_eq!(r.json["outcome"]["status"], "integrated", "integrate {tag}: {}", r.json);
+    assert_eq!(
+        r.json["outcome"]["status"], "integrated",
+        "integrate {tag}, read head {head:?}, proposed {id}: {}",
+        r.json
+    );
     s(&r.json["outcome"]["new_head"]).to_string()
 }
 

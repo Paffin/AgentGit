@@ -25,6 +25,8 @@ for crate, binary in [('ag-cli','ag'), ('ag-server','ag-server'), ('ag-worker','
     path = pathlib.Path('crates') / crate
     path.mkdir(parents=True, exist_ok=True)
     names = ['agentgit-types', 'tokio'] + ['dep-' + str(i) for i in range(51)]
+    if binary == 'ag-mcp':
+        names = ['clap', 'ureq', 'serde_json', 'globset']
     doc = {'bomFormat':'CycloneDX', 'specVersion':'1.5', 'components':[{'name':n} for n in names]}
     (path / (binary + '_bin.cdx.json')).write_text(json.dumps(doc))
 ''')

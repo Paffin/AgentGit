@@ -61,6 +61,11 @@ for f in files:
     if f.endswith("-web-ui.cdx.json"):
         assert d["specVersion"] == "1.5", f
         assert len(names) > 30 and {"vue", "pinia", "vue-router"} <= names, f
+    elif f.endswith("-ag-mcp.cdx.json"):
+        # MCP is a blocking HTTP client. Tokio and the storage/core crates are
+        # test-only dependencies and must not be required in its shipped SBOM.
+        assert d["specVersion"] == "1.5", f
+        assert {"clap", "ureq", "serde_json", "globset"} <= names, f
     else:
         assert d["specVersion"] == "1.5", f
         assert len(names) > 50 and "agentgit-types" in names and "tokio" in names, f

@@ -25,6 +25,8 @@ ag-changeset.workspace = true
 ag-dag.workspace = true
 ag-integrate.workspace = true
 thiserror.workspace = true
+serde.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

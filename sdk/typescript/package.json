@@ -1,6 +1,6 @@
 {
   "name": "@agentgit/client",
-  "version": "0.2.0-rc.3",
+  "version": "0.3.0-beta.1",
   "description": "TypeScript client for the AgentGit Wire Protocol (AGWP v1): repositories, proposals, agents, leases, signed provenance and events.",
   "keywords": [
     "agentgit",

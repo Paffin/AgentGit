@@ -1,8 +1,8 @@
 # Beta programme
 
-AgentGit is preparing a focused beta for small teams working with coding agents. The goal is to let a team review and land agent changes with checks tied to the exact candidate tree and a clear explanation when policy blocks a change.
+AgentGit offers an early public beta for small teams working with coding agents. The goal is to let a team review and land agent changes with checks tied to the exact candidate tree and a clear explanation when policy blocks a change.
 
-**Current status: alpha.** A completed checklist or a prerelease does not by itself establish production readiness. External pilot results must be recorded before changing the maturity label.
+**Current status: early public beta (`0.3.0-beta.1`).** This opens the supported single-server workflow to early adopters; it does not claim independent pilot results or production readiness. The remaining qualification gates below stay visible.
 
 ## Supported beta target
 
@@ -15,7 +15,7 @@ AgentGit is preparing a focused beta for small teams working with coding agents.
 | Recovery | Verified backup/restore and Git export | Treating a Git mirror as a backup of policy, reviews or audit |
 | Storage | Local filesystem | PostgreSQL/S3 qualification remains a separate track |
 
-This is a release target, not a claim that all entries have passed. See [the readiness checklist](#release-gates).
+This is the beta support scope, not a claim that every external qualification gate has passed. See [the readiness checklist](#release-gates).
 
 ## Join a pilot
 
@@ -52,7 +52,7 @@ Targets: 5–10 pilots, 80% unassisted first integration within 15 minutes, thre
 
 1. Ship a candidate that makes installation and documentation agree.
 2. Qualify the narrow supported workflow and fix repeated pilot blockers.
-3. Publish beta only after the gates above have evidence.
+3. Publish early beta with explicit scope and open qualification gates; require the full evidence set before a production-ready release.
 4. Expand storage, host and operating-system support through separate qualification reports.
 
 Keep the existing alpha release available. Publish candidates as prereleases. Do not rename a tag or silently replace an archive. Changes to stored data need a documented upgrade path; backup before upgrading.

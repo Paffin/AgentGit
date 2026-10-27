@@ -68,6 +68,8 @@ __all__ = [
     "GetTreeRequest",
     "GetTreeResponse",
     "GetWorkspaceRequest",
+    "GitMigrationDecision",
+    "GitMigrationPlan",
     "GrantRoleRequest",
     "HeartbeatJobRequest",
     "HeartbeatRequest",
@@ -773,6 +775,22 @@ class GetWorkspaceRequest:
     """The `GetWorkspaceRequest` message."""
     name: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GitMigrationDecision:
+    """The `GitMigrationDecision` message."""
+    accept_lossy: bool = field(default=False)
+
+
+@dataclass(kw_only=True)
+class GitMigrationPlan:
+    """The `GitMigrationPlan` message."""
+    id: str = field(default="")
+    name: str = field(default="")
+    report: dict[str, Any] = field(default_factory=dict)
+    source_sha256: str = field(default="")
+    state: str = field(default="")
 
 
 @dataclass(kw_only=True)

@@ -55,6 +55,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag login`](#ag-login)
 - [`ag logout`](#ag-logout)
 - [`ag ls`](#ag-ls)
+- [`ag migrate`](#ag-migrate)
 - [`ag op`](#ag-op)
 - [`ag pin`](#ag-pin)
 - [`ag pins`](#ag-pins)
@@ -697,6 +698,39 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "type": "string"
   }
 ]
+```
+
+## ag migrate
+
+### ag migrate
+
+```json
+{
+  "blobs": "number",
+  "branches": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ],
+  "commits": "number",
+  "default_branch": "string",
+  "lfs_pointers": "number",
+  "lossy_commits": "number",
+  "other_refs": [],
+  "skipped_paths": [],
+  "skipped_submodules": "number",
+  "tags": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ]
+}
 ```
 
 ## ag op

@@ -22,10 +22,12 @@
 
 mod export;
 mod import;
+mod migration;
 mod run;
 
 pub use export::{ExportOptions, ExportReport, export};
 pub use import::{ImportOptions, ImportReport, import};
+pub use migration::{MigratedRef, MigrationOptions, MigrationReport, migrate, source_default_branch, unpack_bundle};
 
 /// The parsers behind [`import`], exposed for the fuzz targets in `fuzz/`. Not a stable interface.
 #[doc(hidden)]

@@ -86,6 +86,8 @@ pub struct Cli {
 pub enum Command {
     /// Create a repository in the current directory.
     Init(cmds::repo::InitArgs),
+    /// Migrate every branch and tag from a full local Git clone or bundle into a new repository.
+    Migrate(cmds::gitbridge::MigrateArgs),
     /// Summarize the workspace, your proposals, leases, task and remote at a glance.
     Status(cmds::repo::StatusArgs),
     /// Record the working directory as a new snapshot.
@@ -286,6 +288,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     // Commands that work without a repository.
     match &cli.command {
         Init(args) => return cmds::repo::init(&cli, args),
+        Migrate(args) => return cmds::gitbridge::migrate(&cli, args),
         Clone(args) => return cmds::remote::clone(&cli, args),
         Remote(args) => return cmds::remote::remote(&cli, args),
         Login(a) => return cmds::login::login(&cli, a),
@@ -305,8 +308,8 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) | Clone(_) | Remote(_) | Login(_) | Logout(_) | Doctor(_) | Config(_) | Completions(_) | Man(_)
-        | Version | Help(_) => {
+        Init(_) | Migrate(_) | Clone(_) | Remote(_) | Login(_) | Logout(_) | Doctor(_) | Config(_) | Completions(_)
+        | Man(_) | Version | Help(_) => {
             unreachable!()
         }
         Fetch(a) => cmds::remote::fetch(&ctx, a),

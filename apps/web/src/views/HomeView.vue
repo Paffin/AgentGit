@@ -74,6 +74,7 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
         <h1>Home</h1>
         <p class="muted">Review changes, unblock work, and keep agents moving.</p>
       </div>
+      <Button v-if="canStart" to="/import">Import from GitHub / GitLab</Button>
       <Button
         v-if="canStart"
         variant="primary"

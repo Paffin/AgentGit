@@ -92,6 +92,7 @@ const split = (name: string) => {
         <h1>Repositories</h1>
         <p class="muted">Every repository you may read. Open one to watch its agents work.</p>
       </div>
+      <Button v-if="canCreate" to="/import">Import from GitHub / GitLab</Button>
       <Button
         variant="primary"
         icon="plus"

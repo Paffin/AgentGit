@@ -208,11 +208,12 @@ export class AgentGitClient {
    * Calls any operation by its OpenAPI operation id. The namespaced methods (`client.proposals.create(...)`)
    * are the same thing with nicer names.
    */
-  call<Id extends Exclude<OperationId, 'objects.put' | 'objects.get' | 'tree.file' | 'events.subscribe'>>(
-    id: Id,
-    request: Req<Id>,
-    options?: CallOptions,
-  ): Promise<Res<Id>> {
+  call<
+    Id extends Exclude<
+      OperationId,
+      'objects.put' | 'objects.get' | 'tree.file' | 'events.subscribe' | 'migration.prepare'
+    >,
+  >(id: Id, request: Req<Id>, options?: CallOptions): Promise<Res<Id>> {
     return this.#invoke(id, request as Record<string, unknown>, undefined, options) as Promise<Res<Id>>;
   }
 

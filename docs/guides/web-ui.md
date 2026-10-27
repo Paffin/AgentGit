@@ -190,6 +190,8 @@ attestation (who signed, for which tree, under which policy version, in which en
 what the agent said about itself (rationale, inputs, parameters), always as untrusted text, with whether the signature
 verified; *Timeline* is the history of the proposal.
 
+Diff line-number columns fit the largest number in the displayed patch, including when a hunk crosses a digit boundary. Long lines scroll inside the diff; focus that region and use the arrow keys to read across.
+
 **Review drafts.** Closing the review dialog to inspect the diff keeps the comment and decision on this page. A reload still clears them. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your

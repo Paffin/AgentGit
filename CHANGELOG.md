@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Diff line-number columns expand for large files, preventing old/new numbers from overlapping each other or the code. Keyboard scrolling remains available on narrow screens.
+
 - Role revocation preserves its confirmation after a failure and ignores late results after leaving the original context. Retries retain the initiating session.
 
 - Role grants retain the submitted binding and initiating session while pending. Late results cannot affect a different repository or account; failures preserve the form for retry.

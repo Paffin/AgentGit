@@ -59,3 +59,17 @@ describe('diff replacement', () => {
     w.unmount()
   })
 })
+
+describe('diff line number width', () => {
+  it('fits either revision across a digit boundary and resets for a smaller patch', async () => {
+    const wide = { ...file(2), patch: '@@ -999999,2 +9,2 @@\n context\n-old\n+new\n' }
+    const w = mount(DiffFile, { props: { file: wide } })
+    expect(w.get('.diff').attributes('style')).toContain('--number-width: 7ch')
+    expect(w.findAll('.no').map((cell) => cell.text())).toContain('1000000')
+    await w.setProps({ file: { ...wide, patch: '@@ -9,2 +999999,2 @@\n context\n-old\n+new\n' } })
+    expect(w.get('.diff').attributes('style')).toContain('--number-width: 7ch')
+    await w.setProps({ file: file(2) })
+    expect(w.get('.diff').attributes('style')).toContain('--number-width: 3ch')
+    w.unmount()
+  })
+})

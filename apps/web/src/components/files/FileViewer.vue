@@ -9,6 +9,7 @@ import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import BlameTable from './BlameTable.vue'
 import FileEditor from './FileEditor.vue'
+import FileActions from './FileActions.vue'
 import CodeBlock from '@/ui/CodeBlock.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Segmented from '@/ui/Segmented.vue'
@@ -56,7 +57,12 @@ const file = useResource(
       api.tree.file(repo, revision, path, limit.value, { signal }),
       api.tree.resolve(repo, revision, path, { signal }),
     ])
-    return { ...contents, revision, executable: location.entry?.executable === true }
+    return {
+      ...contents,
+      revision,
+      entry: location.entry,
+      executable: location.entry?.executable === true,
+    }
   },
   {
     watch: [() => props.repo, () => props.rev, () => props.path, limit],
@@ -114,6 +120,13 @@ onBeforeUnmount(() => {
       @retry="file.reload()"
     />
     <template v-else-if="tooBig">
+      <FileActions
+        v-if="canEdit && file.data.value?.entry"
+        :repo="repo"
+        :rev="file.data.value.revision"
+        :stream="rev"
+        :entry="file.data.value.entry"
+      />
       <Alert tone="warn" title="This file is large">
         It is larger than {{ formatBytes(limit) }}, so it was not downloaded.
         <template v-if="file.data.value?.size">
@@ -158,6 +171,13 @@ onBeforeUnmount(() => {
           @click="editing = true"
           >Edit</Button
         >
+        <FileActions
+          v-if="canEdit && !editing && file.data.value?.entry"
+          :repo="repo"
+          :rev="file.data.value.revision"
+          :stream="rev"
+          :entry="file.data.value.entry"
+        />
         <Button size="sm" icon="download" @click="download">{{
           editing ? 'Download original' : 'Download'
         }}</Button>
@@ -170,6 +190,7 @@ onBeforeUnmount(() => {
         :rev="file.data.value!.revision"
         :stream="rev"
         :executable="file.data.value!.executable"
+        :file-type="file.data.value!.entry?.file_type"
         @cancel="editing = false"
       />
       <figure v-else-if="image" class="img">

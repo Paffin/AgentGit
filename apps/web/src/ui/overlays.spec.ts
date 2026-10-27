@@ -132,6 +132,19 @@ describe('Dialog', () => {
     busy.unmount()
   })
 
+  it('keeps the page locked when one of two dialogs closes', async () => {
+    const root = appRoot()
+    const first = mount(Dialog, { props: { modelValue: true, title: 'First' }, attachTo: root })
+    const second = mount(Dialog, { props: { modelValue: true, title: 'Second' }, attachTo: root })
+    await nextTick()
+    expect(root.hasAttribute('inert')).toBe(true)
+    await first.setProps({ modelValue: false })
+    expect(root.hasAttribute('inert')).toBe(true)
+    second.unmount()
+    expect(root.hasAttribute('inert')).toBe(false)
+    first.unmount()
+  })
+
   it('renders hostile titles as text', async () => {
     const root = appRoot()
     const w = mount(Dialog, {

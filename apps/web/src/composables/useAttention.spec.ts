@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref, type Ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAttention } from './useAttention'
 
@@ -28,12 +28,12 @@ afterEach(() => {
   vi.useRealTimers()
   mocks.auth.isAuthenticated = true
 })
-function setup() {
+function setup(repository?: Ref<string>) {
   let attention!: ReturnType<typeof useAttention>
   wrapper = mount(
     defineComponent({
       setup() {
-        attention = useAttention()
+        attention = useAttention(repository)
         return () => h('div')
       },
     }),
@@ -41,6 +41,7 @@ function setup() {
   return attention
 }
 function seed() {
+  mocks.list.mockReset()
   mocks.list.mockResolvedValue({ items: [{ name: 'acme/repo', created_at_ms: 1 }] })
   mocks.proposals.mockResolvedValue({
     items: [
@@ -70,6 +71,42 @@ function seed() {
   })
 }
 describe('home attention data', () => {
+  it('loads a selected older repository even when it is outside the first summary batch and catalogue page', async () => {
+    seed()
+    const recent = Array.from({ length: 30 }, (_, i) => ({
+      name: `acme/new-${i}`,
+      created_at_ms: i + 2,
+    }))
+    mocks.list
+      .mockResolvedValueOnce({ items: recent, nextPageToken: 'older' })
+      .mockResolvedValueOnce({
+        items: [{ name: 'acme/repo', created_at_ms: 1 }],
+        nextPageToken: '',
+      })
+    const state = setup(ref('acme/repo'))
+    await flushPromises()
+    expect(mocks.list).toHaveBeenCalledWith({ page_size: 200, page_token: 'older' })
+    expect(mocks.proposals).toHaveBeenCalledTimes(1)
+    expect(mocks.proposals).toHaveBeenCalledWith('acme/repo', expect.anything())
+    expect(state.items.value.map((item) => item.title)).toEqual(['A ready change'])
+    expect(state.skipped.value).toBe(0)
+  })
+  it('lets the user include more repositories without removing already loaded work', async () => {
+    seed()
+    mocks.list.mockResolvedValue({
+      items: Array.from({ length: 40 }, (_, i) => ({ name: `acme/repo-${i}`, created_at_ms: i })),
+      nextPageToken: '',
+    })
+    mocks.proposals.mockResolvedValue({ items: [], nextPageToken: '' })
+    const state = setup()
+    await flushPromises()
+    expect(state.skipped.value).toBe(10)
+    expect(mocks.proposals).toHaveBeenNthCalledWith(1, 'acme/repo-39', expect.anything())
+    expect(mocks.proposals.mock.calls.some(([name]) => name === 'acme/repo-0')).toBe(false)
+    await state.loadMore()
+    expect(state.skipped.value).toBe(0)
+    expect(new Set(mocks.proposals.mock.calls.map(([name]) => name)).size).toBe(40)
+  })
   it('keeps readable work when another proposal cannot be loaded and marks the summary incomplete', async () => {
     seed()
     const state = setup()

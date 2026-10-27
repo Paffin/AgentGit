@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { focusableIn, trapTab } from '@/composables/useFocusTrap'
 import Button from './Button.vue'
+import { modalLayer } from '@/composables/modalLayer'
 
 const props = withDefaults(
   defineProps<{
@@ -23,15 +24,16 @@ const titleId = useId()
 const descId = useId()
 const panel = ref<HTMLElement | null>(null)
 let returnTo: HTMLElement | null = null
-let appRoot: HTMLElement | null = null
+const layer = modalLayer()
 
 function close() {
-  if (!props.dismissable) return
+  if (!props.dismissable || !layer.top.value) return
   emit('update:modelValue', false)
   emit('close')
 }
 
 function onKeydown(e: KeyboardEvent) {
+  if (!layer.top.value) return
   if (e.key === 'Escape' && props.dismissable) {
     e.stopPropagation()
     close()
@@ -42,18 +44,15 @@ function onKeydown(e: KeyboardEvent) {
 
 function lock() {
   returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  appRoot = document.getElementById('app')
-  appRoot?.setAttribute('inert', '')
-  document.documentElement.style.overflow = 'hidden'
+  layer.activate()
 }
 function unlock() {
-  appRoot?.removeAttribute('inert')
-  document.documentElement.style.overflow = ''
+  layer.deactivate()
   const target = returnTo
   returnTo = null
   // Restore focus after the DOM settled; the opener may have been re-rendered.
   void nextTick(() => {
-    if (target && document.contains(target)) target.focus()
+    if (target && document.contains(target) && !target.closest('[inert]')) target.focus()
   })
 }
 
@@ -64,7 +63,7 @@ watch(
       lock()
       await nextTick()
       const el = panel.value
-      if (!el) return
+      if (!el || !layer.top.value) return
       const preferred = el.querySelector<HTMLElement>('[data-autofocus]')
       const first = preferred ?? focusableIn(el).find((n) => !n.hasAttribute('data-dialog-close'))
       ;(first ?? el).focus()
@@ -76,13 +75,20 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (props.modelValue) unlock()
+  unlock()
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="modelValue" class="scrim" @mousedown.self="close">
+    <div
+      v-if="modelValue"
+      class="scrim"
+      :style="{ zIndex: layer.zIndex.value }"
+      :inert="!layer.top.value"
+      :aria-hidden="!layer.top.value || undefined"
+      @mousedown.self="close"
+    >
       <div
         ref="panel"
         class="panel"

@@ -115,3 +115,8 @@ The consolidated dependency/release candidate preserves the heads of PRs 38, 39,
 ### Axe 4.14 accessible-name findings
 
 The full WebKit run caught label-content-name-mismatch in the account button after upgrading axe. A separate mobile regression also demonstrated that an initial fix lost the hidden account identity (expected `Account: user:dana`, received `Account:`). The current implementation keeps a complete text alternative at all viewport sizes. The same axe rule found that task-graph button names listed title/state in a different order than visible content; their names now follow the contents and append the dependency names. Existing graph assertions are strengthened to include the visible state and dependency count. All 18 targeted accessibility, task-graph and account-menu checks now pass across Chromium, Firefox, WebKit, tablet and phone, with retries disabled. The initial 44-case scan had exactly the two task-graph failures; the other 42 cases passed. Full final-tree WebKit and hosted validation are still pending.
+
+
+### Release dispatch contract
+
+An executed workflow-mode regression found that `publish=true` with a bare version kept that bare value as `ref`, which the real release validator correctly rejected. The publish path now validates the selected tag name after checking it matches the requested version. The regression failed against the old shell block, then all 45 release-tooling tests and 26 request tests passed. Cases cover bare/prefixed publication, mismatched tags, branch refusal, independent rehearsal versions and pushed tags. The earlier string-only workflow assertion was replaced by these execution checks; no tag or release was created by this test.

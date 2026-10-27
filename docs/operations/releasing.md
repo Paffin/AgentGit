@@ -267,3 +267,5 @@ After the checks pass, the request creates `v<version>` at the checked commit an
 The request uses a write token only on trusted main pushes or a manual run on main; it has no pull-request or workflow-run trigger and does not persist checkout credentials.
 
 Required checks are identified by their workflow file paths, so another workflow using the same display name cannot hide a failed or unfinished check. Optional workflows triggered by the same commit must finish successfully too.
+
+Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.

@@ -81,6 +81,8 @@ jobs:
                 exit 1
               fi
               publish=true
+              # A real run validates the actual tag, even when the input omits its v.
+              ref="$REF_NAME"
             fi
           else
             ref="0.0.0-rc.dry" # a push to a rehearsal branch

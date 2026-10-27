@@ -125,3 +125,6 @@ An executed workflow-mode regression found that `publish=true` with a bare versi
 ### Complete release metadata
 
 The licence freshness check caught 23 workspace-package references still naming beta.1; the standard generator updates them to beta.2 and a fresh check passes, with no third-party dependency changes. `uv lock --check --offline` also reproduced a stale project version (`0.3.0b1`); `uv lock --offline` changes only that entry to `0.3.0b2`, and the check passes. Python CI now uses locked synchronization and package jobs check the lock before building, so a future drift fails instead of silently rewriting it. All 28 workflow tests and 15 strict workflow checks pass.
+
+
+Deployment validation caught three default image tags still on beta.1. Compose and both Kubernetes defaults now match the beta.2 workspace version. The deployment guide distinguishes candidate defaults from already-published installation targets; no live deployment was changed. Strict manifest, Prometheus and Compose validation passes after the correction. CLI reference/artwork, the executable README demo, package metadata, no-stubs scan and reviewed-skip validation also pass.

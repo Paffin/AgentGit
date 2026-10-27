@@ -51,6 +51,7 @@ Evidence (all on `main`'s code, nothing published): see [Evidence](#evidence) at
 ```sh
 # 1. bump Cargo.toml workspace/package versions, apps/web/package.json, sdk/typescript/package.json
 #    and sdk/python/pyproject.toml plus sdk/python/src/agentgit/__init__.py; refresh Cargo.lock and npm lock roots
+#    Set the three default image tags under deploy/ to the same candidate version.
 cargo update -w
 (cd sdk/python && uv lock)
 scripts/third_party_licenses.sh
@@ -274,4 +275,4 @@ Required checks are identified by their workflow file paths, so another workflow
 
 Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.
 
-Python CI uses `uv sync --locked`; package checks run `uv lock --check` before building. A version bump must therefore include the normalized project version in `sdk/python/uv.lock`, the public Python `__version__`, regenerated CLI reference and third-party licence list. Update published installation links and deployment defaults only after the new release assets are verified.
+Python CI uses `uv sync --locked`; package checks run `uv lock --check` before building. A version bump must therefore include the normalized project version in `sdk/python/uv.lock`, the public Python `__version__`, regenerated CLI reference and third-party licence list. Deployment defaults track the candidate workspace version; verify image availability before using them. Update published installation links only after the new release assets are verified.

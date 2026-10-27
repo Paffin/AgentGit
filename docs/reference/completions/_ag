@@ -2340,6 +2340,27 @@ never\:"Never colour"))' \
 ':id -- Proposal id:_default' \
 && ret=0
 ;;
+(explain)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id (any unique prefix):_default' \
+&& ret=0
+;;
 (review)
 _arguments "${_arguments_options[@]}" : \
 '-m+[Review text]:MESSAGE:_default' \
@@ -3417,6 +3438,7 @@ _ag__subcmd__remote_commands() {
 'proposals:List proposals on the server' \
 'proposal:Show a proposal with its reviews' \
 'prepare:What would integrating do now, and what is missing?' \
+'explain:Explain why a server proposal cannot land, with the next commands. Changes nothing' \
 'review:Review a proposal'\''s current head' \
 'integrate:Integrate a proposal into its stream' \
 'close:Close a proposal without integrating it' \
@@ -3453,6 +3475,11 @@ _ag__subcmd__remote__subcmd__close_commands() {
 _ag__subcmd__remote__subcmd__events_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote events commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__explain_commands] )) ||
+_ag__subcmd__remote__subcmd__explain_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote explain commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__integrate_commands] )) ||
 _ag__subcmd__remote__subcmd__integrate_commands() {

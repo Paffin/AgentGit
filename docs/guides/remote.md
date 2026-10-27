@@ -94,3 +94,11 @@ changes on the server; use `ag integrate` only in a repository that is itself th
   fetch skips them) but does not move the tracking reference, so it is simply retried.
 - The Rust client crate `ag-client` is what `ag` uses; it retries only errors the server marks retryable,
   honouring `retry_after_ms`.
+
+## Understand a blocked change
+
+In a clone, run `ag remote explain PROPOSAL` to get each reason, why it matters and the next commands to run.
+It reads the server's current preparation without requesting validation jobs or changing the proposal.
+Use `ag --json remote explain PROPOSAL` in scripts: exit 0 means ready, 3 means a requirement is missing,
+and 4 means refused, conflicted or already closed. The result includes the candidate tree and policy version.
+An explanation is a snapshot; integration always checks the current policy and candidate again.

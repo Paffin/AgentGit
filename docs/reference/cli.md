@@ -122,6 +122,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote proposals`](#ag-remote-proposals)
 - [`ag remote proposal`](#ag-remote-proposal)
 - [`ag remote prepare`](#ag-remote-prepare)
+- [`ag remote explain`](#ag-remote-explain)
 - [`ag remote review`](#ag-remote-review)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
@@ -2378,6 +2379,7 @@ Commands:
   proposals  List proposals on the server
   proposal   Show a proposal with its reviews
   prepare    What would integrating do now, and what is missing?
+  explain    Explain why a server proposal cannot land, with the next commands. Changes nothing
   review     Review a proposal's current head
   integrate  Integrate a proposal into its stream
   close      Close a proposal without integrating it
@@ -2542,6 +2544,28 @@ Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
       --remote <REMOTE>  Remote to use (default: origin)
       --validate         Also queue the validation jobs the policy knows how to run
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote explain
+
+```text
+Explain why a server proposal cannot land, with the next commands. Changes nothing
+
+Usage: ag remote explain [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id (any unique prefix)
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
       --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json             Machine-readable JSON output
       --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never

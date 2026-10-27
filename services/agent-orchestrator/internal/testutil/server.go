@@ -30,13 +30,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -137,17 +138,6 @@ func serverBinMissing() error {
 		"or set AG_SERVER_BIN=/path/to/ag-server, or put ag-server on PATH", build)
 }
 
-// FreePort returns a loopback TCP port that was free a moment ago.
-func FreePort(t testing.TB) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
-}
-
 // Server is a running ag-server.
 type Server struct {
 	t       testing.TB
@@ -192,21 +182,9 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	}
 	dir := t.TempDir()
 	token := RandHex(24) // 48 characters; the server wants at least 32
-	scheme, caFile := "http", ""
-	var httpc *http.Client
-	extra := o.Args
-	if o.TLS {
-		var certFile, keyFile string
-		caFile, certFile, keyFile = writeTLSMaterial(t, dir)
-		cfgFile := filepath.Join(dir, "server.toml")
-		if err := os.WriteFile(cfgFile, []byte(fmt.Sprintf("[server]\ntls_cert = %q\ntls_key = %q\n", certFile, keyFile)), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		extra = append([]string{"--config", cfgFile}, extra...)
-		scheme, httpc = "https", trustingClient(t, caFile)
-	}
+	connection := serverConnectionFor(t, dir, o)
 	for attempt := 0; attempt < 5; attempt++ {
-		addr := fmt.Sprintf("127.0.0.1:%d", FreePort(t))
+		addr := "127.0.0.1:0"
 		logPath := filepath.Join(dir, fmt.Sprintf("server-%d.log", attempt))
 		lf, err := os.Create(logPath)
 		if err != nil {
@@ -216,25 +194,27 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 		if data == "" {
 			data = filepath.Join(dir, fmt.Sprintf("data-%d", attempt))
 		}
-		args := append([]string{"serve", "--data-dir", data, "--listen", addr}, extra...)
+		args := append([]string{"serve", "--data-dir", data, "--listen", addr}, connection.args...)
 		cmd := exec.Command(bin, args...)
 		cmd.Env = append([]string{"AG_BOOTSTRAP_TOKEN=" + token, "PATH=" + os.Getenv("PATH"), "HOME=" + dir}, o.Env...)
+		// The bound address comes from the listening event, independently of a caller's log filter.
+		cmd.Env = append(cmd.Env, "RUST_LOG=info", "NO_COLOR=1")
 		cmd.Stdout, cmd.Stderr = lf, lf
 		setProcessGroup(cmd)
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("cannot start %s: %v", bin, err)
 		}
 		lf.Close()
-		hc := &http.Client{Timeout: 30 * time.Second}
-		var opts []agwp.Option
-		if httpc != nil {
-			hc.Transport = httpc.Transport
-			opts = append(opts, agwp.WithHTTPClient(httpc), agwp.WithStreamClient(&http.Client{Transport: httpc.Transport}))
-		}
-		s := &Server{t: t, URL: scheme + "://" + addr, CAFile: caFile, Token: token, Dir: dir, logPath: logPath, cmd: cmd, done: make(chan struct{}), hc: hc, clientOpts: opts}
+		s := &Server{t: t, URL: connection.scheme + "://" + addr, CAFile: connection.caFile, Token: token, Dir: dir, logPath: logPath, cmd: cmd, done: make(chan struct{}), hc: connection.http, clientOpts: connection.options}
 		go func() { _ = cmd.Wait(); close(s.done) }()
 		t.Cleanup(s.Stop)
-		s.Admin, err = agwp.New(s.URL, secret.New(token), append([]agwp.Option{agwp.WithIdentityLabel("test-admin"), agwp.WithTimeout(30 * time.Second)}, opts...)...)
+		bound := s.waitAddress(15 * time.Second)
+		if bound == "" {
+			s.Stop()
+			continue
+		}
+		s.URL = connection.scheme + "://" + bound
+		s.Admin, err = agwp.New(s.URL, secret.New(token), append([]agwp.Option{agwp.WithIdentityLabel("test-admin"), agwp.WithTimeout(30 * time.Second)}, connection.options...)...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -247,6 +227,67 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	return nil
 }
 
+type serverConnection struct {
+	scheme  string
+	caFile  string
+	args    []string
+	http    *http.Client
+	options []agwp.Option
+}
+
+// Keep HTTPS trust and the clients' transports consistent across startup attempts.
+func serverConnectionFor(t testing.TB, dir string, o ServerOptions) serverConnection {
+	t.Helper()
+	c := serverConnection{scheme: "http", args: o.Args, http: &http.Client{Timeout: 30 * time.Second}}
+	if !o.TLS {
+		return c
+	}
+	caFile, certFile, keyFile := writeTLSMaterial(t, dir)
+	cfgFile := filepath.Join(dir, "server.toml")
+	if err := os.WriteFile(cfgFile, []byte(fmt.Sprintf("[server]\ntls_cert = %q\ntls_key = %q\n", certFile, keyFile)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trusted := trustingClient(t, caFile)
+	c.scheme, c.caFile = "https", caFile
+	c.args = append([]string{"--config", cfgFile}, o.Args...)
+	c.http.Transport = trusted.Transport
+	c.options = []agwp.Option{agwp.WithHTTPClient(c.http), agwp.WithStreamClient(&http.Client{Transport: trusted.Transport})}
+	return c
+}
+
+var loopbackAddress = regexp.MustCompile(`127\.0\.0\.1:[0-9]+`)
+
+// Only consume complete listening events: a concurrent log write may end part-way through a port.
+func listeningAddress(log []byte) string {
+	lines := strings.Split(string(log), "\n")
+	for _, line := range lines[:len(lines)-1] {
+		if strings.Contains(line, "listening (") {
+			if addr := loopbackAddress.FindString(line); addr != "" {
+				return addr
+			}
+		}
+	}
+	return ""
+}
+
+func (s *Server) waitAddress(d time.Duration) string {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		select {
+		case <-s.done:
+			return ""
+		default:
+		}
+		if log, err := os.ReadFile(s.logPath); err == nil {
+			if addr := listeningAddress(log); addr != "" {
+				return addr
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return ""
+}
+
 func (s *Server) waitReady(d time.Duration) bool {
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
@@ -256,7 +297,7 @@ func (s *Server) waitReady(d time.Duration) bool {
 		default:
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, err := s.Admin.Negotiate(ctx)
+		_, err := s.Admin.Whoami(ctx)
 		cancel()
 		if err == nil {
 			return true

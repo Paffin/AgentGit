@@ -243,7 +243,7 @@ jobs:
       - name: TypeScript SDK (generate:check, types, lint, tests against the real server, package)
         working-directory: sdk/typescript
         run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm run check
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
       - name: Python SDK (tests against the real server, ruff, mypy, generated code)
         working-directory: sdk/python
         run: |
@@ -296,7 +296,7 @@ jobs:
         working-directory: sdk/typescript
         run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm test
       - if: matrix.kind == 'python'
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
       - if: matrix.kind == 'python'
         name: Python SDK tests
         working-directory: sdk/python
@@ -433,7 +433,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
       - name: Python 3.9 with PyYAML
         run: |
           uv venv --python 3.9 "$RUNNER_TEMP/py39"

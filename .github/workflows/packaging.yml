@@ -171,7 +171,7 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP/npm"
           tar -tzf "$RUNNER_TEMP"/npm/*.tgz | sort
           npm publish --dry-run --access public
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
       - name: Python SDK - build and twine check
         working-directory: sdk/python
         run: |
@@ -180,7 +180,7 @@ jobs:
           ls -la "$RUNNER_TEMP/py"
           uvx twine check --strict "$RUNNER_TEMP"/py/*
           unzip -l "$RUNNER_TEMP"/py/*.whl | tail -n +4 | head -30
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-packages
           path: |

@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Proposal } from '@/api/types'
 import ReviewDialog from './ReviewDialog.vue'
+import { useToasts } from '@/stores/toasts'
 
 const { review, capabilities } = vi.hoisted(() => ({ review: vi.fn(), capabilities: vi.fn() }))
 vi.mock('@/api/instance', () => ({ api: { capabilities, proposals: { review } } }))
@@ -165,5 +166,190 @@ describe('unfinished review', () => {
     expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe('')
     expect((w.get('input[value="approve"]').element as HTMLInputElement).checked).toBe(true)
     w.unmount()
+  })
+})
+
+describe('review submission snapshot', () => {
+  it('captures the decision, text and head before waiting for capabilities', async () => {
+    let finish!: (value: { features: string[] }) => void
+    capabilities.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    review.mockResolvedValueOnce({})
+    const w = show()
+    await w.get('textarea').setValue('  Checked the original code  ')
+    await w.get('input[value="request_changes"]').setValue()
+    await w.get('form').trigger('submit')
+    const fields = w.get('textarea').element.closest('fieldset')
+    expect(fields?.disabled).toBe(true)
+    expect(fields?.contains(w.get('input[value="approve"]').element)).toBe(true)
+    // A component update can still occur while native user editing is disabled.
+    await w.get('textarea').setValue('Later text')
+    await w.get('input[value="approve"]').setValue()
+    await w.setProps({ proposal: { ...proposal, head: 'head-two' } })
+    finish({ features: ['proposals.review_head'] })
+    await flushPromises()
+    expect(review).toHaveBeenCalledWith('acme/demo', 'proposal-one', {
+      decision: 'request_changes',
+      body: 'Checked the original code',
+      expected_head: 'head-one',
+    })
+    expect(useToasts().items.at(-1)?.title).toBe('Changes requested')
+    w.unmount()
+  })
+
+  it('reports the submitted decision when the response arrives after a live update', async () => {
+    let finish!: () => void
+    review.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const w = show()
+    await w.get('input[value="comment"]').setValue()
+    await w.get('textarea').setValue('Original comment')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(w.get('textarea').element.closest('fieldset')?.disabled).toBe(true)
+    await w.get('input[value="approve"]').setValue()
+    finish()
+    await flushPromises()
+    expect(useToasts().items.at(-1)?.title).toBe('Comment added')
+    w.unmount()
+  })
+
+  it('unlocks the same draft after a rejected request so it can be corrected and retried', async () => {
+    let fail!: (error: Error) => void
+    review.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject
+        }),
+    )
+    const w = show()
+    await w.get('textarea').setValue('Keep this review')
+    await w.get('input[value="comment"]').setValue()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    fail(new Error('Request rejected'))
+    await flushPromises()
+    expect(w.get('textarea').element.closest('fieldset')?.disabled).toBe(false)
+    expect(w.get('textarea').element.value).toBe('Keep this review')
+    expect(w.text()).toContain('Request rejected')
+    review.mockResolvedValueOnce({})
+    await w.get('textarea').setValue('Corrected review')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(review).toHaveBeenLastCalledWith('acme/demo', 'proposal-one', {
+      decision: 'comment',
+      body: 'Corrected review',
+      expected_head: 'head-one',
+    })
+    w.unmount()
+  })
+
+  it.each(['capabilities', 'review'])(
+    'does not retarget or close the next proposal while %s is pending',
+    async (pending) => {
+      let finish!: () => void
+      if (pending === 'capabilities') {
+        capabilities.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = () => resolve({ features: ['proposals.review_head'] })
+            }),
+        )
+        review.mockResolvedValueOnce({})
+      } else {
+        review.mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              finish = resolve
+            }),
+        )
+      }
+      const w = show()
+      await w.get('textarea').setValue('Original proposal review')
+      await w.get('form').trigger('submit')
+      await flushPromises()
+      await w.setProps({
+        repo: 'other/repository',
+        proposal: { ...proposal, id: 'proposal-two', head: 'head-two' },
+      })
+      await w.get('textarea').setValue('New proposal draft')
+      finish()
+      await flushPromises()
+      expect(review).toHaveBeenCalledWith('acme/demo', 'proposal-one', {
+        decision: 'approve',
+        body: 'Original proposal review',
+        expected_head: 'head-one',
+      })
+      expect(w.get('textarea').element.value).toBe('New proposal draft')
+      expect(w.emitted('done')).toBeUndefined()
+      expect(w.emitted('update:modelValue')).toBeUndefined()
+      expect(useToasts().items).toHaveLength(0)
+      w.unmount()
+    },
+  )
+
+  it('does not unlock or put an old error on a new pending review', async () => {
+    let failOld!: (error: Error) => void
+    let finishNew!: () => void
+    review
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            failOld = reject
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve
+          }),
+      )
+    const w = show()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    await w.setProps({ proposal: { ...proposal, id: 'proposal-two', head: 'head-two' } })
+    await w.get('textarea').setValue('New pending review')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    failOld(new Error('Old failure'))
+    await flushPromises()
+    expect(w.text()).not.toContain('Old failure')
+    expect(w.get('textarea').element.closest('fieldset')?.disabled).toBe(true)
+    finishNew()
+    await flushPromises()
+    expect(useToasts().items).toHaveLength(1)
+    expect(review).toHaveBeenLastCalledWith('acme/demo', 'proposal-two', {
+      decision: 'approve',
+      expected_head: 'head-two',
+      body: 'New pending review',
+    })
+    w.unmount()
+  })
+
+  it('does not publish feedback from a response after the dialog is unmounted', async () => {
+    let finish!: () => void
+    review.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const w = show()
+    const toasts = useToasts()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    w.unmount()
+    finish()
+    await flushPromises()
+    expect(toasts.items).toHaveLength(0)
+    expect(w.emitted('done')).toBeUndefined()
   })
 })

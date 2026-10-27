@@ -17,6 +17,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Browser qualification uses Playwright 1.64.1 after a native WebKit reload assertion on 1.56.1; the original recovery scenario passes without disabling crash, console or persistence checks.
 - Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
 
 ## [0.3.0-beta.1] — 2026-10-27

@@ -34,3 +34,11 @@ The qualified worker copies its Vite configuration and test setup into the isola
 
 - Fresh final draft recovery passed Chromium, Firefox, phone and tablet (40.4 s aggregate suite). Two additional real-server race regressions passed all three desktop engines (six cases): restored drafts retain the old changeset parent after another writer advances the branch, and a new-file draft from an empty branch is not silently rebased onto another writer's first commit. The latter must reject proposal creation and preserve the draft. These race regressions use API-created fixtures and are not counted as clean-account UI acceptance.
 - Static type checks, ESLint/Prettier and the production build passed for `d5e2383`. Three equivalent storage-fallback mutations are documented alongside the 37 detected mutations.
+
+## Browser engine investigation
+
+The original Playwright 1.56.1 WebKit also failed in the official `mcr.microsoft.com/playwright:v1.56.1-noble` image (digest `sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a`). Native browser diagnostics reported an internal C++ `std::optional<unsigned long>` assertion. Removing the page DOM before the final reload did not resolve it. Those diagnostics are separate from the unchanged acceptance test.
+
+Upgrading the test dependency to Playwright 1.64.1 removes the duplicate older Playwright core and uses the matching official image (digest `sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea`). The original complete WebKit acceptance path passed. Repeated qualification passed all 34 cases (two passes of the selected suites across Chromium, Firefox, WebKit, tablet and phone) in 1.8 minutes, without retries. No reload, assertion, console guard or crash check is disabled. Full embedded-server CI qualification remains pending. Unit tests (478), types and lint pass with the new dependency.
+
+CI also exposed colored terminal output in the mutation-harness self-test. The adapter already stripped it correctly; the self-test now strips ANSI styling and forces colored subprocess output. Its three protocol cases pass. The earlier CI failure remains a recorded test defect, not a product pass.

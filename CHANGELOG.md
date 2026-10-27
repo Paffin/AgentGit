@@ -27,6 +27,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Directory navigation removes stale links immediately and retains loaded files after a next-page error. Review submission captures its target and content before waiting; clipboard feedback ignores obsolete requests.
+
 - History follows Back/Forward filters, isolates each changeset's lazy diff, and preserves revision/path context in native parent links. Clipboard fallback restores keyboard focus and cleans up on failure.
 
 - Closing a review dialog keeps unfinished text and decisions. A changed head requires explicit re-review; failed submissions preserve the draft, and successful submissions clear it.

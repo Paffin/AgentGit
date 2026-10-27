@@ -97,3 +97,7 @@ Twenty-three behavior/contract tests pass. Fifty-three selected mutations are ca
 
 
 Release-gate follow-up: two negative tests demonstrated that a second workflow with the same display name could mask a failed required workflow or be mistaken for the request workflow itself. Selection now uses exact workflow paths. The final set has 26 passing tests and 59 detected mutations; measured maximum CRAP is 8. Actual GitHub run metadata confirms the expected workflow-path format.
+
+## Directory and pending-action isolation
+
+Integrated the agent's clipboard-generation guard, directory-reset and pagination-retry changes, plus immutable pending-review inputs. A root regression showed that a capability request resolving after unmount could still start a review POST; a context check now prevents that unsent mutation. Two tests failed before the fix, then passed. An already transmitted POST is not claimed cancellable. The agent separately verified delayed clipboard APIs, real directory resolution and real paginated requests with temporary 503 responses on desktop/phone. New-directory links never reuse previous rows, and failed Load more requests preserve the existing rows and cursor.

@@ -58,6 +58,20 @@ const more = ref(false)
 const listError = ref<unknown>(null)
 const emptyRepo = ref(false)
 let serial = 0
+// A listing and its page token belong to one directory at one revision.
+watch(
+  [repo, rev, path],
+  () => {
+    serial++
+    entries.value = []
+    next.value = ''
+    listError.value = null
+    emptyRepo.value = false
+    more.value = false
+    listing.value = true
+  },
+  { flush: 'sync' },
+)
 async function list(append = false) {
   const mine = ++serial
   if (!rev.value) {
@@ -284,7 +298,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
         />
       </div>
       <template v-else>
-        <ErrorState v-if="listError" what="the directory" :error="listError" @retry="list()" />
+        <ErrorState
+          v-if="listError && entries.length === 0"
+          what="the directory"
+          :error="listError"
+          @retry="list()"
+        />
         <EmptyState
           v-else-if="emptyRepo"
           icon="folder"
@@ -340,6 +359,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
                 :title="filter ? 'No matching files' : 'This directory is empty'"
             /></template>
           </DataTable>
+          <ErrorState
+            v-if="listError"
+            what="more files"
+            :error="listError"
+            :retryable="false"
+            compact
+          />
           <LoadMore
             :has-more="!!next"
             :loading="more"

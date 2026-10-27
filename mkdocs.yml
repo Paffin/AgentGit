@@ -109,6 +109,7 @@ nav:
   - Community:
       - Start here: community/start-here.md
       - Beta programme: community/beta.md
+      - Watch the workflow: community/demo.md
       - Pilot launch kit: community/launch-kit.md
   - Guides:
       - Running agents: guides/agents.md

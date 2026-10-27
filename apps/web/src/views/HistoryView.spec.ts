@@ -13,10 +13,10 @@ vi.mock('@/stores/board', () => ({
   }),
 }))
 
-function page(message: string) {
+function page(message: string, nextPageToken = '', parents: string[] = []) {
   return {
-    items: [{ id: message, parents: [], message, author: 'user:alice', timestamp_ms: 1 }],
-    nextPageToken: '',
+    items: [{ id: message, parents, message, author: 'user:alice', timestamp_ms: 1 }],
+    nextPageToken,
   }
 }
 async function show(path = '/repos/acme/demo/history?rev=main') {
@@ -151,6 +151,90 @@ describe('history navigation', () => {
     await flushPromises()
     expect(w.get('input').element.value).toBe('main')
     expect(w.text()).toContain('main:all')
+    w.unmount()
+  })
+})
+
+describe('history pagination recovery', () => {
+  it('keeps loaded changesets and selection, then retries the same cursor', async () => {
+    log
+      .mockResolvedValueOnce(page('first', 'next-page', ['second']))
+      .mockRejectedValueOnce(new Error('History page unavailable'))
+      .mockResolvedValueOnce(page('second'))
+    const { w, router } = await show('/repos/acme/demo/history?rev=main&cs=first')
+    const more = () => w.findAll('button').find((button) => button.text() === 'Load more')!
+    await more().trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="history-log"]').text()).toContain('first')
+    expect(w.find('.row.sel').exists()).toBe(true)
+    expect(router.currentRoute.value.query.cs).toBe('first')
+    expect(w.text()).toContain('History page unavailable')
+    await more().trigger('click')
+    await flushPromises()
+    expect(log.mock.calls[1]![1].page_token).toBe('next-page')
+    expect(log.mock.calls[2]![1].page_token).toBe('next-page')
+    expect(
+      w
+        .findAll('[data-testid="history-log"] button.main')
+        .map((button) => button.find('.m').text()),
+    ).toEqual(['first', 'second'])
+    expect(w.findAll('svg.g')[1]!.findAll('path').length).toBeGreaterThan(0)
+    w.unmount()
+  })
+
+  it('does not start two requests for the same pending page', async () => {
+    log.mockResolvedValueOnce(page('first', 'next-page'))
+    let finish!: (value: ReturnType<typeof page>) => void
+    log.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const { w } = await show()
+    const more = w.findAll('button').find((button) => button.text() === 'Load more')!
+    await Promise.all([more.trigger('click'), more.trigger('click')])
+    expect(log).toHaveBeenCalledTimes(2)
+    finish(page('second'))
+    await flushPromises()
+    expect(w.findAll('[data-testid="history-log"] button.main')).toHaveLength(2)
+    w.unmount()
+  })
+
+  it('hides prior rows after a new-revision first-page failure and ignores an old append response', async () => {
+    log.mockResolvedValueOnce(page('first', 'next-page'))
+    let finishOld!: (value: ReturnType<typeof page>) => void
+    log
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOld = resolve
+          }),
+      )
+      .mockRejectedValueOnce(new Error('New revision unavailable'))
+    const { w, router } = await show()
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Load more')!
+      .trigger('click')
+    await router.push({ query: { rev: 'other' } })
+    await flushPromises()
+    finishOld(page('stale append'))
+    await flushPromises()
+    expect(w.text()).toContain('New revision unavailable')
+    expect(w.find('[data-testid="history-log"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('stale append')
+    log.mockResolvedValueOnce(page('recovered'))
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Try again')!
+      .trigger('click')
+    await flushPromises()
+    expect(log).toHaveBeenLastCalledWith(
+      'acme/demo',
+      expect.objectContaining({ rev: 'other', page_token: undefined }),
+    )
+    expect(w.get('[data-testid="history-log"]').text()).toContain('recovered')
     w.unmount()
   })
 })

@@ -95,23 +95,6 @@ async fn check_connection(connection: &mut Connection, login: &Login, args: &Sta
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn saved_expiration_includes_the_boundary_and_keeps_unknown_expiry_unknown() {
-        let mut login = Login { token: String::new(), identity: "user:test".into(), expires_at_ms: 10, saved_at_ms: 0 };
-        assert_eq!(saved_connection("server".into(), &login, 10).state, State::Expired);
-        assert_eq!(saved_connection("server".into(), &login, 9).state, State::Saved);
-        login.expires_at_ms = 0;
-        let unknown = saved_connection("server".into(), &login, 10);
-        assert_eq!(unknown.state, State::Saved);
-        assert_eq!(unknown.expires_at, None);
-        assert!(expiration(1).is_some());
-    }
-}
-
 fn describe(connection: &Connection) -> String {
     let state = match connection.state {
         State::Saved => "saved locally; not checked online",
@@ -169,4 +152,21 @@ pub fn auth(cli: &Cli, command: &AuthCmd) -> Result<u8> {
         render(&connections)
     })?;
     Ok(if failed { exit::ERROR } else { exit::OK })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_expiration_includes_the_boundary_and_keeps_unknown_expiry_unknown() {
+        let mut login = Login { token: String::new(), identity: "user:test".into(), expires_at_ms: 10, saved_at_ms: 0 };
+        assert_eq!(saved_connection("server".into(), &login, 10).state, State::Expired);
+        assert_eq!(saved_connection("server".into(), &login, 9).state, State::Saved);
+        login.expires_at_ms = 0;
+        let unknown = saved_connection("server".into(), &login, 10);
+        assert_eq!(unknown.state, State::Saved);
+        assert_eq!(unknown.expires_at, None);
+        assert!(expiration(1).is_some());
+    }
 }

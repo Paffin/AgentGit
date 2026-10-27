@@ -615,7 +615,10 @@ fn cache_control(rel: &str) -> &'static str {
 fn is_hashed_asset(rel: &str) -> bool {
     let Some(name) = rel.strip_prefix("assets/") else { return false };
     let name = name.rsplit('/').next().unwrap_or(name);
-    let stem = name.split('.').next().unwrap_or("");
+    // Dots belong to Vite chunk names too (for example runtime-dom.esm-bundler-HASH.js).
+    // Remove the extension from the right; source maps retain the asset's hash before .js.map.
+    let name = name.strip_suffix(".map").unwrap_or(name);
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
     let n = stem.len();
     n > 9
         && stem.is_char_boundary(n - 9)
@@ -709,6 +712,9 @@ mod tests {
         assert!(is_hashed_asset("assets/index-D004i6Pa.js"));
         assert!(is_hashed_asset("assets/Card-9Sd5_lV6.js"));
         assert!(is_hashed_asset("assets/Card-9Sd5-lV6.css"));
+        assert!(is_hashed_asset("assets/runtime-dom.esm-bundler-tKiCzGw2.js"));
+        assert!(is_hashed_asset("assets/logo.dark-tKiCzGw2.svg"));
+        assert!(is_hashed_asset("assets/index-D004i6Pa.js.map"));
         assert!(!is_hashed_asset("assets/logo.svg"));
         assert!(!is_hashed_asset("index.html"));
         assert!(!is_hashed_asset("favicon.svg"));

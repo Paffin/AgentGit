@@ -4,6 +4,7 @@ import type { Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
+import { preloadDependencies, preloadPolicy } from './scripts/preload-policy'
 
 // `npm run dev` proxies the API to a local ag-server. Override with AG_SERVER_URL.
 const target = process.env.AG_SERVER_URL ?? 'http://127.0.0.1:8080'
@@ -28,7 +29,7 @@ const versionFile: Plugin = {
 }
 
 export default defineConfig({
-  plugins: [vue(), versionFile],
+  plugins: [vue(), versionFile, preloadPolicy],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
@@ -47,6 +48,11 @@ export default defineConfig({
     // The server's CSP forbids inline scripts; keep every asset a real file.
     assetsInlineLimit: 0,
     cssCodeSplit: true,
+    // Native import starts the lazy entry request immediately; preload its dependencies,
+    // not the same entry a second time. Keep entry-page hints and asynchronous CSS.
+    modulePreload: {
+      resolveDependencies: preloadDependencies,
+    },
   },
   test: {
     // Each file gets an isolated VM; reuse bounded workers instead of starting a process per file.

@@ -35,6 +35,24 @@ async function open() {
 }
 
 describe('branch creation', () => {
+  it('does not reload the branch list after leaving while creation was pending', async () => {
+    let finish!: (value: object) => void
+    mocks.create.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const w = await open()
+    await w.get('#new-stream input[required]').setValue('topic/first')
+    await w.get('#new-stream').trigger('submit')
+    w.unmount()
+    const calls = mocks.list.mock.calls.length
+    finish({})
+    await flushPromises()
+    expect(mocks.list).toHaveBeenCalledTimes(calls)
+  })
+
   it('locks submitted inputs and ignores duplicate submissions while creation is pending', async () => {
     let finish!: (value: object) => void
     mocks.create.mockImplementationOnce(

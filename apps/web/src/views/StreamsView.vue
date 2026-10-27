@@ -78,15 +78,15 @@ function openCreate() {
   creating.value = true
 }
 async function create() {
+  if (busy.value) return
+  const request = { name: name.value.trim(), from_rev: from.value.trim() || undefined }
+  const repository = repo.value
   busy.value = true
   error.value = null
   try {
-    await api.streams.create(repo.value, {
-      name: name.value.trim(),
-      from_rev: from.value.trim() || undefined,
-    })
+    await api.streams.create(repository, request)
     creating.value = false
-    toasts.ok('Stream created', name.value.trim())
+    toasts.ok('Stream created', request.name)
     await streams.reload()
     board.touched(['streams'])
   } catch (e) {
@@ -229,6 +229,7 @@ async function create() {
       <form id="new-stream" class="form" @submit.prevent="create">
         <TextField
           v-model="name"
+          :disabled="busy"
           label="Name"
           mono
           required
@@ -237,6 +238,7 @@ async function create() {
         />
         <TextField
           v-model="from"
+          :disabled="busy"
           label="Start at (optional)"
           mono
           placeholder="main"

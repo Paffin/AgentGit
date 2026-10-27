@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Proposal } from '@/api/types'
 import { useRepoName } from '@/composables/useRepoName'
@@ -23,12 +23,42 @@ import TextField from '@/ui/TextField.vue'
 import type { Column } from '@/ui/types'
 
 const { repo } = useRepoName()
+const route = useRoute()
+const router = useRouter()
 usePageTitle(() => `Proposals · ${repo.value}`)
 
-type StateFilter = 'open' | 'integrated' | 'closed' | 'all'
-const state = ref<StateFilter>('open')
-const author = ref('')
-const query = ref('')
+const statusOptions = [
+  { value: 'open', label: 'Open' },
+  { value: 'integrated', label: 'Landed' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'all', label: 'All' },
+] as const
+type StateFilter = (typeof statusOptions)[number]['value']
+const readState = (value: unknown): StateFilter =>
+  statusOptions.find((option) => option.value === value)?.value ?? 'open'
+const readText = (value: unknown): string => (typeof value === 'string' ? value : '')
+const state = ref(readState(route.query.state))
+const author = ref(readText(route.query.author))
+const query = ref(readText(route.query.q))
+function syncFilters() {
+  state.value = readState(route.query.state)
+  author.value = readText(route.query.author)
+  query.value = readText(route.query.q)
+}
+watch([() => route.query.state, () => route.query.author, () => route.query.q], syncFilters)
+function updateFilters(values: Partial<{ state: StateFilter; author: string; q: string }>) {
+  state.value = values.state ?? state.value
+  author.value = values.author ?? author.value
+  query.value = values.q ?? query.value
+  void router.replace({
+    query: {
+      ...route.query,
+      state: state.value === 'open' ? undefined : state.value,
+      author: author.value || undefined,
+      q: query.value || undefined,
+    },
+  })
+}
 const auth = useAuth()
 const items = ref<Proposal[]>([])
 const next = ref('')
@@ -107,12 +137,6 @@ void load()
 const stateWord = (s: string) => (s === 'integrated' ? 'landed' : s)
 const TONE = { open: 'info', integrated: 'ok', closed: 'neutral' } as const
 const tone = (s: string) => (s in TONE ? TONE[s as keyof typeof TONE] : 'neutral')
-const statusOptions = [
-  { value: 'open', label: 'Open' },
-  { value: 'integrated', label: 'Landed' },
-  { value: 'closed', label: 'Closed' },
-  { value: 'all', label: 'All' },
-] as const
 const rows = computed(() => {
   const words = query.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
   return items.value.filter((p) => {
@@ -146,24 +170,31 @@ const rows = computed(() => {
       </div>
     </div>
     <div class="tools">
-      <Segmented v-model="state" legend="State" :options="statusOptions" />
+      <Segmented
+        :model-value="state"
+        legend="State"
+        :options="statusOptions"
+        @update:model-value="updateFilters({ state: $event })"
+      />
       <TextField
-        v-model="author"
+        :model-value="author"
         label="Author"
         placeholder="e.g. agent:refactor-bot"
         hint="Exact identity or principal."
         class="author"
         mono
+        @update:model-value="updateFilters({ author: $event })"
       />
     </div>
     <TextField
-      v-model="query"
+      :model-value="query"
       label="Search loaded change requests"
       type="search"
       placeholder="Title, author, branch or ID"
       :hint="
         next ? 'Search covers the loaded page. Load more to include older changes.' : undefined
       "
+      @update:model-value="updateFilters({ q: $event })"
       ><template #prefix><Icon name="search" :size="16" /></template
     ></TextField>
     <Card flush>

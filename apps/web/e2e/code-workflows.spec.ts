@@ -2,6 +2,59 @@ import { test, expect } from './fixtures.ts'
 import { commitFiles, freshRepo, integrate, openProposal } from './support/world.ts'
 import { expectAccessible } from './support/ui.ts'
 
+test('change request filters survive detail navigation without stealing editing focus', async ({
+  page,
+  cast,
+}) => {
+  const { repo } = await freshRepo(cast, 'proposal-filters')
+  const author = cast.as('alice')
+  const change = await commitFiles(
+    author,
+    repo,
+    { 'filter-proof.txt': 'A change to review\n' },
+    'Filter context',
+  )
+  const proposal = await openProposal(author, repo, {
+    head: change.head,
+    title: 'Preserve review filters',
+  })
+  await author.ok_(
+    author.post(`/v1/repos/${repo}/proposals/${proposal.id}/close`, {}),
+    'close filter fixture',
+  )
+  await page.goto(`/repos/${repo}/proposals`)
+  await page.getByRole('radio', { name: 'Closed', exact: true }).check()
+  const authorFilter = page.getByRole('textbox', { name: 'Author', exact: true })
+  await authorFilter.fill('user:alice')
+  await expect.poll(() => new URL(page.url()).searchParams.get('author')).toBe('user:alice')
+  await expect(authorFilter).toBeFocused()
+  const search = page.getByRole('searchbox', { name: 'Search loaded change requests', exact: true })
+  await search.fill('Preserve')
+  await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Preserve')
+  await expect(search).toBeFocused()
+  const filteredUrl = page.url()
+  const scroll = await page.evaluate(() => window.scrollY)
+  await page.evaluate(() => {
+    window.location.hash = 'filter-context'
+  })
+  await expect(page).toHaveURL(`${filteredUrl}#filter-context`)
+  await expect(search).toBeFocused()
+  expect(await page.evaluate(() => window.scrollY)).toBe(scroll)
+  await page.goBack()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(search).toBeFocused()
+  const row = page.getByRole('link', { name: 'Preserve review filters', exact: true })
+  await row.click()
+  await expect(page).toHaveURL(new RegExp(`/proposals/${proposal.id}$`))
+  await expect(page.locator('main')).toBeFocused()
+  await page.goBack()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(page.getByRole('radio', { name: 'Closed', exact: true })).toBeChecked()
+  await expect(authorFilter).toHaveValue('user:alice')
+  await expect(search).toHaveValue('Preserve')
+  await expect(row).toBeVisible()
+})
+
 test('editing a symbolic link preserves its file type', async ({ page, cast }) => {
   const { repo, head } = await freshRepo(cast, 'link-edit')
   const api = cast.as('dana')

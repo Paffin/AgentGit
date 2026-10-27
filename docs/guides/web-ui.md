@@ -408,6 +408,8 @@ notice remains visible. An incomplete summary is never evidence that no work nee
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.
 
+The change-request list keeps **State**, **Author** and **Search loaded change requests** in its URL. After opening a request, browser **Back** restores those filters. Bookmark or copy the list URL to reuse them. Typing a filter keeps focus in the field; the text search still covers only the loaded results.
+
 
 ### Keeping context in history and copied text
 

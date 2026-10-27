@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LoadMore from '@/ui/LoadMore.vue'
 import ProposalsView from './ProposalsView.vue'
@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   list.mockReset().mockResolvedValue(page('First request', 'next-page'))
 })
-async function show() {
+async function show(path = '/repos/acme/demo/proposals') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -27,8 +27,11 @@ async function show() {
       { path: '/repos/:owner/:name/proposals/:id', component: { template: '<i />' } },
     ],
   })
-  await router.push('/repos/acme/demo/proposals')
-  const w = mount(ProposalsView, { global: { plugins: [router] } })
+  await router.push(path)
+  const w = mount(
+    { components: { RouterView }, template: '<RouterView />' },
+    { global: { plugins: [router] } },
+  )
   await flushPromises()
   return { w, router }
 }
@@ -116,5 +119,95 @@ describe('change request pagination', () => {
     await flushPromises()
     expect(list.mock.lastCall![1].page_token).toBeUndefined()
     expect(w.findAll('a.t').map((link) => link.text())).toEqual(['Recovered'])
+  })
+})
+
+describe('change request filter navigation', () => {
+  it('keeps State, Author and search when opening a request and returning with Back', async () => {
+    const { w, router } = await show()
+    await w.get('input[value="closed"]').setValue(true)
+    await w.get('input[placeholder="e.g. agent:refactor-bot"]').setValue('user:bob')
+    await w.get('input[type=search]').setValue('First')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({
+      state: 'closed',
+      author: 'user:bob',
+      q: 'First',
+    })
+    await w.get('a.t').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toContain('/proposals/First%20request')
+    router.back()
+    await flushPromises()
+    expect((w.get('input[value="closed"]').element as HTMLInputElement).checked).toBe(true)
+    expect(
+      w.get<HTMLInputElement>('input[placeholder="e.g. agent:refactor-bot"]').element.value,
+    ).toBe('user:bob')
+    expect(w.get<HTMLInputElement>('input[type=search]').element.value).toBe('First')
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: 'closed', author: 'user:bob' }),
+    )
+  })
+
+  it('reads bookmarked filters and responds to Back/Forward query changes', async () => {
+    const { w, router } = await show(
+      '/repos/acme/demo/proposals?state=integrated&author=user:bob&q=First',
+    )
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: 'integrated', author: 'user:bob' }),
+    )
+    await router.push({ query: { state: 'all', author: 'user:carol', q: 'First' } })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: undefined, author: 'user:carol' }),
+    )
+    router.back()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: 'integrated', author: 'user:bob' }),
+    )
+    router.forward()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(200)
+    expect((w.get('input[value="all"]').element as HTMLInputElement).checked).toBe(true)
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: undefined, author: 'user:carol' }),
+    )
+  })
+
+  it('defaults repeated or empty filters and does not reload for a local text search', async () => {
+    const { w, router } = await show(
+      '/repos/acme/demo/proposals?state=closed&state=all&author=a&author=b&q=x&q=y',
+    )
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: 'open', author: undefined }),
+    )
+    expect(w.get<HTMLInputElement>('input[type=search]').element.value).toBe('')
+    await router.push({ query: { q: 'First', state: '', author: '' } })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(w.get<HTMLInputElement>('input[type=search]').element.value).toBe('First')
+    expect(list).toHaveBeenCalledTimes(1)
+  })
+  it('keeps simultaneous edits together and coalesces their server request', async () => {
+    const { w, router } = await show()
+    await Promise.all([
+      w.get('input[value="closed"]').setValue(true),
+      w.get('input[placeholder="e.g. agent:refactor-bot"]').setValue('user:bob'),
+      w.get('input[type=search]').setValue('First'),
+    ])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(router.currentRoute.value.query).toEqual({
+      state: 'closed',
+      author: 'user:bob',
+      q: 'First',
+    })
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list.mock.lastCall![1]).toEqual(
+      expect.objectContaining({ state: 'closed', author: 'user:bob' }),
+    )
   })
 })

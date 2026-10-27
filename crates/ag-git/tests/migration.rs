@@ -161,7 +161,10 @@ fn git_branch_names_are_mapped_without_dropping_case_sensitive_refs() {
     fs::write(source.path().join("a"), "a").unwrap();
     git(source.path(), &["add", "."]);
     git(source.path(), &["commit", "-qm", "a"]);
+    // Keep case-distinct refs packed so the fixture also works on default macOS filesystems.
+    git(source.path(), &["pack-refs", "--all"]);
     git(source.path(), &["branch", "main"]);
+    git(source.path(), &["pack-refs", "--all"]);
     git(source.path(), &["branch", "Änderung"]);
     let report = migrate(
         &repo(dest.path()),

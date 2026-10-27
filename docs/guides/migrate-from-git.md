@@ -17,7 +17,7 @@ git -C agentgit-source.git bundle create ../repository.bundle --all
 
 The same commands work with GitLab and self-hosted Git servers; replace the URL. For SSH, use the SSH URL with your local Git tooling and upload the resulting bundle. A full mirror includes branches and tags that an ordinary clone may keep only as remote-tracking refs. Shallow and incremental bundles are not complete migration inputs.
 
-Browser imports currently support one server with SQLite and filesystem objects. Bundles are limited to 128 MiB; histories to 100,000 commits. One import is processed at a time and at most eight unpublished imports are retained. Unpublished staging is eligible for cleanup after 24 hours. Retry with the same browser action after a network interruption; publication is idempotent.
+Browser imports currently support one server with SQLite and filesystem objects. The server needs Git on its `PATH`; the official Docker images include it. Bundles are limited to 128 MiB; histories to 100,000 commits. One import is processed at a time and at most eight unpublished imports are retained. Unpublished staging is eligible for cleanup after 24 hours. Retry with the same browser action after a network interruption; publication is idempotent.
 
 ## From the terminal
 
@@ -30,7 +30,7 @@ ag status
 ag verify
 ```
 
-`ag migrate` also accepts a full local Git mirror or clone. Prefer a mirror to include every remote branch. The destination must not already exist. The command checks history, imports every branch and commit-based tag, verifies the result and prepares the default working tree. If content would be omitted, it refuses publication. Read the reported limitations before retrying with `--allow-lossy`.
+`ag migrate` also accepts a full local Git mirror or clone. It transfers committed history; uncommitted working-tree edits are not included. Prefer a mirror to include every remote branch. The destination must not already exist. The command checks history, imports every branch and commit-based tag, verifies the result and prepares the default working tree. If content would be omitted, it refuses publication. Read the reported limitations before retrying with `--allow-lossy`.
 
 ## What moves, and what needs separate work
 

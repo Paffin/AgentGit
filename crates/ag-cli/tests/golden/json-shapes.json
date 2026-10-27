@@ -325,6 +325,32 @@
         "type": "string"
       }
     ],
+    "migrate": {
+      "blobs": "number",
+      "branches": [
+        {
+          "changeset": "string",
+          "destination": "string",
+          "git_commit": "string",
+          "name": "string"
+        }
+      ],
+      "commits": "number",
+      "default_branch": "string",
+      "lfs_pointers": "number",
+      "lossy_commits": "number",
+      "other_refs": [],
+      "skipped_paths": [],
+      "skipped_submodules": "number",
+      "tags": [
+        {
+          "changeset": "string",
+          "destination": "string",
+          "git_commit": "string",
+          "name": "string"
+        }
+      ]
+    },
     "op list": [
       {
         "actor": "string",

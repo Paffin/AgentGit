@@ -335,6 +335,8 @@ the normal merge and conflict rules. It is not silently replaced by your older c
 revision or cancelling asks before discarding unfinished text; closing the tab uses the browser's warning.
 Text edits, their original revision, path and proposal description are saved in this tab's session storage, separately for each account and repository. Reopen **Edit** after reloading or signing back in to recover them. The original revision stays pinned, including when another user advanced the branch. **Keep draft and leave** retains the draft; **Discard changes** removes it. Storage errors are shown explicitly and never reported as a successful save.
 
+If another participant removes or moves the file, reopening its saved URL still shows your draft. You can download it or propose it from the original revision; review detects a conflict with the removal. Cancelling returns to the repository root.
+
 **Download draft** saves your current text to a local file without opening a change request. Tab storage is not a server backup and does not promise recovery after closing the tab or moving to another device. Download important unfinished work before closing the tab. Authentication tokens are not copied into draft records.
 
 **Filter this folder** narrows the directory listing by name, without changing the branch or path. For a paginated

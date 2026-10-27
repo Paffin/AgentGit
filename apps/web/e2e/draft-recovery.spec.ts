@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures.ts'
 import { startServer, defaultUi, type RunningServer } from './support/server.ts'
-import { suffix } from './support/world.ts'
+import { freshRepo, suffix } from './support/world.ts'
 
 async function signIn(page: Page, server: RunningServer) {
   if (!page.url().startsWith(`${server.baseURL}/signin`))
@@ -114,4 +114,58 @@ test('an empty server user creates content through UI and recovers edits after r
     await page.close()
     await server.stop()
   }
+})
+
+// Fixture-backed concurrency regression; separate from the clean-server UI acceptance above.
+
+test('a saved edit can be recovered when another writer deletes its file', async ({
+  page,
+  cast,
+}, testInfo) => {
+  const { repo, head } = await freshRepo(cast, 'deleted-draft')
+  await page.goto(`/repos/${repo}/files?path=README.md`)
+  const fileUrl = page.url()
+  await page.getByTestId('edit-file').click()
+  await page.getByLabel('Contents of README.md').fill('Keep this unfinished work\n')
+  const { commitFiles, openProposal, integrate } = await import('./support/world.ts')
+  const deletion = await commitFiles(cast.as('alice'), repo, { 'README.md': null }, 'Remove file')
+  const removal = await openProposal(cast.as('alice'), repo, {
+    head: deletion.head,
+    title: 'Remove file',
+  })
+  await integrate(cast.as('carol'), repo, removal.id)
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.reload()
+  await expect(page.getByLabel('Contents of README.md')).toHaveValue('Keep this unfinished work\n')
+  await expect(page.getByText('Draft recovered', { exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('missing-file-draft.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.getByRole('button', { name: 'Keep draft and leave' }).click()
+  await expect(page).not.toHaveURL(fileUrl)
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+  await page.goto(fileUrl)
+  await expect(page.getByLabel('Contents of README.md')).toHaveValue('Keep this unfinished work\n')
+  await page.getByTestId('propose-change').click()
+  await page.getByTestId('propose-submit').click()
+  await expect(page.getByTestId('proposal-title')).toHaveText('Update README.md')
+  const id = page.url().split('/').pop()!
+  const detail = await cast
+    .as('dana')
+    .ok_(cast.as('dana').get(`/v1/repos/${repo}/proposals/${id}`), 'read recovered proposal')
+  const commit = await cast
+    .as('dana')
+    .ok_(
+      cast.as('dana').get(`/v1/repos/${repo}/changeset?rev=${detail.proposal.head}`),
+      'read recovered changeset',
+    )
+  expect(commit.parents).toEqual([head])
+  const preview = await cast
+    .as('carol')
+    .ok_(
+      cast.as('carol').post(`/v1/repos/${repo}/proposals/${id}/prepare`),
+      'check edit against deletion',
+    )
+  expect(preview.conflicts.map((conflict: { path: string }) => conflict.path)).toContain(
+    'README.md',
+  )
 })

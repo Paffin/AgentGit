@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import type { DirEntry } from '@/api/types'
 import FileViewer from '@/components/files/FileViewer.vue'
+import MissingFileDraft from '@/components/files/MissingFileDraft.vue'
 import FileFinder from '@/components/files/FileFinder.vue'
 import FileUpload from '@/components/files/FileUpload.vue'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -256,13 +257,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
         @retry="where.reload()"
       />
       <div v-else-if="where.data.value?.kind === 'missing'" class="pad">
-        <EmptyState
-          icon="search"
-          title="Nothing at this path"
-          :description="`“${path}” does not exist at ${rev}.`"
+        <MissingFileDraft
+          :key="JSON.stringify([repo, rev, path, auth.identity])"
+          :repo="repo"
+          :stream="rev"
+          :path="path"
+          :enabled="canEdit"
+          @cancel="router.push(to(''))"
         >
-          <Button :to="to('')">Back to the root</Button>
-        </EmptyState>
+          <EmptyState
+            icon="search"
+            title="Nothing at this path"
+            :description="`“${path}” does not exist at ${rev}.`"
+          >
+            <Button :to="to('')">Back to the root</Button>
+          </EmptyState>
+        </MissingFileDraft>
       </div>
       <div v-else-if="where.data.value && where.data.value.kind !== 'dir'" class="pad">
         <FileViewer

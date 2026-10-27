@@ -61,6 +61,12 @@ jobs:
             publish=true
           fi
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Build the server used by the SDK contract tests
+        run: cargo build --locked -p agentgit-server
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -68,6 +74,8 @@ jobs:
           cache-dependency-path: sdk/typescript/package-lock.json
       - name: TypeScript SDK
         working-directory: sdk/typescript
+        env:
+          AG_SERVER_BIN: ${{ github.workspace }}/target/debug/ag-server
         run: |
           npm ci
           npm run check

@@ -109,7 +109,7 @@ const names = computed(() => board.streams.map((s) => s.name))
     <div>
       <h1>Compare revisions</h1>
       <p class="muted">
-        The diff between any two revisions. Leave “from” empty to compare against the empty tree.
+        Compare two revisions. Leave From empty to compare To with its first parent.
       </p>
     </div>
     <Card>
@@ -118,12 +118,17 @@ const names = computed(() => board.streams.map((s) => s.name))
           v-model="from"
           label="From"
           mono
-          placeholder="main~3, a changeset id, or empty"
+          placeholder="First parent of To"
           list="cmp-streams"
         />
         <TextField v-model="to" label="To" mono placeholder="main" list="cmp-streams" required />
         <Button type="submit" variant="primary" icon="diff" :loading="busy">Compare</Button>
-        <Button :disabled="!from.trim() || !to.trim()" @click="swap">Swap revisions</Button>
+        <Button
+          :disabled="!from.trim() || !to.trim()"
+          disabled-reason="Enter both From and To to swap revisions."
+          @click="swap"
+          >Swap revisions</Button
+        >
         <datalist id="cmp-streams">
           <option v-for="s in names" :key="s" :value="s" />
         </datalist>
@@ -134,8 +139,11 @@ const names = computed(() => board.streams.map((s) => s.name))
     <p v-if="busy && result" class="muted" role="status">Updating comparison…</p>
     <template v-if="result">
       <p class="muted ids">
-        <code class="mono">{{ result.from ? shortId(result.from, 12) : 'empty tree' }}</code>
-        →
+        <template v-if="result.from">
+          <code class="mono">{{ shortId(result.from, 12) }}</code>
+          →
+        </template>
+        <template v-else>Changes introduced by </template>
         <code class="mono">{{ shortId(result.to, 12) }}</code>
       </p>
       <DiffViewer
@@ -147,8 +155,8 @@ const names = computed(() => board.streams.map((s) => s.name))
     <EmptyState
       v-else-if="!error && !busy"
       icon="diff"
-      title="Pick two revisions"
-      description="A branch name, a version id or prefix, a change request id, or an expression like main~2 or prop_…^2."
+      title="Choose a target revision"
+      description="Enter a branch, changeset ID, change request ID, or expression such as main~2 in To. From is optional."
     />
   </div>
 </template>

@@ -111,6 +111,7 @@ complete -c ag -n "__fish_ag_using_subcommand migrate" -l as -d 'Act as this ide
 complete -c ag -n "__fish_ag_using_subcommand migrate" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l dry-run -d 'Verify the migration and report limitations without publishing a repository'
 complete -c ag -n "__fish_ag_using_subcommand migrate" -l allow-lossy -d 'Accept reported omissions, unresolved LFS pointers and unsupported refs'
 complete -c ag -n "__fish_ag_using_subcommand migrate" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand migrate" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

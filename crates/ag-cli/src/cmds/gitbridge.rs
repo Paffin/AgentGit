@@ -96,9 +96,19 @@ pub struct MigrateArgs {
     /// Destination namespace, for example acme/webapp.
     #[arg(long)]
     pub namespace: String,
+    /// Verify the migration and report limitations without publishing a repository.
+    #[arg(long)]
+    pub dry_run: bool,
     /// Accept reported omissions, unresolved LFS pointers and unsupported refs.
     #[arg(long)]
     pub allow_lossy: bool,
+}
+
+impl MigrateArgs {
+    // Both modes convert in private staging; only publication requires loss acknowledgement.
+    fn allow_staged_loss(&self) -> bool {
+        self.dry_run || self.allow_lossy
+    }
 }
 
 fn create_bundle(source: &std::path::Path, bundle: &std::path::Path) -> Result<()> {
@@ -165,7 +175,7 @@ fn build_migration(
     let repo = Repository::init(&root, &migration_options(&mirror, namespace, &actor)?)?;
     let report = ag_git::migrate(
         &repo,
-        &ag_git::MigrationOptions { git_dir: mirror, actor: actor.clone(), allow_lossy: args.allow_lossy },
+        &ag_git::MigrationOptions { git_dir: mirror, actor: actor.clone(), allow_lossy: args.allow_staged_loss() },
     )?;
     verify_migration(&repo)?;
     save_archive(&root, bundle, &report)?;
@@ -182,8 +192,14 @@ fn destination_stage(args: &MigrateArgs) -> Result<(PathBuf, tempfile::TempDir)>
     }
     let destination = std::path::absolute(&args.destination)?;
     let parent = destination.parent().ok_or_else(|| anyhow!("Destination needs a parent directory"))?;
-    fs::create_dir_all(parent)?;
-    let stage = tempfile::Builder::new().prefix(".agentgit-migration-").tempdir_in(parent)?;
+    let mut staging = tempfile::Builder::new();
+    staging.prefix(".agentgit-migration-");
+    let stage = if args.dry_run {
+        staging.tempdir()?
+    } else {
+        fs::create_dir_all(parent)?;
+        staging.tempdir_in(parent)?
+    };
     Ok((destination, stage))
 }
 pub fn migrate(cli: &crate::Cli, args: &MigrateArgs) -> Result<u8> {
@@ -196,16 +212,39 @@ pub fn migrate(cli: &crate::Cli, args: &MigrateArgs) -> Result<u8> {
     let bundle = stage.path().join("source.bundle");
     create_bundle(&source, &bundle)?;
     let report = build_migration(cli, args, namespace, stage.path(), &bundle)?;
-    ag_integrate::publish_new_directory(&stage.path().join("repository"), &destination)?;
-    crate::ctx::emit(cli.json, &report, || {
-        format!(
-            "Migrated {} commits, {} branches and {} tags into {}.\nOriginal source unchanged; archive and report: .ag/import/.\nNext: cd {} && ag status",
-            report.commits,
-            report.branches.len(),
-            report.tags.len(),
-            destination.display(),
-            destination.display()
-        )
-    })?;
+    if !args.dry_run {
+        ag_integrate::publish_new_directory(&stage.path().join("repository"), &destination)?;
+    }
+    crate::ctx::emit(cli.json, &report, || migration_summary(&report, &destination, args.dry_run))?;
     Ok(exit::OK)
+}
+
+fn migration_summary(report: &ag_git::MigrationReport, destination: &std::path::Path, preview: bool) -> String {
+    let action = if preview { "Verified preview of" } else { "Migrated" };
+    let mut text = format!(
+        "{action} {} commits, {} branches and {} tags for {}.",
+        report.commits,
+        report.branches.len(),
+        report.tags.len(),
+        destination.display()
+    );
+    if report.needs_attention() {
+        text.push_str(&format!(
+            "\nLimitations: {} skipped paths, {} submodules, {} repaired commit texts, {} LFS pointers and {} other refs. Review the full report with --json.",
+            report.skipped_paths.len(), report.skipped_submodules, report.lossy_commits,
+            report.lfs_pointers, report.other_refs.len()
+        ));
+    }
+    if preview {
+        text.push_str(
+            "\nRepository not published; the source and destination are unchanged. Only committed history is included.",
+        );
+        text.push_str("\nTo publish, run again without --dry-run.");
+        if report.needs_attention() {
+            text.push_str(" Use --allow-lossy only after reviewing and accepting the reported limitations.");
+        }
+    } else {
+        text.push_str("\nOriginal source unchanged; archive and report: .ag/import/.\nNext: open the destination directory and run `ag status`.");
+    }
+    text
 }

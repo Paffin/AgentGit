@@ -34,7 +34,7 @@ const items = ref<Proposal[]>([])
 const next = ref('')
 const loading = ref(true)
 const more = ref(false)
-const error = ref<unknown>(null)
+const error = ref<{ cause: unknown; append: boolean } | null>(null)
 let serial = 0
 
 const columns: Column[] = [
@@ -50,11 +50,23 @@ const columns: Column[] = [
   { key: 'updated_at_ms', label: 'Updated', width: '7rem', align: 'end' },
 ]
 
-async function load(append = false) {
+function startLoad(append: boolean): number | null {
+  if (append && (loading.value || more.value || !next.value)) return null
   const mine = ++serial
-  if (append) more.value = true
-  else loading.value = true
+  loading.value = !append
+  more.value = append
   error.value = null
+  return mine
+}
+
+function applyPage(page: { items: Proposal[]; nextPageToken: string }, append: boolean) {
+  items.value = append ? [...items.value, ...page.items] : page.items
+  next.value = page.nextPageToken
+}
+
+async function load(append = false) {
+  const mine = startLoad(append)
+  if (mine === null) return
   try {
     const page = await api.proposals.list(repo.value, {
       state: state.value === 'all' ? undefined : state.value,
@@ -63,11 +75,10 @@ async function load(append = false) {
       page_token: append ? next.value : undefined,
     })
     if (mine !== serial) return
-    items.value = append ? [...items.value, ...page.items] : page.items
-    next.value = page.nextPageToken
+    applyPage(page, append)
   } catch (e) {
     if (mine !== serial) return
-    error.value = e
+    error.value = { cause: e, append }
   } finally {
     if (mine === serial) {
       loading.value = false
@@ -78,6 +89,12 @@ async function load(append = false) {
 
 let timer: ReturnType<typeof setTimeout> | undefined
 watch([state, author, repo], () => {
+  serial++
+  items.value = []
+  next.value = ''
+  more.value = false
+  loading.value = true
+  error.value = null
   clearTimeout(timer)
   timer = setTimeout(() => void load(), 200)
 })
@@ -150,7 +167,12 @@ const rows = computed(() => {
       ><template #prefix><Icon name="search" :size="16" /></template
     ></TextField>
     <Card flush>
-      <ErrorState v-if="error" what="change requests" :error="error" @retry="load()" />
+      <ErrorState
+        v-if="error && !error.append"
+        what="change requests"
+        :error="error.cause"
+        @retry="load()"
+      />
       <template v-else>
         <DataTable
           :columns="columns"
@@ -189,6 +211,13 @@ const rows = computed(() => {
             />
           </template>
         </DataTable>
+        <ErrorState
+          v-if="error?.append"
+          what="more change requests"
+          :error="error.cause"
+          :retryable="false"
+          compact
+        />
         <LoadMore
           :has-more="!!next"
           :loading="more"

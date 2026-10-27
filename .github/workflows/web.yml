@@ -142,6 +142,16 @@ jobs:
         with:
           name: web-test-binaries
           path: ${{ runner.temp }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: web-production-ui
+          path: ${{ runner.temp }}
+      # Version compatibility tests serve an altered copy from disk, even in embedded mode.
+      - name: Restore the UI compatibility fixture and prepare Firefox
+        run: |
+          tar -xzf "$RUNNER_TEMP/web-dist.tar.gz" -C apps/web
+          # GitHub mounts a home directory owned by the host runner; Firefox requires our UID.
+          chown "$(id -u):$(id -g)" "$HOME"
       - name: Restore and verify the shared binaries
         run: |
           mkdir -p target/debug

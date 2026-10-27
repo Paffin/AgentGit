@@ -35,6 +35,11 @@ class BrowserPipeline(unittest.TestCase):
         self.assertNotIn('--grep', runs)
         self.assertNotIn('playwright install', runs)
 
+    def test_browser_runtime_has_owned_home_and_external_ui_fixture(self):
+        runs = '\n'.join(step.get('run', '') for step in self.browser['steps'])
+        self.assertIn('chown "$(id -u):$(id -g)" "$HOME"', runs)
+        self.assertIn('tar -xzf "$RUNNER_TEMP/web-dist.tar.gz" -C apps/web', runs)
+
     def test_browser_jobs_use_one_shared_embedded_server_build(self):
         builds = [name for name, job in self.jobs.items() if name != 'identity-provider'
                   and any('cargo build -p agentgit-server -p agentgit-cli' in step.get('run', '')
@@ -47,8 +52,8 @@ class BrowserPipeline(unittest.TestCase):
                    if step.get('uses', '').startswith('actions/upload-artifact@')]
         downloads = [step['with']['name'] for step in self.browser['steps']
                      if step.get('uses', '').startswith('actions/download-artifact@')]
-        self.assertEqual(downloads, uploads)
-        self.assertEqual(len(downloads), 1)
+        self.assertCountEqual(downloads, uploads + ['web-production-ui'])
+        self.assertEqual(len(downloads), 2)
         execution = [step for step in self.browser['steps'] if 'playwright test' in step.get('run', '')]
         self.assertEqual(execution[0]['env']['AG_E2E_UI'], 'embedded')
         self.assertTrue(any('check_skips.py' in step.get('run', '') for step in self.browser['steps']))

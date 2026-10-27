@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { setImmediate } from 'node:timers/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { SseParser, openEventFeed } from './sse'
 import type { FeedStatus } from './sse'
@@ -160,7 +161,7 @@ function setup(opts: { stallMs?: number } = {}) {
 }
 
 const tick = async (n = 6) => {
-  for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0))
+  for (let i = 0; i < n; i++) await setImmediate()
 }
 
 describe('openEventFeed', () => {
@@ -283,12 +284,15 @@ describe('openEventFeed', () => {
   })
 
   it('treats a silent connection as dead after stallMs and reconnects', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     const h = setup({ stallMs: 80 })
     const first = new Conn()
     h.queue.push(first, new Conn())
     const feed = openEventFeed({ ...h.feedOptions, afterSeq: 4 })
     await tick()
-    await new Promise((r) => setTimeout(r, 260)) // no bytes, not even heartbeats
+    await vi.advanceTimersByTimeAsync(249)
+    expect(h.statuses.at(-1)).toBe('live')
+    await vi.advanceTimersByTimeAsync(1) // first watchdog tick; no bytes or heartbeats
     await tick()
     expect(h.statuses).toContain('reconnecting')
     h.proceed()
@@ -298,6 +302,7 @@ describe('openEventFeed', () => {
   })
 
   it('keeps a connection alive that only sends heartbeats', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     const h = setup({ stallMs: 120 })
     const conn = new Conn()
     h.queue.push(conn)
@@ -305,7 +310,8 @@ describe('openEventFeed', () => {
     await tick()
     for (let i = 0; i < 6; i++) {
       conn.send(': heartbeat\n\n')
-      await new Promise((r) => setTimeout(r, 50))
+      await tick()
+      await vi.advanceTimersByTimeAsync(50)
     }
     expect(h.opens).toHaveLength(1)
     expect(h.statuses.at(-1)).toBe('live')

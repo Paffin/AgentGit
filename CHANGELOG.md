@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Repository search survives opening a result, browser Back and page reload; bookmarked filters keep searching the loaded list without extra requests.
+
 - Git import instructions accept the copied SSH addresses from GitHub and nested GitLab groups, with shell-safe commands and editable destination suggestions.
 
 - History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.

@@ -408,6 +408,8 @@ notice remains visible. An incomplete summary is never evidence that no work nee
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.
 
+The Repositories list keeps its search in the URL. Open a repository and use browser **Back** to return to the same filtered list, or bookmark the search. Search covers only loaded repositories; use **Load more** to include the rest.
+
 The change-request list keeps **State**, **Author** and **Search loaded change requests** in its URL. After opening a request, browser **Back** restores those filters. Bookmark or copy the list URL to reuse them. Typing a filter keeps focus in the field; the text search still covers only the loaded results.
 The browser tab keeps the repository name while filters or anchors change, so several open repositories remain distinguishable.
 

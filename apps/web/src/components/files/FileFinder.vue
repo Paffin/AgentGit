@@ -62,31 +62,30 @@ async function load(reset = false) {
       revision.value = resolved
     }
     if (!revision.value) return
-    const target = entries.value.length + 10_000
-    let pages = 0
-    do {
-      const page = await api.tree.manifest(
-        repository,
-        {
-          rev: revision.value,
-          page_size: 1000,
-          page_token: next.value || undefined,
-        },
-        { signal: current.signal },
-      )
-      if (current.signal.aborted) return
-      entries.value = [...entries.value, ...page.entries]
-      total.value = page.total
-      if (page.nextPageToken && page.nextPageToken === next.value)
-        throw new Error('The file list did not advance. Please retry.')
-      next.value = page.nextPageToken
-      pages++
-    } while (next.value && entries.value.length < target && pages < 20)
+    await loadPages(repository, current.signal)
   } catch (e) {
     if (!current.signal.aborted) error.value = e
   } finally {
     if (controller === current) busy.value = false
   }
+}
+async function loadPages(repository: string, signal: AbortSignal) {
+  const target = entries.value.length + 10_000
+  let pages = 0
+  do {
+    const page = await api.tree.manifest(
+      repository,
+      { rev: revision.value, page_size: 1000, page_token: next.value || undefined },
+      { signal },
+    )
+    if (signal.aborted) return
+    if (page.nextPageToken && page.nextPageToken === next.value)
+      throw new Error('The file list did not advance. Please retry.')
+    entries.value = [...entries.value, ...page.entries]
+    total.value = page.total
+    next.value = page.nextPageToken
+    pages++
+  } while (next.value && entries.value.length < target && pages < 20)
 }
 watch(
   () => [props.modelValue, props.repo, props.rev],

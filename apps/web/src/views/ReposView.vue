@@ -54,27 +54,30 @@ async function load(append = false) {
   error.value = null
   if (!append) next.value = ''
   try {
-    const items: Repo[] = append ? [...all.value] : []
-    let token = append ? next.value : ''
-    const stopAt = items.length + MAX_REPOS
-    let pages = 0
-    do {
-      const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
-      if (mine !== serial) return
-      if (page.nextPageToken && page.nextPageToken === token)
-        throw new Error('The repository list did not advance. Please retry.')
-      items.push(...page.items)
-      token = page.nextPageToken
-      all.value = [...items]
-      next.value = token
-      if (items.length >= stopAt || ++pages >= 5) break
-    } while (token)
+    await loadPages(append ? [...all.value] : [], append ? next.value : '', mine)
+    if (mine !== serial) return
     loading.value = false
   } catch (e) {
     if (mine !== serial) return
     error.value = e
     loading.value = false
   }
+}
+
+async function loadPages(items: Repo[], token: string, mine: number) {
+  const stopAt = items.length + MAX_REPOS
+  let pages = 0
+  do {
+    const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
+    if (mine !== serial) return
+    if (page.nextPageToken && page.nextPageToken === token)
+      throw new Error('The repository list did not advance. Please retry.')
+    items.push(...page.items)
+    token = page.nextPageToken
+    all.value = [...items]
+    next.value = token
+    if (items.length >= stopAt || ++pages >= 5) break
+  } while (token)
 }
 
 onMounted(() => load())

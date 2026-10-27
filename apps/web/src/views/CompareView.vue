@@ -31,6 +31,17 @@ const error = ref<ApiError | null>(null)
 let serial = 0
 let controller: AbortController | undefined
 onBeforeUnmount(() => controller?.abort())
+const isCurrent = (request: number, signal: AbortSignal) => request === serial && !signal.aborted
+
+async function compare(repository: string, a: string, b: string, signal: AbortSignal) {
+  // Resolve first so typos identify the unknown revision and results display immutable ids.
+  const [fromId, toId] = await Promise.all([
+    a ? api.history.resolve(repository, a, { signal }) : Promise.resolve(''),
+    api.history.resolve(repository, b, { signal }),
+  ])
+  const diff = await api.tree.diff(repository, { from: fromId, to: toId, context: 3 }, { signal })
+  return { diff, from: fromId, to: toId }
+}
 
 async function run() {
   controller?.abort()
@@ -50,20 +61,11 @@ async function run() {
   busy.value = true
   error.value = null
   try {
-    // Resolve first so a typo reads "cannot resolve 'x'" rather than a failed diff, and so we can show real ids.
-    const [fromId, toId] = await Promise.all([
-      a ? api.history.resolve(repository, a, { signal: current.signal }) : Promise.resolve(''),
-      api.history.resolve(repository, b, { signal: current.signal }),
-    ])
-    const diff = await api.tree.diff(
-      repository,
-      { from: fromId, to: toId, context: 3 },
-      { signal: current.signal },
-    )
-    if (mine !== serial || current.signal.aborted) return
-    result.value = { diff, from: fromId, to: toId }
+    const comparison = await compare(repository, a, b, current.signal)
+    if (!isCurrent(mine, current.signal)) return
+    result.value = comparison
   } catch (e) {
-    if (mine !== serial || current.signal.aborted) return
+    if (!isCurrent(mine, current.signal)) return
     error.value =
       e instanceof ApiError
         ? e

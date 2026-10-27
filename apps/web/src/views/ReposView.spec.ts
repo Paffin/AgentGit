@@ -29,7 +29,18 @@ async function show() {
     ],
   })
   await router.push('/repos')
-  const wrapper = mount(ReposView, { global: { plugins: [createPinia(), router] } })
+  const wrapper = mount(ReposView, {
+    global: {
+      plugins: [createPinia(), router],
+      // This suite checks loaded rows and recovery; table rendering has its own tests.
+      stubs: {
+        DataTable: {
+          props: ['rows'],
+          template: '<div><span v-for="row in rows" :key="row.name">{{ row.name }}</span></div>',
+        },
+      },
+    },
+  })
   await flushPromises()
   return wrapper
 }

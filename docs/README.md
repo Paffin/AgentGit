@@ -3,6 +3,7 @@
 | If you want to… | Read |
 |---|---|
 | install it (release archive, container image, from source) | [Install](getting-started.md#install) |
+| join a pilot or contribute for the first time | [Start here](community/start-here.md), [beta programme](community/beta.md) |
 | try it in five minutes | [Getting started](getting-started.md) |
 | follow a walkthrough (every command in them is run by the tests) | [Tutorials](tutorials/README.md): [your first agent-safe repository](tutorials/first-agent-safe-repo.md), [run a team server](tutorials/team-server.md), [policy cookbook](tutorials/policy-cookbook.md), [migrating a Git repository](tutorials/migrating-from-git.md), [troubleshooting a blocked integration](tutorials/troubleshooting-blocked-integration.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md), [Glossary](glossary.md) |

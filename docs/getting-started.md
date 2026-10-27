@@ -3,10 +3,10 @@
 Five minutes, and nothing to build: **no Rust, no Node, no tokens to make by hand.** You download the programs, start an
 evaluation server that sets itself up, sign in, land a first change, and see a policy say no and tell you why.
 
-> **Status.** The commands below were run against a build of `main`. The only published release, the pre-release
-> `v0.2.0-rc.2`, does not have `ag-server dev`, `ag login`, `ag explain` or policy presets yet; they arrive with the next
-> release. Until then, [the same start on 0.2.0-rc.2](#on-020-rc2-until-the-next-release) takes a few more lines and is
-> also verified. What has **not** been run is marked where it appears.
+> **Version.** This guide targets the `v0.2.0-rc.3` candidate, which includes `ag-server dev`, `ag login`,
+> `ag explain` and policy presets. Before downloading, check that the candidate's assets have been published on
+> [Releases](https://github.com/Paffin/AgentGit/releases). For the previous published candidate, use
+> [the 0.2.0-rc.2 procedure](#on-020-rc2-until-the-next-release). A candidate is still alpha software.
 
 ## 1. Get the programs
 
@@ -14,7 +14,7 @@ A release archive for Linux or macOS (x86_64 and aarch64). The script checks the
 puts `ag`, `ag-server`, `ag-worker` and `ag-mcp` in `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2   # use the newest version
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3   # use the candidate version
 ag --version
 ```
 
@@ -185,8 +185,8 @@ out) and `ag-worker` (runs validation jobs), and `ag-mcp` for agents. Pick the w
 **1. Release archive (Linux and macOS, x86_64 and aarch64)** — a script that checks what it downloads:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.2   # no stable release yet: `latest` skips pre-releases
-ag --version                              # ag 0.2.0-rc.2 (a1b2c3d4e5f6 2026-10-19): version, commit, commit date
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3   # no stable release yet: `latest` skips pre-releases
+ag --version                              # ag 0.2.0-rc.3 (a1b2c3d4e5f6 2026-10-19): version, commit, commit date
 ```
 
 It works out your platform, downloads `agentgit-<version>-<target>.tar.gz` and `SHA256SUMS`, refuses to install
@@ -197,7 +197,7 @@ if you like: [`scripts/install.sh`](../scripts/install.sh) is short and `shellch
 need glibc (Alpine/musl is not supported; use the container image or build from source). Doing it by hand:
 
 ```bash
-V=0.2.0-rc.2; T=x86_64-unknown-linux-gnu          # or aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin
+V=0.2.0-rc.3; T=x86_64-unknown-linux-gnu          # or aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin
 curl -fsSLO https://github.com/Paffin/AgentGit/releases/download/v$V/agentgit-$V-$T.tar.gz
 curl -fsSLO https://github.com/Paffin/AgentGit/releases/download/v$V/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing     # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
@@ -206,7 +206,7 @@ tar xzf agentgit-$V-$T.tar.gz && install agentgit-$V-$T/ag* ~/.local/bin/
 ```
 
 **2. Container images** (`linux/amd64` and `linux/arm64`, distroless, non-root):
-`docker run --rm ghcr.io/paffin/agentgit-cli:0.2.0-rc.2 --version`, and
+`docker run --rm ghcr.io/paffin/agentgit-cli:0.2.0-rc.3 --version`, and
 `ghcr.io/paffin/agentgit-server` for the server — see [Deploying `ag-server`](operations/deployment.md).
 
 **3. Homebrew / Scoop.** The repository carries a formula and a manifest *template* under

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentgit-client"
-version = "0.2.0-rc.2"
+version = "0.2.0-rc.3"
 description = "Python client for the AgentGit Wire Protocol (AGWP v1): repositories, proposals, agents, leases, signed provenance and events."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- File search supports arrow keys, Home/End and Enter on any result, preserves IME input and modified link actions, and explains the keyboard controls in the dialog.
+
 - Faster Web UI test execution with isolated, bounded VM workers, Node environments for pure functions, and cancellable test-worker shutdown. Browser CI shares one verified embedded build and runs each project once in a pinned runtime.
 
 - Tab-scoped file drafts preserve text, original base, path and proposal description across reload and sign-in; storage failures are explicit and drafts remain separated by account/repository/branch/path.

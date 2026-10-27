@@ -212,6 +212,8 @@ the blockers), conflict (with the paths) or refused by policy.
   than the server looked are marked *older than shown*). If a server does not offer blame, the page says so.
 - **Compare** shows the diff between any two revisions (`main~3` and `main`, two changeset ids, ...).
 
+In **Files**, choose **Find file** or press **t** to search paths throughout the repository. Arrow Down and Arrow Up move between the search field and matching files; Home and End jump to the first and last result. Enter opens the focused file. Escape closes the finder and returns focus to its opener. The results remain normal links, including Ctrl/Cmd-click to open another tab.
+
 ![Blame](../assets/ui-blame.png)
 
 ## Agents & work

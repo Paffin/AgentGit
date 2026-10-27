@@ -7,6 +7,7 @@ import {
   bundleCommands,
   finishMigration,
   migrationWarnings,
+  parseGitRemote,
   prepareMigration,
   readMigration,
 } from '@/api/migration'
@@ -116,21 +117,23 @@ onBeforeUnmount(() => {
 })
 const suggestedName = computed(() => {
   if (!commands.value) return ''
-  const path = new URL(source.value).pathname
-    .replace(/\.git$/, '')
+  const path = parseGitRemote(source.value.trim())
+    .path.replace(/\.git$/, '')
     .split('/')
     .filter(Boolean)
     .slice(-2)
-  return path.length === 2
-    ? path
-        .map((part) =>
-          part
-            .toLowerCase()
-            .replace(/[^a-z0-9._-]/g, '-')
-            .replace(/^[^a-z0-9]+/, ''),
-        )
-        .join('/')
-    : ''
+  const candidate =
+    path.length === 2
+      ? path
+          .map((part) =>
+            part
+              .toLowerCase()
+              .replace(/[^a-z0-9._-]/g, '-')
+              .replace(/^[^a-z0-9]+/, ''),
+          )
+          .join('/')
+      : ''
+  return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(candidate) ? candidate : ''
 })
 function startAnother() {
   if (busy.value) return

@@ -2,7 +2,9 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { ApiError } from '@/api/errors'
+import { bundleCommands } from '@/api/migration'
 import type { MigrationPlan } from '@/api/migration'
+import type * as MigrationApi from '@/api/migration'
 import ImportRepoView from './ImportRepoView.vue'
 
 enableAutoUnmount(afterEach)
@@ -22,12 +24,11 @@ const auth = reactive({
   token: 'alice-token',
 })
 vi.mock('@/stores/auth', () => ({ useAuth: () => auth }))
-vi.mock('@/api/migration', () => ({
+vi.mock('@/api/migration', async (importOriginal) => ({
+  ...(await importOriginal<typeof MigrationApi>()),
   readMigration: mocks.read,
   prepareMigration: mocks.prepare,
   finishMigration: mocks.finish,
-  bundleCommands: (source: string) => (source ? `git clone ${source}` : ''),
-  migrationWarnings: () => [],
 }))
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand')
@@ -295,7 +296,7 @@ describe('copying migration commands', () => {
       .setValue('https://gitlab.example/team/first.git')
     await button(w, 'Copy commands').trigger('click')
     await flushPromises()
-    expect(copied).toBe('git clone https://gitlab.example/team/first.git')
+    expect(copied).toBe(bundleCommands('https://gitlab.example/team/first.git'))
     expect(button(w, 'Copied')).toBeDefined()
     expect(w.text()).not.toContain('Clipboard access is unavailable')
   })
@@ -316,8 +317,31 @@ describe('copying migration commands', () => {
     await input.setValue('https://gitlab.example/team/second.git')
     finish()
     await flushPromises()
-    expect(writeText).toHaveBeenCalledWith('git clone https://gitlab.example/team/first.git')
+    expect(writeText).toHaveBeenCalledWith(bundleCommands('https://gitlab.example/team/first.git'))
     expect(button(w, 'Copy commands')).toBeDefined()
     expect(button(w, 'Copied')).toBeUndefined()
+  })
+})
+
+describe('copied SSH migration source', () => {
+  it('does not suggest an invalid destination when a namespace normalizes to empty', async () => {
+    const w = await show()
+    await w
+      .get('input[placeholder="https://github.com/team/project.git"]')
+      .setValue('git@gitlab.com:---/project.git')
+    expect(w.findAll('button').some((button) => button.text().startsWith('Use '))).toBe(false)
+  })
+
+  it('offers a valid AgentGit name for a nested GitLab namespace', async () => {
+    const w = await show()
+    await w
+      .get('input[placeholder="https://github.com/team/project.git"]')
+      .setValue('git@gitlab.com:group/subgroup/project.git')
+    expect(w.text()).not.toContain('Use an HTTPS or SSH repository URL')
+    expect(w.get('pre').text()).toContain("'git@gitlab.com:group/subgroup/project.git'")
+    await button(w, 'Use subgroup/project').trigger('click')
+    expect(w.get<HTMLInputElement>('input[placeholder="team/project"]').element.value).toBe(
+      'subgroup/project',
+    )
   })
 })

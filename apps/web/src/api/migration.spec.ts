@@ -75,6 +75,25 @@ describe('migration request ownership', () => {
 })
 
 describe('migration guidance', () => {
+  it.each(['git@github.com:team/project.git', 'git@gitlab.com:group/subgroup/project.git'])(
+    'accepts the copied SSH remote %s as one quoted clone argument',
+    (source) => {
+      expect(bundleCommands(source).split('\n')[0]).toBe(
+        `git clone --mirror -- '${source}' agentgit-source.git`,
+      )
+    },
+  )
+
+  it('quotes apostrophes in copied SSH paths', () => {
+    expect(bundleCommands("git@github.com:team/a'b.git")).toContain("a'\\''b.git")
+  })
+
+  it('preserves explicit SSH ports and IPv6 hosts', () => {
+    expect(bundleCommands('ssh://git@[2001:db8::1]:2222/group/project.git')).toContain(
+      "'ssh://git@[2001:db8::1]:2222/group/project.git'",
+    )
+  })
+
   it('keeps the source a shell-quoted argument and does not allow credentials or local protocols', () => {
     expect(bundleCommands('ssh://git@gitlab.example/team/app.git')).toContain(
       "'ssh://git@gitlab.example/team/app.git'",
@@ -84,6 +103,11 @@ describe('migration guidance', () => {
     )
     for (const source of [
       'file:///etc/passwd',
+      '/tmp/repository.git',
+      'C:\\work\\repository.git',
+      'github.com:team/repo.git',
+      'git@github.com:',
+      'git@github.com:team/repo.git\nwhoami',
       'https://secret@github.com/a/b',
       'https://a:secret@github.com/a/b',
     ]) {

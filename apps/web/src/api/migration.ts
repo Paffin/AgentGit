@@ -83,8 +83,10 @@ export function migrationWarnings(report: MigrationReport): string[] {
     )
   return warnings
 }
-/** POSIX shell quoting; URLs are never executed by the browser or sent to the server. */
-export function bundleCommands(source: string): string {
+/** Accept Git's copied SSH address without changing its remote path semantics. */
+export function parseGitRemote(source: string): { remote: string; path: string } {
+  const scp = /^([a-zA-Z0-9._-]+@[a-zA-Z0-9][a-zA-Z0-9.-]*):([^\s\p{Cc}]+)$/u.exec(source)
+  if (scp) return { remote: source, path: scp[2]! }
   const url = new URL(source)
   if (
     !['https:', 'ssh:'].includes(url.protocol) ||
@@ -92,6 +94,12 @@ export function bundleCommands(source: string): string {
     url.password
   )
     throw new Error('Use an HTTPS or SSH URL without embedded credentials.')
-  const quoted = `'${url.href.replaceAll("'", "'\\''")}'`
+  return { remote: url.href, path: url.pathname }
+}
+
+/** POSIX shell quoting; remotes are never executed by the browser or sent to the server. */
+export function bundleCommands(source: string): string {
+  const { remote } = parseGitRemote(source)
+  const quoted = `'${remote.replaceAll("'", "'\\''")}'`
   return `git clone --mirror -- ${quoted} agentgit-source.git\ngit -C agentgit-source.git bundle create ../repository.bundle --all`
 }

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Git import instructions accept the copied SSH addresses from GitHub and nested GitLab groups, with shell-safe commands and editable destination suggestions.
+
 - History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.
 - Obsolete blame and changeset requests are cancelled when their view closes. Large diff expansion follows the selected patch, and comparison labels explain the default first-parent base.
 - Uploads can retry a failed branch lookup without losing selected files. Pending branch creation, settings saves and integration attempts keep their submitted values; settings and integration results stay attached to their original target.

@@ -138,6 +138,18 @@ fn verify_migration(repo: &ag_integrate::Repository) -> Result<()> {
     }
     Ok(())
 }
+fn migration_options(
+    mirror: &std::path::Path,
+    namespace: ag_types::Namespace,
+    actor: &ag_types::Identity,
+) -> Result<ag_integrate::InitOptions> {
+    Ok(ag_integrate::InitOptions {
+        namespace,
+        default_stream: StreamName::new(ag_git::source_default_branch(mirror)?).map_err(|e| anyhow!("{e}"))?,
+        actor: actor.clone(),
+        storage: None,
+    })
+}
 fn build_migration(
     cli: &crate::Cli,
     args: &MigrateArgs,
@@ -145,26 +157,20 @@ fn build_migration(
     stage: &std::path::Path,
     bundle: &std::path::Path,
 ) -> Result<ag_git::MigrationReport> {
-    use ag_integrate::{InitOptions, Repository};
+    use ag_integrate::Repository;
     let mirror = stage.join("mirror.git");
     ag_git::unpack_bundle(bundle, &mirror)?;
     let actor = crate::ctx::identity(cli)?;
     let root = stage.join("repository");
-    let repo = Repository::init(
-        &root,
-        &InitOptions {
-            namespace,
-            default_stream: StreamName::new(ag_git::source_default_branch(&mirror)?).map_err(|e| anyhow!("{e}"))?,
-            actor: actor.clone(),
-            storage: None,
-        },
+    let repo = Repository::init(&root, &migration_options(&mirror, namespace, &actor)?)?;
+    let report = ag_git::migrate(
+        &repo,
+        &ag_git::MigrationOptions { git_dir: mirror, actor: actor.clone(), allow_lossy: args.allow_lossy },
     )?;
-    let report =
-        ag_git::migrate(&repo, &ag_git::MigrationOptions { git_dir: mirror, actor, allow_lossy: args.allow_lossy })?;
     verify_migration(&repo)?;
     save_archive(&root, bundle, &report)?;
     // Make the default branch immediately usable; an empty worktree would look like every file was deleted.
-    repo.sync_workspace("default", &root, &crate::ctx::identity(cli)?)?;
+    repo.sync_workspace("default", &root, &actor)?;
     drop(repo);
     Ok(report)
 }

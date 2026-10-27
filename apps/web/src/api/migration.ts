@@ -1,4 +1,11 @@
 import { client } from './instance'
+import type { RequestOptions } from './client'
+
+type CredentialOptions = Pick<RequestOptions, 'token'>
+/** Pin retries to the initiating session; its caller handles a rejected credential locally. */
+function credentials(options: CredentialOptions): RequestOptions {
+  return { ...options, quietUnauthenticated: options.token !== undefined }
+}
 
 export interface MigrationRef {
   name: string
@@ -25,8 +32,14 @@ export interface MigrationPlan {
   report: MigrationReport
   state: 'ready' | 'imported'
 }
-export function prepareMigration(name: string, file: File, key: string) {
+export function prepareMigration(
+  name: string,
+  file: File,
+  key: string,
+  options: CredentialOptions = {},
+) {
   return client.json<MigrationPlan>('/v1/migrations/git', {
+    ...credentials(options),
     method: 'PUT',
     query: { name },
     binary: file,
@@ -34,13 +47,21 @@ export function prepareMigration(name: string, file: File, key: string) {
     timeoutMs: 300_000,
   })
 }
-export function readMigration(id: string) {
-  return client.get<MigrationPlan>(`/v1/migrations/${encodeURIComponent(id)}`)
+export function readMigration(id: string, options: CredentialOptions = {}) {
+  return client.get<MigrationPlan>(
+    `/v1/migrations/${encodeURIComponent(id)}`,
+    undefined,
+    credentials(options),
+  )
 }
-export function finishMigration(id: string, acceptLossy: boolean) {
-  return client.post<MigrationPlan>(`/v1/migrations/${encodeURIComponent(id)}/commit`, {
-    accept_lossy: acceptLossy,
-  })
+export function finishMigration(id: string, acceptLossy: boolean, options: CredentialOptions = {}) {
+  return client.post<MigrationPlan>(
+    `/v1/migrations/${encodeURIComponent(id)}/commit`,
+    {
+      accept_lossy: acceptLossy,
+    },
+    credentials(options),
+  )
 }
 export function migrationWarnings(report: MigrationReport): string[] {
   const warnings: string[] = []

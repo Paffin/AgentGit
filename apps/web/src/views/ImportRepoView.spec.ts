@@ -9,6 +9,10 @@ enableAutoUnmount(afterEach)
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+  else Reflect.deleteProperty(navigator, 'clipboard')
+  if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor)
+  else Reflect.deleteProperty(document, 'execCommand')
 })
 const mocks = vi.hoisted(() => ({ read: vi.fn(), prepare: vi.fn(), finish: vi.fn() }))
 const auth = reactive({
@@ -22,9 +26,11 @@ vi.mock('@/api/migration', () => ({
   readMigration: mocks.read,
   prepareMigration: mocks.prepare,
   finishMigration: mocks.finish,
-  bundleCommands: () => '',
+  bundleCommands: (source: string) => (source ? `git clone ${source}` : ''),
   migrationWarnings: () => [],
 }))
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand')
 const legacy = 'agentgit.migration'
 const key = (identity: string) => `${legacy}:${encodeURIComponent(identity)}`
 const plan = (name = 'acme/alice', id = 'saved-import'): MigrationPlan => ({
@@ -269,5 +275,49 @@ describe('resuming an import', () => {
     expect(w.text()).toContain('Import recovery is unavailable')
     expect(w.text()).toContain('Review before publishing')
     expect(sessionStorage.getItem(legacy)).toBe('saved-import')
+  })
+})
+
+describe('copying migration commands', () => {
+  it('copies through the shared fallback when the async clipboard is unavailable', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    let copied = ''
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: () => {
+        copied = document.querySelector('textarea')?.value ?? ''
+        return true
+      },
+    })
+    const w = await show()
+    await w
+      .get('input[placeholder="https://github.com/team/project.git"]')
+      .setValue('https://gitlab.example/team/first.git')
+    await button(w, 'Copy commands').trigger('click')
+    await flushPromises()
+    expect(copied).toBe('git clone https://gitlab.example/team/first.git')
+    expect(button(w, 'Copied')).toBeDefined()
+    expect(w.text()).not.toContain('Clipboard access is unavailable')
+  })
+
+  it('does not label changed instructions as copied after an older request completes', async () => {
+    let finish!: () => void
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const w = await show()
+    const input = w.get('input[placeholder="https://github.com/team/project.git"]')
+    await input.setValue('https://gitlab.example/team/first.git')
+    await button(w, 'Copy commands').trigger('click')
+    await input.setValue('https://gitlab.example/team/second.git')
+    finish()
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('git clone https://gitlab.example/team/first.git')
+    expect(button(w, 'Copy commands')).toBeDefined()
+    expect(button(w, 'Copied')).toBeUndefined()
   })
 })

@@ -16,6 +16,7 @@ import { useAuth } from '@/stores/auth'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Card from '@/ui/Card.vue'
+import CopyButton from '@/ui/CopyButton.vue'
 import TextField from '@/ui/TextField.vue'
 
 usePageTitle(() => 'Import a repository')
@@ -30,7 +31,6 @@ const busy = ref(false)
 const error = ref('')
 const needsSignIn = ref(false)
 const mayRequest = computed(() => canImport.value && !needsSignIn.value)
-const copied = ref(false)
 const accept = ref(false)
 const RESUME_KEY = 'agentgit.migration'
 const resumeId = ref<string | null>(null)
@@ -137,7 +137,6 @@ function startAnother() {
   resumeId.value = null
   error.value = ''
   storageError.value = ''
-  copied.value = false
   remember(null)
   plan.value = null
   accept.value = false
@@ -174,14 +173,6 @@ function selectFile(event: Event) {
     file.value = null
   } else file.value = next
   key.value = randomHex()
-}
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(commands.value)
-    copied.value = true
-  } catch {
-    error.value = 'Clipboard access is unavailable. Select and copy the commands below.'
-  }
 }
 async function prepare() {
   if (busy.value || !file.value || !validName.value || !mayRequest.value) return
@@ -284,12 +275,11 @@ function downloadReport() {
               placeholder="https://github.com/team/project.git"
               :error="sourceError || undefined"
               hint="Private repositories work with your existing local Git sign-in. Never paste a token here."
-              @update:model-value="copied = false"
             />
             <template v-if="commands">
               <div class="command-heading">
                 <strong>Run in Bash or Git Bash in an empty folder</strong
-                ><Button size="sm" @click="copy">{{ copied ? 'Copied' : 'Copy commands' }}</Button>
+                ><CopyButton :text="commands" label="Copy commands" with-label />
               </div>
               <pre
                 tabindex="0"

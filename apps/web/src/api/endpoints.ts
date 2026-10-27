@@ -48,6 +48,8 @@ import type {
 } from './types'
 
 type Opts = Pick<RequestOptions, 'signal' | 'timeoutMs' | 'runId' | 'idempotencyKey'>
+// Creation spans two requests; keep both tied to the initiating session.
+type SessionOpts = Opts & Pick<RequestOptions, 'token' | 'quietUnauthenticated'>
 
 export function createApi(c: ApiClient) {
   const r = repoPath
@@ -79,8 +81,10 @@ export function createApi(c: ApiClient) {
         return { items: res.repos ?? [], nextPageToken: res.next_page_token ?? '' }
       },
       get: (repo: string, o?: Opts) => c.get<Repo>(r(repo), undefined, o),
-      create: (body: { name: string; description?: string; default_stream?: string }, o?: Opts) =>
-        c.post<Repo>('/v1/repos', body, o),
+      create: (
+        body: { name: string; description?: string; default_stream?: string },
+        o?: SessionOpts,
+      ) => c.post<Repo>('/v1/repos', body, o),
       configure: (repo: string, body: { description?: string; quota?: Partial<Quota> }, o?: Opts) =>
         c.patch<Repo>(r(repo), body, o),
     },
@@ -369,7 +373,7 @@ export function createApi(c: ApiClient) {
     admin: {
       policy: (repo: string, stream: string, o?: Opts) =>
         c.get<PolicyVersion>(r(repo, '/policy'), { stream }, o),
-      setPolicy: (repo: string, stream: string, document: string, o?: Opts) =>
+      setPolicy: (repo: string, stream: string, document: string, o?: SessionOpts) =>
         c.put<PolicyVersion>(r(repo, '/policy'), { stream, document }, o),
       policyHistory: async (repo: string, stream: string, o?: Opts) =>
         (await c.get<{ versions: PolicyVersion[] }>(r(repo, '/policy/history'), { stream }, o))

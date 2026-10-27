@@ -326,6 +326,8 @@ choice means in sentences, create. The rules are stored with the repository. The
 **Getting started** checklist (repository created, rules chosen, work started, a change request open, first change
 landed) that ticks itself and offers the button for the next step.
 
+Leaving the wizard does not delete a repository that was already created, and a late response does not bring you back. If the repository is created but its rules cannot be saved, a warning names it; finish choosing the rules under **Settings**.
+
 ![Choosing the rules of a new repository](../assets/ui-new-repo.png)
 
 ### Import from GitHub or GitLab

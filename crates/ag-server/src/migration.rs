@@ -223,6 +223,14 @@ fn save_result(app: &App, id: &str, path: &FsPath, saved: Saved) -> ApiResult<Pl
 }
 fn prepare(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<Plan> {
     let path = directory(app, id)?;
+    let result = prepare_inner(app, id, name, owner, bytes);
+    if result.is_err() && !path.join("plan.json").exists() {
+        let _ = fs::remove_dir_all(path);
+    }
+    result
+}
+fn prepare_inner(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<Plan> {
+    let path = directory(app, id)?;
     let digest = hex::encode(Sha256::digest(&bytes));
     if let Some(existing) = previous_plan(app, id, name, owner, &digest)? {
         return Ok(existing);

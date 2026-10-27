@@ -77,6 +77,11 @@ async fn invalid_or_unauthenticated_uploads_do_not_create_a_repository() {
     let bad = s.admin().put_bytes("/v1/migrations/git?name=acme/moved", b"not a bundle".to_vec()).await;
     assert_eq!(bad.status, 400, "{}", bad.json);
     assert_eq!(s.admin().get("/v1/repos/acme/moved").await.status, 404);
+    let staging = s.app.cfg.server.data_dir.join("migrations");
+    assert!(
+        fs::read_dir(staging).unwrap().all(|entry| !entry.unwrap().path().is_dir()),
+        "failed imports must not retain uploaded bundles"
+    );
     s.stop().await;
 }
 

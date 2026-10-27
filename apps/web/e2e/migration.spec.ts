@@ -5,14 +5,19 @@ import { execFileSync } from 'node:child_process'
 import { expectAccessible } from './support/ui.ts'
 import { expect, test } from './fixtures.ts'
 
-function bundle(): Buffer {
+function bundle(lfs = false): Buffer {
   const dir = mkdtempSync(join(tmpdir(), 'ag-migration-'))
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { stdio: 'pipe' })
   try {
     git('init', '-b', 'main')
     git('config', 'user.name', 'Migration Test')
     git('config', 'user.email', 'migration@example.invalid')
-    writeFileSync(join(dir, 'hello.txt'), 'Hello from the source repository\n')
+    writeFileSync(
+      join(dir, 'hello.txt'),
+      lfs
+        ? `version https://git-lfs.github.com/spec/v1\noid sha256:${'a'.repeat(64)}\nsize 123\n`
+        : 'Hello from the source repository\n',
+    )
     git('add', '.')
     git('-c', 'commit.gpgsign=false', 'commit', '-m', 'Original history')
     git('branch', 'feature')
@@ -56,4 +61,27 @@ test('imports a real Git bundle after reviewing its branches and tags', async ({
   await expect(page.getByText('Your repository is ready', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Open repository', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/repos/${name}$`))
+})
+
+test('requires explicit consent for external LFS content before publishing', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/import')
+  await page
+    .getByLabel('New AgentGit repository')
+    .fill(`acme/lfs-${Date.now()}-${testInfo.workerIndex}`)
+  await page.getByLabel('Git bundle', { exact: true }).setInputFiles({
+    name: 'source.bundle',
+    mimeType: 'application/octet-stream',
+    buffer: bundle(true),
+  })
+  await page.getByRole('button', { name: 'Check the import', exact: true }).click()
+  await expect(
+    page.getByText('Some content needs a separate migration', { exact: true }),
+  ).toBeVisible()
+  const publish = page.getByRole('button', { name: 'Publish repository', exact: true })
+  await expect(publish).toBeDisabled()
+  await page.getByRole('checkbox', { name: /I have reviewed these content limitations/ }).check()
+  await publish.click()
+  await expect(page.getByText('Your repository is ready', { exact: true })).toBeVisible()
 })

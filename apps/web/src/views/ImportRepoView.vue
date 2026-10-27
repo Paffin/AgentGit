@@ -39,7 +39,7 @@ function remember(id: string | null) {
   }
 }
 onMounted(async () => {
-  let id: string | null = null
+  let id: string | null
   try {
     id = sessionStorage.getItem(RESUME_KEY)
   } catch {
@@ -56,23 +56,24 @@ onMounted(async () => {
     busy.value = false
   }
 })
-function suggestName() {
-  if (name.value || !commands.value) return
+const suggestedName = computed(() => {
+  if (!commands.value) return ''
   const path = new URL(source.value).pathname
     .replace(/\.git$/, '')
     .split('/')
     .filter(Boolean)
     .slice(-2)
-  if (path.length === 2)
-    name.value = path
-      .map((part) =>
-        part
-          .toLowerCase()
-          .replace(/[^a-z0-9._-]/g, '-')
-          .replace(/^[^a-z0-9]+/, ''),
-      )
-      .join('/')
-}
+  return path.length === 2
+    ? path
+        .map((part) =>
+          part
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]/g, '-')
+            .replace(/^[^a-z0-9]+/, ''),
+        )
+        .join('/')
+    : ''
+})
 function startAnother() {
   remember(null)
   plan.value = null
@@ -185,7 +186,6 @@ function downloadReport() {
             <TextField
               v-model="source"
               label="Source repository URL (optional)"
-              @change="suggestName"
               placeholder="https://github.com/team/project.git"
               :error="sourceError || undefined"
               hint="Private repositories work with your existing local Git sign-in. Never paste a token here."
@@ -220,6 +220,9 @@ function downloadReport() {
               required
               hint="Use lowercase owner/name. The destination must not exist yet."
             />
+            <Button v-if="suggestedName && !name" @click="name = suggestedName"
+              >Use {{ suggestedName }}</Button
+            >
             <div class="upload">
               <label for="bundle">Git bundle</label
               ><input

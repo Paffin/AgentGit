@@ -46,6 +46,60 @@ test.describe('no screen scrolls the page sideways', () => {
 })
 
 test.describe('navigation', () => {
+  test('administration tabs keep their labels readable and keyboard-selected tabs in view', async ({
+    state,
+    openAs,
+  }) => {
+    const page = await openAs('admin')
+    await page.goto(`/repos/${state.demo.repo}/admin`)
+    const list = page.getByRole('tablist', { name: 'Administration', exact: true })
+    const tabs = list.getByRole('tab')
+    await expect(tabs).toHaveCount(7)
+    await expect
+      .poll(() =>
+        list.evaluate((element) => {
+          const buttons = Array.from(element.querySelectorAll<HTMLElement>('[role=tab]'))
+          return buttons.every((button) => button.scrollWidth <= button.clientWidth + 1)
+        }),
+      )
+      .toBe(true)
+    const geometry = await list.evaluate((element) => {
+      const labels = Array.from(element.querySelectorAll('[role=tab] > span')).map((label) =>
+        label.getBoundingClientRect(),
+      )
+      return {
+        labelsOverlap: labels.some(
+          (label, index) => index > 0 && labels[index - 1]!.right > label.left + 1,
+        ),
+        pageWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+      }
+    })
+    expect(geometry.labelsOverlap).toBe(false)
+    expect(geometry.pageWidth).toBeLessThanOrEqual(geometry.viewportWidth)
+    const first = tabs.first()
+    const last = tabs.last()
+    await first.focus()
+    const verticalPosition = await page.evaluate(() => window.scrollY)
+    await first.press('End')
+    await expect(last).toBeFocused()
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await expect
+      .poll(() =>
+        last.evaluate((tab) => {
+          const box = tab.getBoundingClientRect()
+          const viewport = tab.parentElement!.getBoundingClientRect()
+          return box.left >= viewport.left - 1 && box.right <= viewport.right + 1
+        }),
+      )
+      .toBe(true)
+    await last.press('Home')
+    await expect(first).toBeFocused()
+    await expect(first).toHaveAttribute('aria-selected', 'true')
+    await expect.poll(() => list.evaluate((element) => element.scrollLeft)).toBe(0)
+    expect(await page.evaluate(() => window.scrollY)).toBe(verticalPosition)
+  })
+
   test('the header is whole and the account menu opens inside the window', async ({ page }) => {
     await page.goto('/repos')
     await expect(page.getByTestId('user-menu')).toBeVisible()

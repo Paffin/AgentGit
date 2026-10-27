@@ -20,6 +20,12 @@ function select(id: T) {
   emit('update:modelValue', id)
 }
 
+function focusTab(id: T) {
+  const target = list.value?.querySelector<HTMLElement>(`#${CSS.escape(tabId(id))}`)
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' })
+}
+
 async function onKey(e: KeyboardEvent, index: number) {
   const enabled = props.tabs.filter((t) => !t.disabled)
   const current = enabled.findIndex((t) => t.id === props.tabs[index]?.id)
@@ -34,7 +40,7 @@ async function onKey(e: KeyboardEvent, index: number) {
   if (!target) return
   select(target.id)
   await nextTick()
-  list.value?.querySelector<HTMLElement>(`#${CSS.escape(tabId(target.id))}`)?.focus()
+  focusTab(target.id)
 }
 </script>
 

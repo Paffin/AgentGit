@@ -302,11 +302,17 @@ not been run in production by anyone but its authors, and there has been no exte
 - No history rewriting, tags, submodules or LFS; the Git bridge reports what it cannot carry.
 - The Web UI is tested in Chromium, Firefox and WebKit; OIDC only against Keycloak. There has been no screen-reader pass.
   `ag-mcp` was not run inside real hosts. The SDKs are unpublished.
-- The nightly fuzz and weekly mutation jobs have not run on GitHub yet.
+- Nightly fuzz and weekly mutation jobs have run. On the inspected main commit, policy mutation testing still reported survivors; a successful coverage run alone does not close that gate.
 
 Reasonable today: a team and its agents on one machine, one server or a few replicas, with CI-gated workflows, or
 experimenting with policy-bound autonomy. Not yet: hosting mutually untrusting tenants, or being the only copy of data you
 cannot lose. Keep `ag backup` copies and a Git mirror.
+
+## Try the beta workflow
+
+The project is still alpha. We are preparing a focused beta for small teams: see the
+[scope and release gates](docs/community/beta.md), [start here](docs/community/start-here.md), and the
+[beta milestone](https://github.com/Paffin/AgentGit/milestone/1). Installation problems and confusing workflows are useful feedback.
 
 ## Contributing
 

@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and workflow discussion
+    url: https://github.com/Paffin/AgentGit/discussions
+    about: Ask about setup, agent workflows and contributing.
   - name: Security vulnerability
     url: https://github.com/Paffin/AgentGit/security/advisories/new
     about: Please report security issues privately.

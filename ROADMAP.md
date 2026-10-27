@@ -61,6 +61,12 @@ Each item is described, with what is and is not verified, in the [changelog](CHA
   `ag-server dev`, `ag login`, policy presets, `ag explain`; and a test gate under which a test cannot pass by not
   running (required components, a reviewed skip list, a report in every job).
 
+## Beta exit criteria
+
+The next release is scoped around one reliable workflow, not every deployment option. The
+[beta programme](docs/community/beta.md) defines the supported target, measurable acceptance gates and pilot process.
+Track work in the [beta milestone](https://github.com/Paffin/AgentGit/milestone/1).
+
 ## Next
 
 Only what is not done. The order comes from the first outside validation
@@ -86,8 +92,7 @@ they left open is listed first.
 4. **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,
    storage class); mixed builds during a rolling upgrade (metadata schema 3 needs the new build first); a PostgreSQL
    failover; the periodic reaper with real replicas on PostgreSQL and S3; load on PostgreSQL, S3, TLS and several
-   replicas, and the tree cache on the disk backend; first results of the nightly fuzz and the weekly mutation runs;
-   `perf.yml` on a GitHub runner; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
+   replicas, and the tree cache on the disk backend; resolve surviving policy mutations and retain nightly fuzz, mutation and performance evidence; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
 5. **Test-gate leftovers.** The root-only halves of the sandbox tests (`n/a:host-privilege`) run in no CI job; the four
    scripts that read TOML need Python 3.11 and are not in the 3.9 job; a bare `if !cond { return }` in a new Rust test is
    not caught by the scan.

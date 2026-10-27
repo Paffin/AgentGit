@@ -1,0 +1,49 @@
+name: Pilot report
+description: Try the beta workflow and tell us what helped or blocked you.
+title: "[Pilot]: "
+labels: ["beta", "feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for testing AgentGit. It is still alpha. Use a non-critical repository and never include credentials, private source or customer data."
+  - type: input
+    id: version
+    attributes:
+      label: Version and platform
+      description: Output of ag --version, operating system and installation method.
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Agent host and task
+      description: Which agent or MCP host, and what were you trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: First integration
+      description: Did you reach a reviewed, validated integration? How long did it take, and where did you need help?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and blockers
+      description: Steps, expected result, actual result, and sanitized errors or screenshots.
+  - type: dropdown
+    id: return
+    attributes:
+      label: Have you used it again?
+      options:
+        - First session only
+        - Returned in the following week
+        - Stopped using it (please explain above)
+  - type: checkboxes
+    id: sharing
+    attributes:
+      label: Follow-up
+      options:
+        - label: I am open to follow-up questions in this issue.
+        - label: Please ask before using this report in a case study.

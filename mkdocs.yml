@@ -106,6 +106,10 @@ nav:
       - Glossary: glossary.md
       - Git to AgentGit: concepts-cheatsheet.md
       - AgentGit compared: comparison.md
+  - Community:
+      - Start here: community/start-here.md
+      - Beta programme: community/beta.md
+      - Pilot launch kit: community/launch-kit.md
   - Guides:
       - Running agents: guides/agents.md
       - Agents through MCP: guides/mcp.md

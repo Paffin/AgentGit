@@ -21,7 +21,13 @@ Browser imports currently support one server with SQLite and filesystem objects.
 
 ## From the terminal
 
-For larger bundles or an offline migration:
+For larger bundles or an offline migration, preview the same conversion and integrity checks before publishing:
+
+```sh
+ag migrate repository.bundle ./your-project --namespace your-team/your-project --dry-run
+```
+
+The preview reports branches, tags and content limitations without creating the destination or changing the source. Add `--json` for the complete reconciliation report, including renamed branches and skipped paths. It uses temporary storage and can take as long as a full import. Uncommitted files are not included. Review any limitations before running the command again without `--dry-run`:
 
 ```sh
 ag migrate repository.bundle ./your-project --namespace your-team/your-project

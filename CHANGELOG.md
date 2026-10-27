@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- `ag migrate --dry-run` verifies a full Git conversion and shows its reconciliation report before creating a destination. Previewing losses does not authorize a later lossy import.
+
 - `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
 - Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
 

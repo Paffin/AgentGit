@@ -74,6 +74,7 @@ _arguments "${_arguments_options[@]}" : \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
+'--dry-run[Verify the migration and report limitations without publishing a repository]' \
 '--allow-lossy[Accept reported omissions, unresolved LFS pointers and unsupported refs]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \

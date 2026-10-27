@@ -280,8 +280,13 @@ impl RepoManager {
         }
         if !dest.exists() {
             std::fs::create_dir_all(dest.parent().expect("repository parent")).map_err(ApiError::internal)?;
-            std::fs::create_dir(&dest).map_err(ApiError::internal)?;
-            std::fs::rename(source.join(".ag"), dest.join(".ag")).map_err(ApiError::internal)?;
+            ag_integrate::publish_new_directory(source, &dest).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    ApiError::new(ag_protocol::ErrorCode::AlreadyExists, "repository directory already exists")
+                } else {
+                    ApiError::internal(e)
+                }
+            })?;
         } else if !owns() {
             return Err(ApiError::new(
                 ag_protocol::ErrorCode::AlreadyExists,

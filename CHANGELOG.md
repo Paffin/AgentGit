@@ -13,6 +13,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Public beta for the single-server Linux/SQLite/filesystem workflow, with open external qualification gates and explicit migration limits.
 - Web import from full Git bundles: private preflight, all-branch/tag reconciliation, content-loss acknowledgement, idempotent publication, and downloadable receipt. Credentials stay with local Git.
+- Publication moves the complete prepared directory atomically without replacing an existing destination; a retry can recover after the move but before registry insertion.
 - `ag migrate` imports a full local Git clone/mirror or bundle into a new working repository. Original bundles and reports are retained and included in backups.
 - Deterministic mapping for Git branch names outside AgentGit's naming rules; unsupported refs, submodules, paths, repaired text and external LFS pointers are reported.
 - Deployment smoke tests exercise real bundle import and publication in the shipped server image. Git's native bundle/pack runtime is included in the shell-less images.

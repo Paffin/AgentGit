@@ -98,6 +98,8 @@ dependencies = [
  "agentgit-dag",
  "agentgit-integrate",
  "agentgit-types",
+ "serde",
+ "sha2",
  "thiserror",
 ]
 
@@ -118,6 +120,7 @@ dependencies = [
  "agentgit-types",
  "globset",
  "hex",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

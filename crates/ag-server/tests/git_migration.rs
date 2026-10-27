@@ -98,3 +98,23 @@ async fn losses_require_acceptance_before_publication() {
     assert_eq!(admin.post(&route, json!({"accept_lossy":true})).await.status, 200);
     s.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn retries_register_a_complete_directory_after_an_interrupted_publication() {
+    let s = TestServer::start().await;
+    let admin = s.admin();
+    let plan = admin.put_bytes("/v1/migrations/git?name=acme/recovered", bundle()).await;
+    assert_eq!(plan.status, 200, "{}", plan.json);
+    let id = plan.json["id"].as_str().unwrap();
+    let source = s.app.cfg.server.data_dir.join("migrations").join(id).join("repository");
+    let destination = s.app.cfg.server.data_dir.join("repos/acme/recovered");
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    // The filesystem move completed, but the process stopped before the registry transaction.
+    ag_integrate::publish_new_directory(&source, &destination).unwrap();
+    assert_eq!(admin.get("/v1/repos/acme/recovered").await.status, 404);
+    let result = admin.post(&format!("/v1/migrations/{id}/commit"), json!({"accept_lossy":false})).await;
+    assert_eq!(result.status, 200, "{}", result.json);
+    assert_eq!(result.json["state"], "imported");
+    assert!(s.app.repos.handle("acme/recovered").unwrap().fsck().unwrap().is_ok());
+    s.stop().await;
+}

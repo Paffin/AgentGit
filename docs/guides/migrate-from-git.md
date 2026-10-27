@@ -17,7 +17,7 @@ git -C agentgit-source.git bundle create ../repository.bundle --all
 
 The same commands work with GitLab and self-hosted Git servers; replace the URL. For SSH, use the SSH URL with your local Git tooling and upload the resulting bundle. A full mirror includes branches and tags that an ordinary clone may keep only as remote-tracking refs. Shallow and incremental bundles are not complete migration inputs.
 
-Browser imports currently support one server with SQLite and filesystem objects. The server needs Git on its `PATH`; the official Docker images include it. Bundles are limited to 128 MiB; histories to 100,000 commits. One import is processed at a time and at most eight unpublished imports are retained. Unpublished staging is eligible for cleanup after 24 hours. Retry with the same browser action after a network interruption; publication is idempotent.
+Browser imports currently support one server with SQLite and filesystem objects. The server needs Git on its `PATH`; the official Docker images include it. Keep staging and hosted repositories on the same filesystem for atomic publication. If you use a reverse proxy, allow 128 MiB request bodies and five-minute requests. Bundles are limited to 128 MiB; histories to 100,000 commits. One import is processed at a time and at most eight unpublished imports are retained. Unpublished staging is eligible for cleanup after 24 hours. Retry with the same browser action after a network interruption; publication is idempotent.
 
 ## From the terminal
 

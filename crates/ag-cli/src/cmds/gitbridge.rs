@@ -174,23 +174,6 @@ fn build_migration(
     drop(repo);
     Ok(report)
 }
-fn publish_directory(root: &std::path::Path, destination: &std::path::Path) -> Result<()> {
-    use anyhow::Context;
-    use std::fs;
-    // An exclusive reservation prevents replacing a concurrently created destination.
-    fs::create_dir(destination).context("Destination was created by another process")?;
-    if let Err(e) = (|| -> std::io::Result<()> {
-        for entry in fs::read_dir(root)? {
-            let entry = entry?;
-            fs::rename(entry.path(), destination.join(entry.file_name()))?;
-        }
-        Ok(())
-    })() {
-        let _ = fs::remove_dir(destination);
-        return Err(e.into());
-    }
-    Ok(())
-}
 fn destination_stage(args: &MigrateArgs) -> Result<(PathBuf, tempfile::TempDir)> {
     use anyhow::bail;
     use std::fs;
@@ -213,7 +196,7 @@ pub fn migrate(cli: &crate::Cli, args: &MigrateArgs) -> Result<u8> {
     let bundle = stage.path().join("source.bundle");
     create_bundle(&source, &bundle)?;
     let report = build_migration(cli, args, namespace, stage.path(), &bundle)?;
-    publish_directory(&stage.path().join("repository"), &destination)?;
+    ag_integrate::publish_new_directory(&stage.path().join("repository"), &destination)?;
     crate::ctx::emit(cli.json, &report, || {
         format!(
             "Migrated {} commits, {} branches and {} tags into {}.\nOriginal source unchanged; archive and report: .ag/import/.\nNext: cd {} && ag status",

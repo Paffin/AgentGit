@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Proposal } from '@/api/types'
@@ -21,17 +21,19 @@ const decision = ref<Decision>('approve')
 const body = ref('')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
+const reviewedHead = ref(props.proposal.head)
+const headChanged = computed(() => reviewedHead.value !== props.proposal.head)
 
-watch(
-  () => props.modelValue,
-  (open) => {
-    if (open) {
-      decision.value = 'approve'
-      body.value = ''
-      error.value = null
-    }
-  },
-)
+function reset() {
+  decision.value = 'approve'
+  body.value = ''
+  error.value = null
+  reviewedHead.value = props.proposal.head
+}
+
+// Closing the dialog lets the reviewer inspect the diff without losing their work.
+// A different proposal must start a new review. Head changes keep the draft for re-review.
+watch([() => props.repo, () => props.proposal.id], reset)
 
 const options = [
   { value: 'approve', label: 'Approve', icon: 'check' },
@@ -40,11 +42,22 @@ const options = [
 ] as const
 
 async function submit() {
+  if (busy.value || headChanged.value) return
   busy.value = true
   error.value = null
   try {
+    const capabilities = await api.capabilities()
+    if (!capabilities.features.includes('proposals.review_head')) {
+      throw new ApiError({
+        status: 412,
+        code: 'failed_precondition',
+        message:
+          'This server cannot bind your review to the code you inspected. Update the server before submitting reviews.',
+      })
+    }
     await api.proposals.review(props.repo, props.proposal.id, {
       decision: decision.value,
+      expected_head: reviewedHead.value,
       body: body.value.trim() || undefined,
     })
     toasts.ok(
@@ -54,6 +67,7 @@ async function submit() {
           ? 'Changes requested'
           : 'Comment added',
     )
+    reset()
     emit('update:modelValue', false)
     emit('done')
   } catch (e) {
@@ -76,13 +90,19 @@ async function submit() {
     @update:model-value="emit('update:modelValue', $event)"
   >
     <form id="review-form" class="form" @submit.prevent="submit">
+      <Alert v-if="headChanged" tone="warn" live="alert" title="The proposal changed">
+        Your comment is kept. Review the updated changes before submitting your decision.
+        <Button size="sm" @click="reviewedHead = proposal.head"
+          >I reviewed the updated changes</Button
+        >
+      </Alert>
       <Segmented v-model="decision" legend="Decision" :options="options" />
       <TextArea
         v-model="body"
         label="Comment"
         :rows="5"
         placeholder="What did you check? Anything the author should know?"
-        hint="Plain text."
+        hint="Plain text. Your unfinished review stays here while you inspect this proposal; reloading the page clears it."
       />
       <Alert v-if="error" tone="bad" live="alert" title="The server did not accept the review">
         {{ error.message }}
@@ -91,7 +111,12 @@ async function submit() {
     </form>
     <template #footer>
       <Button :disabled="busy" @click="emit('update:modelValue', false)">Cancel</Button>
-      <Button type="submit" form="review-form" variant="primary" :loading="busy"
+      <Button
+        type="submit"
+        form="review-form"
+        variant="primary"
+        :loading="busy"
+        :disabled="headChanged"
         >Submit review</Button
       >
     </template>

@@ -205,3 +205,54 @@ async fn the_server_enforces_client_deadlines() {
     assert_eq!(r.json["version"], 0);
     srv.stop().await;
 }
+
+#[tokio::test]
+async fn a_review_cannot_approve_a_head_the_reviewer_did_not_see() {
+    let srv = TestServer::start().await;
+    let admin = srv.admin();
+    assert_eq!(admin.post("/v1/repos", json!({"name": "acme/review-head"})).await.status, 200);
+    let author = user_with_role(&srv, "user:author", "acme/review-head", "writer").await;
+    let reviewer = user_with_role(&srv, "user:reviewer", "acme/review-head", "reviewer").await;
+    let c = Client::new("acme/review-head");
+    let (seen, objects) = c.commit(vec![], "user:author", "seen", &[("a", b"one")], 1_700_000_000_000);
+    upload(&author, "acme/review-head", &objects).await;
+    let (updated, objects) = c.commit(vec![seen], "user:author", "unseen", &[("a", b"two")], 1_700_000_000_001);
+    upload(&author, "acme/review-head", &objects).await;
+    let proposal = author
+        .post(
+            "/v1/repos/acme/review-head/proposals",
+            json!({"stream": "main", "head": seen.to_string(), "title": "Review this"}),
+        )
+        .await;
+    assert_eq!(proposal.status, 200, "{}", proposal.json);
+    let path = format!("/v1/repos/acme/review-head/proposals/{}", proposal.json["id"].as_str().unwrap());
+    let changed = author.call("PATCH", &path, Some(json!({"new_head": updated.to_string()})), &[]).await;
+    assert_eq!(changed.status, 200, "{}", changed.json);
+
+    for decision in ["approve", "request_changes", "comment"] {
+        let stale = reviewer
+            .post(
+                &format!("{path}/reviews"),
+                json!({"decision": decision, "body": "only saw version one", "expected_head": seen.to_string()}),
+            )
+            .await;
+        assert_eq!(stale.status, 412, "{}", stale.json);
+        assert_eq!(stale.json["error"]["code"], "failed_precondition");
+    }
+    let untouched = reviewer.get(&path).await;
+    assert_eq!(untouched.json["reviews"].as_array().unwrap().len(), 0);
+    let audit = admin.get("/v1/repos/acme/review-head/audit?contains=proposal.review").await;
+    assert_eq!(audit.status, 200, "{}", audit.json);
+    assert_eq!(audit.json["entries"].as_array().unwrap().len(), 0);
+    let malformed = reviewer
+        .post(&format!("{path}/reviews"), json!({"decision": "approve", "expected_head": "not-a-changeset"}))
+        .await;
+    assert_eq!(malformed.status, 400, "{}", malformed.json);
+
+    let accepted = reviewer
+        .post(&format!("{path}/reviews"), json!({"decision": "approve", "expected_head": updated.to_string()}))
+        .await;
+    assert_eq!(accepted.status, 200, "{}", accepted.json);
+    assert_eq!(accepted.json["head"], updated.to_string());
+    srv.stop().await;
+}

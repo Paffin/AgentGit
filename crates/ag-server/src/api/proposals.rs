@@ -5,7 +5,7 @@ use ag_types::{ChangesetId, StreamName};
 
 use ag_storage::meta::ProposalFilter;
 
-use super::{convert, decode_keyset, encode_keyset, page_size, require};
+use super::{convert, decode_keyset, encode_keyset, page_size, parse_id, require};
 use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
@@ -98,8 +98,13 @@ impl App {
     /// Records a review (approve, request_changes or comment) of the current head.
     pub async fn review_proposal(&self, call: &Call, req: v1::ReviewProposalRequest) -> ApiResult<v1::Review> {
         let decision = require(&req.decision, "decision")?.to_string();
+        let expected_head = if req.expected_head.is_empty() {
+            None
+        } else {
+            Some(parse_id(&req.expected_head, "reviewed changeset id")?)
+        };
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalReview, None, move |repo, actor| {
-            Ok(convert::review(&repo.review(&req.id, actor, &decision, &req.body)?))
+            Ok(convert::review(&repo.review_at_head(&req.id, actor, &decision, &req.body, expected_head.as_ref())?))
         })
         .await
     }

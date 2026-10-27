@@ -990,11 +990,12 @@ class ProposalsApi:
         id: str,
         body: str | None = None,
         decision: str | None = None,
+        expected_head: str | None = None,
         idempotency_key: str | None = None,
         options: CallOptions | None = None,
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
-        return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "idempotency_key": idempotency_key}, options, Review)
+        return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
 
     def update(
         self,
@@ -2294,11 +2295,12 @@ class AsyncProposalsApi:
         id: str,
         body: str | None = None,
         decision: str | None = None,
+        expected_head: str | None = None,
         idempotency_key: str | None = None,
         options: CallOptions | None = None,
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
-        return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "idempotency_key": idempotency_key}, options, Review)
+        return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
 
     async def update(
         self,

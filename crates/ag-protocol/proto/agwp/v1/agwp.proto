@@ -720,6 +720,9 @@ message ReviewProposalRequest {
   string body = 4;
   // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 5;
+  // Optional exact head inspected by the reviewer. A mismatch rejects the review atomically.
+  // Empty retains the legacy current-head behavior; negotiate proposals.review_head first.
+  string expected_head = 6;
 }
 
 message CloseProposalRequest {

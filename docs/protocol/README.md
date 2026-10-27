@@ -14,8 +14,7 @@ move a stream head directly; changes travel as proposals and land only through `
 
 ## What follows the engine's rules
 
-- **Every mutating operation is idempotent** (`idempotency_key`); replays return the recorded result, and keys
-  are bound to the request they were first used with.
+- **Idempotency is operation-specific**: operations that support `idempotency_key` return the recorded result on replay and bind keys to the original request. Some operations, including review submission, accept but ignore the key; consult the message's field documentation before retrying a lost response.
 - **Structured outcomes**, not strings: `integrate` answers `integrated | blocked | conflict | denied |
   invalid` with stable blocker codes — see the [policy reference](../guides/policy.md#outcome-codes).
 - **Bounded inputs**: sizes are checked before allocation; the server advertises its limits in

@@ -1061,6 +1061,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         decision: decision.into(),
                         body: message.clone(),
                         idempotency_key: String::new(),
+                        expected_head: String::new(),
                     }))
                     .await
                     .map_err(s)?

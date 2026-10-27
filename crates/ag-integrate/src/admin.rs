@@ -2,7 +2,9 @@
 
 use ag_crypto::random_id;
 use ag_policy::{Attestation, IdentityMatcher, Policy};
-use ag_storage::meta::{AttestationRow, MetaError, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, StreamRow};
+use ag_storage::meta::{
+    AttestationRow, MetaError, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, StreamRow, Tx,
+};
 use ag_types::{ChangesetId, Identity, IdentityKind, StreamName, TreeId};
 use serde_json::json;
 
@@ -318,28 +320,39 @@ impl Repository {
 
     /// Records a review of the proposal's **current head**.
     pub fn review(&self, proposal: &str, reviewer: &Identity, decision: &str, body: &str) -> Result<ReviewRow> {
+        self.review_at_head(proposal, reviewer, decision, body, None)
+    }
+
+    /// Records a review only if the proposal still has the caller's inspected head.
+    /// The comparison, review and audit insertion share one metadata write transaction.
+    pub fn review_at_head(
+        &self,
+        proposal: &str,
+        reviewer: &Identity,
+        decision: &str,
+        body: &str,
+        expected_head: Option<&ChangesetId>,
+    ) -> Result<ReviewRow> {
         if !["approve", "request_changes", "comment"].contains(&decision) {
             return Err(Error::Invalid(format!("unknown decision '{decision}' (approve | request_changes | comment)")));
         }
         let proposal = self.find_proposal(proposal)?.id;
         let proposal = proposal.as_str();
-        Ok(self.meta.write(|tx| {
+        self.meta.write(|tx| {
             let p = tx.proposal(proposal)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{proposal}'")))?;
             if p.state != "open" {
                 return Err(MetaError::Invalid(format!("proposal '{proposal}' is {}", p.state)));
             }
-            let id = tx.review_add(proposal, reviewer.as_str(), decision, body, &p.head)?;
-            tx.audit_append(
-                reviewer.as_str(),
-                "proposal.review",
-                proposal,
-                &json!({"decision": decision, "head": p.head}),
-            )?;
-            tx.reviews(proposal)?
-                .into_iter()
-                .find(|r| r.id == id)
-                .ok_or_else(|| MetaError::Corrupt("review vanished".into()))
-        })?)
+            if let Some(expected) = expected_head
+                && p.head != *expected
+            {
+                return Ok(Err(Error::Conflict(format!(
+                    "proposal head changed: expected {expected}, found {}; inspect the updated changes before reviewing",
+                    p.head
+                ))));
+            }
+            Ok(Ok(store_review(tx, &p, reviewer, decision, body)?))
+        })?
     }
 
     // ---- policy --------------------------------------------------------------
@@ -469,4 +482,25 @@ impl Repository {
     pub fn pins(&self) -> Result<Vec<PinRow>> {
         Ok(self.meta.read(|tx| tx.pins())?)
     }
+}
+
+/// Keep the review row and its audit event in the caller's metadata transaction.
+fn store_review(
+    tx: &Tx<'_>,
+    proposal: &ProposalRow,
+    reviewer: &Identity,
+    decision: &str,
+    body: &str,
+) -> std::result::Result<ReviewRow, MetaError> {
+    let id = tx.review_add(&proposal.id, reviewer.as_str(), decision, body, &proposal.head)?;
+    tx.audit_append(
+        reviewer.as_str(),
+        "proposal.review",
+        &proposal.id,
+        &json!({"decision": decision, "head": proposal.head}),
+    )?;
+    tx.reviews(&proposal.id)?
+        .into_iter()
+        .find(|review| review.id == id)
+        .ok_or_else(|| MetaError::Corrupt("review vanished".into()))
 }

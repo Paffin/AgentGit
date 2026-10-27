@@ -104,3 +104,8 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 
 Rust core ✅ · CLI (clap) ✅ (Linux, macOS and Windows in CI) · Vue Web UI ✅ (served by `ag-server`; Chromium, Firefox, WebKit in CI; [guide](../guides/web-ui.md)) · Go orchestrator ✅ · SDKs ✅ (TypeScript, Python; unpublished) · OpenTelemetry (traces) / Prometheus ✅ ·
 NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (the image, the Compose stack and a kind deployment run end to end in the `Containers` workflow; no real cluster, ingress or storage class, the HA overlay and the Prometheus Operator overlay are not applied to one — [deployment](../operations/deployment.md)). The ADR's text is cut off at §11 (Web UI); the rest was never received.
+
+
+## ADR-0014 — reviewed-head precondition
+
+`Repository::review_at_head` compares the optional inspected head inside the metadata write transaction. `a_review_cannot_approve_a_head_the_reviewer_did_not_see` exercises the HTTP refusal and successful current-head review. The Web UI preserves unfinished text and negotiates `proposals.review_head`; legacy callers omitting the field retain current-head behavior.

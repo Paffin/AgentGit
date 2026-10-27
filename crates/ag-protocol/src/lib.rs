@@ -51,6 +51,9 @@ pub mod features {
     /// Operators can finish tasks and reap stale runs (`agent.operate`, `ReapRuns`).
     pub const AGENTS_OPERATE: &str = "agents.operate";
 
+    /// Review submission can atomically require the exact head inspected by the caller.
+    pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -62,6 +65,7 @@ pub mod features {
         AUTH_RUN_CREDENTIALS,
         AUTH_DELEGATION,
         AGENTS_OPERATE,
+        PROPOSALS_REVIEW_HEAD,
     ];
 }
 

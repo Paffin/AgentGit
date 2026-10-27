@@ -21,3 +21,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0011](0011-proposal-paging-indexes-and-background-leases.md) | Proposal paging indexes (metadata schema 3), dated idempotency records, a lease for background work |
 | [0012](0012-job-claim-fencing.md) | A fencing token for job claims (an optional request field, no schema change) |
 | [0013](0013-directory-renames.md) | Directory renames in the tree merge (`ag-merge/3`); copy detection for blame and show |
+| [0014](0014-review-head-precondition.md) | Optional expected-head precondition for atomically recording reviews |

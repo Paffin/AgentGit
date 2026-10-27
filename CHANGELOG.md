@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Reviews can require the exact inspected head through the negotiated `proposals.review_head` capability; stale submissions are rejected atomically without a review or audit entry.
+
 - File search supports arrow keys, Home/End and Enter on any result, preserves IME input and modified link actions, and explains the keyboard controls in the dialog.
 
 - Faster Web UI test execution with isolated, bounded VM workers, Node environments for pure functions, and cancellable test-worker shutdown. Browser CI shares one verified embedded build and runs each project once in a pinned runtime.
@@ -20,6 +22,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
 
 ### Fixed
+
+- Closing a review dialog keeps unfinished text and decisions. A changed head requires explicit re-review; failed submissions preserve the draft, and successful submissions clear it.
 
 - Lazy route imports no longer preload their own entry twice; dependency and CSS preloads remain, and chunk hashes include the preload policy. Mutation workers now execute their own source copies instead of resolving relative imports into the original tree.
 

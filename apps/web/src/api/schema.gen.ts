@@ -2323,6 +2323,16 @@ export interface components {
       /** @default  */
       repo: string
     }
+    GitMigrationDecision: {
+      accept_lossy?: boolean
+    }
+    GitMigrationPlan: {
+      id: string
+      name: string
+      report: Record<string, never>
+      source_sha256: string
+      state: string
+    }
     GrantRoleRequest: {
       /** @default  */
       repo: string
@@ -4275,7 +4285,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': string
+          'application/json': components['schemas']['GitMigrationPlan']
         }
       }
       /** @description Error */
@@ -4306,7 +4316,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': string
+          'application/json': components['schemas']['GitMigrationPlan']
         }
       }
       /** @description Error */
@@ -4331,7 +4341,7 @@ export interface operations {
     }
     requestBody: {
       content: {
-        'application/json': string
+        'application/json': components['schemas']['GitMigrationDecision']
       }
     }
     responses: {
@@ -4341,7 +4351,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': string
+          'application/json': components['schemas']['GitMigrationPlan']
         }
       }
       /** @description Error */

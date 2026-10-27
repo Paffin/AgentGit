@@ -32,6 +32,14 @@ ag verify
 
 `ag migrate` also accepts a full local Git mirror or clone. It transfers committed history; uncommitted working-tree edits are not included. Prefer a mirror to include every remote branch. The destination must not already exist. The command checks history, imports every branch and commit-based tag, verifies the result and prepares the default working tree. If content would be omitted, it refuses publication. Read the reported limitations before retrying with `--allow-lossy`.
 
+## Automate a migration
+
+The [TypeScript SDK](../../sdk/typescript/README.md#migrate-a-git-repository) and
+[Python SDK](../../sdk/python/README.md#migrate-a-git-repository) expose
+`migrations.prepare`, `migrations.status` and `migrations.commit`. Upload bytes with an
+administrator credential, keep the returned ID, review the report and then commit.
+The clients reuse the upload's idempotency key across automatic retries.
+
 ## What moves, and what needs separate work
 
 | Source data | Result |

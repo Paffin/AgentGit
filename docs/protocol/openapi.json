@@ -1651,6 +1651,41 @@
         },
         "type": "object"
       },
+      "GitMigrationDecision": {
+        "properties": {
+          "accept_lossy": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GitMigrationPlan": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "report": {
+            "type": "object"
+          },
+          "source_sha256": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_sha256",
+          "report",
+          "state"
+        ],
+        "type": "object"
+      },
       "GrantRoleRequest": {
         "properties": {
           "repo": {
@@ -4648,7 +4683,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.3.0-beta.1"
+    "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4965,8 +5000,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "format": "binary",
-                  "type": "string"
+                  "$ref": "#/components/schemas/GitMigrationPlan"
                 }
               }
             },
@@ -5008,8 +5042,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "format": "binary",
-                  "type": "string"
+                  "$ref": "#/components/schemas/GitMigrationPlan"
                 }
               }
             },
@@ -5050,8 +5083,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/GitMigrationDecision"
               }
             }
           },
@@ -5062,8 +5094,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "format": "binary",
-                  "type": "string"
+                  "$ref": "#/components/schemas/GitMigrationPlan"
                 }
               }
             },

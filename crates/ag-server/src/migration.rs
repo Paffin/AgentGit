@@ -30,11 +30,12 @@ struct Saved {
     source_sha256: String,
     report: MigrationReport,
 }
-#[derive(Serialize)]
-struct Plan {
+#[derive(Serialize, utoipa::ToSchema)]
+struct GitMigrationPlan {
     id: String,
     name: String,
     source_sha256: String,
+    #[schema(value_type = Object)]
     report: MigrationReport,
     state: &'static str,
 }
@@ -42,15 +43,15 @@ struct Plan {
 struct Target {
     name: String,
 }
-#[derive(Deserialize)]
-struct Decision {
+#[derive(Deserialize, utoipa::ToSchema)]
+struct GitMigrationDecision {
     #[serde(default)]
     accept_lossy: bool,
 }
 fn invalid(error: impl std::fmt::Display) -> ApiError {
     ApiError::invalid(error.to_string())
 }
-fn response(result: ApiResult<Plan>) -> Response {
+fn response(result: ApiResult<GitMigrationPlan>) -> Response {
     match result {
         Ok(plan) => axum::Json(plan).into_response(),
         Err(e) => e.into_response(),
@@ -91,7 +92,7 @@ async fn owned(app: &App, call: &Call, id: &str) -> ApiResult<Saved> {
     app.authorize(call, &saved.name, Cap::RepoCreate, None).await?;
     Ok(saved)
 }
-fn plan(app: &App, id: String, saved: Saved) -> ApiResult<Plan> {
+fn plan(app: &App, id: String, saved: Saved) -> ApiResult<GitMigrationPlan> {
     let state = if app.control.repo(&saved.name)?.is_some() {
         let marker = app.cfg.server.data_dir.join("repos").join(&saved.name).join(".ag/import/id");
         if fs::read_to_string(marker).ok().as_deref() != Some(&id) {
@@ -104,7 +105,7 @@ fn plan(app: &App, id: String, saved: Saved) -> ApiResult<Plan> {
     } else {
         "ready"
     };
-    Ok(Plan { id, name: saved.name, source_sha256: saved.source_sha256, report: saved.report, state })
+    Ok(GitMigrationPlan { id, name: saved.name, source_sha256: saved.source_sha256, report: saved.report, state })
 }
 fn write_plan(path: &FsPath, saved: &Saved) -> ApiResult<()> {
     let bytes = serde_json::to_vec_pretty(saved).map_err(ApiError::internal)?;
@@ -199,7 +200,13 @@ fn convert_bundle(path: &FsPath, name: &str, owner: &Identity) -> ApiResult<(Rep
         .map_err(invalid)?;
     Ok((repo, report))
 }
-fn previous_plan(app: &App, id: &str, name: &str, owner: &Identity, digest: &str) -> ApiResult<Option<Plan>> {
+fn previous_plan(
+    app: &App,
+    id: &str,
+    name: &str,
+    owner: &Identity,
+    digest: &str,
+) -> ApiResult<Option<GitMigrationPlan>> {
     if let Ok(saved) = load(app, id) {
         if saved.name != name || saved.owner != owner.as_str() || saved.source_sha256 != digest {
             return Err(ApiError::invalid("This migration key was already used for different input."));
@@ -217,11 +224,11 @@ fn stage_upload(app: &App, id: &str, path: &FsPath, bytes: &[u8]) -> ApiResult<(
     clean_incomplete(path)?;
     fs::write(path.join("source.bundle"), bytes).map_err(ApiError::internal)
 }
-fn save_result(app: &App, id: &str, path: &FsPath, saved: Saved) -> ApiResult<Plan> {
+fn save_result(app: &App, id: &str, path: &FsPath, saved: Saved) -> ApiResult<GitMigrationPlan> {
     write_plan(path, &saved)?;
     plan(app, id.into(), saved)
 }
-fn prepare(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<Plan> {
+fn prepare(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<GitMigrationPlan> {
     let path = directory(app, id)?;
     let result = prepare_inner(app, id, name, owner, bytes);
     if result.is_err() && !path.join("plan.json").exists() {
@@ -229,7 +236,7 @@ fn prepare(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) ->
     }
     result
 }
-fn prepare_inner(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<Plan> {
+fn prepare_inner(app: &App, id: &str, name: &str, owner: &Identity, bytes: Vec<u8>) -> ApiResult<GitMigrationPlan> {
     let path = directory(app, id)?;
     let digest = hex::encode(Sha256::digest(&bytes));
     if let Some(existing) = previous_plan(app, id, name, owner, &digest)? {
@@ -295,7 +302,7 @@ async fn status(State(app): State<App>, Path(id): Path<String>, headers: HeaderM
         .await,
     )
 }
-fn publish(app: &App, id: &str, saved: Saved, owner: &Identity) -> ApiResult<Plan> {
+fn publish(app: &App, id: &str, saved: Saved, owner: &Identity) -> ApiResult<GitMigrationPlan> {
     let _guard = lock(app)?;
     let path = directory(app, id)?;
     app.repos.publish_migration(&path.join("repository"), &saved.name, id, owner, app.default_quota())?;
@@ -316,7 +323,7 @@ async fn commit(State(app): State<App>, Path(id): Path<String>, headers: HeaderM
         app.dispatch(ing, "migration.commit", move |call| async move {
             let saved = owned(&a, &call, &id).await?;
             let bytes = to_bytes(request.into_body(), 1024).await.map_err(invalid)?;
-            let decision: Decision = serde_json::from_slice(&bytes).map_err(invalid)?;
+            let decision: GitMigrationDecision = serde_json::from_slice(&bytes).map_err(invalid)?;
             if saved.report.needs_attention() && !decision.accept_lossy {
                 return Err(ApiError::invalid(
                     "Review and explicitly accept the reported migration limitations first.",
@@ -349,13 +356,13 @@ pub fn add_routes(router: &mut Router<App>, meta: &mut Vec<RouteMeta>) {
             "Publish a preflighted repository; body: accept_lossy boolean",
         ),
     ] {
-        let mut route = RouteMeta::raw(method, path, op, "Migration", summary).response_body("application/json");
+        let mut route = RouteMeta::raw(method, path, op, "Migration", summary).json_response::<GitMigrationPlan>();
         if method == "put" {
             route =
                 route.query("name", "string", "New destination, owner/name").request_body("application/octet-stream");
         }
         if method == "post" {
-            route = route.request_body("application/json");
+            route = RouteMeta::json::<GitMigrationDecision, GitMigrationPlan>(method, path, op, "Migration", summary);
         }
         meta.push(route);
     }

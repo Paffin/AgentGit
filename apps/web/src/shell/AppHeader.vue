@@ -92,15 +92,15 @@ async function onSelect(id: string) {
           <button
             type="button"
             class="user"
-            :aria-label="`Account: ${auth.identity}`"
             aria-haspopup="menu"
             :aria-expanded="open"
             :aria-controls="open ? menuId : undefined"
             data-testid="user-menu"
             @click="toggle"
           >
+            <span class="sr-only">Account: {{ auth.identity }}</span>
             <Avatar :identity="auth.identity" :size="24" decorative />
-            <span class="who">{{ auth.identity }}</span>
+            <span class="who" aria-hidden="true">{{ auth.identity }}</span>
             <Icon name="chevron-down" :size="14" />
           </button>
         </template>

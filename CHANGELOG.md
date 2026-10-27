@@ -29,6 +29,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Account and task-graph controls derive their accessible names from matching text; the account identity remains available to assistive technology when its visible label is hidden on a small screen.
+
 - Shared browser code is bundled once while views stay lazy; lazy JavaScript no longer adds speculative preload links. Keyboard focus checks poll rendered styles instead of depending on animation frames.
 
 - Directory navigation removes stale links immediately and retains loaded files after a next-page error. Review submission captures its target and content before waiting; clipboard feedback ignores obsolete requests.

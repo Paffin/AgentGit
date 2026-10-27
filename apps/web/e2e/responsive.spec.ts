@@ -49,6 +49,7 @@ test.describe('navigation', () => {
   test('the header is whole and the account menu opens inside the window', async ({ page }) => {
     await page.goto('/repos')
     await expect(page.getByTestId('user-menu')).toBeVisible()
+    await expect(page.getByTestId('user-menu')).toHaveAccessibleName('Account: user:dana')
     for (const l of [
       page.getByRole('link', { name: /AgentGit/ }).first(),
       page.getByTestId('theme-toggle'),

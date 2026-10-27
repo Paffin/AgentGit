@@ -24,7 +24,7 @@ const chromium = chromiumPath ? { launchOptions: { executablePath: chromiumPath 
 const screenshots = /screenshots\.spec\.ts/
 // Layout assertions are made at the viewports of the tablet and phone projects, not at desktop size.
 const layout = /responsive\.spec\.ts/
-const small = /(responsive|accessibility)\.spec\.ts/
+const small = /(responsive|accessibility|code-workflows)\.spec\.ts/
 const desktop = { viewport: { width: 1440, height: 900 } }
 
 export default defineConfig({

@@ -123,6 +123,22 @@ describe('proposeChange', () => {
     ).rejects.toThrow('head moved')
     expect(calls.at(-1)).toBe('remove')
   })
+
+  it('refuses a changed starting point before writing and removes the unused workspace', async () => {
+    const { api, calls, raw } = fakeApi()
+    await expect(
+      proposeChange(api, {
+        repo: 'a/b',
+        stream: 'main',
+        expectedBase: '',
+        changes: [putFile('new.txt', 'mine')],
+        title: 'new',
+      }),
+    ).rejects.toThrow('branch changed')
+    expect(raw.workspaces.modify).not.toHaveBeenCalled()
+    expect(raw.proposals.create).not.toHaveBeenCalled()
+    expect(calls.at(-1)).toBe('remove')
+  })
 })
 
 describe('nextStep: one thing to do first', () => {

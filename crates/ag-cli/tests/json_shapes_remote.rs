@@ -41,6 +41,7 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
     r.rec("remote proposal", &as_user("user:alice", &alice, &["--json", "remote", "proposal", &p1]).ok());
     r.rec("remote prepare", &as_user("user:carol", &carol, &["--json", "remote", "prepare", &p1]).code_is(3));
+    r.rec("remote explain", &as_user("user:carol", &carol, &["--json", "remote", "explain", &p1]).code_is(3));
     r.rec(
         "remote integrate#blocked",
         &as_user("user:carol", &carol, &["--json", "remote", "integrate", &p1]).code_is(3),
@@ -50,7 +51,9 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
         &as_user("user:bob", &bob, &["--json", "remote", "review", &p1, "--approve", "-m", "ok"]).ok(),
     );
     r.rec("remote prepare", &as_user("user:carol", &carol, &["--json", "remote", "prepare", &p1]).ok());
+    r.rec("remote explain", &as_user("user:carol", &carol, &["--json", "remote", "explain", &p1]).ok());
     r.rec("remote integrate", &as_user("user:carol", &carol, &["--json", "remote", "integrate", &p1]).ok());
+    r.rec("remote explain", &as_user("user:carol", &carol, &["--json", "remote", "explain", &p1]).code_is(4));
     a.write("two.txt", "2\n");
     as_user("user:alice", &alice, &["snapshot", "-m", "two"]).ok();
     let p2 = as_user("user:alice", &alice, &["--json", "push", "-t", "two"]).ok().json()["proposal"]["id"]
@@ -90,6 +93,10 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     }
     let login = ["--json", "login", srv.url.as_str(), "--token-file", token_file.to_str().unwrap()];
     r.rec("login", &run_in(parent.path(), cfg.path(), "user:alice", &login, &[]).ok());
+    r.rec(
+        "auth status",
+        &run_in(parent.path(), cfg.path(), "user:alice", &["--json", "auth", "status", "--check"], &[]).ok(),
+    );
     r.rec(
         "logout",
         &run_in(parent.path(), cfg.path(), "user:alice", &["--json", "logout", srv.url.as_str()], &[]).ok(),

@@ -1,8 +1,9 @@
 // The programs under examples/ are what the READMEs and docs/guides/sdks.md quote. They run here,
 // against a real server, so that they cannot rot.
 
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { startServer, type RunningServer } from './harness/server.js';
+import { REPO_ROOT, startServer, type RunningServer } from './harness/server.js';
 
 let server: RunningServer;
 beforeAll(async () => {
@@ -65,6 +66,18 @@ describe('examples', () => {
     expect(module.objectsResult).toMatchObject({ stored: 2 });
     expect(module.objectsResult.newHead).toBe(module.objectsResult.id);
     expect(printed).toEqual(['2 0', 'integrated']);
+  });
+
+  it('migration.ts', async () => {
+    vi.stubEnv('AGENTGIT_BUNDLE', path.join(REPO_ROOT, 'sdk/fixtures/git-migration.bundle'));
+    vi.stubEnv('AGENTGIT_REPO', 'examples/migration');
+    vi.stubEnv('AGENTGIT_PUBLISH', '1');
+    try {
+      const { module } = await run(() => import('../examples/migration.js'));
+      expect(module.migrationResult.state).toBe('imported');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('signing.ts', async () => {

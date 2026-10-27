@@ -24,6 +24,8 @@ export interface KvItem {
 }
 
 export interface Column {
+  /** Explanation of a domain term without adding a tab stop. */
+  tooltip?: string
   key: string
   label: string
   /** CSS width, e.g. `120px` or `2fr`. */

@@ -60,7 +60,7 @@ class SyncTransport:
         explicit = params.get("idempotency_key") or opts.idempotency_key
         key = (
             (explicit if isinstance(explicit, str) and explicit else f"sdk-{random_token(24)}")
-            if built.has_json_body and op.idempotency_key
+            if (built.has_json_body and op.idempotency_key) or op.retry == "keyed"
             else None
         )
         request_id = opts.request_id or f"sdk-{random_token(16)}"

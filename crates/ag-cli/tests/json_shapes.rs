@@ -204,6 +204,20 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
         fs::write(g.join("a.txt"), "a\n").unwrap();
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "one"]);
+        git(&["branch", "feature"]);
+        git(&["tag", "v1"]);
+        r.rec(
+            "migrate",
+            &a.ag(&[
+                "--json",
+                "migrate",
+                g.to_str().unwrap(),
+                out.path().join("migrated").to_str().unwrap(),
+                "--namespace",
+                "acme/migrated",
+            ])
+            .ok(),
+        );
         r.rec("git import", &a.ag(&["--json", "git", "import", g.to_str().unwrap(), "--stream", "imported"]).ok());
         r.rec(
             "git export",
@@ -213,6 +227,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
 
     // -- setup and diagnosis ---------------------------------------------------------------------------------------------------
     r.rec("doctor", &a.ag(&["--json", "doctor"]).ok());
+    r.rec("auth status#empty", &a.ag(&["--json", "auth", "status"]).ok());
     r.rec("config list", &a.ag(&["--json", "config", "list"]).ok());
     r.rec("config get", &a.ag(&["--json", "config", "get", "identity"]).ok());
     r.rec("config set", &a.ag(&["--json", "config", "set", "color", "never"]).ok());
@@ -227,7 +242,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("remote list", &a.ag(&["--json", "remote", "list"]).ok());
     r.rec("remote remove", &a.ag(&["--json", "remote", "remove", "origin"]).ok());
 
-    check_golden("json-shapes.json", &r.shapes, if have("git") { &[] } else { &["git "] });
+    check_golden("json-shapes.json", &r.shapes, if have("git") { &[] } else { &["git ", "migrate"] });
 }
 
 /// All leaf commands of `ag --help`, as "stream create".

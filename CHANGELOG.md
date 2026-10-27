@@ -9,6 +9,45 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- `ag migrate --dry-run` verifies a full Git conversion and shows its reconciliation report before creating a destination. Previewing losses does not authorize a later lossy import.
+
+- `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
+- Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
+
+### Fixed
+
+- Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
+
+## [0.3.0-beta.1] — 2026-10-27
+
+### Added
+
+- Public beta for the single-server Linux/SQLite/filesystem workflow, with open external qualification gates and explicit migration limits.
+- Web import from full Git bundles: private preflight, all-branch/tag reconciliation, content-loss acknowledgement, idempotent publication, and downloadable receipt. Credentials stay with local Git.
+- Publication moves the complete prepared directory atomically without replacing an existing destination; a retry can recover after the move but before registry insertion.
+- `ag migrate` imports a full local Git clone/mirror or bundle into a new working repository. Original bundles and reports are retained and included in backups.
+- Deterministic mapping for Git branch names outside AgentGit's naming rules; unsupported refs, submodules, paths, repaired text and external LFS pointers are reported.
+- Deployment smoke tests exercise real bundle import and publication in the shipped server image. Git's native bundle/pack runtime is included in the shell-less images.
+
+### Scope
+
+- Hosting issues, pull/merge request discussions, permissions, releases, hosted CI settings and external LFS payloads are not imported. Browser migration currently requires local storage; see [the migration guide](docs/guides/migrate-from-git.md).
+- External MCP host qualification, independent pilots, physical-device and screen-reader verification remain open; beta is not a production-readiness certification.
+
+## [0.2.0-rc.3] — 2026-10-27
+
+### Added
+
+- Home now supports searching visible work, filtering by repository and category, manual refresh and a last-successful-refresh timestamp. Partial reads and truncated summaries are explicitly marked; failures never imply that the work queue is clear.
+- Change-request search and role-aware links to editing files or giving an agent work; glossary hints in repository navigation and table headers.
+- A focused beta programme with public acceptance gates, pilot reporting, contributor entry points and a launch kit. Alpha status remains until external evidence meets the gates.
+- `ag remote explain PROPOSAL` reports a server proposal's blockers, reasons and next commands with machine-readable output and distinct ready/blocked/refused exit codes.
+- Policy regression coverage for preset actor/author restrictions, provenance, file limits, approval explanations and validation age formatting.
+
+- Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
+  after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
+  runs also cover server/core pull requests and fail on execution or integrity errors without timing thresholds.
+
 - **Zero-setup start.** `ag-server dev` makes a data directory, an administrator with a fresh 8-hour credential (replaced
   and the old one revoked at every start), the demo repository `demo/welcome` with the `agents` preset, and a reviewer
   `user:reviewer`, then prints a link that signs you in (`...#token=...`; the Web UI takes the credential out of the
@@ -21,7 +60,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
   sentence.
 - **`ag explain [PROPOSAL]`** turns a refusal into plain words and the exact next commands (one explanation per refusal
   code, checked against the variants); the hints under `ag integrate` and `ag remote integrate|prepare` use the same
-  strings. Local repositories only.
+  strings. The remote workflow also supports `ag remote explain PROPOSAL`.
 - **A Web UI a first-time user can use** (`docs/design/web-ux-review.md`): Home ("needs your attention") and navigation by
   job (Overview, Change requests, Agents & work, Code, Settings); plain labels with the AgentGit word in a tooltip
   (`lib/glossary.ts`, checked against the guide); every blocker carries its fix as an action (request validation, ask a
@@ -75,6 +114,19 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Include the shipped `ag-mcp` executable in the release SBOM inventory.
+- Reject incomplete archives before replacing installed binaries and explain when an older GitHub CLI cannot verify attestations.
+- Keep readable proposals when another detail or the agent-run list cannot be loaded.
+
+- Python and TypeScript SDK integration harnesses enable the startup log used to discover ephemeral ports;
+  an inherited `RUST_LOG=error` no longer causes false server-start timeouts.
+- The orchestrator's process-group timeout test distinguishes a running child from a dead, unreaped Linux
+  child, avoiding false failures in containers whose PID 1 does not reap orphans.
+- Server log-capture tests share a persistent subscriber with per-thread buffers so concurrent tests do not
+  invalidate each other's tracing callsite cache. The startup-warning test also ignores inherited log filters.
+- Update `ctutils` to 0.4.4 in both Cargo lock files (RUSTSEC-2026-0385) and the UI's `happy-dom` to 21.0.4
+  (GHSA-834v-8h66-3h79). Remove the obsolete tinypool exceptions after both npm dependency trees became clean.
+
 - Found by the new gate: the `PostgreSQL + S3 backends` job never lifted the AppArmor restriction on user namespaces, so
   every namespace-sandbox test had been silently skipping there; it does now and requires `namespace-sandbox`.
 - Test flakes: replicas of one test cluster could be given the same port ("Address already in use"); the `ag-server dev`
@@ -88,10 +140,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Known limitations
 
-- Browser editing is one text file per change request (no rename, delete or multi-file); tab labels and table headers have
-  no tooltips; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
-  the raw JSON; no screen-reader pass. `ag explain` works on local repositories only (no `ag remote explain`). The
-  Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
+- Browser editing is one text file per change request (no rename, delete or multi-file); some tab labels and table headers still need glossary hints; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
+  the raw JSON; no screen-reader pass. The Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
   is in the `v0.2.0-rc.2` archives. The root-only halves of the sandbox tests run in no CI job, and the four scripts
   that read TOML need Python 3.11 and are not in the 3.9 job.
 - The tree cache clones a tree on every hit (7 ms at 100 000 files); the disk backend and PostgreSQL were not

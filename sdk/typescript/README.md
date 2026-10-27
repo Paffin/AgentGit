@@ -12,7 +12,7 @@ execution plane, and the event feed.
   Ed25519/SHA-256 code ([`@noble`](https://github.com/paulmillr/noble-ed25519), MIT) is bundled into `dist/`; see
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ESM, CommonJS and `.d.ts` are shipped; Node 20 or newer (CI runs the tests on Node 20 and 22).
 - **Retries that cannot apply a request twice** (see [Errors and retries](#errors-retries-idempotency-and-deadlines)).
-- **Alpha (0.1).** Not published to npm yet: build it from a checkout (`npm ci && npm run build` in `sdk/typescript`).
+- **Early beta (0.3).** Not published to npm yet: build it from a checkout (`npm ci && npm run build` in `sdk/typescript`).
   The package is exercised by the tests in this directory against a real `ag-server`; it has not been run in a browser.
 
 ```bash
@@ -419,3 +419,33 @@ listings, the error envelope on every route, `regular` file types); these are wh
 ## License
 
 Apache-2.0. Copyright 2026 The AgentGit Authors.
+
+### Migrate a Git repository
+
+With an authenticated administrator client, upload a full Git bundle, inspect the report,
+then publish it. Set `AGENTGIT_REPO` to a new owner/name and `AGENTGIT_BUNDLE` to the file.
+Leave `AGENTGIT_PUBLISH` unset to review; set it to `1` to publish without accepting content omissions.
+Keep the returned import ID if you need to resume the review later.
+
+<!-- example: sdk/typescript/examples/migration.ts#migration -->
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { AgentGitClient } from '@agentgit/client';
+
+const client = new AgentGitClient({ baseUrl: process.env['AGENTGIT_URL']!, token: process.env['AGENTGIT_TOKEN']! });
+const repo = process.env['AGENTGIT_REPO']!; // a new owner/name
+const plan = await client.migrations.prepare(
+  { name: repo, data: new Uint8Array(await readFile(process.env['AGENTGIT_BUNDLE'] ?? 'repository.bundle')) },
+  { timeoutMs: 300_000 },
+);
+console.log(plan.id, plan.report);
+// Review the report before opting into publication. Content omissions remain blocked.
+if (process.env['AGENTGIT_PUBLISH'] === '1') {
+  await client.migrations.commit({ id: plan.id, accept_lossy: false });
+}
+```
+
+`client.migrations.status({ id: plan.id })` resumes a report. Binary uploads keep one
+idempotency key across automatic retries. See
+[migration limits and what transfers](../../docs/guides/migrate-from-git.md).

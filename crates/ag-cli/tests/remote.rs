@@ -164,10 +164,21 @@ fn clone_push_review_integrate_and_pull() {
     // Prepare reports the same without side effects, with a distinct exit code.
     let o = ag(a.path(), "user:carol", &carol, &["remote", "prepare", &prop]);
     assert_eq!(o.status.code(), Some(3), "{}", text(&o));
+    let explanation = ag(a.path(), "user:carol", &carol, &["--json", "remote", "explain", &prop]);
+    assert_eq!(explanation.status.code(), Some(3), "{}", text(&explanation));
+    let explained: Value = serde_json::from_slice(&explanation.stdout).unwrap();
+    assert_eq!(explained["standing"], "blocked");
+    assert_eq!(explained["explanations"][0]["code"], "insufficient_approvals");
+    assert!(explained["next"][0].as_str().unwrap().starts_with("ag remote review"));
     // The author cannot approve her own change (writers hold no review power; bob does).
     ok(ag(a.path(), "user:bob", &bob, &["remote", "review", &prop, "--approve", "-m", "lgtm"]));
+    let ready = ok(ag(a.path(), "user:carol", &carol, &["--json", "remote", "explain", &prop]));
+    assert_eq!(serde_json::from_str::<Value>(&ready).unwrap()["standing"], "ready");
     let out = ok(ag(a.path(), "user:carol", &carol, &["remote", "integrate", &prop]));
     assert!(out.contains("Integrated"), "{out}");
+    let closed = ag(a.path(), "user:carol", &carol, &["remote", "explain", &prop]);
+    assert_eq!(closed.status.code(), Some(4), "{}", text(&closed));
+    assert!(text(&closed).contains("already landed"), "{}", text(&closed));
 
     // Dave clones: all files arrive, byte for byte.
     let d = tempfile::tempdir().unwrap();

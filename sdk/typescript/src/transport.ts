@@ -131,7 +131,7 @@ export function buildRequest(op: OperationInfo, request: Record<string, unknown>
   const hasJsonBody = op.body === 'json';
   if (hasJsonBody) {
     json = JSON.stringify(Object.fromEntries(rest));
-  } else if (op.body === 'none' && rest.length > 0) {
+  } else if ((op.body === 'none' || op.body === 'bytes') && rest.length > 0) {
     const query = new URLSearchParams();
     for (const [key, value] of rest) {
       if (value === null) continue;
@@ -177,7 +177,7 @@ export class Transport {
       options.idempotencyKey ??
       (typeof request['idempotency_key'] === 'string' ? request['idempotency_key'] : undefined);
     const idempotencyKey =
-      built.hasJsonBody && op.idempotencyKey
+      (built.hasJsonBody && op.idempotencyKey) || op.retry === 'keyed'
         ? explicitKey && explicitKey !== ''
           ? explicitKey
           : `sdk-${randomToken(24)}`

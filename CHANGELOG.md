@@ -25,6 +25,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- History follows Back/Forward filters, isolates each changeset's lazy diff, and preserves revision/path context in native parent links. Clipboard fallback restores keyboard focus and cleans up on failure.
+
 - Closing a review dialog keeps unfinished text and decisions. A changed head requires explicit re-review; failed submissions preserve the draft, and successful submissions clear it.
 
 - Lazy route imports no longer preload their own entry twice; dependency and CSS preloads remain, and chunk hashes include the preload policy. Mutation workers now execute their own source copies instead of resolving relative imports into the original tree.

@@ -397,3 +397,10 @@ again immediately. If a repository or proposal cannot be read, or a summary limi
 notice remains visible. An incomplete summary is never evidence that no work needs attention. Open the repository
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.
+
+
+### Keeping context in history and copied text
+
+History filters follow the URL: Back and Forward restore the revision and path. Opening a changeset or its parent preserves those filters; modified link clicks open a separate tab without changing the current selection. A different changeset starts with its own detail and diff, so a pending response from the previous selection cannot appear under the new heading.
+
+Copy buttons keep keyboard focus when the browser falls back to legacy clipboard support. If copying fails, the temporary field is removed and the button reports the failure instead of retaining an earlier success message.

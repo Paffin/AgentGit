@@ -28,9 +28,9 @@ const router = useRouter()
 const board = useBoard()
 usePageTitle(() => `History · ${repo.value}`)
 
-const rev = ref(typeof route.query.rev === 'string' ? route.query.rev : '')
+const rev = computed(() => (typeof route.query.rev === 'string' ? route.query.rev : ''))
 const draft = ref(rev.value)
-const path = ref(typeof route.query.path === 'string' ? route.query.path : '')
+const path = computed(() => (typeof route.query.path === 'string' ? route.query.path : ''))
 const selected = computed(() => (typeof route.query.cs === 'string' ? route.query.cs : ''))
 
 const rows = ref<{ cs: Changeset; graph: GraphRow }[]>([])
@@ -96,20 +96,29 @@ watch(
   { immediate: true },
 )
 
+// URL filters also govern back/forward navigation; unrelated selection keeps the draft intact.
+watch([repo, rev], () => {
+  draft.value = rev.value
+})
+
 function apply() {
-  rev.value = draft.value.trim()
-  void router.replace({
+  const value = draft.value.trim()
+  draft.value = value
+  if (value === rev.value && !selected.value) {
+    void load()
+    return
+  }
+  void router.push({
     query: {
       ...route.query,
-      rev: rev.value || undefined,
+      rev: value || undefined,
       path: path.value || undefined,
       cs: undefined,
     },
   })
 }
 function clearPath() {
-  path.value = ''
-  void router.replace({ query: { ...route.query, path: undefined } })
+  void router.push({ query: { ...route.query, path: undefined } })
 }
 function select(id: string) {
   void router.replace({ query: { ...route.query, cs: id } })
@@ -189,7 +198,7 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
           />
         </template>
       </Card>
-      <ChangesetDetail v-if="selected" :id="selected" :repo="repo" @select="select" />
+      <ChangesetDetail v-if="selected" :id="selected" :key="`${repo}:${selected}`" :repo="repo" />
     </div>
   </div>
 </template>

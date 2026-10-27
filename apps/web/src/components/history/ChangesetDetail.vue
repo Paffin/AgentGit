@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Changeset, DiffResponse } from '@/api/types'
 import { useResource } from '@/composables/useResource'
@@ -14,7 +14,7 @@ import IdentityLabel from '@/ui/IdentityLabel.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
 const props = defineProps<{ repo: string; id: string }>()
-defineEmits<{ select: [id: string] }>()
+const route = useRoute()
 
 const cs = useResource<Changeset>(() => api.history.changeset(props.repo, props.id, true), {
   watch: [() => props.repo, () => props.id],
@@ -71,9 +71,8 @@ async function showDiff() {
               <span v-if="cs.data.value.parents.length === 0" class="faint">none (root)</span>
               <span v-for="p in cs.data.value.parents" :key="p" class="par">
                 <RouterLink
-                  :to="{ path: `/repos/${repo}/history`, query: { cs: p } }"
+                  :to="{ path: `/repos/${repo}/history`, query: { ...route.query, cs: p } }"
                   class="mono"
-                  @click="$emit('select', p)"
                   >{{ shortId(p, 10) }}</RouterLink
                 >
               </span>

@@ -18,6 +18,8 @@ const failed = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 
 async function copy() {
+  clearTimeout(timer)
+  copied.value = false
   failed.value = false
   try {
     if (navigator.clipboard?.writeText) {
@@ -49,10 +51,16 @@ function legacyCopy(text: string) {
   ta.style.position = 'fixed'
   ta.style.opacity = '0'
   document.body.appendChild(ta)
-  ta.select()
-  const ok = document.execCommand('copy')
-  document.body.removeChild(ta)
-  if (!ok) throw new Error('copy failed')
+  // Capture focus now: an async clipboard rejection may arrive after the user moved on.
+  const previous = document.activeElement
+  try {
+    ta.select()
+    if (!document.execCommand('copy')) throw new Error('copy failed')
+  } finally {
+    ta.remove()
+    if (previous instanceof HTMLElement && previous.isConnected)
+      previous.focus({ preventScroll: true })
+  }
 }
 
 onBeforeUnmount(() => clearTimeout(timer))

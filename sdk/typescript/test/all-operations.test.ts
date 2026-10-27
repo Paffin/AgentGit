@@ -292,6 +292,20 @@ describe('the tour', () => {
     expect(plan).toMatchObject({ dry_run: true, runs: [], released_leases: [], revoked_credentials: 0 });
   });
 
+  it('preflights and publishes Git migration with a stable upload key', async () => {
+    const data = new Uint8Array(readFileSync(path.join(REPO_ROOT, 'sdk/fixtures/git-migration.bundle')));
+    const options = { idempotencyKey: 'sdk-migration-tour', timeoutMs: 300_000 };
+    const plan = await admin.migrations.prepare({ name: 'tour/migrated', data }, options);
+    const replay = await admin.migrations.prepare({ name: 'tour/migrated', data }, options);
+    expect(replay.id).toBe(plan.id);
+    expect((await admin.migrations.status({ id: plan.id })).state).toBe('ready');
+    expect((await admin.migrations.commit({ id: plan.id, accept_lossy: false })).state).toBe('imported');
+    expect((await admin.migrations.commit({ id: plan.id, accept_lossy: false })).state).toBe('imported');
+    expect(
+      new TextDecoder().decode(await admin.tree.file({ repo: 'tour/migrated', path: 'hello.txt', rev: 'main' })),
+    ).toBe('hello from migration\n');
+  });
+
   it('events, audit and maintenance', async () => {
     expect((await alice.events.replay({ repo, after_seq: 0, limit: 5 })).events).toHaveLength(5);
     const got: string[] = [];

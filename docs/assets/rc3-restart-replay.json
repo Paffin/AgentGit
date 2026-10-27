@@ -1,0 +1,10 @@
+{
+  "version": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+  "platform": "Linux x86_64; SQLite/filesystem",
+  "client_observed_disconnection": true,
+  "server_restarted_after_sigkill": true,
+  "same_key_returned_identical_outcome": true,
+  "stream_unchanged_by_retry": true,
+  "repository_healthy": true,
+  "scope": "Real response loss and hard restart after commit; not hardware power loss. In-transaction failure checkpoints are covered by separate engine tests."
+}

@@ -16,7 +16,7 @@ vocabulary is in [Concepts](concepts.md) and the [glossary](glossary.md). To mov
 | `git push` (then "open a pull request") | `ag push -t "title"` (server), or `ag propose -t "title"` (local) | Publishing and asking for integration are one step. The result is a **proposal**. Nothing you push can move a stream. |
 | pull request / merge request | proposal | Reviews are attached to the exact version they looked at: when the proposal changes, earlier approvals stop counting. |
 | clicking "Merge" | `ag integrate PROPOSAL` (local), `ag remote integrate PROPOSAL` (server) | The **policy** decides, in the same transaction that moves the stream. Exit code 0 landed, 3 blocked (something you can provide), 4 refused (conflict or denial). |
-| "why can't I merge?" | `ag explain [PROPOSAL]` | Each reason in plain words, with the exact commands that fix it. On a server: `ag remote prepare PROPOSAL`. |
+| "why can't I merge?" | `ag explain [PROPOSAL]` | Each reason in plain words, with the exact commands that fix it. On a server: `ag remote explain PROPOSAL`. |
 | `git fetch` | `ag fetch` | |
 | `git pull` | `ag pull` | Fast-forward only; it never creates a merge by itself. To bring new work into a workspace that has its own changes: `ag sync`. |
 | `git log` | `ag log` | 20 entries by default; `-n N` for more. |

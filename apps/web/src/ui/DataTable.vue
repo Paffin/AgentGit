@@ -62,6 +62,7 @@ function value(row: Row, key: string): unknown {
             v-for="c in visible"
             :key="c.key"
             scope="col"
+            :title="c.tooltip"
             :class="[`a-${c.align ?? 'start'}`, { 'sr-only': c.srOnlyHeader }]"
           >
             {{ c.label }}

@@ -37,6 +37,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 - [`ag agent`](#ag-agent)
 - [`ag audit`](#ag-audit)
+- [`ag auth`](#ag-auth)
 - [`ag backup`](#ag-backup)
 - [`ag blame`](#ag-blame)
 - [`ag checkout`](#ag-checkout)
@@ -55,6 +56,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag login`](#ag-login)
 - [`ag logout`](#ag-logout)
 - [`ag ls`](#ag-ls)
+- [`ag migrate`](#ag-migrate)
 - [`ag op`](#ag-op)
 - [`ag pin`](#ag-pin)
 - [`ag pins`](#ag-pins)
@@ -206,6 +208,33 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "timestamp": "number"
   }
 ]
+```
+
+## ag auth
+
+### ag auth status
+
+```json
+{
+  "checked_online": "bool",
+  "connections": [
+    {
+      "expires_at": "string",
+      "identity": "string",
+      "server": "string",
+      "state": "string"
+    }
+  ]
+}
+```
+
+### ag auth status (empty)
+
+```json
+{
+  "checked_online": "bool",
+  "connections": []
+}
 ```
 
 ## ag backup
@@ -697,6 +726,39 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "type": "string"
   }
 ]
+```
+
+## ag migrate
+
+### ag migrate
+
+```json
+{
+  "blobs": "number",
+  "branches": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ],
+  "commits": "number",
+  "default_branch": "string",
+  "lfs_pointers": "number",
+  "lossy_commits": "number",
+  "other_refs": [],
+  "skipped_paths": [],
+  "skipped_submodules": "number",
+  "tags": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ]
+}
 ```
 
 ## ag op
@@ -1354,6 +1416,38 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     }
   ],
   "latest_seq": "number"
+}
+```
+
+### ag remote explain
+
+```json
+{
+  "candidate_tree": "string",
+  "explanations": [
+    {
+      "code": "string",
+      "fixes": [
+        {
+          "command": "string",
+          "note": "string"
+        }
+      ],
+      "kind": "string",
+      "summary": "string",
+      "why": "string"
+    }
+  ],
+  "next": [
+    "string"
+  ],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "state": "string",
+  "stream": "string",
+  "summary": "string",
+  "title": "string"
 }
 ```
 

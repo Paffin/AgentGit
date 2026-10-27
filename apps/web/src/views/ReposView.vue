@@ -14,6 +14,7 @@ import DataTable from '@/ui/DataTable.vue'
 import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import TextField from '@/ui/TextField.vue'
+import LoadMore from '@/ui/LoadMore.vue'
 import type { Column } from '@/ui/types'
 
 const auth = useAuth()
@@ -22,7 +23,7 @@ usePageTitle(() => 'Repositories')
 const MAX_REPOS = 1000
 const all = ref<Repo[]>([])
 const loading = ref(true)
-const truncated = ref(false)
+const next = ref('')
 const error = ref<unknown>(null)
 const search = ref('')
 let serial = 0
@@ -47,25 +48,14 @@ const visible = computed(() => {
 // and shows a dash with the reason, never a zero.
 const countText = (r: Repo, n: number) => (r.counts_error ? '–' : String(n))
 
-async function load() {
+async function load(append = false) {
   const mine = ++serial
   loading.value = true
   error.value = null
-  truncated.value = false
+  if (!append) next.value = ''
   try {
-    const items: Repo[] = []
-    let token = ''
-    do {
-      const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
-      if (mine !== serial) return
-      items.push(...page.items)
-      token = page.nextPageToken
-      all.value = [...items]
-      if (items.length >= MAX_REPOS && token) {
-        truncated.value = true
-        break
-      }
-    } while (token)
+    await loadPages(append ? [...all.value] : [], append ? next.value : '', mine)
+    if (mine !== serial) return
     loading.value = false
   } catch (e) {
     if (mine !== serial) return
@@ -74,7 +64,23 @@ async function load() {
   }
 }
 
-onMounted(load)
+async function loadPages(items: Repo[], token: string, mine: number) {
+  const stopAt = items.length + MAX_REPOS
+  let pages = 0
+  do {
+    const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
+    if (mine !== serial) return
+    if (page.nextPageToken && page.nextPageToken === token)
+      throw new Error('The repository list did not advance. Please retry.')
+    items.push(...page.items)
+    token = page.nextPageToken
+    all.value = [...items]
+    next.value = token
+    if (items.length >= stopAt || ++pages >= 5) break
+  } while (token)
+}
+
+onMounted(() => load())
 onBeforeUnmount(() => serial++)
 
 const canCreate = computed(() => auth.isAdminAnywhere)
@@ -92,6 +98,7 @@ const split = (name: string) => {
         <h1>Repositories</h1>
         <p class="muted">Every repository you may read. Open one to watch its agents work.</p>
       </div>
+      <Button v-if="canCreate" to="/import">Import from GitHub / GitLab</Button>
       <Button
         variant="primary"
         icon="plus"
@@ -119,14 +126,15 @@ const split = (name: string) => {
       }}</span>
     </div>
 
-    <Alert v-if="truncated" tone="info"
-      >Showing the first {{ MAX_REPOS }} repositories. Use the search to narrow the list.</Alert
+    <Alert v-if="next" tone="info"
+      >Search matches the {{ all.length }} loaded repositories. Load more to include the
+      rest.</Alert
     >
 
     <Card flush>
-      <ErrorState v-if="error" what="repositories" :error="error" @retry="load" />
+      <ErrorState v-if="error" what="repositories" :error="error" @retry="load(all.length > 0)" />
       <DataTable
-        v-else
+        v-if="!error || all.length > 0"
         :columns="columns"
         :rows="visible"
         :row-key="(r: Repo) => r.name"
@@ -174,6 +182,14 @@ const split = (name: string) => {
           </EmptyState>
         </template>
       </DataTable>
+      <LoadMore
+        v-if="all.length || next"
+        :has-more="!!next"
+        :loading="loading"
+        :shown="all.length"
+        noun="repositories loaded"
+        @more="load(true)"
+      />
     </Card>
   </div>
 </template>

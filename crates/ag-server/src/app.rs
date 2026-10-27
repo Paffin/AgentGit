@@ -822,6 +822,18 @@ mod tests {
     #[derive(Clone, Default)]
     struct Captured(Arc<Mutex<Vec<u8>>>);
 
+    std::thread_local! {
+        static LOG_SINK: std::cell::RefCell<Option<Captured>> = const { std::cell::RefCell::new(None) };
+    }
+
+    struct CaptureGuard(Option<Captured>);
+
+    impl Drop for CaptureGuard {
+        fn drop(&mut self) {
+            LOG_SINK.with(|sink| sink.replace(self.0.take()));
+        }
+    }
+
     impl Write for Captured {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             self.0.lock().unwrap().extend_from_slice(buf);
@@ -833,6 +845,21 @@ mod tests {
     }
 
     impl Captured {
+        fn install(&self) -> CaptureGuard {
+            // Scoped subscribers race with other tests through tracing's global interest cache. Keep one
+            // subscriber alive for the entire test process and route its output to the calling thread.
+            static INSTALL: std::sync::Once = std::sync::Once::new();
+            INSTALL.call_once(|| {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_writer(|| LOG_SINK.with(|sink| sink.borrow().clone().unwrap_or_default()))
+                    .with_ansi(false)
+                    .with_max_level(tracing::Level::INFO)
+                    .finish();
+                tracing::subscriber::set_global_default(subscriber).expect("install test log subscriber");
+            });
+            CaptureGuard(LOG_SINK.with(|sink| sink.replace(Some(self.clone()))))
+        }
+
         fn text(&self) -> String {
             String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
         }
@@ -849,16 +876,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let app = app(&dir);
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || sink.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::INFO)
-            .finish();
-        let _installed = tracing::subscriber::set_default(subscriber);
-        // Tests run in parallel and share every callsite: one that another test reached while no subscriber
-        // wanted it can keep a cached "never" until the interest is recomputed, which would swallow a line below.
-        tracing::callsite::rebuild_interest_cache();
+        let _installed = captured.install();
 
         let ing = Ingress {
             transport: "http",
@@ -922,14 +940,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let app = proxied_app(&dir, &["10.0.0.0/8"], 0, 20);
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || sink.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::INFO)
-            .finish();
-        let _installed = tracing::subscriber::set_default(subscriber);
-        tracing::callsite::rebuild_interest_cache(); // see log_lines_of_a_request_carry_its_trace_id_and_the_peer_address
+        let _installed = captured.install();
 
         // From the proxy: the client it names.
         assert!(app.dispatch(bad_login("10.0.0.5:3333", "198.51.100.7"), "t", |_c| async { Ok(()) }).await.is_err());
@@ -1008,10 +1019,7 @@ mod tests {
     #[test]
     fn collector_headers_keep_the_good_entries_and_report_the_bad_ones_by_name_only() {
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt().with_writer(move || sink.clone()).with_ansi(false).finish();
-        let _installed = tracing::subscriber::set_default(subscriber);
-        tracing::callsite::rebuild_interest_cache(); // see log_lines_of_a_request_carry_its_trace_id_and_the_peer_address
+        let _installed = captured.install();
         let parsed = parse_headers("Authorization=Bearer abc, bad name=secret-value,=nothing,noequals,x-key=v");
         assert_eq!(
             parsed,

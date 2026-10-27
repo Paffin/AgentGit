@@ -27,7 +27,11 @@ fn run_with_stdin(cwd: &Path, cfg: &Path, args: &[&str], input: &str, env: &[(&s
         c.env(k, v);
     }
     let mut child = c.spawn().unwrap();
-    child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    // Invalid arguments can make the child exit before it reads stdin. Its status and stderr
+    // are still asserted by the caller; a closed input pipe must not race those assertions.
+    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
+        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe, "{error}");
+    }
     Run { out: child.wait_with_output().unwrap() }
 }
 
@@ -200,4 +204,51 @@ fn logout_forgets_and_an_expired_login_says_so() {
     f.login();
     f.ag(&["logout", "--all"]).ok();
     assert!(!std::fs::read_to_string(&file).unwrap().contains(&f.token));
+}
+
+#[test]
+fn auth_status_is_useful_offline_and_never_prints_the_saved_secret() {
+    let f = fixture();
+    let empty = f.ag(&["--json", "auth", "status"]).ok().json();
+    assert_eq!(empty["connections"], serde_json::json!([]));
+    f.login();
+    let cached = f.ag(&["--json", "auth", "status"]).ok();
+    assert!(!cached.stdout().contains(&f.token));
+    assert_eq!(cached.json()["connections"][0]["state"], "saved");
+    assert_eq!(cached.json()["connections"][0]["identity"], "user:alice");
+    let checked = f.ag(&["--json", "auth", "status", &f.url(), "--check"]).ok();
+    assert!(!checked.stdout().contains(&f.token));
+    assert_eq!(checked.json()["connections"][0]["state"], "verified");
+    f.ag(&["auth", "status", "https://missing.example"]).code_is(1);
+    assert!(f.ag(&["auth", "status"]).ok().stdout().contains("--check"));
+}
+
+#[test]
+fn auth_status_distinguishes_expired_rejected_and_unreachable_without_changing_credentials() {
+    let f = fixture();
+    f.login();
+    let file = f.cfg.path().join("credentials.json");
+    let mut saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let url = f.url();
+    saved["servers"][&url]["expires_at_ms"] = 1.into();
+    std::fs::write(&file, saved.to_string()).unwrap();
+    let expired = f.ag(&["--json", "auth", "status"]).code_is(1);
+    assert_eq!(expired.json()["connections"][0]["state"], "expired");
+    saved["servers"][&url]["expires_at_ms"] = 0.into();
+    saved["servers"][&url]["token"] = "agt_invalid_invalid_0123456789".into();
+    std::fs::write(&file, saved.to_string()).unwrap();
+    let rejected = f.ag(&["--json", "auth", "status", "--check"]).code_is(1);
+    assert_eq!(rejected.json()["connections"][0]["state"], "rejected");
+    let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let offline = format!("http://{}", stalled.local_addr().unwrap());
+    saved["servers"][&offline] = saved["servers"][&url].clone();
+    std::fs::write(&file, saved.to_string()).unwrap();
+    let before = std::fs::read(&file).unwrap();
+    let started = std::time::Instant::now();
+    let checked = f.ag(&["--json", "auth", "status", &offline, "--check", "--timeout", "1"]).code_is(1);
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert_eq!(checked.json()["connections"][0]["state"], "unreachable");
+    assert_eq!(std::fs::read(&file).unwrap(), before, "status must never rewrite saved credentials");
+    assert!(!checked.stdout().contains("agt_invalid"));
+    f.ag(&["auth", "status", "--check", "--timeout", "0"]).code_is(2);
 }

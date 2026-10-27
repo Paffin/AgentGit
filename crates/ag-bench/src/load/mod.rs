@@ -51,11 +51,11 @@ pub struct Args {
     #[arg(long, value_enum, value_delimiter = ',', default_value = "http,grpc")]
     protocols: Vec<Proto>,
     /// Seconds each scenario drives load.
-    #[arg(long)]
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
     duration_secs: Option<u64>,
     /// Concurrent writers (one thread and one credential each).
-    #[arg(long)]
-    workers: Option<usize>,
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+    workers: Option<u64>,
     /// Concurrent event subscribers in the `sse` scenario (half HTTP/SSE, half gRPC).
     #[arg(long)]
     subscribers: Option<usize>,
@@ -110,7 +110,7 @@ pub fn run(args: Args) -> Result<()> {
     };
     let plan = Plan {
         duration: Duration::from_secs(args.duration_secs.unwrap_or(d)),
-        workers: args.workers.unwrap_or(w).max(1),
+        workers: usize::try_from(args.workers.unwrap_or(w)).context("worker count exceeds this platform's limits")?,
         subscribers: args.subscribers.unwrap_or(s),
         rate_limit: 50,
         rate_burst: 100,

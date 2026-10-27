@@ -201,3 +201,49 @@ fn what_the_explanation_says_about_agents_is_what_the_evaluator_does() {
         assert_eq!(says_agents_land_alone, lands_alone, "{}", preset.name());
     }
 }
+
+#[test]
+fn presets_exclude_services_from_integrating_and_authoring_team_changes() {
+    for preset in Preset::ALL {
+        let p = build(preset, true);
+        let service = Case {
+            passed: true,
+            provenance: true,
+            approvers: &["user:bob", "user:carol"],
+            ..case(&p, "service:ci", "user:alice", &["src/a.rs"])
+        };
+        assert!(codes(&service.eval()).contains(&"actor_not_allowed"), "{}", preset.name());
+        if preset != Preset::Solo {
+            let author = Case { actor: "user:alice", author: "service:ci", ..service };
+            assert!(codes(&author.eval()).contains(&"author_not_allowed"), "{}", preset.name());
+        }
+    }
+}
+
+#[test]
+fn configured_file_limits_and_strict_provenance_are_enforced() {
+    for (preset, limit) in [(Preset::Agents, 500), (Preset::Strict, 200)] {
+        let p = build(preset, true);
+        let paths: Vec<String> = (0..=limit).map(|i| format!("src/{i}.rs")).collect();
+        let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+        let base = Case {
+            passed: true,
+            provenance: true,
+            approvers: &["user:bob", "user:carol"],
+            ..case(&p, "user:alice", "agent:bot#run_1", &paths[..limit])
+        };
+        assert!(base.eval().is_allowed(), "{}", preset.name());
+        let oversized = Case { paths: &paths, ..base };
+        assert!(codes(&oversized.eval()).contains(&"too_many_changed_files"), "{}", preset.name());
+        let unsigned = Case { provenance: false, paths: &paths[..1], ..oversized };
+        assert!(codes(&unsigned.eval()).contains(&"missing_provenance"), "{}", preset.name());
+    }
+}
+
+#[test]
+fn preset_audiences_are_distinct_and_descriptive() {
+    assert_eq!(Preset::Solo.audience(), "one person, with or without agents helping");
+    assert_eq!(Preset::Team.audience(), "a team of people who review each other's work");
+    assert_eq!(Preset::Agents.audience(), "people and AI agents working on the same code");
+    assert_eq!(Preset::Strict.audience(), "code where every change needs two reviewers and a passing check");
+}

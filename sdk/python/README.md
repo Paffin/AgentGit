@@ -12,7 +12,7 @@ execution plane, and the event feed. Import name: `agentgit`.
   keyword arguments and returns a model. `py.typed` is shipped; the package type-checks under `mypy --strict`.
 * **Two runtime dependencies:** `httpx` and `cryptography`.
 * **Python 3.10 or newer.** CI runs the test suite on 3.10, 3.11, 3.12 and 3.13 (the full lint and type checks on the default interpreter only); newer versions are not run.
-* **Alpha (0.1).** Not published to PyPI yet: install from a checkout (`pip install ./sdk/python`, or `uv sync` in
+* **Early beta (0.3).** Not published to PyPI yet: install from a checkout (`pip install ./sdk/python`, or `uv sync` in
   `sdk/python` for development). It is exercised by the tests in this directory against a real `ag-server`.
 
 ```bash
@@ -451,3 +451,34 @@ the error envelope on every route, `regular` file types); these are what remains
 ## License
 
 Apache-2.0. Copyright 2026 The AgentGit Authors.
+
+### Migrate a Git repository
+
+With an authenticated administrator client, upload a full Git bundle, inspect the report,
+then publish it. Set `AGENTGIT_REPO` to a new owner/name and `AGENTGIT_BUNDLE` to the file.
+Leave `AGENTGIT_PUBLISH` unset to review; set it to `1` to publish without accepting content omissions.
+Keep the returned import ID if you need to resume the review later.
+
+<!-- example: sdk/python/examples/migration.py#migration -->
+```python
+import os
+from pathlib import Path
+
+from agentgit import AgentGitClient, CallOptions
+
+client = AgentGitClient(os.environ["AGENTGIT_URL"], os.environ["AGENTGIT_TOKEN"])
+repo = os.environ["AGENTGIT_REPO"]  # a new owner/name
+plan = client.migrations.prepare(
+    name=repo,
+    data=Path(os.environ.get("AGENTGIT_BUNDLE", "repository.bundle")).read_bytes(),
+    options=CallOptions(timeout_ms=300_000),
+)
+print(plan.id, plan.report)
+# Review the report before opting into publication. Content omissions remain blocked.
+if os.environ.get("AGENTGIT_PUBLISH") == "1":
+    client.migrations.commit(id=plan.id, accept_lossy=False)
+```
+
+`migrations.status(id=plan.id)` resumes a report. The same methods exist on
+`AsyncAgentGitClient`. Binary uploads keep one idempotency key across automatic retries.
+See [migration limits and what transfers](../../docs/guides/migrate-from-git.md).

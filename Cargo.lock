@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agentgit-agent"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-bench"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -46,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-changeset"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-object",
  "agentgit-types",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-cli"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-client"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-crypto"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "ed25519-dalek",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-dag"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-types",
@@ -136,26 +136,28 @@ dependencies = [
 
 [[package]]
 name = "agentgit-diff"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "agentgit-git"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-dag",
  "agentgit-integrate",
  "agentgit-types",
+ "serde",
+ "sha2",
  "tempfile",
  "thiserror",
 ]
 
 [[package]]
 name = "agentgit-integrate"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -169,9 +171,11 @@ dependencies = [
  "agentgit-testkit",
  "agentgit-tree",
  "agentgit-types",
+ "atomicwrites",
  "globset",
  "hex",
  "proptest",
+ "rustix 1.1.5",
  "serde",
  "serde_json",
  "sha2",
@@ -181,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-mcp"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-server",
@@ -200,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-merge"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-diff",
@@ -213,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-object"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "proptest",
@@ -223,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-policy"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-object",
@@ -238,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-protocol"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "base64 0.23.1",
  "prost",
@@ -254,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-sandbox"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-testkit",
  "libc",
@@ -267,13 +271,14 @@ dependencies = [
 
 [[package]]
 name = "agentgit-server"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
  "agentgit-crypto",
  "agentgit-dag",
  "agentgit-diff",
+ "agentgit-git",
  "agentgit-integrate",
  "agentgit-object",
  "agentgit-policy",
@@ -322,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-storage"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -348,11 +353,11 @@ dependencies = [
 
 [[package]]
 name = "agentgit-testkit"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 
 [[package]]
 name = "agentgit-tree"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -365,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-types"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "hex",
  "proptest",
@@ -377,11 +382,11 @@ dependencies = [
 
 [[package]]
 name = "agentgit-ui-assets"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 
 [[package]]
 name = "agentgit-worker"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-client",
@@ -537,6 +542,17 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atomicwrites"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ef1bb8d1b645fe38d51dfc331d720fb5fc2c94b440c76cc79c80ff265ca33e3"
+dependencies = [
+ "rustix 0.38.44",
+ "tempfile",
+ "windows-sys 0.52.0",
+]
 
 [[package]]
 name = "autocfg"
@@ -949,9 +965,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03bb0e1cc970d482d121d9a1744999169b69a07470b3d644a7894e53fcaf4574"
+checksum = "12218662ccac37d9714f2191252553d67585b97df8c839cbe49e0bde278dc865"
 dependencies = [
  "cmov",
 ]
@@ -1693,6 +1709,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
 name = "linux-raw-sys"
@@ -2459,6 +2481,19 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.38.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rustix"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
@@ -2466,7 +2501,7 @@ dependencies = [
  "bitflags",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
 ]
 
@@ -2832,7 +2867,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.3",
  "once_cell",
- "rustix",
+ "rustix 1.1.5",
  "windows-sys 0.61.2",
 ]
 

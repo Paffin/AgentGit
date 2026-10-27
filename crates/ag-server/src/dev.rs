@@ -51,7 +51,7 @@ pub fn sample_files() -> Vec<(&'static str, &'static str)> {
     vec![
         (
             "README.md",
-            "# Welcome to AgentGit\n\nThis is a demo repository on your own `ag-server dev`. Try the loop:\n\n1. `ag clone` it (the command is printed when the server starts).\n2. Edit `src/greeting.py`, then `ag snapshot -m \"...\"`, `ag propose -t \"...\"`, `ag integrate <proposal>`.\n3. Ask what the policy lets an agent do alone: `ag policy explain`.\n",
+            "# Welcome to AgentGit\n\nThis is a demo repository on your own `ag-server dev`. Try the loop:\n\n1. `ag clone` it (the command is printed when the server starts).\n2. Edit `src/greeting.py`, then `ag snapshot -m \"...\"`, `ag push -t \"...\"`, `ag remote integrate <proposal>`, `ag pull`.\n3. Ask what the policy lets an agent do alone: `ag remote policy main --explain`.\n",
         ),
         (
             "docs/guide.md",

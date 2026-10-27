@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { isHuman, parseIdentity, samePrincipal } from './identity'
 import { matchGlob, repoPatternMatches, scopesMayOverlap } from './glob'

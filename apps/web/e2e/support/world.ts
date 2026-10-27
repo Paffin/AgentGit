@@ -371,12 +371,25 @@ export interface HeartbeatKeeper {
   stop(): Promise<void>
 }
 
+function pauseUntilStopped(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    const timer = setTimeout(finish, ms)
+    signal.addEventListener('abort', finish)
+  })
+}
+
 /** Keeps the listed runs alive, the way a working agent would. A run that is not listed goes quiet. */
 export function startHeartbeats(baseURL: string, everyMs = 2000): HeartbeatKeeper {
   const beating = new Map<string, Beating>()
-  let stopped = false
+  const stopping = new AbortController()
   const loop = (async () => {
-    while (!stopped) {
+    while (!stopping.signal.aborted) {
       await Promise.all(
         [...beating.values()].map(async (b) => {
           try {
@@ -389,14 +402,14 @@ export function startHeartbeats(baseURL: string, everyMs = 2000): HeartbeatKeepe
           }
         }),
       )
-      await sleep(everyMs)
+      await pauseUntilStopped(everyMs, stopping.signal)
     }
   })()
   return {
     add: (b) => void beating.set(b.runId, b),
     remove: (runId) => void beating.delete(runId),
     async stop() {
-      stopped = true
+      stopping.abort()
       await loop
     },
   }

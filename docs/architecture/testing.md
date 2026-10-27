@@ -30,6 +30,16 @@ The scripts under `scripts/` that guard the repository have tests of their own, 
 of the real tools** (`npm audit`, `pip-audit`, `govulncheck`, `cargo llvm-cov`): `scripts/testdata/`. They run in the
 Security and Quality workflows.
 
+## Web UI feedback time
+
+The unit suite keeps each file isolated in its own VM and limits itself to four workers (or the available CPU count, if smaller), with a 512 MB recycling limit per worker. Pure API and data tests use Node; component, browser storage and DOM tests keep happy-dom. Timers and mocks are restored after each test. Changing the worker pool must preserve the complete test list, not only the final pass count; shuffled runs check for order dependencies.
+
+A local comparison on 2026-10-27 used Node 24.19.0, two fixed CPU cores and the same 478 existing tests. Three baseline runs took 30.358 / 27.569 / 33.328 seconds; the isolated-VM/Node configuration took 6.050 / 5.856 / 5.660 seconds. Median wall time fell from 30.358 to 5.856 seconds (80.7%). Test names and outcomes matched in all six runs. This is a unit-suite measurement, not a claim about total CI or browser time. Three additional tests cover immediate heartbeat-worker shutdown, stopping before the first interval is scheduled, and the absence of requests after shutdown.
+
+The browser pipeline builds the checked production UI and embedded server once, preserves executable modes in an archive, and checks binary hashes after download. Chromium, Firefox, WebKit, phone, tablet and documentation screenshots then run as separate projects against that same build. The browser image is pinned by version and digest and must match the Playwright package. Screenshot scenarios run once; they are not repeated as a dependency in three matrix jobs. The real Keycloak job remains a separate check.
+
+For a focused local browser iteration after building the current UI, run `npx playwright test --project=chromium --no-deps e2e/draft-recovery.spec.ts` in `apps/web`. The ordinary full run still includes the screenshot project. Do not use a focused run as evidence that the whole matrix passed. Console, crash, authorization and reviewed-skip gates apply in both modes.
+
 ## A test cannot pass by not running
 
 A test that needs an external component (PostgreSQL, S3, a container runtime, Keycloak, the `ag-server` binary, a

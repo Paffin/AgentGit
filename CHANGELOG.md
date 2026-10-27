@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Faster Web UI test execution with isolated, bounded VM workers, Node environments for pure functions, and cancellable test-worker shutdown. Browser CI shares one verified embedded build and runs each project once in a pinned runtime.
+
 - Tab-scoped file drafts preserve text, original base, path and proposal description across reload and sign-in; storage failures are explicit and drafts remain separated by account/repository/branch/path.
 - Repository-wide file finding, reviewed rename/move/delete, binary-safe multi-file upload with replacement review, comparison history/swap, and expandable Home summaries with older-repository selection.
 - A platform goal ledger with a 142-row initial coverage inventory, staged backlog and explicit unverified acceptance work. A qualified Vitest mutation adapter detects empty test runs rather than crediting them as killed mutations.

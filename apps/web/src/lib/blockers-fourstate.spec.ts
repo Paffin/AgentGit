@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { Blocker, Preparation, Proposal, Review } from '@/api/types'
 import { explainAll, explainBlocker, hasRefusal } from './blockers'

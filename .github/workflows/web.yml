@@ -11,6 +11,7 @@ on:
       - "crates/ag-server/**"
       - "scripts/build_ui.sh"
       - "scripts/check_skips.py"
+      - "scripts/test_web_e2e_workflow.py"
       - "tests/skip-allowlist.toml"
       - ".github/workflows/web.yml"
   pull_request:
@@ -20,6 +21,7 @@ on:
       - "crates/ag-server/**"
       - "scripts/build_ui.sh"
       - "scripts/check_skips.py"
+      - "scripts/test_web_e2e_workflow.py"
       - "tests/skip-allowlist.toml"
       - ".github/workflows/web.yml"
 
@@ -55,25 +57,22 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Keep the checked production UI for the server build
+        run: tar -czf "$RUNNER_TEMP/web-dist.tar.gz" dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-production-ui
+          path: ${{ runner.temp }}/web-dist.tar.gz
+          compression-level: 0
+          retention-days: 3
 
-  # The whole suite, against a REAL ag-server that serves the UI from its own binary (the UI is built first and
-  # embedded: `scripts/build_ui.sh`, then `cargo build`), in Chromium, Firefox and WebKit, plus the layout and
-  # accessibility specs at tablet and phone size (Chromium). Nothing is quarantined: a failure is a bug or a
-  # documented engine difference (docs/guides/web-ui.md, "Verified where").
-  e2e:
-    name: end-to-end (${{ matrix.project }})
-    runs-on: ubuntu-latest
+  server-build:
+    name: build the embedded server once
+    runs-on: ubuntu-24.04
     needs: checks
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { project: chromium, browser: chromium }
-          - { project: firefox, browser: firefox }
-          - { project: webkit, browser: webkit }
-          - { project: tablet, browser: chromium }
-          - { project: phone, browser: chromium }
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,20 +83,73 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: web-e2e
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: web-production-ui
+          path: ${{ runner.temp }}
+      - name: Restore the checked UI
+        run: tar -xzf "$RUNNER_TEMP/web-dist.tar.gz" -C apps/web
+      - name: Build the server (with the UI inside) and the CLI
+        run: cargo build -p agentgit-server -p agentgit-cli
+      - name: Archive executable binaries and their checksums
+        working-directory: target/debug
+        run: |
+          sha256sum ag-server ag > binaries.sha256
+          tar -czf "$RUNNER_TEMP/web-binaries.tar.gz" ag-server ag binaries.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-test-binaries
+          path: ${{ runner.temp }}/web-binaries.tar.gz
+          compression-level: 0
+          retention-days: 3
+
+  # Every project runs once against the same embedded build. The screenshot project has its own
+  # pristine server, so it does not delay or repeat inside the Chromium, tablet and phone jobs.
+  # The whole suite, against a REAL ag-server that serves the UI from its own binary (the UI is built first and
+  # embedded: `scripts/build_ui.sh`, then `cargo build`), in Chromium, Firefox and WebKit, plus the layout and
+  # accessibility specs at tablet and phone size (Chromium). Nothing is quarantined: a failure is a bug or a
+  # documented engine difference (docs/guides/web-ui.md, "Verified where").
+  e2e:
+    name: end-to-end (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    needs: [checks, server-build]
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      options: --ipc=host
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: screens }
+          - { project: chromium }
+          - { project: firefox }
+          - { project: webkit }
+          - { project: tablet }
+          - { project: phone }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: Build the UI (npm ci, production build, pre-compression)
-        run: scripts/build_ui.sh
-      - name: Build the server (with the UI inside) and the CLI
-        run: cargo build -p agentgit-server -p agentgit-cli
-      - name: Install the browser
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm ci
         working-directory: apps/web
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: web-test-binaries
+          path: ${{ runner.temp }}
+      - name: Restore and verify the shared binaries
+        run: |
+          mkdir -p target/debug
+          tar -xzf "$RUNNER_TEMP/web-binaries.tar.gz" -C target/debug
+          cd target/debug
+          sha256sum --check binaries.sha256
       - name: Run the end-to-end suite
-        run: npx playwright test --project=${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --no-deps
         working-directory: apps/web
         env:
           AG_SERVER_BIN: ${{ github.workspace }}/target/debug/ag-server

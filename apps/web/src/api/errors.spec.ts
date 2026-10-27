@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { ApiError, describeError, errorFromResponse, parseRetryAfter } from './errors'
 

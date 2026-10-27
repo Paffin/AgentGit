@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import type { Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
@@ -48,6 +49,11 @@ export default defineConfig({
     cssCodeSplit: true,
   },
   test: {
+    // Each file gets an isolated VM; reuse bounded workers instead of starting a process per file.
+    pool: 'vmThreads',
+    isolate: true,
+    maxWorkers: Math.min(4, availableParallelism()),
+    vmMemoryLimit: '512MB',
     environment: 'happy-dom',
     include: ['src/**/*.spec.ts', 'tests/**/*.spec.ts'],
     setupFiles: ['./tests/setup.ts'],

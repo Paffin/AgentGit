@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { Run, ServerEvent } from '@/api/types'
 import { describeEvent, eventConcernsProposal, sectionsFor } from './events'

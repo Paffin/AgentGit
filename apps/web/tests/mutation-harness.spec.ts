@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { spawnSync } from 'node:child_process'
 import { stripVTControlCharacters } from 'node:util'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'

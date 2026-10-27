@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import { ApiClient, buildQuery, filePath, repoPath } from './client'
 import type { ClientOptions } from './client'

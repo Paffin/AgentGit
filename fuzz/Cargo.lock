@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agentgit-agent"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-dag",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-changeset"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-object",
  "agentgit-types",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-client"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-object",
  "agentgit-protocol",
@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-crypto"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "ed25519-dalek",
@@ -55,7 +55,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-dag"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-types",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-diff"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 
 [[package]]
 name = "agentgit-fuzz"
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-git"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-dag",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-integrate"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-merge"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-diff",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-object"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "sha2",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-policy"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-object",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-protocol"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "base64 0.23.1",
  "prost",
@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-sandbox"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "libc",
  "serde",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-storage"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-tree"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-types"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "hex",
  "serde",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-worker"
-version = "0.2.0-rc.3"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-client",
  "agentgit-crypto",

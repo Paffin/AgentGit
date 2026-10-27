@@ -73,3 +73,5 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install --require-hashes -r doc
 is enabled for the repository (Settings, Pages, Source: GitHub Actions); until then the deploy step is skipped and the
 build is still checked. Links that leave `docs/` (the README, roadmap, source files) are rewritten to the repository on
 GitHub by `scripts/mkdocs_hooks.py`; a page that is missing from `nav` in `mkdocs.yml` is appended under "More" and reported.
+
+- [Migrate from GitHub or GitLab](guides/migrate-from-git.md) — browser and CLI import, branch/tag mapping, backup and limitations.

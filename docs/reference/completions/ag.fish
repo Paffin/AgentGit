@@ -35,6 +35,7 @@ complete -c ag -n "__fish_ag_needs_command" -s v -l verbose -d 'Explain what is 
 complete -c ag -n "__fish_ag_needs_command" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ag -n "__fish_ag_needs_command" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_needs_command" -f -a "init" -d 'Create a repository in the current directory'
+complete -c ag -n "__fish_ag_needs_command" -f -a "migrate" -d 'Migrate every branch and tag from a full local Git clone or bundle into a new repository'
 complete -c ag -n "__fish_ag_needs_command" -f -a "status" -d 'Summarize the workspace, your proposals, leases, task and remote at a glance'
 complete -c ag -n "__fish_ag_needs_command" -f -a "snapshot" -d 'Record the working directory as a new snapshot'
 complete -c ag -n "__fish_ag_needs_command" -f -a "sync" -d 'Bring the stream\'s latest head into the workspace'
@@ -103,6 +104,18 @@ complete -c ag -n "__fish_ag_using_subcommand init" -s q -l quiet -d 'Print only
 complete -c ag -n "__fish_ag_using_subcommand init" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand init" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand init" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l namespace -d 'Destination namespace, for example acme/webapp' -r
+complete -c ag -n "__fish_ag_using_subcommand migrate" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l allow-lossy -d 'Accept reported omissions, unresolved LFS pointers and unsupported refs'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand migrate" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand status" -s w -l workspace -d 'Workspace name' -r
 complete -c ag -n "__fish_ag_using_subcommand status" -l dir -d 'Working directory of the workspace (required for non-default workspaces)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand status" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F

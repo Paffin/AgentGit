@@ -65,6 +65,29 @@ never\:"Never colour"))' \
 '--version[Print version]' \
 && ret=0
 ;;
+(migrate)
+_arguments "${_arguments_options[@]}" : \
+'--namespace=[Destination namespace, for example acme/webapp]:NAMESPACE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--allow-lossy[Accept reported omissions, unresolved LFS pointers and unsupported refs]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':source -- Full local Git clone, mirror or self-contained .bundle file:_files' \
+':destination -- New destination directory. It must not exist:_files' \
+&& ret=0
+;;
 (status)
 _arguments "${_arguments_options[@]}" : \
 '-w+[Workspace name]:WORKSPACE:_default' \
@@ -2917,6 +2940,7 @@ esac
 _ag_commands() {
     local commands; commands=(
 'init:Create a repository in the current directory' \
+'migrate:Migrate every branch and tag from a full local Git clone or bundle into a new repository' \
 'status:Summarize the workspace, your proposals, leases, task and remote at a glance' \
 'snapshot:Record the working directory as a new snapshot' \
 'sync:Bring the stream'\''s latest head into the workspace' \
@@ -3214,6 +3238,11 @@ _ag__subcmd__ls_commands() {
 _ag__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'ag man commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__migrate_commands] )) ||
+_ag__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag migrate commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__op_commands] )) ||
 _ag__subcmd__op_commands() {

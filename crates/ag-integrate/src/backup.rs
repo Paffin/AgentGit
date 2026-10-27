@@ -112,6 +112,12 @@ impl Repository {
         }
         drop(_gc_held_off);
 
+        // Imported source bundles and reconciliation reports are part of recovery, not disposable cache.
+        let imported = self.layout.ag_dir().join("import");
+        if imported.is_dir() {
+            let (mut n, mut b) = (0, 0);
+            copy_dir(&imported, &ag.join("import"), &mut n, &mut b)?;
+        }
         let mut keys_included = false;
         let keys = self.layout.keys_dir();
         if include_keys && keys.is_dir() {

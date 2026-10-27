@@ -22,6 +22,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 
 - [`ag`](#ag)
 - [`ag init`](#ag-init)
+- [`ag migrate`](#ag-migrate)
 - [`ag status`](#ag-status)
 - [`ag snapshot`](#ag-snapshot)
 - [`ag sync`](#ag-sync)
@@ -157,6 +158,7 @@ Usage: ag [OPTIONS] <COMMAND>
 
 Commands:
   init         Create a repository in the current directory
+  migrate      Migrate every branch and tag from a full local Git clone or bundle into a new repository
   status       Summarize the workspace, your proposals, leases, task and remote at a glance
   snapshot     Record the working directory as a new snapshot
   sync         Bring the stream's latest head into the workspace
@@ -274,6 +276,30 @@ Options:
       --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
   -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
       --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag migrate
+
+```text
+Migrate every branch and tag from a full local Git clone or bundle into a new repository
+
+Usage: ag migrate [OPTIONS] --namespace <NAMESPACE> <SOURCE> <DESTINATION>
+
+Arguments:
+  <SOURCE>       Full local Git clone, mirror or self-contained .bundle file
+  <DESTINATION>  New destination directory. It must not exist
+
+Options:
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --namespace <NAMESPACE>  Destination namespace, for example acme/webapp
+      --allow-lossy            Accept reported omissions, unresolved LFS pointers and unsupported refs
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                   Print help
   -V, --version                Print version
 ```

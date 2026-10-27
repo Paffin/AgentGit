@@ -221,7 +221,14 @@ impl RepoManager {
                 dir.display()
             )));
         }
-        std::fs::create_dir_all(&dir).map_err(ApiError::internal)?;
+        std::fs::create_dir_all(dir.parent().expect("repository has parent")).map_err(ApiError::internal)?;
+        std::fs::create_dir(&dir).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                ApiError::new(ag_protocol::ErrorCode::AlreadyExists, "repository directory already exists")
+            } else {
+                ApiError::internal(e)
+            }
+        })?;
         let init = Repository::init(
             &dir,
             &InitOptions {
@@ -247,6 +254,60 @@ impl RepoManager {
             quota,
             object_bytes: 0,
             config_json,
+        };
+        self.control.insert_repo(&row)?;
+        Ok(row)
+    }
+
+    /// Register a fully verified local migration. The source marker makes a lost-response retry safe.
+    pub fn publish_migration(
+        &self,
+        source: &Path,
+        name: &str,
+        migration: &str,
+        actor: &Identity,
+        quota: v1::Quota,
+    ) -> ApiResult<RepoRow> {
+        parse_repo_name(name)?;
+        let dest = self.dir(name);
+        let owns = || std::fs::read_to_string(dest.join(".ag/import/id")).ok().as_deref() == Some(migration);
+        if let Some(row) = self.control.repo(name)? {
+            return if owns() {
+                Ok(row)
+            } else {
+                Err(ApiError::new(ag_protocol::ErrorCode::AlreadyExists, "repository already exists"))
+            };
+        }
+        if !dest.exists() {
+            std::fs::create_dir_all(dest.parent().expect("repository parent")).map_err(ApiError::internal)?;
+            std::fs::create_dir(&dest).map_err(ApiError::internal)?;
+            std::fs::rename(source.join(".ag"), dest.join(".ag")).map_err(ApiError::internal)?;
+        } else if !owns() {
+            return Err(ApiError::new(
+                ag_protocol::ErrorCode::AlreadyExists,
+                "repository directory is reserved by another operation",
+            ));
+        }
+        let repo = Repository::open(&dest)?;
+        if repo.config().namespace.as_str() != name {
+            return Err(ApiError::invalid("migration namespace does not match destination"));
+        }
+        let bytes = repo
+            .objects()
+            .list()?
+            .iter()
+            .try_fold(0u64, |sum, o| sum.checked_add(o.size))
+            .ok_or_else(|| ApiError::invalid("object size overflow"))?;
+        let row = RepoRow {
+            name: name.into(),
+            namespace: name.into(),
+            default_stream: repo.config().default_stream.to_string(),
+            description: "Imported from Git".into(),
+            created_at_ms: self.clock.now().as_millis(),
+            created_by: actor.to_string(),
+            quota,
+            object_bytes: bytes,
+            config_json: serde_json::to_string(repo.config()).map_err(ApiError::internal)?,
         };
         self.control.insert_repo(&row)?;
         Ok(row)

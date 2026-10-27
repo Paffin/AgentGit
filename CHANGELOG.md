@@ -7,6 +7,21 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.1] — 2026-10-27
+
+### Added
+
+- Public beta for the single-server Linux/SQLite/filesystem workflow, with open external qualification gates and explicit migration limits.
+- Web import from full Git bundles: private preflight, all-branch/tag reconciliation, content-loss acknowledgement, idempotent publication, and downloadable receipt. Credentials stay with local Git.
+- `ag migrate` imports a full local Git clone/mirror or bundle into a new working repository. Original bundles and reports are retained and included in backups.
+- Deterministic mapping for Git branch names outside AgentGit's naming rules; unsupported refs, submodules, paths, repaired text and external LFS pointers are reported.
+- Deployment smoke tests exercise real bundle import and publication in the shipped server image. Git's native bundle/pack runtime is included in the shell-less images.
+
+### Scope
+
+- Hosting issues, pull/merge request discussions, permissions, releases, hosted CI settings and external LFS payloads are not imported. Browser migration currently requires local storage; see [the migration guide](docs/guides/migrate-from-git.md).
+- External MCP host qualification, independent pilots, physical-device and screen-reader verification remain open; beta is not a production-readiness certification.
+
 ## [0.2.0-rc.3] — 2026-10-27
 
 ### Added

@@ -106,6 +106,10 @@ async function create() {
       <p class="crumb"><RouterLink to="/repos">Repositories</RouterLink> / New</p>
       <h1>Start a repository</h1>
       <p class="muted">Two questions, then you are in. You can change both later.</p>
+      <p>
+        Coming from GitHub or GitLab?
+        <RouterLink to="/import">Import an existing repository</RouterLink>.
+      </p>
     </div>
 
     <Card v-if="!auth.isAdminAnywhere" flush>

@@ -41,6 +41,7 @@ ag-storage.workspace = true
 ag-policy.workspace = true
 ag-agent.workspace = true
 ag-integrate.workspace = true
+ag-git.workspace = true
 ag-protocol.workspace = true
 ag-ui-assets = { workspace = true, optional = true }
 anyhow.workspace = true

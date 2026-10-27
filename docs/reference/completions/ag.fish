@@ -77,6 +77,7 @@ complete -c ag -n "__fish_ag_needs_command" -f -a "pull" -d 'Fetch, then fast-fo
 complete -c ag -n "__fish_ag_needs_command" -f -a "push" -d 'Upload your snapshot and open a proposal on the server'
 complete -c ag -n "__fish_ag_needs_command" -f -a "remote" -d 'Manage remotes and work with proposals, events and policy on a server'
 complete -c ag -n "__fish_ag_needs_command" -f -a "login" -d 'Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing'
+complete -c ag -n "__fish_ag_needs_command" -f -a "auth" -d 'Inspect saved server connections without printing credentials'
 complete -c ag -n "__fish_ag_needs_command" -f -a "logout" -d 'Forget a saved server credential'
 complete -c ag -n "__fish_ag_needs_command" -f -a "pin" -d 'Pin a revision so garbage collection keeps it'
 complete -c ag -n "__fish_ag_needs_command" -f -a "unpin" -d 'Remove a pin'
@@ -1407,6 +1408,30 @@ complete -c ag -n "__fish_ag_using_subcommand login" -s q -l quiet -d 'Print onl
 complete -c ag -n "__fish_ag_using_subcommand login" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand login" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand login" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand auth; and not __fish_seen_subcommand_from status" -f -a "status" -d 'List saved connections; --check asks each server whether its saved credential still works'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l timeout -d 'Timeout for each online check, in seconds' -r
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l ca-file -d 'Extra CA certificate (PEM) for online checks' -r -F
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l check -d 'Verify saved credentials online. Without this, status is local and works offline'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand auth; and __fish_seen_subcommand_from status" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand logout" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand logout" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand logout" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'

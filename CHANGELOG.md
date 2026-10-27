@@ -7,6 +7,15 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
+- Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
+
+### Fixed
+
+- Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
+
 ## [0.3.0-beta.1] — 2026-10-27
 
 ### Added

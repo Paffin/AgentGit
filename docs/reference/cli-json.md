@@ -37,6 +37,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 - [`ag agent`](#ag-agent)
 - [`ag audit`](#ag-audit)
+- [`ag auth`](#ag-auth)
 - [`ag backup`](#ag-backup)
 - [`ag blame`](#ag-blame)
 - [`ag checkout`](#ag-checkout)
@@ -207,6 +208,33 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "timestamp": "number"
   }
 ]
+```
+
+## ag auth
+
+### ag auth status
+
+```json
+{
+  "checked_online": "bool",
+  "connections": [
+    {
+      "expires_at": "string",
+      "identity": "string",
+      "server": "string",
+      "state": "string"
+    }
+  ]
+}
+```
+
+### ag auth status (empty)
+
+```json
+{
+  "checked_online": "bool",
+  "connections": []
+}
 ```
 
 ## ag backup

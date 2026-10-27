@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import { pathProblem, proposeChange, putFile } from '@/lib/edit'
 import { useBoard } from '@/stores/board'
 import { useToasts } from '@/stores/toasts'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+import { useResource } from '@/composables/useResource'
+import ErrorState from '@/ui/ErrorState.vue'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Dialog from '@/ui/Dialog.vue'
@@ -35,15 +38,23 @@ const router = useRouter()
 const board = useBoard()
 const toasts = useToasts()
 
-const newPath = ref(props.isNew ? (props.path ? `${props.path}/` : '') : props.path)
+const initialPath = props.isNew ? (props.path ? `${props.path}/` : '') : props.path
+const newPath = ref(initialPath)
 const text = ref(props.original)
 const filePath = computed(() => (props.isNew ? newPath.value.trim() : props.path))
 const problem = computed(() => (props.isNew && newPath.value ? pathProblem(newPath.value) : null))
 const changed = computed(() =>
   props.isNew ? filePath.value !== '' : text.value !== props.original,
 )
+const base = useResource(async () =>
+  props.isNew ? (await api.streams.head(props.repo, props.stream)).head : props.rev,
+)
 const canPropose = computed(
-  () => changed.value && !(props.isNew && pathProblem(newPath.value) !== null),
+  () =>
+    changed.value &&
+    base.settled.value &&
+    !base.error.value &&
+    !(props.isNew && pathProblem(newPath.value) !== null),
 )
 
 const asking = ref(false)
@@ -51,6 +62,33 @@ const title = ref('')
 const description = ref('')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
+const submitted = ref(false)
+const dirty = computed(
+  () => !submitted.value && (text.value !== props.original || newPath.value !== initialPath),
+)
+const { askingToLeave, requestLeave, decide } = useUnsavedChanges(dirty, busy)
+watch(askingToLeave, (open) => {
+  if (open) asking.value = false
+})
+
+async function cancel() {
+  if (await requestLeave()) emit('cancel')
+}
+
+let draftUrl = ''
+function downloadDraft() {
+  if (draftUrl) URL.revokeObjectURL(draftUrl)
+  draftUrl = URL.createObjectURL(new Blob([text.value], { type: 'text/plain;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = draftUrl
+  link.download = filePath.value.split('/').pop() || 'draft.txt'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+onBeforeUnmount(() => {
+  if (draftUrl) URL.revokeObjectURL(draftUrl)
+})
 
 function ask() {
   title.value = props.isNew ? `Add ${filePath.value}` : `Update ${filePath.value}`
@@ -66,11 +104,14 @@ async function propose() {
     const p = await proposeChange(api, {
       repo: props.repo,
       stream: props.stream,
-      fromRev: props.isNew ? undefined : props.rev,
+      fromRev: base.data.value || undefined,
+      expectedBase: base.data.value,
       changes: [putFile(filePath.value, text.value, props.executable === true)],
       title: title.value.trim(),
       description: description.value.trim() || undefined,
     })
+    submitted.value = true
+    busy.value = false
     asking.value = false
     board.touched(['proposals', 'streams', 'predict'])
     toasts.ok('Change request opened', p.title)
@@ -91,17 +132,31 @@ async function propose() {
 
 <template>
   <div class="editor" data-testid="file-editor">
+    <ErrorState
+      v-if="base.error.value"
+      what="the starting revision"
+      :error="base.error.value"
+      compact
+      @retry="base.reload()"
+    />
     <TextField
       v-if="isNew"
       v-model="newPath"
       label="File path"
       mono
       required
+      :disabled="busy"
       placeholder="docs/intro.md"
       :error="problem ?? undefined"
       hint="Folders in the path are created for you."
     />
-    <TextArea v-model="text" :label="isNew ? 'Contents' : `Contents of ${path}`" :rows="18" mono />
+    <TextArea
+      v-model="text"
+      :label="isNew ? 'Contents' : `Contents of ${path}`"
+      :rows="18"
+      :disabled="busy"
+      mono
+    />
     <div class="bar">
       <p class="faint">
         {{
@@ -111,7 +166,8 @@ async function propose() {
         }}
       </p>
       <div class="btns">
-        <Button @click="emit('cancel')">Cancel</Button>
+        <Button :disabled="!dirty" icon="download" @click="downloadDraft">Download draft</Button>
+        <Button :disabled="busy" @click="cancel">Cancel</Button>
         <Button
           variant="primary"
           icon="proposal"
@@ -122,6 +178,22 @@ async function propose() {
         >
       </div>
     </div>
+
+    <Dialog
+      :model-value="askingToLeave"
+      title="Leave without proposing?"
+      description="Your edits have not been sent to the server. Keep editing, or discard them to continue."
+      size="sm"
+      alert
+      @update:model-value="decide(false)"
+    >
+      <p>You can download a copy of your draft before leaving.</p>
+      <Button icon="download" @click="downloadDraft">Download draft</Button>
+      <template #footer>
+        <Button variant="danger" @click="decide(true)">Discard changes</Button>
+        <Button variant="primary" data-autofocus @click="decide(false)">Keep editing</Button>
+      </template>
+    </Dialog>
 
     <Dialog
       v-model="asking"
@@ -179,6 +251,7 @@ async function propose() {
 }
 .btns {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
 </style>

@@ -12,7 +12,8 @@ over gRPC when you ask it to. The model is deliberately small:
 ## Connecting
 
 ```sh
-export AG_TOKEN=agt_…                                   # a credential minted on the server
+ag login https://git.example.com:8443                   # paste a credential minted on the server
+ag auth status --check                                 # verify saved connections without printing credentials
 ag clone https://git.example.com:8443/acme/web web      # http:// works for a local or TLS-terminated server
 cd web
 ag remote whoami                                        # who the server thinks you are, and your roles
@@ -21,7 +22,7 @@ ag remote whoami                                        # who the server thinks 
 A remote is `<server>/<owner>/<name>`; `ag clone` records it as `origin` in `.ag/remotes.json` (no secrets in it).
 Where the credential comes from, in order: the variable named by `--token-env`, a file you stored with
 `--token-stdin` (`.ag/credentials/<remote>`, mode 0600 — `ag` **refuses** a credential file other users can
-read), `AG_TOKEN_<REMOTE>`, then `AG_TOKEN`. For TLS with a private CA add `--ca-file ca.pem`. To act as an agent
+read), `AG_TOKEN_<REMOTE>`, `AG_TOKEN`, then a saved `ag login` for that server. For TLS with a private CA add `--ca-file ca.pem`. To act as an agent
 run, export `AG_RUN=<run id>` (the credential must belong to that agent).
 
 ```sh
@@ -29,6 +30,13 @@ echo "$TOKEN" | ag clone --token-stdin https://… web        # store it instead
 ag remote add upstream https://other.example.com/acme/web --token-env UPSTREAM_TOKEN
 ag remote list
 ```
+
+`ag auth status` works outside a repository and without a network. It lists saved identities and expiry times,
+not token values, and distinguishes a cached login from one verified online. Use `ag auth status SERVER --check`
+to check one connection; `--timeout 5` bounds the check in seconds and `--ca-file ca.pem` supports a private CA.
+An expired, rejected or unreachable connection returns exit code 1. The command never changes saved credentials
+and does not list environment or remote-specific credentials. Run `ag login SERVER` to replace a saved login,
+or `ag logout SERVER` to forget it. For automation, `AG_TOKEN` and `ag login --token-stdin` remain available.
 
 ## The loop
 

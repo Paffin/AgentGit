@@ -94,6 +94,10 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     let login = ["--json", "login", srv.url.as_str(), "--token-file", token_file.to_str().unwrap()];
     r.rec("login", &run_in(parent.path(), cfg.path(), "user:alice", &login, &[]).ok());
     r.rec(
+        "auth status",
+        &run_in(parent.path(), cfg.path(), "user:alice", &["--json", "auth", "status", "--check"], &[]).ok(),
+    );
+    r.rec(
         "logout",
         &run_in(parent.path(), cfg.path(), "user:alice", &["--json", "logout", srv.url.as_str()], &[]).ok(),
     );

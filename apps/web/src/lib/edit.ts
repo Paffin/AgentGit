@@ -54,6 +54,8 @@ export interface ProposeInput {
   stream: string
   /** Start from this revision instead of the branch's head (the revision that was on screen). */
   fromRev?: string
+  /** The base shown to the editor; an empty string means the branch had no commits. */
+  expectedBase?: string
   changes: FileChange[]
   title: string
   description?: string
@@ -71,6 +73,11 @@ export async function proposeChange(api: Api, input: ProposeInput): Promise<Prop
     from_rev: input.fromRev,
   })
   try {
+    if (input.expectedBase !== undefined && ws.base !== input.expectedBase) {
+      throw new Error(
+        'The branch changed before this edit could start. Reload it and try again; your text is still here.',
+      )
+    }
     const done = await api.workspaces.modify(input.repo, name, {
       changes: input.changes,
       message: input.title,

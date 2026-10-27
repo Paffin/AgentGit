@@ -1,5 +1,16 @@
 {
   "commands": {
+    "auth status": {
+      "checked_online": "bool",
+      "connections": [
+        {
+          "expires_at": "string",
+          "identity": "string",
+          "server": "string",
+          "state": "string"
+        }
+      ]
+    },
     "clone": {
       "blobs": "number",
       "changesets": "number",

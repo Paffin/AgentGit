@@ -86,6 +86,8 @@ pub struct Cli {
 pub enum Command {
     /// Create a repository in the current directory.
     Init(cmds::repo::InitArgs),
+    /// Migrate every branch and tag from a full local Git clone or bundle into a new repository.
+    Migrate(cmds::gitbridge::MigrateArgs),
     /// Summarize the workspace, your proposals, leases, task and remote at a glance.
     Status(cmds::repo::StatusArgs),
     /// Record the working directory as a new snapshot.
@@ -192,6 +194,9 @@ pub enum Command {
         after_help = "The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.\nAn environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:\n  ag login http://127.0.0.1:8080 --token-file ag-dev-data/dev/token\n  echo \"$TOKEN\" | ag login https://ag.example.com --token-stdin"
     )]
     Login(cmds::login::LoginArgs),
+    /// Inspect saved server connections without printing credentials.
+    #[command(subcommand)]
+    Auth(cmds::auth::AuthCmd),
     /// Forget a saved server credential.
     Logout(cmds::login::LogoutArgs),
     /// Pin a revision so garbage collection keeps it.
@@ -286,9 +291,11 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     // Commands that work without a repository.
     match &cli.command {
         Init(args) => return cmds::repo::init(&cli, args),
+        Migrate(args) => return cmds::gitbridge::migrate(&cli, args),
         Clone(args) => return cmds::remote::clone(&cli, args),
         Remote(args) => return cmds::remote::remote(&cli, args),
         Login(a) => return cmds::login::login(&cli, a),
+        Auth(a) => return cmds::auth::auth(&cli, a),
         Logout(a) => return cmds::login::logout(&cli, a),
         Doctor(args) => return cmds::doctor::doctor(&cli, args),
         Config(c) => return cmds::config::config(&cli, c),
@@ -305,8 +312,8 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) | Clone(_) | Remote(_) | Login(_) | Logout(_) | Doctor(_) | Config(_) | Completions(_) | Man(_)
-        | Version | Help(_) => {
+        Init(_) | Migrate(_) | Clone(_) | Remote(_) | Login(_) | Auth(_) | Logout(_) | Doctor(_) | Config(_)
+        | Completions(_) | Man(_) | Version | Help(_) => {
             unreachable!()
         }
         Fetch(a) => cmds::remote::fetch(&ctx, a),

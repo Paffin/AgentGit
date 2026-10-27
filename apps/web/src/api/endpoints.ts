@@ -133,6 +133,22 @@ export function createApi(c: ApiClient) {
         (await c.get<{ bases: string[] }>(r(repo, '/history/merge-base'), { a, b }, o)).bases ?? [],
     },
     tree: {
+      manifest: async (
+        repo: string,
+        q: { rev: string; page_size?: number; page_token?: string },
+        o?: Opts,
+      ) => {
+        const res = await c.get<{
+          entries: TreeEntry[]
+          next_page_token: string
+          total_entries: number
+        }>(r(repo, '/tree'), q, o)
+        return {
+          entries: res.entries ?? [],
+          nextPageToken: res.next_page_token ?? '',
+          total: res.total_entries ?? 0,
+        }
+      },
       list: async (
         repo: string,
         q: { rev: string; path?: string; page_size?: number; page_token?: string },

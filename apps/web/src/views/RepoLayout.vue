@@ -7,7 +7,7 @@ import Badge from '@/ui/Badge.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
-import { termLabel } from '@/lib/glossary'
+import { termLabel, termTip } from '@/lib/glossary'
 
 const props = defineProps<{ owner: string; name: string }>()
 const board = useBoard()
@@ -30,6 +30,7 @@ interface Tab {
   label: string
   icon: IconName
   exact?: boolean
+  tip?: string
   /** Route names that keep this tab highlighted besides its own. */
   group?: string[]
 }
@@ -43,7 +44,12 @@ const tabs = computed<Tab[]>(() => {
   const b = base.value
   const list: Tab[] = [
     { to: b, label: 'Overview', icon: 'activity', exact: true },
-    { to: `${b}/proposals`, label: termLabel('proposal', true), icon: 'proposal' },
+    {
+      to: `${b}/proposals`,
+      label: termLabel('proposal', true),
+      icon: 'proposal',
+      tip: termTip('proposal'),
+    },
     { to: `${b}/agents`, label: 'Agents & work', icon: 'bot' },
     { to: `${b}/files`, label: 'Code', icon: 'folder', group: CODE_ROUTES },
   ]
@@ -54,7 +60,7 @@ const tabs = computed<Tab[]>(() => {
 const codeLinks = computed(() => [
   { to: `${base.value}/files`, label: 'Files' },
   { to: `${base.value}/history`, label: 'History' },
-  { to: `${base.value}/streams`, label: termLabel('stream', true) },
+  { to: `${base.value}/streams`, label: termLabel('stream', true), tip: termTip('stream') },
   { to: `${base.value}/compare`, label: 'Compare' },
 ])
 const inCode = computed(() => CODE_ROUTES.includes(String(route.name)))
@@ -111,6 +117,7 @@ const repoError = computed(() =>
         class="tab"
         :class="{ current: isCurrent(t) }"
         :aria-current="isCurrent(t) ? 'page' : undefined"
+        :title="t.tip"
       >
         <Icon :name="t.icon" :size="15" />
         {{ t.label }}
@@ -123,6 +130,7 @@ const repoError = computed(() =>
         :to="l.to"
         class="subtab"
         active-class="current"
+        :title="'tip' in l ? l.tip : undefined"
         >{{ l.label }}</RouterLink
       >
     </nav>

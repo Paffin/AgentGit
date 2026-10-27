@@ -23,7 +23,7 @@ export interface OperationInfo {
   readonly retry: RetryClass;
   /** `natural` only when the request carries this field (e.g. an optimistic-concurrency guard). */
   readonly retryWhenField?: string;
-  /** Whether the request message has an `idempotency_key` field. */
+  /** Whether the operation accepts an idempotency key (message field or HTTP header). */
   readonly idempotencyKey: boolean;
   /** Needs no credentials. */
   readonly public: boolean;

@@ -17,6 +17,8 @@ export interface RequestOptions {
   method?: HttpMethod
   query?: Query
   body?: unknown
+  /** Binary upload; uses the same authentication, deadline and retry contract as JSON. */
+  binary?: Blob
   signal?: AbortSignal
   /** Deadline sent as `Request-Timeout` (ms). 0 disables it. */
   timeoutMs?: number
@@ -265,8 +267,11 @@ export class ApiClient {
     if (o.runId) headers['ag-run'] = o.runId
     const timeoutMs = o.timeoutMs ?? this.opts.defaultTimeoutMs
     if (timeoutMs > 0 && !o.stream) headers['request-timeout'] = String(timeoutMs)
-    let body: string | undefined
-    if (o.body !== undefined && method !== 'GET') {
+    let body: BodyInit | undefined
+    if (o.binary !== undefined && method !== 'GET') {
+      headers['content-type'] = 'application/octet-stream'
+      body = o.binary
+    } else if (o.body !== undefined && method !== 'GET') {
       headers['content-type'] = 'application/json'
       body = JSON.stringify(o.body)
     }

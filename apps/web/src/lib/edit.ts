@@ -7,7 +7,10 @@ import type { FileChange, Proposal } from '@/api/types'
 
 /** UTF-8 text as the base64 the protocol carries file contents in. */
 export function toBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text)
+  return bytesToBase64(new TextEncoder().encode(text))
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
   let bin = ''
   const chunk = 0x8000
   for (let i = 0; i < bytes.length; i += chunk)
@@ -15,11 +18,17 @@ export function toBase64(text: string): string {
   return btoa(bin)
 }
 
-export const putFile = (path: string, text: string, executable = false): FileChange => ({
+export const putFile = (
+  path: string,
+  text: string,
+  executable = false,
+  fileType?: 'symlink',
+): FileChange => ({
   path,
   op: 'put',
   content: toBase64(text),
   executable,
+  ...(fileType ? { file_type: fileType } : {}),
 })
 export const deleteFile = (path: string): FileChange => ({ path, op: 'delete' })
 
@@ -54,6 +63,8 @@ export interface ProposeInput {
   stream: string
   /** Start from this revision instead of the branch's head (the revision that was on screen). */
   fromRev?: string
+  /** The base shown to the editor; an empty string means the branch had no commits. */
+  expectedBase?: string
   changes: FileChange[]
   title: string
   description?: string
@@ -71,6 +82,11 @@ export async function proposeChange(api: Api, input: ProposeInput): Promise<Prop
     from_rev: input.fromRev,
   })
   try {
+    if (input.expectedBase !== undefined && ws.base !== input.expectedBase) {
+      throw new Error(
+        'The branch changed before this edit could start. Reload it and try again; your text is still here.',
+      )
+    }
     const done = await api.workspaces.modify(input.repo, name, {
       changes: input.changes,
       message: input.title,

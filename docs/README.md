@@ -3,6 +3,7 @@
 | If you want to… | Read |
 |---|---|
 | install it (release archive, container image, from source) | [Install](getting-started.md#install) |
+| join a pilot or contribute for the first time | [Start here](community/start-here.md), [beta programme](community/beta.md) |
 | try it in five minutes | [Getting started](getting-started.md) |
 | follow a walkthrough (every command in them is run by the tests) | [Tutorials](tutorials/README.md): [your first agent-safe repository](tutorials/first-agent-safe-repo.md), [run a team server](tutorials/team-server.md), [policy cookbook](tutorials/policy-cookbook.md), [migrating a Git repository](tutorials/migrating-from-git.md), [troubleshooting a blocked integration](tutorials/troubleshooting-blocked-integration.md) |
 | understand the vocabulary (changeset, stream, proposal, intent…) | [Concepts](concepts.md), [Glossary](glossary.md) |
@@ -72,3 +73,5 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install --require-hashes -r doc
 is enabled for the repository (Settings, Pages, Source: GitHub Actions); until then the deploy step is skipped and the
 build is still checked. Links that leave `docs/` (the README, roadmap, source files) are rewritten to the repository on
 GitHub by `scripts/mkdocs_hooks.py`; a page that is missing from `nav` in `mkdocs.yml` is appended under "More" and reported.
+
+- [Migrate from GitHub or GitLab](guides/migrate-from-git.md) — browser and CLI import, branch/tag mapping, backup and limitations.

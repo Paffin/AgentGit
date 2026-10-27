@@ -1,6 +1,6 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH ag-login 1  "login 0.2.0-rc.2" 
+.TH ag-login 1  "login 0.3.0-beta.1" 
 .SH NAME
 ag\-login \- Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
 .SH SYNOPSIS
@@ -50,4 +50,4 @@ An environment variable (AG_TOKEN) or a credential stored with a remote still ta
   ag login http://127.0.0.1:8080 \-\-token\-file ag\-dev\-data/dev/token
   echo "$TOKEN" | ag login https://ag.example.com \-\-token\-stdin
 .SH VERSION
-v0.2.0\-rc.2
+v0.3.0\-beta.1

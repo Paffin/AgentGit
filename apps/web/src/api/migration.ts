@@ -1,0 +1,76 @@
+import { client } from './instance'
+
+export interface MigrationRef {
+  name: string
+  destination: string
+  git_commit: string
+  changeset: string
+}
+export interface MigrationReport {
+  default_branch: string
+  commits: number
+  blobs: number
+  branches: MigrationRef[]
+  tags: MigrationRef[]
+  skipped_paths: [string, string][]
+  skipped_submodules: number
+  lossy_commits: number
+  lfs_pointers: number
+  other_refs: string[]
+}
+export interface MigrationPlan {
+  id: string
+  name: string
+  source_sha256: string
+  report: MigrationReport
+  state: 'ready' | 'imported'
+}
+export function prepareMigration(name: string, file: File, key: string) {
+  return client.json<MigrationPlan>('/v1/migrations/git', {
+    method: 'PUT',
+    query: { name },
+    binary: file,
+    idempotencyKey: key,
+    timeoutMs: 300_000,
+  })
+}
+export function readMigration(id: string) {
+  return client.get<MigrationPlan>(`/v1/migrations/${encodeURIComponent(id)}`)
+}
+export function finishMigration(id: string, acceptLossy: boolean) {
+  return client.post<MigrationPlan>(`/v1/migrations/${encodeURIComponent(id)}/commit`, {
+    accept_lossy: acceptLossy,
+  })
+}
+export function migrationWarnings(report: MigrationReport): string[] {
+  const warnings: string[] = []
+  if (report.skipped_paths.length)
+    warnings.push(`${report.skipped_paths.length} unsupported paths were omitted.`)
+  if (report.skipped_submodules)
+    warnings.push(
+      `${report.skipped_submodules} submodule entries were omitted. Migrate those repositories separately.`,
+    )
+  if (report.lfs_pointers)
+    warnings.push(
+      `${report.lfs_pointers} Git LFS pointers were copied without their external file contents. Keep your LFS storage available.`,
+    )
+  if (report.lossy_commits)
+    warnings.push(`${report.lossy_commits} commit messages needed UTF-8 text repair.`)
+  if (report.other_refs.length)
+    warnings.push(
+      `${report.other_refs.length} refs outside commit-based branches and tags are retained only in the source archive.`,
+    )
+  return warnings
+}
+/** POSIX shell quoting; URLs are never executed by the browser or sent to the server. */
+export function bundleCommands(source: string): string {
+  const url = new URL(source)
+  if (
+    !['https:', 'ssh:'].includes(url.protocol) ||
+    (url.protocol === 'https:' && url.username) ||
+    url.password
+  )
+    throw new Error('Use an HTTPS or SSH URL without embedded credentials.')
+  const quoted = `'${url.href.replaceAll("'", "'\\''")}'`
+  return `git clone --mirror -- ${quoted} agentgit-source.git\ngit -C agentgit-source.git bundle create ../repository.bundle --all`
+}

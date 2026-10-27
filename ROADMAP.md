@@ -12,7 +12,11 @@ signed attestations, approvals, protected paths · agent identities, runs, tasks
 signed provenance, conflict prediction, integration queue · workspaces with conflict markers · GC, fsck,
 backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
-## Built since 0.1 (in the `v0.2.0-rc.2` pre-release and on `main`)
+## 0.3 public beta — migration and guided adoption
+
+The single-server Linux/SQLite/filesystem workflow is open to early adopters. Web and CLI migration preserve complete branch/tag history with a reconciliation report and retained source bundle. Hosting metadata migration, external MCP-host evidence, independent pilots and wider storage qualification remain separate open work; see the [beta programme](docs/community/beta.md).
+
+## Built since 0.1 (through `v0.3.0-beta.1`)
 
 Each item is described, with what is and is not verified, in the [changelog](CHANGELOG.md) and the linked page.
 
@@ -61,6 +65,12 @@ Each item is described, with what is and is not verified, in the [changelog](CHA
   `ag-server dev`, `ag login`, policy presets, `ag explain`; and a test gate under which a test cannot pass by not
   running (required components, a reviewed skip list, a report in every job).
 
+## Beta exit criteria
+
+The next release is scoped around one reliable workflow, not every deployment option. The
+[beta programme](docs/community/beta.md) defines the supported target, measurable acceptance gates and pilot process.
+Track work in the [beta milestone](https://github.com/Paffin/AgentGit/milestone/1).
+
 ## Next
 
 Only what is not done. The order comes from the first outside validation
@@ -71,23 +81,21 @@ they left open is listed first.
 
 1. **Finish the first-time-user work.**
    Browser editing covers one text file per change request (no rename, delete, multi-file or non-text conflicts);
-   tab labels and table headers have no glossary tooltip; Home is polled every 15 s, not live; the rules form leaves
-   protected-path approvers and check timing in the raw JSON; no screen-reader pass; `ag explain` works on local
-   repositories only (no `ag remote explain`); the `ag-server dev` sign-in link is not one-time (needs an exchange
+   Home has filters and glossary hints, but is polled every 15 s, not live; the rules form leaves
+   protected-path approvers and check timing in the raw JSON; no screen-reader pass; the `ag-server dev` sign-in link is not one-time (needs an exchange
    endpoint); the Docker one-liner is not verified (no Docker daemon yet) and `dev`, `login` and `explain` are missing
    from the `v0.2.0-rc.2` archives until the next tag.
 2. **Orchestration that works out of the box.** The orchestrator in the release archives and as an image, a ready
    template "task, agent, proposal" with a real model executor verified live. ("Give this task to an agent" exists in the
    Web UI.)
 3. **Finish the release.** Verify what rc.2 left unverified (archive attestations, macOS and aarch64 archives outside CI,
-   the Homebrew formula); add an SBOM for `ag-mcp` and a Windows archive; cut a stable tag (until then `install.sh` needs
+   the Homebrew formula); qualify the new `ag-mcp` SBOM and add a Windows archive; cut a stable tag (until then `install.sh` needs
    `--version`) that carries `ag-server dev`; publish the 21 `agentgit-<x>` crates and the SDKs. Only the owner can push
    tags and publish.
 4. **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,
    storage class); mixed builds during a rolling upgrade (metadata schema 3 needs the new build first); a PostgreSQL
    failover; the periodic reaper with real replicas on PostgreSQL and S3; load on PostgreSQL, S3, TLS and several
-   replicas, and the tree cache on the disk backend; first results of the nightly fuzz and the weekly mutation runs;
-   `perf.yml` on a GitHub runner; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
+   replicas, and the tree cache on the disk backend; resolve surviving policy mutations and retain nightly fuzz, mutation and performance evidence; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
 5. **Test-gate leftovers.** The root-only halves of the sandbox tests (`n/a:host-privilege`) run in no CI job; the four
    scripts that read TOML need Python 3.11 and are not in the 3.9 job; a bare `if !cond { return }` in a new Rust test is
    not caught by the scan.

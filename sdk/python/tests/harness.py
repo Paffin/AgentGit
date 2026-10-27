@@ -127,7 +127,14 @@ def start_server(config: str | None = None) -> RunningServer:
         cfg = data_dir / "server.toml"
         cfg.write_text(config)
         args += ["--config", str(cfg)]
-    env = {**os.environ, "AG_BOOTSTRAP_TOKEN": token, "NO_COLOR": "1", "RUST_BACKTRACE": "0"}
+    # Address discovery consumes the INFO listening event, regardless of the caller's log filter.
+    env = {
+        **os.environ,
+        "AG_BOOTSTRAP_TOKEN": token,
+        "NO_COLOR": "1",
+        "RUST_BACKTRACE": "0",
+        "RUST_LOG": "info",
+    }
     process = subprocess.Popen(
         args, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )

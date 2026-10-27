@@ -30,7 +30,7 @@ class OperationInfo:
     response: Literal["json", "bytes", "sse"]
     retry: RetryClass
     idempotency_key: bool
-    """Whether the request message has an ``idempotency_key`` field."""
+    """Whether the operation accepts an idempotency key (message field or HTTP header)."""
     public: bool
     """Needs no credentials."""
     retry_when_field: str | None = None

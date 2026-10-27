@@ -93,7 +93,7 @@ def build_request(op: OperationInfo, params: Mapping[str, Any], base_url: str) -
     has_body = op.body == "json"
     if has_body:
         body = json.dumps(encode(rest), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    elif op.body == "none" and rest:
+    elif op.body in ("none", "bytes") and rest:
         pairs: list[tuple[str, str]] = []
         for key, value in rest.items():
             if isinstance(value, (list, tuple)):

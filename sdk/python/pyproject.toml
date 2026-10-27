@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentgit-client"
-version = "0.2.0-rc.2"
+version = "0.3.0-beta.1"
 description = "Python client for the AgentGit Wire Protocol (AGWP v1): repositories, proposals, agents, leases, signed provenance and events."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "The AgentGit Authors" }]
 keywords = ["agentgit", "agwp", "scm", "agents", "client"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",

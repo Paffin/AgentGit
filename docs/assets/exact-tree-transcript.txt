@@ -1,0 +1,25 @@
+AgentGit rc.3 — exact-tree validation (approximately three minutes; recorded from the rc.3 archive, build 746cf8eae1b2)
+
+This recording uses a real local ag-server, real CLI and a real ag-worker in the Linux namespace sandbox. Two scripted workspaces are controlled by one operator. It contains no model execution and is not an external pilot. The worker tests actual files using `test -f README.md && test -f src/greeting.py`; this demonstrates binding a result to a candidate tree, not the quality of application tests. No delegated cgroup is available on this host; worker doctor reports that limit honestly.
+
+1. Open the real repository. The stream policy trusts the demonstration CI signing key and requires the tests check plus one approval from someone other than the author.
+2. Workspace A changes README.md, snapshots and pushes a proposal. A separate reviewer credential approves its current head with `ag remote review <A> --approve` (exit 0). `ag remote prepare <A> --validate` queues its candidate; the namespace worker runs and signs the result. `ag remote explain <A>` returns ready.
+3. Workspace B changes docs/parallel.md, is reviewed with the separate reviewer credential, gets a real passing check and integrates. The target stream moves.
+4. `ag remote explain <A>` now returns blocked (exit 3). Its previous success applies to the earlier candidate, not the new combined tree.
+5. Queue A again and run the worker. The new signed result applies to the new candidate; explain returns ready.
+6. Integrate A, pull, export to Git and verify that docs/parallel.md is in the exported main branch. Git export does not replace backup of proposals, reviews, policy or audit.
+
+Published recording: exact-tree-demo.webm (the recorder writes agentgit-exact-tree.webm)
+Verification record: rc3-linux-verification.json
+Reproduction driver: reproduce-exact-tree.mjs
+
+Expected exits: snapshot/push/review, successful worker execution, ready explain, integration, pull and Git export return 0. Preparing an unvalidated proposal with `ag remote prepare <ID> --validate` returns 3 while queueing its real check. Explaining A after the target moves returns 3. The recorder asserts these exits and stops on any mismatch.
+
+Reproduce on Linux with a downloaded/extracted rc.3 archive and a checkout of AgentGit:
+  npm --prefix /path/to/AgentGit/apps/web ci
+  cd /path/to/AgentGit/apps/web && npx playwright install chromium
+  AG_SOURCE_ROOT=/path/to/AgentGit AG_BIN_DIR=/path/to/extracted/archive AG_DEMO_OUTPUT=/path/to/output node reproduce-exact-tree.mjs
+
+The namespace sandbox must be available (`ag-worker doctor`). No production credentials are used; the recorder creates a loopback dev server and temporary credentials. The full video contains readable on-screen captions.
+
+Prerequisites: Node.js 22.18+, npm, Git, Linux with the namespace sandbox available, and the published rc.3 archive. The recorder needs no LLM or provider API key.

@@ -1,0 +1,35 @@
+{
+  "release": "v0.2.0-rc.3",
+  "commit": "746cf8eae1b237cf23dd0f76970245dfe9ec9ac5",
+  "platform": "Linux x86_64, SQLite and local filesystem",
+  "onboarding": {
+    "cli_version": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+    "dev_login_clone_push_integrate_pull_verify": "passed",
+    "protected_path_review_and_remote_explain": "passed",
+    "server_backup_restore_verify": "passed"
+  },
+  "upgrade": {
+    "old": "ag 0.2.0-rc.2 (0ad475333ee2 2026-10-19)",
+    "candidate": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+    "upgrade_verify": "4 object(s) hashed, 2 changeset(s) cross-checked, 1 head tree(s) recomputed, 10 audit entries.\nRepository is healthy.",
+    "backup_verify": "4 object(s) hashed, 2 changeset(s) cross-checked, 1 head tree(s) recomputed, 10 audit entries.\nRepository is healthy.",
+    "git_tree_content_matches": true,
+    "policy_proposal_review_head_audit_preserved": true,
+    "restored_metadata_matches": true,
+    "scope": "Public rc.3 archive installed and run on Linux x86_64, SQLite/filesystem. Checksum matches published SHA256SUMS. Local provenance bundle retrieval returned HTTP 403; release workflow verifies provenance separately. Not an external pilot.",
+    "archive_matches_published_sha256sums": true,
+    "archive_sha256": "2ab212a496476e99ed8504b4c99019049434076ad84e8f02daf5ecd6c142b2e4"
+  },
+  "release_workflow": "https://github.com/Paffin/AgentGit/actions/runs/40470846262",
+  "independent_pilot": false,
+  "exact_tree_demo": {
+    "version": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+    "proposal_a": "prop_b3632924f8886963ea39",
+    "proposal_b": "prop_38e33bbff561f4833c39",
+    "old_pass_rejected": true,
+    "namespace_worker_real_checks": true,
+    "revalidated_and_integrated": true,
+    "git_export_verified": true,
+    "scope": "Two scripted workspaces operated by one person; not live model execution or an external pilot."
+  }
+}

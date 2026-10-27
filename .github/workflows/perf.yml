@@ -1,12 +1,12 @@
 name: Performance
 
-# Measurements, not gates (docs/architecture/performance.md, docs/operations/performance.md). The smoke variant
+# Timings are measurements, not thresholds; functional failures gate (docs/operations/performance.md). The smoke variant
 # proves on every change to the engine, the server or the tool that the benchmark and the load generator still run
 # end to end; its numbers come from a shared 4-vCPU runner and are uploaded as artifacts, never compared with a
 # threshold. The full sizes (1k/10k/100k files; 20 s of load per scenario at 16 writers and 100 subscribers) run
 # weekly and by hand, on the same kind of runner, and are the numbers to compare with the published ones.
 #
-#   smoke   ag-bench engine --sizes 1000,10000 and ag-bench load --profile smoke. Non-gating: continue-on-error.
+#   smoke   ag-bench engine --sizes 1000,10000 and ag-bench load --profile smoke. Correctness gates; timings do not.
 #   full    ag-bench engine (1k/10k/100k, memory and disk) and ag-bench load --profile full. Weekly and by hand.
 
 on:
@@ -22,6 +22,10 @@ on:
   pull_request:
     paths:
       - "crates/ag-bench/**"
+      - "crates/ag-server/**"
+      - "crates/ag-integrate/**"
+      - "crates/ag-merge/**"
+      - "crates/ag-tree/**"
       - ".github/workflows/perf.yml"
   schedule:
     - cron: "41 4 * * 1"
@@ -39,12 +43,11 @@ env:
 
 jobs:
   smoke:
-    name: smoke (non-gating)
+    name: smoke (correctness)
     if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    # A slow or noisy runner must never turn main red; a crash of the tools is still visible as a red step.
-    continue-on-error: true
+    # No latency/throughput thresholds: fail only on an unsuccessful run, including integrity violations.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,11 +55,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: perf
       - name: Build the server and the tool (release)
-        run: cargo build --release -p agentgit-server -p agentgit-bench
+        run: cargo build --locked --release -p agentgit-server -p agentgit-bench
       - name: Engine benchmark (1k and 10k files)
         run: target/release/ag-bench engine --sizes 1000,10000 --samples 5 --json engine-smoke.json --markdown engine-smoke.md
       - name: Load test against a real ag-server
@@ -91,10 +94,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: perf
-      - run: cargo build --release -p agentgit-server -p agentgit-bench
+      - run: cargo build --locked --release -p agentgit-server -p agentgit-bench
       - name: Engine benchmark, in memory
         run: target/release/ag-bench engine --backend memory --json engine-memory.json --markdown engine-memory.md
       - name: Engine benchmark, on disk (SQLite and files)

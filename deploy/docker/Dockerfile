@@ -86,6 +86,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
  && install -D target/release/ag /out/ag \
  && install -d -m 0700 -o 65532 -g 65532 /out/data
 
+# Git's builtin bundle/pack commands are needed for migration. Copy only the binary and its
+# dynamic libraries: no shell, credential helper or network transport is shipped.
+FROM debian:bookworm-slim AS git-runtime
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+ && mkdir -p /git-runtime/usr/bin /git-runtime/licenses/git \
+ && cp /usr/bin/git /git-runtime/usr/bin/git \
+ && ldd /usr/bin/git | awk '/=> \// { print $3 }' | xargs -I '{}' cp --parents '{}' /git-runtime \
+ && cp /usr/share/doc/git/copyright /git-runtime/licenses/git/copyright
+
 # ---- the command-line client ------------------------------------------------------------------
 FROM gcr.io/distroless/cc-debian12:nonroot AS cli
 LABEL org.opencontainers.image.title="agentgit-cli" \
@@ -94,6 +103,7 @@ LABEL org.opencontainers.image.title="agentgit-cli" \
       org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=build /out/ag /usr/local/bin/ag
 COPY LICENSE NOTICE /licenses/
+COPY --from=git-runtime /git-runtime/ /
 USER 65532:65532
 WORKDIR /work
 ENTRYPOINT ["/usr/local/bin/ag"]
@@ -108,6 +118,7 @@ COPY --from=build /out/ag-server /usr/local/bin/ag-server
 COPY --from=build --chown=65532:65532 /out/data /data
 COPY deploy/docker/ag-server.toml /etc/agentgit/ag-server.toml
 COPY LICENSE NOTICE /licenses/
+COPY --from=git-runtime /git-runtime/ /
 ENV AG_SERVER_CONFIG=/etc/agentgit/ag-server.toml
 USER 65532:65532
 VOLUME ["/data"]

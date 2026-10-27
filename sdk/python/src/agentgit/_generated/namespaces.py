@@ -68,6 +68,8 @@ from agentgit._generated.models import (
     GetTreeRequest,
     GetTreeResponse,
     GetWorkspaceRequest,
+    GitMigrationDecision,
+    GitMigrationPlan,
     GrantRoleRequest,
     HeartbeatJobRequest,
     HeartbeatRequest,
@@ -798,6 +800,45 @@ class LeasesApi:
     ) -> Empty:
         """Release a lease (`DELETE /v1/repos/{owner}/{rname}/leases/{lease_id}`, operation `lease.release`)."""
         return self._c._call("lease.release", {"repo": repo, "lease_id": lease_id}, options, Empty)
+
+
+
+class MigrationsApi:
+    """The `migrations` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: SyncCaller) -> None:
+        self._c = caller
+
+    def commit(
+        self,
+        *,
+        id: str,
+        accept_lossy: bool | None = None,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Publish a preflighted repository; body: accept_lossy boolean (`POST /v1/migrations/{id}/commit`, operation `migration.commit`)."""
+        return self._c._call("migration.commit", {"id": id, "accept_lossy": accept_lossy}, options, GitMigrationPlan)
+
+    def prepare(
+        self,
+        *,
+        data: bytes,
+        name: str | None = None,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only) (`PUT /v1/migrations/git`, operation `migration.prepare`)."""
+        return self._c._call("migration.prepare", {"name": name, "data": data}, options, GitMigrationPlan)
+
+    def status(
+        self,
+        *,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Read a private migration report (`GET /v1/migrations/{id}`, operation `migration.status`)."""
+        return self._c._call("migration.status", {"id": id}, options, GitMigrationPlan)
 
 
 
@@ -2063,6 +2104,45 @@ class AsyncLeasesApi:
     ) -> Empty:
         """Release a lease (`DELETE /v1/repos/{owner}/{rname}/leases/{lease_id}`, operation `lease.release`)."""
         return await self._c._call("lease.release", {"repo": repo, "lease_id": lease_id}, options, Empty)
+
+
+
+class AsyncMigrationsApi:
+    """The `migrations` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: AsyncCaller) -> None:
+        self._c = caller
+
+    async def commit(
+        self,
+        *,
+        id: str,
+        accept_lossy: bool | None = None,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Publish a preflighted repository; body: accept_lossy boolean (`POST /v1/migrations/{id}/commit`, operation `migration.commit`)."""
+        return await self._c._call("migration.commit", {"id": id, "accept_lossy": accept_lossy}, options, GitMigrationPlan)
+
+    async def prepare(
+        self,
+        *,
+        data: bytes,
+        name: str | None = None,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only) (`PUT /v1/migrations/git`, operation `migration.prepare`)."""
+        return await self._c._call("migration.prepare", {"name": name, "data": data}, options, GitMigrationPlan)
+
+    async def status(
+        self,
+        *,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> GitMigrationPlan:
+        """Read a private migration report (`GET /v1/migrations/{id}`, operation `migration.status`)."""
+        return await self._c._call("migration.status", {"id": id}, options, GitMigrationPlan)
 
 
 

@@ -89,7 +89,9 @@ for (const [route, item] of Object.entries(spec.paths)) {
       response: bodies.response ?? contentKind(op.responses?.['200']?.content) ?? 'json',
       retry: classify(id, http),
       retryWhenField: policy.retry.naturalWhenFieldPresent[id],
-      idempotencyKey: Boolean(reqSchema?.properties && 'idempotency_key' in reqSchema.properties),
+      idempotencyKey: Boolean(
+        (reqSchema?.properties && 'idempotency_key' in reqSchema.properties) || policy.retry.keyed.includes(id),
+      ),
       public: Array.isArray(op.security) && op.security.length === 0,
       paginated,
     });
@@ -138,6 +140,8 @@ function operationsTs() {
 
 /** Hand-typed signatures for the operations whose body or response is not JSON. */
 const SPECIAL = {
+  'migration.prepare':
+    "(request: { name: string; data: Uint8Array }, options?: CallOptions): Promise<Res<'migration.prepare'>>",
   'objects.put':
     '(request: { repo: string; object_id: string; data: Uint8Array }, options?: CallOptions): Promise<PutObjectResult>',
   'objects.get': '(request: { repo: string; object_id: string }, options?: CallOptions): Promise<Uint8Array>',
@@ -151,6 +155,7 @@ const SPECIAL = {
   const nonJson = ops.filter((o) => o.body !== 'json' && o.body !== 'none').map((o) => o.id);
   nonJson.push(...ops.filter((o) => o.response !== 'json').map((o) => o.id));
   const expected = {
+    'migration.prepare': ['name'],
     'objects.put': [],
     'objects.get': [],
     'tree.file': ['rev'],

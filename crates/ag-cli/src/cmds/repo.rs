@@ -28,6 +28,11 @@ pub struct InitArgs {
     /// docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`.
     #[arg(long, value_name = "FILE")]
     pub storage: Option<PathBuf>,
+    /// Store a ready-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`).
+    #[arg(long, value_name = "NAME")]
+    pub preset: Option<String>,
+    #[command(flatten)]
+    pub preset_flags: crate::cmds::policy::PresetFlags,
 }
 
 pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
@@ -48,6 +53,24 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
             format!("local/{}", clean.trim_start_matches(['-', '.', '_']))
         }
     };
+    if args.preset.is_none()
+        && (!args.preset_flags.admins.is_empty()
+            || args.preset_flags.issuer.is_some()
+            || args.preset_flags.ci_key.is_some())
+    {
+        bail!("--admin, --issuer and --ci-key go with --preset NAME (`ag policy preset list` shows the presets)");
+    }
+    let me = crate::ctx::identity(cli)?;
+    // Check the preset before anything is created: a typo must not leave a half-made repository behind.
+    if let Some(name) = &args.preset {
+        ag_policy::presets::Preset::parse(name)?;
+        if args.preset_flags.ci_key.is_none()
+            && args.preset_flags.issuer.is_none()
+            && ag_policy::presets::Preset::parse(name)?.requires_ci()
+        {
+            crate::cmds::policy::build_preset(name, &args.preset_flags, &me, None, false)?;
+        }
+    }
     let storage = match &args.storage {
         Some(file) => Some(
             serde_json::from_slice::<StorageConfig>(
@@ -60,17 +83,31 @@ pub fn init(cli: &Cli, args: &InitArgs) -> Result<u8> {
     let opts = InitOptions {
         namespace: Namespace::new(ns.clone()).map_err(|e| anyhow!("{e}"))?,
         default_stream: StreamName::new(args.stream.clone()).map_err(|e| anyhow!("{e}"))?,
-        actor: crate::ctx::identity(cli)?,
+        actor: me.clone(),
         storage,
     };
     let repo = Repository::init(&root, &opts)?;
+    let applied = match &args.preset {
+        Some(name) => {
+            let policy = crate::cmds::policy::build_preset(name, &args.preset_flags, &me, Some(&repo), true)?;
+            Some((name.clone(), repo.set_policy(&args.stream, &policy.to_json(), &me)?.version))
+        }
+        None => None,
+    };
     if !(cli.quiet && !cli.json) {
         crate::ctx::emit(
             cli.json,
-            &json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name}),
+            &json!({"root": root, "namespace": ns, "stream": args.stream, "durability": repo.objects().durability().name,
+                    "preset": applied.as_ref().map(|(n, _)| n), "policy_version": applied.as_ref().map(|(_, v)| v)}),
             || {
+                let preset = match &applied {
+                    Some((n, v)) => {
+                        format!("\n  policy:    preset '{n}' (version {v}); `ag policy explain` says what it means")
+                    }
+                    None => String::new(),
+                };
                 format!(
-                    "Initialized AgentGit repository in {}\n  namespace: {ns}\n  stream:    {}\n  storage:   {} (see `docs/operations/durability.md`)\nNext: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`.",
+                    "Initialized AgentGit repository in {}\n  namespace: {ns}\n  stream:    {}\n  storage:   {} (see `docs/operations/durability.md`){preset}\nNext: create files, then `ag snapshot -m \"first\"`, `ag propose -t \"first\"`, `ag integrate <proposal>`.",
                     root.join(".ag").display(),
                     args.stream,
                     repo.objects().durability().name
@@ -351,6 +388,10 @@ fn op_marker(parent: &Tree, op: &Op) -> &'static str {
 pub struct ShowArgs {
     /// Revision (default: the workspace head).
     pub rev: Option<String>,
+    /// Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the
+    /// bytes in common with another file (co-modified and neighbouring files are tried first).
+    #[arg(long)]
+    pub copies: bool,
 }
 
 pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
@@ -362,13 +403,16 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
     let renames = ctx.repo.changeset_renames(&cs)?;
     let renamed_to: std::collections::BTreeMap<_, _> = renames.iter().map(|r| (r.to.clone(), r)).collect();
     let renamed_from: std::collections::BTreeSet<_> = renames.iter().map(|r| r.from.clone()).collect();
+    let copies = if a.copies { ctx.repo.changeset_copies(&cs)? } else { Vec::new() };
+    let copied_to: std::collections::BTreeMap<_, _> = copies.iter().map(|r| (r.to.clone(), r)).collect();
     let changes: Vec<_> = cs
         .ops
         .iter()
         .filter(|op| !renamed_from.contains(op.path()))
-        .map(|op| match renamed_to.get(op.path()) {
-            Some(r) => json!({"op": "R", "path": op.path(), "from": r.from, "similarity": r.similarity}),
-            None => json!({"op": op_marker(&parent, op), "path": op.path()}),
+        .map(|op| match (renamed_to.get(op.path()), copied_to.get(op.path())) {
+            (Some(r), _) => json!({"op": "R", "path": op.path(), "from": r.from, "similarity": r.similarity}),
+            (None, Some(r)) => json!({"op": "C", "path": op.path(), "from": r.from, "similarity": r.similarity}),
+            (None, None) => json!({"op": op_marker(&parent, op), "path": op.path()}),
         })
         .collect();
     ctx.out(
@@ -390,11 +434,14 @@ pub fn show(ctx: &Ctx, a: &ShowArgs) -> Result<u8> {
             }
             s.push('\n');
             for op in cs.ops.iter().filter(|op| !renamed_from.contains(op.path())) {
-                match renamed_to.get(op.path()) {
-                    Some(r) => {
+                match (renamed_to.get(op.path()), copied_to.get(op.path())) {
+                    (Some(r), _) => {
                         let _ = writeln!(s, "  R {} -> {}  ({}% similar)", r.from, r.to, r.similarity);
                     }
-                    None => {
+                    (None, Some(r)) => {
+                        let _ = writeln!(s, "  C {} -> {}  ({}% similar)", r.from, r.to, r.similarity);
+                    }
+                    (None, None) => {
                         let _ = writeln!(s, "  {} {}", op_marker(&parent, op), op.path());
                     }
                 }
@@ -535,6 +582,11 @@ pub struct BlameArgs {
     /// Visit at most this many changesets; older lines are marked as a boundary.
     #[arg(long, default_value_t = ag_integrate::DEFAULT_BLAME_COMMITS)]
     pub max_commits: usize,
+    /// Follow files that were created as copies of another file: lines a copy took over are blamed on whoever
+    /// wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or
+    /// co-modified file).
+    #[arg(long)]
+    pub copies: bool,
 }
 
 pub fn blame(ctx: &Ctx, a: &BlameArgs) -> Result<u8> {
@@ -554,7 +606,11 @@ pub fn blame(ctx: &Ctx, a: &BlameArgs) -> Result<u8> {
             Some((s, e))
         }
     };
-    let b = ctx.repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits: a.max_commits, range })?;
+    let b = ctx.repo.blame(
+        &id,
+        &path,
+        &ag_integrate::BlameOptions { max_commits: a.max_commits, range, copies: a.copies },
+    )?;
     ctx.out(&b, || {
         let width = b.lines.last().map(|l| l.line.to_string().len()).unwrap_or(1);
         let author_w = b.lines.iter().map(|l| l.author.len()).max().unwrap_or(0).min(28);

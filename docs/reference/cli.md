@@ -22,6 +22,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 
 - [`ag`](#ag)
 - [`ag init`](#ag-init)
+- [`ag migrate`](#ag-migrate)
 - [`ag status`](#ag-status)
 - [`ag snapshot`](#ag-snapshot)
 - [`ag sync`](#ag-sync)
@@ -47,6 +48,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag proposal close`](#ag-proposal-close)
 - [`ag integrate`](#ag-integrate)
 - [`ag preview`](#ag-preview)
+- [`ag explain`](#ag-explain)
 - [`ag op`](#ag-op)
 - [`ag op show`](#ag-op-show)
 - [`ag op resume`](#ag-op-resume)
@@ -61,6 +63,11 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag policy set`](#ag-policy-set)
 - [`ag policy history`](#ag-policy-history)
 - [`ag policy example`](#ag-policy-example)
+- [`ag policy preset`](#ag-policy-preset)
+- [`ag policy preset list`](#ag-policy-preset-list)
+- [`ag policy preset show`](#ag-policy-preset-show)
+- [`ag policy preset apply`](#ag-policy-preset-apply)
+- [`ag policy explain`](#ag-policy-explain)
 - [`ag validate`](#ag-validate)
 - [`ag validate keygen`](#ag-validate-keygen)
 - [`ag validate run`](#ag-validate-run)
@@ -116,6 +123,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote proposals`](#ag-remote-proposals)
 - [`ag remote proposal`](#ag-remote-proposal)
 - [`ag remote prepare`](#ag-remote-prepare)
+- [`ag remote explain`](#ag-remote-explain)
 - [`ag remote review`](#ag-remote-review)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
@@ -125,6 +133,10 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote log`](#ag-remote-log)
 - [`ag remote blame`](#ag-remote-blame)
 - [`ag remote cat`](#ag-remote-cat)
+- [`ag login`](#ag-login)
+- [`ag auth`](#ag-auth)
+- [`ag auth status`](#ag-auth-status)
+- [`ag logout`](#ag-logout)
 - [`ag pin`](#ag-pin)
 - [`ag unpin`](#ag-unpin)
 - [`ag pins`](#ag-pins)
@@ -148,6 +160,7 @@ Usage: ag [OPTIONS] <COMMAND>
 
 Commands:
   init         Create a repository in the current directory
+  migrate      Migrate every branch and tag from a full local Git clone or bundle into a new repository
   status       Summarize the workspace, your proposals, leases, task and remote at a glance
   snapshot     Record the working directory as a new snapshot
   sync         Bring the stream's latest head into the workspace
@@ -164,6 +177,7 @@ Commands:
   proposal     List, review, update or close proposals
   integrate    Integrate a proposal into its stream
   preview      Show what integrating a proposal would do, without doing it
+  explain      Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
   op           Inspect or resume operations
   recover      Resume interrupted operations and expire stale ones
   queue        The ordered integration queue
@@ -187,6 +201,9 @@ Commands:
   pull         Fetch, then fast-forward the local stream and bring the workspace up to date
   push         Upload your snapshot and open a proposal on the server
   remote       Manage remotes and work with proposals, events and policy on a server
+  login        Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+  auth         Inspect saved server connections without printing credentials
+  logout       Forget a saved server credential
   pin          Pin a revision so garbage collection keeps it
   unpin        Remove a pin
   pins         List pins
@@ -227,6 +244,7 @@ Common workflow:
   ag snapshot -m "message"       record the working directory
   ag propose -t "title"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance
@@ -254,6 +272,35 @@ Options:
       --stream <STREAM>        Name of the first stream [default: main]
       --json                   Machine-readable JSON output
       --storage <FILE>         JSON file with the `storage` section (PostgreSQL metadata and/or S3 objects); see docs/operations/postgres-and-s3.md. Default: a SQLite file and local objects under `.ag/`
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --preset <NAME>          Store a ready-made policy for the first stream: solo, team, agents or strict (`ag policy preset list`)
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag migrate
+
+```text
+Migrate every branch and tag from a full local Git clone or bundle into a new repository
+
+Usage: ag migrate [OPTIONS] --namespace <NAMESPACE> <SOURCE> <DESTINATION>
+
+Arguments:
+  <SOURCE>       Full local Git clone, mirror or self-contained .bundle file
+  <DESTINATION>  New destination directory. It must not exist
+
+Options:
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --namespace <NAMESPACE>  Destination namespace, for example acme/webapp
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --dry-run                Verify the migration and report limitations without publishing a repository
+      --allow-lossy            Accept reported omissions, unresolved LFS pointers and unsupported refs
+      --json                   Machine-readable JSON output
       --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
   -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
@@ -359,6 +406,7 @@ Arguments:
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --copies         Also report files created as copies of another file (`C` lines): identical content, or at least 50% of the bytes in common with another file (co-modified and neighbouring files are tried first)
       --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --json           Machine-readable JSON output
       --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
@@ -428,6 +476,7 @@ Options:
   -L, --lines <START,END>          Only these lines, `START,END` (1-based, inclusive)
       --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --max-commits <MAX_COMMITS>  Visit at most this many changesets; older lines are marked as a boundary [default: 100000]
+      --copies                     Follow files that were created as copies of another file: lines a copy took over are blamed on whoever wrote them in the source (identical content, or at least 50% of the bytes in common with a neighbouring or co-modified file)
       --json                       Machine-readable JSON output
       --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
@@ -823,6 +872,33 @@ Options:
   -V, --version        Print version
 ```
 
+## ag explain
+
+```text
+Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
+
+Usage: ag explain [OPTIONS] [PROPOSAL]
+
+Arguments:
+  [PROPOSAL]  Proposal id (any unique prefix). Default: your newest open proposal
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+
+Exit codes: 0 nothing is in the way, 3 blocked (something can be provided), 4 refused (conflict or denial).
+Changes nothing. Examples:
+  ag explain                 your newest open proposal
+  ag explain prop_8f3a1c     a specific one
+  ag --json explain          codes, sentences and commands for a program
+```
+
 ## ag op
 
 ```text
@@ -1027,6 +1103,8 @@ Commands:
   set      Replace the policy with the contents of a JSON file (needs an admin)
   history  List policy versions
   example  Print an example policy document
+  preset   Ready-made policies: solo, team, agents, strict
+  explain  Say in plain language what a policy allows, requires and refuses
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -1123,6 +1201,123 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag policy preset
+
+```text
+Ready-made policies: solo, team, agents, strict
+
+Usage: ag policy preset [OPTIONS] <COMMAND>
+
+Commands:
+  list   List the presets and who each is for
+  show   Print the policy document a preset makes, and what it means
+  apply  Store a preset as the stream's next policy version (needs an admin)
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag policy preset list
+
+```text
+List the presets and who each is for
+
+Usage: ag policy preset list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag policy preset show
+
+```text
+Print the policy document a preset makes, and what it means
+
+Usage: ag policy preset show [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  solo, team, agents or strict
+
+Options:
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag policy preset apply
+
+```text
+Store a preset as the stream's next policy version (needs an admin)
+
+Usage: ag policy preset apply [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  solo, team, agents or strict
+
+Options:
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+      --json                   Machine-readable JSON output
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --stream <STREAM>        Stream (default: the default stream)
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+## ag policy explain
+
+```text
+Say in plain language what a policy allows, requires and refuses
+
+Usage: ag policy explain [OPTIONS] [TARGET]
+
+Arguments:
+  [TARGET]  A policy file, or `current` (the default) for the policy in force
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --stream <STREAM>  Stream whose policy `current` means (default: the default stream)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+
+Examples:
+  ag policy explain                  the policy in force
+  ag policy explain policy.json      a document, before you set it
+  ag --json policy explain current   the same sentences as data
 ```
 
 ## ag validate
@@ -1410,9 +1605,11 @@ Usage: ag agent reap [OPTIONS]
 
 Options:
   -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
-      --timeout <TIMEOUT>  Heartbeat timeout [default: 10m]
+      --timeout <TIMEOUT>  Heartbeat timeout (default 10m here; with `--remote`, the server's `agents.run_stale_after_secs`)
       --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --dry-run            Say what would be abandoned without changing anything
       --json               Machine-readable JSON output
+      --remote [<NAME>]    Reap the runs of a server instead of this repository (needs `agent.operate` there; without a NAME: origin). The server also revokes the credentials bound to the reaped runs
       --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
   -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
@@ -2212,6 +2409,7 @@ Commands:
   proposals  List proposals on the server
   proposal   Show a proposal with its reviews
   prepare    What would integrating do now, and what is missing?
+  explain    Explain why a server proposal cannot land, with the next commands. Changes nothing
   review     Review a proposal's current head
   integrate  Integrate a proposal into its stream
   close      Close a proposal without integrating it
@@ -2385,6 +2583,28 @@ Options:
   -V, --version          Print version
 ```
 
+## ag remote explain
+
+```text
+Explain why a server proposal cannot land, with the next commands. Changes nothing
+
+Usage: ag remote explain [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id (any unique prefix)
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
 ## ag remote review
 
 ```text
@@ -2508,16 +2728,21 @@ Arguments:
   <STREAM>  Stream
 
 Options:
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --set <SET>        Replace the policy with the JSON document in this file
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>        Remote to use (default: origin)
+      --set <SET>              Replace the policy with the JSON document in this file
+      --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --preset <NAME>          Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`)
+      --explain                Also say in plain language what the policy allows, requires and refuses
+      --json                   Machine-readable JSON output
+      --admin <IDENTITY>       Identity pattern allowed to change the policy (repeatable). Default: you
+      --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --issuer <IDENTITY=KEY>  Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>
+  -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --ci-key <NAME>          Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the same key): the issuer becomes service:NAME
+  -v, --verbose                Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
 
 ## ag remote log
@@ -2587,6 +2812,102 @@ Options:
   -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag login
+
+```text
+Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+
+Usage: ag login [OPTIONS] <SERVER>
+
+Arguments:
+  <SERVER>  The server, e.g. `http://127.0.0.1:8080` (a repository URL works too; only the server part is used)
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --token-stdin        Read the credential from standard input (`echo "$TOKEN" | ag login URL --token-stdin`)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --token-file <FILE>  Read the credential from a file (`ag-server dev` writes one and prints the command)
+      --ca-file <CA_FILE>  Extra CA certificate (PEM) to trust when checking the credential
+      --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+
+The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.
+An environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:
+  ag login http://127.0.0.1:8080 --token-file ag-dev-data/dev/token
+  echo "$TOKEN" | ag login https://ag.example.com --token-stdin
+```
+
+## ag auth
+
+```text
+Inspect saved server connections without printing credentials
+
+Usage: ag auth [OPTIONS] <COMMAND>
+
+Commands:
+  status  List saved connections; --check asks each server whether its saved credential still works
+
+Options:
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+## ag auth status
+
+```text
+List saved connections; --check asks each server whether its saved credential still works
+
+Usage: ag auth status [OPTIONS] [SERVER]
+
+Arguments:
+  [SERVER]  Inspect just this server (a repository URL works too)
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --check              Verify saved credentials online. Without this, status is local and works offline
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --timeout <TIMEOUT>  Timeout for each online check, in seconds [default: 5]
+      --ca-file <CA_FILE>  Extra CA certificate (PEM) for online checks
+      --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## ag logout
+
+```text
+Forget a saved server credential
+
+Usage: ag logout [OPTIONS] [SERVER]
+
+Arguments:
+  [SERVER]  The server whose saved login to forget
+
+Options:
+      --all            Forget every saved login
+  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json           Machine-readable JSON output
+      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help           Print help
+  -V, --version        Print version
 ```
 
 ## ag pin

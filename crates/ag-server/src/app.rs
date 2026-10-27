@@ -29,6 +29,8 @@ use crate::repos::RepoManager;
 
 /// The identity under which the server's own periodic run reaper (`agents.reap_interval_secs`) is audited.
 pub const REAPER_IDENTITY: &str = "system:reaper";
+/// The control-database lease that makes the periodic run reaper run on one replica at a time.
+pub const RUN_REAPER_LEASE: &str = "run-reaper";
 
 /// The deadline given to long-lived streams (event subscriptions): effectively none. It is a marker, not a time
 /// anyone waits for, and it is left out of the trace attributes.
@@ -50,8 +52,14 @@ pub struct Ingress {
     /// W3C `traceparent`: continues the caller's trace (exported with OTLP) and puts its trace id on the
     /// request's log lines.
     pub traceparent: Option<String>,
-    /// Peer address of the connection. Appears on the request's log lines, including failed authentications.
+    /// Address of the caller: the peer of the connection or, behind a trusted proxy (`server.trusted_proxies`), the
+    /// client that proxy reports. Appears on the request's log lines, including failed authentications, and keys
+    /// the failed-authentication limit. [`App::dispatch`] resolves it from the raw peer.
     pub remote: Option<String>,
+    /// The `Forwarded` header, read only when the peer is a trusted proxy.
+    pub forwarded: Option<String>,
+    /// The `X-Forwarded-For` header, read only when the peer is a trusted proxy.
+    pub x_forwarded_for: Option<String>,
 }
 
 /// An authenticated request in flight.
@@ -90,8 +98,16 @@ pub struct AppState {
     pub tracer: Option<Arc<crate::trace::Tracer>>,
     /// Request rate limiting.
     pub limiter: RateLimiter,
+    /// Failed authentications per client address (`limits.auth_failures_per_second`).
+    pub auth_failures: RateLimiter,
+    /// Proxies whose `Forwarded` / `X-Forwarded-For` headers are believed (`server.trusted_proxies`).
+    pub proxies: crate::proxy::TrustedProxies,
     /// Prometheus metrics.
     pub metrics: Metrics,
+    /// What the last health scan found (`repos.health_scan_interval_secs`).
+    pub(crate) health: Mutex<Option<crate::health::Health>>,
+    /// Object bytes held by uploads in progress (`limits.max_inflight_object_bytes`).
+    pub inflight: Arc<crate::inflight::InflightBytes>,
     /// Bounds concurrent requests; excess is shed.
     pub concurrency: Semaphore,
     /// When the process started.
@@ -106,6 +122,8 @@ pub struct AppState {
     bus: Bus,
     /// Name of this replica (logs, metrics).
     pub replica_id: String,
+    /// Names this process (not just this replica id) as the holder of background-work leases in the control database.
+    pub lease_holder: String,
     /// Set from SIGTERM until exit: `/readyz` says "not ready" so balancers stop sending requests.
     draining: AtomicBool,
 }
@@ -242,6 +260,13 @@ impl App {
             cfg.repos.pool_size,
             cfg.repos.max_open,
             cfg.repos.storage.clone(),
+            crate::repos::HostedOptions {
+                trees: ag_storage::DecodedTrees::new(usize::try_from(cfg.repos.tree_cache_bytes).unwrap_or(usize::MAX)),
+                contention: ag_integrate::ContentionPolicy {
+                    attempts: cfg.repos.integrate_attempts,
+                    max_backoff_ms: cfg.repos.integrate_backoff_ms,
+                },
+            },
         );
         let metrics = Metrics::new();
         let tracer = (!cfg.telemetry.otlp_endpoint.is_empty()).then(|| {
@@ -263,7 +288,15 @@ impl App {
             )
         });
         let limiter = RateLimiter::new(cfg.limits.requests_per_second, cfg.limits.burst);
+        let auth_failures = RateLimiter::new(cfg.limits.auth_failures_per_second, cfg.limits.auth_failure_burst);
+        let proxies = crate::proxy::TrustedProxies::parse(&cfg.server.trusted_proxies)
+            .map_err(|e| ApiError::internal(format!("server.trusted_proxies: {e}")))?;
         let concurrency = Semaphore::new(cfg.limits.max_concurrent_requests);
+        let inflight = crate::inflight::InflightBytes::new(
+            cfg.limits.max_inflight_object_bytes,
+            metrics.inflight_object_bytes.clone(),
+            metrics.object_budget_refused.clone(),
+        );
         let replica_id = resolve_replica_id(&cfg);
         let local = Arc::new(Local::default());
         // The bus's origin must differ between processes even if two were misconfigured with one replica id.
@@ -293,7 +326,11 @@ impl App {
             repos,
             tracer,
             limiter,
+            auth_failures,
+            proxies,
             metrics,
+            inflight,
+            health: Mutex::new(None),
             concurrency,
             started: Instant::now(),
             shutdown: tokio::sync::watch::channel(false).0,
@@ -301,6 +338,7 @@ impl App {
             local,
             job_rescan: Mutex::new(Instant::now()),
             bus,
+            lease_holder: format!("{replica_id}.{}", random_hex()),
             replica_id,
             draining: AtomicBool::new(false),
         })))
@@ -310,11 +348,21 @@ impl App {
 
     /// Runs one operation through the pipeline: concurrency gate →
     /// authentication → deadline → metrics.
-    pub async fn dispatch<T, Fut>(&self, ing: Ingress, op: &'static str, f: impl FnOnce(Call) -> Fut) -> ApiResult<T>
+    pub async fn dispatch<T, Fut>(
+        &self,
+        mut ing: Ingress,
+        op: &'static str,
+        f: impl FnOnce(Call) -> Fut,
+    ) -> ApiResult<T>
     where
         Fut: Future<Output = ApiResult<T>>,
     {
         use tracing::Instrument as _;
+        // The caller's address: the peer, or what a trusted proxy says (forwarding headers from anyone else are
+        // ignored). From here on `remote` is the one address used in logs and limits.
+        if let Some(peer) = ing.remote.as_deref().and_then(|r| r.parse().ok()) {
+            ing.remote = self.proxies.client(Some(peer), ing.forwarded.as_deref(), ing.x_forwarded_for.as_deref());
+        }
         let started = Instant::now();
         let span = self.tracer.as_ref().and_then(|t| t.begin(ing.traceparent.as_deref()));
         // Every log line written while serving this request — including the cause of an `internal` error,
@@ -375,12 +423,28 @@ impl App {
         self.metrics.inflight.inc();
         let _guard = scopeguard(|| self.metrics.inflight.dec());
 
+        // A client address that keeps failing to authenticate is turned away before its credential is looked at
+        // (`limits.auth_failures_per_second`); the key is the host of `remote`, so behind a trusted proxy it is the
+        // client, not the proxy, that is counted.
+        let failure_key = ing.remote.as_deref().map(|r| format!("ip:{}", crate::proxy::host_of(r)));
+        if let Some(key) = &failure_key {
+            self.auth_failures.peek(key).inspect_err(|_| {
+                self.metrics.auth_failures.with_label_values(&["throttled"]).inc();
+                tracing::warn!(remote = ing.remote.as_deref().unwrap_or("-"), op, "too many failed authentications");
+            })?;
+        }
         let bearer = ing.bearer.as_deref().ok_or_else(|| {
+            if let Some(key) = &failure_key {
+                self.auth_failures.spend(key);
+            }
             self.metrics.auth_failures.with_label_values(&["missing"]).inc();
             tracing::warn!(remote = ing.remote.as_deref().unwrap_or("-"), op, "request without credentials");
             ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "missing, invalid or expired credentials")
         })?;
         let principal = self.auth.authenticate(bearer).await.inspect_err(|e| {
+            if let Some(key) = &failure_key {
+                self.auth_failures.spend(key);
+            }
             self.metrics.auth_failures.with_label_values(&["invalid"]).inc();
             tracing::warn!(
                 remote = ing.remote.as_deref().unwrap_or("-"),
@@ -758,6 +822,18 @@ mod tests {
     #[derive(Clone, Default)]
     struct Captured(Arc<Mutex<Vec<u8>>>);
 
+    std::thread_local! {
+        static LOG_SINK: std::cell::RefCell<Option<Captured>> = const { std::cell::RefCell::new(None) };
+    }
+
+    struct CaptureGuard(Option<Captured>);
+
+    impl Drop for CaptureGuard {
+        fn drop(&mut self) {
+            LOG_SINK.with(|sink| sink.replace(self.0.take()));
+        }
+    }
+
     impl Write for Captured {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             self.0.lock().unwrap().extend_from_slice(buf);
@@ -769,6 +845,21 @@ mod tests {
     }
 
     impl Captured {
+        fn install(&self) -> CaptureGuard {
+            // Scoped subscribers race with other tests through tracing's global interest cache. Keep one
+            // subscriber alive for the entire test process and route its output to the calling thread.
+            static INSTALL: std::sync::Once = std::sync::Once::new();
+            INSTALL.call_once(|| {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_writer(|| LOG_SINK.with(|sink| sink.borrow().clone().unwrap_or_default()))
+                    .with_ansi(false)
+                    .with_max_level(tracing::Level::INFO)
+                    .finish();
+                tracing::subscriber::set_global_default(subscriber).expect("install test log subscriber");
+            });
+            CaptureGuard(LOG_SINK.with(|sink| sink.replace(Some(self.clone()))))
+        }
+
         fn text(&self) -> String {
             String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
         }
@@ -785,13 +876,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let app = app(&dir);
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || sink.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::INFO)
-            .finish();
-        let _installed = tracing::subscriber::set_default(subscriber);
+        let _installed = captured.install();
 
         let ing = Ingress {
             transport: "http",
@@ -831,6 +916,92 @@ mod tests {
         assert!(captured.text().contains("198.51.100.8:2"));
     }
 
+    fn proxied_app(dir: &tempfile::TempDir, trusted: &[&str], per_second: u32, burst: u32) -> App {
+        let mut cfg = ServerConfig::default();
+        cfg.server.data_dir = dir.path().to_path_buf();
+        cfg.server.trusted_proxies = trusted.iter().map(|s| s.to_string()).collect();
+        cfg.limits.auth_failures_per_second = per_second;
+        cfg.limits.auth_failure_burst = burst;
+        App::with_options(cfg, Arc::new(SystemClock), Some(TOKEN.to_string())).unwrap()
+    }
+
+    fn bad_login(peer: &str, forwarded_for: &str) -> Ingress {
+        Ingress {
+            transport: "http",
+            bearer: Some("not-a-credential".into()),
+            remote: Some(peer.into()),
+            x_forwarded_for: (!forwarded_for.is_empty()).then(|| forwarded_for.into()),
+            ..Ingress::default()
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn behind_a_trusted_proxy_the_client_address_is_logged_and_anyone_elses_header_is_not_believed() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = proxied_app(&dir, &["10.0.0.0/8"], 0, 20);
+        let captured = Captured::default();
+        let _installed = captured.install();
+
+        // From the proxy: the client it names.
+        assert!(app.dispatch(bad_login("10.0.0.5:3333", "198.51.100.7"), "t", |_c| async { Ok(()) }).await.is_err());
+        let log = captured.text();
+        let line = log.lines().find(|l| l.contains("authentication failed")).expect(&log);
+        assert!(line.contains(r#"remote="198.51.100.7""#), "{line}");
+        // From anyone else: the header is a claim, the peer is the fact.
+        assert!(app.dispatch(bad_login("203.0.113.9:4711", "198.51.100.7"), "t", |_c| async { Ok(()) }).await.is_err());
+        let log = captured.text();
+        assert!(log.contains(r#"remote="203.0.113.9:4711""#), "{log}");
+        assert!(
+            log.lines().filter(|l| l.contains("203.0.113.9")).all(|l| !l.contains("198.51.100.7")),
+            "the spoofed address must not appear on the lines of the direct peer: {log}"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn failed_logins_are_counted_per_client_address_and_the_header_decides_only_behind_a_trusted_proxy() {
+        let dir = tempfile::tempdir().unwrap();
+        // The proxy 10.0.0.5 is trusted: two clients behind it have a bucket each (burst 2, almost no refill).
+        let app = proxied_app(&dir, &["10.0.0.5"], 1, 2);
+        let fail = |peer: &'static str, xff: &'static str| {
+            let app = app.clone();
+            async move { app.dispatch(bad_login(peer, xff), "t", |_c| async { Ok(()) }).await.unwrap_err() }
+        };
+        for _ in 0..2 {
+            assert_eq!(fail("10.0.0.5:1", "198.51.100.1").await.code(), ag_protocol::ErrorCode::Unauthenticated);
+        }
+        let throttled = fail("10.0.0.5:1", "198.51.100.1").await;
+        assert_eq!(throttled.code(), ag_protocol::ErrorCode::RateLimited);
+        assert!(throttled.0.retry_after_ms > 0, "{throttled:?}");
+        // A second client behind the same proxy is unaffected.
+        assert_eq!(fail("10.0.0.5:2", "198.51.100.2").await.code(), ag_protocol::ErrorCode::Unauthenticated);
+        // A good credential from the throttled address is refused too: it is turned away before it is looked at.
+        let good = Ingress {
+            transport: "http",
+            bearer: Some(TOKEN.into()),
+            remote: Some("10.0.0.5:1".into()),
+            x_forwarded_for: Some("198.51.100.1".into()),
+            ..Ingress::default()
+        };
+        assert_eq!(
+            app.dispatch(good, "t", |_c| async { Ok(()) }).await.unwrap_err().code(),
+            ag_protocol::ErrorCode::RateLimited
+        );
+
+        // Nobody trusted: changing the header does not buy a new bucket - the peer is counted.
+        let app2 = proxied_app(&dir, &[], 1, 2);
+        let mut codes = Vec::new();
+        for n in 0..4 {
+            let xff = format!("198.51.100.{n}");
+            let err = app2.dispatch(bad_login("203.0.113.9:4711", &xff), "t", |_c| async { Ok(()) }).await.unwrap_err();
+            codes.push(err.code());
+        }
+        use ag_protocol::ErrorCode::{RateLimited, Unauthenticated};
+        assert_eq!(codes, [Unauthenticated, Unauthenticated, RateLimited, RateLimited]);
+        // Another peer, the same header: its own bucket.
+        let other = app2.dispatch(bad_login("203.0.113.10:1", "198.51.100.0"), "t", |_c| async { Ok(()) }).await;
+        assert_eq!(other.unwrap_err().code(), Unauthenticated);
+    }
+
     #[test]
     fn oidc_sign_ins_share_one_rate_limit_bucket_per_identity() {
         let mut token = Principal::for_tests("user:dana");
@@ -848,9 +1019,7 @@ mod tests {
     #[test]
     fn collector_headers_keep_the_good_entries_and_report_the_bad_ones_by_name_only() {
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt().with_writer(move || sink.clone()).with_ansi(false).finish();
-        let _installed = tracing::subscriber::set_default(subscriber);
+        let _installed = captured.install();
         let parsed = parse_headers("Authorization=Bearer abc, bad name=secret-value,=nothing,noequals,x-key=v");
         assert_eq!(
             parsed,

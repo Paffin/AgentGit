@@ -52,7 +52,7 @@ fn jobs_wait_for_run_after_and_leases_are_reaped() {
     clock.advance_ms(999);
     assert!(m.write(|tx| tx.job_claim(&["k"], "w2", 1_000)).unwrap().is_none());
     // a heartbeat extends the lease
-    m.write(|tx| tx.job_heartbeat(&later.id, "w1", 1_000)).unwrap();
+    m.write(|tx| tx.job_heartbeat(&later.id, "w1", None, 1_000)).unwrap();
     clock.advance_ms(999);
     assert!(m.write(|tx| tx.job_claim(&["k"], "w2", 1_000)).unwrap().is_none(), "the heartbeat kept it");
     // the lease runs out: w2 takes over, w1 is told it lost the job
@@ -60,11 +60,11 @@ fn jobs_wait_for_run_after_and_leases_are_reaped() {
     let taken = m.write(|tx| tx.job_claim(&["k"], "w2", 1_000)).unwrap().unwrap();
     assert_eq!((taken.id.as_str(), taken.attempts, taken.claimed_by.as_deref()), (later.id.as_str(), 2, Some("w2")));
     assert!(taken.error.as_deref().unwrap().contains("lease expired"));
-    assert!(matches!(m.write(|tx| tx.job_heartbeat(&later.id, "w1", 1_000)), Err(MetaError::NotFound(_))));
-    assert!(matches!(m.write(|tx| tx.job_complete(&later.id, "w1", &json!({}))), Err(MetaError::NotFound(_))));
-    let done = m.write(|tx| tx.job_complete(&later.id, "w2", &json!({"ok": true}))).unwrap();
+    assert!(matches!(m.write(|tx| tx.job_heartbeat(&later.id, "w1", None, 1_000)), Err(MetaError::NotFound(_))));
+    assert!(matches!(m.write(|tx| tx.job_complete(&later.id, "w1", None, &json!({}))), Err(MetaError::NotFound(_))));
+    let done = m.write(|tx| tx.job_complete(&later.id, "w2", None, &json!({"ok": true}))).unwrap();
     assert_eq!((done.state, done.result.unwrap()["ok"].clone()), (JobState::Succeeded, json!(true)));
-    assert!(m.write(|tx| tx.job_complete(&later.id, "w2", &json!({}))).is_err(), "only once");
+    assert!(m.write(|tx| tx.job_complete(&later.id, "w2", None, &json!({}))).is_err(), "only once");
 }
 
 #[test]
@@ -85,20 +85,20 @@ fn failing_jobs_retry_until_the_attempts_run_out() {
     for attempt in 1..=2 {
         let c = m.write(|tx| tx.job_claim(&["flaky"], "w", 10_000)).unwrap().unwrap();
         assert_eq!(c.attempts, attempt);
-        let f = m.write(|tx| tx.job_fail(&job.id, "w", &format!("boom {attempt}"), Some(2_000))).unwrap();
+        let f = m.write(|tx| tx.job_fail(&job.id, "w", None, &format!("boom {attempt}"), Some(2_000))).unwrap();
         assert_eq!((f.state, f.error.as_deref()), (JobState::Queued, Some(format!("boom {attempt}").as_str())));
         assert_eq!(f.run_after, t(clock.now().as_millis() + 2_000), "retry no sooner than asked");
         assert!(m.write(|tx| tx.job_claim(&["flaky"], "w", 10_000)).unwrap().is_none(), "backing off");
         clock.advance_ms(2_000);
     }
     m.write(|tx| tx.job_claim(&["flaky"], "w", 10_000)).unwrap().unwrap();
-    let last = m.write(|tx| tx.job_fail(&job.id, "w", "boom 3", Some(0))).unwrap();
+    let last = m.write(|tx| tx.job_fail(&job.id, "w", None, "boom 3", Some(0))).unwrap();
     assert_eq!((last.state, last.attempts), (JobState::Failed, 3), "no attempts left");
 
     // `None` means "do not retry", even with attempts left
     let j2 = m.write(|tx| tx.job_enqueue("flaky", &json!({}), None, t(0))).unwrap();
     m.write(|tx| tx.job_claim(&["flaky"], "w", 10_000)).unwrap().unwrap();
-    assert_eq!(m.write(|tx| tx.job_fail(&j2.id, "w", "hopeless", None)).unwrap().state, JobState::Failed);
+    assert_eq!(m.write(|tx| tx.job_fail(&j2.id, "w", None, "hopeless", None)).unwrap().state, JobState::Failed);
 
     // a lease that expires on the last attempt fails the job instead of requeueing it
     let j3 = m
@@ -129,7 +129,7 @@ fn jobs_can_be_cancelled_listed_and_looked_up() {
     let cancelled = m.write(|tx| tx.job_cancel(&a.id)).unwrap();
     assert_eq!(cancelled.state, JobState::Cancelled);
     assert!(
-        matches!(m.write(|tx| tx.job_heartbeat(&a.id, "w", 1)), Err(MetaError::NotFound(_))),
+        matches!(m.write(|tx| tx.job_heartbeat(&a.id, "w", None, 1)), Err(MetaError::NotFound(_))),
         "the worker finds out it was cancelled"
     );
     assert!(matches!(m.write(|tx| tx.job_cancel(&a.id)), Err(MetaError::InvalidTransition { .. })));
@@ -161,7 +161,7 @@ fn concurrent_claimers_never_receive_the_same_job() {
                     match m.write(|tx| tx.job_claim(&["work"], &worker, 60_000)) {
                         Ok(Some(job)) => {
                             claimed.lock().unwrap().push(job.id.clone());
-                            m.write(|tx| tx.job_complete(&job.id, &worker, &json!({}))).unwrap();
+                            m.write(|tx| tx.job_complete(&job.id, &worker, None, &json!({}))).unwrap();
                         }
                         Ok(None) => return,
                         Err(e) if e.is_retriable() => continue,
@@ -222,4 +222,30 @@ fn expired_leases_are_reported_when_they_are_reaped_and_jobs_are_found_by_key_an
         })
         .unwrap();
     assert_eq!(counts, (1, 1, 1));
+}
+
+#[test]
+fn a_claim_number_fences_a_stale_claimant_of_the_same_name() {
+    let clock = clock();
+    let m = TestMeta::new(clock.clone());
+    let job = m.write(|tx| tx.job_enqueue("k", &json!({}), None, Timestamp::from_millis(0))).unwrap();
+    let first = m.write(|tx| tx.job_claim(&[], "w", 1_000)).unwrap().unwrap();
+    assert_eq!((first.id.as_str(), first.attempts), (job.id.as_str(), 1));
+    // The lease runs out; the same name claims again and is on claim 2.
+    clock.advance_ms(5_000);
+    let second = m.write(|tx| tx.job_claim(&[], "w", 60_000)).unwrap().unwrap();
+    assert_eq!(second.attempts, 2);
+
+    let stale = |r: Result<crate::meta::JobRow, MetaError>| matches!(r, Err(MetaError::NotFound(_)));
+    assert!(stale(m.write(|tx| tx.job_heartbeat(&job.id, "w", Some(1), 1_000))));
+    assert!(stale(m.write(|tx| tx.job_complete(&job.id, "w", Some(1), &json!({})))));
+    assert!(stale(m.write(|tx| tx.job_fail(&job.id, "w", Some(1), "late", Some(0)))));
+    let still = m.read(|tx| tx.job_get(&job.id)).unwrap().unwrap();
+    assert_eq!((still.state, still.attempts), (JobState::Claimed, 2), "the stale calls changed nothing");
+
+    // The current number, and no number at all, are accepted.
+    m.write(|tx| tx.job_heartbeat(&job.id, "w", Some(2), 1_000)).unwrap();
+    m.write(|tx| tx.job_heartbeat(&job.id, "w", None, 1_000)).unwrap();
+    let done = m.write(|tx| tx.job_complete(&job.id, "w", Some(2), &json!({"ok": true}))).unwrap();
+    assert_eq!(done.state, JobState::Succeeded);
 }

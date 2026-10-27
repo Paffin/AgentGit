@@ -67,7 +67,9 @@ pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
 pub use migrate::{Migration, SCHEMA_VERSION};
 pub use outbox::{AuditEntry, AuditReport, OutboxRow};
 pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_schema_name};
-pub use records::{AttestationRow, NewProposal, PinRow, PolicyRow, ProposalRow, ReviewRow, WorkspaceRow};
+pub use records::{
+    AttestationRow, NewProposal, PinRow, PolicyRow, ProposalFilter, ProposalRow, ReviewRow, WorkspaceRow,
+};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 
 /// Errors from the metadata store.
@@ -135,6 +137,10 @@ pub enum MetaError {
     /// A caller-supplied value is invalid.
     #[error("invalid: {0}")]
     Invalid(String),
+    /// A count limit set by the caller (a repository quota) would be exceeded. Counted and refused inside the
+    /// transaction that would have created the row, so concurrent creates cannot pass the limit between them.
+    #[error("quota exceeded: {0}")]
+    QuotaExceeded(String),
     /// Stored data failed validation.
     #[error("metadata corruption: {0}")]
     Corrupt(String),
@@ -208,6 +214,8 @@ pub struct Meta {
     backend: Backend,
     clock: Arc<dyn Clock>,
     limits: Limits,
+    /// Write transactions committed through this handle (see [`Meta::committed_writes`]).
+    writes: std::sync::atomic::AtomicU64,
 }
 
 fn migrate_sqlite(conn: &mut Connection, now: Timestamp) -> Result<(), MetaError> {
@@ -276,7 +284,7 @@ impl Meta {
         opts: &PgOptions,
     ) -> Result<Self, MetaError> {
         let backend = pg::PgBackend::open(url, schema, opts, clock.now())?;
-        Ok(Self { backend: Backend::Postgres(Box::new(backend)), clock, limits })
+        Ok(Self { backend: Backend::Postgres(Box::new(backend)), clock, limits, writes: Default::default() })
     }
 
     fn init_sqlite(mut conn: Connection, clock: Arc<dyn Clock>, limits: Limits) -> Result<Self, MetaError> {
@@ -287,7 +295,7 @@ impl Meta {
         conn.pragma_update(None, "trusted_schema", "OFF")?;
         conn.set_prepared_statement_cache_capacity(128);
         migrate_sqlite(&mut conn, clock.now())?;
-        Ok(Self { backend: Backend::Sqlite(Mutex::new(conn)), clock, limits })
+        Ok(Self { backend: Backend::Sqlite(Mutex::new(conn)), clock, limits, writes: Default::default() })
     }
 
     /// The database engine behind this handle.
@@ -370,7 +378,7 @@ impl Meta {
     /// Write transactions of one repository never overlap, on any backend; the
     /// closure may therefore read a fact and act on it without it changing.
     pub fn write<T>(&self, f: impl FnOnce(&Tx<'_>) -> Result<T, MetaError>) -> Result<T, MetaError> {
-        match &self.backend {
+        let out = match &self.backend {
             Backend::Sqlite(m) => {
                 let mut guard = Self::sqlite(m);
                 let tx = guard.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -379,10 +387,19 @@ impl Meta {
                     f(&Tx::new(&conn, self.clock.now(), &self.limits))?
                 };
                 tx.commit()?;
-                Ok(out)
+                out
             }
-            Backend::Postgres(p) => p.run(pg::TxKind::Write, &*self.clock, &self.limits, f),
-        }
+            Backend::Postgres(p) => p.run(pg::TxKind::Write, &*self.clock, &self.limits, f)?,
+        };
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(out)
+    }
+
+    /// How many write transactions this handle has committed since it was opened. Each is one durable commit
+    /// (one fsync with SQLite's `synchronous=FULL`, one WAL flush on PostgreSQL), so the difference across an
+    /// operation is the number of flushes it cost; the engine's tests pin it for the operations that were batched.
+    pub fn committed_writes(&self) -> u64 {
+        self.writes.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Number of open PostgreSQL connections (0 for SQLite). Diagnostics and tests.
@@ -438,6 +455,47 @@ impl Tx<'_> {
             &params![key, value],
         )?;
         Ok(())
+    }
+
+    /// Removes a key of the `meta` table (nothing if it is absent).
+    pub fn meta_delete(&self, key: &str) -> Result<(), MetaError> {
+        self.conn.execute("DELETE FROM meta WHERE key = ?1", &params![key])?;
+        Ok(())
+    }
+
+    /// Up to `limit` keys that start with `prefix` and whose value sorts below `bound` as text (callers that
+    /// store numbers pad them to a fixed width so that text order is numeric order).
+    pub fn meta_keys_with_value_below(
+        &self,
+        prefix: &str,
+        bound: &str,
+        limit: usize,
+    ) -> Result<Vec<String>, MetaError> {
+        let like = format!("{}%", escape_like(prefix));
+        self.conn
+            .query(
+                "SELECT key FROM meta WHERE key LIKE ?1 ESCAPE '\\' AND value < ?2 ORDER BY key LIMIT ?3",
+                &params![like, bound, limit as i64],
+            )?
+            .iter()
+            .map(|r| r.string(0))
+            .collect()
+    }
+
+    /// For every key that starts with `prefix` and has no counterpart `companion_prefix` + the rest of the key, writes
+    /// the counterpart with `value`; returns how many it wrote. One statement, so it is atomic and cheap to repeat.
+    /// (The backfill of idempotency records that were written before they carried a time.)
+    pub fn meta_fill_companions(&self, prefix: &str, companion_prefix: &str, value: &str) -> Result<u64, MetaError> {
+        let like = format!("{}%", escape_like(prefix));
+        let from = prefix.chars().count() as i64 + 1;
+        self.conn.execute(
+            "INSERT INTO meta (key, value)
+             SELECT CAST(?2 AS TEXT) || substr(m.key, CAST(?4 AS INTEGER)), CAST(?3 AS TEXT) FROM meta m
+             WHERE m.key LIKE ?1 ESCAPE '\\'
+               AND NOT EXISTS (SELECT 1 FROM meta t WHERE t.key = CAST(?2 AS TEXT) || substr(m.key, CAST(?4 AS INTEGER)))
+             ON CONFLICT (key) DO NOTHING",
+            &params![like, companion_prefix, value, from],
+        )
     }
 
     /// Executes arbitrary SQL (`?1` placeholders). For tests that simulate

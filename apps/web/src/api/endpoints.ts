@@ -37,6 +37,9 @@ import type {
   Task,
   TreeEntry,
   Attestation,
+  FileChange,
+  SyncWorkspaceResponse,
+  Workspace,
   BlameResponse,
   Job,
   Page,
@@ -130,6 +133,22 @@ export function createApi(c: ApiClient) {
         (await c.get<{ bases: string[] }>(r(repo, '/history/merge-base'), { a, b }, o)).bases ?? [],
     },
     tree: {
+      manifest: async (
+        repo: string,
+        q: { rev: string; page_size?: number; page_token?: string },
+        o?: Opts,
+      ) => {
+        const res = await c.get<{
+          entries: TreeEntry[]
+          next_page_token: string
+          total_entries: number
+        }>(r(repo, '/tree'), q, o)
+        return {
+          entries: res.entries ?? [],
+          nextPageToken: res.next_page_token ?? '',
+          total: res.total_entries ?? 0,
+        }
+      },
       list: async (
         repo: string,
         q: { rev: string; path?: string; page_size?: number; page_token?: string },
@@ -188,6 +207,13 @@ export function createApi(c: ApiClient) {
         c.post<Review>(r(repo, `/proposals/${encodeURIComponent(id)}/reviews`), body, o),
       close: (repo: string, id: string, o?: Opts) =>
         c.post<Proposal>(r(repo, `/proposals/${encodeURIComponent(id)}/close`), {}, o),
+      /** Moves a proposal to a newer head (only its author may). */
+      update: (repo: string, id: string, newHead: string, o?: Opts) =>
+        c.patch<Proposal>(
+          r(repo, `/proposals/${encodeURIComponent(id)}`),
+          { new_head: newHead },
+          o,
+        ),
       create: (
         repo: string,
         body: {
@@ -199,6 +225,37 @@ export function createApi(c: ApiClient) {
         },
         o?: Opts,
       ) => c.post<Proposal>(r(repo, '/proposals'), body, o),
+    },
+
+    // ---- virtual workspaces: edit files without a clone -----------------------------------------
+    workspaces: {
+      create: (
+        repo: string,
+        body: { name: string; stream?: string; from_rev?: string },
+        o?: Opts,
+      ) => c.post<Workspace>(r(repo, '/workspaces'), body, o),
+      get: (repo: string, name: string, o?: Opts) =>
+        c.get<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}`), undefined, o),
+      /** Applies the changes as ONE new changeset on top of the workspace head. */
+      modify: (
+        repo: string,
+        name: string,
+        body: { changes: FileChange[]; message?: string; expected_head?: string },
+        o?: Opts,
+      ) => c.post<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}/changes`), body, o),
+      /** Brings the stream head in. Conflicts change nothing until every one has a resolution. */
+      sync: (repo: string, name: string, resolutions: FileChange[] = [], o?: Opts) =>
+        c.post<SyncWorkspaceResponse>(
+          r(repo, `/workspaces/${encodeURIComponent(name)}/sync`),
+          resolutions.length ? { resolutions } : {},
+          o,
+        ),
+      remove: (repo: string, name: string, o?: Opts) =>
+        c.del<Record<string, never>>(
+          r(repo, `/workspaces/${encodeURIComponent(name)}`),
+          undefined,
+          o,
+        ),
     },
 
     // ---- integration ----------------------------------------------------------------------------

@@ -77,6 +77,12 @@ policies that can never be satisfied are rejected when you set them.
     ag policy set policy.json           needs an admin of the current version
     ag policy show
 
+You do not have to write the first one: four presets are built in (solo, team, agents, strict).
+
+    ag policy preset list               who each is for
+    ag policy preset apply agents       store one (or `ag init --preset team`); `--ci-key ci` also requires a signed check
+    ag policy explain                   the policy in force in plain language, read from the document itself
+
 The fields
 
     integrators / admins / allowed_authors   who may integrate, change policy, author proposals
@@ -103,6 +109,8 @@ means validating again. Approvals are bound to the proposal head: pushing a new 
 `--json` output of `ag integrate` carries stable blocker codes: missing_validation, insufficient_approvals,
 changes_requested, missing_provenance, lease, failed_validation, actor_not_allowed, author_not_allowed,
 too_many_changed_files.
+
+`ag explain [PROPOSAL]` puts every reason in words and lists the commands that fix it.
 
 Command help: `ag policy --help`. More: docs/guides/policy.md and docs/tutorials/policy-cookbook.md
 ```
@@ -310,7 +318,7 @@ Precedence, highest first
                 CLICOLOR=0, then whether the output is a terminal
     repository  -C DIR / --repo DIR, else the nearest parent directory that contains .ag/
     credential  the variable named by the remote's token_env, the remote's token file,
-                AG_TOKEN_<REMOTE>, AG_TOKEN
+                AG_TOKEN_<REMOTE>, AG_TOKEN, then the login saved by `ag login` (credentials.json beside the user file)
 
 Environment variables
 

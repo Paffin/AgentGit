@@ -18,14 +18,13 @@ const ICON: Record<string, IconName> = { info: 'info', ok: 'check', warn: 'alert
           :key="t.id"
           class="toast"
           :class="`t-${t.tone}`"
-          :role="t.tone === 'bad' ? 'alert' : 'status'"
           @mouseenter="toasts.pause(t.id)"
           @mouseleave="toasts.resume(t.id)"
           @focusin="toasts.pause(t.id)"
           @focusout="toasts.resume(t.id)"
         >
           <Icon :name="ICON[t.tone] ?? 'info'" :size="18" class="lead" />
-          <div class="text">
+          <div class="text" :role="t.tone === 'bad' ? 'alert' : 'status'">
             <p class="title">{{ t.title }}</p>
             <p v-if="t.message" class="msg">{{ t.message }}</p>
             <p v-if="t.requestId" class="rid mono">request {{ t.requestId }}</p>

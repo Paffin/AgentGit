@@ -1,0 +1,153 @@
+# The reviewed list of tests that may skip in a CI job. docs/architecture/test-skips.md explains the mechanism.
+#
+# A test that needs an external component (PostgreSQL, S3, a container runtime, Keycloak, the server binary, a model,
+# ...) FAILS when the job says it must have the component (AG_REQUIRE_COMPONENTS) and SKIPS, leaving an AG-SKIP
+# marker, when it does not. `scripts/check_skips.py --job <name>` reads the markers a job collected
+# (AG_SKIP_REPORT) and fails the job for every skip that no [[skip]] entry below covers for that job. So a skip
+# is either impossible (the job requires the component) or written down here, with a reason and an owner.
+#
+# [[skip]]    component       the component name of the marker; shell-style patterns (`oci*`, `n/a:*`)
+#             test            a pattern for the test name (default "*")
+#             jobs            patterns for the job names, `<workflow>/<job>`; default every job
+#             reason          why this job is allowed not to run it (mandatory)
+#             owner           the area that answers for the entry (mandatory)
+#             runs_for_real   the CI job that runs it with the component, or "none" and why (mandatory)
+#
+# [[native]]  a skip construct that is not the helper (`#[ignore]`) and why it is fine; checked by
+#             `scripts/check_skips.py --scan`, which fails on any other `#[ignore]`, `t.Skip`, `test.skip`,
+#             `pytest.skip`, `skipUnless`, ... in the source tree.
+#
+# Add an entry only when the job really cannot have the component; prefer making the job provide it and require it.
+# Job names are the ones the workflows pass to `check_skips.py --job`.
+
+# ---- components that a dedicated job provides --------------------------------------------------------------------
+
+[[skip]]
+component = "postgres"
+jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
+reason = "The ordinary test jobs have no PostgreSQL server; every suite that needs one runs in the backends job."
+owner = "storage"
+runs_for_real = "ci.yml backends (scripts/pg-test.sh; AG_REQUIRE_COMPONENTS=postgres,s3)"
+
+[[skip]]
+component = "postgres:tls"
+jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
+reason = "No PostgreSQL server in this job; the TLS legs need one with ssl=on."
+owner = "storage"
+runs_for_real = "ci.yml backends (scripts/pg-test.sh starts a server with a private CA)"
+
+[[skip]]
+component = "s3"
+jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
+reason = "The ordinary test jobs have no S3 server; every suite that needs one runs in the backends job."
+owner = "storage"
+runs_for_real = "ci.yml backends (moto, then SeaweedFS; AG_REQUIRE_COMPONENTS=postgres,s3)"
+
+[[skip]]
+component = "s3-tls"
+jobs = ["ci/test-*", "quality/coverage", "windows/windows", "ci/backends-moto"]
+reason = "moto serves plain HTTP only; the TLS tests of the S3 client need a server with a private CA."
+owner = "storage"
+runs_for_real = "ci.yml backends, the SeaweedFS legs (AG_REQUIRE_COMPONENTS includes s3-tls there)"
+
+[[skip]]
+component = "keycloak"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "windows/windows", "web/e2e-*"]
+reason = "Keycloak is a container image of a few hundred MB that only the identity provider job starts."
+owner = "web"
+runs_for_real = "web.yml identity-provider (AG_REQUIRE_COMPONENTS=keycloak: the server's token validation and the browser round trip)"
+
+[[skip]]
+component = "oci*"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "windows/windows", "oci/cgroup-v2"]
+reason = "The real OCI tests need a runtime plus a digest-pinned image pulled beforehand (AG_OCI_IMAGE); only the OCI workflow has them."
+owner = "sandbox"
+runs_for_real = "oci-runtimes.yml runtimes (docker, podman rootful, podman rootless; AG_REQUIRE_COMPONENTS=oci:<runtime>)"
+
+[[skip]]
+component = "cgroup-v2"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "windows/windows"]
+reason = "A delegated cgroup v2 subtree has to be prepared as root before the tests start; only the cgroup job does that."
+owner = "sandbox"
+runs_for_real = "oci-runtimes.yml cgroup-v2 (AG_REQUIRE_COMPONENTS=cgroup-v2,namespace-sandbox)"
+
+[[skip]]
+component = "shell:*"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "windows/windows"]
+reason = "zsh, fish and PowerShell are not on every runner image; the shells job installs them."
+owner = "cli"
+runs_for_real = "ci.yml shells (AG_REQUIRE_COMPONENTS=shell)"
+
+[[skip]]
+component = "namespace-sandbox"
+jobs = ["ci/test-macos", "windows/windows"]
+reason = "The namespace sandbox is Linux-only; macOS and Windows have no user namespaces."
+owner = "sandbox"
+runs_for_real = "ci.yml test (ubuntu; AG_REQUIRE_COMPONENTS includes namespace-sandbox) and the cgroup job"
+
+[[skip]]
+component = "mkdocs"
+jobs = ["ci/scripts-py39"]
+reason = "The Python 3.9 job installs only PyYAML; the real MkDocs build is not importable there."
+owner = "docs"
+runs_for_real = "docs.yml site (the pinned venv; AG_REQUIRE_COMPONENTS=mkdocs)"
+
+# ---- by design --------------------------------------------------------------------------------------------------
+
+[[skip]]
+component = "model"
+jobs = ["ci/orchestrator"]
+reason = "Live-model tests are opt-in by design: they cost money and need a secret that forks and pull requests do not have."
+owner = "orchestrator"
+runs_for_real = "ci.yml orchestrator, the live step (a push, when OPENROUTER_API_KEY and AG_LLM_MODEL are defined; AG_REQUIRE_COMPONENTS=ag-server-binary,model)"
+
+[[skip]]
+component = "n/a:host-privilege"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "oci/cgroup-v2"]
+reason = "CI runs the suite as an ordinary user; the half of these tests that needs uid 0 (a fork bomb the kernel exempts root from, a set-user-ID file) is left out."
+owner = "sandbox"
+runs_for_real = "none in CI (the runner user is not root); runs when the suite is run as root, e.g. in a container"
+
+[[skip]]
+component = "n/a:host-filesystem"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "oci/cgroup-v2"]
+reason = "The demonstration needs a file system that honours set-user-ID, and root to create the file."
+owner = "sandbox"
+runs_for_real = "none in CI (the runner user is not root)"
+
+[[skip]]
+component = "n/a:s3-clock"
+jobs = ["ci/backends-*"]
+reason = "S3 objects age on the server's clock, which a test cannot move forward; the guarantee is tested in real time by the _on_s3 counterpart."
+owner = "storage"
+runs_for_real = "ci.yml backends: rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3"
+
+[[skip]]
+component = "n/a:doc-pages-needing-ag-server"
+jobs = ["ci/test-*", "ci/backends-*", "quality/coverage"]
+reason = "The documentation harness run by cargo test uses the CLI only; pages that need ag-server are run with the real server by the docs workflow."
+owner = "docs"
+runs_for_real = "docs.yml snippets (scripts/doc_snippets.py --bin-dir target/debug, with ag-server built)"
+
+[[skip]]
+component = "platform:windows"
+jobs = ["windows/windows"]
+reason = "The harnesses drive bash; Windows has the PowerShell demo (the_powershell_demo_script_passes) instead."
+owner = "cli"
+runs_for_real = "ci.yml test (ubuntu, macOS): the same tests with bash; windows.yml runs the PowerShell variants"
+
+[[skip]]
+component = "n/a:python-version"
+jobs = ["ci/sdk*"]
+reason = "typing.get_overloads, which this test inspects, exists from Python 3.11; the SDK supports 3.10."
+owner = "sdk"
+runs_for_real = "ci.yml sdk and sdk-runtimes on Python 3.11 and later"
+
+# ---- skip constructs that are not the helper ------------------------------------------------------------------
+
+[[native]]
+path = "crates/*/tests/scale.rs"
+pattern = "ignore"
+reason = "Measurements (timings of the engine at 100k files), not tests: they assert nothing a regression would break and take minutes."
+owner = "engine"
+runs_for_real = "none in CI by design; run on request with `cargo test -p <crate> --test scale -- --ignored`"

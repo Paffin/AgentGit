@@ -144,7 +144,7 @@ fn independent_proposals_merge_with_the_head_as_first_parent() {
 
     let merge = f.repo.changeset(&new_head).unwrap();
     assert_eq!(merge.parents, vec![pa, pb], "first parent is the previous stream head");
-    assert!(merge.message.contains("Merge-Algorithm: ag-merge/2+ag-diff/1"));
+    assert!(merge.message.contains("Merge-Algorithm: ag-merge/3+ag-diff/1"));
     assert_eq!(f.read(&new_head, "a.txt").as_deref(), Some("A\n"));
     assert_eq!(f.read(&new_head, "b.txt").as_deref(), Some("B\n"));
 
@@ -471,7 +471,45 @@ fn a_rename_and_a_concurrent_edit_integrate_as_one_merged_file() {
     assert_eq!(strategy, Strategy::Merge);
     assert_eq!(f.read(&new_head, "src/new.rs").as_deref(), Some(edited_body.as_str()));
     assert_eq!(f.read(&new_head, "src/old.rs"), None, "the file moved");
-    assert!(f.repo.changeset(&new_head).unwrap().message.contains("Merge-Algorithm: ag-merge/2"));
+    assert!(f.repo.changeset(&new_head).unwrap().message.contains("Merge-Algorithm: ag-merge/3"));
+    assert!(f.repo.fsck().unwrap().is_ok());
+}
+
+#[test]
+fn a_file_added_to_a_renamed_directory_follows_it_and_the_merge_says_so() {
+    let f = fx();
+    let (a, b, c) = ("fn a() {}\n".repeat(3), "fn b() {}\n".repeat(3), "fn c() {}\n".repeat(3));
+    let base = f.land(None, &[("lib/a.rs", &a), ("lib/b.rs", &b), ("lib/c.rs", &c), ("README", "r\n")]);
+    let moved =
+        f.snap(Some(base), &[("src/a.rs", &a), ("src/b.rs", &b), ("src/c.rs", &c), ("README", "r\n")], "user:alice");
+    let added = f.snap(
+        Some(base),
+        &[("lib/a.rs", &a), ("lib/b.rs", &b), ("lib/c.rs", &c), ("lib/d.rs", "fn d() {}\n"), ("README", "r\n")],
+        "user:bob",
+    );
+    let prop_moved = f.propose(moved, "move lib to src", "user:alice");
+    let prop_added = f.propose(added, "add d", "user:bob");
+    f.integrate(&prop_moved, "user:alice");
+
+    // the preview already explains it
+    let pv = f.repo.merge_preview(&prop_added).unwrap();
+    assert!(pv.conflicts.is_empty(), "{:?}", pv.conflicts);
+    assert_eq!(pv.algorithm, "ag-merge/3+ag-diff/1");
+    let [note] = pv.notes.as_slice() else { panic!("{:?}", pv.notes) };
+    assert_eq!(note.code, "directory_rename");
+    assert_eq!(note.moves, [["lib/d.rs".to_string(), "src/d.rs".to_string()]]);
+
+    let r = f.integrate(&prop_added, "user:alice");
+    let Outcome::Integrated { new_head, strategy, .. } = r.outcome else { panic!("{:?}", r.outcome) };
+    assert_eq!(strategy, Strategy::Merge);
+    assert_eq!(f.read(&new_head, "src/d.rs").as_deref(), Some("fn d() {}\n"));
+    assert_eq!(f.read(&new_head, "lib/d.rs"), None);
+    let msg = f.repo.changeset(&new_head).unwrap().message.clone();
+    assert!(msg.contains("Merge-Algorithm: ag-merge/3+ag-diff/1"), "{msg}");
+    assert!(
+        msg.contains("Directory-Rename: lib -> src (ours renamed it; 3 of 3 files; 1 added and 0 edited followed)"),
+        "{msg}"
+    );
     assert!(f.repo.fsck().unwrap().is_ok());
 }
 
@@ -526,6 +564,8 @@ fn every_kind_of_conflict_has_a_stable_code_on_the_wire() {
         "file_directory",
         "rename_rename",
         "rename_delete",
+        "directory_rename_ambiguous",
+        "directory_rename_collision",
     ];
     for c in &conflicts {
         assert!(all.contains(&c.kind.as_str()), "{}", c.kind);
@@ -538,4 +578,245 @@ fn stored_outcomes_without_a_message_still_read() {
     let old: ag_integrate::ConflictInfo =
         serde_json::from_str(r#"{"path":"f.txt","kind":"content conflict (1 region(s))"}"#).unwrap();
     assert_eq!((old.path.as_str(), old.message.as_str()), ("f.txt", ""));
+}
+
+/// Every committed write transaction is a durable flush, so the cost of an integration is the number of them. The
+/// operation record and its move to `ready` are one commit, the tokens are not rewritten when they did not change,
+/// and the post-commit derive pass acknowledges its events, caches the new head's tree and prunes in one commit:
+/// a fast-forward costs the record, the stream update and that derive commit.
+#[test]
+fn an_integration_is_a_few_durable_commits() {
+    let f = fx();
+    let c = f.snap(None, &[("a", "1")], "user:alice");
+    let p = f.propose(c, "first", "user:alice");
+    let before = f.repo.meta().committed_writes();
+    let r = f.integrate(&p, "user:alice");
+    let ff = f.repo.meta().committed_writes() - before;
+    assert!(matches!(r.outcome, Outcome::Integrated { strategy: Strategy::FastForward, .. }), "{:?}", r.outcome);
+    assert_eq!(
+        ff, 3,
+        "operation record, stream update, derive pass (it was 7: record, tokens, ready, update, tree, ack, prune)"
+    );
+
+    // A three-way merge: two proposals on the same base.
+    let base = f.head().unwrap();
+    let left = f.snap(Some(base), &[("a", "1"), ("l", "1")], "user:alice");
+    let right = f.snap(Some(base), &[("a", "1"), ("r", "1")], "user:bob");
+    let (pl, pr) = (f.propose(left, "left", "user:alice"), f.propose(right, "right", "user:bob"));
+    f.integrate(&pl, "user:alice");
+    let before = f.repo.meta().committed_writes();
+    let r = f.integrate(&pr, "user:bob");
+    let merge = f.repo.meta().committed_writes() - before;
+    assert!(matches!(r.outcome, Outcome::Integrated { strategy: Strategy::Merge, .. }), "{:?}", r.outcome);
+    assert_eq!(merge, 3, "the merge changeset and its events ride in the stream-update and derive commits (it was 8)");
+}
+
+/// An operation recorded by an earlier build is still in the state `prepared` (it wrote `prepared` and `ready` as two
+/// commits): recovery must carry it through, as it carries one that stopped between the two.
+#[test]
+fn an_operation_left_prepared_by_an_earlier_build_is_still_recovered() {
+    use ag_storage::meta::NewIntent;
+    let f = fx();
+    let c = f.snap(None, &[("a", "1")], "user:alice");
+    let p = f.propose(c, "t", "user:alice");
+    let payload = serde_json::json!({"proposal": p, "stream": "main", "head": c, "tokens": []});
+    f.repo
+        .meta()
+        .write(|tx| {
+            tx.intent_create(&NewIntent {
+                operation_id: "op_old",
+                idempotency_key: "old-key",
+                request_hash: "hash-of-the-old-request",
+                kind: "integrate",
+                actor: "user:alice",
+                stream: Some("main"),
+                payload: &payload,
+            })
+            .map(|_| ())
+        })
+        .unwrap();
+    assert_eq!(f.repo.operation("op_old").unwrap().state, IntentState::Prepared);
+    let rep = f.repo.recover(3_600_000).unwrap();
+    assert!(rep.errors.is_empty(), "{rep:?}");
+    assert_eq!(f.repo.operation("op_old").unwrap().state, IntentState::Integrated);
+    assert_eq!(f.head(), Some(c));
+    assert_eq!(f.version(), 1);
+}
+
+/// What the tree of `id` is by definition: its operations applied, from the root, to the empty tree. Read straight
+/// from the objects, so it shares nothing with the cached paths under test.
+fn tree_by_definition(f: &Fx, id: &ag_types::ChangesetId) -> ag_tree::Tree {
+    let mut chain = vec![f.repo.changeset(id).unwrap()];
+    while let Some(parent) = chain.last().unwrap().first_parent() {
+        chain.push(f.repo.changeset(&parent).unwrap());
+    }
+    chain.iter().rev().fold(ag_tree::Tree::empty(), |t, cs| t.apply(&cs.ops, f.repo.limits()).unwrap())
+}
+
+/// A history with edits, deletions, re-creations and a three-way merge; returns every head it landed.
+fn eventful_history(f: &Fx) -> Vec<ag_types::ChangesetId> {
+    let mut heads = Vec::new();
+    let mut files: std::collections::BTreeMap<String, String> = Default::default();
+    for round in 0..40usize {
+        let name = format!("f{}", round % 5);
+        if round % 7 == 0 {
+            files.remove(&name);
+        } else {
+            files.insert(name, format!("v{round}"));
+        }
+        files.insert("always".into(), "here".into());
+        let view: Vec<(&str, &str)> = files.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
+        heads.push(f.land(f.head(), &view));
+    }
+    // A merge: two proposals on the same base, each adding a file of its own.
+    let base = f.head().unwrap();
+    let mut left: Vec<(&str, &str)> = files.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
+    let mut right = left.clone();
+    left.push(("left.txt", "l"));
+    right.push(("right.txt", "r"));
+    let (l, r) = (f.snap(Some(base), &left, "user:alice"), f.snap(Some(base), &right, "user:bob"));
+    let (pl, pr) = (f.propose(l, "left", "user:alice"), f.propose(r, "right", "user:bob"));
+    f.integrate(&pl, "user:alice");
+    let merged = f.integrate(&pr, "user:bob");
+    assert!(matches!(merged.outcome, Outcome::Integrated { strategy: Strategy::Merge, .. }), "{:?}", merged.outcome);
+    heads.push(f.head().unwrap());
+    heads
+}
+
+#[test]
+fn cached_trees_are_the_trees_by_definition_at_every_point_of_a_history() {
+    let (f, cache) = fx_cached(64 * 1024 * 1024);
+    let heads = eventful_history(&f);
+    for _pass in 0..2 {
+        for id in &heads {
+            assert_eq!(f.repo.tree_of(id).unwrap(), tree_by_definition(&f, id), "{id}");
+        }
+    }
+    let s = cache.stats();
+    assert!(s.hits >= heads.len() as u64, "the second pass is served from memory: {s:?}");
+    assert!(s.bytes > 0 && s.bytes <= s.budget, "{s:?}");
+}
+
+#[test]
+fn a_budget_too_small_for_the_history_evicts_and_stays_correct() {
+    let (probe, _) = fx_cached(0);
+    let heads = eventful_history(&probe);
+    let one = ag_storage::approx_tree_bytes(&probe.repo.tree_of(heads.last().unwrap()).unwrap());
+    let (f, cache) = fx_cached(one * 3);
+    let heads = eventful_history(&f);
+    for id in heads.iter().chain(heads.iter().rev()) {
+        assert_eq!(f.repo.tree_of(id).unwrap(), tree_by_definition(&f, id), "{id}");
+    }
+    let s = cache.stats();
+    assert!(s.evictions > 0, "{s:?}");
+    assert!(s.bytes <= s.budget, "{s:?}");
+}
+
+#[test]
+fn garbage_collection_empties_the_repositorys_part_of_the_cache() {
+    use ag_integrate::GcOptions;
+    const HOUR: i64 = 3_600_000;
+    let (f, cache) = fx_cached(64 * 1024 * 1024);
+    let kept = f.land(None, &[("a", "1")]);
+    // An unpublished, unreachable changeset whose tree is asked for (and so cached).
+    let orphan = f.snap(None, &[("z", "9")], "user:bob");
+    assert!(f.repo.tree_of(&orphan).is_ok());
+    assert!(f.repo.tree_of(&kept).is_ok());
+    assert!(cache.stats().entries >= 2);
+    f.clock.advance_ms(2 * HOUR);
+    let report = f.repo.gc(&GcOptions { grace_ms: HOUR, ..GcOptions::default() }, "user:alice").unwrap();
+    assert!(report.deleted.contains(&orphan.to_hex()), "{report:?}");
+    assert_eq!(cache.stats().entries, 0, "nothing answers for a changeset that was removed");
+    assert!(f.repo.tree_of(&kept).is_ok());
+}
+
+/// Makes an integration of `target` lose its compare-and-swap `rounds` times in a row: every time it is about to
+/// commit, another proposal (one of `rivals`) is integrated first. Returns the target's result.
+fn integrate_while_rivals_win(
+    f: &Fx,
+    target: &str,
+    rivals: &[String],
+    rounds: usize,
+) -> Result<ag_integrate::IntegrationResult, ag_integrate::Error> {
+    let req = IntegrateRequest {
+        proposal_id: target.into(),
+        actor: id("user:alice"),
+        idempotency_key: None,
+        fencing_tokens: vec![],
+    };
+    std::thread::scope(|s| {
+        let mut gate = f.repo.failpoints().arm_gate("integrate.before_commit");
+        let repo = &f.repo;
+        let worker = s.spawn(move || repo.integrate(&req));
+        for rival in rivals.iter().take(rounds) {
+            let mut reached = false;
+            while !worker.is_finished() && !reached {
+                reached = gate.wait_reached(std::time::Duration::from_millis(20));
+            }
+            if !reached {
+                break; // the target gave up (or finished) before this round
+            }
+            f.integrate(rival, "user:bob");
+            // Arm the next round before letting the target go on, so that it cannot slip past.
+            let next = f.repo.failpoints().arm_gate("integrate.before_commit");
+            std::mem::replace(&mut gate, next).release();
+        }
+        f.repo.failpoints().clear();
+        gate.release();
+        worker.join().unwrap()
+    })
+}
+
+fn rival_proposals(f: &Fx, n: usize) -> (String, Vec<String>) {
+    let base = f.land(None, &[("base", "0")]);
+    let one = |name: &str, who: &str| {
+        let c = f.snap(Some(base), &[("base", "0"), (name, "x")], who);
+        f.propose(c, name, who)
+    };
+    let target = one("target.txt", "user:alice");
+    (target, (0..n).map(|i| one(&format!("rival{i}.txt"), "user:bob")).collect())
+}
+
+#[test]
+fn an_integration_that_loses_the_race_many_times_still_lands() {
+    let f = fx();
+    // More lost races than the engine used to put up with (8), fewer than it puts up with now.
+    let (target, rivals) = rival_proposals(&f, 12);
+    let r = integrate_while_rivals_win(&f, &target, &rivals, 12).expect("retried until it won");
+    assert!(matches!(r.outcome, Outcome::Integrated { strategy: Strategy::Merge, .. }), "{:?}", r.outcome);
+    // Everything landed once: the base, the 12 rivals and the target's merge, and the merge kept every file.
+    assert_eq!(f.version(), 1 + 12 + 1);
+    let head = f.head().unwrap();
+    for name in std::iter::once("target.txt".to_string()).chain((0..12).map(|i| format!("rival{i}.txt"))) {
+        assert_eq!(f.read(&head, &name).as_deref(), Some("x"), "{name}");
+    }
+}
+
+#[test]
+fn the_retry_is_bounded_and_the_caller_is_told_to_retry() {
+    let f = fx_contended(ag_integrate::ContentionPolicy { attempts: 3, max_backoff_ms: 0 });
+    let (target, rivals) = rival_proposals(&f, 5);
+    let err = integrate_while_rivals_win(&f, &target, &rivals, 5).expect_err("three attempts, all lost");
+    assert!(matches!(err, ag_integrate::Error::Contention(ref m) if m.contains("3 times")), "{err:?}");
+    // Nothing was half done: the proposal can simply be integrated again.
+    let again = f.integrate(&target, "user:alice");
+    assert!(matches!(again.outcome, Outcome::Integrated { .. }), "{:?}", again.outcome);
+}
+
+#[test]
+fn the_wait_between_attempts_is_spread_per_operation_and_bounded() {
+    let p = ag_integrate::ContentionPolicy { attempts: 24, max_backoff_ms: 32 };
+    let ms = |op: &str, attempt| p.backoff(op, attempt).as_millis() as u64;
+    assert_eq!((ms("op_a", 1), ms("op_a", 2)), (0, 0), "the first two attempts do not wait");
+    for attempt in 3..=24 {
+        let window = (1u64 << (attempt - 3).min(20)).min(32);
+        for op in ["op_a", "op_b", "op_c"] {
+            assert!(ms(op, attempt) <= window, "{op} attempt {attempt}: {} > {window}", ms(op, attempt));
+        }
+        assert_eq!(ms("op_a", attempt), ms("op_a", attempt), "the same operation always waits the same time");
+    }
+    let waits: std::collections::BTreeSet<u64> = (0..40).map(|i| ms(&format!("op_{i}"), 12)).collect();
+    assert!(waits.len() > 8, "colliding writers wait different times: {waits:?}");
+    let none = ag_integrate::ContentionPolicy { attempts: 8, max_backoff_ms: 0 };
+    assert!(none.backoff("op_a", 12).is_zero(), "0 means retry at once");
 }

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -496,15 +497,33 @@ func TestTimeoutStopsTheWholeProcessGroup(t *testing.T) {
 		t.Fatal("child pid unknown")
 	}
 	deadline := time.Now().Add(3 * time.Second)
-	for syscall.Kill(pid, 0) == nil && time.Now().Before(deadline) {
+	for !processExited(pid) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if syscall.Kill(pid, 0) == nil {
+	if !processExited(pid) {
 		t.Fatalf("background child %d survived the session", pid)
 	}
 	if run := e.runs()[0]; run.Status != "failed" || !strings.Contains(run.Summary, "timeout") {
 		t.Fatalf("run = %+v", run)
 	}
+}
+
+// A dead, unreaped child still answers kill(0) in containers whose PID 1 does not reap orphans.
+// Count that as exited, while continuing to reject a running or stopped child.
+func processExited(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	if err == syscall.ESRCH {
+		return true
+	}
+	if err != nil || runtime.GOOS != "linux" {
+		return false
+	}
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return errors.Is(err, os.ErrNotExist)
+	}
+	i := strings.LastIndex(string(b), ") ")
+	return i >= 0 && len(b) > i+2 && b[i+2] == 'Z'
 }
 
 func TestHeartbeatsKeepTheRunAliveAndExtendLeases(t *testing.T) {

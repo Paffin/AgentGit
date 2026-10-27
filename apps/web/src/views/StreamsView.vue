@@ -49,7 +49,7 @@ const reflog = useResource<ReflogEntry[]>(
 )
 
 const streamColumns: Column[] = [
-  { key: 'name', label: 'Stream', width: 'minmax(0, 1.4fr)' },
+  { key: 'name', label: 'Branch', width: 'minmax(0, 1.4fr)' },
   { key: 'head', label: 'Head', width: 'minmax(0, 1.2fr)' },
   { key: 'version', label: 'Version', width: '6rem', align: 'end' },
   { key: 'policy_version', label: 'Policy', width: '6rem', align: 'end' },
@@ -104,7 +104,7 @@ async function create() {
   <div class="page">
     <div class="head">
       <div>
-        <h1>Streams</h1>
+        <h1>Branches</h1>
         <p class="muted">
           A stream is a named line of integration. Its head only moves by compare-and-swap, and
           every move is in the reflog.
@@ -115,14 +115,14 @@ async function create() {
         :disabled="!canCreate"
         disabled-reason="Creating a stream requires the writer role"
         @click="openCreate"
-        >New stream</Button
+        >New branch</Button
       >
     </div>
 
-    <Card title="Streams" icon="branch" flush>
+    <Card title="Branches" term="stream" icon="branch" flush>
       <ErrorState
         v-if="streams.error.value && !streams.data.value"
-        what="streams"
+        what="branches"
         :error="streams.error.value"
         @retry="streams.reload()"
       />
@@ -215,18 +215,14 @@ async function create() {
           ><span class="faint"><RelativeTime :ms="(row as ReflogEntry).timestamp_ms" /></span
         ></template>
         <template #empty>
-          <EmptyState
-            icon="history"
-            compact
-            title="Nothing has been integrated into this stream yet"
-          />
+          <EmptyState icon="history" compact title="Nothing has landed on this branch yet" />
         </template>
       </DataTable>
     </Card>
 
     <Dialog
       v-model="creating"
-      title="New stream"
+      title="New branch"
       description="Starts empty, or at a revision you name."
       :dismissable="!busy"
     >
@@ -246,14 +242,14 @@ async function create() {
           placeholder="main"
           hint="A stream, changeset id or other revision. Empty means an empty stream."
         />
-        <Alert v-if="error" tone="bad" live="alert" title="Could not create the stream">{{
+        <Alert v-if="error" tone="bad" live="alert" title="Could not create the branch">{{
           error.message
         }}</Alert>
       </form>
       <template #footer>
         <Button :disabled="busy" @click="creating = false">Cancel</Button>
         <Button type="submit" form="new-stream" variant="primary" :loading="busy"
-          >Create stream</Button
+          >Create branch</Button
         >
       </template>
     </Dialog>

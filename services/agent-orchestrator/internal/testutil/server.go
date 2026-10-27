@@ -15,9 +15,11 @@
 //     Everything it does not break reaches the real server unchanged.
 //
 // The tests look for the server binary in $AG_SERVER_BIN, then on PATH, then in
-// the cargo target directory of the repository. When none exists they skip,
-// unless $CI or $AG_REQUIRE_SERVER is set, in which case they fail: CI must
-// never silently skip the real-server tests.
+// the cargo target directory of the repository (wherever cargo is configured to
+// put it). When none exists they print the command that builds it and skip with
+// an AG-SKIP marker (components.go), unless AG_REQUIRE_COMPONENTS names
+// ag-server-binary (or $CI / $AG_REQUIRE_SERVER is set), in which case they
+// fail: CI must never silently skip the real-server tests.
 package testutil
 
 import (
@@ -28,13 +30,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -52,7 +55,9 @@ func RandHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// FindServerBin locates the ag-server binary; "" when there is none.
+// FindServerBin locates the ag-server binary; "" when there is none. The order: $AG_SERVER_BIN, `ag-server` on
+// PATH, then the cargo target directory of this repository, wherever it is: $CARGO_TARGET_DIR, <repo>/target, and
+// the one cargo itself reports (`build.target-dir` of a shared ~/.cargo/config.toml). debug before release.
 func FindServerBin() string {
 	if p := os.Getenv("AG_SERVER_BIN"); p != "" {
 		return p
@@ -60,16 +65,15 @@ func FindServerBin() string {
 	if p, err := exec.LookPath("ag-server"); err == nil {
 		return p
 	}
-	// <repo>/target/debug/ag-server, found by walking up to the Cargo workspace; $CARGO_TARGET_DIR wins.
+	root := repoRoot()
 	var dirs []string
 	if d := os.Getenv("CARGO_TARGET_DIR"); d != "" {
 		dirs = append(dirs, d)
 	}
-	_, file, _, _ := runtime.Caller(0)
-	for d := filepath.Dir(file); d != filepath.Dir(d); d = filepath.Dir(d) {
-		if _, err := os.Stat(filepath.Join(d, "Cargo.toml")); err == nil {
-			dirs = append(dirs, filepath.Join(d, "target"))
-			break
+	if root != "" {
+		dirs = append(dirs, filepath.Join(root, "target"))
+		if d := cargoTargetDir(root); d != "" {
+			dirs = append(dirs, d)
 		}
 	}
 	for _, d := range dirs {
@@ -83,17 +87,55 @@ func FindServerBin() string {
 	return ""
 }
 
-func requireServer() bool { return os.Getenv("CI") != "" || os.Getenv("AG_REQUIRE_SERVER") != "" }
-
-// FreePort returns a loopback TCP port that was free a moment ago.
-func FreePort(t testing.TB) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+// repoRoot is the Cargo workspace this source tree lives in; "" when it is not part of one.
+func repoRoot() string {
+	_, file, _, _ := runtime.Caller(0)
+	for d := filepath.Dir(file); d != filepath.Dir(d); d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "Cargo.toml")); err == nil {
+			return d
+		}
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+	return ""
+}
+
+var (
+	targetOnce sync.Once
+	targetDir  string
+)
+
+// cargoTargetDir asks cargo where it builds (`cargo metadata`), once; "" when cargo is not there or says nothing.
+func cargoTargetDir(root string) string {
+	targetOnce.Do(func() {
+		cargo, err := exec.LookPath("cargo")
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, cargo, "metadata", "--format-version", "1", "--no-deps", "--offline")
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			return
+		}
+		var meta struct {
+			TargetDirectory string `json:"target_directory"`
+		}
+		if json.Unmarshal(out, &meta) == nil {
+			targetDir = meta.TargetDirectory
+		}
+	})
+	return targetDir
+}
+
+// serverBinMissing is what a test says when it found no ag-server: the exact command that builds one.
+func serverBinMissing() error {
+	build := "cargo build -p agentgit-server"
+	if root := repoRoot(); root != "" {
+		build = "cd " + root + " && " + build
+	}
+	return fmt.Errorf("these tests run against the real ag-server and none was found: build it with `%s` (it is then found by itself), "+
+		"or set AG_SERVER_BIN=/path/to/ag-server, or put ag-server on PATH", build)
 }
 
 // Server is a running ag-server.
@@ -136,28 +178,13 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	t.Helper()
 	bin := FindServerBin()
 	if bin == "" {
-		if requireServer() {
-			t.Fatal("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
-		}
-		t.Skip("these tests run against the real ag-server and none was found: set AG_SERVER_BIN, put ag-server on PATH, or run `cargo build -p agentgit-server`")
+		RequireComponent(t, "ag-server-binary", serverBinMissing())
 	}
 	dir := t.TempDir()
 	token := RandHex(24) // 48 characters; the server wants at least 32
-	scheme, caFile := "http", ""
-	var httpc *http.Client
-	extra := o.Args
-	if o.TLS {
-		var certFile, keyFile string
-		caFile, certFile, keyFile = writeTLSMaterial(t, dir)
-		cfgFile := filepath.Join(dir, "server.toml")
-		if err := os.WriteFile(cfgFile, []byte(fmt.Sprintf("[server]\ntls_cert = %q\ntls_key = %q\n", certFile, keyFile)), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		extra = append([]string{"--config", cfgFile}, extra...)
-		scheme, httpc = "https", trustingClient(t, caFile)
-	}
+	connection := serverConnectionFor(t, dir, o)
 	for attempt := 0; attempt < 5; attempt++ {
-		addr := fmt.Sprintf("127.0.0.1:%d", FreePort(t))
+		addr := "127.0.0.1:0"
 		logPath := filepath.Join(dir, fmt.Sprintf("server-%d.log", attempt))
 		lf, err := os.Create(logPath)
 		if err != nil {
@@ -167,25 +194,27 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 		if data == "" {
 			data = filepath.Join(dir, fmt.Sprintf("data-%d", attempt))
 		}
-		args := append([]string{"serve", "--data-dir", data, "--listen", addr}, extra...)
+		args := append([]string{"serve", "--data-dir", data, "--listen", addr}, connection.args...)
 		cmd := exec.Command(bin, args...)
 		cmd.Env = append([]string{"AG_BOOTSTRAP_TOKEN=" + token, "PATH=" + os.Getenv("PATH"), "HOME=" + dir}, o.Env...)
+		// The bound address comes from the listening event, independently of a caller's log filter.
+		cmd.Env = append(cmd.Env, "RUST_LOG=info", "NO_COLOR=1")
 		cmd.Stdout, cmd.Stderr = lf, lf
 		setProcessGroup(cmd)
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("cannot start %s: %v", bin, err)
 		}
 		lf.Close()
-		hc := &http.Client{Timeout: 30 * time.Second}
-		var opts []agwp.Option
-		if httpc != nil {
-			hc.Transport = httpc.Transport
-			opts = append(opts, agwp.WithHTTPClient(httpc), agwp.WithStreamClient(&http.Client{Transport: httpc.Transport}))
-		}
-		s := &Server{t: t, URL: scheme + "://" + addr, CAFile: caFile, Token: token, Dir: dir, logPath: logPath, cmd: cmd, done: make(chan struct{}), hc: hc, clientOpts: opts}
+		s := &Server{t: t, URL: connection.scheme + "://" + addr, CAFile: connection.caFile, Token: token, Dir: dir, logPath: logPath, cmd: cmd, done: make(chan struct{}), hc: connection.http, clientOpts: connection.options}
 		go func() { _ = cmd.Wait(); close(s.done) }()
 		t.Cleanup(s.Stop)
-		s.Admin, err = agwp.New(s.URL, secret.New(token), append([]agwp.Option{agwp.WithIdentityLabel("test-admin"), agwp.WithTimeout(30 * time.Second)}, opts...)...)
+		bound := s.waitAddress(15 * time.Second)
+		if bound == "" {
+			s.Stop()
+			continue
+		}
+		s.URL = connection.scheme + "://" + bound
+		s.Admin, err = agwp.New(s.URL, secret.New(token), append([]agwp.Option{agwp.WithIdentityLabel("test-admin"), agwp.WithTimeout(30 * time.Second)}, connection.options...)...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -198,6 +227,67 @@ func StartServerWith(t testing.TB, o ServerOptions) *Server {
 	return nil
 }
 
+type serverConnection struct {
+	scheme  string
+	caFile  string
+	args    []string
+	http    *http.Client
+	options []agwp.Option
+}
+
+// Keep HTTPS trust and the clients' transports consistent across startup attempts.
+func serverConnectionFor(t testing.TB, dir string, o ServerOptions) serverConnection {
+	t.Helper()
+	c := serverConnection{scheme: "http", args: o.Args, http: &http.Client{Timeout: 30 * time.Second}}
+	if !o.TLS {
+		return c
+	}
+	caFile, certFile, keyFile := writeTLSMaterial(t, dir)
+	cfgFile := filepath.Join(dir, "server.toml")
+	if err := os.WriteFile(cfgFile, []byte(fmt.Sprintf("[server]\ntls_cert = %q\ntls_key = %q\n", certFile, keyFile)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trusted := trustingClient(t, caFile)
+	c.scheme, c.caFile = "https", caFile
+	c.args = append([]string{"--config", cfgFile}, o.Args...)
+	c.http.Transport = trusted.Transport
+	c.options = []agwp.Option{agwp.WithHTTPClient(c.http), agwp.WithStreamClient(&http.Client{Transport: trusted.Transport})}
+	return c
+}
+
+var loopbackAddress = regexp.MustCompile(`127\.0\.0\.1:[0-9]+`)
+
+// Only consume complete listening events: a concurrent log write may end part-way through a port.
+func listeningAddress(log []byte) string {
+	lines := strings.Split(string(log), "\n")
+	for _, line := range lines[:len(lines)-1] {
+		if strings.Contains(line, "listening (") {
+			if addr := loopbackAddress.FindString(line); addr != "" {
+				return addr
+			}
+		}
+	}
+	return ""
+}
+
+func (s *Server) waitAddress(d time.Duration) string {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		select {
+		case <-s.done:
+			return ""
+		default:
+		}
+		if log, err := os.ReadFile(s.logPath); err == nil {
+			if addr := listeningAddress(log); addr != "" {
+				return addr
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return ""
+}
+
 func (s *Server) waitReady(d time.Duration) bool {
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
@@ -207,7 +297,7 @@ func (s *Server) waitReady(d time.Duration) bool {
 		default:
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, err := s.Admin.Negotiate(ctx)
+		_, err := s.Admin.Whoami(ctx)
 		cancel()
 		if err == nil {
 			return true

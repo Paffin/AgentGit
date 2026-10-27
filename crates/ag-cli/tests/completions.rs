@@ -1,7 +1,7 @@
 //! `ag completions SHELL` and `ag man`: the scripts parse in the shells that are installed, bash completes
 //! real commands, the committed copies in `docs/reference/` are current, and the man pages are well formed.
 //!
-//! A shell that is not installed is skipped, unless `AG_REQUIRE_SHELLS=1` (CI sets it) turns that into a failure.
+//! A shell that is not installed is skipped, unless `AG_REQUIRE_COMPONENTS` names `shell` (CI sets it) turns that into a failure.
 #![allow(missing_docs)]
 
 mod common;
@@ -19,18 +19,10 @@ fn have(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn required() -> bool {
-    std::env::var("AG_REQUIRE_SHELLS").is_ok_and(|v| !v.is_empty() && v != "0")
-}
-
-/// True if `tool` can be used; false (with a note) if the test should be skipped.
+/// True if `tool` can be used; false (after a skip marker, or a failure when `shell:<tool>` is required) if not.
 fn available(tool: &str) -> bool {
-    if have(tool) {
-        return true;
-    }
-    assert!(!required(), "{tool} is required (AG_REQUIRE_SHELLS is set) but is not installed");
-    eprintln!("skipping: {tool} is not installed");
-    false
+    let reason = if have(tool) { Ok(()) } else { Err(format!("{tool} is not installed")) };
+    ag_testkit::require_component(&format!("shell:{tool}"), &ag_testkit::current_test(), reason).is_some()
 }
 
 fn script(a: &Ag, shell: &str) -> String {
@@ -161,7 +153,11 @@ fn the_copies_shipped_in_docs_reference_are_current() {
     let a = Ag::bare();
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/reference/completions");
     if !dir.is_dir() {
-        eprintln!("skipping: {} is not part of this checkout", dir.display());
+        ag_testkit::skip(
+            "source-tree",
+            &ag_testkit::current_test(),
+            &format!("{} is not part of this checkout (a packaged crate)", dir.display()),
+        );
         return;
     }
     for (shell, file) in SHELLS {

@@ -6,7 +6,8 @@ use std::process::Command;
 
 use ag_agent::registry::KeyStore;
 use ag_crypto::{KeyPair, random_id};
-use ag_policy::{Attestation, CheckResult};
+use ag_policy::presets::{Preset, PresetError, PresetOptions, parse_issuer};
+use ag_policy::{Attestation, CheckResult, Policy};
 use ag_types::{Identity, TreeId};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Subcommand;
@@ -56,6 +57,177 @@ pub enum PolicyCmd {
     },
     /// Print an example policy document.
     Example,
+    /// Ready-made policies: solo, team, agents, strict.
+    #[command(subcommand)]
+    Preset(PresetCmd),
+    /// Say in plain language what a policy allows, requires and refuses.
+    #[command(
+        after_help = "Examples:\n  ag policy explain                  the policy in force\n  ag policy explain policy.json      a document, before you set it\n  ag --json policy explain current   the same sentences as data"
+    )]
+    Explain {
+        /// A policy file, or `current` (the default) for the policy in force.
+        target: Option<String>,
+        /// Stream whose policy `current` means (default: the default stream).
+        #[arg(long)]
+        stream: Option<String>,
+    },
+}
+
+/// What a preset cannot know: who administers the stream and which CI issuer to trust.
+#[derive(clap::Args, Debug, Default, Clone)]
+pub struct PresetFlags {
+    /// Identity pattern allowed to change the policy (repeatable). Default: you.
+    #[arg(long = "admin", value_name = "IDENTITY")]
+    pub admins: Vec<String>,
+    /// Trust this CI issuer to sign the `tests` check: IDENTITY=PUBLIC_KEY, e.g. service:ci=<64 hex digits>.
+    #[arg(long, value_name = "IDENTITY=KEY", conflicts_with = "ci_key")]
+    pub issuer: Option<String>,
+    /// Trust the signing key NAME of this repository (created if missing; `ag validate keygen NAME` makes the
+    /// same key): the issuer becomes service:NAME.
+    #[arg(long, value_name = "NAME")]
+    pub ci_key: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PresetCmd {
+    /// List the presets and who each is for.
+    List,
+    /// Print the policy document a preset makes, and what it means.
+    Show {
+        /// solo, team, agents or strict.
+        name: String,
+        #[command(flatten)]
+        flags: PresetFlags,
+    },
+    /// Store a preset as the stream's next policy version (needs an admin).
+    Apply {
+        /// solo, team, agents or strict.
+        name: String,
+        #[command(flatten)]
+        flags: PresetFlags,
+        /// Stream (default: the default stream).
+        #[arg(long)]
+        stream: Option<String>,
+    },
+}
+
+/// Builds the policy of a preset for the identity `me`. `create_key` allows `--ci-key` to make a missing key (a
+/// repository is needed for that; `repo` is `None` where there is none).
+pub fn build_preset(
+    name: &str,
+    flags: &PresetFlags,
+    me: &Identity,
+    repo: Option<&ag_integrate::Repository>,
+    create_key: bool,
+) -> Result<Policy> {
+    let preset = Preset::parse(name)?;
+    let ci = match (&flags.issuer, &flags.ci_key) {
+        (Some(text), _) => Some(parse_issuer(text).map_err(|e| anyhow!("--issuer: {e}"))?),
+        (None, Some(key)) => {
+            ag_agent::registry::validate_name(key)?;
+            let repo =
+                repo.ok_or_else(|| anyhow!("--ci-key needs a repository (run it inside one, or pass --issuer)"))?;
+            let keys = KeyStore::open(repo.layout().keys_dir())?;
+            let file = format!("issuer-{key}");
+            let pair = if keys.path(&file).is_file() {
+                keys.load(&file)?
+            } else if create_key {
+                keys.create(&file)?
+            } else {
+                bail!(
+                    "there is no key '{key}' in this repository yet; `ag validate keygen {key}` makes one (`ag policy preset apply` does too)"
+                );
+            };
+            Some(ag_policy::TrustedIssuer {
+                identity: Identity::new(format!("service:{key}")).map_err(|e| anyhow!("{e}"))?,
+                public_key: pair.public(),
+            })
+        }
+        (None, None) => None,
+    };
+    let admins = if flags.admins.is_empty() { vec![me.principal().to_string()] } else { flags.admins.clone() };
+    preset.build(&PresetOptions { admins, ci }).map_err(|e| match e {
+        PresetError::NeedsIssuer(n) => anyhow!(
+            "the preset '{n}' requires a passing check on every change, so it needs a trusted CI issuer:\n  \
+             --ci-key ci                        use (or create) this repository's signing key 'ci'\n  \
+             --issuer service:ci=<public key>   or name a key made elsewhere (`ag validate keygen ci` prints one)"
+        ),
+        other => anyhow!(other),
+    })
+}
+
+fn preset_listing() -> Vec<serde_json::Value> {
+    Preset::ALL
+        .iter()
+        .map(|p| json!({"name": p.name(), "for": p.audience(), "needs_ci_issuer": p.requires_ci()}))
+        .collect()
+}
+
+fn print_preset_list(json: bool) -> Result<()> {
+    let rows = preset_listing();
+    crate::ctx::emit(json, &rows, || {
+        let mut t = String::new();
+        for p in Preset::ALL {
+            let _ = writeln!(
+                t,
+                "{:<8} {}{}",
+                p.name(),
+                p.audience(),
+                if p.requires_ci() { "  (needs --ci-key or --issuer)" } else { "" }
+            );
+        }
+        t.push_str("\n`ag policy preset show NAME` prints the document and what it means; `ag policy preset apply NAME` stores it.");
+        t
+    })
+}
+
+fn explained(policy: &Policy) -> (Vec<ag_policy::explain::Statement>, String) {
+    let statements = ag_policy::explain::explain(policy);
+    let text = ag_policy::explain::render(&statements);
+    (statements, text)
+}
+
+/// Commands of `ag policy` that need no repository: the preset catalogue and a policy file's explanation. `None`
+/// when the command needs one.
+pub fn offline(cli: &crate::Cli, cmd: &PolicyCmd) -> Result<Option<u8>> {
+    match cmd {
+        PolicyCmd::Preset(PresetCmd::List) => {
+            print_preset_list(cli.json)?;
+            Ok(Some(exit::OK))
+        }
+        PolicyCmd::Preset(PresetCmd::Show { name, flags }) if flags.ci_key.is_none() => {
+            show_preset(cli.json, name, flags, &crate::ctx::identity(cli)?, None)?;
+            Ok(Some(exit::OK))
+        }
+        PolicyCmd::Explain { target: Some(t), .. } if t != "current" => {
+            let text = std::fs::read_to_string(t).with_context(|| format!("reading {t}"))?;
+            let policy = Policy::parse(&text).with_context(|| format!("{t} is not a valid policy"))?;
+            print_explanation(cli.json, &policy, t, None)?;
+            Ok(Some(exit::OK))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn show_preset(
+    json: bool,
+    name: &str,
+    flags: &PresetFlags,
+    me: &Identity,
+    repo: Option<&ag_integrate::Repository>,
+) -> Result<()> {
+    let policy = build_preset(name, flags, me, repo, false)?;
+    let (statements, text) = explained(&policy);
+    crate::ctx::emit(json, &json!({"preset": name, "policy": policy, "explanation": statements}), || {
+        format!("# preset '{name}'\n{}\n\n{text}", policy.to_json())
+    })
+}
+
+fn print_explanation(json: bool, policy: &Policy, what: &str, version: Option<u64>) -> Result<()> {
+    let (statements, text) = explained(policy);
+    crate::ctx::emit(json, &json!({"source": what, "version": version, "explanation": statements}), || {
+        format!("# {what}\n{text}")
+    })
 }
 
 pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
@@ -105,6 +277,43 @@ pub fn policy(ctx: &Ctx, cmd: &PolicyCmd) -> Result<u8> {
             })?;
         }
         PolicyCmd::Example => crate::ui::print_line(EXAMPLE_POLICY),
+        PolicyCmd::Preset(PresetCmd::List) => print_preset_list(ctx.json)?,
+        PolicyCmd::Preset(PresetCmd::Show { name, flags }) => {
+            show_preset(ctx.json, name, flags, &ctx.me, Some(&ctx.repo))?;
+        }
+        PolicyCmd::Preset(PresetCmd::Apply { name, flags, stream }) => {
+            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            let policy = build_preset(name, flags, &ctx.me, Some(&ctx.repo), true)?;
+            let before = ctx.repo.policy(&s)?.1;
+            let row = ctx.repo.set_policy(&s, &policy.to_json(), &ctx.me)?;
+            ctx.done(&json!({"preset": name, "stream": s, "version": row.version, "hash": row.doc_hash}), || {
+                format!(
+                    "Policy of '{s}' is {} version {} (the preset '{name}', hash {}).\n`ag policy explain` says what it means.{}",
+                    if before == row.version { "unchanged: still" } else { "now" },
+                    row.version,
+                    &row.doc_hash[..12],
+                    if flags.ci_key.is_some() { "\nNext: `ag validate run <proposal> --check tests --key <name> -- <command>` signs the check." } else { "" }
+                )
+            })?;
+        }
+        PolicyCmd::Explain { target, stream } => {
+            let s = stream.clone().unwrap_or_else(|| ctx.default_stream());
+            match target.as_deref() {
+                None | Some("current") => {
+                    let (p, v) = ctx.repo.policy(&s)?;
+                    let what = format!(
+                        "policy v{v} of stream '{s}'{}",
+                        if v == 0 { " (the built-in default; nothing stored yet)" } else { "" }
+                    );
+                    print_explanation(ctx.json, &p, &what, Some(v))?;
+                }
+                Some(file) => {
+                    let text = std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?;
+                    let p = Policy::parse(&text).with_context(|| format!("{file} is not a valid policy"))?;
+                    print_explanation(ctx.json, &p, file, None)?;
+                }
+            }
+        }
     }
     Ok(exit::OK)
 }

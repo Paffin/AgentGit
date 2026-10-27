@@ -43,6 +43,11 @@ impl IntoResponse for ApiError {
             if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
                 resp.headers_mut().insert(header::RETRY_AFTER, v);
             }
+            // `Retry-After` can only say whole seconds (rounded up, so it is never too early); the exact delay
+            // that `retry_after_ms` carries in the body is repeated here for clients that read headers only.
+            if let Ok(v) = HeaderValue::from_str(&self.0.retry_after_ms.to_string()) {
+                resp.headers_mut().insert(HeaderName::from_static("retry-after-ms"), v);
+            }
         }
         if !self.0.request_id.is_empty()
             && let Ok(v) = HeaderValue::from_str(&self.0.request_id)
@@ -81,6 +86,8 @@ pub fn ingress_from_headers(headers: &HeaderMap, remote: Option<String>) -> Ingr
         deadline_ms: get("request-timeout").and_then(|v| v.parse().ok()),
         traceparent: get("traceparent").map(str::to_string),
         remote,
+        forwarded: get("forwarded").map(str::to_string),
+        x_forwarded_for: get("x-forwarded-for").map(str::to_string),
     }
 }
 
@@ -471,6 +478,14 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
                     .dispatch(ing, "objects.put", move |call| async move {
                         a.authorize(&call, &repo, crate::authz::Cap::ObjectsWrite, None).await?;
                         let limit = usize::try_from(a.object_limit(&repo).await?).unwrap_or(usize::MAX);
+                        // The bytes this body may take are reserved from the global budget before any is read:
+                        // what the client announced, or - when it did not say - the most the limit allows.
+                        let announced = request
+                            .headers()
+                            .get(header::CONTENT_LENGTH)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<usize>().ok());
+                        let _held = a.inflight.reserve(announced.map_or(limit, |n| n.min(limit)) as u64)?;
                         let body = http_body_util::Limited::new(request.into_body(), limit)
                             .collect()
                             .await
@@ -1622,6 +1637,7 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     );
 
     crate::jobs_http::add_routes(&mut r, &mut meta);
+    crate::migration::add_routes(&mut r, &mut meta);
 
     (r.with_state(app), meta)
 }

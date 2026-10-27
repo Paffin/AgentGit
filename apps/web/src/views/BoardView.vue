@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import ConnectAgentPanel from '@/components/ConnectAgentPanel.vue'
+import { RouterLink, useRoute } from 'vue-router'
+import GettingStarted from '@/components/GettingStarted.vue'
 import ProposalCard from '@/components/ProposalCard.vue'
 import ActivityFeed from '@/components/board/ActivityFeed.vue'
 import BoardSummary from '@/components/board/BoardSummary.vue'
@@ -13,7 +13,6 @@ import TaskGraph from '@/components/board/TaskGraph.vue'
 import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { shortId } from '@/lib/format'
-import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import Card from '@/ui/Card.vue'
 import EmptyState from '@/ui/EmptyState.vue'
@@ -23,9 +22,8 @@ import RelativeTime from '@/ui/RelativeTime.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
 const board = useBoard()
-const auth = useAuth()
 const { repo } = useRepoName()
-usePageTitle(() => `Live board · ${repo.value}`)
+usePageTitle(() => `Overview · ${repo.value}`)
 
 // A repository nobody has pushed to: the first thing to do is to connect an agent. Only shown when the server said
 // the counts are real (never on a guess) and nothing is open or running.
@@ -36,6 +34,17 @@ const untouched = computed(
     board.repo.changeset_count === 0 &&
     board.load.proposals.status === 'ready' &&
     board.cards.length === 0 &&
+    board.recent.length === 0,
+)
+
+// The checklist stays while the repository is new (or the person just created it) and is not finished.
+const route = useRoute()
+const showStart = computed(
+  () =>
+    board.repo !== null &&
+    !board.repo.counts_error &&
+    board.load.proposals.status === 'ready' &&
+    (untouched.value || route.query.welcome === '1' || board.repo.changeset_count === 0) &&
     board.recent.length === 0,
 )
 
@@ -72,19 +81,21 @@ onBeforeUnmount(() => clearTimeout(giveUp))
 
 <template>
   <div class="board">
-    <h1 class="sr-only">Live board for {{ repo }}</h1>
+    <h1 class="sr-only">Overview of {{ repo }}</h1>
     <BoardSummary />
-    <ConnectAgentPanel v-if="untouched" :repo="repo" :admin="auth.hasRole(repo, 'admin')" />
+    <GettingStarted v-if="showStart" :repo="repo" />
 
     <div class="grid">
       <div class="col main">
         <Card
-          title="Open proposals"
+          title="Open change requests"
           icon="proposal"
-          subtitle="Four independent states each; nothing implies another"
+          subtitle="Each is checked on four separate counts; one being fine does not make another fine"
         >
           <template #actions>
-            <RouterLink :to="`/repos/${repo}/proposals`" class="all">All proposals</RouterLink>
+            <RouterLink :to="`/repos/${repo}/proposals`" class="all"
+              >All change requests</RouterLink
+            >
           </template>
           <div class="cards" data-testid="proposals-panel">
             <template v-if="loadingProposals">
@@ -93,7 +104,7 @@ onBeforeUnmount(() => clearTimeout(giveUp))
             </template>
             <ErrorState
               v-else-if="board.load.proposals.status === 'error' && board.cards.length === 0"
-              what="proposals"
+              what="change requests"
               :error="board.load.proposals.error"
               compact
               @retry="board.refreshAll()"
@@ -101,8 +112,8 @@ onBeforeUnmount(() => clearTimeout(giveUp))
             <EmptyState
               v-else-if="board.cards.length === 0"
               icon="proposal"
-              title="No open proposals"
-              description="When an agent or a person proposes a change it appears here with what is mergeable, validated and approved."
+              title="No open change requests"
+              description="When an agent or a person proposes a change it appears here, with whether it merges cleanly, passed its checks and is approved. To start one yourself, edit a file under Code."
             />
             <TransitionGroup v-else name="card" tag="div" class="stack">
               <ProposalCard
@@ -118,7 +129,7 @@ onBeforeUnmount(() => clearTimeout(giveUp))
           </div>
           <template v-if="board.recent.length" #footer>
             <div class="recent">
-              <span class="faint">Recently integrated</span>
+              <span class="faint">Recently landed</span>
               <ul role="list">
                 <li v-for="p in board.recent.slice(0, 4)" :key="p.id">
                   <RouterLink :to="`/repos/${repo}/proposals/${encodeURIComponent(p.id)}`">{{

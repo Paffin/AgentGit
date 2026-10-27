@@ -13,6 +13,7 @@ import Badge from '@/ui/Badge.vue'
 import Icon from '@/ui/Icon.vue'
 import IdentityLabel from '@/ui/IdentityLabel.vue'
 import RelativeTime from '@/ui/RelativeTime.vue'
+import { conflictLabel } from '@/lib/conflict-label'
 
 const props = defineProps<{
   repo: string
@@ -48,7 +49,7 @@ const reviews = computed(() =>
         v-if="proposal.state !== 'open'"
         size="sm"
         :tone="proposal.state === 'integrated' ? 'ok' : 'neutral'"
-        >{{ proposal.state }}</Badge
+        >{{ proposal.state === 'integrated' ? 'landed' : proposal.state }}</Badge
       >
     </header>
     <p class="meta">
@@ -62,14 +63,14 @@ const reviews = computed(() =>
       <p class="label">Conflicting paths</p>
       <ul role="list">
         <li v-for="c in conflicts.slice(0, 4)" :key="c.path" class="mono">
-          {{ c.path }} <span class="faint">({{ c.message || c.kind }})</span>
+          {{ c.path }} <span class="faint">({{ conflictLabel(c) }})</span>
         </li>
         <li v-if="conflicts.length > 4" class="faint">and {{ conflicts.length - 4 }} more</li>
       </ul>
     </div>
     <BlockerList v-if="blockers.length" :blockers="blockers" :max="3" />
     <p v-else-if="proposal.state === 'open' && prep?.data && !conflicts.length" class="ready">
-      <Icon name="check" :size="14" /> Nothing blocks integration right now.
+      <Icon name="check" :size="14" /> Nothing is in the way. It can land now.
     </p>
     <footer class="foot faint">
       <span v-if="files"><Icon name="file" :size="13" /> {{ plural(files, 'file') }}</span>

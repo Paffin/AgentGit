@@ -85,7 +85,7 @@ const rows = computed(() =>
         icon="check"
         compact
         title="No overlapping work"
-        description="Nobody is editing the same paths. This is a path-level warning; the definitive answer is each proposal’s Mergeable state."
+        description="Nobody is editing the same paths. This is a path-level warning; the definitive answer is each change request’s Merge status."
       />
       <ul v-else class="list" role="list">
         <li v-for="r in rows" :key="r.key" class="ov">

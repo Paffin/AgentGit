@@ -89,7 +89,8 @@ fn the_operator_can_switch_it_off_or_insist_on_it() {
 
     // Required, with a credential that cannot bind (a person's: only an agent binds its own run): refused, and
     // the run that was started for it is ended as failed rather than left behind unbound.
-    let alice = srv.credential("user:alice", REPO, "writer", 3600, &[]);
+    // A person who starts runs for agents is an operator (a plain writer may not: `agent.operate`).
+    let alice = srv.credential("user:alice", REPO, "delegator", 3600, &[]);
     let mut req = Mcp::start(&srv, &alice, &["--repo", REPO, "--run-credentials", "required"]);
     let refused = req.call("run_start", json!({"agent": "coder"}));
     assert!(refused.is_error, "{}", refused.text);

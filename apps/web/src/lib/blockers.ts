@@ -42,9 +42,9 @@ export function explainBlocker(b: Blocker): Explained {
       return {
         ...base,
         title: check
-          ? `Check “${check}” has not passed on this exact tree`
-          : 'A required check has not passed on this exact tree',
-        hint: 'A trusted runner must submit a passing, signed attestation for this tree. A new commit or a moved stream changes the tree, so earlier results do not carry over.',
+          ? `Check “${check}” has not passed on these exact files`
+          : 'A required check has not passed on these exact files',
+        hint: 'A trusted runner must report a passing, signed result for these exact files. A new version or a moved branch changes the files, so earlier results do not carry over.',
       }
     }
     case 'failed_validation': {
@@ -52,9 +52,9 @@ export function explainBlocker(b: Blocker): Explained {
       return {
         ...base,
         title: check
-          ? `Check “${check}” failed on this exact tree`
-          : 'A required check failed on this exact tree',
-        hint: 'A trusted failure cannot be overridden. Fix the code, update the proposal and validate again.',
+          ? `Check “${check}” failed on these exact files`
+          : 'A required check failed on these exact files',
+        hint: 'A trusted failure cannot be overridden. Fix the code, update the change request and run the check again.',
       }
     }
     case 'insufficient_approvals': {
@@ -70,7 +70,7 @@ export function explainBlocker(b: Blocker): Explained {
       return {
         ...base,
         title,
-        hint: 'An eligible reviewer other than the author must approve the current head. Approvals of an older head no longer count.',
+        hint: 'An eligible reviewer other than the author must approve the latest version. Approvals of an older version no longer count.',
       }
     }
     case 'changes_requested':
@@ -82,8 +82,8 @@ export function explainBlocker(b: Blocker): Explained {
     case 'missing_provenance':
       return {
         ...base,
-        title: 'This agent-authored change has no signed provenance',
-        hint: 'The agent must attach a signed provenance record (model, rationale, checks run) for this head.',
+        title: 'This agent’s change has no signed record of where it came from',
+        hint: 'The agent must attach a signed record (model, reason, checks it ran) for this version.',
       }
     case 'lease': {
       const holder = str(d.holder)
@@ -91,29 +91,29 @@ export function explainBlocker(b: Blocker): Explained {
       const stale = str(d.reason).includes('token')
       return {
         ...base,
-        title: `An exclusive lease${scope ? ` on ${scope}` : ''} is held${holder ? ` by ${holder}` : ''}`,
+        title: `An exclusive reservation${scope ? ` on ${scope}` : ''} is held${holder ? ` by ${holder}` : ''}`,
         hint: stale
-          ? 'Integrate with the lease holder’s current fencing token, or wait until the lease is released or expires.'
-          : 'Wait for the lease to be released or to expire.',
+          ? 'Land with the reservation holder’s current key, or wait until the reservation is released or expires.'
+          : 'Wait for the reservation to be released or to expire.',
       }
     }
     case 'actor_not_allowed':
       return {
         ...base,
-        title: 'You are not allowed to integrate this change under the policy',
-        hint: 'Ask someone the policy lists as an integrator. Agents can only integrate inside the autonomy envelope.',
+        title: 'You are not allowed to land this change under the rules',
+        hint: 'Ask someone the rules list as allowed to land changes. Agents can only land changes inside the limits set for them.',
       }
     case 'author_not_allowed':
       return {
         ...base,
-        title: 'The author may not propose to this stream',
-        hint: 'The policy’s allowed_authors does not include the author.',
+        title: 'The author may not propose changes to this branch',
+        hint: 'The rules’ allowed_authors does not include the author.',
       }
     case 'too_many_changed_files':
       return {
         ...base,
-        title: 'The change touches more files than the policy allows',
-        hint: 'Split it into smaller proposals.',
+        title: 'The change touches more files than the rules allow',
+        hint: 'Split it into smaller change requests.',
       }
     default:
       return { ...base, title: b.message || b.code, hint: '' }

@@ -19,6 +19,7 @@ from types import SimpleNamespace
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 sys.dont_write_bytecode = True
+import ag_testkit  # noqa: E402
 import mkdocs_hooks as hooks  # noqa: E402
 
 
@@ -140,8 +141,14 @@ except ImportError:
     HAVE_MKDOCS = False
 
 
-@unittest.skipUnless(HAVE_MKDOCS, "MkDocs is not installed in this Python (docs.yml runs this with the pinned venv)")
 class RealBuild(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # docs.yml runs this with the pinned venv and AG_REQUIRE_COMPONENTS=mkdocs: there a missing MkDocs fails.
+        ag_testkit.require_component(
+            "mkdocs", "test_mkdocs_hooks.RealBuild", HAVE_MKDOCS, "MkDocs is not installed in this Python"
+        )
+
     def build(self, files: dict[str, str]) -> tuple[int, str, Path]:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

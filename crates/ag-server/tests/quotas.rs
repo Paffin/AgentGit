@@ -226,6 +226,14 @@ async fn a_repository_can_limit_the_size_of_one_object_everywhere() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn racing_creates_cannot_pass_the_stream_and_open_proposal_limits() {
+    let srv = TestServer::start().await;
+    assert_eq!(srv.admin().post("/v1/repos", json!({"name": "acme/web"})).await.status, 200);
+    count_quotas_hold_under_concurrent_creates(&srv, "acme/web").await;
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn new_repositories_start_with_the_configured_quota_defaults() {
     let srv = TestServer::start_with(|cfg| {
         cfg.limits.max_total_object_bytes = 1_000_000;
@@ -286,5 +294,93 @@ async fn an_unauthenticated_upload_is_refused_before_its_body_is_read() {
     .await
     .unwrap();
     assert!(answer.starts_with("HTTP/1.1 401"), "the answer came before the body did: {answer:?}");
+    srv.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn uploads_in_flight_share_one_byte_budget_that_is_returned_when_they_end() {
+    let srv = TestServer::start_with(|cfg| {
+        cfg.limits.max_object_bytes = 10_000;
+        cfg.limits.max_inflight_object_bytes = 10_000;
+    })
+    .await;
+    srv.admin().post("/v1/repos", json!({"name": "acme/web"})).await;
+    let addr = srv.base.trim_start_matches("http://").to_string();
+    // A slow upload: 8000 bytes announced, 100 sent, the connection kept open. It holds 8000 of the 10000.
+    let (release, hold) = std::sync::mpsc::channel::<()>();
+    let (ready_tx, ready) = std::sync::mpsc::channel::<()>();
+    let slow = std::thread::spawn(move || {
+        let mut s = TcpStream::connect(&addr).unwrap();
+        let oid = format!("{:0>64}", "cd");
+        let head = format!(
+            "PUT /v1/repos/acme/web/objects/blob_{oid} HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {ADMIN_TOKEN}\r\nContent-Type: application/octet-stream\r\nContent-Length: 8000\r\nConnection: close\r\n\r\n"
+        );
+        s.write_all(head.as_bytes()).unwrap();
+        s.write_all(&[0u8; 100]).unwrap();
+        ready_tx.send(()).unwrap();
+        let _ = hold.recv();
+    });
+    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    let held = {
+        let mut seen = 0;
+        for _ in 0..100 {
+            seen = srv.app.inflight.used();
+            if seen == 8000 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        seen
+    };
+    assert_eq!(held, 8000, "the slow upload holds what it announced");
+
+    // Another upload that would pass the budget is refused before its body is read, with a retry hint.
+    let oid = format!("{:0>64}", "ef");
+    let refused = srv.admin().put_bytes(&format!("/v1/repos/acme/web/objects/blob_{oid}"), vec![1u8; 5000]).await;
+    assert_eq!(refused.status, 503, "{}", refused.json);
+    assert_eq!(refused.json["error"]["code"], "unavailable", "{}", refused.json);
+    assert!(refused.json["error"]["retry_after_ms"].as_i64().unwrap() > 0);
+    assert_eq!(srv.app.inflight.used(), 8000, "a refusal takes nothing");
+    assert!(srv.app.metrics.render().contains("agwp_object_budget_refused_total 1"));
+
+    // One that fits is served (and its bytes come back): 2000 of the 10000 are free.
+    let fits = srv.admin().put_bytes(&format!("/v1/repos/acme/web/objects/blob_{oid}"), vec![1u8; 1500]).await;
+    assert_eq!(
+        fits.status, 400,
+        "it fits the budget, so it is read - and rejected as the garbage it is: {}",
+        fits.json
+    );
+    assert_eq!(srv.app.inflight.used(), 8000);
+
+    // The gRPC upload draws on the same budget, chunk by chunk.
+    let ch = Channel::from_shared(srv.base.clone()).unwrap().connect().await.unwrap();
+    let mut objects = ObjectServiceClient::new(ch);
+    let chunk = |data: Vec<u8>, last: bool| v1::UploadObjectsRequest {
+        repo: "acme/web".into(),
+        chunk: Some(v1::ObjectChunk { object_id: oid.clone(), total_size: 0, data, last }),
+    };
+    let mut req =
+        tonic::Request::new(tokio_stream::iter(vec![chunk(vec![1u8; 1500], false), chunk(vec![1u8; 1500], false)]));
+    req.metadata_mut().insert("authorization", MetadataValue::try_from(format!("Bearer {ADMIN_TOKEN}")).unwrap());
+    let status = objects.upload(req).await.unwrap_err();
+    assert_eq!(
+        ag_protocol::ProtocolError::from_status(&status).code,
+        ag_protocol::ErrorCode::Unavailable,
+        "the second chunk crosses the budget: {status}"
+    );
+    assert_eq!(srv.app.inflight.used(), 8000, "the refused stream returned what it held");
+
+    // The slow upload goes away; the budget is whole again and the same upload is no longer refused for it.
+    release.send(()).unwrap();
+    slow.join().unwrap();
+    for _ in 0..100 {
+        if srv.app.inflight.used() == 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(srv.app.inflight.used(), 0, "an upload that is abandoned returns its bytes");
+    let after = srv.admin().put_bytes(&format!("/v1/repos/acme/web/objects/blob_{oid}"), vec![1u8; 5000]).await;
+    assert_eq!(after.status, 400, "{}", after.json);
     srv.stop().await;
 }

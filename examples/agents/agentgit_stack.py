@@ -4,6 +4,9 @@ and tears it down. Python 3 standard library only.
 Nothing here is simulated: `ag-server` is the production binary on a temporary data directory, and everything is
 done through the same API a person or CI job would use, as the bootstrap administrator.
 """
+
+from __future__ import annotations
+
 import base64
 import json
 import os

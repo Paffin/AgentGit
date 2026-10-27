@@ -4,7 +4,7 @@
 //! schema, PostgreSQL schemas for the repositories and an S3 bucket, and drives them over real sockets, the
 //! way a load balancer's clients would. They run only when both `AG_TEST_POSTGRES_URL` and `AG_TEST_S3_ENDPOINT`
 //! are set (see `scripts/ha-test.sh`, which wraps `scripts/pg-test.sh` and `scripts/s3-test.sh`); with
-//! `AG_REQUIRE_BACKENDS=1` a missing variable fails the test instead of skipping it.
+//! `AG_REQUIRE_COMPONENTS=postgres,s3` a missing variable fails the test instead of skipping it.
 
 mod common;
 
@@ -38,8 +38,16 @@ struct Backends {
 }
 
 fn backends() -> Option<Backends> {
-    let pg_url = ag_storage::testing::postgres_url()?;
-    let s3_endpoint = ag_storage::testing::s3_endpoint()?;
+    let pg_url = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        ag_storage::testing::postgres_url(),
+    )?;
+    let s3_endpoint = ag_testkit::require_here(
+        "s3",
+        "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)",
+        ag_storage::testing::s3_endpoint(),
+    )?;
     let var = |k: &str, d: &str| std::env::var(k).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| d.to_string());
     Some(Backends {
         pg_url,
@@ -214,8 +222,19 @@ struct Cluster {
     replicas: Vec<Replica>,
 }
 
+/// A port nobody listens on. The listener is closed before the replica binds, and the kernel may hand the same
+/// number to the next caller while the first replica is still starting (two replicas of one cluster then fight for
+/// it: "Address already in use"). So no number is given out twice by this process.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    static GIVEN: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
+    let mut given = GIVEN.lock().unwrap();
+    loop {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        if !given.contains(&port) {
+            given.push(port);
+            return port;
+        }
+    }
 }
 
 impl Cluster {

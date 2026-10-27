@@ -4,7 +4,9 @@
 `/metrics` and `/openapi.json`. Everything lives under one data directory (a SQLite *control database*
 with credentials, role bindings and the repository registry; per-repository data unless you configure
 PostgreSQL and S3 — see [postgres-and-s3.md](postgres-and-s3.md)). To try a server on your machine first, with
-roles, credentials, a policy and an agent, follow [Run a team server](../tutorials/team-server.md).
+roles, credentials, a policy and an agent, follow [Run a team server](../tutorials/team-server.md); to see it working in one command,
+`ag-server dev` ([Getting started](../getting-started.md)) makes a throw-away evaluation server on the loopback interface. It is not
+a deployment: plain HTTP, one administrator whose credential lives eight hours, a fixed demo policy.
 
 Three ready-made ways to run it, all under [`deploy/`](../../deploy):
 
@@ -24,7 +26,7 @@ Be clear about what "ready-made" means here.
 | `kustomize build` of every kustomization (base, `ci`, `prometheus-operator`, `ha`); `kubeconform --strict` against Kubernetes 1.30 schemas (and the Prometheus Operator CRDs) | The `prometheus-operator` overlay has never been applied to a cluster (the Operator's CRDs are only schema-checked) |
 | `promtool check rules` / `check config` | Behaviour under load; upgrades and failover of the *cluster*. The server's multi-replica behaviour (kill -9, rolling restart, no lost update) is proved by process tests ([High availability](high-availability.md)); the `ha` overlay has not been applied to a cluster |
 | `docker compose config` with and without secrets (it refuses to start without them) | A cluster other than kind: ingress, TLS termination, a real storage class, a CNI that enforces the NetworkPolicy |
-| Every shipped `ag-server.toml` loads and validates with this server | Published images: nothing has been pushed to GHCR yet, so the default `ghcr.io/paffin/agentgit-server:0.1.0` resolves only after the first release tag; until then build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind). The default tag is the workspace version, which is what `release.yml` pushes; `check_deploy.py` keeps the three defaults equal to it |
+| Every shipped `ag-server.toml` loads and validates with this server | Published images: the `v0.2.0-rc.1` run pushed `ghcr.io/paffin/agentgit-server:0.2.0-rc.1` (multi-arch, anonymously pullable; checked through the registry API, never started from there) but that tag produced no release; the candidate default is `0.3.0-beta.1`; confirm that its images are published before deploying; until then build the image from `deploy/docker/Dockerfile` (the `ci` overlay shows how to use it in kind). The default tag is the workspace version, which is what `release.yml` pushes; `check_deploy.py` keeps the three defaults equal to it |
 | Every metric used by alerts and the dashboard is one the server exports | The release workflow has only been rehearsed without publishing; the first tag is its first real publish ([releasing.md](releasing.md#what-is-not-proven)) |
 | `ag-server healthcheck`, bearer-protected `/metrics` and trace export are covered by integration tests | |
 
@@ -100,7 +102,7 @@ kubectl apply -k deploy/kubernetes/base           # or overlays/prometheus-opera
 kubectl -n agentgit rollout status deploy/ag-server
 ```
 
-The image defaults to the workspace version (`0.1.0`, the `X.Y.Z` tag `release.yml` pushes; `:latest` exists only for a stable release and moves). Override it with `images:` in your own kustomization (`newName`/`newTag`, for a private registry or another release), and expose the Service through
+The image defaults to the workspace version (`0.3.0-beta.1`, the `X.Y.Z` tag `release.yml` pushes; `:latest` exists only for a stable release and moves). Override it with `images:` in your own kustomization (`newName`/`newTag`, for a private registry or another release), and expose the Service through
 your ingress/gateway with TLS. The pod runs as uid 65532 with a read-only root filesystem, no capabilities,
 the `RuntimeDefault` seccomp profile and no service-account token, under the `restricted` Pod Security
 level.
@@ -151,8 +153,11 @@ reap_interval_secs = 0       # > 0: reap every repository this often, audited as
 
 `ag-server admin reap-runs <owner/name> [--stale-after-secs N] [--dry-run]` does the same offline. A reap releases
 the leases of the ended runs, revokes the credentials bound to them and writes `run.abandon` / `lease.reap` audit
-entries; the counter is `agwp_agent_runs_reaped_total` ([observability](observability.md)). Several replicas may
-reap at once: a reap that finds nothing stale changes nothing. See the
+entries; the counter is `agwp_agent_runs_reaped_total` ([observability](observability.md)). From a workstation,
+`ag agent reap --remote [NAME] [--timeout 10m] [--dry-run]` calls the same route (needs `agent.operate`; the server
+enforces its `min_stale_after_secs`). With `reap_interval_secs > 0` on several replicas of one installation, only the
+holder of the `run-reaper` lease (a row of the control database, renewed on every pass, free after two intervals if
+its holder dies or at once on a clean stop) reaps; a reap that finds nothing stale changes nothing anyway. See the
 [agents guide](../guides/agents.md#8-against-a-server-credentials-delegation-and-operators).
 
 ## Upgrading

@@ -2,8 +2,8 @@
 //! connections ("processes"), failure handling, TLS.
 //!
 //! These need a server: run them with `scripts/pg-test.sh cargo test -p agentgit-storage --test postgres`.
-//! Without `AG_TEST_POSTGRES_URL` they print a notice and pass, unless
-//! `AG_REQUIRE_BACKENDS=1`, which makes a missing server a failure.
+//! Without `AG_TEST_POSTGRES_URL` they skip with an `AG-SKIP` marker (`ag-testkit`), unless
+//! `AG_REQUIRE_COMPONENTS` names `postgres`, which makes a missing server a failure.
 #![allow(missing_docs)]
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -17,11 +17,7 @@ use ag_storage::{Clock, ManualClock, SystemClock};
 use ag_types::{Limits, StreamName, Timestamp};
 
 fn url() -> Option<String> {
-    let u = postgres_url();
-    if u.is_none() {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
-    }
-    u
+    ag_testkit::require_here("postgres", "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)", postgres_url())
 }
 
 fn open(url: &str, schema: &str) -> Meta {
@@ -57,7 +53,7 @@ fn opening_twice_at_once_migrates_exactly_once() {
             .collect();
         let metas: Vec<Meta> = handles.into_iter().map(|h| h.join().unwrap()).collect();
         let m = &metas[0];
-        assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+        assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
         let tables = m
             .read(|tx| {
                 tx.raw_query(
@@ -85,6 +81,10 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     let m = open(&url, schema.name());
     m.write(|tx| {
         tx.raw_execute("DROP TABLE jobs", &[])?;
+        tx.raw_execute(
+            "DROP INDEX proposals_by_created, proposals_by_state_created, proposals_by_stream_created",
+            &[],
+        )?;
         tx.raw_execute("UPDATE meta SET value = '1' WHERE key = 'schema'", &[])
     })
     .unwrap();
@@ -92,14 +92,14 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     drop(m);
 
     let m = open(&url, schema.name());
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "data survives the migration");
     let job = m.write(|tx| tx.job_enqueue("k", &serde_json::json!({}), None, Timestamp::from_millis(0))).unwrap();
     assert_eq!(job.attempts, 0, "the jobs table exists again");
 
     m.write(|tx| tx.raw_execute("UPDATE meta SET value = '99' WHERE key = 'schema'", &[])).unwrap();
     let err = Meta::open_postgres(&url, schema.name(), Arc::new(SystemClock), Limits::default()).err().unwrap();
-    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 2 }), "{err}");
+    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 3 }), "{err}");
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn idle_pooled_connections_that_died_are_replaced_transparently() {
         .unwrap();
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(m.write(|tx| tx.next_counter("c")).unwrap(), 4, "the first use after the kill just works");
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
 }
 
 #[test]
@@ -537,11 +537,11 @@ fn a_server_that_refuses_the_login_is_an_unavailable_database_not_an_internal_er
 #[cfg(feature = "tls")]
 fn tls_urls() -> Option<(String, String, String)> {
     let base = url()?;
-    let Ok(ca) = std::env::var("AG_TEST_POSTGRES_CA") else {
-        eprintln!("skipped: AG_TEST_POSTGRES_CA is not set (use scripts/pg-test.sh)");
-        assert!(!ag_storage::testing::backends_required(), "AG_REQUIRE_BACKENDS: no TLS-enabled server");
-        return None;
-    };
+    let ca = ag_testkit::require_here(
+        "postgres:tls",
+        "AG_TEST_POSTGRES_CA is not set (scripts/pg-test.sh provides a TLS-enabled server when openssl is installed)",
+        std::env::var("AG_TEST_POSTGRES_CA").ok(),
+    )?;
     let host_port = base.split('@').nth(1)?.split('/').next()?.to_string();
     let (_, port) = host_port.rsplit_once(':')?;
     let user = "postgres";

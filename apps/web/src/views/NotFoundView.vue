@@ -16,7 +16,7 @@ usePageTitle(() => 'Page not found')
       title="This page does not exist"
       :description="`There is nothing at ${route.fullPath}. It may have moved, or the link is mistyped.`"
     >
-      <Button to="/" variant="primary" icon="home">Go to repositories</Button>
+      <Button to="/" variant="primary" icon="home">Go to your home page</Button>
     </EmptyState>
   </div>
 </template>

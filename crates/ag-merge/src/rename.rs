@@ -19,7 +19,7 @@
 //!
 //! Directory renames are *not* detected as such; they appear as one rename per file.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use ag_diff::{is_binary, split_lines};
 use ag_tree::{Change, Entry, Tree};
@@ -35,6 +35,13 @@ pub const MAX_SIMILARITY_FILE_SIZE: usize = 256 * 1024;
 pub const MAX_SIMILARITY_CANDIDATES: usize = 200;
 /// Most line comparisons (sum over pairs of both files' line counts) spent on similarity matching.
 pub const MAX_SIMILARITY_WORK: usize = 40_000_000;
+
+/// Minimum similarity, in percent, for a file to count as a copy of another (see [`detect_copies`]). Lower than
+/// [`MIN_SIMILARITY`]: a copy is usually edited further than a moved file, and a false copy only labels where lines
+/// came from; it never changes a merge.
+pub const MIN_COPY_SIMILARITY: u32 = 50;
+/// Most candidate sources of a similarity search for copies.
+pub const MAX_COPY_SOURCES: usize = 200;
 
 /// One detected rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,24 +85,8 @@ pub fn detect_renames_in(changes: &[Change], io: &dyn BlobIo) -> Result<Vec<Rena
     let mut used_to: BTreeMap<&RepoPath, ()> = BTreeMap::new();
     let mut found: Vec<Rename> = Vec::new();
 
-    // 1. Exact: identical content (and, for copies, the pairing is by file name then path order).
-    let mut exact: Vec<(&RepoPath, &RepoPath)> = Vec::new();
-    let mut by_content: HashMap<BlobId, Vec<&RepoPath>> = HashMap::new();
-    for (p, e) in &added {
-        by_content.entry(e.content).or_default().push(p);
-    }
-    for (from, e) in &deleted {
-        if let Some(tos) = by_content.get(&e.content) {
-            for to in tos {
-                exact.push((from, to));
-            }
-        }
-    }
-    exact.sort_by(|(af, at), (bf, bt)| pair_order(af, at, bf, bt));
-    for (from, to) in exact {
-        if used_from.contains_key(from) || used_to.contains_key(to) {
-            continue;
-        }
+    // 1. Exact: identical content.
+    for (from, to) in exact_pairs(&deleted, &added) {
         used_from.insert(from, ());
         used_to.insert(to, ());
         found.push(Rename { from: from.clone(), to: to.clone(), similarity: 100 });
@@ -153,6 +144,147 @@ pub fn detect_renames_in(changes: &[Change], io: &dyn BlobIo) -> Result<Vec<Rena
     }
     found.sort_by(|a, b| a.from.cmp(&b.from));
     Ok(found)
+}
+
+/// The exact (identical content) renames: among the deleted and the added files with the same content, pairs chosen
+/// greedily by (same file name first, old path ↑, new path ↑), every path at most once.
+///
+/// Linear in the number of files. Taking the pairs in that order amounts to zipping the sorted old paths with the
+/// sorted new paths, first within each file name and then across the rest, which is what this does; the quadratic
+/// formulation (every deleted file against every added file of the same content) stays in the tests as the
+/// reference this is checked against. It matters for trees full of identical files (empty markers, licence headers)
+/// that a directory move relocates by the thousand.
+pub(crate) fn exact_pairs<'a>(
+    deleted: &[(&'a RepoPath, &Entry)],
+    added: &[(&'a RepoPath, &Entry)],
+) -> Vec<(&'a RepoPath, &'a RepoPath)> {
+    let mut groups: BTreeMap<BlobId, (Vec<&'a RepoPath>, Vec<&'a RepoPath>)> = BTreeMap::new();
+    for (p, e) in deleted {
+        groups.entry(e.content).or_default().0.push(p);
+    }
+    for (p, e) in added {
+        if let Some(g) = groups.get_mut(&e.content) {
+            g.1.push(p);
+        }
+    }
+    let mut out = Vec::new();
+    for (mut froms, mut tos) in groups.into_values() {
+        if froms.is_empty() || tos.is_empty() {
+            continue;
+        }
+        froms.sort();
+        tos.sort();
+        // Same file name first: per name, the i-th old path takes the i-th new path.
+        let mut by_name: BTreeMap<&str, (Vec<&'a RepoPath>, Vec<&'a RepoPath>)> = BTreeMap::new();
+        for f in &froms {
+            by_name.entry(f.file_name()).or_default().0.push(f);
+        }
+        for t in &tos {
+            if let Some(g) = by_name.get_mut(t.file_name()) {
+                g.1.push(t);
+            }
+        }
+        let mut used_f: BTreeMap<&RepoPath, ()> = BTreeMap::new();
+        let mut used_t: BTreeMap<&RepoPath, ()> = BTreeMap::new();
+        for (fs, ts) in by_name.into_values() {
+            for (f, t) in fs.iter().zip(ts.iter()) {
+                used_f.insert(f, ());
+                used_t.insert(t, ());
+                out.push((*f, *t));
+            }
+        }
+        // Then whatever is left, in path order.
+        let rest_f = froms.iter().filter(|f| !used_f.contains_key(*f));
+        let rest_t = tos.iter().filter(|t| !used_t.contains_key(*t));
+        out.extend(rest_f.zip(rest_t).map(|(f, t)| (*f, *t)));
+    }
+    out
+}
+
+/// Finds, for each of `targets` (new files), the file among `sources` it is a **copy** of: identical content, or
+/// else the most similar file of `similar` (a subset of the sources the caller picked) with at least
+/// [`MIN_COPY_SIMILARITY`] percent in common (the same measure as [`detect_renames`]). Unlike a rename a source
+/// stays where it is and may be the source of many copies. The best source wins; ties go to the same file name,
+/// then to the lowest path. The result is ordered by target and a pure function of the inputs.
+///
+/// Work is bounded: similarity is tried only when `similar` and `targets` each hold at most
+/// [`MAX_COPY_SOURCES`] files and the line-comparison budget [`MAX_SIMILARITY_WORK`] suffices; otherwise only
+/// identical content counts. Binary files and files over [`MAX_SIMILARITY_FILE_SIZE`] match exactly or not at all.
+/// `similarity` in the result is 100 for identical content.
+///
+/// Copies are reported by `ag show --copies` and followed by `ag blame --copies`; **no merge uses them**.
+pub fn detect_copies(
+    sources: &[(RepoPath, Entry)],
+    similar: &[(RepoPath, Entry)],
+    targets: &[(RepoPath, Entry)],
+    io: &dyn BlobIo,
+) -> Result<Vec<Rename>, IoError> {
+    let mut out: Vec<Rename> = Vec::new();
+    let mut by_content: BTreeMap<BlobId, Vec<&RepoPath>> = BTreeMap::new();
+    for (p, e) in sources.iter().filter(|(_, e)| e.file_type == FileType::Regular) {
+        by_content.entry(e.content).or_default().push(p);
+    }
+    let better = |to: &RepoPath, a: &RepoPath, b: &RepoPath| {
+        // true if source `a` is preferred over `b` for target `to`
+        let (a_same, b_same) = (a.file_name() == to.file_name(), b.file_name() == to.file_name());
+        b_same.cmp(&a_same).then_with(|| a.cmp(b)).is_lt()
+    };
+    let mut pending: Vec<&(RepoPath, Entry)> = Vec::new();
+    for t in targets.iter().filter(|(_, e)| e.file_type == FileType::Regular) {
+        let best = by_content.get(&t.1.content).and_then(|v| {
+            v.iter().copied().filter(|p| **p != t.0).reduce(|a, b| if better(&t.0, a, b) { a } else { b })
+        });
+        match best {
+            Some(from) => out.push(Rename { from: from.clone(), to: t.0.clone(), similarity: 100 }),
+            None => pending.push(t),
+        }
+    }
+    let similar: Vec<&(RepoPath, Entry)> = similar.iter().filter(|(_, e)| e.file_type == FileType::Regular).collect();
+    if !pending.is_empty()
+        && !similar.is_empty()
+        && similar.len() <= MAX_COPY_SOURCES
+        && targets.len() <= MAX_COPY_SOURCES
+    {
+        let a: Vec<Option<Signature>> = similar.iter().map(|(_, e)| signature_of(e, io)).collect::<Result<_, _>>()?;
+        let b: Vec<Option<Signature>> = pending.iter().map(|(_, e)| signature_of(e, io)).collect::<Result<_, _>>()?;
+        let lines = |v: &[Option<Signature>]| v.iter().flatten().map(|s| s.lines.len()).sum::<usize>();
+        let work = lines(&a)
+            .saturating_mul(b.iter().flatten().count().max(1))
+            .saturating_add(lines(&b).saturating_mul(a.iter().flatten().count().max(1)));
+        if work <= MAX_SIMILARITY_WORK {
+            for (j, (to, _)) in pending.iter().enumerate() {
+                let Some(sb) = &b[j] else { continue };
+                let mut best: Option<(u32, &RepoPath)> = None;
+                for (i, (from, _)) in similar.iter().enumerate() {
+                    let Some(sa) = &a[i] else { continue };
+                    if from == to || similarity_ceiling(sa.bytes, sb.bytes) < MIN_COPY_SIMILARITY {
+                        continue;
+                    }
+                    let score = similarity(sa, sb);
+                    if score < MIN_COPY_SIMILARITY {
+                        continue;
+                    }
+                    best = match best {
+                        Some((bs, bp)) if bs > score || (bs == score && !better(to, from, bp)) => Some((bs, bp)),
+                        _ => Some((score, from)),
+                    };
+                }
+                if let Some((score, from)) = best {
+                    out.push(Rename { from: from.clone(), to: to.clone(), similarity: score });
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| a.to.cmp(&b.to));
+    Ok(out)
+}
+
+fn signature_of(e: &Entry, io: &dyn BlobIo) -> Result<Option<Signature>, IoError> {
+    let data = io.read_blob(&e.content)?;
+    if data.len() > MAX_SIMILARITY_FILE_SIZE || is_binary(&data) || data.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(signature(&data)))
 }
 
 /// Orders candidate pairs: same file name first, then by old path, then by new path.

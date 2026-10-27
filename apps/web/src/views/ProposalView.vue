@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/instance'
 import BlockerList from '@/components/BlockerList.vue'
 import StateStrip from '@/components/StateStrip.vue'
+import ConflictResolver from '@/components/proposal/ConflictResolver.vue'
 import ChangesTab from '@/components/proposal/ChangesTab.vue'
 import IntegrateDialog from '@/components/proposal/IntegrateDialog.vue'
 import ProvenanceTab from '@/components/proposal/ProvenanceTab.vue'
@@ -14,7 +15,10 @@ import ValidationTab from '@/components/proposal/ValidationTab.vue'
 import { useProposalData } from '@/composables/useProposalData'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useRepoName } from '@/composables/useRepoName'
-import { parseIdentity } from '@/lib/identity'
+import { nextStep } from '@/lib/nextstep'
+import { fixesForBlocker, fixesForConflict } from '@/lib/fixes'
+import type { FixId } from '@/lib/fixes'
+import { parseIdentity, samePrincipal } from '@/lib/identity'
 import { shortId, plural } from '@/lib/format'
 import { requirementText } from '@/lib/roles'
 import { useAuth } from '@/stores/auth'
@@ -32,6 +36,7 @@ import RelativeTime from '@/ui/RelativeTime.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import Tabs from '@/ui/Tabs.vue'
 import type { TabItem } from '@/ui/types'
+import { conflictLabel, isDirectoryRenameConflict } from '@/lib/conflict-label'
 
 const props = defineProps<{ id: string }>()
 const { repo } = useRepoName()
@@ -47,7 +52,12 @@ usePageTitle(() => (proposal.value ? `${proposal.value.title} · ${repo.value}` 
 type TabId = 'changes' | 'reviews' | 'validation' | 'provenance' | 'timeline'
 const tab = ref<TabId>('changes')
 const tabs = computed<TabItem<TabId>[]>(() => [
-  { id: 'changes', label: 'Changes', icon: 'diff', count: data.diff.data.value?.files.length },
+  {
+    id: 'changes',
+    label: 'Files changed',
+    icon: 'diff',
+    count: data.diff.data.value?.files.length,
+  },
   {
     id: 'reviews',
     label: 'Reviews',
@@ -56,13 +66,13 @@ const tabs = computed<TabItem<TabId>[]>(() => [
   },
   {
     id: 'validation',
-    label: 'Validation',
+    label: 'Checks',
     icon: 'shield',
     count: data.prep.data.value?.validations.length || undefined,
   },
   {
     id: 'provenance',
-    label: 'Provenance',
+    label: 'Where it came from',
     icon: 'sparkle',
     count: data.provenance.data.value?.length || undefined,
   },
@@ -83,6 +93,28 @@ const task = computed(() =>
 
 // ---- what the caller may do (hints; the server decides) ---------------------------------------------
 const can = (a: Parameters<typeof auth.can>[1]) => auth.can(repo.value, a)
+
+const isAuthor = computed(() =>
+  proposal.value ? samePrincipal(proposal.value.author, auth.identity) : false,
+)
+const fixCtx = computed(() => ({ may: can, isAuthor: isAuthor.value }))
+const planFor = (code: string) => fixesForBlocker(code, fixCtx.value)
+const next = computed(() =>
+  isOpen.value && prepData.value
+    ? nextStep(prepData.value.blockers, prepData.value.conflicts, fixCtx.value)
+    : '',
+)
+const conflictPlan = computed(() => fixesForConflict(fixCtx.value))
+
+// Why an action is off, in words on the page (a tooltip alone is invisible on a phone and to the keyboard).
+const unavailable = computed(() => {
+  const out: string[] = []
+  if (!can('integrate')) out.push(`Land: ${requirementText('integrate').toLowerCase()}.`)
+  if (!can('review')) out.push(`Review: ${requirementText('review').toLowerCase()}.`)
+  if (!can('requestValidation'))
+    out.push(`Run the checks: ${requirementText('requestValidation').toLowerCase()}.`)
+  return out
+})
 
 // ---- actions ----------------------------------------------------------------------------------------
 const reviewing = ref(false)
@@ -159,6 +191,63 @@ async function closeProposal() {
   }
 }
 
+async function copyLink() {
+  const url = window.location.origin + window.location.pathname
+  try {
+    await navigator.clipboard.writeText(url)
+    toasts.ok('Link copied', 'Send it to someone who can review this change request.')
+  } catch {
+    toasts.warn('Could not copy', url)
+  }
+}
+
+function doFix(id: FixId) {
+  switch (id) {
+    case 'validate':
+      void requestValidation()
+      break
+    case 'review':
+      reviewing.value = true
+      break
+    case 'land':
+      integrating.value = true
+      break
+    case 'copy-link':
+      void copyLink()
+      break
+    case 'checks':
+      tab.value = 'validation'
+      break
+    case 'reviews':
+      tab.value = 'reviews'
+      break
+    case 'provenance':
+      tab.value = 'provenance'
+      break
+    case 'conflict':
+      resolving.value = true
+      break
+  }
+}
+
+// A link such as `…/proposals/prop_…?do=review` (from the home page) opens what it names, once, when allowed.
+const route = useRoute()
+const resolving = ref(false)
+let didDo = ''
+function runDo() {
+  const want = typeof route.query.do === 'string' ? route.query.do : ''
+  if (!want || didDo === want || !proposal.value || !isOpen.value) return
+  const ok: FixId[] = ['validate', 'review', 'land', 'checks', 'reviews', 'provenance', 'conflict']
+  if (!ok.includes(want as FixId)) return
+  if (want === 'review' && !(can('review') && !isAuthor.value)) return
+  if (want === 'land' && !can('integrate')) return
+  if (want === 'validate') return // never start work just by opening a link
+  didDo = want
+  doFix(want as FixId)
+}
+watch(() => [proposal.value?.id, isOpen.value, route.query.do], runDo)
+onMounted(runDo)
+
 function changed() {
   board.touched(['proposals', 'streams', 'queue', 'predict'])
   data.refresh()
@@ -169,11 +258,11 @@ function changed() {
   <div class="proposal">
     <div v-if="data.detail.error.value && !proposal">
       <ErrorState
-        what="this proposal"
+        what="this change request"
         :error="data.detail.error.value"
         @retry="data.detail.reload()"
       >
-        <RouterLink :to="`/repos/${repo}/proposals`">All proposals</RouterLink>
+        <RouterLink :to="`/repos/${repo}/proposals`">All change requests</RouterLink>
       </ErrorState>
     </div>
     <div v-else-if="!proposal" class="loading" aria-busy="true">
@@ -185,13 +274,13 @@ function changed() {
     <template v-else>
       <header class="head">
         <p class="crumb">
-          <RouterLink :to="`/repos/${repo}/proposals`">Proposals</RouterLink>
+          <RouterLink :to="`/repos/${repo}/proposals`">Change requests</RouterLink>
           <span class="faint">/</span>
           <code class="mono">{{ shortId(proposal.id, 12) }}</code>
         </p>
         <div class="title-row">
           <h1 data-testid="proposal-title">
-            {{ proposal.title || '(untitled proposal)' }}
+            {{ proposal.title || '(untitled change request)' }}
           </h1>
           <Badge
             :tone="
@@ -202,7 +291,7 @@ function changed() {
                   : 'info'
             "
             data-testid="proposal-state"
-            >{{ proposal.state }}</Badge
+            >{{ proposal.state === 'integrated' ? 'landed' : proposal.state }}</Badge
           >
         </div>
         <ul class="meta" role="list">
@@ -230,7 +319,7 @@ function changed() {
         <p v-if="proposal.description" class="desc">{{ proposal.description }}</p>
       </header>
 
-      <Alert v-if="proposal.state === 'integrated'" tone="ok" title="Integrated">
+      <Alert v-if="proposal.state === 'integrated'" tone="ok" title="Landed">
         This change is in <strong class="mono">{{ proposal.stream }}</strong>
         <template v-if="proposal.integrated_as">
           as <code class="mono">{{ shortId(proposal.integrated_as, 12) }}</code></template
@@ -244,7 +333,7 @@ function changed() {
         >
       </Alert>
       <Alert v-else-if="proposal.state === 'closed'" tone="info" title="Closed"
-        >This proposal was closed without being integrated.</Alert
+        >This change request was closed without landing.</Alert
       >
 
       <Card
@@ -260,6 +349,7 @@ function changed() {
         </template>
         <div class="stand">
           <StateStrip :states="states" />
+          <p v-if="next" class="next" data-testid="next-step"><strong>Next:</strong> {{ next }}</p>
           <div
             v-if="isOpen && prepData && prepData.conflicts.length"
             class="conflicts"
@@ -269,20 +359,38 @@ function changed() {
             <ul role="list">
               <li v-for="c in prepData.conflicts" :key="c.path">
                 <code class="mono">{{ c.path }}</code>
-                <Badge size="sm" tone="bad">{{ c.message || c.kind.replace('_', ' ') }}</Badge>
+                <Badge size="sm" tone="bad">{{ conflictLabel(c) }}</Badge>
               </li>
             </ul>
-            <p class="faint">
-              Nothing guessed: resolve these in the author’s workspace (sync with resolutions) and
-              update the proposal.
+            <p
+              v-if="prepData.conflicts.some(isDirectoryRenameConflict)"
+              class="faint"
+              data-testid="dir-rename-hint"
+            >
+              One side moved a whole directory while the other changed files under its old name; the
+              merge follows such a move only when it is unambiguous and nothing is in the way.
             </p>
+            <p class="faint">
+              Nothing is guessed: someone has to choose, file by file, what the result should be.
+            </p>
+            <div class="fixrow">
+              <Button
+                v-for="f in conflictPlan.fixes"
+                :key="f.id"
+                size="sm"
+                :variant="f.id === 'conflict' ? 'primary' : 'secondary'"
+                :data-testid="`fix-${f.id}`"
+                @click="doFix(f.id)"
+                >{{ f.label }}</Button
+              >
+            </div>
           </div>
           <div v-if="isOpen && blockers.length" class="blockers" data-testid="blockers">
             <h3>What is in the way</h3>
-            <BlockerList :blockers="blockers" hints />
+            <BlockerList :blockers="blockers" hints :plan="planFor" @fix="(id) => doFix(id)" />
           </div>
           <p v-else-if="isOpen && prepData && !prepData.conflicts.length" class="clear">
-            Nothing blocks integration right now.
+            Nothing is in the way. This change request can land now.
           </p>
           <p v-if="isOpen && data.prep.error.value" class="faint">
             Could not recompute: {{ (data.prep.error.value as Error).message }}
@@ -297,7 +405,7 @@ function changed() {
             :disabled-reason="requirementText('integrate')"
             data-testid="act-integrate"
             @click="integrating = true"
-            >Integrate…</Button
+            >Land…</Button
           >
           <Button
             icon="check"
@@ -314,7 +422,7 @@ function changed() {
             :disabled-reason="requirementText('requestValidation')"
             data-testid="act-validate"
             @click="requestValidation"
-            >Request validation</Button
+            >Run the checks</Button
           >
           <Button
             icon="stack"
@@ -336,9 +444,12 @@ function changed() {
             >Close…</Button
           >
         </div>
+        <ul v-if="isOpen && unavailable.length" class="why" data-testid="unavailable">
+          <li v-for="u in unavailable" :key="u">{{ u }}</li>
+        </ul>
       </Card>
 
-      <Tabs v-model="tab" :tabs="tabs" label="Proposal details">
+      <Tabs v-model="tab" :tabs="tabs" label="Change request details">
         <template #changes>
           <ChangesTab
             :diff="data.diff.data.value"
@@ -379,6 +490,13 @@ function changed() {
         </template>
       </Tabs>
 
+      <ConflictResolver
+        v-if="resolving"
+        v-model="resolving"
+        :repo="repo"
+        :proposal="proposal"
+        @done="changed"
+      />
       <ReviewDialog v-model="reviewing" :repo="repo" :proposal="proposal" @done="changed" />
       <IntegrateDialog
         v-model="integrating"
@@ -391,11 +509,11 @@ function changed() {
       />
       <Dialog
         v-model="closing"
-        title="Close this proposal?"
+        title="Close this change request?"
         alert
         size="sm"
         :dismissable="busy !== 'close'"
-        description="It will not be integrated. Reviews and history are kept; you can open a new proposal for the same change."
+        description="It will not land. Reviews and history are kept; you can open a new change request for the same change."
       >
         <template #footer>
           <Button :disabled="busy === 'close'" @click="closing = false">Keep it open</Button>
@@ -404,7 +522,7 @@ function changed() {
             :loading="busy === 'close'"
             data-testid="confirm-close"
             @click="closeProposal"
-            >Close proposal</Button
+            >Close change request</Button
           >
         </template>
       </Dialog>
@@ -422,6 +540,25 @@ function changed() {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+.next {
+  padding: var(--s-2) var(--s-3);
+  background: var(--accent-soft, var(--surface-2));
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+.fixrow {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-top: var(--s-2);
+}
+.why {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
 }
 .head {
   display: flex;

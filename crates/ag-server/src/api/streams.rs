@@ -42,14 +42,10 @@ impl App {
             Cap::StreamCreate,
             Some(&stream_name),
             move |repo, actor| {
-                if max_streams > 0 && repo.meta().read(|tx| tx.list_streams())?.len() as u32 >= max_streams {
-                    return Err(ApiError::new(
-                        ag_protocol::ErrorCode::QuotaExceeded,
-                        format!("this repository is limited to {max_streams} streams"),
-                    ));
-                }
                 let from = if from_rev.is_empty() { None } else { Some(repo.resolve_rev(&from_rev)?) };
-                let row = repo.create_stream(&name, from.as_ref(), actor).map_err(|e| match e {
+                // The limit is counted inside the transaction that inserts the stream.
+                let cap = (max_streams > 0).then_some(u64::from(max_streams));
+                let row = repo.create_stream_capped(&name, from.as_ref(), actor, cap).map_err(|e| match e {
                     ag_integrate::Error::Meta(ag_storage::meta::MetaError::AlreadyExists(m)) => {
                         ApiError::new(ag_protocol::ErrorCode::AlreadyExists, m)
                     }

@@ -10,7 +10,7 @@ is tested, and how you should test changes to it (see [Rehearsing](#rehearsing-a
 | Stage | What happens |
 |---|---|
 | **verify** | `scripts/check_release.py` fails the run unless the tag equals the workspace version in `Cargo.toml` **and** `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section. |
-| **release tooling tests** | `scripts/test_release_scripts.py`: the version check, the archive builder, the Homebrew/Scoop renderer and `install.sh` (with a tampered download, a missing checksum, a wrong platform …). |
+| **release tooling tests** | `scripts/test_release_scripts.py` and `scripts/test_sbom_release.py`: the version check, the archive builder, the Homebrew/Scoop renderer and `install.sh` (with a tampered download, a missing checksum, a wrong platform …). |
 | **tests** | `cargo test --workspace --locked` (with unprivileged user namespaces enabled and the sandbox suites required, as in CI). |
 | **binaries** | `ag`, `ag-server`, `ag-worker` and `ag-mcp` built `--release --locked` natively on Linux x86_64 (`ubuntu-22.04`, so glibc ≥ 2.35), Linux aarch64 (`ubuntu-22.04-arm`), macOS aarch64 and macOS x86_64, and packed by `scripts/package_release.py` into `agentgit-X.Y.Z-<target>.tar.gz` (the four binaries, `LICENSE`, `NOTICE`, `README.md`; the archive is deterministic). Every archive is then **unpacked and run**: the `--version` strings of the first three must carry the version and this commit (`ag-mcp` has no build script: its crate version only), and the end-to-end smoke ([`scripts/e2e_smoke.py`](../../scripts/e2e_smoke.py): create a repository, grant, mint a credential, `ag clone`, snapshot, `ag push`, integrate, read back over HTTP, check metrics) runs against the unpacked `ag-server`. |
 | **sbom** | One CycloneDX 1.5 SBOM per shipped binary (`cargo cyclonedx --describe binaries`, from `Cargo.lock`). |
@@ -63,7 +63,7 @@ gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
 git tag -s vX.Y.Z -m "AgentGit X.Y.Z" && git push origin vX.Y.Z
 ```
 
-For the first release use an `-rc` tag (`v0.1.0-rc.1`): it publishes a pre-release and finds what only a real
+For the first release use an `-rc` tag (`v0.2.0-rc.1`): it publishes a pre-release and finds what only a real
 publish can find (see [What is not proven](#what-is-not-proven)).
 
 ## Verifying what you downloaded
@@ -211,12 +211,11 @@ is done, verify releases through the attestations, not by rebuilding.
 
 The rehearsal runs everything but the writes. These have therefore **never run**:
 
-* `docker push` of each architecture by digest to GHCR, the registry-side merge there, the `:latest` tag, and
-  the attestation of the images (`push-to-registry`). The merge logic itself is exercised against a local
-  registry; GHCR permissions (package visibility, `packages: write` for the workflow) are not.
-* `gh release create` with the assembled files, and the release page that users see.
-* `install.sh` and `gh attestation verify` against real release URLs (the rehearsal uses a `file://` base URL;
-  `releases/latest` redirect lookup is untested because no release exists).
+* The `:latest` tag on GHCR (a pre-release does not move it) and `releases/latest` lookup by `install.sh` (only
+  pre-releases exist). Push by digest, the registry-side merge, `gh release create` and `install.sh` against real
+  release URLs ran for real in the rc.2 run, see [Evidence](#evidence).
+* A person's `gh attestation verify` of the **archives** (the workflow verifies them in its run). The owner has run it
+  for both images, see [Evidence](#evidence).
 * npm and PyPI trusted publishing (needs the one-time registry setup above), and any crates.io publish.
 * A Homebrew tap, a Scoop bucket, a Windows archive, musl/Alpine, 32-bit and FreeBSD builds.
 
@@ -226,6 +225,38 @@ GitHub's attestations; shell completions and man pages are not generated yet (th
 `completions/` and `man/` as soon as they exist).
 
 ## Evidence
+
+The first real run, `v0.2.0-rc.1` ([run 39299147314](https://github.com/Paffin/AgentGit/actions/runs/39299147314),
+commit `bd0442e`), **failed** in `assemble the release`, step *Release notes from the CHANGELOG*:
+`'0.2.0-rc.1' is not a version tag like v1.2.3`. The rehearsal passes `--dry-run`, which accepts a bare
+version; a real run does not, and nothing had exercised that combination. Fixed in `202fbdd`: the notes step passes
+`v$VERSION`, and a test fails on a bare version in any `check_release.py` call in `release.yml`. `gh release create`
+also falls back to `upload --clobber` + `edit` when a release page already exists (the GitHub UI creates an empty one
+together with a tag, as happened for rc.1). `v0.2.0-rc.1` stays as it is: no assets, no notes.
+
+The second real run, `v0.2.0-rc.2` ([run 39434938489](https://github.com/Paffin/AgentGit/actions/runs/39434938489),
+commit `0ad4753`), **succeeded in all 15 jobs** and published the pre-release
+[v0.2.0-rc.2](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): four archives, three SBOMs (`ag`,
+`ag-server`, `ag-worker`; none for `ag-mcp`), `SHA256SUMS`, `agentgit.rb`.
+
+What the published rc.2 proved (checked afterwards from outside the workflow, on 2026-10-20, with the downloaded files):
+
+| Check | Result |
+|---|---|
+| `sha256sum -c SHA256SUMS` on the downloaded files | all 7 listed files OK (`agentgit.rb` is not listed) |
+| SBOMs | valid CycloneDX 1.5 JSON, 305 / 333 / 209 components, root version `0.2.0-rc.2` |
+| linux x86_64 archive | `ag`, `ag-server`, `ag-worker` report `0.2.0-rc.2 (0ad475333ee2 …)`; `ag doctor` passes; the README quick start (`init`, `snapshot`, `propose`, `integrate`, `log`) works; `ag-server` `create-repo`/`grant`/`mint`/`serve`, `/healthz` 200, `/readyz` 200, `ag clone`, `ag push --title …`, `/metrics` work |
+| `scripts/install.sh --version 0.2.0-rc.2` against the real release URL | `--dry-run` installs nothing; the real run checks the checksum and installs four working binaries; also works piped from `raw.githubusercontent.com` |
+| GHCR, anonymous | `agentgit-server:0.2.0-rc.2` and `agentgit-cli:0.2.0-rc.2` are OCI indexes with linux/amd64 + linux/arm64 (+ attestation manifests) |
+| Attestations | the attestations API returns SLSA provenance v1 for the archives and for both image digests, naming `release.yml` at `refs/tags/v0.2.0-rc.2`; subject digests match the downloaded files |
+| `install.sh` in the run | success on Linux x86_64, Linux aarch64 and macOS, against the assembled release |
+| `gh attestation verify oci://ghcr.io/paffin/agentgit-server:0.2.0-rc.2` and the same for `agentgit-cli`, **by the owner** with a logged-in `gh` | both verified: SLSA provenance v1, built by `.github/workflows/release.yml` at `refs/tags/v0.2.0-rc.2` in `Paffin/AgentGit` |
+
+Not verified by that pass: `gh attestation verify` of the **archives** (the agent environment has no working `gh`
+login; the owner later verified the two images, the archives' signatures were only inspected, and the workflow
+verified them inside the run); the macOS and aarch64 archives were not run outside CI; the images were not pulled
+or started from GHCR; the Homebrew formula was not installed; there is no SBOM for `ag-mcp`; `install.sh` without `--version` cannot work while only pre-releases exist (`releases/latest`
+skips them). Details: `dev/handoff/release-rc2.md`.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow
 runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab with their uploaded artifacts.

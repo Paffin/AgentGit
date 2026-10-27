@@ -2,7 +2,7 @@
 //! PostgreSQL and S3, and that nothing secret ends up in the file.
 //!
 //! The tests that need a server skip without `AG_TEST_POSTGRES_URL` /
-//! `AG_TEST_S3_ENDPOINT` (and fail with `AG_REQUIRE_BACKENDS=1`).
+//! `AG_TEST_S3_ENDPOINT` (and fail with `AG_REQUIRE_COMPONENTS=postgres,s3`).
 #![allow(missing_docs)]
 
 mod common;
@@ -113,8 +113,11 @@ fn a_typo_in_the_storage_section_is_an_error_not_a_silent_default() {
 
 #[test]
 fn a_postgres_repository_is_created_reopened_and_cannot_be_initialized_twice() {
-    let Some(url) = postgres_url() else {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
+    let Some(url) = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        postgres_url(),
+    ) else {
         return;
     };
     let schema = TempSchema::new(&url);
@@ -176,8 +179,13 @@ fn a_postgres_repository_is_created_reopened_and_cannot_be_initialized_twice() {
 #[cfg(feature = "s3")]
 #[test]
 fn an_s3_repository_keeps_no_objects_locally_and_survives_reopen() {
-    if ag_storage::testing::s3_endpoint().is_none() {
-        eprintln!("skipped: AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)");
+    if ag_testkit::require_here(
+        "s3",
+        "AG_TEST_S3_ENDPOINT is not set (use scripts/s3-test.sh)",
+        ag_storage::testing::s3_endpoint(),
+    )
+    .is_none()
+    {
         return;
     }
     let dir = tempdir();

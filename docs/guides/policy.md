@@ -15,6 +15,44 @@ Documents are parsed strictly: **unknown fields are rejected** (a typo must not 
 and policies that could never be satisfied are rejected on load (for example a required validation with no
 `trusted_issuers`).
 
+## Start from a preset
+
+You do not have to write the first policy. Four presets are built in; each makes an ordinary policy document
+(the same one `ag policy set` would store, parsed by the same parser), which you can edit afterwards.
+
+```bash
+ag policy preset list                    # what each is for
+ag policy preset show agents             # the document it makes, and what it means in plain language
+ag policy preset apply agents            # store it as the stream's next policy version (needs an admin)
+ag init --preset team                    # or choose one when the repository is made
+ag policy explain                        # the plain-language reading of the policy in force
+ag policy explain policy.json            # ... or of a file, before you set it
+```
+
+| Preset | For | In short |
+|---|---|---|
+| `solo` | one person, with or without agents | your own changes land at once; an agent's change needs your approval; an agent never lands anything itself |
+| `team` | people who review each other | every change needs one approval from somebody else |
+| `agents` | people and agents together | your changes land at once; an agent's change needs a person's approval, except documentation (`docs/**`, `**/*.md`, at most 10 files) which it may land itself; agent changes carry signed provenance; `.github/**`, `SECURITY.md`, `deploy/**` and `LICENSE` need an approval from somebody else |
+| `strict` | code where every change needs two reviewers and a passing check | two approvals (three for the sensitive paths above), a passing check no older than a day, signed provenance for agents, no agent autonomy, at most 200 files per change |
+
+The table is a summary: **`ag policy explain` is the authority**. It does not read a hand-written description of the
+preset; it reads the policy document and builds every sentence from its fields, so what it says is what the
+evaluator enforces (a test runs both on the same cases).
+
+What a preset cannot know it takes as options:
+
+- `--admin IDENTITY` (repeatable): who may change the policy afterwards. The default is you; `solo` leaves it open to any user.
+- `--ci-key NAME` or `--issuer IDENTITY=PUBLIC_KEY`: the CI issuer trusted to sign the check `tests`. With one, `solo`,
+  `team` and `agents` also require that check on every change, and `strict` can be built at all (it always requires
+  it). `--ci-key ci` uses the signing key `ci` of this repository and creates it if it is missing, so
+  `ag validate run <proposal> --check tests --key ci -- <command>` works straight away; `--issuer` names a key made elsewhere
+  (`ag validate keygen ci` prints one).
+
+On a server: `ag remote policy main --preset team` (your clone's identity and credential), or, with the server stopped,
+`ag-server admin policy-preset acme/web team --admin user:alice`.
+Applying the same preset again changes nothing (no new version, and so no attestation is invalidated).
+
 ## Default (no policy stored)
 
 Anyone who is not an agent may integrate; no validation, no approvals, no limits. Agents cannot integrate on

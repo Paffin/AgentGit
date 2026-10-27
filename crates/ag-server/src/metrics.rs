@@ -26,15 +26,39 @@ pub struct Metrics {
     pub object_bytes_in: IntCounter,
     /// Object bytes sent to clients.
     pub object_bytes_out: IntCounter,
+    /// Object bytes held in memory by uploads in progress (see `limits.max_inflight_object_bytes`).
+    pub inflight_object_bytes: IntGauge,
+    /// Uploads refused because the in-flight byte budget was used up.
+    pub object_budget_refused: IntCounter,
     /// Repositories currently open.
     pub open_repos: IntGauge,
     /// Open event subscriptions.
     pub subscriptions: IntGauge,
+    /// Outbox events (derived data to build after a commit) still pending, over all repositories (health scan).
+    pub derive_pending: IntGauge,
+    /// Repositories whose last post-commit derive pass was incomplete (health scan).
+    pub derive_failing_repos: IntGauge,
+    /// Pins, open proposals and workspaces pointing at a changeset that cannot be read, by kind (health scan).
+    pub dangling_refs: IntGaugeVec,
+    /// Repositories the last health scan could not read.
+    pub health_unreadable_repos: IntGauge,
+    /// When the last health scan finished (seconds since the epoch; 0 = none yet).
+    pub health_scan_time: IntGauge,
     /// Execution-plane job events since start: enqueued, claimed, succeeded, retried, failed. `retried` and
     /// `failed` also count the jobs taken back because a worker's lease ran out (see `job.expire`).
     pub job_events: IntCounterVec,
     /// Queued jobs in repositories known to have work (refreshed on scrape).
     pub jobs_queued: IntGauge,
+    /// Estimated bytes of decoded trees held in memory (budget: `repos.tree_cache_bytes`).
+    pub tree_cache_bytes: IntGauge,
+    /// Decoded trees held in memory.
+    pub tree_cache_entries: IntGauge,
+    /// Tree lookups answered from memory.
+    pub tree_cache_hits: IntCounter,
+    /// Tree lookups not found in memory.
+    pub tree_cache_misses: IntCounter,
+    /// Trees dropped from memory to stay inside the budget.
+    pub tree_cache_evictions: IntCounter,
     /// Agent runs ended as abandoned by a reap (an operator's `ReapRuns`, or `agents.reap_interval_secs`).
     pub runs_reaped: IntCounter,
     /// Seconds since the server started.
@@ -86,11 +110,48 @@ impl Metrics {
                 .expect("metric");
         let object_bytes_in = IntCounter::new("object_bytes_received_total", "Object bytes received").expect("metric");
         let object_bytes_out = IntCounter::new("object_bytes_sent_total", "Object bytes sent").expect("metric");
+        let inflight_object_bytes =
+            IntGauge::new("inflight_object_bytes", "Object bytes held in memory by uploads in progress")
+                .expect("metric");
+        let object_budget_refused = IntCounter::new(
+            "object_budget_refused_total",
+            "Uploads refused because the in-flight object byte budget was used up",
+        )
+        .expect("metric");
+        let derive_pending =
+            IntGauge::new("derive_pending_events", "Outbox events still pending, over all repositories")
+                .expect("metric");
+        let derive_failing_repos = IntGauge::new(
+            "derive_failing_repositories",
+            "Repositories whose last post-commit derive pass was incomplete",
+        )
+        .expect("metric");
+        let dangling_refs = IntGaugeVec::new(
+            Opts::new("dangling_refs", "References that point at a changeset that cannot be read, by kind"),
+            &["kind"],
+        )
+        .expect("metric");
+        let health_unreadable_repos =
+            IntGauge::new("health_scan_unreadable_repositories", "Repositories the last health scan could not read")
+                .expect("metric");
+        let health_scan_time =
+            IntGauge::new("health_scan_timestamp_seconds", "When the last health scan finished (0 = none yet)")
+                .expect("metric");
         let open_repos = IntGauge::new("open_repositories", "Repositories currently open").expect("metric");
         let subscriptions = IntGauge::new("event_subscriptions", "Open event subscriptions").expect("metric");
         let job_events = IntCounterVec::new(Opts::new("job_events_total", "Execution-plane job events"), &["event"])
             .expect("metric");
         let jobs_queued = IntGauge::new("jobs_queued", "Queued execution-plane jobs").expect("metric");
+        let tree_cache_bytes =
+            IntGauge::new("tree_cache_bytes", "Estimated bytes of decoded trees held in memory").expect("metric");
+        let tree_cache_entries = IntGauge::new("tree_cache_entries", "Decoded trees held in memory").expect("metric");
+        let tree_cache_hits =
+            IntCounter::new("tree_cache_hits_total", "Tree lookups answered from memory").expect("metric");
+        let tree_cache_misses =
+            IntCounter::new("tree_cache_misses_total", "Tree lookups not found in memory").expect("metric");
+        let tree_cache_evictions =
+            IntCounter::new("tree_cache_evictions_total", "Trees dropped from memory to stay inside the budget")
+                .expect("metric");
         let runs_reaped =
             IntCounter::new("agent_runs_reaped_total", "Agent runs ended as abandoned by a reap").expect("metric");
         let uptime = IntGauge::new("uptime_seconds", "Seconds since start").expect("metric");
@@ -138,10 +199,22 @@ impl Metrics {
             Box::new(integrations.clone()),
             Box::new(object_bytes_in.clone()),
             Box::new(object_bytes_out.clone()),
+            Box::new(inflight_object_bytes.clone()),
+            Box::new(object_budget_refused.clone()),
+            Box::new(derive_pending.clone()),
+            Box::new(derive_failing_repos.clone()),
+            Box::new(dangling_refs.clone()),
+            Box::new(health_unreadable_repos.clone()),
+            Box::new(health_scan_time.clone()),
             Box::new(open_repos.clone()),
             Box::new(subscriptions.clone()),
             Box::new(job_events.clone()),
             Box::new(jobs_queued.clone()),
+            Box::new(tree_cache_bytes.clone()),
+            Box::new(tree_cache_entries.clone()),
+            Box::new(tree_cache_hits.clone()),
+            Box::new(tree_cache_misses.clone()),
+            Box::new(tree_cache_evictions.clone()),
             Box::new(runs_reaped.clone()),
             Box::new(uptime.clone()),
             Box::new(trace_exported.clone()),
@@ -168,10 +241,22 @@ impl Metrics {
             integrations,
             object_bytes_in,
             object_bytes_out,
+            inflight_object_bytes,
+            object_budget_refused,
+            derive_pending,
+            derive_failing_repos,
+            dangling_refs,
+            health_unreadable_repos,
+            health_scan_time,
             open_repos,
             subscriptions,
             job_events,
             jobs_queued,
+            tree_cache_bytes,
+            tree_cache_entries,
+            tree_cache_hits,
+            tree_cache_misses,
+            tree_cache_evictions,
             runs_reaped,
             uptime,
             trace_exported,

@@ -5,7 +5,8 @@
 //!
 //! * `AG_OCI_RUNTIME` — `docker`, `podman` or a path (default `docker`);
 //! * `AG_OCI_IMAGE` — a digest-pinned BusyBox image that is already in the runtime's local store;
-//! * `AG_REQUIRE_OCI=1` — a host that cannot run them fails instead of skipping (CI sets it).
+//! * `AG_REQUIRE_COMPONENTS=oci:docker` (or `oci:podman`) — a host that cannot run them fails instead of
+//!   skipping (CI sets it).
 //!
 //! The first test is the one that would have caught the container user not being able to write `/work` for a
 //! worker that is not root: the check writes to the tree it was given.
@@ -14,7 +15,6 @@
 
 mod common;
 
-use std::io::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -36,13 +36,12 @@ struct Real {
 
 fn real(test: &str) -> Option<Real> {
     let guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let required = std::env::var("AG_REQUIRE_OCI").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"));
+    let runtime = std::env::var("AG_OCI_RUNTIME").ok().filter(|r| !r.trim().is_empty()).unwrap_or("docker".into());
+    let component = ag_testkit::oci_component(&runtime);
     let skip = |why: String| {
-        assert!(!required, "AG_REQUIRE_OCI is set, but {test} cannot run on this host: {why}");
-        let _ = writeln!(std::io::stderr(), "SKIP {test}: {why}");
+        ag_testkit::skip(&component, test, &why);
         None
     };
-    let runtime = std::env::var("AG_OCI_RUNTIME").ok().filter(|r| !r.trim().is_empty()).unwrap_or("docker".into());
     let Ok(image) = std::env::var("AG_OCI_IMAGE") else {
         return skip("AG_OCI_IMAGE (a digest-pinned BusyBox image in the local store) is not set".into());
     };

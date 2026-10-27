@@ -104,7 +104,7 @@ impl App {
         };
         self.with_repo(call, require(&req.repo, "repo")?, Cap::HistoryRead, None, move |repo, _| {
             let id = super::resolve(repo, &rev)?;
-            let b = repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits, range })?;
+            let b = repo.blame(&id, &path, &ag_integrate::BlameOptions { max_commits, range, copies: false })?;
             Ok(v1::BlameResponse {
                 rev: b.rev.to_string(),
                 path: b.path,

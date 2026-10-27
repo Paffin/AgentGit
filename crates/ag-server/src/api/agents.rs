@@ -12,10 +12,15 @@ use ag_protocol::v1;
 use ag_storage::meta::{MetaError, TaskRow, Tx};
 use ag_types::{ChangesetId, Identity, IdentityKind, Timestamp};
 
-use super::{convert, keyed, page_size, parse_id, require};
+use super::{IDEM_TIME_PREFIX, Idem, convert, keyed, padded_ms, page_size, parse_id, require};
 use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
+
+/// Records one sweep deletes per repository (a bound on the length of its write transaction).
+const SWEEP_BATCH: usize = 1000;
+/// Marks a repository whose idempotency records written before they carried a time have been dated.
+const IDEM_BACKFILL_DONE: &str = "backfill:idem-times";
 
 /// An agent principal may only act for itself; humans and services (an
 /// orchestrator, an operator) may act for any agent.
@@ -25,6 +30,19 @@ fn check_agent_scope(actor: &Identity, agent_name: &str) -> ApiResult<()> {
         return Err(ApiError::denied(format!("{p} may not act for agent '{agent_name}'")));
     }
     Ok(())
+}
+
+/// Acting on an agent's run is the agent's own business - or an operator's. An agent principal is held to its own
+/// runs by [`check_agent_scope`]; anyone else (a human, a service: a plain `writer`) acts for an agent only with
+/// `agent.operate`, which the `delegator` and `admin` roles carry.
+fn check_operator_for(actor: &Identity, agent_name: &str, operator: bool, what: &str) -> ApiResult<()> {
+    let p = actor.principal();
+    if operator || (p.kind() == IdentityKind::Agent && p.name() == agent_name) {
+        return Ok(());
+    }
+    Err(ApiError::denied(format!(
+        "{p} is not agent '{agent_name}': {what} for another agent requires the capability agent.operate"
+    )))
 }
 
 /// The run an actor acts as (`agent:bot#run_...`), if it acts as one.
@@ -75,6 +93,70 @@ fn record_from_wire(r: &v1::ProvenanceRecord) -> ApiResult<ProvenanceRecord> {
 }
 
 impl App {
+    /// The lifetime of idempotency records and the time to judge them by.
+    fn idem(&self) -> Idem {
+        let ttl_ms = self.cfg.repos.idempotency_ttl_secs.saturating_mul(1000);
+        Idem { ttl_ms: i64::try_from(ttl_ms).unwrap_or(i64::MAX), now_ms: self.clock.now().as_millis() }
+    }
+
+    /// Deletes the idempotency records older than `repos.idempotency_ttl_secs` from every repository (at most
+    /// `SWEEP_BATCH` per repository and pass; the next pass takes the rest). Returns how many were removed. A
+    /// repository that cannot be read is logged and skipped.
+    pub async fn sweep_idempotency_records(&self) -> usize {
+        let idem = self.idem();
+        if idem.ttl_ms <= 0 {
+            return 0;
+        }
+        let control = self.control.clone();
+        let names = match tokio::task::spawn_blocking(move || control.all_repos()).await {
+            Ok(Ok(rows)) => rows.into_iter().map(|r| r.name).collect::<Vec<_>>(),
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e.0.message, "idempotency sweep: cannot list the repositories");
+                return 0;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "idempotency sweep: the listing task failed");
+                return 0;
+            }
+        };
+        let mut removed = 0;
+        for name in names {
+            let app = self.0.clone();
+            let repo = name.clone();
+            let swept = tokio::task::spawn_blocking(move || -> ApiResult<usize> {
+                let handle = app.repos.handle(&repo)?;
+                let bound = padded_ms(idem.now_ms.saturating_sub(idem.ttl_ms));
+                Ok(handle.meta().write(|tx| {
+                    // Records written before they carried a time can never be judged; once per repository they get
+                    // the time of this first sweep, so they live one more lifetime and are then removed.
+                    if tx.meta_get(IDEM_BACKFILL_DONE)?.is_none() {
+                        let n = tx.meta_fill_companions("idem:", IDEM_TIME_PREFIX, &padded_ms(idem.now_ms))?;
+                        tx.meta_set(IDEM_BACKFILL_DONE, "1")?;
+                        if n > 0 {
+                            tracing::info!(repo = %repo, records = n, "idempotency sweep: dated records that had no time");
+                        }
+                    }
+                    let stale = tx.meta_keys_with_value_below(IDEM_TIME_PREFIX, &bound, SWEEP_BATCH)?;
+                    for time_key in &stale {
+                        tx.meta_delete(time_key)?;
+                        tx.meta_delete(&format!("idem:{}", &time_key[IDEM_TIME_PREFIX.len()..]))?;
+                    }
+                    Ok(stale.len())
+                })?)
+            })
+            .await;
+            match swept {
+                Ok(Ok(n)) => removed += n,
+                Ok(Err(e)) => tracing::warn!(repo = %name, error = %e.0.message, "idempotency sweep: skipped"),
+                Err(e) => tracing::error!(repo = %name, error = %e, "idempotency sweep: the task failed"),
+            }
+        }
+        if removed > 0 {
+            tracing::info!(records = removed, "idempotency sweep: expired records removed");
+        }
+        removed
+    }
+
     /// Registers an agent and its public key.
     pub async fn register_agent(&self, call: &Call, req: v1::RegisterAgentRequest) -> ApiResult<v1::Agent> {
         let name = require(&req.name, "name")?.to_string();
@@ -109,8 +191,12 @@ impl App {
         let agent = require(&req.agent, "agent")?.to_string();
         let task = (!req.task_id.is_empty()).then(|| req.task_id.clone());
         let key = req.idempotency_key.clone();
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
+        let idem = self.idem();
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo_mut(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
             check_agent_scope(actor, &agent)?;
+            check_operator_for(actor, &agent, operator, "starting a run")?;
             // A run does not start runs: one acting as a run - a run-bound credential, or `ag-run` - would be
             // making a second identity for its agent. Runs are started with the agent's own credential, or by
             // an operator.
@@ -118,7 +204,7 @@ impl App {
                 return Err(ApiError::denied(format!("{actor} acts as run '{run}' and may not start another run")));
             }
             let request = format!("start_run\0{actor}\0{agent}\0{}", task.as_deref().unwrap_or(""));
-            keyed(repo, "run.start", &key, &request, |claim| {
+            keyed(repo, idem, "run.start", &key, &request, |claim| {
                 let (_, response) = start_run_with(repo.meta(), &agent, task.as_deref(), |tx, run| {
                     let row = tx.run(&run.run_id)?.ok_or_else(|| MetaError::Corrupt("run vanished".into()))?;
                     let response = convert::run(&row);
@@ -135,12 +221,15 @@ impl App {
         repo: &ag_integrate::Repository,
         run_id: &str,
         actor: &Identity,
+        operator: bool,
+        what: &str,
     ) -> ApiResult<ag_storage::meta::RunRow> {
         let run = repo
             .meta()
             .read(|tx| tx.run(run_id))?
             .ok_or_else(|| ApiError::not_found(format!("run '{run_id}' not found")))?;
         check_agent_scope(actor, &run.agent)?;
+        check_operator_for(actor, &run.agent, operator, what)?;
         // Acting as one run is not acting as another: the heartbeat and the end of a run are its own.
         if let Some(acting) = acting_run(actor)
             && acting != run_id
@@ -153,8 +242,10 @@ impl App {
     /// Records a heartbeat of a run.
     pub async fn heartbeat(&self, call: &Call, req: v1::HeartbeatRequest) -> ApiResult<v1::HeartbeatResponse> {
         let now = self.clock.now().as_millis();
-        self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRun, None, move |repo, actor| {
-            Self::check_run_owner(repo, &req.run_id, actor)?;
+        let repo_name = require(&req.repo, "repo")?.to_string();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
+            Self::check_run_owner(repo, &req.run_id, actor, operator, "a heartbeat")?;
             heartbeat(repo.meta(), &req.run_id)?;
             Ok(v1::HeartbeatResponse { server_time_ms: now })
         })
@@ -166,9 +257,10 @@ impl App {
     pub async fn complete_run(&self, call: &Call, req: v1::CompleteRunRequest) -> ApiResult<v1::Run> {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let run_id = req.run_id.clone();
+        let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
         let out = self
             .with_repo_mut(call, &repo_name, Cap::AgentRun, None, move |repo, actor| {
-                Self::check_run_owner(repo, &req.run_id, actor)?;
+                Self::check_run_owner(repo, &req.run_id, actor, operator, "finishing a run")?;
                 let summary = (!req.summary.is_empty()).then_some(req.summary.as_str());
                 finish_run_as(repo.meta(), &req.run_id, &req.status, summary, Some(actor.as_str()))?;
                 let row =
@@ -235,6 +327,22 @@ impl App {
     /// Reaps every registered repository on behalf of the server itself (`agents.reap_interval_secs`). A
     /// repository that cannot be read is logged and skipped; the next pass tries again.
     pub async fn reap_all_repos(&self) {
+        // One replica at a time: the lease is renewed by its holder on every pass and expires after two intervals if
+        // the holder dies. A control database that cannot be asked skips the pass (the next one tries again).
+        let (control, holder) = (self.control.clone(), self.lease_holder.clone());
+        let ttl = std::time::Duration::from_secs(self.cfg.agents.reap_interval_secs.saturating_mul(2).max(2));
+        match tokio::task::spawn_blocking(move || control.try_lease(crate::app::RUN_REAPER_LEASE, &holder, ttl)).await {
+            Ok(Ok(true)) => {}
+            Ok(Ok(false)) => return,
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e.0.message, "run reaper: cannot take the lease");
+                return;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "run reaper: the lease task failed");
+                return;
+            }
+        }
         let Ok(stale_after) = i64::try_from(self.cfg.agents.run_stale_after_secs.saturating_mul(1000)) else {
             return;
         };
@@ -286,6 +394,7 @@ impl App {
 
     /// Creates a task (with dependencies).
     pub async fn create_task(&self, call: &Call, req: v1::CreateTaskRequest) -> ApiResult<v1::Task> {
+        let idem = self.idem();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
             let request = format!(
                 "create_task\0{actor}\0{}\0{}\0{}\0{}",
@@ -294,7 +403,7 @@ impl App {
                 req.scope.join(","),
                 req.depends_on.join(",")
             );
-            keyed(repo, "task.create", &req.idempotency_key, &request, |claim| {
+            keyed(repo, idem, "task.create", &req.idempotency_key, &request, |claim| {
                 // The task, its dependencies and the idempotency record are one transaction.
                 let (_, response) = create_task_with(
                     repo.meta(),
@@ -377,6 +486,7 @@ impl App {
         call: &Call,
         req: v1::AcquireLeaseRequest,
     ) -> ApiResult<v1::AcquireLeaseResponse> {
+        let idem = self.idem();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::LeaseWrite, None, move |repo, actor| {
             let task = (!req.task_id.is_empty()).then_some(req.task_id.as_str());
             let request = format!(
@@ -386,7 +496,7 @@ impl App {
                 req.ttl_ms,
                 task.unwrap_or("")
             );
-            keyed(repo, "lease.acquire", &req.idempotency_key, &request, |claim| {
+            keyed(repo, idem, "lease.acquire", &req.idempotency_key, &request, |claim| {
                 let (_, response) = acquire_with(
                     repo.meta(),
                     &req.scope,

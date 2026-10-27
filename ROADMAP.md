@@ -12,7 +12,11 @@ signed attestations, approvals, protected paths · agent identities, runs, tasks
 signed provenance, conflict prediction, integration queue · workspaces with conflict markers · GC, fsck,
 backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
-## Built since 0.1 (on `main`, unreleased)
+## 0.3 public beta — migration and guided adoption
+
+The single-server Linux/SQLite/filesystem workflow is open to early adopters. Web and CLI migration preserve complete branch/tag history with a reconciliation report and retained source bundle. Hosting metadata migration, external MCP-host evidence, independent pilots and wider storage qualification remain separate open work; see the [beta programme](docs/community/beta.md).
+
+## Built since 0.1 (through `v0.3.0-beta.1`)
 
 Each item is described, with what is and is not verified, in the [changelog](CHANGELOG.md) and the linked page.
 
@@ -21,9 +25,17 @@ Each item is described, with what is and is not verified, in the [changelog](CHA
   quotas (object bytes atomic on every write path) and rate limits; live events (SSE) with replay; Prometheus
   metrics and OpenTelemetry traces.
 - **Server hardening.** Credentials bound to one run, the `delegator` role, operator finish and reap of tasks and
-  runs, a read-consistent `integration.prepare`, real repository counts, fail-closed control rows
-  ([ADR-0010](docs/adr/0010-run-bound-credentials.md)); the audit of mocks, stubs and hardcoded values
-  (`dev/audit/`) triaged and fixed by the work packages (see `dev/handoff/`).
+  runs (locally and `ag agent reap --remote`, with a leased periodic reaper), `agent.operate` for acting on another
+  agent's run, atomic stream and proposal quotas, keyset paging with indexes, trusted proxies and a limit on failed
+  logins, idempotency records that expire, a global in-flight byte budget, derive status and dangling references in
+  `ag doctor`, `/readyz` and metrics, a fencing token for job claims, fail-closed control rows
+  ([ADR-0010](docs/adr/0010-run-bound-credentials.md),
+  [ADR-0011](docs/adr/0011-proposal-paging-indexes-and-background-leases.md),
+  [ADR-0012](docs/adr/0012-job-claim-fencing.md)); the audit of mocks, stubs and hardcoded values (`dev/audit/`)
+  triaged and fixed by the work packages (see `dev/handoff/`).
+- **Performance work**: an integration costs 3 durable commits instead of 7-8, a decoded-tree cache with a memory
+  budget, a bounded retry for same-stream contention
+  ([numbers and conditions](docs/architecture/performance.md)).
 - **Several replicas.** Control plane on PostgreSQL, tested with real processes against PostgreSQL and S3
   ([ADR-0007](docs/adr/0007-multi-replica-server.md), [guide](docs/operations/high-availability.md)), Kubernetes `ha` overlay.
 - **PostgreSQL metadata and S3-compatible objects**, per repository, tested against a real S3 server (SeaweedFS) and moto.
@@ -38,8 +50,9 @@ Each item is described, with what is and is not verified, in the [changelog](CHA
   Keycloak), TypeScript and Python SDKs, `ag-mcp` for agents ([ADR-0008](docs/adr/0008-mcp-server.md)), and the Go agent
   platform (no simulated agent; optional model-backed advisor, reviewers and index).
 - **Operations and distribution**: Dockerfile, Compose, Kubernetes, Prometheus / Grafana / OpenTelemetry files run in
-  CI (`Containers`), a release workflow rehearsed end to end (nothing published), install script, Homebrew and Scoop
-  templates, Windows builds and tests in CI.
+  CI (`Containers`), a release workflow that published the pre-release `v0.2.0-rc.2` (archives, SBOMs, checksums,
+  multi-arch images, attestations; what was verified: [releasing](docs/operations/releasing.md#evidence)), install
+  script, Homebrew and Scoop templates, Windows builds and tests in CI.
 - **Measurements**: engine benchmarks and a server load driver (`ag-bench`), numbers published with their conditions
   ([engine](docs/architecture/performance.md), [server](docs/operations/performance.md)); scale
   ([ADR-0006](docs/adr/0006-flat-trees-measured.md)).
@@ -47,44 +60,51 @@ Each item is described, with what is and is not verified, in the [changelog](CHA
   compatibility fixtures ([Testing](docs/architecture/testing.md)).
 - **Documentation**: a strict-built MkDocs site, tutorials executed in CI, FAQ, glossary, comparison, generated
   reference pages, doc and no-stub checks in CI.
+- **Easy to pick up (on `main`, not in rc.2).** A Web UI a first-time user can use (Home, plain labels, blockers with their
+  fix as a button, guided flows, rules presets, editing in the browser; proven by a task-based end-to-end test);
+  `ag-server dev`, `ag login`, policy presets, `ag explain`; and a test gate under which a test cannot pass by not
+  running (required components, a reviewed skip list, a report in every job).
+
+## Beta exit criteria
+
+The next release is scoped around one reliable workflow, not every deployment option. The
+[beta programme](docs/community/beta.md) defines the supported target, measurable acceptance gates and pilot process.
+Track work in the [beta milestone](https://github.com/Paffin/AgentGit/milestone/1).
 
 ## Next
 
-Only what is not done. Ordered by what unblocks the most.
+Only what is not done. The order comes from the first outside validation
+([report](dev/feedback/validation-2026-10-21.md), 2026-10-21): the engine works, the product was hard to pick up. The
+Web UI for a first-time user, the five-minute start (`ag-server dev`, `ag login`, presets, `ag explain`) and the test
+gate that stops a test from passing by not running are built and on `main` (see the [changelog](CHANGELOG.md)); what
+they left open is listed first.
 
-- **Owner actions that only the repository owner can take.** Enable GitHub Pages (Settings, Pages, Source: GitHub
-  Actions) so the docs site deploys for the first time; switch on the dependency graph and private vulnerability
-  reporting; triage the Dependabot pull requests and dismiss fixed CodeQL alerts; delete leftover remote branches;
-  run the release rehearsal from `main` in the Actions UI; decide the crates.io naming scheme.
-- **Cut a first `-rc` tag** and fix what it finds. Nothing is published yet: images, archives, the SDKs (npm, PyPI)
-  and the crates. Add a Windows archive to the release matrix.
-- **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,
-  storage class); mixed builds during a rolling upgrade; a PostgreSQL failover; measure PostgreSQL, S3, TLS and several
-  replicas under load; first results of the nightly fuzz and the weekly mutation runs; the opt-in live model step in CI.
-- **Finish server hardening.**
-  - Require `agent.operate` for acting on another agent's run (today a writer can; it is attributed, not prevented).
-  - Atomic open-stream and open-proposal quotas (needs an engine hook), SQL filters and keyset paging for
-    `list_proposals`, a global in-flight byte budget, trusted-proxy handling for `remote`, a TTL for idempotency records.
-  - A remote `ag agent reap`; the periodic reaper and several-replica reaping beyond a single-server test.
-  - Show `derive_status` and the `dangling_*` kinds in `ag doctor`, `/readyz` and metrics; queue fencing tokens
-    (needs a schema and protocol change, hence an ADR).
-- **Performance.** Batch the writes of one integration and an in-process cache of decoded trees with a memory budget;
-  fewer `aborted` answers under same-stream contention; a `Retry-After` header that matches `retry_after_ms`; run
-  `perf.yml` on a GitHub runner.
-- **Execution plane**: microVM isolation (Firecracker / gVisor, Kata) for hostile multi-tenant use; a sandbox on macOS
-  and Windows; other runtimes and images, SELinux hosts; worker pools and labels; per-job log storage; a scheduled run
-  of the runtime workflow to notice new runner images.
-- **Scale** (when the triggers in ADR-0006 are met): hierarchical Merkle trees, packed objects, incremental GC marking,
-  streaming blobs.
-- **Merge and history**: directory renames and copy detection.
-- **Clients and agents.** Run `ag-mcp` inside the real hosts and with more models; other MCP transports; a second
-  OIDC provider (Entra, Okta, Auth0) and a screen-reader and real-device pass for the Web UI; model-backed
-  advisors with other models and providers, and the Docker image of the orchestrator against a server in a container.
-- **Documentation.** Tutorials on Windows, an external-link checker, completions and man pages in the release
-  archives, the first real Pages deploy.
-- **Security gates.** Mutation-test `ag-agent` and the server's authorisation code; fuzz the HTTP layer and the CLI
-  parser; explain the 46.6% coverage of `ag-mcp`; measure `llvm-cov` where the PostgreSQL and S3 backends run.
-- **Reproducible builds**: demonstrate bit-for-bit reproducibility across machines.
+1. **Finish the first-time-user work.**
+   Browser editing covers one text file per change request (no rename, delete, multi-file or non-text conflicts);
+   Home has filters and glossary hints, but is polled every 15 s, not live; the rules form leaves
+   protected-path approvers and check timing in the raw JSON; no screen-reader pass; the `ag-server dev` sign-in link is not one-time (needs an exchange
+   endpoint); the Docker one-liner is not verified (no Docker daemon yet) and `dev`, `login` and `explain` are missing
+   from the `v0.2.0-rc.2` archives until the next tag.
+2. **Orchestration that works out of the box.** The orchestrator in the release archives and as an image, a ready
+   template "task, agent, proposal" with a real model executor verified live. ("Give this task to an agent" exists in the
+   Web UI.)
+3. **Finish the release.** Verify what rc.2 left unverified (archive attestations, macOS and aarch64 archives outside CI,
+   the Homebrew formula); qualify the new `ag-mcp` SBOM and add a Windows archive; cut a stable tag (until then `install.sh` needs
+   `--version`) that carries `ag-server dev`; publish the 21 `agentgit-<x>` crates and the SDKs. Only the owner can push
+   tags and publish.
+4. **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,
+   storage class); mixed builds during a rolling upgrade (metadata schema 3 needs the new build first); a PostgreSQL
+   failover; the periodic reaper with real replicas on PostgreSQL and S3; load on PostgreSQL, S3, TLS and several
+   replicas, and the tree cache on the disk backend; resolve surviving policy mutations and retain nightly fuzz, mutation and performance evidence; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
+5. **Test-gate leftovers.** The root-only halves of the sandbox tests (`n/a:host-privilege`) run in no CI job; the four
+   scripts that read TOML need Python 3.11 and are not in the 3.9 job; a bare `if !cond { return }` in a new Rust test is
+   not caught by the scan.
+6. **Server follow-ups.** A server option that requires the job-claim fencing token; the resolved client address in the
+   hash-chained audit entries; `Arc<Tree>` in the tree cache; a per-stream in-process queue so same-stream writers take
+   turns instead of retrying; merge notes on the AGWP wire (and so in the Web UI); copy search over the server and MCP.
+7. **Scale and isolation, when needed.** Hierarchical Merkle trees, packed objects, incremental GC marking, streaming
+   blobs (triggers in [ADR-0006](docs/adr/0006-flat-trees-measured.md)); microVM isolation (Firecracker, gVisor, Kata)
+   for hostile multi-tenant use; a sandbox on macOS and Windows; worker pools and labels; per-job log storage.
 
 ## Ideas we are deliberately not doing
 

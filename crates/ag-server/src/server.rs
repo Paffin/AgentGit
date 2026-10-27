@@ -120,7 +120,12 @@ fn cors(router: Router, app: &App) -> Router {
 /// a replica does not repair a database outage.
 async fn readyz(State(app): State<App>) -> Response {
     match app.not_ready_reason().await {
-        None => "ready".into_response(),
+        // Ready, and - when the last health scan found something - saying what, so that a person who curls the
+        // endpoint sees it. The status stays 200: serving is not what is wrong.
+        None => match app.last_health().and_then(|h| h.problems()) {
+            Some(why) => format!("ready; needs attention: {why}").into_response(),
+            None => "ready".into_response(),
+        },
         Some(why) => (StatusCode::SERVICE_UNAVAILABLE, why).into_response(),
     }
 }
@@ -147,12 +152,25 @@ async fn metrics(State(app): State<App>, req: Request) -> Response {
         Err(e) => tracing::error!(error = %e, "counting the queued jobs failed"),
     }
     app.metrics.open_repos.set(app.repos.open_count() as i64);
+    {
+        // The cache keeps cumulative counts; the exported counters follow them.
+        let s = app.repos.tree_cache().stats();
+        let m = &app.metrics;
+        m.tree_cache_bytes.set(i64::try_from(s.bytes).unwrap_or(i64::MAX));
+        m.tree_cache_entries.set(i64::try_from(s.entries).unwrap_or(i64::MAX));
+        for (counter, total) in
+            [(&m.tree_cache_hits, s.hits), (&m.tree_cache_misses, s.misses), (&m.tree_cache_evictions, s.evictions)]
+        {
+            counter.inc_by(total.saturating_sub(counter.get()));
+        }
+    }
     app.metrics.uptime.set(app.started.elapsed().as_secs() as i64);
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], app.metrics.render()).into_response()
 }
 
-/// Ends the stale runs of every repository every `agents.reap_interval_secs` until shutdown (ADR-0010). Running it
-/// on several replicas is harmless: a reap that finds nothing stale changes nothing.
+/// Ends the stale runs of every repository every `agents.reap_interval_secs` until shutdown (ADR-0010). Of several
+/// replicas on one control database only the holder of the `run-reaper` lease reaps (`App::reap_all_repos`); a reap
+/// is idempotent anyway, so a moment with two holders (clock skew, a lease expiring mid-pass) changes nothing.
 fn spawn_run_reaper(app: App) {
     let every = std::time::Duration::from_secs(app.cfg.agents.reap_interval_secs);
     let mut stop = app.shutdown_signal();
@@ -162,6 +180,42 @@ fn spawn_run_reaper(app: App) {
         loop {
             tokio::select! {
                 _ = ticker.tick() => app.reap_all_repos().await,
+                _ = stop.changed() => break,
+            }
+        }
+        // A clean stop hands the lease over at once instead of making the others wait for it to expire.
+        let (control, holder) = (app.control.clone(), app.lease_holder.clone());
+        let _ = tokio::task::spawn_blocking(move || control.release_lease(crate::app::RUN_REAPER_LEASE, &holder)).await;
+    });
+}
+
+/// Deletes expired idempotency records every `repos.idempotency_sweep_interval_secs` until shutdown.
+fn spawn_idempotency_sweeper(app: App) {
+    let every = std::time::Duration::from_secs(app.cfg.repos.idempotency_sweep_interval_secs);
+    let mut stop = app.shutdown_signal();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(every);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => { app.sweep_idempotency_records().await; }
+                _ = stop.changed() => break,
+            }
+        }
+    });
+}
+
+/// Reads the condition of every repository every `repos.health_scan_interval_secs` until shutdown (the first scan
+/// is immediate), for `/metrics` and `/readyz`.
+fn spawn_health_scanner(app: App) {
+    let every = std::time::Duration::from_secs(app.cfg.repos.health_scan_interval_secs);
+    let mut stop = app.shutdown_signal();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(every);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => { app.refresh_health().await; }
                 _ = stop.changed() => break,
             }
         }
@@ -182,6 +236,12 @@ async fn serve_inner(
     }
     if app.cfg.agents.reap_interval_secs > 0 {
         spawn_run_reaper(app.clone());
+    }
+    if app.cfg.repos.health_scan_interval_secs > 0 {
+        spawn_health_scanner(app.clone());
+    }
+    if app.cfg.repos.idempotency_ttl_secs > 0 && app.cfg.repos.idempotency_sweep_interval_secs > 0 {
+        spawn_idempotency_sweeper(app.clone());
     }
     let (router, _) = build_router(app.clone());
     let addr = listener.local_addr()?;

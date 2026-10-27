@@ -2,7 +2,7 @@
 # Run a command against a throwaway PostgreSQL cluster.
 #
 #   scripts/pg-test.sh cargo test --workspace
-#   AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
+#   AG_REQUIRE_COMPONENTS=postgres,s3 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
 #
 # Starts a private cluster (trust authentication, localhost only, a free port,
 # durability settings relaxed for speed), exports AG_TEST_POSTGRES_URL for the

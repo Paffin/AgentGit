@@ -7,7 +7,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Paffin/AgentGit/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/github/actions/workflow/status/Paffin/AgentGit/docs.yml?branch=main&style=flat-square&label=docs)](docs/README.md)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-yellow?style=flat-square)](#status-and-limits)
+[![Status: beta](https://img.shields.io/badge/status-beta-blue?style=flat-square)](#status-and-limits)
 
 **English** · [Русский](README.ru.md) · [Docs](docs/README.md) · [Roadmap](ROADMAP.md) · [Comparison](docs/comparison.md)
 
@@ -22,7 +22,11 @@ moves the branch, so nothing can change between "checked" and "merged". Test res
 tree they ran on. Every agent run has its own identity, and every decision ends up in an audit log you can verify.
 The core that stores, merges and recovers never calls a language model; anything smart sits on top and can only propose.
 
-It is alpha software: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
+This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
+
+## Coming from GitHub or GitLab?
+
+Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).
 
 ## See it work
 
@@ -49,7 +53,7 @@ $ ag integrate prop_6eed… --fencing-token 1                              # as 
 Integrated (merge): stream is now at 793a03b6da69 (version 3, was 70e31c72a4d0), 1 file(s) changed.
 
 $ ag preview prop_2b19…                                                  # a concurrent edit to the same line
-strategy: Merge   (algorithm ag-merge/2+ag-diff/1)
+strategy: Merge   (algorithm ag-merge/3+ag-diff/1)
 conflict: src/main.rs (content conflict (1 region(s)))                   # exit code 4 — the stream was not touched
 ```
 
@@ -65,9 +69,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-Release archives, `scripts/install.sh`, container images and a Homebrew formula exist and have been rehearsed by the
-release workflow, but nothing is published: there is no release tag yet, so none of them can be downloaded.
-[Install options](docs/getting-started.md#install) says what is and is not proven.
+The public beta is [`v0.3.0-beta.1`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.1). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.1
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.1
+```
+
+`--version` is needed while only pre-releases exist. For an existing rc.2 installation, see the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
 
 ## Quick start
 
@@ -84,6 +93,18 @@ ag log
 Next, add a [policy](docs/guides/policy.md), start an [agent](docs/guides/agents.md), or run the whole story with
 `./examples/quickstart.sh`. The full walkthrough is [Getting started](docs/getting-started.md).
 
+### Five minutes with a server, nothing to build
+
+```bash
+ag-server dev                                            # data directory, administrator, demo repository, a sign-in link
+ag login http://127.0.0.1:8080 --token-file ./ag-dev-data/dev/token
+ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, `ag push -t "my change"`, `ag explain` if refused
+```
+
+`ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in the `v0.3.0-beta.1` candidate. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+start on rc.2 in a few more lines.
+
 ### As a server
 
 ```bash
@@ -93,7 +114,7 @@ ag-server admin --data-dir ./ag-data create-repo acme/web
 ag-server admin --data-dir ./ag-data grant --subject user:alice --repo 'acme/*' --role admin
 export AG_TOKEN=$(ag-server admin --data-dir ./ag-data mint --subject user:alice --ttl 86400 | tail -n 1)
 ag-server serve --data-dir ./ag-data &                      # 127.0.0.1:8080, gRPC + HTTP/JSON
-ag clone http://127.0.0.1:8080/acme/web web && cd web      # then edit, `ag snapshot`, `ag push`
+ag clone http://127.0.0.1:8080/acme/web web && cd web      # then edit, `ag snapshot`, `ag push -t "my change"`
 ```
 
 The server speaks one protocol, [AGWP v1](docs/protocol/agwp-v1.md), over gRPC and HTTP/JSON on a single port, and serves
@@ -136,11 +157,16 @@ public documentation; the page linked below has the sources, the access date and
 | Tamper-evident audit | an audit log with export; the docs make no integrity claim | audit events (Ultimate); the docs make no integrity claim | an audit log; not compared | hash-chained, checked by `ag audit` and `ag verify` |
 | Self-contained and offline | hosted; Enterprise Server for self-managed | SaaS or self-managed | Cloud or Data Center | local mode needs no server; the server is one binary |
 | Ecosystem | very large | very large, CI and security built in | large, Jira and Pipelines | small: CLI, SDKs (unpublished), MCP, Web UI |
-| Maturity | very high | very high | very high | alpha |
+| Maturity | very high | very high | very high | beta |
 
 The full comparison, including Git, Gerrit and Jujutsu: [AgentGit compared](docs/comparison.md).
 
 ## The Web UI
+
+A new user starts on a home page that says what needs attention, with plain labels (the AgentGit word is in a tooltip),
+blockers that come with their fix as a button, guided flows to start a repository or give an agent work, rules presets
+instead of raw JSON, and editing a file and proposing it from the browser. These are included in the rc.3 candidate; rc.2 does not include them.
+What is still missing is on the [roadmap](ROADMAP.md).
 
 A live board of runs, leases, tasks and the merge queue, with four independent verdicts per proposal. These are real
 screenshots of the UI running against a real server, captured by the end-to-end suite.
@@ -243,11 +269,11 @@ The threat model and its known limits are in [Security](docs/architecture/securi
 
 The docs are checked in CI: the CLI reference is generated from the binary, tutorial commands are run against real
 binaries, and `scripts/check_docs.py` verifies links, test names, `ag` commands and `AG_*` variables. The site builds with
-`mkdocs build --strict`, but has never been deployed because GitHub Pages is not enabled for the repository.
+`mkdocs build --strict` and deploys to GitHub Pages from `main`.
 
 ## Status and limits
 
-AgentGit is alpha. The core and the guarantees above are implemented and tested, and so is the platform around it. It has
+AgentGit is an early public beta for a single Linux server with SQLite and filesystem storage. The core and the guarantees above are implemented and tested, and so is the platform around it. It has
 not been run in production by anyone but its authors, and there has been no external security audit. The full list is in
 [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md); the ones that decide whether you can use it today:
 
@@ -257,24 +283,34 @@ not been run in production by anyone but its authors, and there has been no exte
   failover, mixed versions during a rolling upgrade, load, and the Kubernetes `ha` overlay on a real cluster are not
   proven ([high availability](docs/operations/high-availability.md)).
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
-  per client, and a writer can still act on another agent's run (it is audited, not prevented).
-- Nothing is published: no release tag, no registry, npm, PyPI or crates.io package. The release workflow has been
-  rehearsed end to end from a work branch, not from `main` ([releasing](docs/operations/releasing.md)).
+  per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
+  job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
+- Only prereleases are available; the current beta is `v0.3.0-beta.1`. No stable release, and no
+  crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
+  ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
+  build first.
 - `ag validate run` is not a sandbox. Untrusted code goes through [`ag-worker`](docs/guides/workers.md), whose sandbox
   shares the host kernel. Verified against real Docker and Podman and cgroup v2; not verified for microVMs, Windows
   (the worker refuses to run) or macOS beyond a limits-only fallback ([sandbox](docs/architecture/sandbox.md)).
 - PostgreSQL and S3 are tested against a real PostgreSQL and SeaweedFS, not against Amazon S3, MinIO, Ceph or R2.
 - Trees are flat manifests, measured at 100,000 files ([ADR-0006](docs/adr/0006-flat-trees-measured.md)). Performance
   numbers come from one shared 4-vCPU VM and are not targets ([engine](docs/architecture/performance.md),
-  [server](docs/operations/performance.md)); PostgreSQL, S3, TLS and multi-replica throughput are not measured.
+  [server](docs/operations/performance.md)); PostgreSQL, S3, TLS and multi-replica throughput are not measured. The decoded-tree
+  cache and the 3 durable commits per integration were measured on the memory and disk backends only.
 - No history rewriting, tags, submodules or LFS; the Git bridge reports what it cannot carry.
 - The Web UI is tested in Chromium, Firefox and WebKit; OIDC only against Keycloak. There has been no screen-reader pass.
   `ag-mcp` was not run inside real hosts. The SDKs are unpublished.
-- The nightly fuzz and weekly mutation jobs have not run on GitHub yet.
+- Nightly fuzzing and weekly mutation checks run in GitHub Actions. Inspect the results on the release commit; a successful coverage run alone does not establish passing mutation checks.
 
 Reasonable today: a team and its agents on one machine, one server or a few replicas, with CI-gated workflows, or
 experimenting with policy-bound autonomy. Not yet: hosting mutually untrusting tenants, or being the only copy of data you
 cannot lose. Keep `ag backup` copies and a Git mirror.
+
+## Try the beta workflow
+
+The public beta is open to small teams: see the
+[scope and release gates](docs/community/beta.md), [start here](docs/community/start-here.md), and the
+[beta milestone](https://github.com/Paffin/AgentGit/milestone/1). Installation problems and confusing workflows are useful feedback.
 
 ## Contributing
 

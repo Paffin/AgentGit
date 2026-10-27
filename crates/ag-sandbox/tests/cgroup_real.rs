@@ -7,14 +7,13 @@
 //!
 //! * `AG_SANDBOX_CGROUP_BASE` — that directory (the library reads it too, so the other namespace suites run
 //!   with cgroup limits when it is set);
-//! * `AG_REQUIRE_CGROUP=1` — a host without it fails instead of skipping. CI sets it.
+//! * `AG_REQUIRE_COMPONENTS=cgroup-v2` — a host without it fails instead of skipping. CI sets it.
 //!
-//! A host without a delegated cgroup prints `SKIP <name>: <reason>` and passes: it has verified nothing.
+//! A host without a delegated cgroup leaves an `AG-SKIP` marker and passes: it has verified nothing.
 #![cfg(target_os = "linux")]
 
 mod common;
 
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -30,10 +29,6 @@ struct Delegated {
     _guard: std::sync::MutexGuard<'static, ()>,
 }
 
-fn require() -> bool {
-    std::env::var("AG_REQUIRE_CGROUP").is_ok_and(|v| !matches!(v.trim(), "" | "0" | "false" | "no"))
-}
-
 fn delegated(test: &str) -> Option<Delegated> {
     let guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let sandbox = namespace(test)?;
@@ -44,10 +39,7 @@ fn delegated(test: &str) -> Option<Delegated> {
         Err(why) => Some(why),
     };
     if let Some(why) = problem {
-        if require() {
-            panic!("AG_REQUIRE_CGROUP is set, but {test} cannot run on this host: {why}");
-        }
-        let _ = writeln!(std::io::stderr(), "SKIP {test}: no usable delegated cgroup v2 directory: {why}");
+        ag_testkit::skip("cgroup-v2", test, &format!("no usable delegated cgroup v2 directory: {why}"));
         return None;
     }
     let base = base.unwrap_or_else(|| PathBuf::from("/nonexistent"));

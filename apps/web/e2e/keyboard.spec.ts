@@ -18,11 +18,13 @@ test.describe('keyboard use', () => {
     expect(await page.evaluate(() => document.activeElement?.id)).toBe('main')
 
     // Navigating to another screen with the keyboard announces it and puts focus at the top of the content.
-    const history = page.getByRole('link', { name: 'History' })
-    await history.focus()
+    const code = page
+      .getByRole('navigation', { name: 'Repository' })
+      .getByRole('link', { name: 'Code' })
+    await code.focus()
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/history$/)
-    await expect(page.getByTestId('route-announcer')).toContainText(/History/)
+    await expect(page).toHaveURL(/\/files$/)
+    await expect(page.getByTestId('route-announcer')).toContainText(/Files/)
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('main')
   })
 
@@ -56,7 +58,7 @@ test.describe('keyboard use', () => {
     state,
   }) => {
     await page.goto(`/repos/${state.demo.repo}/proposals/${state.demo.proposals.extract}`)
-    const tablist = page.getByRole('tablist', { name: 'Proposal details' })
+    const tablist = page.getByRole('tablist', { name: 'Change request details' })
     const tabs = tablist.getByRole('tab')
     await expect(tabs).toHaveCount(5)
     await tabs.first().focus()
@@ -132,7 +134,7 @@ test.describe('keyboard use', () => {
   test('the account menu opens with Enter, moves with arrows, closes with Escape and returns focus', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/repos')
     const trigger = page.getByTestId('user-menu')
     await trigger.focus()
     await page.keyboard.press('Enter')

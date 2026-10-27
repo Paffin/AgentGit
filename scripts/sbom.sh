@@ -7,6 +7,7 @@
 # runs it on every change so that the release job never meets a surprise. Output, in DIR (default dist/):
 #
 #   agentgit-V-ag.cdx.json  agentgit-V-ag-server.cdx.json  agentgit-V-ag-worker.cdx.json   (cargo-cyclonedx)
+#   agentgit-V-ag-mcp.cdx.json
 #   agentgit-V-web-ui.cdx.json                                                            (scripts/sbom_npm.py)
 #
 # Rust SBOMs list the dependencies of Cargo.lock for the binary, build-time dependencies included. The web UI one
@@ -35,7 +36,7 @@ command -v cargo-cyclonedx >/dev/null || cargo cyclonedx --version >/dev/null 2>
 
 mkdir -p "$out"
 cargo cyclonedx --format json --spec-version 1.5 --describe binaries --target all
-for pair in ag-cli:ag ag-server:ag-server ag-worker:ag-worker; do
+for pair in ag-cli:ag ag-server:ag-server ag-worker:ag-worker ag-mcp:ag-mcp; do
   crate=${pair%%:*}; bin=${pair##*:}
   # a move, not a copy: the tool writes next to Cargo.toml and the working tree must stay clean
   mv "crates/$crate/${bin}_bin.cdx.json" "$out/agentgit-${version}-${bin}.cdx.json"
@@ -50,7 +51,7 @@ fi
 python3 - "$out" "$version" "$web" <<'PY'
 import glob, json, sys
 out, version, web = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
-want = 4 if web else 3
+want = 5 if web else 4
 files = sorted(glob.glob(f"{out}/agentgit-{version}-*.cdx.json"))
 assert len(files) == want, f"expected {want} SBOMs, found {files}"
 for f in files:
@@ -60,6 +61,11 @@ for f in files:
     if f.endswith("-web-ui.cdx.json"):
         assert d["specVersion"] == "1.5", f
         assert len(names) > 30 and {"vue", "pinia", "vue-router"} <= names, f
+    elif f.endswith("-ag-mcp.cdx.json"):
+        # MCP is a blocking HTTP client. Tokio and the storage/core crates are
+        # test-only dependencies and must not be required in its shipped SBOM.
+        assert d["specVersion"] == "1.5", f
+        assert {"clap", "ureq", "serde_json", "globset"} <= names, f
     else:
         assert d["specVersion"] == "1.5", f
         assert len(names) > 50 and "agentgit-types" in names and "tokio" in names, f

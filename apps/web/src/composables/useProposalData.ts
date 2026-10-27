@@ -28,6 +28,8 @@ const REFLOG_WINDOW = 500
  */
 export async function diffBase(repo: string, p: Proposal): Promise<string> {
   if (p.state !== 'integrated') {
+    // A branch nothing has landed on has no common ancestor with anything: the base is the empty tree.
+    if (!(await api.streams.head(repo, p.stream)).head) return ''
     const bases = await api.history.mergeBase(repo, p.stream, p.head)
     return bases[0] ?? ''
   }

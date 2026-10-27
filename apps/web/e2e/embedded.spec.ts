@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
+import { requireComponent } from './support/components.ts'
 import { startServer } from './support/server.ts'
 import type { RunningServer } from './support/server.ts'
 
 // The single-binary story: `ag-server` with NO UI configuration serves the app out of its own binary (cargo
 // feature `ui`, built after `scripts/build_ui.sh`). These tests start their own server for that, so they hold
 // whatever way the main suite is run. A binary built without the UI makes them fail in CI (where it must have
-// been built with it) and skip on a laptop.
+// been built with it) and skip, with a marker (support/components.ts), on a laptop.
 
 let server: RunningServer
 let hasUi = false
@@ -22,7 +23,13 @@ test.beforeAll(async () => {
   }
 })
 test.afterAll(async () => server?.stop())
-test.beforeEach(() => test.skip(!hasUi, 'this ag-server binary was built without the Web UI'))
+test.beforeEach(({}, info) =>
+  requireComponent(
+    info,
+    'embedded-ui',
+    hasUi ? null : 'this ag-server binary was built without the Web UI',
+  ),
+)
 
 test.describe('the UI served from the binary', () => {
   test('the page, its assets and the headers that go with them', async ({ request }) => {

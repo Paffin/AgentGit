@@ -26,9 +26,7 @@ test.describe('a proposal in the demo repository', () => {
     await expect(conflicts).toContainText('Conflicting paths')
     await expect(conflicts).toContainText('src/index.ts')
     await expect(conflicts).toContainText('content conflict')
-    await expect(conflicts).toContainText(
-      'Nothing guessed: resolve these in the author’s workspace',
-    )
+    await expect(conflicts).toContainText('Nothing is guessed: someone has to choose')
   })
 
   test('the header names the run, the model and the task behind an agent’s change', async ({
@@ -44,9 +42,9 @@ test.describe('a proposal in the demo repository', () => {
     await expect(page.getByTestId('blockers')).toContainText('Needs 1 more approval')
     // The remedy is spelled out for the lease blocker, including the fencing token idea.
     await expect(page.getByTestId('blockers')).toContainText(
-      'An exclusive lease on src/auth/** is held by agent:refactor-bot',
+      'An exclusive reservation on src/auth/** is held by agent:refactor-bot',
     )
-    await expect(page.getByTestId('blockers')).toContainText('fencing token')
+    await expect(page.getByTestId('blockers')).toContainText('reservation holder’s current key')
   })
 
   test('shows a real diff: files, hunks, line numbers, additions and deletions, as text', async ({
@@ -104,7 +102,7 @@ test.describe('a proposal in the demo repository', () => {
     state,
   }) => {
     await open(page, state.demo.repo, state.demo.proposals.extract)
-    await page.getByRole('tab', { name: /Validation/ }).click()
+    await page.getByRole('tab', { name: /Checks/ }).click()
     const tab = page.getByTestId('validation-tab')
     await expect(tab).toContainText('tests')
     await expect(tab).toContainText('passed')
@@ -113,7 +111,7 @@ test.describe('a proposal in the demo repository', () => {
     await expect(tab).toContainText(/sha256:[0-9a-f]{12}/)
 
     await open(page, state.demo.repo, state.demo.proposals.flaky)
-    await page.getByRole('tab', { name: /Validation/ }).click()
+    await page.getByRole('tab', { name: /Checks/ }).click()
     await expect(page.getByTestId('validation-tab')).toContainText('failed')
   })
 
@@ -122,7 +120,7 @@ test.describe('a proposal in the demo repository', () => {
     state,
   }) => {
     await open(page, state.demo.repo, state.demo.proposals.extract)
-    await page.getByRole('tab', { name: /Provenance/ }).click()
+    await page.getByRole('tab', { name: /Where it came from/ }).click()
     const tab = page.getByTestId('provenance-tab')
     await expect(tab).toContainText('example-coder-large')
     await expect(tab).toContainText('Splitting the store out makes the Redis migration')
@@ -189,8 +187,8 @@ test.describe('acting on a proposal', () => {
     await waitLive(page)
 
     await page.getByTestId('act-close').click()
-    const dialog = page.getByRole('alertdialog', { name: 'Close this proposal?' })
-    await expect(dialog).toContainText('It will not be integrated')
+    const dialog = page.getByRole('alertdialog', { name: 'Close this change request?' })
+    await expect(dialog).toContainText('It will not land')
     await dialog.getByRole('button', { name: 'Keep it open' }).click()
     await expect(page.getByTestId('proposal-state')).toHaveText('open')
 
@@ -219,7 +217,7 @@ test.describe('acting on a proposal', () => {
     const queue = page.getByTestId('queue-panel')
     await expect(queue).toContainText('Extend the notes')
     await page.getByRole('button', { name: 'Run queue' }).click()
-    await expect(page.getByTestId('proposals-panel')).toContainText('No open proposals')
+    await expect(page.getByTestId('proposals-panel')).toContainText('No open change requests')
     await expect(page.getByRole('link', { name: 'Extend the notes' }).first()).toBeVisible()
     const head = await alice.get(`/v1/repos/${repo}/log?rev=main&page_size=3`)
     expect(head.json.changesets[0].message).toContain('Notes')
@@ -258,15 +256,15 @@ test.describe('acting on a proposal', () => {
     })
 
     await open(page, repo, p.id)
-    await expect(page.getByTestId('blockers')).toContainText('An exclusive lease on src/**')
+    await expect(page.getByTestId('blockers')).toContainText('An exclusive reservation on src/**')
     await page.getByTestId('act-integrate').click()
-    const dialog = page.getByRole('dialog', { name: 'Integrate this proposal' })
+    const dialog = page.getByRole('dialog', { name: 'Land this change request' })
     await expect(dialog).toContainText(`src/** (token ${token})`)
-    await dialog.getByLabel('Fencing tokens (optional)').fill('seven')
+    await dialog.getByLabel('Reservation keys (optional)').fill('seven')
     await expect(dialog.getByText(/numbers/i)).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Integrate', exact: true })).toBeDisabled()
-    await dialog.getByLabel('Fencing tokens (optional)').fill(String(token))
-    await dialog.getByRole('button', { name: 'Integrate', exact: true }).click()
-    await expect(dialog.getByText('Integrated', { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Land', exact: true })).toBeDisabled()
+    await dialog.getByLabel('Reservation keys (optional)').fill(String(token))
+    await dialog.getByRole('button', { name: 'Land', exact: true }).click()
+    await expect(dialog.getByText('Landed', { exact: true })).toBeVisible()
   })
 })

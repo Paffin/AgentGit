@@ -142,10 +142,25 @@ impl Repository {
             }
         }
 
-        // Pins, open proposals and workspaces keep changesets alive (garbage collection starts from them and
-        // refuses to run when one is unreadable). They may name changesets that are stored but not published yet
-        // (a proposal waiting for its integration, a workspace snapshot), so the test is "can the object store
-        // produce it", not "is it published".
+        r.issues.extend(self.dangling_refs()?);
+
+        let audit = self.meta.read(|tx| tx.audit_verify())?;
+        r.audit_entries = audit.entries;
+        r.audit_head = audit.head;
+        if let Some(seq) = audit.first_bad {
+            r.issue("audit_chain_broken", format!("audit entry #{seq} does not match the hash chain"));
+        }
+        Ok(r)
+    }
+
+    /// The references that keep changesets alive and point at something the object store cannot produce: pins
+    /// (`dangling_pin`), open proposals (`dangling_proposal_head`) and workspaces (`dangling_workspace_ref`).
+    /// Garbage collection starts from these and refuses to run when one is unreadable. They may name changesets
+    /// that are stored but not published yet (a proposal waiting for its integration, a workspace snapshot), so the
+    /// test is "can the object store produce it", not "is it published". Cheap compared to [`Repository::fsck`]: it
+    /// reads one changeset per reference and hashes nothing else.
+    pub fn dangling_refs(&self) -> Result<Vec<FsckIssue>> {
+        let mut r = FsckReport::default();
         for pin in self.meta.read(|tx| tx.pins())? {
             self.check_root(&mut r, "dangling_pin", &format!("pin '{}'", pin.name), &pin.changeset);
         }
@@ -159,14 +174,7 @@ impl Repository {
                 }
             }
         }
-
-        let audit = self.meta.read(|tx| tx.audit_verify())?;
-        r.audit_entries = audit.entries;
-        r.audit_head = audit.head;
-        if let Some(seq) = audit.first_bad {
-            r.issue("audit_chain_broken", format!("audit entry #{seq} does not match the hash chain"));
-        }
-        Ok(r)
+        Ok(r.issues)
     }
 
     /// Records an issue of `kind` unless the object store yields the changeset `id` that `what` points at.

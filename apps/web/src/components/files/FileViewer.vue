@@ -8,12 +8,23 @@ import { decodeUtf8, imageMime, looksBinary, toDataUrl, baseName } from '@/lib/t
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import BlameTable from './BlameTable.vue'
+import FileEditor from './FileEditor.vue'
+import FileActions from './FileActions.vue'
 import CodeBlock from '@/ui/CodeBlock.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Segmented from '@/ui/Segmented.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
-const props = defineProps<{ repo: string; rev: string; path: string }>()
+const props = defineProps<{
+  repo: string
+  rev: string
+  path: string
+  /** The person may edit here: they hold a writing role and `rev` is a branch (so a change request has a target). */
+  canEdit?: boolean
+  executable?: boolean
+}>()
+/** Editing the text in place; leaving the file ends it. */
+const editing = ref(false)
 
 /**
  * Whatever the listing says about size, the guard works while downloading: a declared Content-Length over
@@ -34,12 +45,29 @@ watch(
   () => {
     limit.value = DEFAULT_LIMIT
     view.value = 'contents'
+    editing.value = false
   },
 )
 
-const file = useResource(() => api.tree.file(props.repo, props.rev, props.path, limit.value), {
-  watch: [() => props.repo, () => props.rev, () => props.path, limit],
-})
+const file = useResource(
+  async (signal) => {
+    const { repo, rev, path } = props
+    const revision = await api.history.resolve(repo, rev, { signal })
+    const [contents, location] = await Promise.all([
+      api.tree.file(repo, revision, path, limit.value, { signal }),
+      api.tree.resolve(repo, revision, path, { signal }),
+    ])
+    return {
+      ...contents,
+      revision,
+      entry: location.entry,
+      executable: location.entry?.executable === true,
+    }
+  },
+  {
+    watch: [() => props.repo, () => props.rev, () => props.path, limit],
+  },
+)
 
 const content = computed(() => {
   const f = file.data.value
@@ -92,6 +120,13 @@ onBeforeUnmount(() => {
       @retry="file.reload()"
     />
     <template v-else-if="tooBig">
+      <FileActions
+        v-if="canEdit && file.data.value?.entry"
+        :repo="repo"
+        :rev="file.data.value.revision"
+        :stream="rev"
+        :entry="file.data.value.entry"
+      />
       <Alert tone="warn" title="This file is large">
         It is larger than {{ formatBytes(limit) }}, so it was not downloaded.
         <template v-if="file.data.value?.size">
@@ -119,20 +154,58 @@ onBeforeUnmount(() => {
           ></span
         >
         <span class="spacer" />
-        <Segmented v-if="!content.binary" v-model="view" legend="View" :options="VIEWS" />
+        <Segmented
+          v-if="!content.binary && !editing"
+          v-model="view"
+          legend="View"
+          :options="VIEWS"
+        />
         <RouterLink :to="{ path: `/repos/${repo}/history`, query: { rev, path } }" class="hist"
           >File history</RouterLink
         >
-        <Button size="sm" icon="download" @click="download">Download</Button>
+        <Button
+          v-if="canEdit && !content.binary && !editing"
+          size="sm"
+          icon="edit"
+          data-testid="edit-file"
+          @click="editing = true"
+          >Edit</Button
+        >
+        <FileActions
+          v-if="canEdit && !editing && file.data.value?.entry"
+          :repo="repo"
+          :rev="file.data.value.revision"
+          :stream="rev"
+          :entry="file.data.value.entry"
+        />
+        <Button size="sm" icon="download" @click="download">{{
+          editing ? 'Download original' : 'Download'
+        }}</Button>
       </div>
-      <figure v-if="image" class="img">
+      <FileEditor
+        v-if="editing && !content.binary"
+        :repo="repo"
+        :path="path"
+        :original="content.text"
+        :rev="file.data.value!.revision"
+        :stream="rev"
+        :executable="file.data.value!.executable"
+        :file-type="file.data.value!.entry?.file_type"
+        @cancel="editing = false"
+      />
+      <figure v-else-if="image" class="img">
         <img :src="image" :alt="`Preview of ${baseName(path)}`" />
       </figure>
       <Alert v-else-if="content.binary" tone="info" title="Binary file">
         This looks like binary data ({{ formatBytes(content.size) }}), so it is not shown as text.
       </Alert>
       <p v-else-if="content.text === ''" class="faint">This file is empty.</p>
-      <BlameTable v-else-if="view === 'blame'" :repo="repo" :rev="rev" :path="path" />
+      <BlameTable
+        v-else-if="view === 'blame'"
+        :repo="repo"
+        :rev="file.data.value!.revision"
+        :path="path"
+      />
       <CodeBlock v-else :code="content.text" :label="`Contents of ${path}`" max-height="70vh" />
     </template>
   </div>
@@ -146,6 +219,7 @@ onBeforeUnmount(() => {
 }
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3);
   font-size: var(--fs-sm);

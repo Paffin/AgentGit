@@ -68,6 +68,8 @@ __all__ = [
     "GetTreeRequest",
     "GetTreeResponse",
     "GetWorkspaceRequest",
+    "GitMigrationDecision",
+    "GitMigrationPlan",
     "GrantRoleRequest",
     "HeartbeatJobRequest",
     "HeartbeatRequest",
@@ -401,6 +403,7 @@ class CompareAndSwapRequest:
 class CompleteJobRequest:
     """The `CompleteJobRequest` message."""
     attestation: Attestation | None = field(default=None)
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     repo: str = field(default="")
     result: dict[str, Any] = field(default_factory=dict)
@@ -597,6 +600,7 @@ class ExtendLeaseRequest:
 class FailJobRequest:
     """The `FailJobRequest` message."""
     error: str = field(default="")
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     repo: str = field(default="")
     retry_after_ms: int = field(default=0)
@@ -774,6 +778,22 @@ class GetWorkspaceRequest:
 
 
 @dataclass(kw_only=True)
+class GitMigrationDecision:
+    """The `GitMigrationDecision` message."""
+    accept_lossy: bool = field(default=False)
+
+
+@dataclass(kw_only=True)
+class GitMigrationPlan:
+    """The `GitMigrationPlan` message."""
+    id: str = field(default="")
+    name: str = field(default="")
+    report: dict[str, Any] = field(default_factory=dict)
+    source_sha256: str = field(default="")
+    state: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class GrantRoleRequest:
     """The `GrantRoleRequest` message."""
     repo: str = field(default="")
@@ -784,6 +804,7 @@ class GrantRoleRequest:
 @dataclass(kw_only=True)
 class HeartbeatJobRequest:
     """The `HeartbeatJobRequest` message."""
+    fencing_token: int = field(default=0)
     job_id: str = field(default="")
     lease_ms: int = field(default=0)
     repo: str = field(default="")

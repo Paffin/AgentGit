@@ -77,7 +77,7 @@ async function extend(l: Lease) {
     <Segmented v-model="scope" legend="Show" :options="options" />
     <ErrorState
       v-if="leases.error.value && !leases.data.value"
-      what="leases"
+      what="reservations"
       :error="leases.error.value"
       @retry="leases.reload()"
     />
@@ -134,8 +134,8 @@ async function extend(l: Lease) {
         ><EmptyState
           icon="unlock"
           compact
-          title="No leases"
-          description="Agents claim path scopes with soft or exclusive leases."
+          title="No reservations"
+          description="Agents reserve the files they are about to change, so two of them do not edit the same ones. None are held right now."
       /></template>
     </DataTable>
   </div>

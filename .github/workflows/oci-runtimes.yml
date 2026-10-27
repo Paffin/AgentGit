@@ -10,8 +10,9 @@ name: OCI runtimes and cgroup v2
 #   * the whole `ag-sandbox` suite on a delegated cgroup v2 subtree prepared as root and used by the test user,
 #     including crates/ag-sandbox/tests/cgroup_real.rs (memory.max, pids.max, memory.peak, OOM kills, removal).
 #
-# AG_REQUIRE_OCI / AG_REQUIRE_CGROUP / AG_REQUIRE_SANDBOX turn every skip into a failure: a runner that cannot do
-# what the job claims must not go green.
+# AG_REQUIRE_COMPONENTS (oci:docker / oci:podman, cgroup-v2, namespace-sandbox) turns every skip of what the job
+# claims to run into a failure: a runner that cannot do it must not go green. Whatever still skips is listed, and
+# fails the job unless tests/skip-allowlist.toml has reviewed it (scripts/check_skips.py).
 
 on:
   push:
@@ -54,10 +55,13 @@ jobs:
         include:
           - name: docker
             leg: docker
+            component: "oci:docker"
           - name: podman (rootful)
             leg: podman-rootful
+            component: "oci:podman"
           - name: podman (rootless)
             leg: podman-rootless
+            component: "oci:podman"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,7 +69,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: The host
         run: |
           uname -r
@@ -152,13 +156,18 @@ jobs:
         run: cargo test -p agentgit-sandbox --test oci_real -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
-          AG_REQUIRE_OCI: "1"
+          AG_REQUIRE_COMPONENTS: ${{ matrix.component }}
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
       - name: The worker end to end with this runtime (a check that writes its tree, a missing image, stopping now)
         if: ${{ !cancelled() }}
         run: cargo test -p agentgit-worker --test oci_e2e -- --nocapture --test-threads=1
         env:
           AG_OCI_IMAGE: ${{ env.OCI_TEST_IMAGE }}
-          AG_REQUIRE_OCI: "1"
+          AG_REQUIRE_COMPONENTS: ${{ matrix.component }}
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job "oci/${{ matrix.leg }}" --report "$RUNNER_TEMP/skips.jsonl"
       - name: Containers left behind
         if: always()
         run: |
@@ -175,7 +184,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # Ubuntu 24.04 restricts unprivileged user namespaces with AppArmor (see ci.yml).
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
@@ -212,8 +221,11 @@ jobs:
           cargo test -p agentgit-sandbox -- --nocapture
         env:
           AG_SANDBOX_CGROUP_BASE: /sys/fs/cgroup/ag-ci/sandboxes
-          AG_REQUIRE_CGROUP: "1"
-          AG_REQUIRE_SANDBOX: "1"
+          AG_REQUIRE_COMPONENTS: cgroup-v2,namespace-sandbox
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job oci/cgroup-v2 --report "$RUNNER_TEMP/skips.jsonl"
       - name: Cgroups left behind
         if: always()
         run: ls -la /sys/fs/cgroup/ag-ci/sandboxes || true

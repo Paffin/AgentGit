@@ -110,6 +110,116 @@ temporary file, fsynced and renamed; `synchronous=FULL` for the metadata), not p
 at 10 000 files a fast-forward is 50 ms on disk against 27 ms in memory. The full table is in the `perf-full`
 artifact of the scheduled workflow.
 
+## Fewer commits per integration
+
+An integration used to cost 7 durable commits (8 for a three-way merge), each a write transaction and so an fsync
+with SQLite's `synchronous=FULL`: the operation record (`prepared`), the fencing tokens rewritten into it (again, to
+the same value), its move to `ready`, the stream update, and then, in the post-commit derive pass, the cached tree of
+the new head, one acknowledgement per outbox event, and the pruning of derived data. Now:
+
+* the operation record of a new integration whose head is published is written already `ready` (one commit; a record
+  whose head is not published yet, or one an earlier build left `prepared`, goes through the old path and is
+  recovered as before);
+* the tokens are written only when they differ from the payload;
+* the derive pass handles its events, then records the new head's tree, every acknowledgement and the pruning in one
+  commit.
+
+Nothing is deferred or weakened: every remaining commit is a full synchronous commit, the stream update is still one
+transaction with the policy facts it was judged on, and a crash anywhere leaves a state recovery already handled
+(`crash_at_every_step_recovers_to_exactly_one_integration`, plus
+`an_operation_left_prepared_by_an_earlier_build_is_still_recovered`). `Meta::committed_writes()` counts the commits;
+`an_integration_is_a_few_durable_commits` pins 3 for a fast-forward and for a three-way merge (it was 7 and 8).
+
+Numbers (release build, same VM as above, load average 2-6; before = commit `2c26f2d`, after = the change). Only the
+commit counts are exact; the times are noisy.
+
+| measurement | before | after |
+|---|---:|---:|
+| durable commits, fast-forward / three-way merge | 7 / 8 | 3 / 3 |
+| `ag-bench engine --backend disk`, 1 000 files, fast-forward, median of 15 (two rounds) | 9.87, 7.47 ms | 8.18, 7.14 ms |
+| same, three-way merge | 14.7, 12.7 ms | 10.2, 9.03 ms |
+| same, 10 000 files, fast-forward / merge | 43.4, 34.5 / 72.8, 68.8 ms | 33.1, 34.4 / 77.7, 58.0 ms |
+| `ag-bench load`, `streams`, 16 clients, HTTP/JSON, 15 s, three alternating rounds | 90.4, 88.4, 84.1 integrations/s (mean 87.6) | 104.6, 99.8, 95.6 (mean 100.0, +14 %) |
+| same, integrate p50 | 72-77 ms | 53-60 ms |
+
+The engine times on disk are inside the noise of this VM except the three-way merge at 1 000 files (about 25-30 %
+less); the server run, where many writers queue on the disk, shows the 14 % clearly and consistently in all three
+rounds. The fsync of this virtual disk is cheap; on a disk where an fsync costs milliseconds the ratio of 7 to 3
+commits is what carries over. PostgreSQL metadata was not measured.
+
+## Decoded-tree cache
+
+Deriving the tree of a changeset costs a metadata read, a strict decode and a verification of the manifest (a
+re-encode and a SHA-256): about 105 ms of a 345 ms fast-forward at 100 000 files. A tree is a pure function of its
+changeset's history, so the answer for an id never changes. `ag-storage`'s `DecodedTrees` keeps decoded trees in
+memory:
+
+* one **byte budget per process** (`repos.tree_cache_bytes`, default 256 MiB, `0` = off) shared by every repository,
+  evicting the least recently used first; a repository sees only its own entries (`scope`), and garbage collection
+  empties a repository's entries;
+* `Repository::tree_of` and the derive pass look in memory first, then in the derived-tree table, and remember what
+  they find or compute (`LayeredTrees` also serves as the starting point of an uncached chain's replay);
+* the size of a tree is an estimate (`approx_tree_bytes`: path text and handle, entry, map overhead). Checked once
+  against the resident memory of ten clones of a 100 000-file tree: 9.79 MB estimated, 9.20 MB measured (ratio
+  0.94). The process's peak resident memory exceeds the budget by the working set (trees being built, clones handed
+  to callers).
+
+Tests: `cached_trees_are_the_trees_by_definition_at_every_point_of_a_history` (every changeset of a history with
+edits, deletions, re-creations and a merge, twice, against the operations applied from the root),
+`a_budget_too_small_for_the_history_evicts_and_stays_correct`, `garbage_collection_empties_the_repositorys_part_of_the_cache`,
+the unit tests of the cache (eviction order, the budget, an oversized tree, scopes, accounting under threads), and at
+the server `trees_are_served_from_memory_and_are_the_same_trees_without_the_cache` (the same history served with the
+cache on and off gives identical trees; hits are on `/metrics`) and `a_small_budget_evicts_and_the_answers_stay_right`.
+
+Numbers (`ag-bench engine --backend memory --filter integrate`, median of 7, two interleaved rounds each; cache 0
+against `--tree-cache-mb 512`):
+
+| operation | 1 000 files | 10 000 files | 100 000 files |
+|---|---:|---:|---:|
+| fast-forward, no cache | 3.12, 6.59 ms | 27.8, 26.2 ms | 332, 330 ms |
+| fast-forward, cache | 1.33, 2.01 ms | 11.3, 15.8 ms | 183, 178 ms |
+| three-way merge, no cache | 4.66, 4.49 ms | 54.7, 49.2 ms | 1 054, 880 ms |
+| three-way merge, cache | 1.55, 1.52 ms | 12.7, 19.4 ms | 214, 191 ms |
+| merge, rename vs edit, no cache | 5.89, 5.43 ms | 58.6, 64.5 ms | 1 307, 1 358 ms |
+| merge, rename vs edit, cache | 1.61, 1.62 ms | 11.8, 18.4 ms | 171, 193 ms |
+| publish one file on a published base, no cache | 1.02, 2.14 ms | 7.20, 6.69 ms | 86.2, 82.7 ms |
+| publish one file, cache | 0.312, 0.555 ms | 1.67, 2.84 ms | 31.8, 38.4 ms |
+
+At 100 000 files a fast-forward is about 45 % faster and a three-way merge four to six times faster. Peak resident
+memory of the 100 000-file fast-forward run (memory backend, so the stores are in it too): 168 MiB without the cache,
+237 MiB with a 64 MiB budget, 714 MiB with 512 MiB. The default budget fits about 25 trees of 100 000 files, or far
+more of smaller repositories. The disk backend was not measured with the cache (its fixed costs are the commits above);
+neither was PostgreSQL, where a hit also saves a network round trip.
+
+## Same-stream contention: a bounded retry
+
+An integration computes its candidate against the head it read and commits with a compare-and-swap; if another writer
+committed first it recomputes against the new head. It used to give up after 8 lost attempts with `aborted`. Now the
+number of attempts (`repos.integrate_attempts`, default 24) and the longest wait between attempts
+(`repos.integrate_backoff_ms`, default 32; 0 = retry at once) are configuration, and the wait is spread per operation
+(a hash of the operation id and the attempt number, so the colliding writers wait different times and nothing is
+random) in a window that starts at 1 ms after the second lost attempt and doubles per loss. The retry is bounded:
+after the last attempt the caller still gets `aborted` (retryable), and the proposal is untouched.
+
+Tests: `an_integration_that_loses_the_race_many_times_still_lands` (12 forced losses in a row with a gate at the
+commit step; the old limit of 8 fails it), `the_retry_is_bounded_and_the_caller_is_told_to_retry`,
+`the_wait_between_attempts_is_spread_per_operation_and_bounded`, and at the server
+`writers_racing_on_one_stream_all_land_with_the_default_retry` and
+`one_attempt_is_all_a_loser_gets_and_the_stream_still_ends_up_consistent`.
+
+Numbers (`ag-bench load --scenarios contention --protocols http`, 16 writers on one stream, 15 s, two alternating
+rounds; before = 8 attempts, no wait):
+
+| | answered/s | `aborted` | integrate p50 / p99 / max |
+|---|---:|---:|---:|
+| 8 attempts | 55.1, 52.4 | 139 (14 %), 149 (16 %) | 18.3, 24.9 ms / 506, 575 ms / 1.3, 0.9 s |
+| 24 attempts, backoff | 47.1, 48.6 | 26 (3.2 %), 33 (4.0 %) | 12.8, 11.4 ms / 1 550, 767 ms / 6.0, 6.2 s |
+
+Fewer than a quarter of the aborts remain, and the median integration is faster; the price is the tail: a writer that
+keeps losing now retries for up to a few seconds instead of failing after eight attempts, and the "answered per second"
+counts fewer cycles because each retried integration takes longer (the failed ones the client would have repeated are
+now successes inside the call). A deployment that prefers failing fast lowers `repos.integrate_attempts`.
+
 ## A bottleneck found: blame over an uncached chain
 
 The first run of this suite showed `blame` costing far more than the ADR's table suggested, because the ADR's blame
@@ -150,7 +260,9 @@ shared CI runners.
 
 ## Where the next gain would come from
 
-An in-process cache of decoded trees would remove the decode and verification of a cached head
-(about 105 ms of the 345 ms fast-forward at 100 000 files) — ADR-0006 already names it. It trades memory (15–20 MB per
-cached tree at 100 000 files, per open repository) for latency, so it needs a budget in the configuration and a
-decision about it; it is not done here.
+* The cached tree is cloned on every hit (7 ms at 100 000 files); handing out `Arc<Tree>` would remove that.
+* What is left of a fast-forward at 100 000 files (about 180 ms with the cache) is hashing the new manifest (52 ms),
+  the tree diff and the apply; incremental manifest hashing would need a hierarchical manifest (ADR-0006's trigger).
+* A per-stream in-process queue would let writers on one stream take turns instead of racing, which the retry above
+  only softens.
+* The cache and the commit counts on PostgreSQL and S3 are unmeasured.

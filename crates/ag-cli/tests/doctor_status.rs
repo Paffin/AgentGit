@@ -345,3 +345,39 @@ fn status_tracks_how_the_local_stream_relates_to_a_remote() {
     let j = run_in(&dir, cfg.path(), "user:alice", &["--json", "status"], &[]).ok().json();
     assert_eq!(j["summary"]["remotes"][0]["state"], "up_to_date");
 }
+
+#[test]
+fn doctor_reports_the_derive_status_and_dangling_references() {
+    let a = Ag::new();
+    a.land_first_change();
+    let j = a.ag(&["--json", "doctor"]).ok().json();
+    assert_eq!(check(&j, "derive")["status"], "ok");
+    assert_eq!(check(&j, "references")["status"], "ok");
+
+    // A pin and an open proposal that point at a changeset that never existed, and a derive event that failed.
+    a.ag(&["pin", "keep", "main"]).ok();
+    a.write("src/more.rs", "pub fn two() -> u32 { 2 }\n");
+    let p = a.propose_as("user:alice", "more");
+    let ghost = "ab".repeat(32);
+    {
+        let db = rusqlite::Connection::open(a.root().join(".ag/meta.db")).unwrap();
+        db.execute("UPDATE pins SET changeset = ?1", [&ghost]).unwrap();
+        db.execute("UPDATE proposals SET head = ?1 WHERE id = ?2", [&ghost, &p]).unwrap();
+        db.execute(
+            "INSERT INTO meta (key, value) VALUES ('derive.last_error', 'caching the tree: disk full')
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            [],
+        )
+        .unwrap();
+    }
+    let r = a.ag(&["--json", "doctor"]).code_is(1);
+    let j = r.json();
+    let refs = check(&j, "references");
+    assert_eq!(refs["status"], "fail", "{j}");
+    let summary = refs["summary"].as_str().unwrap();
+    assert!(summary.contains("1 dangling_pin") && summary.contains("1 dangling_proposal_head"), "{summary}");
+    assert!(refs["hint"].as_str().unwrap().contains("garbage collection"));
+    let derive = check(&j, "derive");
+    assert_eq!(derive["status"], "warn", "{j}");
+    assert!(derive["summary"].as_str().unwrap().contains("disk full"));
+}

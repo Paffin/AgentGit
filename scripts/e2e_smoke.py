@@ -22,6 +22,9 @@ restart the server (or the pod) in between to prove that credentials, the reposi
 script grant roles and mint credentials with the offline admin tool inside the container instead of the HTTP
 API (the path docs/operations/deployment.md documents). Python 3 standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -68,10 +71,10 @@ class Api:
 
     def call(self, method: str, path: str, token: str | None = None, body: object = None,
              raw: bool = False, timeout: float = 30):
-        data = None if body is None else json.dumps(body).encode()
+        data = body if isinstance(body, bytes) else (None if body is None else json.dumps(body).encode())
         req = urllib.request.Request(self.base + path, data=data, method=method)
         if data is not None:
-            req.add_header("Content-Type", "application/json")
+            req.add_header("Content-Type", "application/octet-stream" if isinstance(body, bytes) else "application/json")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
         try:
@@ -84,6 +87,41 @@ class Api:
                 return e.code, json.loads(payload)
             except ValueError:
                 return e.code, payload.decode(errors="replace")
+
+
+def check_git_migration(api: Api, token: str, repository: str) -> None:
+    """Runs through the shipped server, including its real Git runtime dependency."""
+    step("Git bundle preflight, publication and content reconciliation")
+    with tempfile.TemporaryDirectory(prefix="ag-migrate-") as source:
+        def git(*args):
+            return subprocess.run(["git", "-C", source, *args], check=True, capture_output=True)
+        git("init", "-qb", "main")
+        git("config", "user.name", "Migration smoke")
+        git("config", "user.email", "migration@example.invalid")
+        with open(os.path.join(source, "hello.txt"), "w") as f:
+            f.write("migrated without changing the source\n")
+        git("add", ".")
+        git("-c", "commit.gpgsign=false", "commit", "-qm", "source commit")
+        git("branch", "feature")
+        git("tag", "v1")
+        archive = os.path.join(source, "source.bundle")
+        git("bundle", "create", archive, "--all")
+        with open(archive, "rb") as f:
+            bundle = f.read()
+        target = repository + "-migration"
+        status, plan = api.call("PUT", "/v1/migrations/git?name=" + urllib.parse.quote(target), token, bundle)
+        check(status == 200, "the shipped server can preflight a Git bundle", plan)
+        check(len(plan["report"]["branches"]) == 2 and len(plan["report"]["tags"]) == 1,
+              "all branches and tags are in the report", plan)
+        status, _ = api.call("GET", "/v1/repos/" + target, token)
+        check(status == 404, "preflight did not publish a partial repository")
+        route = "/v1/migrations/" + plan["id"] + "/commit"
+        status, result = api.call("POST", route, token, {"accept_lossy": False})
+        check(status == 200 and result["state"] == "imported", "import publishes after review", result)
+        status, again = api.call("POST", route, token, {"accept_lossy": False})
+        check(status == 200 and again == result, "publication retry is idempotent", again)
+        status, data = api.call("GET", "/v1/repos/" + target + "/files/hello.txt?rev=main", token, raw=True)
+        check(status == 200 and data == b"migrated without changing the source\n", "imported file bytes match the source", data)
 
 
 def wait_ready(api: Api, seconds: int) -> None:
@@ -243,6 +281,10 @@ def main() -> None:
 
     status, who = api.call("GET", "/v1/whoami", args.bootstrap_token)
     check(status == 200, "the bootstrap token authenticates", who)
+
+    # The browser importer intentionally supports local SQLite/filesystem repositories first.
+    if not args.expect_meta_backend or args.expect_meta_backend == "sqlite":
+        check_git_migration(api, args.bootstrap_token, args.repo)
 
     # ---- 2. administer ----------------------------------------------------------------------
     step("create the repository, grant roles, mint credentials")

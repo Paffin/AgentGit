@@ -10,6 +10,9 @@ the server's policy must refuse, and a person then reviews and lands the proposa
 
 Exit status 0 only if every check passed. Python 3 standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import os
 import sys

@@ -31,6 +31,15 @@ const (
 	liveKeyEnv  = "AG_LLM_LIVE_KEY_ENV"
 )
 
+// requireLive skips the test (with the marker of the component "model"), or fails it when AG_REQUIRE_COMPONENTS
+// names "model": the job that is supposed to talk to a model says so.
+func requireLive(t testing.TB) {
+	t.Helper()
+	if os.Getenv(liveSwitch) != "1" {
+		RequireComponent(t, "model", fmt.Errorf("live model test: set %s=1 (and %s) to run it against a real endpoint", liveSwitch, liveModel))
+	}
+}
+
 // LiveCall is one recorded exchange: the SHAPE of the prompt (sizes and the names of the fenced pieces, not the
 // repository text) and the model's answer.
 type LiveCall struct {
@@ -60,9 +69,7 @@ var fenceRE = regexp.MustCompile(`<<<UNTRUSTED id=\S+ name="([^"]*)" bytes=(\d+)
 // and the NAME of the key variable ("" when none is needed). It skips the test when live tests are off.
 func LiveSettings(t testing.TB) (baseURL, model, keyEnv string) {
 	t.Helper()
-	if os.Getenv(liveSwitch) != "1" {
-		t.Skip("live model test: set " + liveSwitch + "=1 (and " + liveModel + ") to run it against a real endpoint")
-	}
+	requireLive(t)
 	model = os.Getenv(liveModel)
 	if model == "" {
 		t.Fatalf("%s=1 needs %s: the model is your choice, nothing is assumed", liveSwitch, liveModel)
@@ -77,9 +84,7 @@ func LiveSettings(t testing.TB) (baseURL, model, keyEnv string) {
 // LiveLLM returns a recording client for the configured live endpoint, or skips the test when live tests are off.
 func LiveLLM(t testing.TB) *LiveRecorder {
 	t.Helper()
-	if os.Getenv(liveSwitch) != "1" {
-		t.Skip("live model test: set " + liveSwitch + "=1 (and " + liveModel + ") to run it against a real endpoint")
-	}
+	requireLive(t)
 	model := os.Getenv(liveModel)
 	if model == "" {
 		t.Fatalf("%s=1 needs %s: the model is your choice, nothing is assumed", liveSwitch, liveModel)

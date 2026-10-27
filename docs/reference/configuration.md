@@ -45,7 +45,7 @@ settings are shown by `ag config list` but are read-only there.
 | identity | `--as`, `AG_IDENTITY`, the user file, `user:$USER` |
 | colour | `--color WHEN`, the user file (when not `auto`), `NO_COLOR`, `CLICOLOR_FORCE`, `TERM=dumb` / `CLICOLOR=0`, then whether the output is a terminal |
 | repository | `-C DIR` / `--repo DIR`, else the nearest parent directory that contains `.ag/` |
-| a remote's credential | the variable named by the remote's `token_env`, the remote's token file, `AG_TOKEN_<REMOTE>`, `AG_TOKEN` |
+| a remote's credential | the variable named by the remote's `token_env`, the remote's token file, `AG_TOKEN_<REMOTE>`, `AG_TOKEN`, then the login saved by `ag login` (`credentials.json` beside the user file, readable by you only) |
 
 ## Environment variables read by `ag`
 

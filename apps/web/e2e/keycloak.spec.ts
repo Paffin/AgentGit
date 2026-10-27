@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { resolve } from 'node:path'
+import { requireComponent } from './support/components.ts'
 import { defaultUi, startServer } from './support/server.ts'
 import type { RunningServer } from './support/server.ts'
 import { Api } from './support/http.ts'
@@ -13,7 +14,7 @@ import { Api } from './support/http.ts'
 // re-authentication after a reload, token expiry once the provider's session is gone, and sign-out at the
 // provider.
 //
-// Needs AG_E2E_KEYCLOAK (the base URL of Keycloak, `http://localhost:8180`); other jobs skip it. Locally:
+// Needs AG_E2E_KEYCLOAK (the base URL of Keycloak, `http://localhost:8180`); other jobs skip it (and list the skip). Locally:
 //   docker run --rm -p 8180:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
 //     -v $PWD/e2e/keycloak:/opt/keycloak/data/import quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm
 
@@ -22,9 +23,10 @@ const REALM = 'agentgit'
 const ISSUER = `${KEYCLOAK}/realms/${REALM}`
 const CLIENT = 'agentgit-web'
 
-test.skip(
-  !KEYCLOAK,
-  'needs a Keycloak: set AG_E2E_KEYCLOAK (the "real identity provider" CI job does)',
+// Without AG_E2E_KEYCLOAK the tests skip with a marker; the "real identity provider" CI job sets
+// AG_REQUIRE_COMPONENTS=keycloak, so there a missing Keycloak is a failure.
+test.beforeEach(({}, info) =>
+  requireComponent(info, 'keycloak', KEYCLOAK ? null : 'needs a Keycloak: set AG_E2E_KEYCLOAK'),
 )
 // One Keycloak, a few tests that change its state: they run one after the other.
 test.describe.configure({ mode: 'serial' })
@@ -126,7 +128,7 @@ test('a person without a group is signed in but sees nothing', async ({ browser 
   await page.goto('/signin')
   await signInAtKeycloak(page, 'nobody', 'nobody-password')
   await expect(page.getByTestId('user-menu')).toContainText('user:nobody')
-  await page.goto('/')
+  await page.goto('/repos')
   await expect(page.getByText('No repositories yet')).toBeVisible()
   await ctx.close()
 })

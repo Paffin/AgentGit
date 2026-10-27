@@ -48,6 +48,9 @@ struct Rec {
     errors: BTreeMap<String, u64>,
     samples: Vec<String>,
     completed: u64,
+    // Acknowledged writes, kept separately from timing samples so the final server state can be checked.
+    integrated_per_stream: BTreeMap<String, u64>,
+    expected_files: BTreeMap<(String, String), Vec<u8>>,
 }
 
 impl Rec {
@@ -84,6 +87,11 @@ impl Rec {
             }
         }
         self.completed += o.completed;
+        for (stream, count) in o.integrated_per_stream {
+            *self.integrated_per_stream.entry(stream).or_default() += count;
+        }
+        // Non-conflict workers own disjoint paths; within a worker this contains its last successful write.
+        self.expected_files.extend(o.expected_files);
     }
 }
 
@@ -296,6 +304,14 @@ impl Worker {
                     let label =
                         if o.strategy.is_empty() { o.status.clone() } else { format!("{} ({})", o.status, o.strategy) };
                     *rec.outcomes.entry(label).or_default() += 1;
+                    if o.status == "integrated" {
+                        *rec.integrated_per_stream.entry(self.stream.clone()).or_default() += 1;
+                        if self.mode != Mode::Conflict {
+                            for (path, bytes) in &files {
+                                rec.expected_files.insert((self.stream.clone(), path.clone()), bytes.clone());
+                            }
+                        }
+                    }
                     last = (o.status == "integrated").then(|| o.new_head.clone()).filter(|h| !h.is_empty());
                 }
                 Err(e) => {
@@ -430,12 +446,37 @@ fn cycles(
 ) -> Result<ScenarioResult> {
     let fx = Fixture::start(bin, plan, ServerSettings::unlimited())?;
     let ws = workers(&fx, plan, proto, mode, rt)?;
+    let streams: HashSet<String> = ws.iter().map(|w| w.stream.clone()).collect();
     if mode != Mode::Chain {
         seed(&fx, &ws[0])?;
     }
     let before = fx.server.pid().and_then(proc_use);
-    let (rec, elapsed) = drive(ws, plan.duration);
+    let (mut rec, elapsed) = drive(ws, plan.duration);
+    ensure!(rec.completed > 0, "{name}: no integration completed; errors: {:?}", rec.errors);
+    ensure!(
+        rec.integrated_per_stream.values().sum::<u64>() > 0,
+        "{name}: no change was integrated; outcomes: {:?}",
+        rec.outcomes
+    );
+    let expected_files = std::mem::take(&mut rec.expected_files);
+    let integrated_per_stream = std::mem::take(&mut rec.integrated_per_stream);
     let mut r = finish(name, proto, description, plan.workers, elapsed, rec, &fx.server, before);
+    let seeded = u64::from(mode != Mode::Chain);
+    for stream in &streams {
+        let (_, version) = fx.admin.head(&fx.repo, stream).map_err(|e| anyhow::anyhow!("{}", e.message))?;
+        let expected = integrated_per_stream.get(stream).copied().unwrap_or(0) + seeded;
+        ensure!(version == expected, "stream {stream}: version {version}, expected {expected} acknowledged updates");
+    }
+    for ((stream, path), expected) in &expected_files {
+        let bytes = fx
+            .admin
+            .file_bytes(&fx.repo, stream, path)
+            .map_err(|e| anyhow::anyhow!("reading {stream}/{path}: {}", e.message))?;
+        ensure!(&bytes == expected, "stream {stream}: acknowledged content lost at {path}");
+    }
+    let verified_files = expected_files.len();
+    r.notes.insert("acknowledged updates verified".into(), "true".into());
+    r.notes.insert("acknowledged files verified".into(), verified_files.to_string());
     let (head, version) = fx
         .admin
         .head(&fx.repo, if mode == Mode::Chain { "s0" } else { "main" })

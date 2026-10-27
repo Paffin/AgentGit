@@ -57,25 +57,25 @@ const stream = computed({
         <SelectField
           v-if="board.streams.length > 1"
           v-model="stream"
-          label="Stream"
+          label="Branch"
           :options="streamOptions"
           class="sel"
         />
-        <p v-else class="k">Stream</p>
+        <p v-else class="k">Branch</p>
         <p class="v mono">
           {{ board.stream || '–' }}
           <span class="head">{{ current?.head ? shortId(current.head, 10) : 'empty' }}</span>
         </p>
         <p class="s">
-          version {{ current?.version ?? 0 }} · policy v{{ current?.policy_version ?? 0 }}
+          version {{ current?.version ?? 0 }} · rules v{{ current?.policy_version ?? 0 }}
         </p>
       </template>
     </div>
     <div class="tile">
-      <p class="k">Open proposals</p>
+      <p class="k">Open change requests</p>
       <p class="v">{{ board.cards.length }}{{ board.proposalsTruncated ? '+' : '' }}</p>
       <p class="s" :class="{ 'one-line': !board.proposalsTruncated }">
-        {{ ready }} ready · {{ held }} held back<template v-if="checking">
+        {{ ready }} ready · {{ held }} blocked<template v-if="checking">
           · {{ checking }} checking</template
         >
         <template v-if="board.proposalsTruncated">
@@ -85,20 +85,20 @@ const stream = computed({
       </p>
     </div>
     <div class="tile">
-      <p class="k">Agents running</p>
+      <p class="k">Agents working</p>
       <p class="v">{{ board.activeRuns.length }}</p>
       <p class="s" :class="{ warn: quiet > 0 }">
         {{
           board.activeRuns.length === 0
             ? 'no agents running'
             : quiet > 0
-              ? `${quiet} quiet`
-              : 'all heartbeating'
+              ? `${quiet} silent`
+              : 'all reporting in'
         }}
       </p>
     </div>
     <div class="tile">
-      <p class="k">Active leases</p>
+      <p class="k">Reservations</p>
       <p class="v">{{ board.activeLeases.length }}</p>
       <p class="s">{{ exclusive }} exclusive · {{ board.activeLeases.length - exclusive }} soft</p>
     </div>
@@ -108,9 +108,9 @@ const stream = computed({
       <p class="s">{{ counts.in_progress }} in progress · {{ counts.ready }} ready</p>
     </div>
     <div class="tile">
-      <p class="k">Queue</p>
+      <p class="k">Landing queue</p>
       <p class="v">{{ waiting }}</p>
-      <p class="s">waiting to integrate</p>
+      <p class="s">waiting to land</p>
     </div>
   </section>
 </template>

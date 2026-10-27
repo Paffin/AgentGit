@@ -67,7 +67,7 @@ test.describe('axe, dialogs', () => {
     await expectAccessible(page, testInfo, 'review dialog')
     await page.keyboard.press('Escape')
     await page.getByTestId('act-integrate').click()
-    await expect(page.getByRole('dialog', { name: 'Integrate this proposal' })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Land this change request' })).toBeVisible()
     await expectAccessible(page, testInfo, 'integrate dialog')
     await page.keyboard.press('Escape')
     await page.goto('/access')

@@ -94,6 +94,7 @@ impl From<MetaError> for ApiError {
                 Self::new(ErrorCode::ObjectMissing, format!("parent changeset {id} is not published"))
             }
             MetaError::Invalid(m) => Self::invalid(m),
+            MetaError::QuotaExceeded(m) => Self::new(ErrorCode::QuotaExceeded, m),
             // Transient trouble with the database (a busy lock, a restart, a failover): nothing was committed,
             // so the caller may simply try again — on this replica or another.
             MetaError::Retriable(m) => {

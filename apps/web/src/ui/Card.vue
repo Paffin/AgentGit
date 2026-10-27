@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 import Icon from './Icon.vue'
+import Term from './Term.vue'
+import type { TermId } from '@/lib/glossary'
 import type { IconName } from './icons'
 
 withDefaults(
@@ -13,6 +15,8 @@ withDefaults(
     /** Heading level for the title; the page decides, the card only styles. */
     level?: 2 | 3 | 4
     tone?: 'default' | 'warn' | 'bad' | 'ok'
+    /** Show the title through the glossary: its plain label, with the AgentGit word in a tooltip. */
+    term?: TermId
   }>(),
   {
     title: undefined,
@@ -21,6 +25,7 @@ withDefaults(
     flush: false,
     level: 2,
     tone: 'default',
+    term: undefined,
   },
 )
 
@@ -34,7 +39,8 @@ const titleId = useId()
         <div class="titles">
           <component :is="`h${level}`" :id="titleId" class="title">
             <Icon v-if="icon" :name="icon" :size="16" />
-            {{ title }}
+            <Term v-if="term" :id="term" plural />
+            <template v-else>{{ title }}</template>
           </component>
           <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
         </div>

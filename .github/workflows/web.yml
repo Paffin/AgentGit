@@ -10,6 +10,8 @@ on:
       - "docs/protocol/openapi.json"
       - "crates/ag-server/**"
       - "scripts/build_ui.sh"
+      - "scripts/check_skips.py"
+      - "tests/skip-allowlist.toml"
       - ".github/workflows/web.yml"
   pull_request:
     paths:
@@ -17,6 +19,8 @@ on:
       - "docs/protocol/openapi.json"
       - "crates/ag-server/**"
       - "scripts/build_ui.sh"
+      - "scripts/check_skips.py"
+      - "tests/skip-allowlist.toml"
       - ".github/workflows/web.yml"
 
 permissions:
@@ -77,7 +81,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: web-e2e
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -100,6 +104,11 @@ jobs:
           AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
           AG_E2E_UI: embedded
           CI: "true"
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      # keycloak.spec.ts skips here by design (tests/skip-allowlist.toml): the identity provider job runs it.
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job "web/e2e-${{ matrix.project }}" --report "$RUNNER_TEMP/skips.jsonl"
       - name: What failed
         if: failure()
         run: node scripts/summarize-failures.mjs
@@ -144,7 +153,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: web-e2e
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -171,7 +180,10 @@ jobs:
           echo "Keycloak did not become ready" >&2
           exit 1
       - name: The server's own token validation, with tokens Keycloak issued
-        run: cargo test -p agentgit-server --test oidc_keycloak -- --ignored --test-threads=1
+        run: cargo test -p agentgit-server --test oidc_keycloak -- --test-threads=1
+        env:
+          AG_REQUIRE_COMPONENTS: keycloak
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
       - name: The browser round trip, token expiry and sign-out with Keycloak
         run: npx playwright test --project=chromium --no-deps keycloak.spec.ts
         working-directory: apps/web
@@ -180,6 +192,12 @@ jobs:
           AG_CLI_BIN: ${{ github.workspace }}/target/debug/ag
           AG_E2E_UI: embedded
           CI: "true"
+          AG_REQUIRE_COMPONENTS: keycloak
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      # Nothing may skip here: the whole point of this job is the real identity provider.
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job web/keycloak --report "$RUNNER_TEMP/skips.jsonl"
       - name: Keycloak's log
         if: failure()
         run: docker logs keycloak | tail -120

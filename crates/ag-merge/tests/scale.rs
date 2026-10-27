@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use ag_merge::{BlobIo, IoError, detect_renames, merge_trees};
+use ag_merge::{Algorithm, BlobIo, IoError, detect_renames, merge_trees, merge_trees_with};
 use ag_object::hash_blob;
 use ag_tree::{Entry, Tree};
 use ag_types::{BlobId, FileType, Limits, RepoPath};
@@ -87,5 +87,59 @@ fn merge_costs() {
             merge_trees(&base, &moved, &edited, &io, &limits).unwrap()
         });
         assert!(m.is_clean(), "{:?}", m.conflicts);
+    }
+}
+
+/// A directory of `n` files is renamed on one side; the other side edits one file, adds 20 and (in the last
+/// case) every file of the tree is identical. Compares ag-merge/3 with ag-merge/2.
+#[test]
+#[ignore = "measurement"]
+fn directory_rename_costs() {
+    let limits = Limits { max_tree_entries: 2_000_000, ..Limits::default() };
+    for n in [10_000usize, 100_000] {
+        for identical in [false, true] {
+            println!(
+                "\n{n} entries in one renamed directory{}",
+                if identical { ", all with identical content" } else { "" }
+            );
+            let io = Mem::default();
+            let body = |i: usize| if identical { "same\n".to_string() } else { format!("file {i}\nline\n") };
+            let file = |dir: &str, i: usize| format!("{dir}/pkg{:03}/mod{:02}/file{i}.rs", i % 200, i % 40);
+            let entry = |text: String| Entry {
+                content: io.write_blob(text.into_bytes()).unwrap(),
+                file_type: FileType::Regular,
+                executable: false,
+            };
+            let tree = |dir: &str, extra: &[(String, String)]| {
+                let mut v: Vec<(RepoPath, Entry)> =
+                    (0..n).map(|i| (RepoPath::new(file(dir, i)).unwrap(), entry(body(i)))).collect();
+                v.extend(extra.iter().map(|(p, c)| (RepoPath::new(p.as_str()).unwrap(), entry(c.clone()))));
+                Tree::from_entries(v, &limits).unwrap()
+            };
+            let base = tree("lib", &[]);
+            let ours = tree("src", &[]);
+            let mut extra: Vec<(String, String)> =
+                (0..20).map(|i| (format!("lib/new{i}.rs"), format!("new {i}\n"))).collect();
+            extra.push((file("lib", 5), "edited\n".to_string()));
+            let theirs = {
+                let mut v: Vec<(RepoPath, Entry)> = base.iter().map(|(p, e)| (p.clone(), *e)).collect();
+                for (path, c) in &extra {
+                    v.retain(|(p, _)| p.as_str() != path);
+                    v.push((RepoPath::new(path.as_str()).unwrap(), entry(c.clone())));
+                }
+                Tree::from_entries(v, &limits).unwrap()
+            };
+            for algo in [Algorithm::V2, Algorithm::V3] {
+                let m = timed(&format!("merge_trees_with({})", algo.version()), || {
+                    merge_trees_with(algo, &base, &ours, &theirs, &io, &limits).unwrap()
+                });
+                println!("      conflicts: {}, notes: {}", m.conflicts.len(), m.notes.len());
+                if algo == Algorithm::V3 {
+                    assert!(m.is_clean(), "{:?}", m.conflicts.iter().take(3).collect::<Vec<_>>());
+                    assert_eq!(m.tree.len(), n + 20);
+                }
+            }
+            let _ = merge_trees;
+        }
     }
 }

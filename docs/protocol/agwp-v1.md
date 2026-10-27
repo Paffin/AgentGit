@@ -45,13 +45,13 @@ directory is checked by a test, so it cannot drift from the server.
   recorded response (what the first call answered — not a fresh view of the object); the same key with
   different content is refused with `idempotency_key_reused`. For `task.create`, `run.start` and `lease.acquire`
   the record is written in the same transaction as the object, so two requests racing on one key, or a crash in
-  between, never produce two objects; records are kept for the life of the repository. Every other operation either is naturally
+  between, never produce two objects; for these three, records are kept for `repos.idempotency_ttl_secs` (default 7 days; 0 = for the life of the repository), after which the key is free again and a periodic sweep (`repos.idempotency_sweep_interval_secs`, default hourly) deletes the record; the engine's own keyed operations (publish, propose, integrate) are kept as operations. Every other operation either is naturally
   idempotent (setting a policy, granting a role, pinning, finishing a task) or cannot replay its result — a
   minted credential's secret is shown once, so `credentials.mint` ignores the key; a repeated
   `stream.create` answers `already_exists`. After a lost response to a call without a key, ask for the outcome
   (`GET …/operations?idempotency_key=…` where a key was used) instead of blindly retrying.
 * **Pagination.** `page_size` (0 = default 100, max 1000) and an opaque `page_token`; responses carry
-  `next_page_token` (empty = last page). Tokens are only valid for the listing that produced them. A few
+  `next_page_token` (empty = last page). Tokens are only valid for the listing that produced them. Proposal listings are keyset pages (the token carries the sort key `created_at, id` of the last row; `state`, `stream` and `author` filter in SQL), so a walk neither skips nor repeats a proposal when others are opened or closed meanwhile. A few
   listings are capped instead of paged and say so with `truncated: true`: credentials (newest 1000), role
   bindings (5000) and the lease history (`limit`, default 100, at most 1000; active leases are never cut).
   Narrow the request (`subject`, `repo`) to see the rest. Authorization itself never reads a capped list.
@@ -59,14 +59,14 @@ directory is checked by a test, so it cannot drift from the server.
   deadline expires the operation *may still complete*: the error is `deadline_exceeded`; ask for the outcome.
   The server applies `limits.default_deadline_ms` when the client sets none.
 * **Backpressure.** `429 rate_limited`/`quota_exceeded` and `503 unavailable` carry `retry_after_ms`
-  (HTTP: `Retry-After`, whole seconds, at least 1; prefer `retry_after_ms`). Every authenticated operation
+  (HTTP: `Retry-After`, whole seconds rounded up, at least 1, never shorter than `retry_after_ms`; and `Retry-After-Ms` with the exact value; prefer `retry_after_ms`). Every authenticated operation
   takes one token from the caller's bucket (`limits.requests_per_second`: per credential, or per identity for
   OIDC sign-ins, whose tokens are short-lived), including the ones not tied to a repository. A repository may
   carry a quota of its own: `max_total_object_bytes` is charged to every write that adds an object (uploads,
   workspace edits, merges — whichever endpoint writes it, atomically across concurrent requests and replicas;
   the tracked total is an estimate that garbage collection recounts), `max_object_bytes` bounds one object,
-  `max_streams` and `max_open_proposals` bound counts (checked just before the create, so concurrent creates
-  can overshoot by the number in flight), and `requests_per_second`/`burst` add a per-repository rate limit.
+  `max_streams` and `max_open_proposals` bound counts (counted inside the transaction that inserts the row; write
+  transactions of one repository never overlap, so racing creates cannot pass the limit), and `requests_per_second`/`burst` add a per-repository rate limit.
   New repositories start with the `[limits] repo_*` / `max_*` defaults of the server configuration.
 * **`retryable`.** `retryable: true` means that doing the *logical operation* again may succeed — after
   waiting (`rate_limited`, `unavailable`), after re-reading state and redoing the change (`stream_moved`,
@@ -117,8 +117,14 @@ Routes that do not exist answer `404 not_found` and methods a route does not hav
 has a stable `code` — see the [policy guide](../guides/policy.md#outcome-codes). A `conflict` outcome (and a
 sync that cannot merge) lists `Conflict`s: each has a `path`, a stable machine-readable `kind` — one of `content`,
 `both_added`, `delete_modify`, `binary`, `type_change`, `too_large`, `file_directory`, `rename_rename`,
-`rename_delete`; new kinds may be added, so a client must tolerate one it does not know — and a `message` for
+`rename_delete`, `directory_rename_ambiguous`, `directory_rename_collision`; new kinds may be added, so a client must tolerate one it does not know — and a `message` for
 people (region counts, which side deleted); a client branches on `kind` and shows `message`.
+
+The two `directory_rename_*` kinds come from `ag-merge/3` ([ADR-0013](../adr/0013-directory-renames.md)): one side
+moved a directory and the other changed files under its old name in a way the merge cannot follow without guessing.
+A merge that *did* follow a move is not a conflict; it is reported as a typed note (`directory_rename`) by
+`ag preview` and in the `Directory-Rename:` lines of the merge changeset message. Notes are not part of AGWP v1
+messages yet (`Preparation` carries conflicts only), so the Web UI shows the conflicts and not the notes.
 
 ## Authentication
 
@@ -162,11 +168,11 @@ Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per reposito
 | Role | Grants |
 |---|---|
 | `reader` | read everything in a repository: history, trees, streams, proposals, events, policy, audit pins |
-| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent, tasks, leases, provenance |
+| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent (start, heartbeat and end the runs of **its own** agent identity only: acting for another agent needs `agent.operate`), tasks, leases, provenance |
 | `reviewer` | reader + review proposals |
 | `integrator` | reader + integrate proposals, request validation, run the queue, close proposals |
 | `runner` | reader + claim execution jobs and submit attestations (execution-plane workers) |
-| `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
+| `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: start, heartbeat or end a run for another agent, finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
 | `admin` | everything, including policy, credentials, roles, GC, fsck, stream compare-and-swap |
 
 A caller with no role at all on a repository gets `not_found`. Authorization says *who may call which API*;

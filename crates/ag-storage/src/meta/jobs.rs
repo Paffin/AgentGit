@@ -157,6 +157,11 @@ fn job_row(r: &Row) -> Result<JobRow, MetaError> {
 }
 
 /// Why a lease-holding call found nothing to act on.
+/// A claim number as a statement parameter: -1 = not given (any claim of the worker's will do).
+fn claim_param(claim: Option<u32>) -> i64 {
+    claim.map_or(-1, i64::from)
+}
+
 fn not_owned(id: &str, worker: &str) -> MetaError {
     MetaError::NotFound(format!("job '{id}' claimed by '{worker}' (finished, cancelled, or its lease was taken over)"))
 }
@@ -316,14 +321,25 @@ impl Tx<'_> {
     /// Extends the lease of a job `worker` holds. Fails with
     /// [`MetaError::NotFound`] if the worker no longer owns it (cancelled, or
     /// reaped and claimed by someone else): the worker should stop.
-    pub fn job_heartbeat(&self, id: &str, worker: &str, lease_ms: i64) -> Result<JobRow, MetaError> {
+    ///
+    /// With `claim` (the job's `attempts` when the worker claimed it, see [`Tx::job_claim`]) the lease is extended
+    /// only if that is still the current claim: a worker of the same name whose lease expired and whose job was
+    /// claimed again (by anyone, itself included) is turned away like any other stale claimant.
+    pub fn job_heartbeat(
+        &self,
+        id: &str,
+        worker: &str,
+        claim: Option<u32>,
+        lease_ms: i64,
+    ) -> Result<JobRow, MetaError> {
         if lease_ms <= 0 {
             return Err(MetaError::Invalid("lease_ms must be positive".into()));
         }
         let now = self.now().as_millis();
         let n = self.conn.execute(
-            "UPDATE jobs SET claimed_until = ?1, updated_at = ?2 WHERE id = ?3 AND state = 'claimed' AND claimed_by = ?4",
-            &params![now.saturating_add(lease_ms), now, id, worker],
+            "UPDATE jobs SET claimed_until = ?1, updated_at = ?2
+             WHERE id = ?3 AND state = 'claimed' AND claimed_by = ?4 AND (CAST(?5 AS BIGINT) < 0 OR attempts = CAST(?5 AS BIGINT))",
+            &params![now.saturating_add(lease_ms), now, id, worker, claim_param(claim)],
         )?;
         if n == 0 {
             return Err(not_owned(id, worker));
@@ -331,12 +347,19 @@ impl Tx<'_> {
         self.job_get(id)?.ok_or_else(|| MetaError::Corrupt("job vanished".into()))
     }
 
-    /// Marks a job `worker` holds as succeeded and stores its result.
-    pub fn job_complete(&self, id: &str, worker: &str, result: &Value) -> Result<JobRow, MetaError> {
+    /// Marks a job `worker` holds as succeeded and stores its result. `claim` fences stale claimants as in
+    /// [`Tx::job_heartbeat`].
+    pub fn job_complete(
+        &self,
+        id: &str,
+        worker: &str,
+        claim: Option<u32>,
+        result: &Value,
+    ) -> Result<JobRow, MetaError> {
         let n = self.conn.execute(
             "UPDATE jobs SET state = 'succeeded', result = ?1, claimed_until = NULL, updated_at = ?2
-             WHERE id = ?3 AND state = 'claimed' AND claimed_by = ?4",
-            &params![serde_json::to_string(result)?, self.now().as_millis(), id, worker],
+             WHERE id = ?3 AND state = 'claimed' AND claimed_by = ?4 AND (CAST(?5 AS BIGINT) < 0 OR attempts = CAST(?5 AS BIGINT))",
+            &params![serde_json::to_string(result)?, self.now().as_millis(), id, worker, claim_param(claim)],
         )?;
         if n == 0 {
             return Err(not_owned(id, worker));
@@ -350,9 +373,21 @@ impl Tx<'_> {
     /// and may not run before `now + ms`. With `None`, or when the attempts are
     /// used up, it fails for good (`None` is how a worker says "retrying is
     /// pointless").
-    pub fn job_fail(&self, id: &str, worker: &str, error: &str, retry_after: Option<i64>) -> Result<JobRow, MetaError> {
+    ///
+    /// `claim` fences stale claimants as in [`Tx::job_heartbeat`].
+    pub fn job_fail(
+        &self,
+        id: &str,
+        worker: &str,
+        claim: Option<u32>,
+        error: &str,
+        retry_after: Option<i64>,
+    ) -> Result<JobRow, MetaError> {
         let job = self.job_get(id)?.ok_or_else(|| MetaError::NotFound(format!("job '{id}'")))?;
-        if job.state != JobState::Claimed || job.claimed_by.as_deref() != Some(worker) {
+        if job.state != JobState::Claimed
+            || job.claimed_by.as_deref() != Some(worker)
+            || claim.is_some_and(|c| c != job.attempts)
+        {
             return Err(not_owned(id, worker));
         }
         let now = self.now().as_millis();

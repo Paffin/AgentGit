@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use ag_integrate::{BlameOptions, Repository};
-use ag_merge::{BlobIo, IoError, merge_trees};
+use ag_merge::{Algorithm, BlobIo, IoError, merge_trees_with};
 use ag_types::{BlobId, ChangesetId, TreeId};
 use serde_json::Value;
 
@@ -199,8 +199,12 @@ fn every_merge_the_old_build_made_is_reproduced_by_this_one() {
                 f.repo.tree_of(&cs.parents[0]).unwrap(),
                 f.repo.tree_of(&cs.parents[1]).unwrap(),
             );
-            let merged =
-                merge_trees(&base_t, &ours_t, &theirs_t, &Blobs(&f.repo), f.repo.limits()).expect("merge runs");
+            // A recorded merge is verified by the algorithm version it names, not by today's.
+            let recorded = Algorithm::parse(algorithm).unwrap_or_else(|| {
+                panic!("fixture {}: merge {} names an unknown algorithm {algorithm}", f.label, id.short())
+            });
+            let merged = merge_trees_with(recorded, &base_t, &ours_t, &theirs_t, &Blobs(&f.repo), f.repo.limits())
+                .expect("merge runs");
             assert!(
                 merged.is_clean(),
                 "fixture {}: merge {} now conflicts: {:?}",
@@ -383,4 +387,30 @@ fn a_fixture_repository_still_accepts_new_work() {
 fn hex_sha256(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     hex::encode(Sha256::digest(bytes))
+}
+
+/// Every fixture - the schema-2 one written by the first alpha and the schema-3 one written after the proposal-paging
+/// indexes were added - ends up at the current metadata schema with those indexes once this build has opened it.
+#[test]
+fn every_fixture_is_at_the_current_metadata_schema_with_the_paging_indexes() {
+    for f in fixtures() {
+        let current = ag_storage::meta::SCHEMA_VERSION.to_string();
+        assert_eq!(
+            f.repo.meta().read(|tx| tx.meta_get("schema")).unwrap().as_deref(),
+            Some(current.as_str()),
+            "fixture {}",
+            f.label
+        );
+        let indexes = f
+            .repo
+            .meta()
+            .read(|tx| {
+                tx.raw_query(
+                    "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'proposals_by_%created'",
+                    &[],
+                )
+            })
+            .unwrap();
+        assert_eq!(indexes.len(), 3, "fixture {}", f.label);
+    }
 }

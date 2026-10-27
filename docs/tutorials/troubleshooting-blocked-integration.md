@@ -83,12 +83,34 @@ Blocked (policy v1); the stream was not changed:
   - approvals (default): 0 of 1 required
 candidate tree: ...
 Provide what is missing, then run `ag integrate prop_...` again (it resumes this operation).
-  validate:  ag validate run prop_... --check <name> --key <issuer-key> -- <command>
-  approve:   ag proposal review prop_... --approve
+  ag validate run prop_... --check tests --key <issuer-key> -- <command>
+  ag proposal review prop_... --approve
+`ag explain prop_...` says why, step by step.
 operation op_...
 ```
 
-Two things are missing, and the output names the commands that provide them. The same facts, for a program:
+Two things are missing, and the output names the commands that provide them. If you would rather have the reasons
+in words, `ag explain` says what each one means and why the rule exists, and lists every step (it changes nothing; with no
+argument it takes your newest open proposal; its exit status is 0, 3 or 4 like `integrate`'s):
+
+<!-- doctest -->
+```bash
+ag explain "$P1"                                   # expect-exit 3
+```
+
+<!-- expect -->
+```text
+Proposal prop_... "Copy items before summing" -> main: blocked (policy v1).
+
+1. The check 'tests' has not passed on this exact change.
+   Why: ...
+   Next:
+     ag validate run prop_... --check tests --key <issuer-key> -- <command>
+...
+2. 0 of 1 required approvals (all changes).
+```
+
+The same facts, for a program:
 
 <!-- doctest -->
 ```bash
@@ -361,12 +383,23 @@ Created workspace 'wide' on 'main' in ../wide
 Snapshot ... in workspace 'wide'
 Denied by policy; the stream was not changed:
   - 2 files changed, policy allows at most 1
+What to do:
+  ag proposal close prop_...
+`ag explain prop_...` says why, step by step.
 Denied by policy; the stream was not changed:
   - actor not allowed to integrate: user:bob is not in the policy's integrators
   - 2 files changed, policy allows at most 1
+What to do:
+  ag policy explain
+  ag proposal close prop_...
+`ag explain prop_...` says why, step by step.
 Denied by policy; the stream was not changed:
   - actor not allowed to integrate: agents may not integrate unless agent_autonomy.auto_integrate is on and the change is within its limits
   - 2 files changed, policy allows at most 1
+What to do:
+  ag policy explain
+  ag proposal close prop_...
+`ag explain prop_...` says why, step by step.
 ```
 
 None of these has a "provide it" answer: split the change into two proposals, ask an integrator, or have the policy's
@@ -428,7 +461,8 @@ ag integrate "$PB"                                 # expect-exit 4
 Conflict: the proposal cannot be merged automatically; the stream was not changed.
   src/lib.rs  (content conflict (1 region(s)))
 merge base: ...
-Fix: `ag sync`, resolve the marked files, `ag snapshot`, `ag proposal update <id>`.
+Fix: `ag sync`, `ag snapshot -m "resolve the conflict in <path>"`, `ag proposal update prop_...`, `ag integrate prop_...`.
+`ag explain prop_...` says why, step by step.
 ```
 
 The stream was not touched. The fix is spelled out in the message: bring the stream's head into the workspace (the

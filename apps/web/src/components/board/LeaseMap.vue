@@ -35,7 +35,8 @@ const exclusive = computed(() => rows.value.filter((r) => r.lease.exclusive).len
 
 <template>
   <Card
-    title="Lease map"
+    title="Reservations"
+    term="lease"
     icon="lock"
     :subtitle="`${exclusive} exclusive · ${rows.length - exclusive} soft${overlapCount ? ` · ${overlapCount} overlapping` : ''}`"
     flush
@@ -46,7 +47,7 @@ const exclusive = computed(() => rows.value.filter((r) => r.lease.exclusive).len
       </div>
       <ErrorState
         v-else-if="board.load.leases.status === 'error' && rows.length === 0"
-        what="leases"
+        what="reservations"
         :error="board.load.leases.error"
         compact
         @retry="board.refreshAll()"
@@ -55,8 +56,8 @@ const exclusive = computed(() => rows.value.filter((r) => r.lease.exclusive).len
         v-else-if="rows.length === 0"
         icon="unlock"
         compact
-        title="No active leases"
-        description="Soft leases are signals; exclusive leases carry a fencing token and are enforced at integration."
+        title="No active reservations"
+        description="A reservation claims some files for an agent. Soft ones are a signal; exclusive ones keep other changes out and need a reservation key to land."
       />
       <ul v-else class="list" role="list">
         <li
@@ -71,7 +72,7 @@ const exclusive = computed(() => rows.value.filter((r) => r.lease.exclusive).len
               :name="r.lease.exclusive ? 'lock' : 'unlock'"
               :size="15"
               class="kind"
-              :label="r.lease.exclusive ? 'Exclusive lease' : 'Soft lease'"
+              :label="r.lease.exclusive ? 'Exclusive reservation' : 'Soft reservation'"
             />
             <span class="scope mono">
               <template v-for="(seg, i) in r.segments" :key="i"

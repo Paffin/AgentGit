@@ -35,6 +35,13 @@ The generator and the server **share the machine**, so the numbers include the g
 server's CPU seconds (from `/proc/<pid>/stat`) are shown next to them. Retries are not hidden: a failed cycle is
 counted as a failure and the client starts a new one after the server's retry hint.
 
+After `streams`, `contention` and `conflict`, the generator checks that each stream's version equals the number
+of acknowledged integrations (plus the seed, where applicable). For `streams` and `contention`, it also reads back
+the last successfully written bytes of every worker-owned path. These checks run outside the timed load phase and
+fail the command if an acknowledged update is missing or applied twice. The report records the verified file count.
+Conflict runs verify the update count only: competing writers deliberately overwrite the same path. Zero-duration,
+zero-worker and write runs with no completed integrations are rejected instead of producing an empty success report.
+
 Conditions of the numbers below: commit `ff68edb` plus the change that introduced `ag-bench`; Intel Xeon @ 2.80 GHz,
 4 logical CPUs, 16 GiB, Linux 6.18, rustc 1.97, release builds of both; 16 writers (one thread and one credential
 each, plus one integrator credential each), 20 s per scenario. The data lived on the VM's virtual disk. It is a shared
@@ -67,7 +74,8 @@ Different streams do not conflict, but they do not run in parallel either: the s
 while 16 clients waited, i.e. it was not CPU-bound. The same scenario with the servers' data on a memory-backed file
 system (`--data-parent /dev/shm`, HTTP/JSON, same VM, run afterwards) did **231 integrations/s** (propose p50 12 ms,
 integrate p50 25 ms, cycle p50 55 ms): about 2.9 times more. On this VM, therefore, most of the write latency is
-the disk: every write transaction is an fsync (`synchronous=FULL`, a deliberate durability choice documented in
+the disk: every write transaction is an fsync (an integration needed 7 of them when these runs were taken and needs 3
+now, [numbers](../architecture/performance.md#fewer-commits-per-integration); `synchronous=FULL`, a deliberate durability choice documented in
 [Durability](durability.md)), and writers to one repository's SQLite database take turns. That is a statement about
 this VM's disk; on a disk with cheap fsyncs the ratio will differ. PostgreSQL metadata (`[repos]` storage, see
 [PostgreSQL & S3](postgres-and-s3.md)) was not measured.
@@ -82,8 +90,11 @@ on a head that has moved by the time it is integrated is merged by the server (t
 | HTTP/JSON | 44.1 | 95 fast-forward, 807 merge | 43.5 / 810 ms | 116 / 1145 / 2004 ms | 112 (11 %) |
 | gRPC | 48.8 | 98 fast-forward, 895 merge | 58.9 / 655 ms | 99 / 681 / 1101 ms | 159 (14 %) |
 
-Failure mode: when the stream moves again and again while a merge is being prepared, the server gives up after eight
-attempts and answers `aborted` — "stream changed 8 times while integrating; retry" (HTTP 409, retryable). It lost
+These runs are from before the bounded retry described in the [engine page](../architecture/performance.md#same-stream-contention-a-bounded-retry)
+(24 attempts with a spread wait, `repos.integrate_attempts`); with it `aborted` fell to 3-4 % at 16 writers on one
+stream (HTTP/JSON, two runs). Failure mode: when the stream moves again and again while a merge is being prepared, the
+server gives up after its attempts and answers `aborted` — "stream changed 8 times while integrating; retry" (8 was
+the limit when these runs were taken; HTTP 409, retryable). It lost
 nothing: the proposal is untouched and the client integrates it again. At 16 writers on one stream, roughly one
 integration in nine needed that second try. Clients should treat `aborted` as "retry" (the error is marked retryable in the protocol); the generator here does not retry inside a cycle, it counts the failure and starts a new cycle.
 
@@ -171,10 +182,10 @@ gRPC clients got through far more refused requests per second in this run; this 
 
 [`perf.yml`](../../.github/workflows/perf.yml) runs on changes to the server, the engine and the tool:
 
-* **smoke** (every push to `main` touching those paths and every pull request touching the tool): the engine
-  benchmark at 1 000 and 10 000 files and `ag-bench load --profile smoke`, release builds, **non-gating**
-  (`continue-on-error`); the results are in the job summary and uploaded as the `perf-smoke` artifact. A runner's
-  numbers are not compared with anything: the point is that the tools still run end to end.
+* **smoke** (every push to `main` and pull request touching the tool, server, integration, merge or tree code): the
+  engine benchmark at 1 000 and 10 000 files and `ag-bench load --profile smoke`, release builds. Failed runs,
+  including integrity-check failures, fail the job; latency and throughput have no thresholds. The results are in
+  the job summary and uploaded as the `perf-smoke` artifact, including on failure when available.
 * **full** (weekly, and by hand): the sizes in this page, the artifact is `perf-full`.
 
 The functional behaviour that the load run exercises — `rate_limited` rejections never exceeding the bucket, shedding

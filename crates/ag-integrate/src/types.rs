@@ -22,7 +22,8 @@ pub struct ConflictInfo {
     /// The path.
     pub path: String,
     /// The kind of conflict as a stable code (`content`, `both_added`, `delete_modify`, `binary`, `type_change`,
-    /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`): see `ag_merge::ConflictKind::code`.
+    /// `too_large`, `file_directory`, `rename_rename`, `rename_delete`,
+    /// `directory_rename_ambiguous`, `directory_rename_collision`): see `ag_merge::ConflictKind::code`.
     pub kind: String,
     /// The same, in words for a person (`content conflict (2 region(s))`). Outcomes stored before this field
     /// existed have none.
@@ -39,6 +40,30 @@ impl ConflictInfo {
     /// What to show a person: the message, or the code for an outcome stored before messages existed.
     pub fn describe(&self) -> &str {
         if self.message.is_empty() { &self.kind } else { &self.message }
+    }
+}
+
+/// A note of the merge: something it decided on its own and a person may want to check.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NoteInfo {
+    /// A stable code (`directory_rename`): see `ag_merge::MergeNote::code`.
+    pub code: String,
+    /// The note in words for a person.
+    pub message: String,
+    /// The paths involved, as `[from, to]` pairs (files moved along by a directory rename), possibly cut.
+    #[serde(default)]
+    pub moves: Vec<[String; 2]>,
+}
+
+impl NoteInfo {
+    /// The wire description of a merge note.
+    pub fn from_note(n: &ag_merge::MergeNote) -> Self {
+        let moves = match n {
+            ag_merge::MergeNote::DirectoryRename { relocated, .. } => {
+                relocated.iter().map(|(a, b)| [a.to_string(), b.to_string()]).collect()
+            }
+        };
+        NoteInfo { code: n.code().to_string(), message: n.to_string(), moves }
     }
 }
 

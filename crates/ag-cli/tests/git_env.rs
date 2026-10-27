@@ -25,8 +25,9 @@ fn git(dir: &std::path::Path, args: &[&str]) -> String {
 
 #[test]
 fn a_hook_environment_does_not_redirect_the_bridge_to_another_repository() {
-    if Command::new("git").arg("--version").output().is_err() {
-        eprintln!("SKIP: git is not installed");
+    if ag_testkit::require_here("git", "git is not installed", Command::new("git").arg("--version").output().ok())
+        .is_none()
+    {
         return;
     }
     let scratch = tempfile::tempdir().unwrap();

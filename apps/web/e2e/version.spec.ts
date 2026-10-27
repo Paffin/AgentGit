@@ -22,7 +22,7 @@ test('a UI that belongs to its server says nothing, and the build names the same
   const caps = await (await request.get(`${state.baseURL}/v1/capabilities`)).json()
   expect(ui.version).toBe(caps.server_version)
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
   // The check has run (it is the first thing the shell does) and found nothing to say.
   await expect(page.getByTestId('version-banner')).toHaveCount(0)
 })
@@ -87,7 +87,7 @@ test.describe('a UI build of another version', () => {
     expect(own, 'the build and the server are one version').toBe(serverVersion)
     const [major, minor] = own.split('.')
     const { ctx, page } = await open(browser, `${major}.${minor}.999`)
-    await expect(page.getByRole('heading', { name: 'Repositories', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
     await expect(page.getByTestId('version-banner')).toHaveCount(0)
     await ctx.close()
   })

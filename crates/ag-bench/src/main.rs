@@ -47,6 +47,10 @@ enum Command {
         /// Only operations whose name contains this text (the setup always runs).
         #[arg(long, default_value = "")]
         filter: String,
+        /// Keep decoded trees in memory under this budget (MiB), as `ag-server` does with `repos.tree_cache_bytes`.
+        /// 0 (the default) measures the engine without the cache.
+        #[arg(long, default_value_t = 0)]
+        tree_cache_mb: usize,
         /// Write the raw results here as JSON.
         #[arg(long)]
         json: Option<PathBuf>,
@@ -109,7 +113,7 @@ fn engine_markdown(
 
 fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Engine { sizes, samples, budget_secs, backend, filter, json, markdown } => {
+        Command::Engine { sizes, samples, budget_secs, backend, filter, tree_cache_mb, json, markdown } => {
             let env = report::Environment::capture();
             if !env.release_build {
                 eprintln!(
@@ -122,6 +126,7 @@ fn main() -> Result<()> {
                 budget: Duration::from_secs(budget_secs),
                 backend,
                 filter,
+                tree_cache_bytes: tree_cache_mb.saturating_mul(1024 * 1024),
             };
             let rows = engine::run(&opts)?;
             let md = engine_markdown(&env, backend, &sizes, &rows);

@@ -636,6 +636,13 @@
               }
             ]
           },
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "job_id": {
             "default": "",
             "type": "string"
@@ -724,7 +731,7 @@
         "properties": {
           "kind": {
             "default": "",
-            "description": "A stable code: \"content\", \"both_added\", \"delete_modify\", \"binary\", \"type_change\",\n\"too_large\", \"file_directory\", \"rename_rename\" or \"rename_delete\". Clients may switch on it;\n`message` is for people.",
+            "description": "A stable code: \"content\", \"both_added\", \"delete_modify\", \"binary\", \"type_change\",\n\"too_large\", \"file_directory\", \"rename_rename\", \"rename_delete\", \"directory_rename_ambiguous\"\nor \"directory_rename_collision\" (the last two: ag-merge/3 found a directory move it cannot follow\nwithout guessing). The set is open: tolerate a code you do not know. Clients may switch on it;\n`message` is for people.",
             "type": "string"
           },
           "message": {
@@ -1180,6 +1187,13 @@
           "error": {
             "default": "",
             "type": "string"
+          },
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "job_id": {
             "default": "",
@@ -1637,6 +1651,41 @@
         },
         "type": "object"
       },
+      "GitMigrationDecision": {
+        "properties": {
+          "accept_lossy": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GitMigrationPlan": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "report": {
+            "type": "object"
+          },
+          "source_sha256": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_sha256",
+          "report",
+          "state"
+        ],
+        "type": "object"
+      },
       "GrantRoleRequest": {
         "properties": {
           "repo": {
@@ -1656,6 +1705,13 @@
       },
       "HeartbeatJobRequest": {
         "properties": {
+          "fencing_token": {
+            "default": 0,
+            "description": "The claim this request is for: the `attempts` of the Job that ClaimJob returned (every claim of a job, by any\nworker including the same one, has a larger number than the one before). If it is not the job's current claim the\nrequest is refused (`failed_precondition`: the claim was lost), so a worker whose lease expired and whose job\nwas claimed again cannot act on the new claim. 0 = not given: only the worker's identity is checked, as before.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "job_id": {
             "default": "",
             "type": "string"
@@ -1832,6 +1888,7 @@
         "properties": {
           "attempts": {
             "default": 0,
+            "description": "How many times the job has been claimed. While the job is `claimed` this is the number of the current claim -\nthe fencing token for HeartbeatJob, CompleteJob and FailJob.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -4910,6 +4967,153 @@
         "summary": "Claim the next queued job (long-poll with wait_ms); repo is optional",
         "tags": [
           "Execution"
+        ]
+      }
+    },
+    "/v1/migrations/git": {
+      "put": {
+        "operationId": "migration.prepare",
+        "parameters": [
+          {
+            "description": "New destination, owner/name",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only)",
+        "tags": [
+          "Migration"
+        ]
+      }
+    },
+    "/v1/migrations/{id}": {
+      "get": {
+        "operationId": "migration.status",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a private migration report",
+        "tags": [
+          "Migration"
+        ]
+      }
+    },
+    "/v1/migrations/{id}/commit": {
+      "post": {
+        "operationId": "migration.commit",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitMigrationDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMigrationPlan"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Publish a preflighted repository; body: accept_lossy boolean",
+        "tags": [
+          "Migration"
         ]
       }
     },

@@ -125,9 +125,9 @@ orchestrator already assumed, not `invalid_argument`.
   role safe to give to a service.
 * **Reaping only in the orchestrator.** It already completed orphaned runs, but deployments without an orchestrator
   (agents through MCP) had nobody to do it, and an operator needs the same call.
-* **Making `writer` unable to act for other agents** (finish or heartbeat their runs, start runs for them). The right
-  end state, but writers use it today (SDK examples, the Web UI's demo world) and the change is not needed for the
-  properties above; it is listed under follow-ups.
+* **Making `writer` unable to act for other agents** (finish or heartbeat their runs, start runs for them). Left out
+  of the first change, then done: starting, heartbeating or ending a run whose agent is not the caller's own
+  `agent:<name>` principal needs `agent.operate` (see the update at the end of Consequences).
 
 ## Consequences
 
@@ -138,9 +138,11 @@ orchestrator already assumed, not `invalid_argument`.
 * ⚠️ A name-bound credential is still the agent for every run: nothing forces a client to bind. `ag-mcp` in `off` mode
   and any hand-minted agent token behave as before. The protocol advertises `auth.run_credentials`,
   `auth.delegation` and `agents.operate` so clients can require them.
-* ⚠️ A non-agent principal with `agent.run` (a writer) can still start, heartbeat and complete the runs of any
-  agent. Those actions are now attributed (and flagged as operator actions when they are not the agent's own), but not
-  prevented. Follow-up: require `agent.operate` for acting on another agent's runs.
+* ✅ *Update:* a non-agent principal with `agent.run` (a plain `writer`) can no longer start, heartbeat or complete the
+  runs of an agent: that needs `agent.operate` (`delegator`, `admin`). An `agent:<name>` identity still acts for its
+  own runs, as before. Breaking for a client that drove agents with a person's or service's `writer` token; give it
+  the `delegator` role (the orchestrator already has it). Test:
+  `acting_on_another_agents_run_needs_agent_operate_and_a_writer_does_not_have_it`.
 * ⚠️ Lease ownership between *plain* actors stays by principal (documented in the agents guide): an agent acting
   without a run can release the leases of its runs, and the overlap rule between two runs of one agent is unchanged.
 * ⚠️ Control schema 3 is additive, but a build that only knows schema 2 refuses the migrated database. A rolling

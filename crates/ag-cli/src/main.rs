@@ -2,6 +2,7 @@
 //! `ag` — the AgentGit command-line interface.
 
 mod cmds;
+mod credstore;
 mod ctx;
 mod errors;
 mod ui;
@@ -26,6 +27,7 @@ Common workflow:
   ag snapshot -m \"message\"       record the working directory
   ag propose -t \"title\"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance
@@ -84,6 +86,8 @@ pub struct Cli {
 pub enum Command {
     /// Create a repository in the current directory.
     Init(cmds::repo::InitArgs),
+    /// Migrate every branch and tag from a full local Git clone or bundle into a new repository.
+    Migrate(cmds::gitbridge::MigrateArgs),
     /// Summarize the workspace, your proposals, leases, task and remote at a glance.
     Status(cmds::repo::StatusArgs),
     /// Record the working directory as a new snapshot.
@@ -124,6 +128,11 @@ pub enum Command {
     Integrate(cmds::flow::IntegrateArgs),
     /// Show what integrating a proposal would do, without doing it.
     Preview(cmds::flow::PreviewArgs),
+    /// Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason.
+    #[command(
+        after_help = "Exit codes: 0 nothing is in the way, 3 blocked (something can be provided), 4 refused (conflict or denial).\nChanges nothing. Examples:\n  ag explain                 your newest open proposal\n  ag explain prop_8f3a1c     a specific one\n  ag --json explain          codes, sentences and commands for a program"
+    )]
+    Explain(cmds::explain::ExplainArgs),
     /// Inspect or resume operations.
     #[command(subcommand)]
     Op(cmds::flow::OpCmd),
@@ -180,6 +189,16 @@ pub enum Command {
     Push(cmds::remote::PushArgs),
     /// Manage remotes and work with proposals, events and policy on a server.
     Remote(cmds::remote::RemoteArgs),
+    /// Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing.
+    #[command(
+        after_help = "The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.\nAn environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:\n  ag login http://127.0.0.1:8080 --token-file ag-dev-data/dev/token\n  echo \"$TOKEN\" | ag login https://ag.example.com --token-stdin"
+    )]
+    Login(cmds::login::LoginArgs),
+    /// Inspect saved server connections without printing credentials.
+    #[command(subcommand)]
+    Auth(cmds::auth::AuthCmd),
+    /// Forget a saved server credential.
+    Logout(cmds::login::LogoutArgs),
     /// Pin a revision so garbage collection keeps it.
     Pin(cmds::admin::PinArgs),
     /// Remove a pin.
@@ -272,19 +291,29 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     // Commands that work without a repository.
     match &cli.command {
         Init(args) => return cmds::repo::init(&cli, args),
+        Migrate(args) => return cmds::gitbridge::migrate(&cli, args),
         Clone(args) => return cmds::remote::clone(&cli, args),
         Remote(args) => return cmds::remote::remote(&cli, args),
+        Login(a) => return cmds::login::login(&cli, a),
+        Auth(a) => return cmds::auth::auth(&cli, a),
+        Logout(a) => return cmds::login::logout(&cli, a),
         Doctor(args) => return cmds::doctor::doctor(&cli, args),
         Config(c) => return cmds::config::config(&cli, c),
         Completions(a) => return cmds::shell::completions(a),
         Man(a) => return cmds::shell::man(a),
         Version => return cmds::shell::version(&cli),
         Help(a) => return cmds::topics::help(a),
+        Policy(c) => {
+            if let Some(code) = cmds::policy::offline(&cli, c)? {
+                return Ok(code);
+            }
+        }
         _ => {}
     }
     let ctx = Ctx::open(&cli)?;
     match &cli.command {
-        Init(_) | Clone(_) | Remote(_) | Doctor(_) | Config(_) | Completions(_) | Man(_) | Version | Help(_) => {
+        Init(_) | Migrate(_) | Clone(_) | Remote(_) | Login(_) | Auth(_) | Logout(_) | Doctor(_) | Config(_)
+        | Completions(_) | Man(_) | Version | Help(_) => {
             unreachable!()
         }
         Fetch(a) => cmds::remote::fetch(&ctx, a),
@@ -306,6 +335,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         Proposal(c) => cmds::flow::proposal(&ctx, c),
         Integrate(a) => cmds::flow::integrate(&ctx, a),
         Preview(a) => cmds::flow::preview(&ctx, a),
+        Explain(a) => cmds::explain::explain(&ctx, a),
         Op(c) => cmds::flow::op(&ctx, c),
         Recover(a) => cmds::flow::recover(&ctx, a),
         Queue(c) => cmds::flow::queue(&ctx, c),

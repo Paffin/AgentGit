@@ -123,12 +123,14 @@ fn the_matcher_for_the_readme_transcript_means_what_it_says() {
 fn the_readme_demo_script_passes() {
     // On Windows `bash` may be a stub (WSL) and `python3` the Store alias: the PowerShell script covers it.
     if cfg!(windows) {
-        eprintln!("skipping on Windows: see the_powershell_demo_script_passes");
+        ag_testkit::skip_platform("the_readme_demo_script_passes", "see the_powershell_demo_script_passes");
         return;
     }
-    if !have("bash") || !have("python3") {
-        eprintln!("skipping: bash and python3 are required");
-        return;
+    for tool in ["bash", "python3"] {
+        let reason = if have(tool) { Ok(()) } else { Err(format!("{tool} is not installed")) };
+        if ag_testkit::require_component(tool, "the_readme_demo_script_passes", reason).is_none() {
+            return;
+        }
     }
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/quickstart.sh");
     let out = Command::new("bash").arg(&script).env("AG", env!("CARGO_BIN_EXE_ag")).output().expect("run bash");

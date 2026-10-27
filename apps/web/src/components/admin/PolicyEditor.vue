@@ -19,6 +19,7 @@ import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Icon from '@/ui/Icon.vue'
 import RelativeTime from '@/ui/RelativeTime.vue'
+import PolicyForm from './PolicyForm.vue'
 import SelectField from '@/ui/SelectField.vue'
 
 const props = defineProps<{ repo: string }>()
@@ -81,6 +82,11 @@ const worst = computed(() =>
       ? 'warning'
       : 'ok',
 )
+// Opens by itself when the raw document has an error, and then stays as the person leaves it.
+const advanced = ref(false)
+watch(worst, (w) => {
+  if (w === 'error') advanced.value = true
+})
 const lineLevels = computed(() => {
   const m = new Map<number, PolicyIssue['level']>()
   for (const i of issues.value) {
@@ -213,7 +219,8 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
 <template>
   <div class="policy" data-testid="policy-editor">
     <Card
-      title="Policy"
+      title="Rules"
+      term="policy"
       icon="shield"
       :subtitle="`Versioned and append-only. ${current.data.value ? `Version ${current.data.value.version} is in force${current.data.value.version === 0 ? ' (the built-in default)' : ''}.` : ''}`"
     >
@@ -221,7 +228,7 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
         <SelectField
           v-if="streamOptions.length > 1"
           v-model="stream"
-          label="Stream"
+          label="Branch"
           :options="streamOptions"
           hide-label
           class="stream-select"
@@ -230,14 +237,14 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
       </template>
       <ErrorState
         v-if="current.error.value && !current.data.value"
-        what="the policy"
+        what="the rules"
         :error="current.error.value"
         compact
         @retry="current.reload()"
       />
       <div v-else class="edit">
+        <PolicyForm v-model:text="text" :baseline="baseline" />
         <div class="toolbar">
-          <Button size="sm" icon="sliders" @click="format">Format</Button>
           <Button size="sm" variant="ghost" icon="refresh" :disabled="!dirty" @click="reset"
             >Revert edits</Button
           >
@@ -255,45 +262,61 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
             >Save new version</Button
           >
         </div>
-        <div class="editor" :class="`w-${worst}`">
-          <div ref="gutter" class="gutter" aria-hidden="true">
-            <div v-for="n in lines" :key="n" class="ln" :class="lineLevels.get(n)">
-              {{ n }}
-            </div>
-          </div>
-          <textarea
-            ref="area"
-            v-model="text"
-            class="ta mono"
-            spellcheck="false"
-            autocomplete="off"
-            wrap="off"
-            aria-label="Policy document, JSON"
-            aria-describedby="policy-issues"
-            data-testid="policy-text"
-            @scroll="syncScroll"
-          />
-        </div>
-        <section
-          id="policy-issues"
-          class="issues"
-          aria-label="Checks on this document"
-          data-testid="policy-issues"
+        <details
+          class="advanced"
+          data-testid="policy-advanced"
+          :open="advanced"
+          @toggle="advanced = ($event.target as HTMLDetailsElement).open"
         >
-          <h3 class="sr-only">Checks on this document</h3>
-          <ul role="list">
-            <li v-for="(i, n) in issues" :key="n" :class="`l-${i.level}`">
-              <Icon
-                :name="i.level === 'error' ? 'x' : i.level === 'warning' ? 'alert' : 'info'"
-                :size="14"
+          <summary>Advanced: edit the raw JSON</summary>
+          <div class="adv-body">
+            <div class="toolbar">
+              <Button size="sm" icon="sliders" @click="format">Format</Button>
+              <span class="faint"
+                >This is the document the server stores. The form above edits it too.</span
+              >
+            </div>
+            <div class="editor" :class="`w-${worst}`">
+              <div ref="gutter" class="gutter" aria-hidden="true">
+                <div v-for="n in lines" :key="n" class="ln" :class="lineLevels.get(n)">
+                  {{ n }}
+                </div>
+              </div>
+              <textarea
+                ref="area"
+                v-model="text"
+                class="ta mono"
+                spellcheck="false"
+                autocomplete="off"
+                wrap="off"
+                aria-label="Policy document, JSON"
+                aria-describedby="policy-issues"
+                data-testid="policy-text"
+                @scroll="syncScroll"
               />
-              <button v-if="i.line !== null" type="button" class="where" @click="jump(i)">
-                line {{ i.line }}
-              </button>
-              <span>{{ i.message }}</span>
-            </li>
-          </ul>
-        </section>
+            </div>
+            <section
+              id="policy-issues"
+              class="issues"
+              aria-label="Checks on this document"
+              data-testid="policy-issues"
+            >
+              <h3 class="sr-only">Checks on this document</h3>
+              <ul role="list">
+                <li v-for="(i, n) in issues" :key="n" :class="`l-${i.level}`">
+                  <Icon
+                    :name="i.level === 'error' ? 'x' : i.level === 'warning' ? 'alert' : 'info'"
+                    :size="14"
+                  />
+                  <button v-if="i.line !== null" type="button" class="where" @click="jump(i)">
+                    line {{ i.line }}
+                  </button>
+                  <span>{{ i.message }}</span>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </details>
         <Alert
           v-if="saveError"
           tone="bad"
@@ -330,8 +353,8 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
         v-else-if="versions.length === 0"
         icon="history"
         compact
-        title="No policy has been stored"
-        description="The built-in default applies: anyone but agents may integrate, agents need a human approval."
+        title="No rules have been set"
+        description="The built-in default applies: any person may land a change; an agent’s change needs one human approval."
       />
       <template v-else>
         <ul class="versions" role="list">
@@ -389,6 +412,23 @@ const SIGIL = { add: '+', del: '−', eq: ' ' } as const
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+.advanced {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-3);
+}
+.advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+}
+.adv-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-2);
 }
 .toolbar {
   display: flex;

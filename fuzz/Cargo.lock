@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agentgit-agent"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-dag",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-changeset"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-object",
  "agentgit-types",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-client"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-object",
  "agentgit-protocol",
@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-crypto"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "ed25519-dalek",
@@ -55,7 +55,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-dag"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-types",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-diff"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 
 [[package]]
 name = "agentgit-fuzz"
@@ -92,18 +92,20 @@ dependencies = [
 
 [[package]]
 name = "agentgit-git"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-dag",
  "agentgit-integrate",
  "agentgit-types",
+ "serde",
+ "sha2",
  "thiserror",
 ]
 
 [[package]]
 name = "agentgit-integrate"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-agent",
  "agentgit-changeset",
@@ -116,8 +118,10 @@ dependencies = [
  "agentgit-storage",
  "agentgit-tree",
  "agentgit-types",
+ "atomicwrites",
  "globset",
  "hex",
+ "rustix 1.1.5",
  "serde",
  "serde_json",
  "sha2",
@@ -126,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-merge"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-diff",
@@ -137,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-object"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-types",
  "sha2",
@@ -146,7 +150,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-policy"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-crypto",
  "agentgit-object",
@@ -159,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-protocol"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "base64 0.23.1",
  "prost",
@@ -175,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-sandbox"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "libc",
  "serde",
@@ -186,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-storage"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-crypto",
@@ -209,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-tree"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-changeset",
  "agentgit-object",
@@ -219,7 +223,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-types"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "hex",
  "serde",
@@ -229,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "agentgit-worker"
-version = "0.1.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "agentgit-client",
  "agentgit-crypto",
@@ -340,6 +344,17 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atomicwrites"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ef1bb8d1b645fe38d51dfc331d720fb5fc2c94b440c76cc79c80ff265ca33e3"
+dependencies = [
+ "rustix 0.38.44",
+ "tempfile",
+ "windows-sys 0.52.0",
+]
 
 [[package]]
 name = "aws-lc-rs"
@@ -619,9 +634,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03bb0e1cc970d482d121d9a1744999169b69a07470b3d644a7894e53fcaf4574"
+checksum = "12218662ccac37d9714f2191252553d67585b97df8c839cbe49e0bde278dc865"
 dependencies = [
  "cmov",
 ]
@@ -1333,6 +1348,12 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
+
+[[package]]
+name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
@@ -1917,6 +1938,19 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.38.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rustix"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
@@ -1924,7 +1958,7 @@ dependencies = [
  "bitflags",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
 ]
 
@@ -1955,9 +1989,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.15"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -2195,7 +2229,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.3",
  "once_cell",
- "rustix",
+ "rustix 1.1.5",
  "windows-sys 0.61.2",
 ]
 
@@ -2830,9 +2864,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.9"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
+checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
 dependencies = [
  "rustls-pki-types",
 ]

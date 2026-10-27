@@ -4,8 +4,8 @@ use std::sync::Arc;
 use ag_changeset::{Changeset, ChangesetSource, Op};
 use ag_merge::{BlobIo, IoError};
 use ag_object::{ObjectKind, RawObject};
-use ag_storage::{Clock, MemoryObjectStore, Meta, MetaTreeCache, ObjectStore, StoreHistory, SystemClock};
-use ag_tree::{Tree, resolve_tree};
+use ag_storage::{Clock, MemoryObjectStore, Meta, MetaTreeCache, ObjectStore, StoreHistory, SystemClock, TreeScope};
+use ag_tree::{Tree, TreeCache, resolve_tree};
 use ag_types::{BlobId, ChangesetId, Identity, Limits, Namespace, StreamName};
 use serde_json::json;
 
@@ -28,6 +28,10 @@ pub struct Repository {
     pub(crate) history: StoreHistory<Arc<dyn ObjectStore>>,
     pub(crate) limits: Limits,
     pub(crate) failpoints: Failpoints,
+    /// Decoded trees kept in memory under the host's budget (none for an embedded repository).
+    pub(crate) trees: Option<TreeScope>,
+    /// How an integration retries when its stream keeps moving.
+    pub(crate) contention: crate::integrate::ContentionPolicy,
 }
 
 impl Repository {
@@ -122,6 +126,8 @@ impl Repository {
             meta: Arc::new(meta),
             limits,
             failpoints: Failpoints::default(),
+            trees: None,
+            contention: Default::default(),
         };
         let actor = Identity::new("system:init").expect("valid");
         repo.meta.write(|tx| {
@@ -150,6 +156,8 @@ impl Repository {
             meta,
             limits,
             failpoints: Failpoints::default(),
+            trees: None,
+            contention: Default::default(),
         })
     }
 
@@ -175,7 +183,25 @@ impl Repository {
             meta: self.meta.clone(),
             limits: self.limits.clone(),
             failpoints: self.failpoints.clone(),
+            trees: self.trees.clone(),
+            contention: self.contention,
         }
+    }
+
+    /// Keeps the trees this repository derives in `scope` (a byte-budgeted cache the host shares between its
+    /// repositories) and answers from it. A tree is a pure function of its changeset's history, so the cache cannot
+    /// be stale; garbage collection empties the repository's part of it.
+    #[must_use]
+    pub fn with_tree_cache(mut self, scope: TreeScope) -> Self {
+        self.trees = Some(scope);
+        self
+    }
+
+    /// Sets how many times, and with what spacing, an integration retries when other writers keep moving its stream.
+    #[must_use]
+    pub fn with_contention_policy(mut self, policy: crate::integrate::ContentionPolicy) -> Self {
+        self.contention = policy;
+        self
     }
 
     /// The repository layout.
@@ -282,7 +308,21 @@ impl Repository {
 
     /// The tree (resulting state) of any stored changeset, published or not.
     pub fn tree_of(&self, id: &ChangesetId) -> Result<Tree> {
-        Ok(resolve_tree(&self.history, &MetaTreeCache(&self.meta), id, &self.limits)?)
+        if let Some(trees) = &self.trees
+            && let Some(tree) = trees.get(id)
+        {
+            return Ok(tree);
+        }
+        let tree = resolve_tree(&self.history, &self.tree_cache(), id, &self.limits)?;
+        if let Some(trees) = &self.trees {
+            trees.put(id, &tree);
+        }
+        Ok(tree)
+    }
+
+    /// The tree sources `resolve_tree` starts from: memory first, then the derived trees of the metadata store.
+    pub(crate) fn tree_cache(&self) -> LayeredTrees<'_> {
+        LayeredTrees { meta: MetaTreeCache(&self.meta), memory: self.trees.as_ref() }
     }
 
     /// The tree at `id`, or the empty tree for `None`.
@@ -297,6 +337,25 @@ impl Repository {
     /// falls back to the object store for unpublished changesets.
     pub fn graph(&self) -> HybridGraph<'_> {
         HybridGraph::new(&self.meta, &self.history)
+    }
+}
+
+/// In-memory decoded trees in front of the derived-tree table. A tree found in the table is remembered in memory.
+pub(crate) struct LayeredTrees<'a> {
+    meta: MetaTreeCache<'a>,
+    memory: Option<&'a TreeScope>,
+}
+
+impl TreeCache for LayeredTrees<'_> {
+    fn cached_tree(&self, id: &ChangesetId) -> Option<Tree> {
+        if let Some(tree) = self.memory.and_then(|m| m.get(id)) {
+            return Some(tree);
+        }
+        let tree = self.meta.cached_tree(id)?;
+        if let Some(memory) = self.memory {
+            memory.put(id, &tree);
+        }
+        Some(tree)
     }
 }
 

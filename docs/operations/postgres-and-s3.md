@@ -181,7 +181,7 @@ Pass the section to `ag init` with `--storage <file>`; the file holds just the o
 Environment variables read by `ag`: the ones named above (`AG_PG_URL`, `AWS_*`), and `AG_KEY_DIR` as before.
 Used only by the test scripts: `AG_TEST_POSTGRES_URL`, `AG_TEST_POSTGRES_CA`, `AG_TEST_S3_ENDPOINT`,
 `AG_TEST_S3_BUCKET`, `AG_TEST_S3_REGION`, `AG_TEST_S3_ACCESS_KEY_ID`, `AG_TEST_S3_SECRET_ACCESS_KEY`,
-`AG_TEST_S3_TLS_ENDPOINT`, `AG_TEST_S3_CA`, `AG_REQUIRE_BACKENDS`, and for `scripts/s3-test.sh` `AG_S3_SERVER`,
+`AG_TEST_S3_TLS_ENDPOINT`, `AG_TEST_S3_CA`, `AG_REQUIRE_COMPONENTS` (older spelling `AG_REQUIRE_BACKENDS`), and for `scripts/s3-test.sh` `AG_S3_SERVER`,
 `AG_S3_VENV`, `AG_S3_CACHE`, `AG_SEAWEEDFS_BIN`, `AG_S3_BUCKET`.
 
 ## Operating it
@@ -258,7 +258,7 @@ cargo test --workspace                                         # SQLite + files 
 scripts/pg-test.sh cargo test --workspace                      # metadata on a throwaway PostgreSQL cluster
 scripts/s3-test.sh cargo test --workspace                      # objects on a throwaway S3 server (moto)
 AG_S3_SERVER=seaweedfs scripts/s3-test.sh cargo test -p agentgit-storage -p agentgit-integrate   # … on a real one (SeaweedFS)
-AG_REQUIRE_BACKENDS=1 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace   # both, and fail if either is missing
+AG_REQUIRE_COMPONENTS=postgres,s3 scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace   # both, and fail if either is missing
 ```
 
 `scripts/pg-test.sh` needs the PostgreSQL server binaries (`initdb`, `pg_ctl`, `postgres`; as root it runs them as
@@ -274,6 +274,6 @@ the `postgres` user) and starts a private cluster with a private CA so the TLS t
   if an unsigned request is answered, so signature verification is demonstrably on. It also serves HTTPS with a
   certificate from a private CA (needs `openssl`) for the TLS tests.
 
-Each test gets its own schema and key prefix and removes it afterwards. With `AG_REQUIRE_BACKENDS=1`, a test that
+Each test gets its own schema and key prefix and removes it afterwards. With `AG_REQUIRE_COMPONENTS=postgres,s3`, a test that
 needs a backend whose variable is unset **fails** rather than quietly using the default. CI runs both S3 servers in
 the *PostgreSQL + S3 backends* job.

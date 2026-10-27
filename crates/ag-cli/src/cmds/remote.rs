@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use ag_changeset::Changeset;
 use ag_client::{Client, ClientError, Options};
+use ag_integrate::explain::Where;
 use ag_integrate::{InitOptions, Repository, SyncOutcome};
 use ag_object::RawObject;
 use ag_protocol::v1;
@@ -109,8 +110,23 @@ pub(crate) fn credential_source(root: &Path, name: &str, r: &Remote) -> Result<(
             return Ok((v.trim().to_string(), format!("environment variable {var}")));
         }
     }
+    if let Some(login) = crate::credstore::find(&r.url)? {
+        let key = crate::credstore::server_key(&r.url)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        if login.expires_at_ms > 0 && login.expires_at_ms <= now {
+            bail!(
+                "the saved login for {key} expired on {}; run `ag login {key}` again",
+                ag_types::Timestamp::from_millis(login.expires_at_ms)
+            );
+        }
+        return Ok((login.token, format!("saved login for {key} ({})", login.identity)));
+    }
     bail!(
-        "no credential for remote '{name}': set AG_TOKEN (or AG_TOKEN_{upper}), or pass --token-stdin to `ag clone` / `ag remote add`"
+        "no credential for remote '{name}': run `ag login {}`, or set AG_TOKEN (or AG_TOKEN_{upper}), or pass --token-stdin to `ag clone` / `ag remote add`",
+        crate::credstore::server_key(&r.url).unwrap_or_else(|_| r.url.clone())
     )
 }
 
@@ -132,7 +148,7 @@ fn split_url(url: &str) -> Result<(String, Option<String>)> {
     Ok((format!("{scheme}://{authority}"), repo))
 }
 
-fn rt() -> Result<tokio::runtime::Runtime> {
+pub(crate) fn rt() -> Result<tokio::runtime::Runtime> {
     Ok(tokio::runtime::Builder::new_current_thread().enable_all().build()?)
 }
 
@@ -158,7 +174,7 @@ async fn connect(root: &Path, name: &str, r: &Remote) -> Result<Client> {
 }
 
 /// How `ag` connects to a remote: the one place that sets the agent run (`AG_RUN`), the user agent and the CA.
-fn options_for(r: &Remote, token: String, timeout: std::time::Duration) -> Options {
+pub(crate) fn options_for(r: &Remote, token: String, timeout: std::time::Duration) -> Options {
     Options {
         endpoint: r.url.clone(),
         token,
@@ -202,6 +218,20 @@ pub(crate) fn server_head(root: &Path, name: &str, remote: &Remote, stream: &str
             .map_err(|s| anyhow!("{}", ClientError::from(s)))?
             .into_inner();
         Ok(if head.head.is_empty() { "(empty)".to_string() } else { head.head })
+    })
+}
+
+/// `ag agent reap --remote NAME`: asks the server to abandon the stale runs of the remote's repository
+/// (`AgentService.ReapRuns`; needs `agent.operate`). `stale_after_ms` 0 = the server's own threshold.
+pub(crate) fn reap_runs(ctx: &Ctx, remote: &str, stale_after_ms: u64, dry_run: bool) -> Result<v1::ReapRunsResponse> {
+    let (name, r) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let c = connect(&ctx.root, &name, &r).await?;
+        c.agents()
+            .reap_runs(c.req(v1::ReapRunsRequest { repo: r.repo.clone(), stale_after_ms, dry_run }))
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(|s| anyhow!("{}", ClientError::from(s)))
     })
 }
 
@@ -652,6 +682,11 @@ pub enum RemoteCmd {
         #[arg(long)]
         validate: bool,
     },
+    /// Explain why a server proposal cannot land, with the next commands. Changes nothing.
+    Explain {
+        /// Proposal id (any unique prefix).
+        id: String,
+    },
     /// Review a proposal's current head.
     Review {
         /// Proposal id.
@@ -701,8 +736,16 @@ pub enum RemoteCmd {
         /// Stream.
         stream: String,
         /// Replace the policy with the JSON document in this file.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "preset")]
         set: Option<PathBuf>,
+        /// Replace the policy with a ready-made one: solo, team, agents or strict (`ag policy preset list`).
+        #[arg(long, value_name = "NAME")]
+        preset: Option<String>,
+        /// Also say in plain language what the policy allows, requires and refuses.
+        #[arg(long)]
+        explain: bool,
+        #[command(flatten)]
+        flags: crate::cmds::policy::PresetFlags,
     },
     /// Show history of a revision on the server.
     Log {
@@ -748,6 +791,72 @@ fn print_done<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String
         return Ok(());
     }
     print(cli, value, human)
+}
+
+async fn explain_remote(cli: &Cli, client: &Client, repo: &str, id: &str) -> Result<u8> {
+    use crate::cmds::explain::{from_wire, render};
+    let detail = client
+        .proposals()
+        .get(client.req(v1::GetProposalRequest { repo: repo.into(), id: id.into() }))
+        .await
+        .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+        .into_inner();
+    let proposal = detail.proposal.ok_or_else(|| anyhow!("server returned no proposal"))?;
+    if proposal.state != "open" {
+        let state = if proposal.state == "integrated" { "already landed" } else { "closed" };
+        let summary = format!("{} is {state}; there is nothing to fix.", proposal.id);
+        print(
+            cli,
+            &serde_json::json!({ "proposal": proposal.id, "state": proposal.state,
+            "standing": "refused", "explanations": [], "next": [], "summary": summary }),
+            || summary,
+        )?;
+        return Ok(exit::REFUSED);
+    }
+    let prep = client
+        .integration()
+        .prepare(client.req(v1::PrepareRequest {
+            repo: repo.into(),
+            proposal: proposal.id.clone(),
+            enqueue_validations: false,
+            idempotency_key: String::new(),
+        }))
+        .await
+        .map_err(|s| anyhow!("{}", ClientError::from(s)))?
+        .into_inner();
+    let mut explanations = from_wire(&prep.blockers, &prep.conflicts, &proposal.id);
+    if !prep.problem.is_empty() {
+        explanations.push(ag_integrate::explain::Explanation {
+            code: "invalid".into(),
+            kind: "denied",
+            summary: "The candidate cannot be prepared.".into(),
+            why: prep.problem.clone(),
+            fixes: vec![],
+        });
+    }
+    let (standing, code) = if explanations.is_empty() {
+        ("ready", exit::OK)
+    } else if explanations.iter().all(|e| e.kind == "blocked") {
+        ("blocked", exit::BLOCKED)
+    } else {
+        ("refused", exit::REFUSED)
+    };
+    let next: Vec<&str> = explanations.iter().filter_map(|e| e.fixes.first()).map(|f| f.command.as_str()).collect();
+    let body = serde_json::json!({ "proposal": proposal.id, "title": proposal.title, "stream": proposal.stream,
+        "standing": standing, "policy_version": prep.policy_version, "candidate_tree": prep.candidate_tree,
+        "explanations": explanations, "next": next });
+    print(cli, &body, || {
+        let heading = format!(
+            "Proposal {} \"{}\" -> {}: {standing} (policy v{}).",
+            proposal.id, proposal.title, proposal.stream, prep.policy_version
+        );
+        if code == exit::OK {
+            format!("{heading}\nNext:\n  ag remote integrate {}", proposal.id)
+        } else {
+            format!("{heading}\n\n{}", render(&explanations))
+        }
+    })?;
+    Ok(code)
 }
 
 pub fn remote(cli: &Cli, args: &RemoteArgs) -> Result<u8> {
@@ -891,6 +1000,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     t
                 })?;
             }
+            RemoteCmd::Explain { id } => return explain_remote(cli, &c, &repo, id).await,
             RemoteCmd::Prepare { id, validate } => {
                 let p = c
                     .integration()
@@ -923,6 +1033,9 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     }
                     if p.blockers.is_empty() && p.conflicts.is_empty() && p.problem.is_empty() {
                         t.push_str("nothing blocks this integration.\n");
+                    } else {
+                        let ex = crate::cmds::explain::from_wire(&p.blockers, &p.conflicts, id);
+                        t.push_str(&format!("What to do:\n{}\n", crate::cmds::explain::steps(&ex, id, Where::Remote)));
                     }
                     t
                 })?;
@@ -976,9 +1089,10 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         o.changed_files
                     ),
                     "blocked" => format!(
-                        "Blocked (policy v{}); the stream was not changed:\n{}",
+                        "Blocked (policy v{}); the stream was not changed:\n{}\nProvide what is missing, then run `ag remote integrate {id}` again.\n{}",
                         o.policy_version,
-                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n"),
+                        crate::cmds::explain::hints(&crate::cmds::explain::from_wire(&o.blockers, &[], id), id, Where::Remote)
                     ),
                     "conflict" => format!(
                         "Conflict:\n{}",
@@ -993,8 +1107,9 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                             .join("\n")
                     ),
                     "denied" => format!(
-                        "Denied by policy; the stream was not changed:\n{}",
-                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n")
+                        "Denied by policy; the stream was not changed:\n{}\nWhat to do:\n{}",
+                        o.blockers.iter().map(|b| format!("  - {}", b.message)).collect::<Vec<_>>().join("\n"),
+                        crate::cmds::explain::hints(&crate::cmds::explain::from_wire(&o.blockers, &[], id), id, Where::Remote)
                     ),
                     _ => format!("Not integrated: {}", o.reason),
                 };
@@ -1097,22 +1212,31 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     })?;
                 }
             }
-            RemoteCmd::Policy { stream, set } => {
-                let v = match set {
-                    Some(file) => {
-                        let doc =
-                            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-                        c.admin()
-                            .set_policy(c.req(v1::SetPolicyRequest {
-                                repo,
-                                stream: stream.clone(),
-                                document: doc,
-                                idempotency_key: String::new(),
-                            }))
-                            .await
-                            .map_err(s)?
-                            .into_inner()
+            RemoteCmd::Policy { stream, set, preset, explain, flags } => {
+                let document = match (set, preset) {
+                    (Some(file), _) => {
+                        Some(std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?)
                     }
+                    (None, Some(name)) => {
+                        // The signing key of `--ci-key` lives in the clone, if there is one.
+                        let local = Repository::open(root).ok();
+                        let me = identity(cli)?;
+                        Some(crate::cmds::policy::build_preset(name, flags, &me, local.as_ref(), true)?.to_json())
+                    }
+                    (None, None) => None,
+                };
+                let v = match document {
+                    Some(doc) => c
+                        .admin()
+                        .set_policy(c.req(v1::SetPolicyRequest {
+                            repo,
+                            stream: stream.clone(),
+                            document: doc,
+                            idempotency_key: String::new(),
+                        }))
+                        .await
+                        .map_err(s)?
+                        .into_inner(),
                     None => c
                         .admin()
                         .get_policy(c.req(v1::GetPolicyRequest { repo, stream: stream.clone() }))
@@ -1120,7 +1244,21 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .map_err(s)?
                         .into_inner(),
                 };
-                print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
+                if *explain {
+                    let policy = ag_policy::Policy::parse(&v.document).context("the server's policy does not parse")?;
+                    let statements = ag_policy::explain::explain(&policy);
+                    print(cli, &serde_json::json!({"version": v.version, "stream": v.stream, "explanation": statements}), || {
+                        format!(
+                            "# policy v{} of '{}'{}\n{}",
+                            v.version,
+                            v.stream,
+                            if v.version == 0 { " (the built-in default; nothing stored yet)" } else { "" },
+                            ag_policy::explain::render(&statements)
+                        )
+                    })?;
+                } else {
+                    print(cli, &v, || format!("policy v{} of '{}':\n{}", v.version, v.stream, v.document))?;
+                }
             }
             RemoteCmd::Log { rev, limit } => {
                 // The server clamps a page; ask for as many pages as `-n` needs instead of getting fewer entries

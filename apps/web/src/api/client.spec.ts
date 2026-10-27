@@ -61,6 +61,24 @@ function harness(
 }
 
 describe('request shape', () => {
+  it('uploads bundle bytes unchanged and reuses authorization and idempotency on retry', async () => {
+    const { client, calls } = harness([new TypeError('connection lost'), json({ id: 'import_1' })])
+    const bundle = new Blob(['# v2 git bundle\n', new Uint8Array([0, 255, 1])])
+    await client.json('/v1/migrations/git', {
+      method: 'PUT',
+      binary: bundle,
+      query: { name: 'acme/app' },
+    })
+    expect(calls).toHaveLength(2)
+    for (const call of calls) {
+      expect(call.init.body).toBe(bundle)
+      expect(call.headers.get('content-type')).toBe('application/octet-stream')
+      expect(call.headers.get('authorization')).toBe('Bearer agt_secret_token_value')
+      expect(call.headers.get('idempotency-key')).toBe('key-1')
+      expect(call.url).toBe('/v1/migrations/git?name=acme%2Fapp')
+    }
+  })
+
   it('sends the bearer token, a request id and a deadline, and never puts the token in the URL', async () => {
     const { client, calls } = harness([json({ ok: true })])
     await client.get('/v1/whoami')

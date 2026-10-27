@@ -1,0 +1,53 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-login 1  "login 0.3.0-beta.1" 
+.SH NAME
+ag\-login \- Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+.SH SYNOPSIS
+\fBag login\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-token\-stdin\fR] [\fB\-\-as\fR] [\fB\-\-token\-file\fR] [\fB\-\-ca\-file\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fISERVER\fR> 
+.SH DESCRIPTION
+Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-token\-stdin\fR
+Read the credential from standard input (`echo "$TOKEN" | ag login URL \-\-token\-stdin`)
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-token\-file\fR \fI<FILE>\fR
+Read the credential from a file (`ag\-server dev` writes one and prints the command)
+.TP
+\fB\-\-ca\-file\fR \fI<CA_FILE>\fR
+Extra CA certificate (PEM) to trust when checking the credential
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+<\fISERVER\fR>
+The server, e.g. `http://127.0.0.1:8080` (a repository URL works too; only the server part is used)
+.SH EXTRA
+The credential is stored in credentials.json beside the user configuration (`ag config path`), readable by you only.
+An environment variable (AG_TOKEN) or a credential stored with a remote still takes precedence. Examples:
+  ag login http://127.0.0.1:8080 \-\-token\-file ag\-dev\-data/dev/token
+  echo "$TOKEN" | ag login https://ag.example.com \-\-token\-stdin
+.SH VERSION
+v0.3.0\-beta.1

@@ -65,6 +65,10 @@
         "timestamp": "number"
       }
     ],
+    "auth status#empty": {
+      "checked_online": "bool",
+      "connections": []
+    },
     "backup": {
       "bytes": "number",
       "keys_included": "bool",
@@ -158,6 +162,39 @@
       },
       "version": "string"
     },
+    "explain": {
+      "explanations": [],
+      "next": [],
+      "policy_version": "number",
+      "proposal": "string",
+      "standing": "string",
+      "stream": "string",
+      "title": "string"
+    },
+    "explain#blocked": {
+      "explanations": [
+        {
+          "code": "string",
+          "fixes": [
+            {
+              "command": "string",
+              "note": "string"
+            }
+          ],
+          "kind": "string",
+          "summary": "string",
+          "why": "string"
+        }
+      ],
+      "next": [
+        "string"
+      ],
+      "policy_version": "number",
+      "proposal": "string",
+      "standing": "string",
+      "stream": "string",
+      "title": "string"
+    },
     "gc": {
       "bytes": "number",
       "deleted": [],
@@ -183,6 +220,16 @@
     "init": {
       "durability": "string",
       "namespace": "string",
+      "policy_version": "null",
+      "preset": "null",
+      "root": "string",
+      "stream": "string"
+    },
+    "init#preset": {
+      "durability": "string",
+      "namespace": "string",
+      "policy_version": "number",
+      "preset": "string",
       "root": "string",
       "stream": "string"
     },
@@ -282,6 +329,32 @@
         "type": "string"
       }
     ],
+    "migrate": {
+      "blobs": "number",
+      "branches": [
+        {
+          "changeset": "string",
+          "destination": "string",
+          "git_commit": "string",
+          "name": "string"
+        }
+      ],
+      "commits": "number",
+      "default_branch": "string",
+      "lfs_pointers": "number",
+      "lossy_commits": "number",
+      "other_refs": [],
+      "skipped_paths": [],
+      "skipped_submodules": "number",
+      "tags": [
+        {
+          "changeset": "string",
+          "destination": "string",
+          "git_commit": "string",
+          "name": "string"
+        }
+      ]
+    },
     "op list": [
       {
         "actor": "string",
@@ -360,6 +433,17 @@
         "reason": "string"
       }
     ],
+    "policy explain": {
+      "explanation": [
+        {
+          "effect": "string",
+          "field": "string",
+          "text": "string"
+        }
+      ],
+      "source": "string",
+      "version": "number"
+    },
     "policy history": [
       {
         "created_at": "number",
@@ -370,6 +454,58 @@
         "version": "number"
       }
     ],
+    "policy preset apply": {
+      "hash": "string",
+      "preset": "string",
+      "stream": "string",
+      "version": "number"
+    },
+    "policy preset list": [
+      {
+        "for": "string",
+        "name": "string",
+        "needs_ci_issuer": "bool"
+      }
+    ],
+    "policy preset show": {
+      "explanation": [
+        {
+          "effect": "string",
+          "field": "string",
+          "text": "string"
+        }
+      ],
+      "policy": {
+        "admins": [
+          "string"
+        ],
+        "agent_autonomy": {
+          "allowed_paths": [],
+          "auto_integrate": "bool",
+          "max_files": "number"
+        },
+        "allowed_authors": [
+          "string"
+        ],
+        "approvals": {
+          "approvers": [
+            "string"
+          ],
+          "forbid_self_approval": "bool",
+          "min": "number",
+          "min_for_agents": "number"
+        },
+        "integrators": [
+          "string"
+        ],
+        "max_changed_files": "number",
+        "protected_paths": [],
+        "require_provenance_for_agents": "bool",
+        "required_validations": [],
+        "trusted_issuers": []
+      },
+      "preset": "string"
+    },
     "policy set": {
       "created_at": "number",
       "created_by": "string",
@@ -425,6 +561,7 @@
         "string"
       ],
       "conflicts": [],
+      "notes": [],
       "problem": "null",
       "strategy": "string"
     },

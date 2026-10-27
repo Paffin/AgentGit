@@ -1,0 +1,33 @@
+{
+  "version": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+  "platform": "Linux x86_64",
+  "import_result": {
+    "blobs": 4,
+    "commits": 1,
+    "head": "eb8cd4f11ef09c4ece752ffd0a120ecd400c3051673db7ef67107d9a57106c0e",
+    "lossy_commits": 0,
+    "skipped_paths": [],
+    "skipped_submodules": 0
+  },
+  "all_imported_tree_shas_preserved": true,
+  "final_tree_matches_git_index": true,
+  "exported_commits": 2,
+  "lfs_pointer_bytes_preserved_payload_not_fetched": true,
+  "tags_exported": false,
+  "gitlink_result": {
+    "blobs": 4,
+    "commits": 2,
+    "head": "e9b9f46a02827ffca7cba1b2c04b60f3f74544ed02012acdfb0bec31387e2b87",
+    "lossy_commits": 0,
+    "skipped_paths": [],
+    "skipped_submodules": 1
+  },
+  "gitlink_omitted_from_tree": true,
+  "metadata_not_exported": [
+    "reviews",
+    "policies",
+    "validation attestations",
+    "audit"
+  ],
+  "scope": "One small linear history, executable, symlink, LFS pointer and gitlink fixture; not every Git feature."
+}

@@ -178,8 +178,9 @@ Compose is a single-host stack (see [Deployment](deployment.md#scaling)); to try
   has been tested by cutting the replicas' logins, not by promoting a standby.
 * Role changes on another replica are usually effective at once and at worst after `bindings_ttl_ms`; an SSE stream
   notices a revoked credential within 5 s.
-* Quota counters (`object_bytes`) are atomic across replicas; stream and proposal counts are checked just before the
-  insert, so concurrent creates through different replicas can overshoot by the number in flight.
+* Quota counters (`object_bytes`) are atomic across replicas; stream and open-proposal counts are taken inside the
+  transaction that inserts the row (a repository's write transactions never overlap, on any replica), so racing
+  creates cannot pass the limit (`racing_creates_cannot_pass_the_stream_and_open_proposal_limits`, also on PostgreSQL).
 * Clock skew between replicas distorts the delivery-lag metric and shortens or lengthens job leases and credential
   lifetimes by the skew.
 

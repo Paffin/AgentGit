@@ -12,6 +12,9 @@ An archive `agentgit-<version>-<target>.tar.gz` holds one directory `agentgit-<v
 mtime (SOURCE_DATE_EPOCH, else the HEAD commit time) and no gzip timestamp, so the same inputs give the same
 bytes.
 """
+
+from __future__ import annotations
+
 import argparse
 import gzip
 import hashlib

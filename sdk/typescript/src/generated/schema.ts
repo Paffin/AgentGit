@@ -87,6 +87,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/migrations/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload a Git bundle and preflight all branches/tags (128 MiB maximum; admin only) */
+        put: operations["migration.prepare"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/migrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a private migration report */
+        get: operations["migration.status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/migrations/{id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a preflighted repository; body: accept_lossy boolean */
+        post: operations["migration.commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos": {
         parameters: {
             query?: never;
@@ -1631,6 +1682,12 @@ export interface components {
         CompleteJobRequest: {
             /** @default null */
             attestation: components["schemas"]["Attestation"] | null;
+            /**
+             * Format: int64
+             * @description The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /** @default  */
@@ -1685,7 +1742,9 @@ export interface components {
         Conflict: {
             /**
              * @description A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
-             *     "too_large", "file_directory", "rename_rename" or "rename_delete". Clients may switch on it;
+             *     "too_large", "file_directory", "rename_rename", "rename_delete", "directory_rename_ambiguous"
+             *     or "directory_rename_collision" (the last two: ag-merge/3 found a directory move it cannot follow
+             *     without guessing). The set is open: tolerate a code you do not know. Clients may switch on it;
              *     `message` is for people.
              * @default
              */
@@ -1977,6 +2036,12 @@ export interface components {
         FailJobRequest: {
             /** @default  */
             error: string;
+            /**
+             * Format: int64
+             * @description The claim this request is for; see HeartbeatJobRequest.fencing_token. 0 = not given.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /** @default  */
@@ -2273,6 +2338,19 @@ export interface components {
             /** @default  */
             repo: string;
         };
+        GitMigrationDecision: {
+            accept_lossy?: boolean;
+        };
+        GitMigrationPlan: {
+            id: string;
+            name: string;
+            /** @default {} */
+            report: {
+                [key: string]: unknown;
+            };
+            source_sha256: string;
+            state: string;
+        };
         GrantRoleRequest: {
             /** @default  */
             repo: string;
@@ -2282,6 +2360,15 @@ export interface components {
             subject: string;
         };
         HeartbeatJobRequest: {
+            /**
+             * Format: int64
+             * @description The claim this request is for: the `attempts` of the Job that ClaimJob returned (every claim of a job, by any
+             *     worker including the same one, has a larger number than the one before). If it is not the job's current claim the
+             *     request is refused (`failed_precondition`: the claim was lost), so a worker whose lease expired and whose job
+             *     was claimed again cannot act on the new claim. 0 = not given: only the worker's identity is checked, as before.
+             * @default 0
+             */
+            fencing_token: number;
             /** @default  */
             job_id: string;
             /**
@@ -2388,6 +2475,8 @@ export interface components {
         Job: {
             /**
              * Format: int32
+             * @description How many times the job has been claimed. While the job is `claimed` this is the number of the current claim -
+             *     the fencing token for HeartbeatJob, CompleteJob and FailJob.
              * @default 0
              */
             attempts: number;
@@ -4182,6 +4271,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClaimJobResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "migration.prepare": {
+        parameters: {
+            query?: {
+                /** @description New destination, owner/name */
+                name?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitMigrationPlan"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "migration.status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitMigrationPlan"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "migration.commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GitMigrationDecision"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitMigrationPlan"];
                 };
             };
             /** @description Error */

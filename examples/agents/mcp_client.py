@@ -3,6 +3,9 @@
 It is deliberately small: spawn the server, send one JSON object per line, match responses by id. A real host
 (Claude Code, Claude Desktop, the Agent SDKs) does the same with more care.
 """
+
+from __future__ import annotations
+
 import json
 import subprocess
 import threading

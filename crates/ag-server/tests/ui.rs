@@ -289,6 +289,11 @@ fn the_ui_package_has_the_workspace_version() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/web/package.json");
     let Ok(text) = std::fs::read_to_string(&manifest) else {
         // Built from a packaged crate, without the repository around it.
+        ag_testkit::skip(
+            "source-tree",
+            "the_ui_package_has_the_workspace_version",
+            "apps/web/package.json is not there (a packaged crate)",
+        );
         return;
     };
     let package: serde_json::Value = serde_json::from_str(&text).unwrap();

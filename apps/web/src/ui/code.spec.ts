@@ -156,7 +156,7 @@ const state = (over: Partial<StateInfo> = {}): StateInfo => ({
 describe('StatePill', () => {
   it('conveys the state with an icon, text and a hidden full sentence, not just colour', () => {
     const w = mount(StatePill, { props: { state: state() } })
-    expect(w.text()).toContain('Validated')
+    expect(w.text()).toContain('Checks')
     expect(w.text()).toContain('0/1 passed')
     expect(w.find('.sr-only').text()).toContain('No trusted passing attestation')
     expect(w.find('[data-state]').attributes('data-tone')).toBe('blocked')

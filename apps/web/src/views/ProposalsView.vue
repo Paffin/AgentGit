@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Proposal } from '@/api/types'
@@ -7,6 +7,10 @@ import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { shortId } from '@/lib/format'
 import Badge from '@/ui/Badge.vue'
+import Button from '@/ui/Button.vue'
+import Icon from '@/ui/Icon.vue'
+import { useAuth } from '@/stores/auth'
+import { termTip } from '@/lib/glossary'
 import Card from '@/ui/Card.vue'
 import DataTable from '@/ui/DataTable.vue'
 import EmptyState from '@/ui/EmptyState.vue'
@@ -24,6 +28,8 @@ usePageTitle(() => `Proposals · ${repo.value}`)
 type StateFilter = 'open' | 'integrated' | 'closed' | 'all'
 const state = ref<StateFilter>('open')
 const author = ref('')
+const query = ref('')
+const auth = useAuth()
 const items = ref<Proposal[]>([])
 const next = ref('')
 const loading = ref(true)
@@ -32,9 +38,14 @@ const error = ref<unknown>(null)
 let serial = 0
 
 const columns: Column[] = [
-  { key: 'title', label: 'Proposal', width: 'minmax(0, 2.4fr)' },
+  {
+    key: 'title',
+    label: 'Change request',
+    tooltip: termTip('proposal'),
+    width: 'minmax(0, 2.4fr)',
+  },
   { key: 'author', label: 'Author', width: 'minmax(0, 1.2fr)', hideBelow: 760 },
-  { key: 'stream', label: 'Stream', width: '8rem', hideBelow: 900 },
+  { key: 'stream', label: 'Branch', tooltip: termTip('stream'), width: '8rem', hideBelow: 900 },
   { key: 'state', label: 'State', width: '7rem' },
   { key: 'updated_at_ms', label: 'Updated', width: '7rem', align: 'end' },
 ]
@@ -70,22 +81,53 @@ watch([state, author, repo], () => {
   clearTimeout(timer)
   timer = setTimeout(() => void load(), 200)
 })
+onBeforeUnmount(() => {
+  serial++
+  clearTimeout(timer)
+})
 void load()
 
+const stateWord = (s: string) => (s === 'integrated' ? 'landed' : s)
 const TONE = { open: 'info', integrated: 'ok', closed: 'neutral' } as const
 const tone = (s: string) => (s in TONE ? TONE[s as keyof typeof TONE] : 'neutral')
 const statusOptions = [
   { value: 'open', label: 'Open' },
-  { value: 'integrated', label: 'Integrated' },
+  { value: 'integrated', label: 'Landed' },
   { value: 'closed', label: 'Closed' },
   { value: 'all', label: 'All' },
 ] as const
-const rows = computed(() => items.value)
+const rows = computed(() => {
+  const words = query.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  return items.value.filter((p) => {
+    const text = [p.title, p.author, p.id, p.stream].join(' ').toLocaleLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+})
 </script>
 
 <template>
   <div class="page">
-    <h1>Proposals</h1>
+    <div class="page-head">
+      <div>
+        <h1>Change requests</h1>
+        <p class="muted">Review proposed changes before they reach the branch.</p>
+      </div>
+      <div class="actions">
+        <Button
+          v-if="auth.can(repo, 'editFiles')"
+          icon="edit"
+          :to="{ name: 'files', params: { owner: repo.split('/')[0], name: repo.split('/')[1] } }"
+          >Edit files</Button
+        >
+        <Button
+          v-if="auth.can(repo, 'createTask')"
+          variant="primary"
+          icon="bot"
+          :to="{ name: 'agents', params: { owner: repo.split('/')[0], name: repo.split('/')[1] } }"
+          >Give an agent work</Button
+        >
+      </div>
+    </div>
     <div class="tools">
       <Segmented v-model="state" legend="State" :options="statusOptions" />
       <TextField
@@ -97,8 +139,18 @@ const rows = computed(() => items.value)
         mono
       />
     </div>
+    <TextField
+      v-model="query"
+      label="Search loaded change requests"
+      type="search"
+      placeholder="Title, author, branch or ID"
+      :hint="
+        next ? 'Search covers the loaded page. Load more to include older changes.' : undefined
+      "
+      ><template #prefix><Icon name="search" :size="16" /></template
+    ></TextField>
     <Card flush>
-      <ErrorState v-if="error" what="proposals" :error="error" @retry="load()" />
+      <ErrorState v-if="error" what="change requests" :error="error" @retry="load()" />
       <template v-else>
         <DataTable
           :columns="columns"
@@ -123,7 +175,7 @@ const rows = computed(() => items.value)
           >
           <template #cell-state="{ row }"
             ><Badge size="sm" :tone="tone((row as Proposal).state)">{{
-              (row as Proposal).state
+              stateWord((row as Proposal).state)
             }}</Badge></template
           >
           <template #cell-updated_at_ms="{ row }"
@@ -132,15 +184,15 @@ const rows = computed(() => items.value)
           <template #empty>
             <EmptyState
               icon="proposal"
-              :title="`No ${state === 'all' ? '' : state + ' '}proposals`"
-              description="Nothing matches. Change the filter, or wait for an agent to propose something."
+              :title="`No ${state === 'all' ? '' : state + ' '}change requests`"
+              description="Nothing matches. Change the filter, or wait for an agent to propose something. To start one yourself, edit a file under Code, or give an agent work."
             />
           </template>
         </DataTable>
         <LoadMore
           :has-more="!!next"
           :loading="more"
-          :shown="rows.length"
+          :shown="items.length"
           noun="proposals"
           @more="load(true)"
         />
@@ -154,6 +206,17 @@ const rows = computed(() => items.value)
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
+}
+.page-head,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.page-head p {
+  margin-top: var(--s-2);
 }
 .tools {
   display: flex;

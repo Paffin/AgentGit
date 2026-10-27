@@ -35,9 +35,27 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
+    name: 'home',
+    component: () => import('@/views/HomeView.vue'),
+    meta: { title: 'Home' },
+  },
+  {
+    path: '/repos',
     name: 'repos',
     component: () => import('@/views/ReposView.vue'),
     meta: { title: 'Repositories' },
+  },
+  {
+    path: '/repos/new',
+    name: 'new-repo',
+    component: () => import('@/views/NewRepoView.vue'),
+    meta: { title: 'Start a repository' },
+  },
+  {
+    path: '/import',
+    name: 'import-repo',
+    component: () => import('@/views/ImportRepoView.vue'),
+    meta: { title: 'Import a repository' },
   },
   {
     path: '/access',
@@ -145,7 +163,7 @@ export function createAppRouter(history = createWebHistory()): Router {
     }
     if (to.meta.public) {
       if ((to.name === 'signin' || to.name === 'unauthorized') && auth.isAuthenticated)
-        return typeof to.query.next === 'string' ? safeNext(to.query.next) : { name: 'repos' }
+        return typeof to.query.next === 'string' ? safeNext(to.query.next) : { name: 'home' }
       return true
     }
     if (!auth.isAuthenticated) {

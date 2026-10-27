@@ -1,43 +1,38 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
-import { ApiError, describeError } from '@/api/errors'
 import type { Repo } from '@/api/types'
 import { formatDate, plural } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
-import { useToasts } from '@/stores/toasts'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Alert from '@/ui/Alert.vue'
 import Badge from '@/ui/Badge.vue'
 import Button from '@/ui/Button.vue'
 import Card from '@/ui/Card.vue'
 import DataTable from '@/ui/DataTable.vue'
-import Dialog from '@/ui/Dialog.vue'
 import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
-import TextArea from '@/ui/TextArea.vue'
 import TextField from '@/ui/TextField.vue'
+import LoadMore from '@/ui/LoadMore.vue'
 import type { Column } from '@/ui/types'
 
 const auth = useAuth()
-const toasts = useToasts()
-const router = useRouter()
 usePageTitle(() => 'Repositories')
 
 const MAX_REPOS = 1000
 const all = ref<Repo[]>([])
 const loading = ref(true)
-const truncated = ref(false)
+const next = ref('')
 const error = ref<unknown>(null)
 const search = ref('')
 let serial = 0
 
 const columns: Column[] = [
   { key: 'name', label: 'Repository', width: 'minmax(0, 2.4fr)' },
-  { key: 'default_stream', label: 'Default stream', width: '9rem', hideBelow: 760 },
-  { key: 'stream_count', label: 'Streams', width: '5.5rem', align: 'end', hideBelow: 900 },
-  { key: 'changeset_count', label: 'Changesets', width: '6.5rem', align: 'end', hideBelow: 900 },
+  { key: 'default_stream', label: 'Main branch', width: '9rem', hideBelow: 760 },
+  { key: 'stream_count', label: 'Branches', width: '5.5rem', align: 'end', hideBelow: 900 },
+  { key: 'changeset_count', label: 'Versions', width: '6.5rem', align: 'end', hideBelow: 900 },
   { key: 'created_at_ms', label: 'Created', width: '7.5rem', hideBelow: 1000 },
 ]
 
@@ -53,25 +48,14 @@ const visible = computed(() => {
 // and shows a dash with the reason, never a zero.
 const countText = (r: Repo, n: number) => (r.counts_error ? '–' : String(n))
 
-async function load() {
+async function load(append = false) {
   const mine = ++serial
   loading.value = true
   error.value = null
-  truncated.value = false
+  if (!append) next.value = ''
   try {
-    const items: Repo[] = []
-    let token = ''
-    do {
-      const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
-      if (mine !== serial) return
-      items.push(...page.items)
-      token = page.nextPageToken
-      all.value = [...items]
-      if (items.length >= MAX_REPOS && token) {
-        truncated.value = true
-        break
-      }
-    } while (token)
+    await loadPages(append ? [...all.value] : [], append ? next.value : '', mine)
+    if (mine !== serial) return
     loading.value = false
   } catch (e) {
     if (mine !== serial) return
@@ -80,47 +64,26 @@ async function load() {
   }
 }
 
-onMounted(load)
+async function loadPages(items: Repo[], token: string, mine: number) {
+  const stopAt = items.length + MAX_REPOS
+  let pages = 0
+  do {
+    const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
+    if (mine !== serial) return
+    if (page.nextPageToken && page.nextPageToken === token)
+      throw new Error('The repository list did not advance. Please retry.')
+    items.push(...page.items)
+    token = page.nextPageToken
+    all.value = [...items]
+    next.value = token
+    if (items.length >= stopAt || ++pages >= 5) break
+  } while (token)
+}
+
+onMounted(() => load())
 onBeforeUnmount(() => serial++)
 
-// ---- create ----------------------------------------------------------------------------------------
-const creating = ref(false)
-// Empty = the server's configured default stream applies.
-const form = ref({ name: '', description: '', stream: '' })
-const formError = ref<ApiError | null>(null)
-const busy = ref(false)
 const canCreate = computed(() => auth.isAdminAnywhere)
-
-function openCreate() {
-  form.value = { name: '', description: '', stream: '' }
-  formError.value = null
-  creating.value = true
-}
-
-async function create() {
-  busy.value = true
-  formError.value = null
-  try {
-    const repo = await api.repos.create({
-      name: form.value.name.trim(),
-      description: form.value.description.trim(),
-      default_stream: form.value.stream.trim() || undefined,
-    })
-    creating.value = false
-    toasts.ok('Repository created', repo.name)
-    await router.push({
-      name: 'board',
-      params: { owner: repo.name.split('/')[0], name: repo.name.split('/')[1] },
-    })
-  } catch (e) {
-    formError.value =
-      e instanceof ApiError
-        ? e
-        : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
-  } finally {
-    busy.value = false
-  }
-}
 
 const split = (name: string) => {
   const [owner = '', repo = ''] = name.split('/')
@@ -135,12 +98,13 @@ const split = (name: string) => {
         <h1>Repositories</h1>
         <p class="muted">Every repository you may read. Open one to watch its agents work.</p>
       </div>
+      <Button v-if="canCreate" to="/import">Import from GitHub / GitLab</Button>
       <Button
         variant="primary"
         icon="plus"
+        to="/repos/new"
         :disabled="!canCreate"
         disabled-reason="Creating repositories requires the admin role"
-        @click="openCreate"
       >
         New repository
       </Button>
@@ -162,14 +126,15 @@ const split = (name: string) => {
       }}</span>
     </div>
 
-    <Alert v-if="truncated" tone="info"
-      >Showing the first {{ MAX_REPOS }} repositories. Use the search to narrow the list.</Alert
+    <Alert v-if="next" tone="info"
+      >Search matches the {{ all.length }} loaded repositories. Load more to include the
+      rest.</Alert
     >
 
     <Card flush>
-      <ErrorState v-if="error" what="repositories" :error="error" @retry="load" />
+      <ErrorState v-if="error" what="repositories" :error="error" @retry="load(all.length > 0)" />
       <DataTable
-        v-else
+        v-if="!error || all.length > 0"
         :columns="columns"
         :rows="visible"
         :row-key="(r: Repo) => r.name"
@@ -211,54 +176,21 @@ const split = (name: string) => {
                 : 'You can see a repository once an administrator grants you a role on it.'
             "
           >
-            <Button v-if="canCreate && !search" variant="primary" icon="plus" @click="openCreate"
+            <Button v-if="canCreate && !search" variant="primary" icon="plus" to="/repos/new"
               >Create the first one</Button
             >
           </EmptyState>
         </template>
       </DataTable>
+      <LoadMore
+        v-if="all.length || next"
+        :has-more="!!next"
+        :loading="loading"
+        :shown="all.length"
+        noun="repositories loaded"
+        @more="load(true)"
+      />
     </Card>
-
-    <Dialog
-      v-model="creating"
-      title="New repository"
-      description="Repository names look like owner/name."
-      :dismissable="!busy"
-    >
-      <form id="create-repo" class="form" @submit.prevent="create">
-        <TextField
-          v-model="form.name"
-          label="Name"
-          mono
-          required
-          placeholder="acme/webapp"
-          hint="Lowercase letters, digits, “.”, “_” and “-”, as owner/name."
-          autofocus
-        />
-        <TextArea
-          v-model="form.description"
-          label="Description"
-          :rows="2"
-          placeholder="What lives here"
-        />
-        <TextField
-          v-model="form.stream"
-          label="Default stream"
-          mono
-          placeholder="the server default"
-          hint="The line of integration most people follow. Leave empty to use the server default."
-        />
-        <Alert v-if="formError" tone="bad" live="alert" title="Could not create the repository">
-          {{ formError.message }}
-        </Alert>
-      </form>
-      <template #footer>
-        <Button :disabled="busy" @click="creating = false">Cancel</Button>
-        <Button type="submit" form="create-repo" variant="primary" :loading="busy"
-          >Create repository</Button
-        >
-      </template>
-    </Dialog>
   </div>
 </template>
 

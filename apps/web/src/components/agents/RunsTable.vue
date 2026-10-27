@@ -76,7 +76,7 @@ const options = [
     </div>
     <ErrorState
       v-if="runs.error.value && !runs.data.value"
-      what="runs"
+      what="agent sessions"
       :error="runs.error.value"
       @retry="runs.reload()"
     />
@@ -131,8 +131,8 @@ const options = [
         <EmptyState
           icon="bot"
           compact
-          :title="scope === 'active' ? 'No active runs' : 'No runs yet'"
-          description="Agents appear here when they start a run."
+          :title="scope === 'active' ? 'No active agent sessions' : 'No agent sessions yet'"
+          description="An agent appears here when it starts working on a task. To get one going, create a task and connect an agent under Tasks."
         />
       </template>
     </DataTable>

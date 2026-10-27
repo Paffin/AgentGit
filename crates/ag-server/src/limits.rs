@@ -59,6 +59,30 @@ impl RateLimiter {
     }
 }
 
+impl RateLimiter {
+    /// Whether `key` still has a token, without taking one (`rate_limited` with the delay if not). With
+    /// [`RateLimiter::spend`] this counts events that happen after the check, such as failed logins.
+    pub fn peek(&self, key: &str) -> ApiResult<()> {
+        if self.rate <= 0.0 {
+            return Ok(());
+        }
+        let map = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(b) = map.get(key) else { return Ok(()) };
+        let tokens = (b.tokens + Instant::now().duration_since(b.last).as_secs_f64() * self.rate).min(self.burst);
+        if tokens >= 1.0 {
+            return Ok(());
+        }
+        let wait_ms = (((1.0 - tokens) / self.rate) * 1000.0).ceil().max(1.0) as i64;
+        Err(ApiError::new(ag_protocol::ErrorCode::RateLimited, "too many failed authentications; slow down")
+            .with_retry_after(wait_ms))
+    }
+
+    /// Takes one token for `key` whether or not one is left (the bucket bottoms out at empty).
+    pub fn spend(&self, key: &str) {
+        let _ = self.check(key, None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

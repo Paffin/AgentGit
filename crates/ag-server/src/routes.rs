@@ -58,6 +58,8 @@ pub struct RouteMeta {
     pub request_media: Option<&'static str>,
     /// Media type of the response body of a raw route.
     pub response_media: &'static str,
+    /// Typed JSON response of a binary request route.
+    pub json_response: Option<(String, Collect)>,
 }
 
 impl RouteMeta {
@@ -84,6 +86,7 @@ impl RouteMeta {
             query: Vec::new(),
             request_media: None,
             response_media: "application/json",
+            json_response: None,
         }
     }
 
@@ -106,6 +109,7 @@ impl RouteMeta {
             query: Vec::new(),
             request_media: None,
             response_media: "application/octet-stream",
+            json_response: None,
         }
     }
 
@@ -127,6 +131,14 @@ impl RouteMeta {
     #[must_use]
     pub fn response_body(mut self, media: &'static str) -> Self {
         self.response_media = media;
+        self
+    }
+
+    /// Declares a typed JSON response for an otherwise binary request route.
+    #[must_use]
+    pub fn json_response<T: ToSchema>(mut self) -> Self {
+        self.response_media = "application/json";
+        self.json_response = Some((T::name().to_string(), collect_for::<T>));
         self
     }
 
@@ -155,6 +167,13 @@ pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
         schemas.insert(name, serde_json::to_value(schema).unwrap_or(Value::Null));
     }
     for r in routes {
+        if let Some((_, collect)) = &r.json_response {
+            let mut found = Vec::new();
+            collect(&mut found);
+            for (name, schema) in found {
+                schemas.entry(name).or_insert_with(|| serde_json::to_value(schema).unwrap_or(Value::Null));
+            }
+        }
         if let Payload::Json { collect, .. } = &r.payload {
             let mut found = Vec::new();
             for c in collect {
@@ -231,7 +250,9 @@ pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
                         "content": {media: {"schema": {"type": "string", "format": "binary"}}}
                     });
                 }
-                let schema = if r.response_media == "text/event-stream" {
+                let schema = if let Some((name, _)) = &r.json_response {
+                    json!({"$ref": format!("#/components/schemas/{name}")})
+                } else if r.response_media == "text/event-stream" {
                     json!({"type": "string"})
                 } else {
                     json!({"type": "string", "format": "binary"})

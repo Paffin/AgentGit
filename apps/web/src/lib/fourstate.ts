@@ -75,7 +75,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         'Integrated',
         'ok',
         'yes',
-        'The stream was updated atomically with this change.',
+        'The branch was updated with this change in one step.',
       )
     : closed
       ? info(
@@ -83,14 +83,14 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
           'Integrated',
           'na',
           'closed',
-          'This proposal was closed without being integrated.',
+          'This change request was closed without landing.',
         )
       : info(
           'integrated',
           'Integrated',
           'pending',
           'not yet',
-          'The stream has not been updated with this change.',
+          'The branch has not been updated with this change yet.',
         )
 
   if (integrated) {
@@ -100,7 +100,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         name,
         'ok',
         'at integration',
-        `${name} requirements were satisfied when the stream was updated.`,
+        `${name} requirements were met when the branch was updated.`,
       )
     return {
       mergeable: done('mergeable', 'Mergeable'),
@@ -111,7 +111,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
   }
   if (closed) {
     const na = (key: StateKey, name: string): StateInfo =>
-      info(key, name, 'na', 'n/a', 'The proposal is closed.')
+      info(key, name, 'na', 'n/a', 'The change request is closed.')
     return {
       mergeable: na('mergeable', 'Mergeable'),
       validated: na('validated', 'Validated'),
@@ -128,7 +128,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'unknown',
       'checking',
-      'Computing the candidate tree…',
+      'Working out the result of merging…',
     )
   } else if (prep.problem) {
     mergeable = info('mergeable', 'Mergeable', 'failed', 'problem', prep.problem)
@@ -139,7 +139,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'failed',
       `${n} ${n === 1 ? 'conflict' : 'conflicts'}`,
-      `No single result tree: ${prep.conflicts.map((c) => c.path).join(', ')}.`,
+      `No single merged result: ${prep.conflicts.map((c) => c.path).join(', ')}.`,
     )
   } else if (prep.strategy === 'fast_forward') {
     mergeable = info(
@@ -147,7 +147,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'ok',
       'clean',
-      'Fast-forward: the stream head is an ancestor of this change.',
+      'Clean: the branch has not moved since this change was made.',
     )
   } else if (prep.strategy === 'merge') {
     mergeable = info(
@@ -155,7 +155,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'ok',
       'clean merge',
-      'The stream moved, and the deterministic three-way merge is clean.',
+      'The branch moved, and merging the two is clean.',
     )
   } else if (prep.strategy === 'already_integrated') {
     mergeable = info(
@@ -163,7 +163,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'ok',
       'already in',
-      'The stream already contains this change.',
+      'The branch already contains this change.',
     )
   } else {
     mergeable = info(
@@ -171,7 +171,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Mergeable',
       'unknown',
       'unknown',
-      'No candidate tree could be computed.',
+      'No merged result could be worked out.',
     )
   }
 
@@ -185,7 +185,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Validated',
       'na',
       'none required',
-      'The stream’s policy requires no checks.',
+      'The rules for this branch require no checks.',
     )
   } else {
     const states = prep.validations.map((v) => v.state)
@@ -197,7 +197,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         'Validated',
         'failed',
         'failed',
-        'A trusted check failed on this exact tree.',
+        'A trusted check failed on these exact files.',
       )
     } else if (passed === total) {
       validated = info(
@@ -205,7 +205,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         'Validated',
         'ok',
         `${passed}/${total} passed`,
-        'Every required check has a trusted passing attestation for this exact tree.',
+        'Every required check has a trusted passing result for these exact files.',
       )
     } else if (states.includes('pending')) {
       validated = info(
@@ -213,7 +213,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         'Validated',
         'pending',
         'running',
-        'A validation job is queued or running for this tree.',
+        'A check is queued or running for these files.',
       )
     } else {
       const missing = prep.validations.filter((v) => v.state !== 'passed').map((v) => v.check)
@@ -222,7 +222,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
         'Validated',
         'blocked',
         `${passed}/${total} passed`,
-        `No trusted passing attestation for this tree: ${missing.join(', ')}.`,
+        `No trusted passing result for these files: ${missing.join(', ')}.`,
       )
     }
   }
@@ -243,7 +243,13 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
     )
   } else if (!prep) {
     // Without the policy check (still loading, or it failed) neither "approved" nor "not required" is known.
-    approved = info('approved', 'Approved', 'unknown', 'checking', 'Waiting for the policy check…')
+    approved = info(
+      'approved',
+      'Approved',
+      'unknown',
+      'checking',
+      'Waiting for the rules to be checked…',
+    )
   } else if (approvalBlocker) {
     const d = (approvalBlocker.detail ?? {}) as { have?: number; required?: number }
     const have = typeof d.have === 'number' ? d.have : (summary?.approvals.length ?? 0)
@@ -255,14 +261,14 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
             'Approved',
             'blocked',
             `${have}/${d.required}`,
-            `${have} of ${d.required} required approvals of the current head.`,
+            `${have} of ${d.required} required approvals of the latest version.`,
           )
         : info(
             'approved',
             'Approved',
             'blocked',
             `${have} ${have === 1 ? 'approval' : 'approvals'}`,
-            `${have} approvals of the current head; the policy requires more.`,
+            `${have} approvals of the latest version; the rules require more.`,
           )
   } else if (summary && summary.approvals.length > 0) {
     const n = summary.approvals.length
@@ -271,7 +277,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Approved',
       'ok',
       `${n} ${n === 1 ? 'approval' : 'approvals'}`,
-      'The approvals the policy requires are in for the current head.',
+      'The approvals the rules require are in for the latest version.',
     )
   } else {
     approved = info(
@@ -279,7 +285,7 @@ export function deriveFourStates({ proposal, prep, reviews }: DeriveInput): Four
       'Approved',
       'na',
       'not required',
-      'The policy requires no approval for this change.',
+      'The rules require no approval for this change.',
     )
   }
 

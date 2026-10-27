@@ -17,7 +17,6 @@
 //! dispatched on the next pass. The external event feed is the audit log.
 
 use ag_changeset::ChangesetSource;
-use ag_storage::MetaTreeCache;
 use ag_tree::resolve_tree;
 use ag_types::ChangesetId;
 use serde::Serialize;
@@ -67,12 +66,16 @@ impl Repository {
     /// pass that succeeds clears the record.
     pub(crate) fn derive_best_effort(&self, head: Option<&ChangesetId>, batch: usize) {
         let mut problems = Vec::new();
-        if let Some(head) = head
-            && let Err(e) = self.cache_tree(head)
-        {
-            problems.push(format!("caching the tree of {head}: {e}"));
-        }
-        match self.derive_pending(batch) {
+        // The tree of the new head is computed here and stored in the same commit that acknowledges the events.
+        let head_tree =
+            head.and_then(|head| match resolve_tree(&self.history, &self.tree_cache(), head, &self.limits) {
+                Ok(tree) => Some((*head, tree)),
+                Err(e) => {
+                    problems.push(format!("caching the tree of {head}: {e}"));
+                    None
+                }
+            });
+        match self.derive_batch(batch, head_tree.as_ref()) {
             Ok(r) if r.failed == 0 => {}
             Ok(r) => problems.push(format!("{} outbox event(s) failed and stay pending", r.failed)),
             Err(e) => problems.push(format!("derive pass: {e}")),
@@ -94,8 +97,19 @@ impl Repository {
 
     /// Dispatches up to `limit` pending outbox events (at-least-once).
     pub fn derive_pending(&self, limit: usize) -> Result<DeriveReport> {
+        self.derive_batch(limit, None)
+    }
+
+    /// Handles up to `limit` pending events, then records all of it - every acknowledgement and failure, the
+    /// optional tree to cache (the live head) and the pruning of derived data - in ONE write transaction. Handling
+    /// an event can write too (a keyframe's tree), but the bookkeeping that used to cost a commit per event is one
+    /// commit per pass. An acknowledgement that does not reach the database leaves the event pending: it is handled
+    /// again, which it is built for (at-least-once).
+    fn derive_batch(&self, limit: usize, cache: Option<&(ChangesetId, ag_tree::Tree)>) -> Result<DeriveReport> {
         let events = self.meta.read(|tx| tx.outbox_pending(limit))?;
         let mut report = DeriveReport::default();
+        let mut acked = Vec::new();
+        let mut failed = Vec::new();
         for ev in events {
             let outcome: Result<()> = match ev.topic.as_str() {
                 "changeset.published" => (|| {
@@ -110,17 +124,28 @@ impl Repository {
             };
             match outcome {
                 Ok(()) => {
-                    self.meta.write(|tx| tx.outbox_ack(ev.id))?;
+                    acked.push(ev.id);
                     report.processed += 1;
                 }
                 Err(e) => {
-                    self.meta.write(|tx| tx.outbox_fail(ev.id, &e.to_string()))?;
+                    failed.push((ev.id, e.to_string()));
                     report.failed += 1;
                 }
             }
         }
-        self.meta.write(|tx| tx.prune_derived(KEYFRAME_INTERVAL))?;
-        report.pending = self.meta.read(|tx| tx.outbox_pending_count())?;
+        report.pending = self.meta.write(|tx| {
+            if let Some((id, tree)) = cache {
+                tx.put_derived_tree(id, tree)?;
+            }
+            for id in &acked {
+                tx.outbox_ack(*id)?;
+            }
+            for (id, error) in &failed {
+                tx.outbox_fail(*id, error)?;
+            }
+            tx.prune_derived(KEYFRAME_INTERVAL)?;
+            tx.outbox_pending_count()
+        })?;
         Ok(report)
     }
 
@@ -139,7 +164,7 @@ impl Repository {
 
     /// Unconditionally caches the tree of `id` (used for live heads).
     pub(crate) fn cache_tree(&self, id: &ChangesetId) -> Result<()> {
-        let tree = resolve_tree(&self.history, &MetaTreeCache(&self.meta), id, &self.limits)?;
+        let tree = resolve_tree(&self.history, &self.tree_cache(), id, &self.limits)?;
         self.meta.write(|tx| tx.put_derived_tree(id, &tree).map(|_| ()))?;
         Ok(())
     }

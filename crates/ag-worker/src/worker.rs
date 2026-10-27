@@ -277,7 +277,7 @@ impl Worker {
         let beat = tokio::spawn(keep_lease(
             self.client.clone(),
             repo.clone(),
-            job.id.clone(),
+            job.clone(),
             label.to_string(),
             self.opts.lease,
             stop_rx,
@@ -303,6 +303,7 @@ impl Worker {
                     result_json: serde_json::json!({"stale": true}).to_string(),
                     attestation: None,
                     stale: true,
+                    fencing_token: u64::from(job.attempts),
                 };
                 match self.complete(job, label, req).await {
                     Ok(()) => Disposition::Stale,
@@ -318,6 +319,7 @@ impl Worker {
                     result_json: result_json.to_string(),
                     attestation: Some(*attestation),
                     stale: false,
+                    fencing_token: u64::from(job.attempts),
                 };
                 match self.complete(job, label, req).await {
                     Ok(()) => Disposition::Attested { result, attestation: id },
@@ -480,6 +482,7 @@ impl Worker {
             } else {
                 0
             },
+            fencing_token: u64::from(job.attempts),
         };
         match self
             .client
@@ -559,7 +562,7 @@ fn remove_job_dir(dir: &Path) {
 async fn keep_lease(
     client: Client,
     repo: String,
-    job_id: String,
+    job: v1::Job,
     worker: String,
     lease: Duration,
     mut stop: oneshot::Receiver<()>,
@@ -573,20 +576,21 @@ async fn keep_lease(
         }
         let req = v1::HeartbeatJobRequest {
             repo: repo.clone(),
-            job_id: job_id.clone(),
+            job_id: job.id.clone(),
             worker: worker.clone(),
             lease_ms: lease.as_millis() as i64,
+            fencing_token: u64::from(job.attempts),
         };
         match client.execution().heartbeat_job(client.req(req)).await {
             Ok(_) => {}
             Err(status) => {
                 let e = ag_protocol::ProtocolError::from_status(&status);
                 if matches!(e.code, ErrorCode::FailedPrecondition | ErrorCode::NotFound | ErrorCode::PermissionDenied) {
-                    tracing::warn!(job = %job_id, error = %e.message, "the claim is gone");
+                    tracing::warn!(job = %job.id, error = %e.message, "the claim is gone");
                     lost.store(true, Ordering::SeqCst);
                     return;
                 }
-                tracing::warn!(job = %job_id, error = %e.message, "heartbeat failed; will try again");
+                tracing::warn!(job = %job.id, error = %e.message, "heartbeat failed; will try again");
             }
         }
     }

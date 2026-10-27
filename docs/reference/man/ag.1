@@ -1,6 +1,6 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH ag 1  "ag 0.1.0" 
+.TH ag 1  "ag 0.3.0-beta.1" 
 .SH NAME
 ag \- AgentGit: the `ag` command\-line interface
 .SH SYNOPSIS
@@ -36,6 +36,9 @@ Print version
 .TP
 ag\-init(1)
 Create a repository in the current directory
+.TP
+ag\-migrate(1)
+Migrate every branch and tag from a full local Git clone or bundle into a new repository
 .TP
 ag\-status(1)
 Summarize the workspace, your proposals, leases, task and remote at a glance
@@ -84,6 +87,9 @@ Integrate a proposal into its stream
 .TP
 ag\-preview(1)
 Show what integrating a proposal would do, without doing it
+.TP
+ag\-explain(1)
+Say why a proposal does not land yet, in plain words, with the exact commands that fix each reason
 .TP
 ag\-op(1)
 Inspect or resume operations
@@ -154,6 +160,15 @@ Upload your snapshot and open a proposal on the server
 ag\-remote(1)
 Manage remotes and work with proposals, events and policy on a server
 .TP
+ag\-login(1)
+Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
+.TP
+ag\-auth(1)
+Inspect saved server connections without printing credentials
+.TP
+ag\-logout(1)
+Forget a saved server credential
+.TP
 ag\-pin(1)
 Pin a revision so garbage collection keeps it
 .TP
@@ -186,6 +201,7 @@ Common workflow:
   ag snapshot \-m "message"       record the working directory
   ag propose \-t "title"          publish it and open a proposal
   ag integrate PROPOSAL          land it (policy decides; any unique id prefix works)
+  ag explain [PROPOSAL]          if it does not land: why, and the exact commands that fix it
 
 Where am I, is it healthy:
   ag status                      workspace, your proposals, leases, task and remote at a glance
@@ -198,4 +214,4 @@ Help topics (ag help TOPIC): workflow, policy, leases, identities, revisions, ex
 Shell completion: ag completions bash|zsh|fish|powershell|elvish     Man pages: ag man \-\-dir DIR
 Documentation: https://github.com/Paffin/AgentGit/tree/main/docs
 .SH VERSION
-v0.1.0
+v0.3.0\-beta.1

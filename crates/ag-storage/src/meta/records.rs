@@ -197,6 +197,42 @@ fn workspace_row(r: &Row) -> Result<WorkspaceRow, MetaError> {
     })
 }
 
+/// Equality filters of [`Tx::proposals_page`]; `None` matches everything.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ProposalFilter<'a> {
+    /// Proposal state (`open`, `integrated`, `closed`).
+    pub state: Option<&'a str>,
+    /// Target stream.
+    pub stream: Option<&'a str>,
+    /// Author identity, exactly as stored.
+    pub author: Option<&'a str>,
+}
+
+/// The `WHERE … ORDER BY … LIMIT` of [`Tx::proposals_page`] and its arguments (separate so that a test can ask the
+/// database how it would run exactly this statement).
+pub(crate) fn proposals_page_clause<'a>(
+    filter: &ProposalFilter<'a>,
+    after: Option<(i64, &'a str)>,
+    limit: usize,
+) -> (String, Vec<Param<'a>>) {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut args: Vec<Param<'_>> = Vec::new();
+    for (column, value) in [("state", filter.state), ("stream", filter.stream), ("author", filter.author)] {
+        if let Some(v) = value {
+            args.push(Param::from(v));
+            clauses.push(format!("{column} = ?{}", args.len()));
+        }
+    }
+    if let Some((created, id)) = after {
+        args.push(Param::from(created));
+        args.push(Param::from(id));
+        clauses.push(format!("(created_at, id) < (?{}, ?{})", args.len() - 1, args.len()));
+    }
+    args.push(Param::from(limit as i64));
+    let where_ = if clauses.is_empty() { "1 = 1".to_string() } else { clauses.join(" AND ") };
+    (format!("{where_} ORDER BY created_at DESC, id DESC LIMIT ?{}", args.len()), args)
+}
+
 impl Tx<'_> {
     // ---- proposals -------------------------------------------------------
 
@@ -231,6 +267,19 @@ impl Tx<'_> {
             }
             None => self.proposals_where("1 = 1 ORDER BY created_at DESC, id DESC LIMIT ?1", &params![limit as i64]),
         }
+    }
+
+    /// One page of proposals, newest first, filtered in SQL. `after` is the `(created_at_ms, id)` of the last row of
+    /// the previous page (keyset paging: the cost of a page does not grow with its position, and rows created or
+    /// closed between two pages cannot shift it).
+    pub fn proposals_page(
+        &self,
+        filter: &ProposalFilter<'_>,
+        after: Option<(i64, &str)>,
+        limit: usize,
+    ) -> Result<Vec<ProposalRow>, MetaError> {
+        let (clause, args) = proposals_page_clause(filter, after, limit);
+        self.proposals_where(&clause, &args)
     }
 
     /// Every open proposal of `stream`, newest first. No cap: a prediction that silently ignored the oldest

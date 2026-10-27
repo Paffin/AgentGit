@@ -1,5 +1,16 @@
 {
   "commands": {
+    "auth status": {
+      "checked_online": "bool",
+      "connections": [
+        {
+          "expires_at": "string",
+          "identity": "string",
+          "server": "string",
+          "state": "string"
+        }
+      ]
+    },
     "clone": {
       "blobs": "number",
       "changesets": "number",
@@ -33,6 +44,17 @@
       "remote": "string",
       "stream": "string",
       "version": "number"
+    },
+    "login": {
+      "expires_at": "string",
+      "file": "string",
+      "identity": "string",
+      "server": "string"
+    },
+    "logout": {
+      "forgotten": [
+        "string"
+      ]
     },
     "pull": {
       "fetch": {
@@ -138,6 +160,33 @@
         }
       ],
       "latest_seq": "number"
+    },
+    "remote explain": {
+      "candidate_tree": "string",
+      "explanations": [
+        {
+          "code": "string",
+          "fixes": [
+            {
+              "command": "string",
+              "note": "string"
+            }
+          ],
+          "kind": "string",
+          "summary": "string",
+          "why": "string"
+        }
+      ],
+      "next": [
+        "string"
+      ],
+      "policy_version": "number",
+      "proposal": "string",
+      "standing": "string",
+      "state": "string",
+      "stream": "string",
+      "summary": "string",
+      "title": "string"
     },
     "remote integrate": {
       "operation_id": "string",

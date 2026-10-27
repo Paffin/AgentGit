@@ -47,7 +47,7 @@ fn schema_is_created_once_and_versioned() {
     let again = first.reopen().unwrap();
     assert_eq!(again.read(|tx| tx.meta_get("k")).unwrap().as_deref(), Some("v"));
     assert_eq!(again.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
-    assert_eq!(SCHEMA_VERSION, 2, "bump the migration tests together with the version");
+    assert_eq!(SCHEMA_VERSION, 3, "bump the migration tests together with the version");
     assert!(again.read(|tx| tx.meta_get("created_at")).unwrap().is_some());
 }
 
@@ -83,14 +83,23 @@ fn a_version_1_database_migrates_forward_and_keeps_its_data() {
         conn.pragma_update(None, "user_version", 1).unwrap();
     }
     let m = Meta::open(&path).unwrap();
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("2"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
     assert_eq!(m.read(|tx| tx.meta_get("created_at")).unwrap().as_deref(), Some("5"), "creation time is kept");
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "existing rows survive");
     let job = m.write(|tx| tx.job_enqueue("k", &json!({}), None, Timestamp::from_millis(0))).unwrap();
     assert_eq!(job.state, JobState::Queued, "the jobs table exists after migrating");
     let version: i64 =
         rusqlite::Connection::open(&path).unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+    let indexes: Vec<String> = rusqlite::Connection::open(&path)
+        .unwrap()
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'proposals_by_%_created' OR name = 'proposals_by_created' ORDER BY name")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(indexes, ["proposals_by_created", "proposals_by_state_created", "proposals_by_stream_created"]);
     drop(m);
     Meta::open(&path).unwrap(); // opening again changes nothing
     let _ = std::fs::remove_dir_all(&dir);
@@ -534,4 +543,169 @@ fn agents_runs_tasks_provenance() {
     m.write(|tx| tx.provenance_insert(&a, "bot", Some("run_1"), &json!({"model": "m"}), "pk", "sig")).unwrap();
     let p = m.read(|tx| tx.provenance_for(&a)).unwrap();
     assert_eq!(p[0].record["model"], "m");
+}
+
+#[test]
+fn proposal_pages_are_keyset_pages_with_sql_filters_even_when_created_at_ties() {
+    let m = meta();
+    let (a, ca) = cs(vec![], "a");
+    m.write(|tx| {
+        tx.register_changeset(&a, &ca)?;
+        for s in ["main", "dev"] {
+            tx.create_stream(&StreamName::new(s).unwrap(), "user:t")?;
+        }
+        // The clock does not move: all of them share one `created_at`, so the id decides.
+        for (id, stream, author) in [
+            ("prop_a", "main", "user:x"),
+            ("prop_b", "dev", "user:x"),
+            ("prop_c", "main", "user:y"),
+            ("prop_d", "dev", "user:y"),
+            ("prop_e", "main", "user:x"),
+        ] {
+            tx.proposal_create(&NewProposal {
+                id,
+                stream,
+                head: &a,
+                title: id,
+                description: "",
+                author,
+                task_id: None,
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let walk = |filter: ProposalFilter<'_>, size: usize| -> Vec<String> {
+        let (mut out, mut after) = (Vec::new(), None::<(i64, String)>);
+        loop {
+            let page =
+                m.read(|tx| tx.proposals_page(&filter, after.as_ref().map(|(t, i)| (*t, i.as_str())), size)).unwrap();
+            assert!(page.len() <= size);
+            let Some(last) = page.last() else { return out };
+            after = Some((last.created_at.as_millis(), last.id.clone()));
+            out.extend(page.into_iter().map(|p| p.id));
+        }
+    };
+    let all = ["prop_e", "prop_d", "prop_c", "prop_b", "prop_a"];
+    for size in [1, 2, 5, 9] {
+        assert_eq!(walk(ProposalFilter::default(), size), all, "size {size}");
+    }
+    assert_eq!(walk(ProposalFilter { stream: Some("main"), ..Default::default() }, 2), ["prop_e", "prop_c", "prop_a"]);
+    assert_eq!(walk(ProposalFilter { author: Some("user:y"), ..Default::default() }, 1), ["prop_d", "prop_c"]);
+    let both = ProposalFilter { stream: Some("dev"), author: Some("user:x"), state: Some("open") };
+    assert_eq!(walk(both, 3), ["prop_b"]);
+    m.write(|tx| tx.proposal_set_state("prop_d", "closed", None)).unwrap();
+    assert_eq!(walk(ProposalFilter { state: Some("closed"), ..Default::default() }, 3), ["prop_d"]);
+    assert_eq!(walk(ProposalFilter { state: Some("open"), ..Default::default() }, 3).len(), 4);
+}
+
+/// How the database runs the paging statement, one line per plan node.
+fn plan_of(m: &TestMeta, filter: &ProposalFilter<'_>, after: Option<(i64, &str)>) -> String {
+    let (clause, args) = records::proposals_page_clause(filter, after, 50);
+    let sql = format!("SELECT * FROM proposals WHERE {clause}");
+    m.write(|tx| {
+        let rows = match tx.dialect() {
+            Dialect::Sqlite => {
+                let rows = tx.raw_query(&format!("EXPLAIN QUERY PLAN {sql}"), &args)?;
+                rows.iter().map(|r| r.string(3)).collect::<Result<Vec<_>, _>>()?
+            }
+            Dialect::Postgres => {
+                // On a handful of rows PostgreSQL rightly prefers a scan; forbid it (and a sort) to see which index
+                // the statement could use.
+                tx.raw_execute("SET LOCAL enable_seqscan = off", &[])?;
+                tx.raw_execute("SET LOCAL enable_sort = off", &[])?;
+                let rows = tx.raw_query(&format!("EXPLAIN {sql}"), &args)?;
+                rows.iter().map(|r| r.string(0)).collect::<Result<Vec<_>, _>>()?
+            }
+        };
+        Ok(rows.join("\n"))
+    })
+    .unwrap()
+}
+
+#[test]
+fn every_proposal_page_is_read_in_index_order_without_sorting() {
+    let m = meta();
+    let (a, ca) = cs(vec![], "a");
+    m.write(|tx| {
+        tx.register_changeset(&a, &ca)?;
+        tx.create_stream(&StreamName::new("main").unwrap(), "user:t")?;
+        tx.proposal_create(&NewProposal {
+            id: "prop_a",
+            stream: "main",
+            head: &a,
+            title: "t",
+            description: "",
+            author: "user:x",
+            task_id: None,
+        })
+        .map(|_| ())
+    })
+    .unwrap();
+    let filters = [
+        ProposalFilter::default(),
+        ProposalFilter { state: Some("open"), ..Default::default() },
+        ProposalFilter { stream: Some("main"), ..Default::default() },
+        ProposalFilter { state: Some("open"), stream: Some("main"), author: None },
+    ];
+    for filter in &filters {
+        for after in [None, Some((5, "prop_z"))] {
+            let plan = plan_of(&m, filter, after);
+            let lower = plan.to_lowercase();
+            assert!(lower.contains("proposals_by_") && lower.contains("created"), "{filter:?} {after:?}: {plan}");
+            assert!(!lower.contains("temp b-tree") && !lower.contains("sort"), "{filter:?} {after:?}: {plan}");
+        }
+    }
+}
+
+#[test]
+fn companions_are_written_only_for_keys_that_lack_one() {
+    let m = meta();
+    m.write(|tx| {
+        for (k, v) in
+            [("idem:a", "x"), ("idem:b", "y"), ("idem:c%d", "z"), ("idemt:b", "00000000000000000007"), ("other:e", "o")]
+        {
+            tx.meta_set(k, v)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(m.write(|tx| tx.meta_fill_companions("idem:", "idemt:", "00000000000000000042")).unwrap(), 2);
+    let get = |k: &str| m.read(|tx| tx.meta_get(k)).unwrap();
+    assert_eq!(get("idemt:a").as_deref(), Some("00000000000000000042"));
+    assert_eq!(get("idemt:c%d").as_deref(), Some("00000000000000000042"));
+    assert_eq!(get("idemt:b").as_deref(), Some("00000000000000000007"), "an existing companion is kept");
+    assert_eq!(get("idemt:e"), None, "other prefixes are left alone");
+    assert_eq!(
+        m.write(|tx| tx.meta_fill_companions("idem:", "idemt:", "00000000000000000043")).unwrap(),
+        0,
+        "repeatable"
+    );
+}
+
+#[test]
+fn meta_keys_are_found_by_prefix_and_value_order_and_deleted() {
+    let m = meta();
+    m.write(|tx| {
+        for (k, v) in [
+            ("idemt:a", "00000000000000000100"),
+            ("idemt:b", "00000000000000000200"),
+            ("idemt:c", "00000000000000000300"),
+            ("idem:a", "x"), // another prefix: never listed
+            ("idemtXd", "00000000000000000001"),
+            ("idemt_", "00000000000000000001"), // `_` is a literal in the prefix, not a wildcard
+        ] {
+            tx.meta_set(k, v)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let below = |bound: &str, limit| m.read(|tx| tx.meta_keys_with_value_below("idemt:", bound, limit)).unwrap();
+    assert_eq!(below("00000000000000000250", 10), ["idemt:a", "idemt:b"]);
+    assert_eq!(below("00000000000000000250", 1), ["idemt:a"]);
+    assert!(below("00000000000000000100", 10).is_empty(), "strictly below");
+    m.write(|tx| tx.meta_delete("idemt:a")).unwrap();
+    m.write(|tx| tx.meta_delete("absent")).unwrap();
+    assert_eq!(below("~", 10), ["idemt:b", "idemt:c"]);
+    assert_eq!(m.read(|tx| tx.meta_get("idem:a")).unwrap().as_deref(), Some("x"));
 }

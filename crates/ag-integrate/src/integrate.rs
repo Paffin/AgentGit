@@ -32,12 +32,46 @@ use serde_json::{Value, json};
 use crate::derive::DERIVE_BATCH_AFTER_INTEGRATE;
 use crate::publish::hash_request;
 use crate::repo::RepoBlobs;
-use crate::types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
+use crate::types::{Blocker, ConflictInfo, IntegrationResult, NoteInfo, Outcome, Strategy};
 use crate::{Error, Repository, Result};
 
-/// How often an integration re-reads the stream and recomputes its candidate when another writer moves the head
-/// under it, before it gives up with a contention error the caller can retry.
-const MAX_CAS_ATTEMPTS: usize = 8;
+/// How an integration behaves when other writers keep moving its stream's head under it.
+///
+/// Each attempt reads the stream, computes the candidate against that head and tries to commit; a writer that
+/// committed in between makes the attempt lose (the compare-and-swap), and the candidate is recomputed against the
+/// new head. Under many writers on one stream an attempt can lose several times in a row. After `attempts` losses the
+/// integration gives up with [`Error::Contention`] (`aborted` on the wire), which the caller may retry; between
+/// attempts it waits a short, spread-out time so that the writers stop colliding in lockstep.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ContentionPolicy {
+    /// Attempts before giving up (at least 1).
+    pub attempts: usize,
+    /// The longest wait between two attempts, in milliseconds. The window starts at 1 ms after the second lost
+    /// attempt and doubles per loss up to this; 0 retries at once.
+    pub max_backoff_ms: u64,
+}
+
+impl Default for ContentionPolicy {
+    fn default() -> Self {
+        Self { attempts: 24, max_backoff_ms: 32 }
+    }
+}
+
+impl ContentionPolicy {
+    /// How long operation `op` waits before attempt number `attempt` (1-based; the first attempt never waits).
+    /// Spread by a hash of the operation id, not by a random generator: the same operation waits the same time, and
+    /// different operations (the colliding writers) wait different times.
+    pub fn backoff(&self, op: &str, attempt: usize) -> std::time::Duration {
+        use sha2::{Digest, Sha256};
+        if attempt < 3 || self.max_backoff_ms == 0 {
+            return std::time::Duration::ZERO;
+        }
+        let window = (1u64 << (attempt - 3).min(20)).min(self.max_backoff_ms);
+        let h = Sha256::digest(format!("{op}/{attempt}").as_bytes());
+        let spread = u64::from_be_bytes(h[..8].try_into().expect("8 bytes")) % (window + 1);
+        std::time::Duration::from_millis(spread)
+    }
+}
 /// Most unfinished operations one `recover` pass looks at; the next pass takes the rest.
 const RECOVER_BATCH: usize = 10_000;
 
@@ -53,6 +87,11 @@ pub struct IntegrateRequest {
     pub idempotency_key: Option<String>,
     /// Fencing tokens of exclusive leases the author holds.
     pub fencing_tokens: Vec<u64>,
+}
+
+/// The merge notes as message lines (`Directory-Rename: ...`), each ending in a newline.
+pub(crate) fn note_trailers(notes: &[ag_merge::MergeNote]) -> String {
+    notes.iter().map(|n| format!("{}\n", n.trailer())).collect()
 }
 
 /// What integrating a proposal *would* do right now. No stream is touched.
@@ -72,6 +111,8 @@ pub struct MergePreview {
     pub problem: Option<String>,
     /// Merge algorithm version.
     pub algorithm: &'static str,
+    /// What the merge decided on its own and a person may want to check (a directory rename followed, ...).
+    pub notes: Vec<NoteInfo>,
     /// The candidate tree itself (for checkout by validators).
     #[serde(skip)]
     pub tree: Option<Tree>,
@@ -92,9 +133,24 @@ pub struct RecoveryReport {
 
 enum Candidate {
     AlreadyIntegrated,
-    FastForward { new_head: ChangesetId, new_tree: Tree, head_tree: Tree },
-    Merge { id: ChangesetId, cs: Box<Changeset>, new_tree: Tree, head_tree: Tree, base: ChangesetId },
-    Conflict { conflicts: Vec<ConflictInfo>, base: ChangesetId },
+    FastForward {
+        new_head: ChangesetId,
+        new_tree: Tree,
+        head_tree: Tree,
+    },
+    Merge {
+        id: ChangesetId,
+        cs: Box<Changeset>,
+        new_tree: Tree,
+        head_tree: Tree,
+        base: ChangesetId,
+        notes: Vec<NoteInfo>,
+    },
+    Conflict {
+        conflicts: Vec<ConflictInfo>,
+        base: ChangesetId,
+        notes: Vec<NoteInfo>,
+    },
     Invalid(String),
 }
 
@@ -138,8 +194,11 @@ impl Repository {
             "head": prop.head,
             "tokens": req.fencing_tokens,
         });
-        let (intent, _) = self.meta.write(|tx| {
-            tx.intent_create(&NewIntent {
+        // The record of a new operation whose head is already published is written in the state `ready`: the two
+        // steps (`prepared`, then `ready`) were two durable commits for what is one fact, and no crash window
+        // between them has a different recovery than the one after them.
+        let (intent, created) = self.meta.write(|tx| {
+            let (intent, created) = tx.intent_create(&NewIntent {
                 operation_id: &op,
                 idempotency_key: &key,
                 request_hash: &request_hash,
@@ -147,8 +206,22 @@ impl Repository {
                 actor: req.actor.as_str(),
                 stream: Some(&prop.stream),
                 payload: &payload,
-            })
+            })?;
+            if created && tx.is_ready(&prop.head)? {
+                let ready = tx.intent_transition(
+                    &intent.operation_id,
+                    &[IntentState::Prepared],
+                    IntentState::Ready,
+                    None,
+                    None,
+                )?;
+                return Ok((ready, created));
+            }
+            Ok((intent, created))
         })?;
+        if created && intent.state == IntentState::Ready {
+            self.failpoints.hit("integrate.after_ready")?;
+        }
         self.advance_integrate(&intent.operation_id, &req.actor, Some(&req.fencing_tokens))
     }
 
@@ -213,18 +286,31 @@ impl Repository {
         tokens: Option<&[u64]>,
     ) -> Result<IntegrationResult> {
         if let Some(t) = tokens {
-            self.meta.write(|tx| {
-                if let Some(i) = tx.intent(op)?
-                    && !i.state.is_terminal()
-                {
-                    let mut p = i.payload.clone();
-                    p["tokens"] = json!(t);
-                    tx.intent_set_payload(op, &p)?;
-                }
-                Ok(())
-            })?;
+            // Only a change is written: a new operation already carries these tokens in its payload.
+            let wanted = json!(t);
+            let current = self.meta.read(|tx| tx.intent(op))?;
+            if let Some(i) = current
+                && !i.state.is_terminal()
+                && i.payload["tokens"] != wanted
+            {
+                self.meta.write(|tx| {
+                    if let Some(i) = tx.intent(op)?
+                        && !i.state.is_terminal()
+                    {
+                        let mut p = i.payload.clone();
+                        p["tokens"] = wanted.clone();
+                        tx.intent_set_payload(op, &p)?;
+                    }
+                    Ok(())
+                })?;
+            }
         }
-        for _ in 0..MAX_CAS_ATTEMPTS {
+        let policy = self.contention;
+        for attempt in 1..=policy.attempts.max(1) {
+            let wait = policy.backoff(op, attempt);
+            if !wait.is_zero() {
+                std::thread::sleep(wait);
+            }
             let intent =
                 self.meta.read(|tx| tx.intent(op))?.ok_or_else(|| Error::NotFound(format!("operation '{op}'")))?;
             if intent.kind != "integrate" {
@@ -277,7 +363,7 @@ impl Repository {
             let candidate = self.compute_candidate(&prop, &st, Some(&meta_for_merge))?;
             match &candidate {
                 Candidate::AlreadyIntegrated => return self.finish_already_integrated(op, actor, &prop, &st),
-                Candidate::Conflict { conflicts, base } => {
+                Candidate::Conflict { conflicts, base, .. } => {
                     let outcome = Outcome::Conflict { conflicts: conflicts.clone(), base: Some(*base) };
                     return self.reject(op, actor, &outcome, "integrate.conflict");
                 }
@@ -287,6 +373,7 @@ impl Repository {
                 }
                 _ => {}
             }
+            self.failpoints.pause("integrate.before_commit");
             self.failpoints.hit("integrate.before_commit")?;
             match self.commit_integration(&intent, &prop, actor, &st, &tokens, candidate)? {
                 Step::Retry => continue,
@@ -301,7 +388,7 @@ impl Repository {
                 }
             }
         }
-        Err(Error::Contention(format!("stream changed {MAX_CAS_ATTEMPTS} times while integrating; retry")))
+        Err(Error::Contention(format!("stream changed {} times while integrating; retry", policy.attempts.max(1))))
     }
 
     fn abort_integrate(&self, op: &str, reason: &str) -> Result<IntegrationResult> {
@@ -411,7 +498,8 @@ impl Repository {
             .map_err(|e| Error::Invalid(format!("merge failed: {e}")))?;
         if !merged.is_clean() {
             let conflicts = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
-            return Ok(Candidate::Conflict { conflicts, base });
+            let notes = merged.notes.iter().map(NoteInfo::from_note).collect();
+            return Ok(Candidate::Conflict { conflicts, base, notes });
         }
         let ops = head_tree.diff(&merged.tree);
         let default_meta;
@@ -427,8 +515,14 @@ impl Repository {
             }
         };
         let message = format!(
-            "Integrate {}: {}\n\nProposal-Head: {}\nMerge-Base: {}\nMerge-Algorithm: {}\nOperation: {}\n",
-            prop.id, prop.title, p, base, ALGORITHM_VERSION, mm.operation_id
+            "Integrate {}: {}\n\nProposal-Head: {}\nMerge-Base: {}\nMerge-Algorithm: {}\n{}Operation: {}\n",
+            prop.id,
+            prop.title,
+            p,
+            base,
+            ALGORITHM_VERSION,
+            note_trailers(&merged.notes),
+            mm.operation_id
         );
         let cs = Changeset::build(
             self.config.namespace.clone(),
@@ -443,7 +537,8 @@ impl Repository {
         if merge_meta.is_some() {
             self.put_changeset(&cs)?;
         }
-        Ok(Candidate::Merge { id, cs: Box::new(cs), new_tree: merged.tree, head_tree, base })
+        let notes = merged.notes.iter().map(NoteInfo::from_note).collect();
+        Ok(Candidate::Merge { id, cs: Box::new(cs), new_tree: merged.tree, head_tree, base, notes })
     }
 
     /// Dry run: reports what integrating `proposal_id` would do now.
@@ -462,6 +557,7 @@ impl Repository {
             changed_files: vec![],
             problem: None,
             algorithm: ALGORITHM_VERSION,
+            notes: vec![],
             tree: None,
         };
         match self.compute_candidate(&prop, &st, None)? {
@@ -473,15 +569,17 @@ impl Repository {
                 preview.candidate_tree = Some(new_tree.id());
                 preview.tree = Some(new_tree);
             }
-            Candidate::Merge { new_tree, head_tree, base, .. } => {
+            Candidate::Merge { new_tree, head_tree, base, notes, .. } => {
                 preview.strategy = Strategy::Merge;
+                preview.notes = notes;
                 preview.base = Some(base);
                 preview.changed_files = head_tree.diff(&new_tree).iter().map(|o| o.path().to_string()).collect();
                 preview.candidate_tree = Some(new_tree.id());
                 preview.tree = Some(new_tree);
             }
-            Candidate::Conflict { conflicts, base } => {
+            Candidate::Conflict { conflicts, base, notes } => {
                 preview.strategy = Strategy::Merge;
+                preview.notes = notes;
                 preview.base = Some(base);
                 preview.conflicts = conflicts;
             }

@@ -8,7 +8,7 @@
 //! Pages that need `ag-server` are left to the `Docs` workflow (`.github/workflows/docs.yml`), which builds the
 //! server and runs every page: a `target/` directory may hold a stale `ag-server` from an earlier build, and the
 //! point is to run the pages against binaries of this very commit. Pages that need `git` are skipped where `git` is not
-//! installed. Needs bash and python3; skipped on Windows and where they are missing, unless `AG_REQUIRE_DOC_SNIPPETS`
+//! installed. Needs bash and python3; skipped on Windows and where they are missing, unless `AG_REQUIRE_COMPONENTS` (or `AG_REQUIRE_DOC_SNIPPETS`)
 //! is set (CI sets it), which turns "cannot run" into a failure.
 #![allow(missing_docs)]
 
@@ -19,21 +19,28 @@ fn have(tool: &str) -> bool {
     Command::new(tool).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
+/// Is a missing `git` a failure? (`AG_REQUIRE_COMPONENTS` names it, or the older `AG_REQUIRE_DOC_SNIPPETS` is set.)
 fn required() -> bool {
-    std::env::var("AG_REQUIRE_DOC_SNIPPETS").is_ok_and(|v| !v.is_empty() && v != "0")
+    ag_testkit::required("git")
 }
 
 #[test]
 fn the_commands_in_the_tutorials_run_and_print_what_the_pages_show() {
+    let test = "the_commands_in_the_tutorials_run_and_print_what_the_pages_show";
     if cfg!(windows) {
-        assert!(!required(), "the doc-snippet harness drives bash and does not run on Windows");
-        eprintln!("skipping on Windows: the harness drives bash");
+        ag_testkit::skip_platform(test, "the doc-snippet harness drives bash");
         return;
     }
-    if !have("bash") || !have("python3") {
-        assert!(!required(), "bash and python3 are required (AG_REQUIRE_DOC_SNIPPETS is set)");
-        eprintln!("skipping: bash and python3 are required");
-        return;
+    for tool in ["bash", "python3"] {
+        if ag_testkit::require_component(
+            tool,
+            test,
+            if have(tool) { Ok(()) } else { Err(format!("{tool} is not installed")) },
+        )
+        .is_none()
+        {
+            return;
+        }
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ag = PathBuf::from(env!("CARGO_BIN_EXE_ag"));
@@ -51,4 +58,12 @@ fn the_commands_in_the_tutorials_run_and_print_what_the_pages_show() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "the documentation's commands do not behave as the pages say\n{stdout}\n{stderr}");
     assert!(stdout.contains("ok   "), "no page was run at all\n{stdout}");
+    // Pages the harness left out: one marker each, so that the skip report lists them.
+    for line in stdout.lines().filter(|l| l.starts_with("skipped ")) {
+        if line.contains("which this run does not use") {
+            ag_testkit::not_applicable("doc-pages-needing-ag-server", test, line);
+        } else {
+            ag_testkit::skip("git", test, line);
+        }
+    }
 }

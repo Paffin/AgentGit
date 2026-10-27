@@ -37,6 +37,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 - [`ag agent`](#ag-agent)
 - [`ag audit`](#ag-audit)
+- [`ag auth`](#ag-auth)
 - [`ag backup`](#ag-backup)
 - [`ag blame`](#ag-blame)
 - [`ag checkout`](#ag-checkout)
@@ -44,6 +45,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag config`](#ag-config)
 - [`ag diff`](#ag-diff)
 - [`ag doctor`](#ag-doctor)
+- [`ag explain`](#ag-explain)
 - [`ag fetch`](#ag-fetch)
 - [`ag gc`](#ag-gc)
 - [`ag git`](#ag-git)
@@ -51,7 +53,10 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 - [`ag integrate`](#ag-integrate)
 - [`ag lease`](#ag-lease)
 - [`ag log`](#ag-log)
+- [`ag login`](#ag-login)
+- [`ag logout`](#ag-logout)
 - [`ag ls`](#ag-ls)
+- [`ag migrate`](#ag-migrate)
 - [`ag op`](#ag-op)
 - [`ag pin`](#ag-pin)
 - [`ag pins`](#ag-pins)
@@ -203,6 +208,33 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "timestamp": "number"
   }
 ]
+```
+
+## ag auth
+
+### ag auth status
+
+```json
+{
+  "checked_online": "bool",
+  "connections": [
+    {
+      "expires_at": "string",
+      "identity": "string",
+      "server": "string",
+      "state": "string"
+    }
+  ]
+}
+```
+
+### ag auth status (empty)
+
+```json
+{
+  "checked_online": "bool",
+  "connections": []
+}
 ```
 
 ## ag backup
@@ -398,6 +430,51 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+## ag explain
+
+### ag explain
+
+```json
+{
+  "explanations": [],
+  "next": [],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "stream": "string",
+  "title": "string"
+}
+```
+
+### ag explain (blocked)
+
+```json
+{
+  "explanations": [
+    {
+      "code": "string",
+      "fixes": [
+        {
+          "command": "string",
+          "note": "string"
+        }
+      ],
+      "kind": "string",
+      "summary": "string",
+      "why": "string"
+    }
+  ],
+  "next": [
+    "string"
+  ],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "stream": "string",
+  "title": "string"
+}
+```
+
 ## ag fetch
 
 ### ag fetch
@@ -462,6 +539,21 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 {
   "durability": "string",
   "namespace": "string",
+  "policy_version": "null",
+  "preset": "null",
+  "root": "string",
+  "stream": "string"
+}
+```
+
+### ag init (preset)
+
+```json
+{
+  "durability": "string",
+  "namespace": "string",
+  "policy_version": "number",
+  "preset": "string",
   "root": "string",
   "stream": "string"
 }
@@ -596,6 +688,31 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 ]
 ```
 
+## ag login
+
+### ag login
+
+```json
+{
+  "expires_at": "string",
+  "file": "string",
+  "identity": "string",
+  "server": "string"
+}
+```
+
+## ag logout
+
+### ag logout
+
+```json
+{
+  "forgotten": [
+    "string"
+  ]
+}
+```
+
 ## ag ls
 
 ### ag ls
@@ -609,6 +726,39 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "type": "string"
   }
 ]
+```
+
+## ag migrate
+
+### ag migrate
+
+```json
+{
+  "blobs": "number",
+  "branches": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ],
+  "commits": "number",
+  "default_branch": "string",
+  "lfs_pointers": "number",
+  "lossy_commits": "number",
+  "other_refs": [],
+  "skipped_paths": [],
+  "skipped_submodules": "number",
+  "tags": [
+    {
+      "changeset": "string",
+      "destination": "string",
+      "git_commit": "string",
+      "name": "string"
+    }
+  ]
+}
 ```
 
 ## ag op
@@ -722,6 +872,22 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ## ag policy
 
+### ag policy explain
+
+```json
+{
+  "explanation": [
+    {
+      "effect": "string",
+      "field": "string",
+      "text": "string"
+    }
+  ],
+  "source": "string",
+  "version": "number"
+}
+```
+
 ### ag policy history
 
 ```json
@@ -735,6 +901,73 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "version": "number"
   }
 ]
+```
+
+### ag policy preset apply
+
+```json
+{
+  "hash": "string",
+  "preset": "string",
+  "stream": "string",
+  "version": "number"
+}
+```
+
+### ag policy preset list
+
+```json
+[
+  {
+    "for": "string",
+    "name": "string",
+    "needs_ci_issuer": "bool"
+  }
+]
+```
+
+### ag policy preset show
+
+```json
+{
+  "explanation": [
+    {
+      "effect": "string",
+      "field": "string",
+      "text": "string"
+    }
+  ],
+  "policy": {
+    "admins": [
+      "string"
+    ],
+    "agent_autonomy": {
+      "allowed_paths": [],
+      "auto_integrate": "bool",
+      "max_files": "number"
+    },
+    "allowed_authors": [
+      "string"
+    ],
+    "approvals": {
+      "approvers": [
+        "string"
+      ],
+      "forbid_self_approval": "bool",
+      "min": "number",
+      "min_for_agents": "number"
+    },
+    "integrators": [
+      "string"
+    ],
+    "max_changed_files": "number",
+    "protected_paths": [],
+    "require_provenance_for_agents": "bool",
+    "required_validations": [],
+    "trusted_issuers": []
+  },
+  "preset": "string"
+}
 ```
 
 ### ag policy set
@@ -821,6 +1054,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "string"
   ],
   "conflicts": [],
+  "notes": [],
   "problem": "null",
   "strategy": "string"
 }
@@ -1182,6 +1416,38 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     }
   ],
   "latest_seq": "number"
+}
+```
+
+### ag remote explain
+
+```json
+{
+  "candidate_tree": "string",
+  "explanations": [
+    {
+      "code": "string",
+      "fixes": [
+        {
+          "command": "string",
+          "note": "string"
+        }
+      ],
+      "kind": "string",
+      "summary": "string",
+      "why": "string"
+    }
+  ],
+  "next": [
+    "string"
+  ],
+  "policy_version": "number",
+  "proposal": "string",
+  "standing": "string",
+  "state": "string",
+  "stream": "string",
+  "summary": "string",
+  "title": "string"
 }
 ```
 

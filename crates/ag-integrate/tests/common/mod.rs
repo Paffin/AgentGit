@@ -4,7 +4,7 @@
 //! filesystem (or memory); with `AG_TEST_POSTGRES_URL` the metadata moves to a
 //! fresh PostgreSQL schema per test, with `AG_TEST_S3_ENDPOINT` the objects move
 //! to a fresh S3 key prefix per test (see `ag_storage::testing`, and
-//! `scripts/pg-test.sh` / `scripts/s3-test.sh`). With `AG_REQUIRE_BACKENDS=1` a
+//! `scripts/pg-test.sh` / `scripts/s3-test.sh`). With `AG_REQUIRE_COMPONENTS=postgres,s3` a
 //! missing server fails the test instead of silently falling back.
 #![allow(dead_code, missing_docs)]
 
@@ -34,6 +34,21 @@ pub fn id(s: &str) -> Identity {
 /// A repository over in-memory stores — or over PostgreSQL and/or S3 when the
 /// environment asks for them.
 pub fn fx() -> Fx {
+    fx_with(None, None)
+}
+
+/// Like [`fx`], with the given retry policy for integrations that lose races.
+pub fn fx_contended(policy: ag_integrate::ContentionPolicy) -> Fx {
+    fx_with(None, Some(policy))
+}
+
+/// Like [`fx`], with the decoded-tree cache of a host on: `budget` bytes, and the cache to read its counters from.
+pub fn fx_cached(budget: usize) -> (Fx, std::sync::Arc<ag_storage::DecodedTrees>) {
+    let cache = ag_storage::DecodedTrees::new(budget);
+    (fx_with(Some(cache.scope("acme/app")), None), cache)
+}
+
+fn fx_with(trees: Option<ag_storage::TreeScope>, policy: Option<ag_integrate::ContentionPolicy>) -> Fx {
     // Objects on S3 age on the server's clock, so the test clock must start at the real time:
     // advancing it then moves objects past a grace period exactly as it does for memory.
     let wallclock = s3_endpoint().is_some();
@@ -48,6 +63,14 @@ pub fn fx() -> Fx {
         objects.store(),
     )
     .unwrap();
+    let repo = match trees {
+        Some(scope) => repo.with_tree_cache(scope),
+        None => repo,
+    };
+    let repo = match policy {
+        Some(policy) => repo.with_contention_policy(policy),
+        None => repo,
+    };
     Fx { repo, clock, objects, _meta_guard: guard }
 }
 

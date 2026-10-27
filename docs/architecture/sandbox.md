@@ -350,9 +350,11 @@ runtimes are whatever the runner image ships, so a new runner image is a new tes
 
 The root-only tests (the set-user-ID demonstration, the sampled task limit, `with_host_ids`) print a `NOTE` and
 check what they can when the suite runs as the unprivileged runner user; they were run as root on the original
-development host (a Firecracker microVM), which CI does not repeat. A host that cannot run a suite prints
-`SKIP <name>: <reason>` and passes: it has verified nothing. `AG_REQUIRE_SANDBOX=1`, `AG_REQUIRE_CGROUP=1` and
-`AG_REQUIRE_OCI=1` turn each kind of skip into a failure, and the CI jobs set them.
+development host (a Firecracker microVM), which CI does not repeat. A host that cannot run a suite leaves an
+`AG-SKIP` marker with the reason and passes: it has verified nothing. `AG_REQUIRE_COMPONENTS` naming
+`namespace-sandbox`, `cgroup-v2` and `oci:docker` / `oci:podman` turns each kind of skip into a failure, the CI jobs
+set it, and every skip that remains is listed and checked against a reviewed list
+([Test skips](test-skips.md)).
 
 **Not verified, and why you should not assume it works:**
 

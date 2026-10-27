@@ -31,6 +31,28 @@ enum Command {
         #[arg(long)]
         data_dir: Option<PathBuf>,
     },
+    /// Try AgentGit out: one command makes a data directory, an administrator and a demo repository with a sample
+    /// policy, and starts the server on 127.0.0.1 (plain HTTP). For evaluation, not for real work: the credential
+    /// it prints lives eight hours and changes at every start. Run it again with the same --data-dir to keep your data.
+    Dev {
+        /// Where the data lives (made if missing). Delete it to start over.
+        #[arg(long, default_value = "./ag-dev-data")]
+        data_dir: PathBuf,
+        /// Port to listen on (0: any free one).
+        #[arg(long, default_value_t = 8080)]
+        port: u16,
+        /// Address to listen on. Anything but a loopback address needs --allow-non-loopback.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: std::net::IpAddr,
+        /// Listen on a non-loopback address anyway (for example 0.0.0.0 inside a container whose port you publish
+        /// only to 127.0.0.1). The server speaks plain HTTP and the link it prints carries a credential.
+        #[arg(long)]
+        allow_non_loopback: bool,
+        /// Open the sign-in link in your browser. The link carries the credential, so it is briefly visible in the
+        /// process list of this machine.
+        #[arg(long)]
+        open: bool,
+    },
     /// Probe a running server's /readyz and exit 0 (ready) or 1. For container health checks,
     /// where the image has no curl.
     Healthcheck {
@@ -117,6 +139,27 @@ enum AdminAction {
     },
     /// List repositories.
     Repos,
+    /// Store a ready-made policy (solo, team, agents, strict) as the next policy version of a stream, and say in
+    /// plain language what it allows and refuses. `ag policy preset list` shows what each is for.
+    PolicyPreset {
+        /// owner/name
+        repo: String,
+        /// solo, team, agents or strict.
+        name: String,
+        /// Stream (default: the repository's default stream).
+        #[arg(long)]
+        stream: Option<String>,
+        /// Identity pattern allowed to change the policy afterwards (repeatable). Default: the identity in --as.
+        #[arg(long = "admin")]
+        admins: Vec<String>,
+        /// Trusted CI issuer for the `tests` check: IDENTITY=PUBLIC_KEY (required by `strict`).
+        #[arg(long)]
+        issuer: Option<String>,
+        /// Who is recorded as changing the policy. The engine only lets an administrator of the current policy do
+        /// it: with none configured any `user:` identity is one.
+        #[arg(long = "as", default_value = "user:cli-admin")]
+        actor: String,
+    },
     /// End the runs of a repository that stopped heartbeating, release the leases of ended runs and revoke the
     /// credentials bound to them (what `POST /v1/repos/{repo}/runs/reap` does; audited as `system:cli-admin`).
     ReapRuns {
@@ -216,6 +259,63 @@ async fn main() -> Result<()> {
             let _ = std::fs::remove_dir_all(&cfg.server.data_dir);
             Ok(())
         }
+        Command::Dev { data_dir, port, host, allow_non_loopback, open } => {
+            let listen = std::net::SocketAddr::new(host, port);
+            ag_server::dev::check_listen(listen, allow_non_loopback)?;
+            let mut cfg = ServerConfig::default();
+            cfg.server.listen = listen;
+            cfg.server.allow_insecure_remote = allow_non_loopback;
+            // A directory this command makes holds the hash of every credential: private. One that exists is left as it is.
+            if !data_dir.exists() {
+                ag_crypto::private_file::create_dir_all(&data_dir)
+                    .with_context(|| format!("creating {}", data_dir.display()))?;
+            }
+            cfg.server.data_dir = data_dir.canonicalize().unwrap_or(data_dir);
+            // The banner is the output; keep the log to warnings unless RUST_LOG asks for more.
+            cfg.telemetry.log_filter = "warn".into();
+            cfg.validate()?;
+            init_tracing(&cfg);
+            let stop = shutdown_signal().context("installing the signal handlers")?;
+            let listener = tokio::net::TcpListener::bind(listen).await.with_context(|| {
+                format!(
+                    "binding {listen}: is another server using the port? choose one with --port (0 picks a free one)"
+                )
+            })?;
+            let bound = listener.local_addr()?;
+            let (app, done) = {
+                let cfg = cfg.clone();
+                tokio::task::spawn_blocking(move || -> Result<(App, ag_server::dev::Bootstrapped)> {
+                    let app = App::new(cfg.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
+                    let done = ag_server::dev::bootstrap(&app, &cfg.server.data_dir)?;
+                    Ok((app, done))
+                })
+                .await??
+            };
+            // "Listen on every interface" is not an address to browse to: a link says where this machine is.
+            let shown = if bound.ip().is_unspecified() {
+                std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), bound.port())
+            } else {
+                bound
+            };
+            let base = format!("http://{shown}");
+            let expires = ag_types::Timestamp::from_millis(done.expires_at_ms).to_string();
+            let ui = ag_server::ui::mode(&app.cfg) != ag_server::ui::Mode::Disabled
+                && (ag_server::ui::embedded() || app.cfg.ui_dir().is_some());
+            {
+                use std::io::Write as _;
+                let mut out = std::io::stdout().lock();
+                writeln!(out, "{}", ag_server::dev::banner(&base, &done, &cfg.server.data_dir, ui, &expires))?;
+                out.flush()?;
+            }
+            if open && let Err(e) = ag_server::dev::open_browser(&ag_server::dev::sign_in_url(&base, &done.token)) {
+                eprintln!("note: {e}");
+            }
+            let shutdown = async {
+                stop.await;
+                println!("\nstopping");
+            };
+            ag_server::server::serve(app, listener, shutdown).await
+        }
         Command::Serve { config, listen, data_dir } => {
             let mut cfg = match config {
                 Some(path) => ServerConfig::load(&path)?,
@@ -251,11 +351,14 @@ async fn main() -> Result<()> {
                     cfg.metrics.token_env
                 );
             }
+            // Registered before the server says it is listening: a stop request that arrives right after that line
+            // (a supervisor, a test) must be a graceful stop, not the default action of the signal.
+            let stop = shutdown_signal().context("installing the signal handlers")?;
             let listener = tokio::net::TcpListener::bind(cfg.server.listen)
                 .await
                 .with_context(|| format!("binding {}", cfg.server.listen))?;
             let shutdown = async {
-                wait_for_shutdown_signal().await;
+                stop.await;
                 tracing::info!("shutting down");
             };
             ag_server::server::serve(app, listener, shutdown).await
@@ -298,18 +401,32 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Resolves when the process is asked to stop, so the server drains in-flight requests and flushes telemetry.
+/// Starts listening for a request to stop and returns the future that resolves when one arrives, so the server
+/// drains in-flight requests and flushes telemetry. The handlers are installed by this call, not by the first poll
+/// of the future: a signal that comes in between must not take the default action (ending the process).
 ///
 /// Unix: SIGINT (Ctrl+C) and SIGTERM. Windows, where a console process gets control events instead of
 /// signals: Ctrl+C, Ctrl+Break, closing the console window, and logoff/shutdown of the machine.
+fn shutdown_signal() -> std::io::Result<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut interrupt = signal(SignalKind::interrupt())?;
+        let mut terminate = signal(SignalKind::terminate())?;
+        Ok(Box::pin(async move {
+            tokio::select! { _ = interrupt.recv() => {}, _ = terminate.recv() => {} }
+        }))
+    }
+    #[cfg(not(unix))]
+    {
+        Ok(Box::pin(wait_for_shutdown_signal()))
+    }
+}
+
+/// The console control events of Windows (and, elsewhere without signals, nothing but Ctrl+C).
+#[cfg(not(unix))]
 async fn wait_for_shutdown_signal() {
     let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
-    #[cfg(unix)]
-    let term = async {
-        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            s.recv().await;
-        }
-    };
     #[cfg(windows)]
     let term = async {
         use tokio::signal::windows;
@@ -329,7 +446,7 @@ async fn wait_for_shutdown_signal() {
             _ = async { wait(windows::ctrl_logoff().map(|mut s| async move { s.recv().await })).await } => {}
         }
     };
-    #[cfg(not(any(unix, windows)))]
+    #[cfg(not(windows))]
     let term = std::future::pending::<()>();
     tokio::select! { _ = ctrl_c => {}, _ = term => {} }
 }
@@ -479,6 +596,31 @@ fn admin(app: App, action: AdminAction) -> Result<()> {
             for r in app.control.all_repos().map_err(|e| anyhow::anyhow!("{e}"))? {
                 println!("{}\t{}", r.name, r.description);
             }
+        }
+        AdminAction::PolicyPreset { repo, name, stream, admins, issuer, actor } => {
+            use ag_policy::presets::{Preset, PresetOptions, parse_issuer};
+            let actor = ag_types::Identity::new(actor)?;
+            let preset = Preset::parse(&name)?;
+            let ci = issuer.as_deref().map(parse_issuer).transpose().map_err(|e| anyhow::anyhow!("--issuer: {e}"))?;
+            let admins = if admins.is_empty() { vec![actor.principal().to_string()] } else { admins };
+            let policy = preset.build(&PresetOptions { admins, ci }).map_err(|e| match e {
+                ag_policy::presets::PresetError::NeedsIssuer(n) => anyhow::anyhow!(
+                    "the preset '{n}' requires a passing check on every change: pass --issuer IDENTITY=PUBLIC_KEY"
+                ),
+                other => anyhow::anyhow!(other),
+            })?;
+            if app.control.repo(&repo).map_err(|e| anyhow::anyhow!("{e}"))?.is_none() {
+                bail!("repository '{repo}' not found");
+            }
+            let handle = app.repos.handle(&repo).map_err(|e| anyhow::anyhow!("{e}"))?;
+            let stream = stream.unwrap_or_else(|| handle.default_stream().to_string());
+            let row = handle.set_policy(&stream, &policy.to_json(), &actor)?;
+            println!(
+                "policy of {repo} '{stream}' is version {} (the preset '{name}', hash {})",
+                row.version,
+                &row.doc_hash[..12]
+            );
+            println!("{}", ag_policy::explain::render(&ag_policy::explain::explain(&policy)));
         }
         AdminAction::ReapRuns { repo, stale_after_secs, dry_run } => {
             let cfg = &app.cfg.agents;

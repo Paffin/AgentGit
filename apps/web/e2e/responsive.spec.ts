@@ -47,7 +47,7 @@ test.describe('no screen scrolls the page sideways', () => {
 
 test.describe('navigation', () => {
   test('the header is whole and the account menu opens inside the window', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/repos')
     await expect(page.getByTestId('user-menu')).toBeVisible()
     for (const l of [
       page.getByRole('link', { name: /AgentGit/ }).first(),
@@ -73,17 +73,17 @@ test.describe('navigation', () => {
   }) => {
     await page.goto(`/repos/${state.demo.repo}/history`)
     const tabs = page.getByRole('navigation', { name: 'Repository' })
-    await expect(tabs.getByRole('link')).toHaveCount(8)
+    await expect(tabs.getByRole('link')).toHaveCount(5)
     // The current tab is scrolled into view on arrival, not left off-screen in a strip with no scrollbar.
-    expect(await fitsViewport(page, tabs.getByRole('link', { name: 'History' }))).toBe(true)
+    expect(await fitsViewport(page, tabs.getByRole('link', { name: 'Code' }))).toBe(true)
     for (const link of await tabs.getByRole('link').all()) {
       expect(await fitsViewport(page, link), `${await link.textContent()} is reachable`).toBe(true)
     }
     // ... and following one works by touch or click.
-    await tabs.getByRole('link', { name: 'Agents' }).click()
+    await tabs.getByRole('link', { name: 'Agents & work' }).click()
     await expect(page).toHaveURL(/\/agents$/)
-    expect(await fitsViewport(page, tabs.getByRole('link', { name: 'Agents' }))).toBe(true)
-    await tabs.getByRole('link', { name: 'Live board' }).click()
+    expect(await fitsViewport(page, tabs.getByRole('link', { name: 'Agents & work' }))).toBe(true)
+    await tabs.getByRole('link', { name: 'Overview' }).click()
     await expect(page).toHaveURL(new RegExp(`/repos/${state.demo.repo}$`))
   })
 
@@ -94,7 +94,7 @@ test.describe('navigation', () => {
     await page.goto(`/repos/${state.demo.repo}/proposals`)
     const admin = page
       .getByRole('navigation', { name: 'Repository' })
-      .getByRole('link', { name: 'Admin' })
+      .getByRole('link', { name: 'Settings' })
     await admin.focus()
     expect(await fitsViewport(page, admin)).toBe(true)
   })
@@ -106,7 +106,7 @@ test.describe('tables', () => {
     state,
   }) => {
     for (const path of [
-      '/',
+      '/repos',
       `/repos/${state.demo.repo}/streams`,
       `/repos/${state.demo.repo}/files`,
       `/repos/${state.demo.repo}/agents`,
@@ -201,16 +201,12 @@ test.describe('dialogs', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await page.getByTestId('act-integrate').click()
-    await checkDialog(page, 'Integrate this proposal', /Integrate/)
+    await checkDialog(page, 'Land this change request', /Land|Integrate/)
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
-  test('new repository and mint a token', async ({ page }) => {
-    await page.goto('/')
-    await page.getByRole('button', { name: 'New repository' }).click()
-    await checkDialog(page, 'New repository', 'Create repository')
-    await page.keyboard.press('Escape')
+  test('mint a token', async ({ page }) => {
     await page.goto('/access')
     await page.getByTestId('mint-open').click()
     await checkDialog(page, 'Mint a token', /Mint/)

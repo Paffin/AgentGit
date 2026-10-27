@@ -9,6 +9,209 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- `ag migrate --dry-run` verifies a full Git conversion and shows its reconciliation report before creating a destination. Previewing losses does not authorize a later lossy import.
+
+- `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
+- Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
+
+### Fixed
+
+- Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
+
+## [0.3.0-beta.1] — 2026-10-27
+
+### Added
+
+- Public beta for the single-server Linux/SQLite/filesystem workflow, with open external qualification gates and explicit migration limits.
+- Web import from full Git bundles: private preflight, all-branch/tag reconciliation, content-loss acknowledgement, idempotent publication, and downloadable receipt. Credentials stay with local Git.
+- Publication moves the complete prepared directory atomically without replacing an existing destination; a retry can recover after the move but before registry insertion.
+- `ag migrate` imports a full local Git clone/mirror or bundle into a new working repository. Original bundles and reports are retained and included in backups.
+- Deterministic mapping for Git branch names outside AgentGit's naming rules; unsupported refs, submodules, paths, repaired text and external LFS pointers are reported.
+- Deployment smoke tests exercise real bundle import and publication in the shipped server image. Git's native bundle/pack runtime is included in the shell-less images.
+
+### Scope
+
+- Hosting issues, pull/merge request discussions, permissions, releases, hosted CI settings and external LFS payloads are not imported. Browser migration currently requires local storage; see [the migration guide](docs/guides/migrate-from-git.md).
+- External MCP host qualification, independent pilots, physical-device and screen-reader verification remain open; beta is not a production-readiness certification.
+
+## [0.2.0-rc.3] — 2026-10-27
+
+### Added
+
+- Home now supports searching visible work, filtering by repository and category, manual refresh and a last-successful-refresh timestamp. Partial reads and truncated summaries are explicitly marked; failures never imply that the work queue is clear.
+- Change-request search and role-aware links to editing files or giving an agent work; glossary hints in repository navigation and table headers.
+- A focused beta programme with public acceptance gates, pilot reporting, contributor entry points and a launch kit. Alpha status remains until external evidence meets the gates.
+- `ag remote explain PROPOSAL` reports a server proposal's blockers, reasons and next commands with machine-readable output and distinct ready/blocked/refused exit codes.
+- Policy regression coverage for preset actor/author restrictions, provenance, file limits, approval explanations and validation age formatting.
+
+- Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
+  after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
+  runs also cover server/core pull requests and fail on execution or integrity errors without timing thresholds.
+
+- **Zero-setup start.** `ag-server dev` makes a data directory, an administrator with a fresh 8-hour credential (replaced
+  and the old one revoked at every start), the demo repository `demo/welcome` with the `agents` preset, and a reviewer
+  `user:reviewer`, then prints a link that signs you in (`...#token=...`; the Web UI takes the credential out of the
+  address bar at once) and the exact commands. Loopback only unless `--allow-non-loopback`. `ag login URL --token-file
+  FILE` / `ag logout URL` keep a credential per server in `credentials.json` (mode 0600), which `clone`, `fetch`, `pull`,
+  `push` and `ag remote` find on their own after `AG_TOKEN*`. The link is not one-time (that needs a new endpoint).
+- **Policy presets** `solo`, `team`, `agents`, `strict`, as data in `ag-policy`: `ag policy preset list|show|apply`,
+  `ag init --preset`, `ag remote policy --preset`, `ag-server admin policy-preset`. `ag policy explain [FILE|current]` and
+  `ag remote policy --explain` read any policy document in plain words; a test fails when `Policy` gains a field without a
+  sentence.
+- **`ag explain [PROPOSAL]`** turns a refusal into plain words and the exact next commands (one explanation per refusal
+  code, checked against the variants); the hints under `ag integrate` and `ag remote integrate|prepare` use the same
+  strings. The remote workflow also supports `ag remote explain PROPOSAL`.
+- **A Web UI a first-time user can use** (`docs/design/web-ux-review.md`): Home ("needs your attention") and navigation by
+  job (Overview, Change requests, Agents & work, Code, Settings); plain labels with the AgentGit word in a tooltip
+  (`lib/glossary.ts`, checked against the guide); every blocker carries its fix as an action (request validation, ask a
+  reviewer, take the lease) and a "Next:" line; guided flows (new-repository wizard, getting-started checklist, "Give an
+  agent work" that grants the role and mints the credential); a rules editor with presets and sentences, raw JSON under
+  Advanced; editing a file and proposing it from the browser, with a conflict resolver; empty states that say what to do.
+  Proven by `e2e/jobs.spec.ts`: a fresh user does each of the five jobs in a real browser against a real server, using
+  only what the screen says. No server change.
+- **Tests that cannot pass by not testing.** A shared helper per language (`ag-testkit`, Go `testutil`, `ag_testkit.py`,
+  `e2e/support/components.ts`): a missing component fails when `AG_REQUIRE_COMPONENTS` names it (or `all`), otherwise it
+  skips with an `AG-SKIP` marker and a JSON report. `scripts/check_skips.py` fails a CI job on a skip not in
+  `tests/skip-allowlist.toml` (reason, owner and where it runs for real are mandatory) and, with `--scan`, on any raw
+  skip outside the helpers; every test job runs it. Inventory: `docs/architecture/test-skips.md`.
+
+- **`ag agent reap --remote [NAME] [--timeout D] [--dry-run]`**: reaps the silent runs of a server from the command
+  line (`AgentService.ReapRuns`, needs `agent.operate`, audited under the caller as `run.abandon`); the local form
+  gained `--dry-run`. The periodic reaper takes a `run-reaper` lease in the control database before each pass, so one
+  replica of several reaps (the lease is time-based; two replicas briefly reaping together is harmless because a
+  reap is idempotent). [ADR-0011](docs/adr/0011-proposal-paging-indexes-and-background-leases.md).
+- **Metadata schema 3**: three indexes so that every page of `list_proposals` is read in index order without sorting,
+  and idempotency records written before they carried a time are dated once by the first sweep and then expire.
+  Metadata schema 3 is **not readable by builds that only know schema 2**: in a rolling upgrade start the new build
+  first ([ADR-0007](docs/adr/0007-multi-replica-server.md)). The control schema stays at 3.
+- **Decoded-tree cache** with a memory budget (`repos.tree_cache_bytes`, default 256 MiB; `0` switches it off) and
+  metrics `agwp_tree_cache_*`. At 100 000 files a fast-forward went from about 330 to about 180 ms, a three-way merge
+  from 880-1 050 to about 200 ms and the publish of one file from 86 to 32-38 ms; peak RSS of that run grew from
+  168 to 714 MiB with a 512 MiB budget ([numbers](docs/architecture/performance.md)).
+- **Bounded retry of same-stream contention** inside the call (`repos.integrate_attempts`, default 24;
+  `repos.integrate_backoff_ms`, default 32; `1` means one attempt). `aborted` answers at 16 writers went from 14-16 %
+  to 3-4 %; the tail is longer because losers now wait inside the call (p99 0.5-0.6 s to 0.8-1.5 s).
+- **Job-claim fencing token** ([ADR-0012](docs/adr/0012-job-claim-fencing.md)): optional `fencing_token` on job
+  heartbeat, complete and fail, no schema change; a stale claimant of the same worker name is refused. `ag-worker`
+  sends it; the OpenAPI document, both SDKs and the Web UI types are regenerated. It is opt-in per request: an old
+  worker is as exposed as before.
+
+### Changed
+
+- The Go suite requires `ag-server` in CI (`ag-server-binary`) and finds it through `cargo metadata`; the Keycloak Rust
+  tests are no longer `#[ignore]` (they skip in plain `cargo test` and are required in the identity-provider job); the
+  scripts run on Python 3.9 (`scripts-py39` job, `from __future__ import annotations`). The Web UI opens on Home; the
+  old words (proposal, integrate) became Change requests and Land, with the old word in a tooltip.
+- **An integration costs 3 durable commits** instead of 7 (fast-forward) or 8 (merge): the intent is written `ready`,
+  tokens only if they changed, one derive commit. `ag-bench load streams` (16 clients over HTTP, 3 alternating rounds):
+  87.6 to 100.0 integrations/s (+14 %, on a shared VM where less than 30 % is noise). Crash recovery at every step and
+  recovery of an operation left `prepared` by an earlier build are unchanged and tested.
+- Storage API: `Tx::job_heartbeat/complete/fail` take a `claim: Option<u32>` argument;
+  `Repository::with_tree_cache`, `with_contention_policy` and `Meta::committed_writes` are new; the tree-size estimate
+  lives in `agentgit-storage` (`approx_tree_bytes`).
+- The README (English and Russian) and the release documents state the published `v0.2.0-rc.2` and what was verified
+  about it; `docs/operations/releasing.md` records the owner's `gh attestation verify` of both images.
+
+### Fixed
+
+- Include the shipped `ag-mcp` executable in the release SBOM inventory.
+- Reject incomplete archives before replacing installed binaries and explain when an older GitHub CLI cannot verify attestations.
+- Keep readable proposals when another detail or the agent-run list cannot be loaded.
+
+- Python and TypeScript SDK integration harnesses enable the startup log used to discover ephemeral ports;
+  an inherited `RUST_LOG=error` no longer causes false server-start timeouts.
+- The orchestrator's process-group timeout test distinguishes a running child from a dead, unreaped Linux
+  child, avoiding false failures in containers whose PID 1 does not reap orphans.
+- Server log-capture tests share a persistent subscriber with per-thread buffers so concurrent tests do not
+  invalidate each other's tracing callsite cache. The startup-warning test also ignores inherited log filters.
+- Update `ctutils` to 0.4.4 in both Cargo lock files (RUSTSEC-2026-0385) and the UI's `happy-dom` to 21.0.4
+  (GHSA-834v-8h66-3h79). Remove the obsolete tinypool exceptions after both npm dependency trees became clean.
+
+- Found by the new gate: the `PostgreSQL + S3 backends` job never lifted the AppArmor restriction on user namespaces, so
+  every namespace-sandbox test had been silently skipping there; it does now and requires `namespace-sandbox`.
+- Test flakes: replicas of one test cluster could be given the same port ("Address already in use"); the `ag-server dev`
+  tests expected a clean exit from a killed process on Windows.
+- Dependencies: `rustls-webpki` 0.103.16 and `webpki-roots` 1.0.10 (RUSTSEC-2026-0381, -0382), `certifi` 2026.10.19 in
+  the Python SDK lock; a CodeQL alert in the rules-change sentence of the Web UI.
+- Test races found by CI (no product code changed): `ag-mcp`'s `closing_stdin_ends_the_process_cleanly` waited for
+  nothing and raced the stderr drain thread; the server's log-capturing tests lost a line to the shared tracing
+  callsite and `sigterm_and_sigint_stop_the_server_gracefully` sent SIGINT before tokio had installed its handler
+  (the server now installs the stop-signal handlers before it listens).
+
+### Known limitations
+
+- Browser editing is one text file per change request (no rename, delete or multi-file); some tab labels and table headers still need glossary hints; Home is polled every 15 s, not live; the rules form leaves protected-path approvers and check timing in
+  the raw JSON; no screen-reader pass. The Docker one-liner for `ag-server dev` is not verified (no Docker daemon here), and neither `dev`, `login` nor `explain`
+  is in the `v0.2.0-rc.2` archives. The root-only halves of the sandbox tests run in no CI job, and the four scripts
+  that read TOML need Python 3.11 and are not in the 3.9 job.
+- The tree cache clones a tree on every hit (7 ms at 100 000 files); the disk backend and PostgreSQL were not
+  measured with it. Batching and the cache were not measured on PostgreSQL or S3. The reaper lease is not tested with
+  real replicas on PostgreSQL and S3. Schema 3 adds three index entries per proposal write (not measured as a load).
+- Fencing for job claims is not required by any server option yet (an old worker is as exposed as before).
+
+## [0.2.0-rc.2] — 2026-10-19
+
+Second release candidate, **published** as a GitHub pre-release (tag `v0.2.0-rc.2`, commit `0ad4753`; Release run
+[39434938489](https://github.com/Paffin/AgentGit/actions/runs/39434938489), all 15 jobs green). `v0.2.0-rc.1` was
+tagged but its Release run failed in the last stage, before anything was attached to a release (the release notes
+were requested with a bare version instead of a tag name); no archive was ever published for it. rc.2 is rc.1 plus
+the release fix and the server-hardening items below.
+
+What the release carries: four archives (Linux x86_64 and aarch64, macOS aarch64 and x86_64), CycloneDX SBOMs for
+`ag`, `ag-server` and `ag-worker` (none for `ag-mcp`), `SHA256SUMS`, the rendered Homebrew formula `agentgit.rb`,
+multi-arch images `ghcr.io/paffin/agentgit-server` and `agentgit-cli` (`:0.2.0-rc.2`), and build-provenance
+attestations. See [Releasing](docs/operations/releasing.md#evidence) for what was and was not verified.
+
+### Breaking
+
+- **Acting on another agent's run requires `agent.operate`** (held by `delegator` and `admin`). A person or service
+  with a plain `writer` role can no longer start, heartbeat or finish a run for an agent (`permission_denied`, naming
+  `agent.operate`); an `agent:<name>` identity still acts for itself. Clients that drove agents with a writer token
+  need the `delegator` role.
+- Page tokens of the proposal listing changed (opaque; an old token is `invalid_argument`).
+
+### Added
+
+- **Trusted proxies**: `server.trusted_proxies` decides when `X-Forwarded-For` is believed; the client address is on
+  request log lines and keys a new per-address limit on failed authentications (`limits.auth_failures_per_second`,
+  `auth_failure_burst`; off by default).
+- **Idempotency records expire** (`repos.idempotency_ttl_secs`, 7 days; swept every
+  `repos.idempotency_sweep_interval_secs`, 1 h). Records written by earlier builds carry no time and were never swept
+  in rc.2 (dated in the next release).
+- **A global budget for object bytes held by uploads in flight** (`limits.max_inflight_object_bytes`, 1 GiB; HTTP PUT
+  and gRPC upload).
+- **`derive_status` and dangling references** are shown by `ag doctor` (checks `derive` and `references`), `/readyz`
+  and metrics (`agwp_derive_*`, `agwp_dangling_refs{kind}`); the server scans every
+  `repos.health_scan_interval_secs` (300).
+- `Retry-After-Ms` beside `Retry-After`; the seconds are rounded up and tested against `retry_after_ms`.
+- A 1280x640 social preview image.
+
+### Changed
+
+- Open-stream and open-proposal quotas are counted in the transaction that inserts the row, so racing creates cannot
+  pass the limit; a replay of a keyed proposal that already exists is served even at the limit.
+- `list_proposals` filters in SQL and pages by key (stable while proposals are opened).
+
+### Fixed
+
+- Release workflow: the release notes step passes the tag form (`vX.Y.Z`), and an already existing release page
+  (the GitHub UI creates one with a tag) is filled in instead of making `gh release create` fail.
+
+### Known limitations
+
+- Everything in the rc.1 list below that is not changed above still applies, except that open-stream and
+  open-proposal counts are exact, idempotency records expire, there is a global byte budget and `remote` honours
+  trusted proxies. Not verified for rc.2: the archive attestations, the macOS and aarch64 archives outside CI, the
+  Homebrew formula; no `ag-mcp` SBOM. Image attestations (server and CLI) were verified by the owner with
+  `gh attestation verify` (SLSA provenance v1, `release.yml` at `refs/tags/v0.2.0-rc.2`).
+
+## [0.2.0-rc.1] — 2026-10-19
+
+First release candidate and the first tag of the project (the `0.1.0` section below was an alpha that was never
+tagged or published).
+
+### Added
+
 **Network and storage**
 
 - **`ag-server`**: the network server. AGWP v1 over gRPC and HTTP/JSON on one port (the protobuf file is the
@@ -130,6 +333,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - `ag_merge::ALGORITHM_VERSION` is `ag-merge/2+ag-diff/1` (recorded in every merge changeset).
 - The wire name of a file entry's type is `regular` or `symlink` (it said `file` on reads before the server
   was released); writes still accept `file`.
+- **Cargo packages are named `agentgit-<x>`** (directories, library names and binaries are unchanged; `cargo -p`
+  flags change). 21 crates are publishable and CI dry-runs `cargo publish --workspace`; the protocol and the migrations
+  are packaged inside their crates (`scripts/sync_crate_files.py`). Nothing is published to crates.io
+  ([names](docs/operations/releasing.md#cratesio)).
 - Container images and Compose/Kubernetes default to the image tag of the workspace version instead of `:latest`;
   Compose uses SeaweedFS instead of MinIO (whose images were withdrawn).
 - Object bytes are charged against the repository quota on every path that writes objects, atomically in the control
@@ -176,8 +383,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Known limitations
 
-- Nothing is published: no release tag, no registry image, no npm, PyPI or crates.io package, and GitHub Pages is not
-  enabled. The release workflow was rehearsed from a work branch, not from `main`.
+- This is the first tag: before it the publishing half of the release workflow (GHCR push, GitHub release,
+  attestation of the published files) had only been rehearsed from a work branch. No npm, PyPI or crates.io package is
+  published, and GitHub Pages is not enabled.
 - Replicas: mixed builds during a rolling upgrade, a PostgreSQL failover, load, and the `ha` Kubernetes overlay on a
   cluster are not tested. Rate limits are per replica; `remote` in logs is the proxy's address (no `X-Forwarded-For`).
 - Open-stream and open-proposal counts are checked just before the insert and can overshoot by the number of
@@ -197,8 +405,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - The Web UI has no screen-reader or real-device pass; OIDC was verified against Keycloak only. `ag-mcp` is stdio only
   and was not run inside Claude Code, Claude Desktop or the Agent SDKs; `--ca-file` replaces the built-in roots. The
   model-backed orchestrator was run live once with one model through one provider.
-- The nightly fuzz job and the weekly mutation run have never run on GitHub; the dependency graph is off; the Dependabot
-  pull requests opened by the first run are untriaged. No external security audit.
+- The nightly fuzz job and the weekly mutation run have never run on GitHub; the dependency graph is off. No external
+  security audit.
 - Rename detection is per file (no directory renames or copies); blame follows renames but not copies, and
   for merge parents beyond the first only the same path.
 
@@ -239,5 +447,6 @@ Local mode trusts the local user; no sandbox for `ag validate run`; flat tree ma
 detection; no network server. See [ROADMAP.md](ROADMAP.md) and
 [docs/architecture/security.md](docs/architecture/security.md).
 
-[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.2.0-rc.1...HEAD
+[0.2.0-rc.1]: https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.1
 [0.1.0]: https://github.com/Paffin/AgentGit/releases/tag/v0.1.0

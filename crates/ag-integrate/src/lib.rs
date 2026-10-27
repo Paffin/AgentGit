@@ -23,7 +23,9 @@ mod api_support;
 mod backup;
 mod blame;
 mod derive;
+mod directory;
 mod error;
+pub mod explain;
 mod failpoints;
 mod fsck;
 mod gc;
@@ -44,11 +46,13 @@ pub use api_support::{FileDiff, MAX_NEGOTIATED};
 pub use backup::BackupReport;
 pub use blame::{Blame, BlameLine, BlameOptions, DEFAULT_BLAME_COMMITS, MAX_BLAME_FILE_SIZE, MAX_BLAME_LINES};
 pub use derive::{DeriveReport, DeriveStatus, KEYFRAME_INTERVAL};
+pub use directory::publish_new_directory;
 pub use error::Error;
 pub use failpoints::{Failpoints, GateHandle};
 pub use fsck::{FsckIssue, FsckReport};
 pub use gc::{DEFAULT_GC_GRACE_MS, DEFAULT_REFLOG_RETENTION_MS, GcOptions, GcReport};
 pub use history::{HybridGraph, LogEntry};
+pub use integrate::ContentionPolicy;
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};
 pub use prepare::{Preparation, PrepareContext, ValidationState};
@@ -63,7 +67,7 @@ pub use storage::{
     MAX_S3_LIST_PAGE, MAX_S3_REQUEST_TIMEOUT_SECS, MAX_S3_RETRIES, MetaConfig, ObjectLockKind, ObjectsConfig,
     StorageConfig,
 };
-pub use types::{Blocker, ConflictInfo, IntegrationResult, Outcome, Strategy};
+pub use types::{Blocker, ConflictInfo, IntegrationResult, NoteInfo, Outcome, Strategy};
 pub use virtual_ws::{VirtualChange, VirtualContent};
 pub use workspace::{Change, SyncOutcome};
 

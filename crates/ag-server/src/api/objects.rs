@@ -19,6 +19,8 @@ pub struct ObjectSink {
     /// Largest object this upload may carry: the server's limit, or the repository's own if that is smaller.
     max_object: u64,
     current: Option<(String, Vec<u8>)>,
+    /// What the object being received takes from the global in-flight budget.
+    held: crate::inflight::Reservation,
     stored: Vec<String>,
     present: Vec<String>,
     bytes: u64,
@@ -30,6 +32,7 @@ impl ObjectSink {
         if chunk.object_id.is_empty() {
             return Err(ApiError::invalid("object chunk without object_id"));
         }
+        self.held.grow(chunk.data.len() as u64)?;
         match &mut self.current {
             Some((id, buf)) if *id == chunk.object_id => buf.extend_from_slice(&chunk.data),
             Some((id, _)) => {
@@ -51,6 +54,7 @@ impl ObjectSink {
             let (id, buf) = self.current.take().expect("set above");
             let len = buf.len() as u64;
             let newly = self.app.store_object(&self.call, &self.repo, &id, buf).await?;
+            self.held.release();
             self.bytes += len;
             if newly { self.stored.push(id) } else { self.present.push(id) }
         }
@@ -78,6 +82,7 @@ impl App {
             repo,
             max_object,
             current: None,
+            held: self.inflight.reserve(0)?,
             stored: vec![],
             present: vec![],
             bytes: 0,

@@ -62,7 +62,27 @@ impl Fake {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         let f = Fake { dir };
         f.set("mode", mode);
+        f.wait_until_executable();
         f
+    }
+
+    /// Executing a script that was just written can fail with `ETXTBSY` ("Text file busy"): the tests of this
+    /// binary run on several threads, and a child forked by another thread while the script's write
+    /// descriptor was still open holds a copy of it until that child reaches its own `exec`. Instrumented
+    /// (coverage) builds make that window wide enough to hit on CI. The copy is transient, so wait until one
+    /// run of the script is accepted, then forget that probe call.
+    fn wait_until_executable(&self) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            match std::process::Command::new(self.runtime()).arg("probe").output() {
+                Ok(_) => break,
+                Err(e) if e.raw_os_error() == Some(26) && std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(e) => panic!("the fake runtime cannot be executed: {e}"),
+            }
+        }
+        let _ = std::fs::remove_file(self.dir.path().join("calls.log"));
     }
 
     fn set(&self, file: &str, content: &str) {

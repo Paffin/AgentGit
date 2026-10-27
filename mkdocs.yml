@@ -104,7 +104,13 @@ nav:
           - Troubleshooting a blocked integration: tutorials/troubleshooting-blocked-integration.md
       - FAQ: faq.md
       - Glossary: glossary.md
+      - Git to AgentGit: concepts-cheatsheet.md
       - AgentGit compared: comparison.md
+  - Community:
+      - Start here: community/start-here.md
+      - Beta programme: community/beta.md
+      - Watch the workflow: community/demo.md
+      - Pilot launch kit: community/launch-kit.md
   - Guides:
       - Running agents: guides/agents.md
       - Agents through MCP: guides/mcp.md
@@ -115,6 +121,7 @@ nav:
       - Git bridge: guides/git-bridge.md
       - Execution-plane workers: guides/workers.md
       - The Web UI: guides/web-ui.md
+      - Web UI review (first-time user): design/web-ux-review.md
       - Client SDKs: guides/sdks.md
       - The orchestrator: guides/orchestrator.md
   - Operations:
@@ -139,6 +146,7 @@ nav:
       - Security model: architecture/security.md
       - Compatibility: architecture/compatibility.md
       - Testing: architecture/testing.md
+      - Test skips: architecture/test-skips.md
       - Performance of the engine: architecture/performance.md
       - The sandbox: architecture/sandbox.md
       - ADR traceability: architecture/adr-traceability.md
@@ -154,6 +162,8 @@ nav:
           - "0008 MCP server": adr/0008-mcp-server.md
           - "0009 Identity names": adr/0009-identity-names-and-principals.md
           - "0010 Run-bound credentials": adr/0010-run-bound-credentials.md
+          - "0011 Paging indexes and leases": adr/0011-proposal-paging-indexes-and-background-leases.md
+          - "0012 Job claim fencing": adr/0012-job-claim-fencing.md
   - Protocol:
       - Overview: protocol/README.md
       - AGWP v1: protocol/agwp-v1.md

@@ -53,9 +53,9 @@ const label = (e: QueueEntry) => titleOf.value.get(e.proposal) ?? shortId(e.prop
 
 <template>
   <Card
-    title="Integration queue"
+    title="Landing queue"
     icon="stack"
-    :subtitle="`${board.stream || 'stream'} · ${waiting} waiting`"
+    :subtitle="`${board.stream || 'branch'} · ${waiting} waiting`"
     flush
   >
     <template #actions>
@@ -89,7 +89,7 @@ const label = (e: QueueEntry) => titleOf.value.get(e.proposal) ?? shortId(e.prop
         icon="stack"
         compact
         title="The queue is empty"
-        description="Queued proposals are integrated in order. A blocked or rejected one is marked and skipped; the rest continue."
+        description="Queued change requests land in order. A blocked or rejected one is marked and skipped; the rest continue."
       />
       <ol v-else class="list">
         <li v-for="(e, i) in board.queueEntries" :key="e.id" class="entry" :data-queue="e.id">

@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import type { Blocker } from '@/api/types'
 import { explainAll } from '@/lib/blockers'
+import type { FixId, FixPlan } from '@/lib/fixes'
+import Button from '@/ui/Button.vue'
 import Icon from '@/ui/Icon.vue'
 
 const props = withDefaults(
@@ -11,9 +13,12 @@ const props = withDefaults(
     hints?: boolean
     /** Show at most this many; the rest collapses into "and N more". */
     max?: number
+    /** What can be done about a blocker (by code). Without it the list only explains. */
+    plan?: (code: string) => FixPlan
   }>(),
-  { hints: false, max: 99 },
+  { hints: false, max: 99, plan: undefined },
 )
+const emit = defineEmits<{ fix: [id: FixId, code: string] }>()
 
 const items = computed(() => explainAll(props.blockers))
 const shown = computed(() => items.value.slice(0, props.max))
@@ -33,6 +38,19 @@ const rest = computed(() => Math.max(0, items.value.length - props.max))
       <div>
         <p class="title" :title="b.message">{{ b.title }}</p>
         <p v-if="hints && b.hint" class="hint">{{ b.hint }}</p>
+        <div v-if="plan" class="fix">
+          <Button
+            v-for="f in plan(b.code).fixes"
+            :key="f.id"
+            size="sm"
+            :data-testid="`fix-${f.id}`"
+            @click="emit('fix', f.id, b.code)"
+            >{{ f.label }}</Button
+          >
+          <span v-if="plan(b.code).ask" class="ask" :data-testid="`ask-${b.code}`">{{
+            plan(b.code).ask
+          }}</span>
+        </div>
       </div>
     </li>
     <li v-if="rest" class="more faint">and {{ rest }} more</li>
@@ -70,6 +88,17 @@ const rest = computed(() => Math.max(0, items.value.length - props.max))
   color: var(--text-2);
   font-size: var(--fs-xs);
   margin-top: 1px;
+}
+.fix {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-top: var(--s-2);
+}
+.ask {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
 }
 .more {
   font-size: var(--fs-xs);

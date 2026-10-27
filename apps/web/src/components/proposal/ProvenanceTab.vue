@@ -28,7 +28,7 @@ const shown = computed<Shown[]>(() =>
       v-if="shown.length === 0"
       icon="sparkle"
       compact
-      title="No provenance recorded"
+      title="Nothing recorded about where this came from"
       :description="
         authorIsAgent
           ? 'This change was authored by an agent, but nobody attached a signed provenance record. Policy may require one before it can land.'

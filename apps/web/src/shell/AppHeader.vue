@@ -47,7 +47,7 @@ async function onSelect(id: string) {
 <template>
   <header class="top">
     <div class="inner">
-      <RouterLink to="/" class="brand" aria-label="AgentGit, repositories">
+      <RouterLink to="/" class="brand" aria-label="AgentGit, home">
         <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false">
           <rect width="32" height="32" rx="8" fill="var(--accent)" />
           <path
@@ -63,8 +63,18 @@ async function onSelect(id: string) {
       </RouterLink>
 
       <nav v-if="auth.isAuthenticated" class="nav" aria-label="Main">
-        <RouterLink to="/" class="navlink" exact-active-class="current">Repositories</RouterLink>
+        <RouterLink to="/" class="navlink" exact-active-class="current">Home</RouterLink>
+        <RouterLink to="/repos" class="navlink" active-class="current">Repositories</RouterLink>
       </nav>
+
+      <Button
+        v-if="auth.isAuthenticated"
+        class="mobile-repositories"
+        variant="ghost"
+        icon="folder"
+        to="/repos"
+        label="All repositories"
+      />
 
       <span class="spacer" />
 
@@ -105,8 +115,7 @@ async function onSelect(id: string) {
   top: 0;
   z-index: var(--z-sticky);
   height: var(--header-h);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: saturate(1.4) blur(8px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .inner {
@@ -122,7 +131,7 @@ async function onSelect(id: string) {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  color: var(--text);
+  color: var(--accent-text);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -133,10 +142,12 @@ async function onSelect(id: string) {
   display: flex;
   gap: var(--s-1);
   margin-left: var(--s-3);
+  align-self: stretch;
 }
 .navlink {
   padding: 6px var(--s-3);
-  border-radius: var(--r-sm);
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
   color: var(--text-2);
   font-weight: 560;
 }
@@ -147,7 +158,10 @@ async function onSelect(id: string) {
 }
 .navlink.current {
   color: var(--text);
-  background: var(--surface-3);
+  border-bottom-color: var(--accent);
+}
+.mobile-repositories {
+  display: none;
 }
 .spacer {
   flex: 1;
@@ -188,6 +202,9 @@ async function onSelect(id: string) {
 @media (max-width: 560px) {
   .nav {
     display: none;
+  }
+  .mobile-repositories {
+    display: inline-flex;
   }
   .inner {
     gap: var(--s-2);

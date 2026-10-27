@@ -158,11 +158,14 @@ fn init_with_a_storage_file_checks_it_and_never_stores_secrets() {
     ag(&["init", "--storage", "missing.json"]).code_is(1);
 
     // with a server: a PostgreSQL repository, usable through the CLI, whose backup is refused
-    let Some(_) = ag_storage::testing::postgres_url() else {
-        eprintln!("skipped: AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)");
+    let Some(pg_url) = ag_testkit::require_here(
+        "postgres",
+        "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)",
+        ag_storage::testing::postgres_url(),
+    ) else {
         return;
     };
-    let schema = ag_storage::testing::TempSchema::new(&ag_storage::testing::postgres_url().unwrap());
+    let schema = ag_storage::testing::TempSchema::new(&pg_url);
     fs::write(
         dir.path().join("pg.json"),
         format!(r#"{{"meta":{{"kind":"postgres","url_env":"AG_TEST_POSTGRES_URL","schema":"{}"}}}}"#, schema.name()),
@@ -346,6 +349,37 @@ fn blame_and_show_follow_a_rename() {
     assert_eq!(j["lines"].as_array().unwrap().len(), 2);
     assert_eq!(j["lines"][0]["path"], "old.txt");
     a.run_as("user:bob", &["blame", "nope.txt"]).code_is(1);
+}
+
+#[test]
+fn blame_and_show_follow_a_copy_only_when_asked() {
+    let a = Ag::new();
+    let body: String = (1..=6).map(|i| format!("line {i}\n")).collect();
+    a.write("orig.txt", &body);
+    let first = a.propose_as("user:alice", "create it");
+    a.ag(&["integrate", &first]).ok();
+
+    a.write("sub/copy.txt", &format!("{body}and one more\n"));
+    a.run_as("user:bob", &["snapshot", "-m", "copy it"]).ok();
+
+    // without --copies the copy is a plain add, in the text and in JSON
+    let plain = a.run_as("user:bob", &["--json", "show", "@"]).ok().json();
+    assert_eq!(plain["changes"][0]["op"], "A", "{plain}");
+    let blamed = a.run_as("user:bob", &["blame", "sub/copy.txt"]).ok().stdout();
+    assert!(blamed.lines().all(|l| l.contains("user:bob")), "{blamed}");
+
+    let rev = a.run_as("user:bob", &["--json", "show", "--copies", "@"]).ok().json();
+    assert_eq!(rev["changes"][0]["op"], "C", "{rev}");
+    assert_eq!(rev["changes"][0]["from"], "orig.txt");
+    assert!(rev["changes"][0]["similarity"].as_u64().unwrap() >= 50);
+    let text = a.run_as("user:bob", &["show", "--copies", "@"]).ok().stdout();
+    assert!(text.contains("C orig.txt -> sub/copy.txt"), "{text}");
+
+    let out = a.run_as("user:bob", &["blame", "--copies", "sub/copy.txt"]).ok().stdout();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 7, "{out}");
+    assert!(lines[0].contains("user:alice") && lines[0].contains("orig.txt"), "{out}");
+    assert!(lines[6].contains("user:bob") && lines[6].ends_with("7) and one more"), "{out}");
 }
 
 #[test]

@@ -10,7 +10,7 @@
 //! | `AG_TEST_POSTGRES_URL` | metadata in PostgreSQL (a fresh schema per test, dropped afterwards) |
 //! | `AG_TEST_S3_ENDPOINT` (+ `AG_TEST_S3_BUCKET`, `AG_TEST_S3_REGION`, `AG_TEST_S3_ACCESS_KEY_ID`, `AG_TEST_S3_SECRET_ACCESS_KEY`) | objects in an S3-compatible bucket (a fresh key prefix per test, emptied afterwards) |
 //! | `AG_TEST_S3_TLS_ENDPOINT` + `AG_TEST_S3_CA` | optional: an `https://` endpoint of the same server, and the PEM file of the private CA that signed its certificate (the TLS tests of the S3 client; `scripts/s3-test.sh` provides them for SeaweedFS) |
-//! | `AG_REQUIRE_BACKENDS=1` | a test that needs a backend whose variable is unset **fails** instead of silently running on the default |
+//! | `AG_REQUIRE_COMPONENTS=postgres,s3` (older spelling `AG_REQUIRE_BACKENDS=1`) | a test that needs a backend whose variable is unset **fails** instead of silently running on the default or skipping |
 //!
 //! `scripts/pg-test.sh` and `scripts/s3-test.sh` start throwaway servers and
 //! set these variables around any command.
@@ -28,41 +28,56 @@ use crate::meta::{Meta, MetaError};
 pub const ENV_POSTGRES_URL: &str = "AG_TEST_POSTGRES_URL";
 /// Endpoint of the S3-compatible server to test against.
 pub const ENV_S3_ENDPOINT: &str = "AG_TEST_S3_ENDPOINT";
-/// Make missing backends an error instead of a silent fallback.
+/// Make missing backends an error instead of a silent fallback (older spelling of
+/// `AG_REQUIRE_COMPONENTS=postgres,s3`).
 pub const ENV_REQUIRE_BACKENDS: &str = "AG_REQUIRE_BACKENDS";
+/// The components whose absence is a failure (`postgres,s3`, or `all`); see the `ag-testkit` crate.
+pub const ENV_REQUIRE_COMPONENTS: &str = "AG_REQUIRE_COMPONENTS";
 
 fn truthy(v: &str) -> bool {
     matches!(v.trim(), "1" | "true" | "yes" | "on")
 }
 
-/// True if `AG_REQUIRE_BACKENDS` asks for failure when a backend is missing.
-pub fn backends_required() -> bool {
-    std::env::var(ENV_REQUIRE_BACKENDS).is_ok_and(|v| truthy(&v))
+/// True if the absence of `component` (`postgres`, `s3`) must fail the test. The same rule as
+/// `ag_testkit::required`, which this published crate cannot depend on.
+fn component_required(component: &str) -> bool {
+    let listed = std::env::var(ENV_REQUIRE_COMPONENTS).is_ok_and(|l| {
+        l.split(|c: char| c == ',' || c.is_whitespace())
+            .map(|t| t.trim().to_ascii_lowercase())
+            .any(|t| t == "all" || t == component)
+    });
+    listed || std::env::var(ENV_REQUIRE_BACKENDS).is_ok_and(|v| truthy(&v))
 }
 
-fn from_env(var: &str) -> Option<String> {
+/// True if a missing PostgreSQL or S3 server must fail the test.
+pub fn backends_required() -> bool {
+    component_required("postgres") || component_required("s3")
+}
+
+fn from_env(var: &str, component: &str) -> Option<String> {
     match std::env::var(var) {
         Ok(v) if !v.trim().is_empty() => Some(v),
         _ => {
             assert!(
-                !backends_required(),
-                "{ENV_REQUIRE_BACKENDS} is set but {var} is not: the tests that need it would silently be skipped \
-                 (run them through scripts/pg-test.sh / scripts/s3-test.sh)"
+                !component_required(component),
+                "{component} is required ({ENV_REQUIRE_COMPONENTS}/{ENV_REQUIRE_BACKENDS}) but {var} is not set: the \
+                 tests that need it would silently be skipped (run them through scripts/pg-test.sh / scripts/s3-test.sh)"
             );
             None
         }
     }
 }
 
-/// The PostgreSQL URL under test, if configured. With `AG_REQUIRE_BACKENDS` set
-/// and no URL this panics, which fails the calling test.
+/// The PostgreSQL URL under test, if configured. With `postgres` required (`AG_REQUIRE_COMPONENTS`)
+/// and no URL this panics, which fails the calling test. A test that cannot run without it asks
+/// `ag_testkit::require_some("postgres", ...)` instead of returning on `None`.
 pub fn postgres_url() -> Option<String> {
-    from_env(ENV_POSTGRES_URL)
+    from_env(ENV_POSTGRES_URL, "postgres")
 }
 
-/// The S3 endpoint under test, if configured (same rule as [`postgres_url`]).
+/// The S3 endpoint under test, if configured (same rule as [`postgres_url`], component `s3`).
 pub fn s3_endpoint() -> Option<String> {
-    from_env(ENV_S3_ENDPOINT)
+    from_env(ENV_S3_ENDPOINT, "s3")
 }
 
 /// A random lowercase-hex token for unique names.
@@ -161,7 +176,7 @@ impl TestMeta {
         Self { meta, backing: Backing::File(TempDir(dir)), clock }
     }
 
-    /// PostgreSQL, or `None` when no server is configured (and `AG_REQUIRE_BACKENDS` is off).
+    /// PostgreSQL, or `None` when no server is configured (and the backend is not required).
     pub fn postgres(clock: Arc<dyn Clock>) -> Option<Self> {
         postgres_url().map(|url| Self::postgres_at(&url, clock))
     }
@@ -216,7 +231,7 @@ impl TestMeta {
 // ---- objects -------------------------------------------------------------------
 
 /// Settings of the S3 server under test (the `AG_TEST_S3_*` variables) with every
-/// key under `prefix`. `None` when no server is configured (and `AG_REQUIRE_BACKENDS` is off).
+/// key under `prefix`. `None` when no server is configured (and the backend is not required).
 ///
 /// The credentials have no defaults: a server is only ever started by `scripts/s3-test.sh`, which creates them,
 /// and a test that guessed them would not be testing the authentication it claims to.

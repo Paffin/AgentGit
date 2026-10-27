@@ -117,6 +117,7 @@ button:disabled {
     --touch-min: 44px;
   }
   button,
+  a.btn,
   [role='tab'],
   [role='menuitem'],
   summary,
@@ -126,6 +127,7 @@ button:disabled {
     min-height: var(--touch-min);
   }
   button,
+  a.btn,
   [role='tab'],
   [role='menuitem'] {
     min-width: var(--touch-min);

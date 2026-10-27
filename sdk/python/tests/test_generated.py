@@ -15,6 +15,7 @@ import pytest
 import agentgit
 from agentgit import AgentGitClient, AsyncAgentGitClient, models
 from agentgit._codec import decode_as, encode
+from tests.components import not_applicable
 from tests.harness import REPO_ROOT
 
 SPEC = json.loads((REPO_ROOT / "docs/protocol/openapi.json").read_text())
@@ -110,8 +111,13 @@ def test_the_policy_file_names_real_operations_and_fields() -> None:
         assert "None" not in str(hints[prop]), f"{field} should be typed as present"
 
 
-@pytest.mark.skipif(sys.version_info < (3, 11), reason="typing.get_overloads needs Python 3.11")
 def test_the_paginate_overloads_cover_exactly_the_paginated_operations() -> None:
+    if sys.version_info < (3, 11):
+        not_applicable(
+            "python-version",
+            "test_the_paginate_overloads_cover_exactly_the_paginated_operations",
+            "typing.get_overloads needs Python 3.11",
+        )
     get_overloads = typing.cast("Any", getattr(typing, "get_overloads", None))
     for client in (AgentGitClient, AsyncAgentGitClient):
         literals: set[str] = set()

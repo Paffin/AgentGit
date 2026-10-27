@@ -13,6 +13,13 @@
 //! * **Renames are followed** when a changeset creates the path while deleting a similar one (the same
 //!   detection the merge uses, [`ag_merge::detect_renames`]); for merge parents beyond the first only the same
 //!   path is considered.
+//! * **Copies are followed on request** ([`BlameOptions::copies`]): when a changeset creates the path and no
+//!   deleted file matches, the file is compared with the files of the first parent ([`ag_merge::detect_copies`]:
+//!   identical content anywhere in the tree, else at least [`ag_merge::MIN_COPY_SIMILARITY`] percent of the bytes
+//!   in common with one of at most [`ag_merge::MAX_COPY_SOURCES`] files, taken first from those the same changeset
+//!   modified, then from the new file's directory, then in path order). The lines the copy took over from its source are blamed on whoever
+//!   wrote them there; the rest on the changeset that made the copy. Copy detection affects blame only; no merge
+//!   uses it.
 //! * The walk visits changesets newest generation first, so a changeset is processed only after all of its
 //!   children, and suspects arriving from several children are combined.
 //!
@@ -23,7 +30,7 @@
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 
 use ag_diff::{diff_hunks, is_binary, split_lines};
-use ag_merge::detect_renames;
+use ag_merge::{MAX_COPY_SOURCES, detect_copies, detect_renames};
 use ag_tree::{Entry, Tree, TreeCache};
 use ag_types::{ChangesetId, FileType, RepoPath, Timestamp};
 use serde::Serialize;
@@ -45,11 +52,13 @@ pub struct BlameOptions {
     pub max_commits: usize,
     /// Only report lines `first..=last` (1-based). `None` = the whole file.
     pub range: Option<(usize, usize)>,
+    /// Follow a file that was created as a copy of another one (see the module documentation).
+    pub copies: bool,
 }
 
 impl Default for BlameOptions {
     fn default() -> Self {
-        Self { max_commits: DEFAULT_BLAME_COMMITS, range: None }
+        Self { max_commits: DEFAULT_BLAME_COMMITS, range: None, copies: false }
     }
 }
 
@@ -264,6 +273,14 @@ impl Repository {
                             parent_path = r.from;
                         }
                     }
+                    if parent_entry.is_none() && opts.copies {
+                        let target = (cur_path.clone(), c_entry.expect("loaded above"));
+                        let found = self.copies_in(parent, &cs, std::slice::from_ref(&target))?;
+                        if let Some(r) = found.into_iter().next() {
+                            parent_entry = self.entry_at(parent, &r.from)?;
+                            parent_path = r.from;
+                        }
+                    }
                 }
                 let Some(pe) = parent_entry.filter(|e| e.file_type == FileType::Regular) else { continue };
                 let p_data = self.blob(&pe.content)?;
@@ -345,6 +362,77 @@ fn unchanged_map(old: &[&[u8]], new: &[&[u8]]) -> Vec<Option<usize>> {
 }
 
 impl Repository {
+    /// The copies within one changeset: files it creates that are copies of a file of its first parent that is
+    /// still there afterwards ([`ag_merge::detect_copies`]), ordered by the new path. Files that are the target of a
+    /// rename are not copies. Display only; no merge uses this.
+    pub fn changeset_copies(&self, cs: &ag_changeset::Changeset) -> Result<Vec<ag_merge::Rename>> {
+        let Some(parent) = cs.first_parent() else { return Ok(Vec::new()) };
+        let parent_tree = self.tree_of(&parent)?;
+        let renamed: std::collections::BTreeSet<_> = self.changeset_renames(cs)?.into_iter().map(|r| r.to).collect();
+        let targets: Vec<(RepoPath, Entry)> = cs
+            .ops
+            .iter()
+            .filter_map(|o| match o {
+                ag_changeset::Op::Put { path, content, file_type, executable }
+                    if parent_tree.get(path).is_none() && !renamed.contains(path) =>
+                {
+                    Some((path.clone(), Entry { content: *content, file_type: *file_type, executable: *executable }))
+                }
+                _ => None,
+            })
+            .collect();
+        self.copies_for(&parent_tree, cs, &targets)
+    }
+
+    /// [`Self::copies_for`] with the first parent's tree built here.
+    fn copies_in(
+        &self,
+        parent: &ChangesetId,
+        cs: &ag_changeset::Changeset,
+        targets: &[(RepoPath, Entry)],
+    ) -> Result<Vec<ag_merge::Rename>> {
+        let parent_tree = self.tree_of(parent)?;
+        self.copies_for(&parent_tree, cs, targets)
+    }
+
+    /// Sources for the copy search: every regular file of the parent that the changeset did not delete
+    /// (identical content), and for similarity at most [`MAX_COPY_SOURCES`] of them: first the files the changeset
+    /// modified, then the neighbours of the targets in their directories, then the rest, each group in path order.
+    fn copies_for(
+        &self,
+        parent_tree: &Tree,
+        cs: &ag_changeset::Changeset,
+        targets: &[(RepoPath, Entry)],
+    ) -> Result<Vec<ag_merge::Rename>> {
+        if targets.is_empty() {
+            return Ok(Vec::new());
+        }
+        let deleted: HashSet<&RepoPath> =
+            cs.ops.iter().filter(|o| matches!(o, ag_changeset::Op::Delete { .. })).map(|o| o.path()).collect();
+        let sources: Vec<(RepoPath, Entry)> = parent_tree
+            .iter()
+            .filter(|(p, e)| e.file_type == FileType::Regular && !deleted.contains(p))
+            .map(|(p, e)| (p.clone(), *e))
+            .collect();
+        let dirs: HashSet<&str> = targets.iter().map(|(p, _)| parent_dir(p)).collect();
+        let modified: HashSet<&RepoPath> = cs.ops.iter().map(|o| o.path()).collect();
+        // Candidates in priority order: modified by this changeset, then in a target's directory, then the rest.
+        let rank = |p: &RepoPath| -> u8 {
+            if modified.contains(p) {
+                0
+            } else if dirs.contains(parent_dir(p)) {
+                1
+            } else {
+                2
+            }
+        };
+        let mut similar: Vec<&(RepoPath, Entry)> = sources.iter().collect();
+        similar.sort_by_key(|(p, _)| rank(p)); // stable: path order within a rank
+        similar.truncate(MAX_COPY_SOURCES);
+        let similar: Vec<(RepoPath, Entry)> = similar.into_iter().cloned().collect();
+        detect_copies(&sources, &similar, targets, &RepoBlobs(self)).map_err(|e| Error::Invalid(e.to_string()))
+    }
+
     /// The renames within one changeset: deleted paths paired with similar paths it creates, relative to its
     /// first parent. Used for display; the merge applies the same detection to whole trees.
     pub fn changeset_renames(&self, cs: &ag_changeset::Changeset) -> Result<Vec<ag_merge::Rename>> {
@@ -378,4 +466,9 @@ impl Repository {
         )?;
         detect_renames(&old, &new, &RepoBlobs(self)).map_err(|e| Error::Invalid(e.to_string()))
     }
+}
+
+/// The directory part of a path (`""` for a file at the root).
+fn parent_dir(p: &RepoPath) -> &str {
+    p.as_str().rsplit_once('/').map_or("", |(d, _)| d)
 }

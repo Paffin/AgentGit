@@ -185,3 +185,50 @@ describe('what the caller may do (hints)', () => {
     expect(auth.can('any/repo', 'integrate')).toBe(true)
   })
 })
+
+describe('sign in from a link (ag-server dev)', () => {
+  it('signs in with the credential of the link, like a pasted token, without a confirmation step', async () => {
+    whoami.mockResolvedValue(principal({ identity: 'user:dev' }))
+    const auth = useAuth()
+    await expect(auth.signInFromLink('agt_link_credential_0123456789')).resolves.toBe(true)
+    expect(whoami).toHaveBeenCalledWith('agt_link_credential_0123456789')
+    expect(auth.isAuthenticated).toBe(true)
+    expect(auth.identity).toBe('user:dev')
+    expect(auth.linkError).toBe('')
+    // Kept as a pasted token is: this tab's session storage, nowhere else.
+    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBe('agt_link_credential_0123456789')
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('a link from an earlier start is explained, and the session stays anonymous', async () => {
+    whoami.mockRejectedValue(
+      new ApiError({ status: 401, code: 'unauthenticated', message: 'nope' }),
+    )
+    const auth = useAuth()
+    await expect(auth.signInFromLink('agt_old_link_0123456789')).resolves.toBe(false)
+    expect(auth.isAuthenticated).toBe(false)
+    expect(auth.linkError).toContain('restarted')
+    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull()
+  })
+
+  it('no link means no attempt and no message', async () => {
+    const auth = useAuth()
+    whoami.mockClear()
+    await expect(auth.signInFromLink(null)).resolves.toBe(false)
+    expect(whoami).not.toHaveBeenCalled()
+    expect(auth.linkError).toBe('')
+  })
+
+  it('an unreachable server and a malformed credential each get their own message and never throw', async () => {
+    const auth = useAuth()
+    whoami.mockRejectedValue(new ApiError({ status: 0, code: 'unavailable', message: 'offline' }))
+    await expect(auth.signInFromLink('agt_whatever_0123456789')).resolves.toBe(false)
+    expect(auth.linkError.length).toBeGreaterThan(0)
+    await expect(auth.signInFromLink('x')).resolves.toBe(false)
+    expect(auth.linkError).toContain('did not work')
+    // A later good link clears the message.
+    whoami.mockResolvedValue(principal())
+    await expect(auth.signInFromLink('agt_good_0123456789')).resolves.toBe(true)
+    expect(auth.linkError).toBe('')
+  })
+})

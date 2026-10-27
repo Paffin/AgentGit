@@ -144,3 +144,5 @@ result with its own key.
 
 **Workspace.** An isolated line of work, usually with its own directory (`ag workspace create`). It starts at a stream's head
 and has a *base* and a *head*. Roughly what a Git working tree plus a private branch would be.
+
+The Web UI shows plainer labels for several of these words (change request, land, branch, reservation, …); the mapping is in [Plain words](guides/web-ui.md#plain-words).

@@ -9,7 +9,7 @@ it never reads it differently.**
 | State | Where | Version | A newer build ... | An older build ... |
 |---|---|---|---|---|
 | Objects (blob, `ChangesetV1`, tree manifest) | object store (files or S3) | a kind byte and a `u16` version in the envelope, and the version is part of the hash preimage ([Object format](object-format.md)) | reads every version it knows | refuses an unknown kind or version |
-| Repository metadata (streams, reflog, proposals, policies, attestations, agents, jobs, audit) | `meta.db` (SQLite) or the PostgreSQL schema | `PRAGMA user_version` / `meta` row `schema`, currently **2** (`migrations/sqlite`, `migrations/postgres`) | migrates forward on open, in one transaction | refuses with `UnsupportedSchema` |
+| Repository metadata (streams, reflog, proposals, policies, attestations, agents, jobs, audit) | `meta.db` (SQLite) or the PostgreSQL schema | `PRAGMA user_version` / `meta` row `schema`, currently **3** (`migrations/sqlite`, `migrations/postgres`) | migrates forward on open, in one transaction | refuses with `UnsupportedSchema` |
 | Server control plane (credentials, role bindings, repository registry with per-repository configuration, idempotency records) | `<data_dir>/control.db` or the PostgreSQL schema of `[control]` | `PRAGMA user_version`, currently **3** (`migrations/control`) | migrates forward on open; replicas that start together migrate once, under an advisory lock | refuses with `the control database has schema version N, newer than this server supports` |
 | Audit chain | `audit` table | the hash of each entry covers the previous one | verifies old entries | - |
 | Policy documents, attestation signing bytes, provenance records | `policies`, `attestations`, `provenance` | the signed bytes are specified in the object-format page; a policy version change invalidates earlier attestations by design | verifies old signatures | - |
@@ -33,7 +33,8 @@ written by old builds* in `tests/compat/fixtures/` and runs every one of them th
 
 | Fixture | Written by | Holds | Test |
 |---|---|---|---|
-| `repo-0.1.0.tar.gz` (+ `.expected.json`) | the `ag` of the first alpha (`tests/compat/generate.sh`), meta schema 2 | a repository with clean and conflict-resolved merges, a rename-aware merge, two policy versions, signed attestations, agents, runs, a task, provenance, a lease, a pin, a second stream and the audit chain | `crates/ag-integrate/tests/compat.rs` (7 tests) |
+| `repo-0.1.0.tar.gz` (+ `.expected.json`) | the `ag` of the first alpha (`tests/compat/generate.sh`), meta schema 2 (migrated to 3 when opened: [ADR-0011](../adr/0011-proposal-paging-indexes-and-background-leases.md)) | a repository with clean and conflict-resolved merges, a rename-aware merge, two policy versions, signed attestations, agents, runs, a task, provenance, a lease, a pin, a second stream and the audit chain | `crates/ag-integrate/tests/compat.rs` (8 tests) |
+| `repo-0.2.0-rc.2.tar.gz` (+ `.expected.json`) | the `ag` built with the proposal-paging indexes (`tests/compat/generate.sh 0.2.0-rc.2`), meta schema **3** | the same content as `repo-0.1.0` | same |
 | `control-schema2.tar.gz` (+ `.expected.json`) | `ag-server` built from commit `e5a8146`, the first with a versioned control database (`tests/compat/generate_server.sh`) | two repositories, four credentials (one revoked), four role bindings, an idempotency record, control schema **2** | `crates/ag-server/tests/compat_control.rs` (6 tests) |
 | `control-schema3.tar.gz` (+ `.expected.json`) | `ag-server` built from commit `b69669d` | the same, plus an agent, a run, a delegator and a credential bound to that run (ADR-0010), control schema **3** | same |
 

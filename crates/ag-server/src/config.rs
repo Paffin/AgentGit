@@ -75,6 +75,11 @@ pub struct ServerSection {
     pub drain_secs: u64,
     /// Name of this replica in logs and metrics. Default: `$HOSTNAME` (the pod name on Kubernetes), else random.
     pub replica_id: Option<String>,
+    /// Addresses or CIDR ranges of the reverse proxies and load balancers in front of the server. Only a
+    /// connection from one of them is believed when it says who the client is (`Forwarded`, `X-Forwarded-For`); the
+    /// client address then appears in logs and keys the failed-authentication limit. Empty (the default): the
+    /// peer of the connection is the client, and forwarding headers are ignored.
+    pub trusted_proxies: Vec<String>,
 }
 
 impl Default for ServerSection {
@@ -89,6 +94,7 @@ impl Default for ServerSection {
             cors_origins: Vec::new(),
             drain_secs: 0,
             replica_id: None,
+            trusted_proxies: Vec::new(),
         }
     }
 }
@@ -303,6 +309,10 @@ pub struct LimitsSection {
     pub max_object_bytes: u64,
     /// Requests handled concurrently; more are shed with `unavailable`.
     pub max_concurrent_requests: usize,
+    /// Object bytes the server holds in memory at once for uploads in progress, over all callers (0 = no limit). An
+    /// upload that would pass it is refused with `unavailable` and a retry hint, before its body is read. Must be
+    /// at least `max_object_bytes`, or the largest object could never be uploaded.
+    pub max_inflight_object_bytes: u64,
     /// Default per-request deadline when the client sets none (ms, 0 = none).
     pub default_deadline_ms: u64,
     /// Per-repository default for open proposals (0 = unlimited).
@@ -317,6 +327,12 @@ pub struct LimitsSection {
     pub repo_requests_per_second: u32,
     /// Per-repository default burst for `repo_requests_per_second`.
     pub repo_burst: u32,
+    /// Failed authentications (missing, invalid or expired credentials) per second from one client address
+    /// (see `server.trusted_proxies` for which address that is) before further requests from it are refused with
+    /// `rate_limited` without their credential being looked at. 0 = no limit.
+    pub auth_failures_per_second: u32,
+    /// Burst of failed authentications per client address.
+    pub auth_failure_burst: u32,
 }
 
 /// The largest object envelope the engine can store: its blob limit plus the envelope header. The one source
@@ -333,6 +349,7 @@ impl Default for LimitsSection {
             max_request_bytes: ag_protocol::limits::MAX_REQUEST_BYTES,
             max_object_bytes: engine_max_object_bytes(),
             max_concurrent_requests: 512,
+            max_inflight_object_bytes: 1 << 30,
             default_deadline_ms: 60_000,
             max_open_proposals: 0,
             max_total_object_bytes: 0,
@@ -340,6 +357,8 @@ impl Default for LimitsSection {
             repo_max_streams: 0,
             repo_requests_per_second: 0,
             repo_burst: 0,
+            auth_failures_per_second: 0,
+            auth_failure_burst: 20,
         }
     }
 }
@@ -360,11 +379,45 @@ pub struct ReposSection {
     /// with S3, each repository gets the key prefix `<prefix>/<owner>/<name>`.
     /// Credentials are read from the environment variables the section names.
     pub storage: Option<ag_integrate::StorageConfig>,
+    /// How long the answer to an idempotency key is remembered (seconds). Within it, the same key with the same
+    /// request returns the first answer; after it the key is free again. 0 keeps records for as long as the
+    /// repository exists. Applies to `run.start`, `task.create` and `lease.acquire`; records written before records
+    /// carried a time are kept.
+    pub idempotency_ttl_secs: u64,
+    /// How often the server deletes expired idempotency records, in seconds (0 = never; expired records are
+    /// then only ignored, not removed).
+    pub idempotency_sweep_interval_secs: u64,
+    /// How often the server reads every repository's derive status and dangling references for `/metrics` and
+    /// `/readyz`, in seconds (0 = never). It opens every registered repository, so raise it for installations with
+    /// thousands of them.
+    pub health_scan_interval_secs: u64,
+    /// Memory (bytes, estimated) the server may spend on decoded trees kept between requests, shared by all
+    /// repositories (`docs/architecture/performance.md`). A hit saves reading and verifying a stored tree - about a
+    /// third of a fast-forward at 100 000 files; a tree of that size takes 15-20 MB. 0 turns the cache off.
+    pub tree_cache_bytes: u64,
+    /// How often an integration tries again, recomputing its candidate, when other writers move the same stream
+    /// under it, before it answers `aborted` (which the client may retry). Under many writers on one stream the
+    /// answer used to come after 8 lost attempts.
+    pub integrate_attempts: usize,
+    /// The longest wait between two such attempts, in milliseconds (0 = retry at once). The wait is spread per
+    /// operation so that the colliding writers stop colliding.
+    pub integrate_backoff_ms: u64,
 }
 
 impl Default for ReposSection {
     fn default() -> Self {
-        Self { pool_size: 4, max_open: 256, default_stream: "main".into(), storage: None }
+        Self {
+            pool_size: 4,
+            max_open: 256,
+            default_stream: "main".into(),
+            storage: None,
+            idempotency_ttl_secs: 7 * 24 * 3600,
+            idempotency_sweep_interval_secs: 3600,
+            health_scan_interval_secs: 300,
+            tree_cache_bytes: 256 * 1024 * 1024,
+            integrate_attempts: 24,
+            integrate_backoff_ms: 32,
+        }
     }
 }
 
@@ -476,6 +529,13 @@ impl ServerConfig {
         if !self.tls_enabled() && !self.server.listen.ip().is_loopback() && !self.server.allow_insecure_remote {
             return bad("refusing to listen on a non-loopback address without TLS: set tls_cert/tls_key, \
                  or allow_insecure_remote = true if TLS is terminated in front of the server");
+        }
+        let l = &self.limits;
+        if l.max_inflight_object_bytes != 0 && l.max_inflight_object_bytes < l.max_object_bytes {
+            return bad("limits.max_inflight_object_bytes must be 0 (no limit) or at least limits.max_object_bytes");
+        }
+        if let Err(e) = crate::proxy::TrustedProxies::parse(&self.server.trusted_proxies) {
+            return Err(ConfigError::Invalid(format!("server.trusted_proxies entry {e}")));
         }
         if self.repos.pool_size == 0 || self.repos.max_open == 0 {
             return bad("repos.pool_size and repos.max_open must be at least 1");

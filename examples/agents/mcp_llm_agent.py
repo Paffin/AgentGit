@@ -19,6 +19,9 @@ Settings (environment):
 The model never gets the AgentGit credential: `ag-mcp` holds it. Exit status 0 only if a proposal that fixes the
 file exists, authored by the agent's run, with `main` unmoved. Python 3 standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import json
 import os

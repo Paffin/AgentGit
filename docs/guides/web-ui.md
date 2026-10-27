@@ -253,7 +253,7 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
   suggestion, settings that can never be satisfied), the server's own refusal shown verbatim if it still rejects the
   document, and a **version history with a diff between any two versions**. Saving creates a new version. Attestations made
   under an older version stop counting, on purpose, and the UI says so.
-- **Roles** and **Credentials.** Grant and revoke roles. While a role grant is pending, its fields are locked; failures keep the binding for correction and retry. A rejected session offers sign-in. Mint tokens for yourself, or, as an administrator, for an
+- **Roles** and **Credentials.** Grant and revoke roles. While a role grant is pending, its fields are locked; failures keep the binding for correction and retry. Failed revocations also keep their confirmation available for retry. A rejected session offers sign-in. Mint tokens for yourself, or, as an administrator, for an
   agent or service, optionally limited to repositories, streams or operations. A new token is **shown exactly once**: in full, selected and with
   a copy button (and a button to hide it), and gone from the page when you close the dialog. The server keeps only a hash, so it cannot show it again.
 - **Settings and quota**, **GC and fsck** (garbage collection always starts as a *dry run*; the real run is only offered

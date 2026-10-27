@@ -5,22 +5,31 @@ import RolesManager from './RolesManager.vue'
 import { ApiError } from '@/api/errors'
 import TextField from '@/ui/TextField.vue'
 import SelectField from '@/ui/SelectField.vue'
+import Button from '@/ui/Button.vue'
 
 enableAutoUnmount(afterEach)
-const mocks = vi.hoisted(() => ({ grant: vi.fn(), roles: vi.fn(), ok: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  grant: vi.fn(),
+  revoke: vi.fn(),
+  error: vi.fn(),
+  roles: vi.fn(),
+  ok: vi.fn(),
+}))
 const auth = reactive({ identity: 'user:admin', token: 'first-session', status: 'ready' })
 vi.mock('@/api/instance', () => ({
-  api: { admin: { roles: mocks.roles, grantRole: mocks.grant } },
+  api: { admin: { roles: mocks.roles, grantRole: mocks.grant, revokeRole: mocks.revoke } },
 }))
 vi.mock('@/stores/auth', () => ({ useAuth: () => auth }))
-vi.mock('@/stores/toasts', () => ({ useToasts: () => ({ ok: mocks.ok }) }))
+vi.mock('@/stores/toasts', () => ({ useToasts: () => ({ ok: mocks.ok, error: mocks.error }) }))
 beforeEach(() => {
   Object.assign(auth, { identity: 'user:admin', token: 'first-session', status: 'ready' })
   mocks.roles.mockReset().mockResolvedValue([])
   mocks.grant.mockReset().mockResolvedValue({})
   mocks.ok.mockReset()
+  mocks.error.mockReset()
+  mocks.revoke.mockReset().mockResolvedValue({})
 })
-async function show() {
+async function show(openGrant = true) {
   const w = mount(RolesManager, {
     props: { repo: 'acme/first' },
     global: {
@@ -34,6 +43,7 @@ async function show() {
     },
   })
   await flushPromises()
+  if (!openGrant) return w
   await w.get('[data-testid="grant-open"]').trigger('click')
   await w.get('input[placeholder="user:alice"]').setValue('user:alice')
   await w.get('select').setValue('writer')
@@ -140,6 +150,165 @@ describe('granting roles', () => {
       expect(mocks.ok).not.toHaveBeenCalled()
       expect(mocks.roles).toHaveBeenCalledTimes(reads)
       if (change !== 'unmount') expect(w.find('form').exists()).toBe(false)
+    },
+  )
+})
+
+describe('revoking roles', () => {
+  it('does not submit a second revoke while the first is pending', async () => {
+    mocks.roles.mockResolvedValue([
+      {
+        subject: 'user:alice',
+        repo: 'acme/first',
+        role: 'reader',
+        created_by: 'user:admin',
+        created_at_ms: 0,
+      },
+    ])
+    let finish!: (value: object) => void
+    mocks.revoke.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const w = await show(false)
+    await w.get('[aria-label="Revoke role"]').trigger('click')
+    const confirm = w
+      .findAllComponents(Button)
+      .find((button) => button.props('variant') === 'danger')!
+    confirm.vm.$emit('click')
+    confirm.vm.$emit('click')
+    expect(mocks.revoke).toHaveBeenCalledTimes(1)
+    finish({})
+    await flushPromises()
+  })
+
+  it('does not display an old failure in a new repository confirmation', async () => {
+    const binding = (repo: string) => ({
+      subject: 'user:alice',
+      repo,
+      role: 'reader',
+      created_by: 'user:admin',
+      created_at_ms: 0,
+    })
+    mocks.roles
+      .mockResolvedValueOnce([binding('acme/first')])
+      .mockResolvedValue([binding('acme/second')])
+    let fail!: (error: Error) => void
+    mocks.revoke.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject
+        }),
+    )
+    const w = await show(false)
+    await w.get('[aria-label="Revoke role"]').trigger('click')
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Revoke')!
+      .trigger('click')
+    await w.setProps({ repo: 'acme/second' })
+    await flushPromises()
+    await w.get('[aria-label="Revoke role"]').trigger('click')
+    fail(new Error('Old revoke failure'))
+    await flushPromises()
+    expect(w.text()).not.toContain('Old revoke failure')
+    expect(w.text()).toContain('acme/second')
+  })
+
+  it('keeps the failed binding available for a retry with the initiating credential', async () => {
+    const binding = { subject: 'user:alice', repo: 'acme/first', role: 'reader' }
+    mocks.roles.mockResolvedValue([{ ...binding, created_by: 'user:admin', created_at_ms: 0 }])
+    mocks.revoke.mockRejectedValueOnce(new Error('Revoke unavailable'))
+    const w = await show(false)
+    await w.get('[aria-label="Revoke role"]').trigger('click')
+    const confirm = () => w.findAll('button').find((button) => button.text() === 'Revoke')!
+    await confirm().trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('Revoke unavailable')
+    expect(w.text()).toContain('user:alice')
+    await confirm().trigger('click')
+    await flushPromises()
+    expect(mocks.revoke).toHaveBeenCalledTimes(2)
+    expect(mocks.revoke).toHaveBeenLastCalledWith(binding, {
+      token: 'first-session',
+      quietUnauthenticated: true,
+    })
+    expect(mocks.ok).toHaveBeenCalledWith(
+      'Role revoked',
+      'user:alice no longer has reader on acme/first',
+    )
+  })
+
+  it('explains a rejected session without resending the revoke', async () => {
+    mocks.roles.mockResolvedValue([
+      {
+        subject: 'user:alice',
+        repo: 'acme/first',
+        role: 'reader',
+        created_by: 'user:admin',
+        created_at_ms: 0,
+      },
+    ])
+    mocks.revoke.mockRejectedValueOnce(
+      new ApiError({ status: 401, code: 'unauthenticated', message: 'Expired' }),
+    )
+    const w = await show(false)
+    await w.get('[aria-label="Revoke role"]').trigger('click')
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Revoke')!
+      .trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('Sign in again before revoking a role')
+    expect(w.get('a[href="/signin"]').text()).toBe('Sign in')
+    expect(
+      w
+        .findAll('button')
+        .find((button) => button.text() === 'Revoke')!
+        .attributes('aria-disabled'),
+    ).toBe('true')
+    expect(mocks.revoke).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['repository', 'account', 'unmount'] as const)(
+    'ignores a pending revoke after changing %s',
+    async (change) => {
+      mocks.roles.mockResolvedValue([
+        {
+          subject: 'user:alice',
+          repo: 'acme/first',
+          role: 'reader',
+          created_by: 'user:admin',
+          created_at_ms: 0,
+        },
+      ])
+      let finish!: (value: object) => void
+      mocks.revoke.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const w = await show(false)
+      await w.get('[aria-label="Revoke role"]').trigger('click')
+      await w
+        .findAll('button')
+        .find((button) => button.text() === 'Revoke')!
+        .trigger('click')
+      if (change === 'repository') await w.setProps({ repo: 'acme/second' })
+      else if (change === 'account')
+        Object.assign(auth, { identity: 'user:other', token: 'other-session' })
+      else w.unmount()
+      await flushPromises()
+      const reads = mocks.roles.mock.calls.length
+      finish({})
+      await flushPromises()
+      expect(mocks.ok).not.toHaveBeenCalled()
+      expect(mocks.roles).toHaveBeenCalledTimes(reads)
+      if (change !== 'unmount')
+        expect(w.findAll('button').some((button) => button.text() === 'Revoke')).toBe(false)
     },
   )
 })

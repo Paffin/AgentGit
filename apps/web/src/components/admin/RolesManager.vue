@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { Ref } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { RoleBinding } from '@/api/types'
@@ -55,6 +56,8 @@ watch(
     granting.value = false
     busy.value = false
     error.value = null
+    revoking.value = null
+    revokeBusy.value = false
   },
   { flush: 'sync' },
 )
@@ -70,9 +73,9 @@ function openGrant() {
   error.value = null
   granting.value = true
 }
-function reportGrantError(mine: number, cause: unknown) {
+function reportError(target: Ref<ApiError | null>, mine: number, cause: unknown) {
   if (mine !== context) return
-  error.value =
+  target.value =
     cause instanceof ApiError
       ? cause
       : new ApiError({ status: 0, code: 'internal', message: describeError(cause) })
@@ -96,13 +99,17 @@ async function grant() {
     toasts.ok('Role granted', `${binding.subject} is now ${binding.role} on ${binding.repo}`)
     await bindings.reload()
   } catch (e) {
-    reportGrantError(mine, e)
+    reportError(error, mine, e)
   } finally {
     if (mine === context) busy.value = false
   }
 }
 
 const revoking = ref<RoleBinding | null>(null)
+const revokeError = ref<ApiError | null>(null)
+watch(revoking, () => {
+  revokeError.value = null
+})
 const revokeOpen = computed({
   get: () => revoking.value !== null,
   set: (v: boolean) => {
@@ -112,17 +119,22 @@ const revokeOpen = computed({
 const revokeBusy = ref(false)
 async function revoke() {
   const b = revoking.value
-  if (!b) return
+  if (!b || revokeBusy.value || auth.status !== 'ready' || revokeError.value?.status === 401) return
+  const mine = context
+  const binding = { subject: b.subject, repo: b.repo, role: b.role }
+  const options = { token: auth.token, quietUnauthenticated: true }
   revokeBusy.value = true
+  revokeError.value = null
   try {
-    await api.admin.revokeRole({ subject: b.subject, repo: b.repo, role: b.role })
-    toasts.ok('Role revoked', `${b.subject} no longer has ${b.role} on ${b.repo}`)
+    await api.admin.revokeRole(binding, options)
+    if (mine !== context) return
+    toasts.ok('Role revoked', `${binding.subject} no longer has ${binding.role} on ${binding.repo}`)
     revoking.value = null
     await bindings.reload()
   } catch (e) {
-    toasts.error('Could not revoke the role', e)
+    reportError(revokeError, mine, e)
   } finally {
-    revokeBusy.value = false
+    if (mine === context) revokeBusy.value = false
   }
 }
 const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
@@ -266,9 +278,22 @@ const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
         <code class="mono">{{ revoking.repo }}</code
         >.
       </p>
+      <Alert v-if="revokeError" tone="bad" live="alert" title="Could not revoke the role">
+        <template v-if="revokeError.status === 401">
+          Your session was rejected. Sign in again before revoking a role.
+          <Button to="/signin">Sign in</Button>
+        </template>
+        <template v-else>{{ revokeError.message }}</template>
+      </Alert>
       <template #footer>
         <Button :disabled="revokeBusy" @click="revoking = null">Keep it</Button>
-        <Button variant="danger" :loading="revokeBusy" @click="revoke">Revoke</Button>
+        <Button
+          variant="danger"
+          :loading="revokeBusy"
+          :disabled="revokeError?.status === 401"
+          @click="revoke"
+          >Revoke</Button
+        >
       </template>
     </Dialog>
   </Card>

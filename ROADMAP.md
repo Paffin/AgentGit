@@ -77,7 +77,7 @@ they left open is listed first.
 
 1. **Finish the first-time-user work.**
    Browser editing covers one text file per change request (no rename, delete, multi-file or non-text conflicts);
-   some tab labels and table headers still need glossary hints; Home is polled every 15 s, not live; the rules form leaves
+   Home has filters and glossary hints, but is polled every 15 s, not live; the rules form leaves
    protected-path approvers and check timing in the raw JSON; no screen-reader pass; the `ag-server dev` sign-in link is not one-time (needs an exchange
    endpoint); the Docker one-liner is not verified (no Docker daemon yet) and `dev`, `login` and `explain` are missing
    from the `v0.2.0-rc.2` archives until the next tag.
@@ -85,7 +85,7 @@ they left open is listed first.
    template "task, agent, proposal" with a real model executor verified live. ("Give this task to an agent" exists in the
    Web UI.)
 3. **Finish the release.** Verify what rc.2 left unverified (archive attestations, macOS and aarch64 archives outside CI,
-   the Homebrew formula); add an SBOM for `ag-mcp` and a Windows archive; cut a stable tag (until then `install.sh` needs
+   the Homebrew formula); qualify the new `ag-mcp` SBOM and add a Windows archive; cut a stable tag (until then `install.sh` needs
    `--version`) that carries `ag-server dev`; publish the 21 `agentgit-<x>` crates and the SDKs. Only the owner can push
    tags and publish.
 4. **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,

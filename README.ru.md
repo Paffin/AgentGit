@@ -71,19 +71,14 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # ставит бинарник `ag`
 ```
 
-Или возьмите пре-релиз [`v0.2.0-rc.2`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.2): архивы для Linux
-и macOS (x86_64 и aarch64) с `ag`, `ag-server`, `ag-worker` и `ag-mcp`, `SHA256SUMS`, SBOM и мультиархитектурные образы
-`ghcr.io/paffin/agentgit-server` и `agentgit-cli`.
+Следующий кандидат — [`v0.2.0-rc.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.3). Перед установкой убедитесь, что архивы опубликованы. Они содержат `ag`, `ag-server`, `ag-worker` и `ag-mcp` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.2.0-rc.3
 docker pull ghcr.io/paffin/agentgit-cli:0.2.0-rc.3
 ```
 
-Пока есть только пре-релизы, `--version` обязателен. На опубликованных файлах проверены: контрольные суммы, быстрый
-старт и серверный сценарий ниже, `install.sh` и аттестации обоих образов (`gh attestation verify`, владельцем).
-Не проверены: аттестации архивов, архивы для macOS и aarch64 вне CI, формула Homebrew.
-[Варианты установки](docs/getting-started.md#install) описывают подробности.
+Пока есть только пре-релизы, `--version` обязателен. Если кандидат ещё не опубликован, используйте [инструкцию для rc.2](docs/getting-started.md#on-020-rc2-until-the-next-release). [Отчёт о проверке rc.2](docs/operations/releasing.md) относится только к тому выпуску и не подтверждает готовность rc.3. Подробности — в [вариантах установки](docs/getting-started.md#install).
 
 ## Быстрый старт
 
@@ -105,12 +100,11 @@ ag log
 ```bash
 ag-server dev                                            # каталог данных, администратор, демо-репозиторий, ссылка для входа
 ag login http://127.0.0.1:8080 --token-file ./ag-dev-data/dev/token
-ag clone http://127.0.0.1:8080/demo/welcome              # правьте, `ag snapshot`, `ag push -t "my change"`, при отказе `ag explain`
+ag clone http://127.0.0.1:8080/demo/welcome              # правьте, `ag snapshot`, `ag push -t "my change"`, при отказе `ag remote explain <id>`
 ```
 
 `ag-server dev` печатает ссылку, которая входит в Web UI, и те же команды. Это режим для знакомства (только loopback,
-обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он есть в `main`, но **не в архивах `v0.2.0-rc.2`**: до
-следующего тега [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
+обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он включён в кандидат `v0.2.0-rc.3`. Для прежних архивов `v0.2.0-rc.2` [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
 rc.2 несколькими строками длиннее.
 
 ### Как сервер

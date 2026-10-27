@@ -16,4 +16,4 @@ configMapGenerator:
 # create it out of band, or with your secret manager / sealed-secrets / external-secrets.
 images:
   - name: ghcr.io/paffin/agentgit-server
-    newTag: 0.2.0-rc.2   # the workspace version: the tag release.yml pushes (X.Y.Z, no "v"); check_deploy.py keeps them equal
+    newTag: 0.2.0-rc.3   # the workspace version: the tag release.yml pushes (X.Y.Z, no "v"); check_deploy.py keeps them equal

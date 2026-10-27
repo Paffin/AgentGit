@@ -83,6 +83,7 @@ async function onKey(e: KeyboardEvent, index: number) {
   scrollbar-width: none;
 }
 .tab {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;

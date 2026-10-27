@@ -163,6 +163,8 @@ say "checksum ok ($actual)"
 
 if [ "$attestation" != never ]; then
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    gh attestation verify --help >/dev/null 2>&1 ||
+      die "this GitHub CLI does not support attestation verification. Upgrade gh, or explicitly choose --no-attestation for checksum-only verification. Nothing was installed."
     if gh attestation verify "$tmp/$archive" --repo "$REPO" >"$tmp/attestation.log" 2>&1; then
       say "build-provenance attestation ok (gh attestation verify)"
     else
@@ -179,10 +181,13 @@ fi
 # ---- install ---------------------------------------------------------------------------------------------------
 tar -xzf "$tmp/$archive" -C "$tmp" || die "could not unpack $archive"
 [ -d "$tmp/$name" ] || die "the archive does not contain the expected directory $name/"
+# Validate the whole distribution before touching an existing installation.
+for b in $BINARIES; do
+  [ -f "$tmp/$name/$b" ] || die "the archive is missing $b. Nothing was installed."
+done
 mkdir -p "$bindir" || die "cannot create $bindir (choose a directory you own with --prefix)"
 installed=""
 for b in $BINARIES; do
-  [ -f "$tmp/$name/$b" ] || continue
   # Copy beside the destination first, then rename: replacing a running binary must not corrupt it.
   if ! cp "$tmp/$name/$b" "$bindir/.$b.new.$$"; then die "cannot write $bindir/$b"; fi
   chmod 0755 "$bindir/.$b.new.$$"

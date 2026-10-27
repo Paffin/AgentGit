@@ -260,6 +260,38 @@ class Packaging(unittest.TestCase):
         self.assertIn("checksum mismatch", p.stderr)
         self.assertFalse((prefix / "bin").exists(), "nothing may be installed after a failed check")
 
+    def test_an_incomplete_archive_does_not_replace_an_existing_install(self):
+        d = self.release_dir()
+        archive = next(d.glob("*.tar.gz"))
+        with tarfile.open(archive) as source:
+            members = [(m, source.extractfile(m).read() if m.isfile() else None)
+                       for m in source.getmembers() if not m.name.endswith("/ag-mcp")]
+        with tarfile.open(archive, "w:gz") as target:
+            for member, content in members:
+                target.addfile(member, io.BytesIO(content) if content is not None else None)
+        (d / "SHA256SUMS").write_text(f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}\n")
+        old = self.dir / "prefix/bin/ag"
+        old.parent.mkdir(parents=True)
+        old.write_text("old installation")
+        result, _ = self.install(release=d)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ag-mcp", result.stderr)
+        self.assertEqual(old.read_text(), "old installation")
+
+    def test_old_github_cli_explains_how_to_enable_attestation_verification(self):
+        d = self.release_dir()
+        bindir = self.dir / "old-gh"
+        bindir.mkdir()
+        gh = bindir / "gh"
+        gh.write_text('#!/bin/sh\n[ "$1" = auth ] && exit 0\nexit 1\n')
+        gh.chmod(0o755)
+        result = run("sh", SCRIPTS / "install.sh", "--version", self.version,
+                     "--prefix", self.dir / "old-gh-prefix", "--base-url", f"file://{d}",
+                     "--require-attestation", env={"PATH": str(bindir) + os.pathsep + os.environ["PATH"]})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not support", result.stderr)
+        self.assertFalse((self.dir / "old-gh-prefix/bin").exists())
+
     def test_a_missing_checksum_entry_installs_nothing(self):
         d = self.release_dir()
         (d / "SHA256SUMS").write_text(f"{'0' * 64}  agentgit-{self.version}-some-other-target.tar.gz\n")

@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Changed
+
+- The real Keycloak browser job reuses the pinned Playwright runtime, avoiding repeated system-package downloads while retaining real-provider, embedded-server and reviewed-skip checks.
+
 ## [0.3.0-beta.2] — 2026-10-27
 
 ### Added

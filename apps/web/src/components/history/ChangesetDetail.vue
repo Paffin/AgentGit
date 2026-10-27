@@ -16,15 +16,18 @@ import Skeleton from '@/ui/Skeleton.vue'
 const props = defineProps<{ repo: string; id: string }>()
 const route = useRoute()
 
-const cs = useResource<Changeset>(() => api.history.changeset(props.repo, props.id, true), {
-  watch: [() => props.repo, () => props.id],
-})
+const cs = useResource<Changeset>(
+  (signal) => api.history.changeset(props.repo, props.id, true, { signal }),
+  {
+    watch: [() => props.repo, () => props.id],
+  },
+)
 // Diff against the first parent: exactly what this changeset's delta did. A root changeset diffs against nothing.
 const diff = useResource<DiffResponse>(
-  async () => {
+  async (signal) => {
     const c = cs.data.value
     if (!c) return { files: [], truncated: false }
-    return api.tree.diff(props.repo, { from: c.parents[0] ?? '', to: c.id, context: 3 })
+    return api.tree.diff(props.repo, { from: c.parents[0] ?? '', to: c.id, context: 3 }, { signal })
   },
   { immediate: false },
 )

@@ -260,3 +260,12 @@ skips them). Details: `dev/handoff/release-rc2.md`.
 
 Rehearsal and container runs on `main` are listed in the project's change log entry for this work; the workflow
 runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab with their uploaded artifacts.
+
+
+## Release requests from main
+
+A reviewed version bump on `main`, with matching package versions and a nonempty changelog section, requests the next release automatically. `Request release` waits for successful CI, CodeQL, Containers, Docs, Packaging, Quality, Security, Web UI and Windows runs for that exact push, plus any other workflows triggered by it. A newer main commit cancels the request; a failed or timed-out check creates no tag.
+
+After the checks pass, the request creates `v<version>` at the checked commit and dispatches the existing Release workflow on that tag. That workflow still builds, tests, attests and verifies the actual archives and images before publication. The request itself is not a successful release. Existing published versions are skipped; an existing tag is never moved. If a request failed after creating its tag, rerun Request release on the same main commit. If main has moved, run Release manually on the existing tag with its matching version. Rehearsals remain available through Release with `publish=false`.
+
+The request uses a write token only on trusted main pushes or a manual run on main; it has no pull-request or workflow-run trigger and does not persist checkout credentials.

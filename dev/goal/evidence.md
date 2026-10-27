@@ -87,3 +87,10 @@ The earlier full local desktop run completed with 619 passes, 18 reviewed Keyclo
 ### Vite 8 integration
 
 Merged the checked Vite 8.3.4 upgrade into the browser branch. With locked dependencies, all 525 unit cases pass (shuffled seed 2054) and the production build succeeds. Both WebKit scenarios that failed in the earlier broad local run pass five repetitions each with strict console checks and no retries. The read-only scenario now waits for the actual board before checking that Admin is absent, so it neither asserts against an unfinished page nor cancels its initial module load. Vite's native-config warning is addressed with an explicit TypeScript import extension, not a warning override. This is targeted verification; a full current-tree browser/CI run is still required.
+
+
+## Checked release requests
+
+A main-only release request workflow waits for successful CI, CodeQL, Containers, Docs, Packaging, Quality, Security, Web UI and Windows for the exact commit, including other triggered workflows. It creates a version tag only after validation, refuses to move an existing tag, and dispatches the existing release pipeline rather than publishing unchecked artifacts itself. The workflow uses neither pull_request_target nor workflow_run, and never checks out pull-request code with its write token.
+
+Twenty-three behavior/contract tests pass. Fifty-three selected mutations are caught, including missing/failed checks, stale main, tag mismatch, incomplete assets and progress output before a wait. Measured Python CRAP is at most 7; no duplicate candidates were found. The actual beta.1 release payload is recognized as complete (four archives, four SBOMs, checksums and Homebrew formula), so installing the workflow does not republish it. Workflow pin/permission checks and release-tooling tests pass. A live request and next release remain pending until the workflow and a version bump are merged; no new release is claimed here.

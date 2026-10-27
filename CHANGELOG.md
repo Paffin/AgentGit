@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Reviewed version bumps on main can request the existing release pipeline after all checks pass for the exact commit. Existing complete releases are skipped, incomplete releases can be retried, and version tags are never moved.
+
 - Reviews can require the exact inspected head through the negotiated `proposals.review_head` capability; stale submissions are rejected atomically without a review or audit entry.
 
 - File search supports arrow keys, Home/End and Enter on any result, preserves IME input and modified link actions, and explains the keyboard controls in the dialog.

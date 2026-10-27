@@ -20,10 +20,20 @@ import TextField from '@/ui/TextField.vue'
 
 const auth = useAuth()
 usePageTitle(() => 'Home')
-const { repos, items, loading, settled, lastUpdated, error, skipped, unreadable, reload } =
-  useAttention()
-const query = ref('')
 const repository = ref('')
+const {
+  repos,
+  items,
+  loading,
+  settled,
+  lastUpdated,
+  error,
+  skipped,
+  unreadable,
+  reload,
+  loadMore,
+} = useAttention(repository)
+const query = ref('')
 const kind = ref<AttentionKind>()
 const scoped = computed(() =>
   filterAttention(items.value, { query: query.value, repo: repository.value }),
@@ -74,6 +84,7 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
         <h1>Home</h1>
         <p class="muted">Review changes, unblock work, and keep agents moving.</p>
       </div>
+      <Button v-if="canStart" to="/import">Import from GitHub / GitLab</Button>
       <Button
         v-if="canStart"
         variant="primary"
@@ -123,8 +134,12 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
         <template v-else-if="unreadable"
           >Some work could not be read or exceeds the per-repository summary limit.</template
         >
-        <template v-if="skipped"> Only the 30 newest repositories are included.</template>
-        Open the repository to see all work, or refresh to try again.
+        <template v-if="skipped">
+          Work from {{ repos.length - skipped }} of {{ repos.length }} repositories is loaded.
+          Choose a repository above to see its work, or load more repositories.
+          <Button :loading="loading" @click="loadMore">Load more repositories</Button>
+        </template>
+        <template v-else> Open the repository to see all work, or refresh to try again.</template>
       </Alert>
       <div class="workspace">
         <aside class="rail" aria-label="Work navigation">
@@ -168,7 +183,9 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
             {{
               filtering
                 ? `${visible.length} of ${total} items shown`
-                : `${plural(total, 'thing needs', 'things need')} your attention.`
+                : incomplete
+                  ? `${total} items in loaded repositories. Other work may still need your attention.`
+                  : `${plural(total, 'thing needs', 'things need')} your attention.`
             }}
           </p>
           <EmptyState

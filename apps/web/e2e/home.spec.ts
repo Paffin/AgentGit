@@ -1,4 +1,32 @@
 import { expect, test } from './fixtures.ts'
+import { commitFiles, freshRepo, openProposal } from './support/world.ts'
+
+test('older repositories remain selectable and more work can be included explicitly', async ({
+  page,
+  cast,
+}) => {
+  const { repo, head } = await freshRepo(cast, 'older-home-work')
+  const change = await commitFiles(
+    cast.as('dana'),
+    repo,
+    { 'legacy.txt': 'Review this\n' },
+    'Home change',
+    { fromRev: head },
+  )
+  const title = `Legacy work in ${repo}`
+  await openProposal(cast.as('dana'), repo, { head: change.head, title })
+  for (let i = 0; i < 35; i++) await freshRepo(cast, `newer-home-${i}`)
+  await page.goto('/')
+  const rows = page.getByTestId('attention-item').filter({ hasText: title })
+  await expect(page.getByTestId('attention-incomplete')).toBeVisible()
+  await expect(rows).toHaveCount(0)
+  const repository = page.getByRole('combobox', { name: 'Repository', exact: true })
+  await repository.selectOption(repo)
+  await expect(rows).toHaveCount(1)
+  await repository.selectOption('')
+  await page.getByRole('button', { name: 'Load more repositories', exact: true }).click()
+  await expect(rows).toHaveCount(1)
+})
 
 // Uses the same real server and demo proposals as the review workflow tests.
 test('finds work, scopes categories, and recovers from an empty search', async ({
@@ -6,6 +34,7 @@ test('finds work, scopes categories, and recovers from an empty search', async (
 }, testInfo) => {
   await page.setViewportSize({ width: 1586, height: 992 })
   await page.goto('/')
+  await page.getByRole('combobox', { name: 'Repository', exact: true }).selectOption('acme/webapp')
   const rows = page.getByTestId('attention-item')
   await expect(rows.first()).toBeVisible()
   const initial = await rows.count()
@@ -21,6 +50,8 @@ test('finds work, scopes categories, and recovers from an empty search', async (
   await search.fill('no-such-work-849172')
   await expect(page.getByText('No work matches these filters', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Clear filters' }).click()
+  await expect(search).toHaveValue('')
+  await page.getByRole('combobox', { name: 'Repository', exact: true }).selectOption('acme/webapp')
   await expect(rows).toHaveCount(initial)
   await page.getByTestId('home-refresh').click()
   await expect(page.getByTestId('home-refresh')).toBeEnabled()
@@ -32,6 +63,7 @@ test('keeps home usable on a narrow screen and in dark mode', async ({ page }, t
   await page.addInitScript(() => localStorage.setItem('agentgit.theme', 'dark'))
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
+  await page.getByRole('combobox', { name: 'Repository', exact: true }).selectOption('acme/webapp')
   await expect(page.getByTestId('attention-item').first()).toBeVisible()
   await page.getByRole('button', { name: /^Ready to land/ }).click()
   await expect(page.getByTestId('attention-ready')).toBeVisible()
@@ -74,5 +106,7 @@ test('a failed first load is an error, not an empty work queue, and retry recove
   await expect(page.getByText('Nothing to look at yet', { exact: true })).toHaveCount(0)
   broken = false
   await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByText('Could not load your home page', { exact: true })).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Repository', exact: true }).selectOption('acme/webapp')
   await expect(page.getByTestId('attention-item').first()).toBeVisible()
 })

@@ -1,5 +1,5 @@
 {
-  "$comment": "Hand-maintained facts about the AGWP v1 HTTP API that docs/protocol/openapi.json does not carry. Both SDK generators (sdk/typescript/scripts/generate.mjs and sdk/python/scripts/generate.py) read this file; their tests fail when it disagrees with the OpenAPI document. 'retry' classes: read = GET, or a POST that only reads; natural = repeating the call has the same effect as making it once; keyed = the server records the outcome under the Idempotency-Key header (documented in docs/protocol/agwp-v1.md and verified by the retry tests for exactly these seven operations; stream.create and credentials.mint ignore the key by design); unsafe = a repeat may apply twice, so the SDK never retries it on its own (pass an explicit override per call).",
+  "$comment": "Hand-maintained facts about the AGWP v1 HTTP API that docs/protocol/openapi.json does not carry. Both SDK generators (sdk/typescript/scripts/generate.mjs and sdk/python/scripts/generate.py) read this file; their tests fail when it disagrees with the OpenAPI document. 'retry' classes: read = GET, or a POST that only reads; natural = repeating the call has the same effect as making it once; keyed = the server records the outcome under the Idempotency-Key header (documented in docs/protocol/agwp-v1.md and verified by the retry tests for the listed operations; stream.create and credentials.mint ignore the key by design); unsafe = a repeat may apply twice, so the SDK never retries it on its own (pass an explicit override per call).",
   "retry": {
     "readPosts": [
       "history.ancestors",
@@ -15,7 +15,8 @@
       "integration.integrate",
       "task.create",
       "agent.start_run",
-      "lease.acquire"
+      "lease.acquire",
+      "migration.prepare"
     ],
     "natural": [
       "objects.put",
@@ -41,7 +42,8 @@
       "task.depend",
       "task.finish",
       "workspace.delete",
-      "workspace.sync"
+      "workspace.sync",
+      "migration.commit"
     ],
     "naturalWhenFieldPresent": {
       "workspace.modify": "expected_head"
@@ -83,6 +85,7 @@
     "jobs": "jobs",
     "admin.credentials": "credentials",
     "admin.roles": "roles",
-    "admin": "admin"
+    "admin": "admin",
+    "migration": "migrations"
   }
 }

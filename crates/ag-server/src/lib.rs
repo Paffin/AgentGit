@@ -28,6 +28,7 @@ pub mod inflight;
 pub mod jobs_http;
 pub mod limits;
 pub mod metrics;
+pub mod migration;
 pub mod proxy;
 pub mod quota;
 pub mod repos;

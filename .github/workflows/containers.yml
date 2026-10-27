@@ -63,7 +63,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CACHE_SCOPE: agentgit-image
+  # The cache probe must read this commit's export, even if another run finishes in between.
+  CACHE_SCOPE: agentgit-image-${{ github.sha }}
+  CACHE_BASE_SCOPE: agentgit-image
 
 jobs:
   image:
@@ -91,8 +93,12 @@ jobs:
           build-args: |
             AG_BUILD_COMMIT=${{ github.sha }}
             AG_BUILD_DATE=${{ steps.meta.outputs.date }}
-          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
-          cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+          cache-from: |
+            type=gha,scope=${{ env.CACHE_SCOPE }}
+            type=gha,scope=${{ env.CACHE_BASE_SCOPE }}
+          cache-to: |
+            type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+            type=gha,scope=${{ env.CACHE_BASE_SCOPE }},mode=max
       - name: Build the CLI image (shares every layer but the last)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

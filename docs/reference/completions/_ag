@@ -65,6 +65,30 @@ never\:"Never colour"))' \
 '--version[Print version]' \
 && ret=0
 ;;
+(migrate)
+_arguments "${_arguments_options[@]}" : \
+'--namespace=[Destination namespace, for example acme/webapp]:NAMESPACE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--dry-run[Verify the migration and report limitations without publishing a repository]' \
+'--allow-lossy[Accept reported omissions, unresolved LFS pointers and unsupported refs]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':source -- Full local Git clone, mirror or self-contained .bundle file:_files' \
+':destination -- New destination directory. It must not exist:_files' \
+&& ret=0
+;;
 (status)
 _arguments "${_arguments_options[@]}" : \
 '-w+[Workspace name]:WORKSPACE:_default' \
@@ -2595,6 +2619,60 @@ never\:"Never colour"))' \
 ':server -- The server, e.g. `http\://127.0.0.1\:8080` (a repository URL works too; only the server part is used):_default' \
 && ret=0
 ;;
+(auth)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__auth_commands" \
+"*::: :->auth" \
+&& ret=0
+
+    case $state in
+    (auth)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-auth-command-$line[1]:"
+        case $line[1] in
+            (status)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Timeout for each online check, in seconds]:TIMEOUT:_default' \
+'--ca-file=[Extra CA certificate (PEM) for online checks]:CA_FILE:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--check[Verify saved credentials online. Without this, status is local and works offline]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::server -- Inspect just this server (a repository URL works too):_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (logout)
 _arguments "${_arguments_options[@]}" : \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
@@ -2917,6 +2995,7 @@ esac
 _ag_commands() {
     local commands; commands=(
 'init:Create a repository in the current directory' \
+'migrate:Migrate every branch and tag from a full local Git clone or bundle into a new repository' \
 'status:Summarize the workspace, your proposals, leases, task and remote at a glance' \
 'snapshot:Record the working directory as a new snapshot' \
 'sync:Bring the stream'\''s latest head into the workspace' \
@@ -2958,6 +3037,7 @@ _ag_commands() {
 'push:Upload your snapshot and open a proposal on the server' \
 'remote:Manage remotes and work with proposals, events and policy on a server' \
 'login:Save a server credential once; \`clone\`, \`fetch\`, \`push\` and \`remote\` then need no token plumbing' \
+'auth:Inspect saved server connections without printing credentials' \
 'logout:Forget a saved server credential' \
 'pin:Pin a revision so garbage collection keeps it' \
 'unpin:Remove a pin' \
@@ -3035,6 +3115,18 @@ _ag__subcmd__agent__subcmd__start_commands() {
 _ag__subcmd__audit_commands() {
     local commands; commands=()
     _describe -t commands 'ag audit commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__auth_commands] )) ||
+_ag__subcmd__auth_commands() {
+    local commands; commands=(
+'status:List saved connections; --check asks each server whether its saved credential still works' \
+    )
+    _describe -t commands 'ag auth commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__auth__subcmd__status_commands] )) ||
+_ag__subcmd__auth__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag auth status commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__backup_commands] )) ||
 _ag__subcmd__backup_commands() {
@@ -3214,6 +3306,11 @@ _ag__subcmd__ls_commands() {
 _ag__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'ag man commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__migrate_commands] )) ||
+_ag__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag migrate commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__op_commands] )) ||
 _ag__subcmd__op_commands() {

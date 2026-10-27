@@ -2,9 +2,11 @@
 
 These are drafts for maintainers to publish after checking the named version and evidence. No outreach or independent user results are implied by this document.
 
+The [exact-tree demonstration](demo.md) is available with a captioned recording, commands and explicit limits. The longer launch outline below also includes an agent-scope refusal.
+
 ## Pilot invitation
 
-> Do you use multiple coding agents on the same repository? We are testing AgentGit, an open-source source-control system that binds checks to the exact code being integrated and explains why a change is blocked. We are looking for five small teams to try one real task on a non-critical repository, then repeat the workflow a week later. You can export code back to Git. The project is alpha; the supported scope and limitations are public. Tell us your operating system, agent host and the integration problem you want to solve in a pilot report.
+> Do you use multiple coding agents on the same repository? We are testing AgentGit, an open-source source-control system that binds checks to the exact code being integrated and explains why a change is blocked. We are looking for five small teams to try one real task on a non-critical repository, then repeat the workflow a week later. You can export code back to Git. The project is in early public beta; the supported scope and limitations are public. Tell us your operating system, agent host and the integration problem you want to solve in a pilot report.
 
 Link to the [beta programme](beta.md) and a published candidate. Do not send an invitation that points at unbuilt `main` instructions.
 

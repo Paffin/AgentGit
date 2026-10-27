@@ -77,7 +77,7 @@ impl CatFile {
         }
     }
 
-    fn blob(&mut self, sha: &str) -> Result<Vec<u8>, GitError> {
+    fn blob(&mut self, sha: &str, max_size: u64) -> Result<Vec<u8>, GitError> {
         if writeln!(self.stdin, "{sha}").and_then(|()| self.stdin.flush()).is_err() {
             return Err(self.died(format!("git cat-file stopped before it was asked for {sha}")));
         }
@@ -91,6 +91,9 @@ impl CatFile {
             return Err(GitError::Parse(format!("cat-file said '{}' for {sha}", header.trim())));
         }
         let size: usize = parts[2].parse().map_err(|_| GitError::Parse(format!("bad size in '{}'", header.trim())))?;
+        if size as u64 > max_size {
+            return Err(GitError::Unsupported(format!("Git blob {sha} is {size} bytes; limit is {max_size}")));
+        }
         let mut data = vec![0u8; size];
         let mut nl = [0u8; 1];
         if self.stdout.read_exact(&mut data).and_then(|()| self.stdout.read_exact(&mut nl)).is_err() {
@@ -171,25 +174,23 @@ pub struct Commit {
 /// How many fields `git log` prints per commit in the format below.
 const LOG_FIELDS: usize = 6;
 
-fn list_commits(dir: &Path, rev: &str) -> Result<Vec<Commit>, GitError> {
+fn list_commits(dir: &Path, revisions: &[String]) -> Result<Vec<Commit>, GitError> {
     // What the user's git configuration says must not change what is printed: `log.showSignature` would put
     // the output of gpg in front of the record, `i18n.logOutputEncoding` would re-encode it. A NUL ends every
     // field and every record (`-z`): unlike the control characters used before, git does not let a commit
     // message contain one.
-    let out = git(
-        dir,
-        &[
-            "log",
-            "-z",
-            "--topo-order",
-            "--reverse",
-            "--no-show-signature",
-            "--encoding=UTF-8",
-            "--format=%H%x00%P%x00%an%x00%ae%x00%at%x00%B",
-            rev,
-            "--",
-        ],
-    )?;
+    let mut args = vec![
+        "log",
+        "-z",
+        "--topo-order",
+        "--reverse",
+        "--no-show-signature",
+        "--encoding=UTF-8",
+        "--format=%H%x00%P%x00%an%x00%ae%x00%at%x00%B",
+    ];
+    args.extend(revisions.iter().map(String::as_str));
+    args.push("--");
+    let out = git(dir, &args)?;
     parse_log(&out)
 }
 
@@ -268,24 +269,39 @@ pub fn import_timestamp(secs: i64) -> Result<Timestamp, GitError> {
 
 /// Imports the history reachable from `opts.rev` as a new stream.
 pub fn import(repo: &Repository, opts: &ImportOptions) -> Result<ImportReport, GitError> {
-    git(&opts.git_dir, &["rev-parse", "--git-dir"])?;
-    let commits = list_commits(&opts.git_dir, &opts.rev)?;
+    let staged = stage(repo, &opts.git_dir, std::slice::from_ref(&opts.rev), &opts.actor)?;
+    repo.adopt_history(&opts.stream, &staged.report.head, &opts.actor, &format!("import of git {}", opts.rev))?;
+    Ok(staged.report)
+}
+
+pub(crate) struct StagedImport {
+    pub report: ImportReport,
+    pub ids: HashMap<String, ChangesetId>,
+    pub lfs_pointers: usize,
+}
+
+pub(crate) fn stage(
+    repo: &Repository,
+    dir: &Path,
+    revisions: &[String],
+    actor: &Identity,
+) -> Result<StagedImport, GitError> {
+    git(dir, &["rev-parse", "--git-dir"])?;
+    let commits = list_commits(dir, revisions)?;
     if commits.is_empty() {
-        return Err(GitError::Unsupported(format!("'{}' has no commits", opts.rev)));
+        return Err(GitError::Unsupported("the selected history has no commits".into()));
     }
-    let mut cat = CatFile::start(&opts.git_dir)?;
+    let mut cat = CatFile::start(dir)?;
     let mut ids: HashMap<String, ChangesetId> = HashMap::new();
     let mut blob_cache: HashMap<String, BlobId> = HashMap::new();
     let mut skipped_paths: Vec<(String, String)> = Vec::new();
     let mut skipped_submodules = 0usize;
+    let mut lfs_pointers = 0usize;
 
     for c in &commits {
         let raw = match c.parents.first() {
-            None => git(
-                &opts.git_dir,
-                &["diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-commit-id", "--root", &c.sha],
-            )?,
-            Some(p) => git(&opts.git_dir, &["diff-tree", "-r", "-z", "--raw", "--no-renames", p, &c.sha])?,
+            None => git(dir, &["diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-commit-id", "--root", &c.sha])?,
+            Some(p) => git(dir, &["diff-tree", "-r", "-z", "--raw", "--no-renames", p, &c.sha])?,
         };
         let mut ops: Vec<Op> = Vec::new();
         for ch in parse_raw(&raw)? {
@@ -330,7 +346,10 @@ pub fn import(repo: &Repository, opts: &ImportOptions) -> Result<ImportReport, G
             let content = match blob_cache.get(&ch.new_sha) {
                 Some(b) => *b,
                 None => {
-                    let data = cat.blob(&ch.new_sha)?;
+                    let data = cat.blob(&ch.new_sha, repo.limits().max_blob_size)?;
+                    if data.starts_with(b"version https://git-lfs.github.com/spec/v1\n") {
+                        lfs_pointers += 1;
+                    }
                     let b = repo.put_blob(data).map_err(GitError::Engine)?;
                     blob_cache.insert(ch.new_sha.clone(), b);
                     b
@@ -366,21 +385,31 @@ pub fn import(repo: &Repository, opts: &ImportOptions) -> Result<ImportReport, G
         ids.insert(c.sha.clone(), id);
     }
 
-    let head = *ids.get(&commits.last().expect("non-empty").sha).expect("imported");
-    let published = repo.publish(&head, &opts.actor, Some(&format!("git-import:{head}")))?;
-    if published.state != ag_integrate::PublishState::Published {
-        return Err(GitError::Unsupported(format!(
-            "the imported history was rejected: {}",
-            published.reason.unwrap_or_default()
-        )));
+    for revision in revisions {
+        let original = String::from_utf8(git(dir, &["rev-parse", "--verify", &format!("{revision}^{{commit}}")])?)
+            .map_err(|e| GitError::Parse(e.to_string()))?;
+        let head = ids[original.trim()];
+        let published = repo.publish(&head, actor, Some(&format!("git-import:{head}")))?;
+        if published.state != ag_integrate::PublishState::Published {
+            return Err(GitError::Unsupported(format!(
+                "the imported history was rejected: {}",
+                published.reason.unwrap_or_default()
+            )));
+        }
     }
-    repo.adopt_history(&opts.stream, &head, &opts.actor, &format!("import of git {}", opts.rev))?;
-    Ok(ImportReport {
-        commits: commits.len(),
-        head,
-        skipped_paths,
-        skipped_submodules,
-        blobs: blob_cache.len(),
-        lossy_commits: commits.iter().filter(|c| c.lossy).count(),
+    let first = String::from_utf8(git(dir, &["rev-parse", "--verify", &format!("{}^{{commit}}", revisions[0])])?)
+        .map_err(|e| GitError::Parse(e.to_string()))?;
+    let head = ids[first.trim()];
+    Ok(StagedImport {
+        report: ImportReport {
+            commits: commits.len(),
+            head,
+            skipped_paths,
+            skipped_submodules,
+            blobs: blob_cache.len(),
+            lossy_commits: commits.iter().filter(|c| c.lossy).count(),
+        },
+        ids,
+        lfs_pointers,
     })
 }

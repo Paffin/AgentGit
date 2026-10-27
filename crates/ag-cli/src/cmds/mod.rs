@@ -2,6 +2,7 @@
 
 pub mod admin;
 pub mod agents;
+pub mod auth;
 pub mod config;
 pub mod doctor;
 pub mod explain;

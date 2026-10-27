@@ -1,6 +1,6 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH ag 1  "ag 0.2.0-rc.3" 
+.TH ag 1  "ag 0.3.0-beta.1" 
 .SH NAME
 ag \- AgentGit: the `ag` command\-line interface
 .SH SYNOPSIS
@@ -36,6 +36,9 @@ Print version
 .TP
 ag\-init(1)
 Create a repository in the current directory
+.TP
+ag\-migrate(1)
+Migrate every branch and tag from a full local Git clone or bundle into a new repository
 .TP
 ag\-status(1)
 Summarize the workspace, your proposals, leases, task and remote at a glance
@@ -160,6 +163,9 @@ Manage remotes and work with proposals, events and policy on a server
 ag\-login(1)
 Save a server credential once; `clone`, `fetch`, `push` and `remote` then need no token plumbing
 .TP
+ag\-auth(1)
+Inspect saved server connections without printing credentials
+.TP
 ag\-logout(1)
 Forget a saved server credential
 .TP
@@ -208,4 +214,4 @@ Help topics (ag help TOPIC): workflow, policy, leases, identities, revisions, ex
 Shell completion: ag completions bash|zsh|fish|powershell|elvish     Man pages: ag man \-\-dir DIR
 Documentation: https://github.com/Paffin/AgentGit/tree/main/docs
 .SH VERSION
-v0.2.0\-rc.3
+v0.3.0\-beta.1

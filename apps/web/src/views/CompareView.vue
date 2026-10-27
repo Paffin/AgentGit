@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
@@ -29,32 +29,43 @@ const result = ref<{ diff: DiffResponse; from: string; to: string } | null>(null
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 let serial = 0
+let controller: AbortController | undefined
+onBeforeUnmount(() => controller?.abort())
+const isCurrent = (request: number, signal: AbortSignal) => request === serial && !signal.aborted
+
+async function compare(repository: string, a: string, b: string, signal: AbortSignal) {
+  // Resolve first so typos identify the unknown revision and results display immutable ids.
+  const [fromId, toId] = await Promise.all([
+    a ? api.history.resolve(repository, a, { signal }) : Promise.resolve(''),
+    api.history.resolve(repository, b, { signal }),
+  ])
+  const diff = await api.tree.diff(repository, { from: fromId, to: toId, context: 3 }, { signal })
+  return { diff, from: fromId, to: toId }
+}
 
 async function run() {
-  const a = from.value.trim()
-  const b = to.value.trim()
+  controller?.abort()
+  const current = new AbortController()
+  controller = current
+  const a = q('from')
+  const b = q('to')
+  const repository = repo.value
   if (!b) {
-    error.value = new ApiError({
-      status: 0,
-      code: 'invalid_argument',
-      message: 'Say which revision to compare to.',
-    })
+    serial++
+    result.value = null
+    error.value = null
+    busy.value = false
     return
   }
   const mine = ++serial
   busy.value = true
   error.value = null
   try {
-    // Resolve first so a typo reads "cannot resolve 'x'" rather than a failed diff, and so we can show real ids.
-    const [fromId, toId] = await Promise.all([
-      a ? api.history.resolve(repo.value, a) : Promise.resolve(''),
-      api.history.resolve(repo.value, b),
-    ])
-    const diff = await api.tree.diff(repo.value, { from: fromId, to: toId, context: 3 })
-    if (mine !== serial) return
-    result.value = { diff, from: fromId, to: toId }
+    const comparison = await compare(repository, a, b, current.signal)
+    if (!isCurrent(mine, current.signal)) return
+    result.value = comparison
   } catch (e) {
-    if (mine !== serial) return
+    if (!isCurrent(mine, current.signal)) return
     error.value =
       e instanceof ApiError
         ? e
@@ -66,20 +77,29 @@ async function run() {
 }
 
 function submit() {
-  void router.replace({
-    query: { from: from.value.trim() || undefined, to: to.value.trim() || undefined },
-  })
-  void run()
+  const a = from.value.trim()
+  const b = to.value.trim()
+  if (a === q('from') && b === q('to')) {
+    void run()
+    return
+  }
+  void router.push({ query: { from: a || undefined, to: b || undefined } })
 }
-
+function swap() {
+  const oldFrom = from.value
+  from.value = to.value
+  to.value = oldFrom
+  submit()
+}
 watch(
-  () => [route.query.from, route.query.to],
+  [repo, () => route.query.from, () => route.query.to],
   () => {
     from.value = q('from')
     to.value = q('to')
+    void run()
   },
+  { immediate: true },
 )
-if (q('to')) void run()
 
 const names = computed(() => board.streams.map((s) => s.name))
 </script>
@@ -103,6 +123,7 @@ const names = computed(() => board.streams.map((s) => s.name))
         />
         <TextField v-model="to" label="To" mono placeholder="main" list="cmp-streams" required />
         <Button type="submit" variant="primary" icon="diff" :loading="busy">Compare</Button>
+        <Button :disabled="!from.trim() || !to.trim()" @click="swap">Swap revisions</Button>
         <datalist id="cmp-streams">
           <option v-for="s in names" :key="s" :value="s" />
         </datalist>
@@ -110,7 +131,8 @@ const names = computed(() => board.streams.map((s) => s.name))
     </Card>
     <Alert v-if="error" tone="bad" live="alert" title="Cannot compare">{{ error.message }}</Alert>
     <Skeleton v-if="busy && !result" :lines="5" />
-    <template v-else-if="result">
+    <p v-if="busy && result" class="muted" role="status">Updating comparison…</p>
+    <template v-if="result">
       <p class="muted ids">
         <code class="mono">{{ result.from ? shortId(result.from, 12) : 'empty tree' }}</code>
         →
@@ -123,7 +145,7 @@ const names = computed(() => board.streams.map((s) => s.name))
       />
     </template>
     <EmptyState
-      v-else-if="!error"
+      v-else-if="!error && !busy"
       icon="diff"
       title="Pick two revisions"
       description="A branch name, a version id or prefix, a change request id, or an expression like main~2 or prop_…^2."
@@ -139,7 +161,7 @@ const names = computed(() => board.streams.map((s) => s.name))
 }
 .form {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr auto auto;
   gap: var(--s-3);
   align-items: end;
 }

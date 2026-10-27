@@ -38,6 +38,7 @@ from agentgit._generated.namespaces import (
     AsyncIntegrationApi,
     AsyncJobsApi,
     AsyncLeasesApi,
+    AsyncMigrationsApi,
     AsyncObjectsApi,
     AsyncOperationsApi,
     AsyncProposalsApi,
@@ -56,6 +57,7 @@ from agentgit._generated.namespaces import (
     IntegrationApi,
     JobsApi,
     LeasesApi,
+    MigrationsApi,
     ObjectsApi,
     OperationsApi,
     ProposalsApi,
@@ -97,6 +99,16 @@ class UploadResult:
     """Ids that were sent."""
     already_present: list[str] = field(default_factory=list)
     """Ids the repository already had."""
+
+
+def _binary_body(op_id: str, params: Mapping[str, Any]) -> tuple[Mapping[str, Any], bytes | None]:
+    if OPERATIONS[op_id].body != "bytes":
+        return params, None
+    fields = dict(params)
+    data = fields.pop("data", None)
+    if not isinstance(data, (bytes, bytearray, memoryview)):
+        raise TypeError("binary operations require bytes in data")
+    return fields, bytes(data)
 
 
 def _retry_policy(retry: RetryPolicy | bool | None) -> RetryPolicy:
@@ -246,6 +258,7 @@ class AgentGitClient:
     provenance: ProvenanceApi
     events: EventsApi
     jobs: JobsApi
+    migrations: MigrationsApi
     admin: AdminApi
     credentials: CredentialsApi
     roles: RolesApi
@@ -298,6 +311,7 @@ class AgentGitClient:
         self.provenance = ProvenanceApi(self)
         self.events = EventsApi(self)
         self.jobs = JobsApi(self)
+        self.migrations = MigrationsApi(self)
         self.admin = AdminApi(self)
         self.credentials = CredentialsApi(self)
         self.roles = RolesApi(self)
@@ -337,7 +351,8 @@ class AgentGitClient:
     # -- what the generated namespaces call -----------------------------------------------------
 
     def _call(self, op_id: str, params: Mapping[str, Any], options: CallOptions | None, result: type[T]) -> T:
-        raw = self._transport.execute(OPERATIONS[op_id], params, None, options)
+        params, data = _binary_body(op_id, params)
+        raw = self._transport.execute(OPERATIONS[op_id], params, data, options)
         if result is bytes:
             return raw  # type: ignore[no-any-return]
         return decode_as(result, raw)
@@ -540,6 +555,7 @@ class AsyncAgentGitClient:
     provenance: AsyncProvenanceApi
     events: AsyncEventsApi
     jobs: AsyncJobsApi
+    migrations: AsyncMigrationsApi
     admin: AsyncAdminApi
     credentials: AsyncCredentialsApi
     roles: AsyncRolesApi
@@ -594,6 +610,7 @@ class AsyncAgentGitClient:
         self.provenance = AsyncProvenanceApi(self)
         self.events = AsyncEventsApi(self)
         self.jobs = AsyncJobsApi(self)
+        self.migrations = AsyncMigrationsApi(self)
         self.admin = AsyncAdminApi(self)
         self.credentials = AsyncCredentialsApi(self)
         self.roles = AsyncRolesApi(self)
@@ -631,7 +648,8 @@ class AsyncAgentGitClient:
     async def _call(
         self, op_id: str, params: Mapping[str, Any], options: CallOptions | None, result: type[T]
     ) -> T:
-        raw = await self._transport.execute(OPERATIONS[op_id], params, None, options)
+        params, data = _binary_body(op_id, params)
+        raw = await self._transport.execute(OPERATIONS[op_id], params, data, options)
         if result is bytes:
             return raw  # type: ignore[no-any-return]
         return decode_as(result, raw)

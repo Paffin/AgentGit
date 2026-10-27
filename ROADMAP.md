@@ -12,7 +12,11 @@ signed attestations, approvals, protected paths · agent identities, runs, tasks
 signed provenance, conflict prediction, integration queue · workspaces with conflict markers · GC, fsck,
 backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
-## Built since 0.1 (in the `v0.2.0-rc.2` pre-release and on `main`)
+## 0.3 public beta — migration and guided adoption
+
+The single-server Linux/SQLite/filesystem workflow is open to early adopters. Web and CLI migration preserve complete branch/tag history with a reconciliation report and retained source bundle. Hosting metadata migration, external MCP-host evidence, independent pilots and wider storage qualification remain separate open work; see the [beta programme](docs/community/beta.md).
+
+## Built since 0.1 (through `v0.3.0-beta.1`)
 
 Each item is described, with what is and is not verified, in the [changelog](CHANGELOG.md) and the linked page.
 

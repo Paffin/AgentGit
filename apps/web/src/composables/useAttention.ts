@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
 import { api } from '@/api/instance'
 import type { Preparation, Proposal, Repo, Review } from '@/api/types'
 import { attentionForRepo } from '@/lib/attention'
@@ -107,21 +107,42 @@ function combine(results: PromiseSettledResult<Summary>[]): {
   return { items, unreadable }
 }
 
-async function readSnapshot(access: Access, stale: () => boolean) {
-  const page = await api.repos.list({ page_size: 100 })
+async function repositoryCatalogue(stale: () => boolean) {
+  const repos: Repo[] = []
+  let token = ''
+  do {
+    const page = await api.repos.list({ page_size: 200, page_token: token || undefined })
+    if (stale()) return []
+    if (page.nextPageToken && page.nextPageToken === token)
+      throw new Error('The repository list did not advance. Please retry.')
+    repos.push(...page.items)
+    token = page.nextPageToken
+  } while (token)
+  return repos
+}
+
+async function readSnapshot(
+  access: Access,
+  stale: () => boolean,
+  repository: string,
+  limit: number,
+) {
+  const repos = await repositoryCatalogue(stale)
   if (stale()) return null
-  const read = [...page.items].sort((a, b) => b.created_at_ms - a.created_at_ms).slice(0, MAX_REPOS)
+  const read = repository
+    ? repos.filter((repo) => repo.name === repository)
+    : [...repos].sort((a, b) => b.created_at_ms - a.created_at_ms).slice(0, limit)
   const now = serverNow()
   const results = await mapLimit(read, 3, (r) => repositorySummary(r, access, stale, now))
   return {
-    repos: page.items,
+    repos,
     ...combine(results),
-    skipped: Math.max(0, page.items.length - read.length) + (page.nextPageToken ? 1 : 0),
+    skipped: repository ? 0 : Math.max(0, repos.length - read.length),
   }
 }
 
 /** Bounded, visible-page polling; a complete snapshot is committed only by the newest request. */
-export function useAttention() {
+export function useAttention(repository: Ref<string> = ref('')) {
   const auth = useAuth()
   const repos = shallowRef<Repo[]>([])
   const items = shallowRef<AttentionItem[]>([])
@@ -131,6 +152,7 @@ export function useAttention() {
   const error = shallowRef<unknown>(null)
   const skipped = ref(0)
   const unreadable = ref(0)
+  const limit = ref(MAX_REPOS)
   let serial = 0
   let timer: ReturnType<typeof setInterval> | undefined
 
@@ -140,7 +162,7 @@ export function useAttention() {
     loading.value = true
     try {
       if (stale()) return
-      const snapshot = await readSnapshot(auth, stale)
+      const snapshot = await readSnapshot(auth, stale, repository.value, limit.value)
       if (stale() || !snapshot) return
       repos.value = snapshot.repos
       items.value = snapshot.items
@@ -158,6 +180,13 @@ export function useAttention() {
     }
   }
 
+  async function loadMore() {
+    limit.value += MAX_REPOS
+    await load()
+  }
+
+  watch(repository, () => void load())
+
   onMounted(() => {
     void load()
     timer = setInterval(() => pollVisible(load, loading.value), POLL_MS)
@@ -166,5 +195,16 @@ export function useAttention() {
     serial++
     clearInterval(timer)
   })
-  return { repos, items, loading, settled, lastUpdated, error, skipped, unreadable, reload: load }
+  return {
+    repos,
+    items,
+    loading,
+    settled,
+    lastUpdated,
+    error,
+    skipped,
+    unreadable,
+    reload: load,
+    loadMore,
+  }
 }

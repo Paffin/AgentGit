@@ -1,0 +1,57 @@
+{
+  "version": "ag 0.2.0-rc.3 (746cf8eae1b2 2026-10-27)",
+  "platform": "Linux x86_64; live server; SQLite/filesystem",
+  "acknowledged_writes": 80,
+  "backups": [
+    {
+      "writes_before": 1,
+      "writes_after": 1,
+      "restored_counter": 1,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    },
+    {
+      "writes_before": 1,
+      "writes_after": 2,
+      "restored_counter": 2,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    },
+    {
+      "writes_before": 2,
+      "writes_after": 2,
+      "restored_counter": 2,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    },
+    {
+      "writes_before": 3,
+      "writes_after": 3,
+      "restored_counter": 3,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    },
+    {
+      "writes_before": 4,
+      "writes_after": 4,
+      "restored_counter": 4,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    },
+    {
+      "writes_before": 5,
+      "writes_after": 5,
+      "restored_counter": 5,
+      "tree_coherent": true,
+      "review_preserved": true,
+      "policy_preserved": true
+    }
+  ],
+  "final_server_healthy": true,
+  "scope": "Concurrent backup is verified; fault-injection/replay tests are recorded separately."
+}

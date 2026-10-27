@@ -37,3 +37,15 @@ The recorder starts a loopback development server, creates temporary credentials
 [Linux verification record](../assets/rc3-linux-verification.json) records a separate run against the publicly downloaded archive: onboarding, protected-path review, backup/restore and an upgrade from rc.2 preserving policy, a reviewed proposal, the stream head and ten audit entries. The archive checksum matches the published `SHA256SUMS`. Local provenance-bundle retrieval returned HTTP 403; [the release workflow](https://github.com/Paffin/AgentGit/actions/runs/40470846262) separately verifies attestations and installs the archives on Linux x86_64, Linux ARM64 and macOS.
 
 These checks do not replace [the external pilot and platform gates](beta.md). The project remains alpha.
+
+## Additional rc.3 qualification
+
+These are repeatable maintainer checks on Linux x86_64 with SQLite and local object storage, not independent customer trials:
+
+- [Live backup record](../assets/rc3-live-backup.json): 80 acknowledged writes and six independently verified backups. Writes completed during 1 of the backup windows. Every restored counter/event sequence was coherent; the pending review and policy were preserved. [Reproducer](../../examples/qualify-backup.py).
+- [Restart and replay record](../assets/rc3-restart-replay.json): the client loses the integration response, the real server is killed, and an identical-key retry after restart returns the original result without another stream update. This checks an unknown outcome after commit, not hardware power loss. [Reproducer](../../examples/qualify-restart.py).
+- [Git adapter record](../assets/rc3-git-exit.json): import, an AgentGit change and export preserve the compared Git trees and history structure. The fixture includes an executable, a symlink and an LFS pointer. Tags are not exported; a gitlink is reported and skipped; LFS payloads are not fetched. [Reproducer](../../examples/qualify-git-exit.py).
+
+Set `AG_BIN_DIR` to the directory containing the unpacked published binaries and run each Python script. They need Python 3.9+, Git and roughly 500 MB of temporary disk space for the backup fixture. Temporary fixtures are removed on exit; JSON evidence is written to the current directory (or `AG_EVIDENCE_DIR`).
+
+The engine's deterministic `crash_at_every_step_recovers_to_exactly_one_integration` and `idempotent_replay_and_unknown_outcome_recovery` tests also pass. They inject failures at seven publication/integration checkpoints on test stores; they do not simulate a physical disk or a power failure.

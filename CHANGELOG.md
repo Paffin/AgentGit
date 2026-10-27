@@ -7,6 +7,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.2] — 2026-10-27
+
 ### Added
 
 - Reviewed version bumps on main can request the existing release pipeline after all checks pass for the exact commit. Existing complete releases are skipped, incomplete releases can be retried, and version tags are never moved.
@@ -26,6 +28,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
 
 ### Fixed
+
+- Shared browser code is bundled once while views stay lazy; lazy JavaScript no longer adds speculative preload links. Keyboard focus checks poll rendered styles instead of depending on animation frames.
 
 - Directory navigation removes stale links immediately and retains loaded files after a next-page error. Review submission captures its target and content before waiting; clipboard feedback ignores obsolete requests.
 

@@ -101,3 +101,12 @@ Release-gate follow-up: two negative tests demonstrated that a second workflow w
 ## Directory and pending-action isolation
 
 Integrated the agent's clipboard-generation guard, directory-reset and pagination-retry changes, plus immutable pending-review inputs. A root regression showed that a capability request resolving after unmount could still start a review POST; a context check now prevents that unsent mutation. Two tests failed before the fix, then passed. An already transmitted POST is not claimed cancellable. The agent separately verified delayed clipboard APIs, real directory resolution and real paginated requests with temporary 503 responses on desktop/phone. New-directory links never reuse previous rows, and failed Load more requests preserve the existing rows and cursor.
+
+
+## Beta.2 integrated browser qualification
+
+The post-integration WebKit baseline completed with 205 passes, six reviewed Keycloak skips and three failures. The keyboard failure spent about 55 seconds waiting for animation frames under concurrent load; it now polls the same computed focus visibility with a bounded assertion. The SSO reload case now waits for rendered destinations before deliberately replacing the document. Neither console assertions nor crash checks were disabled. A separate latest embedded recovery/review/navigation sweep passed all 50 scenarios across Chromium, Firefox, WebKit, tablet and phone with no retries.
+
+A CSS-only lazy preload experiment with only a shared UI module regressed cold navigation and was rejected. Grouping shared application code while keeping views lazy measured 569/500/491 ms versus 630/584/597 ms for the existing layout, using three fresh Chromium contexts per variant and 100 ms delay per asset request. This local measurement is not a general performance claim. The selected build has 41 files and 172 KiB of Brotli output versus 106 files and 205 KiB before grouping. A real WebKit token-sign-in probe, kept open beyond the preload warning window, reported no console problems. Full final-tree browser and hosted checks remain required.
+
+The consolidated dependency/release candidate preserves the heads of PRs 38, 39, 41, 42, 45, 71 and 73 as ancestors. All 161 TypeScript SDK tests, generated-client freshness, type checks, lint and packaged ESM/CommonJS verification pass. The version metadata for the planned 0.3.0-beta.2 release agrees across Rust, Web UI and SDKs; this is a candidate, not an already-published release.

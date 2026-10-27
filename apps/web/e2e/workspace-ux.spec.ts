@@ -36,8 +36,18 @@ test('directory filter is clear, local to the folder, and retains navigation', a
   cast,
 }, testInfo) => {
   const { repo } = await freshRepo(cast, 'filter-files')
-  await page.goto(`/repos/${repo}/files`)
-  await page.getByRole('searchbox', { name: 'Filter this folder' }).fill('READ')
+  let release!: () => void
+  const repositoryMetadata = new Promise<void>((resolve) => (release = resolve))
+  await page.route(`**/v1/repos/${repo}`, async (route) => {
+    await repositoryMetadata
+    await route.continue()
+  })
+  try {
+    await page.goto(`/repos/${repo}/files`)
+    await page.getByRole('searchbox', { name: 'Filter this folder' }).fill('READ')
+  } finally {
+    release()
+  }
   await expect(page.getByRole('link', { name: 'README.md', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'src', exact: true })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Filter this folder' }).fill('does-not-exist')

@@ -110,7 +110,8 @@ const sorted = computed(() =>
   ),
 )
 const filter = ref('')
-watch([path, rev, repo], () => (filter.value = ''))
+// Resolving the default branch after the user starts typing must not erase their query.
+watch([path, qRev, repo], () => (filter.value = ''))
 const filtered = computed(() => {
   const query = filter.value.trim().toLocaleLowerCase()
   return sorted.value.filter((entry) => entry.name.toLocaleLowerCase().includes(query))

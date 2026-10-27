@@ -51,14 +51,17 @@ struct Connection {
     expires_at: Option<String>,
 }
 
+fn expiration(expires_at_ms: i64) -> Option<String> {
+    (expires_at_ms > 0).then(|| ag_types::Timestamp::from_millis(expires_at_ms).to_string())
+}
+
 fn saved_connection(server: String, login: &Login, now: i64) -> Connection {
     let expired = login.expires_at_ms > 0 && login.expires_at_ms <= now;
     Connection {
         server,
         identity: login.identity.clone(),
         state: if expired { State::Expired } else { State::Saved },
-        expires_at: (login.expires_at_ms > 0)
-            .then(|| ag_types::Timestamp::from_millis(login.expires_at_ms).to_string()),
+        expires_at: expiration(login.expires_at_ms),
     }
 }
 
@@ -80,8 +83,7 @@ async fn check_connection(connection: &mut Connection, login: &Login, args: &Sta
         Ok(Some(Ok(reply))) => {
             let who = reply.into_inner();
             connection.identity = who.identity;
-            connection.expires_at =
-                (who.expires_at_ms > 0).then(|| ag_types::Timestamp::from_millis(who.expires_at_ms).to_string());
+            connection.expires_at = expiration(who.expires_at_ms);
             connection.state = State::Verified;
         }
         Ok(Some(Err(status)))
@@ -90,6 +92,23 @@ async fn check_connection(connection: &mut Connection, login: &Login, args: &Sta
             connection.state = State::Rejected;
         }
         _ => connection.state = State::Unreachable,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_expiration_includes_the_boundary_and_keeps_unknown_expiry_unknown() {
+        let mut login = Login { token: String::new(), identity: "user:test".into(), expires_at_ms: 10, saved_at_ms: 0 };
+        assert_eq!(saved_connection("server".into(), &login, 10).state, State::Expired);
+        assert_eq!(saved_connection("server".into(), &login, 9).state, State::Saved);
+        login.expires_at_ms = 0;
+        let unknown = saved_connection("server".into(), &login, 10);
+        assert_eq!(unknown.state, State::Saved);
+        assert_eq!(unknown.expires_at, None);
+        assert!(expiration(1).is_some());
     }
 }
 

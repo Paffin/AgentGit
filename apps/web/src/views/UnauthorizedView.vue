@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePageTitle } from '@/composables/usePageTitle'
-import { safeNext } from '@/router'
+import { safeNext } from '@/router/redirect'
 import { useAuth } from '@/stores/auth'
 import Button from '@/ui/Button.vue'
 import EmptyState from '@/ui/EmptyState.vue'

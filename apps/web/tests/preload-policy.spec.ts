@@ -8,16 +8,15 @@ it('keeps entry-page preloads intact', () => {
     dependencies,
   )
 })
-it('omits only the lazy entry while preserving dependencies and CSS', () => {
+it('keeps lazy CSS without preloading JavaScript that native imports fetch', () => {
   const dependencies = ['assets/page-a.js', 'assets/vue-b.js', 'assets/page-c.css']
   expect(preloadDependencies('assets/page-a.js', dependencies, { hostType: 'js' })).toEqual([
-    'assets/vue-b.js',
     'assets/page-c.css',
   ])
   expect(dependencies).toEqual(['assets/page-a.js', 'assets/vue-b.js', 'assets/page-c.css'])
 })
-it('keeps all dependencies when the import entry is absent', () => {
-  expect(preloadDependencies('assets/page-a.js', ['assets/vue-b.js'], { hostType: 'js' })).toEqual([
-    'assets/vue-b.js',
-  ])
+it('does not add a JavaScript hint when the import entry is absent', () => {
+  expect(preloadDependencies('assets/page-a.js', ['assets/vue-b.js'], { hostType: 'js' })).toEqual(
+    [],
+  )
 })

@@ -33,23 +33,22 @@ test.describe('keyboard use', () => {
     await expect(page.getByTestId('board-summary')).toBeVisible()
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press('Tab')
-      const shown = await page.evaluate(async () => {
-        // Let the engine start the focus style (WebKit reports an outline of 0px until its next frame).
-        await new Promise<void>((r) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const el = document.activeElement as HTMLElement | null
+              if (!el || el === document.body) return null
+              const cs = getComputedStyle(el)
+              const outline = parseFloat(cs.outlineWidth) > 0 && cs.outlineStyle !== 'none'
+              const ring = cs.boxShadow !== 'none'
+              return outline || ring
+                ? null
+                : `${el.tagName.toLowerCase()}.${el.className} outline=${cs.outlineStyle}/${cs.outlineWidth} shadow=${cs.boxShadow} focus-visible=${el.matches(':focus-visible')}`
+            }),
+          { message: `element ${i + 1} in tab order shows focus` },
         )
-        const el = document.activeElement as HTMLElement | null
-        if (!el || el === document.body) return { ok: true, what: 'body' }
-        const cs = getComputedStyle(el)
-        const outline = parseFloat(cs.outlineWidth) > 0 && cs.outlineStyle !== 'none'
-        const ring = cs.boxShadow !== 'none'
-        return {
-          ok: outline || ring,
-          what: `${el.tagName.toLowerCase()}.${el.className} ${el.getAttribute('data-testid') ?? ''} outline=${cs.outlineStyle}/${cs.outlineWidth} shadow=${cs.boxShadow} focus-visible=${el.matches(':focus-visible')}`,
-        }
-      })
-      const visible = shown.ok
-      expect(visible, `element ${i + 1} in tab order shows focus: ${shown.what}`).toBe(true)
+        .toBeNull()
     }
   })
 

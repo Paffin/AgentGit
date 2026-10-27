@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { safeNext } from '@/router'
+import { safeNext } from '@/router/redirect'
 import { useAuth } from '@/stores/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Spinner from '@/ui/Spinner.vue'

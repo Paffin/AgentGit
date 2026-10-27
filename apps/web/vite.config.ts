@@ -48,10 +48,23 @@ export default defineConfig({
     // The server's CSP forbids inline scripts; keep every asset a real file.
     assetsInlineLimit: 0,
     cssCodeSplit: true,
-    // Native import starts the lazy entry request immediately; preload its dependencies,
-    // not the same entry a second time. Keep entry-page hints and asynchronous CSS.
+    // Shared application code loads with the entry. Lazy views use native imports;
+    // keep their CSS hints without speculative script requests that can go unused.
     modulePreload: {
       resolveDependencies: preloadDependencies,
+    },
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'framework', test: /node_modules/ },
+            {
+              name: 'shared',
+              test: /src[\\/](?:ui|components|composables|lib|stores|api|router)[\\/]/,
+            },
+          ],
+        },
+      },
     },
   },
   test: {

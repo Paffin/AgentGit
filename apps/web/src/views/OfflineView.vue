@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { safeNext } from '@/router'
+import { safeNext } from '@/router/redirect'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Button from '@/ui/Button.vue'
 import EmptyState from '@/ui/EmptyState.vue'

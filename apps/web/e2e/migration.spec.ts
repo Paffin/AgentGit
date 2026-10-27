@@ -5,6 +5,12 @@ import { execFileSync } from 'node:child_process'
 import { expectAccessible } from './support/ui.ts'
 import { expect, test } from './fixtures.ts'
 
+// Imports intentionally share one server-side slot; concurrent browsers retry its 429 response.
+// Each test must still reach the reviewed/published state, so a failed retry remains a test failure.
+test.beforeEach(({ allowConsole }) => {
+  allowConsole(/status of 429/)
+})
+
 function bundle(lfs = false): Buffer {
   const dir = mkdtempSync(join(tmpdir(), 'ag-migration-'))
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { stdio: 'pipe' })
@@ -84,4 +90,22 @@ test('requires explicit consent for external LFS content before publishing', asy
   await page.getByRole('checkbox', { name: /I have reviewed these content limitations/ }).check()
   await publish.click()
   await expect(page.getByText('Your repository is ready', { exact: true })).toBeVisible()
+})
+
+test('can reject a preview and start over without publishing', async ({ page }, testInfo) => {
+  await page.goto('/import')
+  await page
+    .getByLabel('New AgentGit repository')
+    .fill(`acme/abandoned-${Date.now()}-${testInfo.workerIndex}`)
+  await page.getByLabel('Git bundle', { exact: true }).setInputFiles({
+    name: 'source.bundle',
+    mimeType: 'application/octet-stream',
+    buffer: bundle(),
+  })
+  await page.getByRole('button', { name: 'Check the import', exact: true }).click()
+  await expect(page.getByText('Review before publishing', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Start over', exact: true }).click()
+  await page.reload()
+  await expect(page.getByLabel('New AgentGit repository')).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Publish repository', exact: true })).toHaveCount(0)
 })

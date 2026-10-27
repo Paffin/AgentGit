@@ -75,6 +75,8 @@ const suggestedName = computed(() => {
     : ''
 })
 function startAnother() {
+  error.value = ''
+  copied.value = false
   remember(null)
   plan.value = null
   accept.value = false
@@ -189,6 +191,7 @@ function downloadReport() {
               placeholder="https://github.com/team/project.git"
               :error="sourceError || undefined"
               hint="Private repositories work with your existing local Git sign-in. Never paste a token here."
+              @update:model-value="copied = false"
             />
             <template v-if="commands">
               <div class="command-heading">
@@ -333,6 +336,7 @@ function downloadReport() {
             >
             <div class="actions">
               <Button @click="downloadReport">Save report</Button>
+              <Button v-if="!imported" :disabled="busy" @click="startAnother">Start over</Button>
               <Button v-if="imported" @click="startAnother">Import another repository</Button
               ><Button
                 v-if="!imported"

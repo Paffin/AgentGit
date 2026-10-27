@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useScrollRegion } from '@/composables/useScrollRegion'
 import { lineCount, parseUnifiedDiff } from '@/lib/unidiff'
 import type { FileDiff } from '@/api/types'
@@ -22,6 +22,10 @@ const parsed = computed(() => parseUnifiedDiff(props.file.patch))
 const total = computed(() => lineCount(parsed.value))
 const forced = computed(() => total.value > LARGE)
 const open = ref(!props.collapsed && !forced.value)
+// Reset before rendering a replacement patch; identical refreshes keep the reader's choice.
+watch([() => props.file.path, () => props.file.patch], () => {
+  open.value = !props.collapsed && !forced.value
+})
 const bodyId = useId()
 // A long line scrolls the diff sideways, inside its own box; the keyboard can reach it then.
 const { setEl: diffRef, attrs: diffAttrs } = useScrollRegion(() => `Changes to ${props.file.path}`)

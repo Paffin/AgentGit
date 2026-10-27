@@ -8,8 +8,18 @@ import time
 import urllib.error
 import urllib.request
 
-REQUIRED = frozenset(('CI', 'CodeQL', 'Containers', 'Docs', 'Packaging', 'Quality', 'Security', 'Web UI', 'Windows'))
-IGNORED = frozenset(('Request release', 'Release'))
+REQUIRED = {
+    '.github/workflows/ci.yml': 'CI',
+    '.github/workflows/codeql.yml': 'CodeQL',
+    '.github/workflows/containers.yml': 'Containers',
+    '.github/workflows/docs.yml': 'Docs',
+    '.github/workflows/packaging.yml': 'Packaging',
+    '.github/workflows/quality.yml': 'Quality',
+    '.github/workflows/security.yml': 'Security',
+    '.github/workflows/web.yml': 'Web UI',
+    '.github/workflows/windows.yml': 'Windows',
+}
+IGNORED = frozenset(('.github/workflows/request-release.yml', '.github/workflows/release.yml'))
 TARGETS = ('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu', 'aarch64-apple-darwin', 'x86_64-apple-darwin')
 
 
@@ -48,15 +58,16 @@ class GitHub:
 def checks_pending(runs):
     latest = {}
     for run in sorted(runs, key=lambda item: item['id'], reverse=True):
-        if run['name'] not in IGNORED:
-            latest.setdefault(run['name'], run)
-    failed = [name for name, run in latest.items()
+        if run['path'] not in IGNORED:
+            latest.setdefault(run['path'], run)
+    failed = [run['name'] + ' (' + path + ')' for path, run in latest.items()
               if run['status'] == 'completed' and run['conclusion'] != 'success']
     if failed:
         raise RuntimeError('release blocked by checks: ' + ', '.join(sorted(failed)))
-    pending = REQUIRED.difference(latest)
-    pending = pending.union(name for name, run in latest.items() if run['status'] != 'completed')
-    return sorted(pending)
+    pending = set(REQUIRED).difference(latest)
+    pending = pending.union(path for path, run in latest.items() if run['status'] != 'completed')
+    return sorted(REQUIRED[path] if path in REQUIRED else latest[path]['name'] + ' (' + path + ')'
+                  for path in pending)
 
 
 def workflow_runs(api, base, sha):

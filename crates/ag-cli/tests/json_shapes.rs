@@ -227,6 +227,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
 
     // -- setup and diagnosis ---------------------------------------------------------------------------------------------------
     r.rec("doctor", &a.ag(&["--json", "doctor"]).ok());
+    r.rec("auth status#empty", &a.ag(&["--json", "auth", "status"]).ok());
     r.rec("config list", &a.ag(&["--json", "config", "list"]).ok());
     r.rec("config get", &a.ag(&["--json", "config", "get", "identity"]).ok());
     r.rec("config set", &a.ag(&["--json", "config", "set", "color", "never"]).ok());

@@ -65,6 +65,10 @@
         "timestamp": "number"
       }
     ],
+    "auth status#empty": {
+      "checked_online": "bool",
+      "connections": []
+    },
     "backup": {
       "bytes": "number",
       "keys_included": "bool",

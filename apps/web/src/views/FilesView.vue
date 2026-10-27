@@ -109,6 +109,12 @@ const sorted = computed(() =>
     (a, b) => Number(b.kind === 'dir') - Number(a.kind === 'dir') || a.name.localeCompare(b.name),
   ),
 )
+const filter = ref('')
+watch([path, rev, repo], () => (filter.value = ''))
+const filtered = computed(() => {
+  const query = filter.value.trim().toLocaleLowerCase()
+  return sorted.value.filter((entry) => entry.name.toLocaleLowerCase().includes(query))
+})
 const anySize = computed(() => entries.value.some((e) => e.size > 0))
 const columns = computed<Column[]>(() => [
   { key: 'name', label: 'Name', width: 'minmax(0, 1fr)' },
@@ -135,10 +141,15 @@ watch([rev, path, repo], () => (writing.value = false))
       <div>
         <h1>Files</h1>
         <p class="muted">
-          The tree at <code class="mono">{{ rev || '…' }}</code
-          >, read from the server.
-          <template v-if="canEdit">Open a file and press Edit to propose a change.</template>
-          <template v-else>Read-only here.</template>
+          Files at <code class="mono">{{ rev || '…' }}</code
+          >.
+          <template v-if="canEdit">Open a file to read it or propose an edit.</template>
+          <template v-else-if="auth.can(repo, 'editFiles')"
+            >Open a branch to propose an edit.</template
+          >
+          <template v-else
+            >You have read access. A repository administrator can grant writing access.</template
+          >
         </p>
       </div>
       <form class="rev" @submit.prevent="applyRev">
@@ -148,7 +159,7 @@ watch([rev, path, repo], () => (writing.value = false))
           mono
           :placeholder="rev"
           list="rev-list"
-          hint="Stream, changeset id or main~2"
+          hint="Branch name, changeset ID or main~2"
         />
         <Button type="submit" icon="search">Open</Button>
         <Button
@@ -231,9 +242,24 @@ watch([rev, path, repo], () => (writing.value = false))
           description="Nothing has landed on it yet."
         />
         <template v-else>
+          <div class="folder-tools">
+            <TextField
+              v-model="filter"
+              label="Filter this folder"
+              type="search"
+              placeholder="Find a file or folder…"
+              :hint="
+                next ? 'Filters loaded entries only. Load more to include the rest.' : undefined
+              "
+            />
+            <Button v-if="filter" @click="filter = ''">Clear filter</Button>
+            <p class="faint" role="status">
+              {{ filtered.length }} of {{ entries.length }} loaded entries
+            </p>
+          </div>
           <DataTable
             :columns="columns"
-            :rows="sorted"
+            :rows="filtered"
             :row-key="(e: DirEntry) => e.name"
             caption="Directory listing"
             :loading="listing || !where.settled.value"
@@ -258,14 +284,17 @@ watch([rev, path, repo], () => (writing.value = false))
               ><span class="faint">{{ (row as DirEntry).kind }}</span></template
             >
             <template #empty
-              ><EmptyState icon="folder" compact title="This directory is empty"
+              ><EmptyState
+                icon="folder"
+                compact
+                :title="filter ? 'No matching files' : 'This directory is empty'"
             /></template>
           </DataTable>
           <LoadMore
             :has-more="!!next"
             :loading="more"
             :shown="sorted.length"
-            noun="entries"
+            :noun="filter ? 'loaded entries' : 'entries'"
             @more="list(true)"
           />
         </template>
@@ -320,5 +349,16 @@ watch([rev, path, repo], () => (writing.value = false))
 }
 .entry:hover {
   color: var(--accent-text);
+}
+.folder-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.folder-tools :deep(.field) {
+  flex: 1 1 16rem;
 }
 </style>

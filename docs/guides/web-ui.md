@@ -331,6 +331,16 @@ This uses the server's virtual workspaces: a draft is opened on the branch (from
 applied as one version, the change request is opened from it, and the draft is removed. Only text files can be edited;
 renaming and deleting files, and several files in one change, are not in the browser yet.
 
+The editor pins the version you read. If someone changes the branch while you type, their work is checked by
+the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
+revision or cancelling asks before discarding unfinished text; closing the tab uses the browser's warning.
+**Download draft** saves your current text to a local file without opening a change request. Text is not
+automatically stored in browser storage: keep the tab open or download it before closing.
+
+**Filter this folder** narrows the directory listing by name, without changing the branch or path. For a paginated
+folder it explicitly filters the loaded entries; **Load more** includes the next page. Clearing the filter restores
+the listing, and opening another folder resets it.
+
 **Resolve the conflict.** When a change request no longer merges with its branch, its author sees *Resolve the
 conflict* (everyone else sees *Copy link to send to the author*). The resolver shows, per file, the branch's version and
 yours, with *Keep the branch's*, *Keep mine*, *Delete the file* and a text box for the result. Saving applies the

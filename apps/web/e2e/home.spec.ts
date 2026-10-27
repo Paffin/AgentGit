@@ -106,5 +106,7 @@ test('a failed first load is an error, not an empty work queue, and retry recove
   await expect(page.getByText('Nothing to look at yet', { exact: true })).toHaveCount(0)
   broken = false
   await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByText('Could not load your home page', { exact: true })).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Repository', exact: true }).selectOption('acme/webapp')
   await expect(page.getByTestId('attention-item').first()).toBeVisible()
 })

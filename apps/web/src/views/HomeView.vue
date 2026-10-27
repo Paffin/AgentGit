@@ -183,7 +183,9 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
             {{
               filtering
                 ? `${visible.length} of ${total} items shown`
-                : `${plural(total, 'thing needs', 'things need')} your attention.`
+                : incomplete
+                  ? `${total} items in loaded repositories. Other work may still need your attention.`
+                  : `${plural(total, 'thing needs', 'things need')} your attention.`
             }}
           </p>
           <EmptyState

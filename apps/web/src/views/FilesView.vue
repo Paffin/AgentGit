@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import type { DirEntry } from '@/api/types'
 import FileViewer from '@/components/files/FileViewer.vue'
+import FileFinder from '@/components/files/FileFinder.vue'
+import FileUpload from '@/components/files/FileUpload.vue'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useRepoName } from '@/composables/useRepoName'
 import { useResource } from '@/composables/useResource'
@@ -133,7 +135,22 @@ const canEdit = computed(
   () => auth.can(repo.value, 'editFiles') && streamNames.value.includes(rev.value),
 )
 const writing = ref(false)
-watch([rev, path, repo], () => (writing.value = false))
+const uploading = ref(false)
+watch([rev, path, repo], () => {
+  writing.value = false
+  uploading.value = false
+})
+const finding = ref(false)
+function findShortcut(event: KeyboardEvent) {
+  if (event.key !== 't' || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return
+  if ((event.target as HTMLElement)?.closest('input, textarea, select, [contenteditable="true"]'))
+    return
+  if (document.getElementById('app')?.hasAttribute('inert')) return
+  event.preventDefault()
+  finding.value = true
+}
+onMounted(() => window.addEventListener('keydown', findShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
 </script>
 
 <template>
@@ -154,6 +171,9 @@ watch([rev, path, repo], () => (writing.value = false))
         </p>
       </div>
       <form class="rev" @submit.prevent="applyRev">
+        <Button icon="search" :disabled="!rev" title="Find a file (t)" @click="finding = true"
+          >Find file</Button
+        >
         <TextField
           v-model="draft"
           label="Revision"
@@ -166,15 +186,34 @@ watch([rev, path, repo], () => (writing.value = false))
         <Button
           v-if="canEdit && where.data.value?.kind === 'dir'"
           icon="plus"
+          :disabled="uploading"
           data-testid="new-file"
           @click="writing = true"
           >New file</Button
+        >
+        <Button
+          v-if="canEdit && where.data.value?.kind === 'dir'"
+          :disabled="writing"
+          @click="uploading = true"
+          >Upload files</Button
         >
         <datalist id="rev-list">
           <option v-for="s in streamNames" :key="s" :value="s" />
         </datalist>
       </form>
     </div>
+
+    <FileFinder
+      v-model="finding"
+      :repo="repo"
+      :rev="rev"
+      :branch="!qRev || streamNames.includes(rev)"
+      @select="router.push(to($event))"
+    />
+
+    <Card v-if="uploading && canEdit" title="Upload files" icon="file"
+      ><FileUpload :repo="repo" :stream="rev" :path="path" @cancel="uploading = false"
+    /></Card>
 
     <Card v-if="writing && canEdit" title="New file" icon="file">
       <FileEditor

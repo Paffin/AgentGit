@@ -30,6 +30,7 @@ const props = defineProps<{
   /** The branch the change request is for. */
   stream: string
   executable?: boolean
+  fileType?: string
   isNew?: boolean
 }>()
 const emit = defineEmits<{ cancel: [] }>()
@@ -106,7 +107,14 @@ async function propose() {
       stream: props.stream,
       fromRev: base.data.value || undefined,
       expectedBase: base.data.value,
-      changes: [putFile(filePath.value, text.value, props.executable === true)],
+      changes: [
+        putFile(
+          filePath.value,
+          text.value,
+          props.executable === true,
+          props.fileType === 'symlink' ? 'symlink' : undefined,
+        ),
+      ],
       title: title.value.trim(),
       description: description.value.trim() || undefined,
     })
@@ -152,8 +160,8 @@ async function propose() {
     />
     <TextArea
       v-model="text"
-      :label="isNew ? 'Contents' : `Contents of ${path}`"
-      :rows="18"
+      :label="fileType === 'symlink' ? 'Link target' : isNew ? 'Contents' : `Contents of ${path}`"
+      :rows="fileType === 'symlink' ? 3 : 18"
       :disabled="busy"
       mono
     />

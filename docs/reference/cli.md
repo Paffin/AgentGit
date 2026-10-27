@@ -297,8 +297,9 @@ Arguments:
 Options:
   -C, --repo <DIR>             Operate on the repository at this path (default: discovered from the current directory)
       --namespace <NAMESPACE>  Destination namespace, for example acme/webapp
-      --allow-lossy            Accept reported omissions, unresolved LFS pointers and unsupported refs
       --as <IDENTITY>          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --dry-run                Verify the migration and report limitations without publishing a repository
+      --allow-lossy            Accept reported omissions, unresolved LFS pointers and unsupported refs
       --json                   Machine-readable JSON output
       --color <WHEN>           Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
   -q, --quiet                  Print only what was asked for: no confirmations or hints. Errors and refusals are still shown

@@ -29,6 +29,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Python CI and package checks require the committed lockfile; release metadata includes the normalized Python version and regenerated licence list.
+
 - Account and task-graph controls derive their accessible names from matching text; the account identity remains available to assistive technology when its visible label is hidden on a small screen.
 
 - Shared browser code is bundled once while views stay lazy; lazy JavaScript no longer adds speculative preload links. Keyboard focus checks poll rendered styles instead of depending on animation frames.

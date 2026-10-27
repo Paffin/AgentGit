@@ -120,3 +120,8 @@ The full WebKit run caught label-content-name-mismatch in the account button aft
 ### Release dispatch contract
 
 An executed workflow-mode regression found that `publish=true` with a bare version kept that bare value as `ref`, which the real release validator correctly rejected. The publish path now validates the selected tag name after checking it matches the requested version. The regression failed against the old shell block, then all 45 release-tooling tests and 26 request tests passed. Cases cover bare/prefixed publication, mismatched tags, branch refusal, independent rehearsal versions and pushed tags. The earlier string-only workflow assertion was replaced by these execution checks; no tag or release was created by this test.
+
+
+### Complete release metadata
+
+The licence freshness check caught 23 workspace-package references still naming beta.1; the standard generator updates them to beta.2 and a fresh check passes, with no third-party dependency changes. `uv lock --check --offline` also reproduced a stale project version (`0.3.0b1`); `uv lock --offline` changes only that entry to `0.3.0b2`, and the check passes. Python CI now uses locked synchronization and package jobs check the lock before building, so a future drift fails instead of silently rewriting it. All 28 workflow tests and 15 strict workflow checks pass.

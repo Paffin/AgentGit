@@ -176,6 +176,7 @@ jobs:
         working-directory: sdk/python
         run: |
           set -euo pipefail
+          uv lock --check
           uv build --out-dir "$RUNNER_TEMP/py"
           ls -la "$RUNNER_TEMP/py"
           uvx twine check --strict "$RUNNER_TEMP"/py/*

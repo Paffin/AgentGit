@@ -50,12 +50,16 @@ Evidence (all on `main`'s code, nothing published): see [Evidence](#evidence) at
 
 ```sh
 # 1. bump Cargo.toml workspace/package versions, apps/web/package.json, sdk/typescript/package.json
-#    and sdk/python/pyproject.toml; refresh Cargo.lock and the affected npm lockfile root versions
+#    and sdk/python/pyproject.toml plus sdk/python/src/agentgit/__init__.py; refresh Cargo.lock and npm lock roots
 cargo update -w
+(cd sdk/python && uv lock)
+scripts/third_party_licenses.sh
 # 2. move [Unreleased] into a dated [X.Y.Z] section of CHANGELOG.md
 # 3. check what the workflow will check
 python3 scripts/check_release.py vX.Y.Z --notes
 python3 scripts/check_publish_metadata.py
+cargo build -p agentgit-cli --locked
+AG=target/debug/ag python3 scripts/gen_cli_docs.py
 cargo test --workspace --locked
 # 4. rehearse on the exact commit you are about to tag
 gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
@@ -269,3 +273,5 @@ The request uses a write token only on trusted main pushes or a manual run on ma
 Required checks are identified by their workflow file paths, so another workflow using the same display name cannot hide a failed or unfinished check. Optional workflows triggered by the same commit must finish successfully too.
 
 Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.
+
+Python CI uses `uv sync --locked`; package checks run `uv lock --check` before building. A version bump must therefore include the normalized project version in `sdk/python/uv.lock`, the public Python `__version__`, regenerated CLI reference and third-party licence list. Update published installation links and deployment defaults only after the new release assets are verified.

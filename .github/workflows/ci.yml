@@ -247,7 +247,7 @@ jobs:
       - name: Python SDK (tests against the real server, ruff, mypy, generated code)
         working-directory: sdk/python
         run: |
-          uv sync
+          uv sync --locked
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
           uv run ruff check .
           uv run ruff format --check .
@@ -301,7 +301,7 @@ jobs:
         name: Python SDK tests
         working-directory: sdk/python
         run: |
-          uv sync --python ${{ matrix.version }}
+          uv sync --locked --python ${{ matrix.version }}
           AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
       - name: Skipped tests
         if: ${{ !cancelled() }}

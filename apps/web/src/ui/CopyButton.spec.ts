@@ -115,3 +115,94 @@ describe('copy fallback', () => {
     w.unmount()
   })
 })
+
+function pendingClipboard() {
+  const attempts: { resolve: () => void; reject: (error: Error) => void }[] = []
+  const writeText = vi.fn(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        attempts.push({ resolve, reject })
+      }),
+  )
+  useClipboard({ writeText })
+  return { attempts, writeText }
+}
+
+describe('copy attempt lifetime', () => {
+  it('does not let an earlier success replace a later failure', async () => {
+    const { attempts } = pendingClipboard()
+    fallback(() => false)
+    const w = show()
+    await w.get('button').trigger('click')
+    await w.get('button').trigger('click')
+    attempts[1]!.reject(new Error('Latest attempt denied'))
+    await flushPromises()
+    expect(w.get('[role="status"]').text()).toBe('Copy failed')
+    attempts[0]!.resolve()
+    await flushPromises()
+    expect(w.get('[role="status"]').text()).toBe('Copy failed')
+    w.unmount()
+  })
+
+  it('does not run an obsolete fallback after a newer successful copy', async () => {
+    const { attempts } = pendingClipboard()
+    fallback(() => true)
+    const w = show()
+    await w.get('button').trigger('click')
+    await w.get('button').trigger('click')
+    attempts[1]!.resolve()
+    await flushPromises()
+    attempts[0]!.reject(new Error('Old attempt denied'))
+    await flushPromises()
+    expect(document.execCommand).not.toHaveBeenCalled()
+    expect(w.get('[role="status"]').text()).toBe('Copied to clipboard')
+    w.unmount()
+  })
+
+  it('does not copy or report success for a value replaced during an attempt', async () => {
+    const { attempts, writeText } = pendingClipboard()
+    fallback(() => true)
+    const w = show()
+    await w.get('button').trigger('click')
+    await w.setProps({ text: 'src/new-file.ts' })
+    attempts[0]!.reject(new Error('Old value denied'))
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('src/auth/session.ts')
+    expect(document.execCommand).not.toHaveBeenCalled()
+    expect(w.get('[role="status"]').text()).toBe('')
+    await w.get('button').trigger('click')
+    attempts[1]!.resolve()
+    await flushPromises()
+    expect(writeText).toHaveBeenLastCalledWith('src/new-file.ts')
+    expect(w.get('[role="status"]').text()).toBe('Copied to clipboard')
+    w.unmount()
+  })
+
+  it('clears old feedback as soon as the displayed value changes', async () => {
+    const { attempts } = pendingClipboard()
+    const w = show()
+    await w.get('button').trigger('click')
+    attempts[0]!.resolve()
+    await flushPromises()
+    expect(w.get('[role="status"]').text()).toBe('Copied to clipboard')
+    await w.setProps({ text: 'new value' })
+    expect(w.get('[role="status"]').text()).toBe('')
+    w.unmount()
+  })
+
+  it('does not fall back or schedule feedback after unmounting', async () => {
+    vi.useFakeTimers()
+    const { attempts } = pendingClipboard()
+    fallback(() => true)
+    const w = show()
+    await w.get('button').trigger('click')
+    w.unmount()
+    await flushPromises()
+    const timersAfterUnmount = vi.getTimerCount()
+    attempts[0]!.reject(new Error('Arrived after unmount'))
+    await flushPromises()
+    expect(document.execCommand).not.toHaveBeenCalled()
+    expect(document.querySelector('textarea')).toBeNull()
+    expect(vi.getTimerCount()).toBe(timersAfterUnmount)
+  })
+})

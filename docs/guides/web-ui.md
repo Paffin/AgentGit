@@ -404,3 +404,7 @@ to editing files or giving an agent work when your role permits it.
 History filters follow the URL: Back and Forward restore the revision and path. Opening a changeset or its parent preserves those filters; modified link clicks open a separate tab without changing the current selection. A different changeset starts with its own detail and diff, so a pending response from the previous selection cannot appear under the new heading.
 
 Copy buttons keep keyboard focus when the browser falls back to legacy clipboard support. If copying fails, the temporary field is removed and the button reports the failure instead of retaining an earlier success message.
+
+A failed next-page request keeps files already loaded in the directory. Use **Load more** to retry that page; changing the folder or revision clears the old listing immediately, so its links cannot point into the new folder.
+
+Review controls pause while the decision is being sent. The decision and comment are fixed when you submit; switching to another change request cannot redirect a pending send to that request. Responses from an earlier page do not clear the current draft.

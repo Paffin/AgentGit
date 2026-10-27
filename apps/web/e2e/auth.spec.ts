@@ -84,6 +84,7 @@ test.describe('signing in', () => {
     await page.getByLabel('Access token').fill(token)
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('link', { name: 'Repositories', exact: true }).click()
     await page.getByRole('link', { name: 'acme/webapp' }).first().click()
     await expect(page.getByTestId('board-summary')).toBeVisible()
     expect(leaks).toEqual([])

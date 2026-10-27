@@ -4,7 +4,7 @@ import type { Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
-import { preloadDependencies, preloadPolicy } from './scripts/preload-policy'
+import { preloadDependencies, preloadPolicy } from './scripts/preload-policy.ts'
 
 // `npm run dev` proxies the API to a local ag-server. Override with AG_SERVER_URL.
 const target = process.env.AG_SERVER_URL ?? 'http://127.0.0.1:8080'

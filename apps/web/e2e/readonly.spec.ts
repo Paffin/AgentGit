@@ -21,6 +21,7 @@ test.describe('a read-only user', () => {
     state,
   }) => {
     await page.goto(`/repos/${state.demo.repo}`)
+    await expect(page.getByTestId('board-summary')).toBeVisible()
     await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0)
     await page.goto(`/repos/${state.demo.repo}/admin`)
     await expect(page.getByText('Administration needs the admin role')).toBeVisible()

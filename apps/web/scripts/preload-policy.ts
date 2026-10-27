@@ -11,7 +11,7 @@ export function preloadDependencies(
     : dependencies.filter((dependency) => dependency !== url)
 }
 
-// Vite rewrites preload maps after Rollup computes chunk hashes. Hash the policy
+// Vite rewrites preload maps after the bundler computes chunk hashes. Hash the policy
 // itself so changing it cannot reuse an immutable URL with different bytes.
 export const preloadPolicy: Plugin = {
   name: 'ag-native-lazy-preloads',

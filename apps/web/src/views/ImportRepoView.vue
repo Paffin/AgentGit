@@ -14,6 +14,8 @@ import {
 import type { MigrationPlan } from '@/api/migration'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuth } from '@/stores/auth'
+import ImportScope from '@/components/ImportScope.vue'
+import { migrationSummary } from '@/lib/migrationSummary'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Card from '@/ui/Card.vue'
@@ -211,15 +213,29 @@ async function publish() {
     if (mine === context) busy.value = false
   }
 }
-function downloadReport() {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(plan.value, null, 2)], { type: 'application/json' }),
-  )
+function saveFile(filename: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
   const link = document.createElement('a')
   link.href = url
-  link.download = 'agentgit-migration-report.json'
+  link.download = filename
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+function downloadReport() {
+  if (plan.value)
+    saveFile(
+      'agentgit-migration-report.json',
+      JSON.stringify(plan.value, null, 2),
+      'application/json',
+    )
+}
+function downloadSummary() {
+  if (plan.value)
+    saveFile(
+      'agentgit-migration-summary.txt',
+      migrationSummary(plan.value),
+      'text/plain;charset=utf-8',
+    )
 }
 </script>
 
@@ -272,6 +288,7 @@ function downloadReport() {
           subtitle="The commands below read your repository. They do not change or delete anything on GitHub or GitLab."
         >
           <div class="stack">
+            <ImportScope />
             <TextField
               v-model="source"
               label="Source repository URL (optional)"
@@ -399,29 +416,29 @@ function downloadReport() {
                 </ul>
               </details></Alert
             >
+            <ImportScope />
             <div class="note">
-              <strong>What this transfers</strong>
               <p>
-                Git file history, authors, commit messages, branches and commit-based tags. Git IDs
-                and signed tag objects stay in the original source bundle; AgentGit changesets have
-                their own IDs.
+                Git IDs and signed tag objects stay in the original source bundle; AgentGit
+                changesets have their own IDs. The server retains the bundle in repository backups.
+                Save this report to reconcile the imported refs.
               </p>
               <p>
-                GitHub and GitLab issues, pull/merge request discussions, permissions, releases, CI
-                settings and external LFS files are not imported. Keep the source available until
-                your team has checked the result and moved these separately.
-              </p>
-              <p>
-                The server retains the original bundle with the repository and includes it in
-                backups. Save this report to reconcile the imported refs.
+                Keep your source available until your team has checked the imported history and
+                moved the remaining project data.
               </p>
             </div>
             <label v-if="warnings.length && !imported" class="consent"
               ><input v-model="accept" type="checkbox" />I have reviewed these content limitations
               and accept this import.</label
             >
+            <details>
+              <summary>Technical report</summary>
+              <p class="muted">The full import record for troubleshooting and automation.</p>
+              <Button size="sm" @click="downloadReport">Download JSON</Button>
+            </details>
             <div class="actions">
-              <Button @click="downloadReport">Save report</Button>
+              <Button @click="downloadSummary">Save migration summary</Button>
               <Button v-if="!imported" :disabled="busy" @click="startAnother">Start over</Button>
               <Button v-if="imported" @click="startAnother">Import another repository</Button
               ><Button
@@ -433,6 +450,26 @@ function downloadReport() {
                 >Publish repository</Button
               ><Button v-else variant="primary" :to="destination">Open repository</Button>
             </div>
+            <section v-if="imported" class="next-steps" aria-labelledby="import-next-steps">
+              <h3 id="import-next-steps">Make it ready for your team</h3>
+              <ol>
+                <li>
+                  <RouterLink :to="`${destination}/files`">Review the imported files</RouterLink>.
+                </li>
+                <li>
+                  <RouterLink :to="`${destination}/streams`"
+                    >Check branches and their heads</RouterLink
+                  >.
+                </li>
+                <li>
+                  <RouterLink :to="`${destination}/admin?tab=roles`">Set up team access</RouterLink>
+                  before inviting people.
+                </li>
+              </ol>
+              <p class="muted">
+                Use the saved migration summary to finish moving the remaining project data.
+              </p>
+            </section>
             <p v-if="!imported" class="muted">
               Only you can see this staged import. Nothing is published until you confirm.
               Unpublished imports expire after 24 hours.
@@ -477,6 +514,17 @@ function downloadReport() {
 .stack {
   display: grid;
   gap: var(--s-4);
+}
+.next-steps {
+  display: grid;
+  gap: var(--s-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-4);
+}
+.next-steps ol {
+  margin: 0;
+  padding-left: 1.25em;
+  line-height: 1.8;
 }
 .command-heading,
 .actions {

@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- The import wizard shows transfer coverage before uploading, exports a readable migration summary and checklist, and links directly to imported files, branches and team access. Administration tabs can be bookmarked and survive reloads.
+
 ## [0.3.0-beta.3] - 2026-10-28
 
 ### Added

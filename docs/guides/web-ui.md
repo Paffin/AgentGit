@@ -342,6 +342,8 @@ Leaving the wizard does not delete a repository that was already created, and a 
 
 Choose **Import from GitHub / GitLab** on Home or Repositories to upload a full Git bundle. **Check the import** stages it for review; only **Publish repository** makes the destination available. See the [Git migration guide](migrate-from-git.md) for what transfers and what needs a separate migration.
 
+Before uploading, the page shows which data the Git bundle transfers and which project data needs a separate move. **Save migration summary** downloads a plain-text handoff with counts, branch/tag mappings, warnings and a checklist; **Technical report → Download JSON** keeps the machine-readable record available. After publishing, direct links lead to files, branches and team access. Administration tabs are bookmarkable and survive reloads.
+
 Reopening the import page resumes the saved import for your account. After a temporary error, **Retry previous import** opens the same staged result; an expired credential offers **Sign in again**. **Start new import** clears only this account's local reference, without deleting the staged import on the server. Recovery references are kept in this tab, separately by account; switching accounts hides the previous report. If browser storage is unavailable, keep the page open and save the report before leaving.
 
 ## Edit several files together

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AuditPanel from '@/components/admin/AuditPanel.vue'
 import CredentialsManager from '@/components/admin/CredentialsManager.vue'
 import MaintenancePanel from '@/components/admin/MaintenancePanel.vue'
@@ -20,7 +21,8 @@ const auth = useAuth()
 usePageTitle(() => `Admin · ${repo.value}`)
 
 type TabId = 'policy' | 'roles' | 'credentials' | 'settings' | 'maintenance' | 'audit' | 'pins'
-const tab = ref<TabId>('policy')
+const route = useRoute()
+const router = useRouter()
 const tabs: TabItem<TabId>[] = [
   { id: 'policy', label: 'Policy', icon: 'shield' },
   { id: 'roles', label: 'Roles', icon: 'user' },
@@ -30,6 +32,12 @@ const tabs: TabItem<TabId>[] = [
   { id: 'audit', label: 'Audit log', icon: 'list' },
   { id: 'pins', label: 'Pins', icon: 'pin' },
 ]
+const tab = computed<TabId>({
+  get: () => tabs.find((item) => item.id === route.query.tab)?.id ?? 'policy',
+  set: (value) => {
+    void router.replace({ query: { ...route.query, tab: value === 'policy' ? undefined : value } })
+  },
+})
 const isAdmin = computed(() => auth.hasRole(repo.value, 'admin'))
 const defaultRepos = computed(() => [repo.value])
 </script>

@@ -464,3 +464,5 @@ Open **Issues** in a repository to search or filter open and closed issues. Writ
 The browser retains unsent drafts in the current tab, scoped to the signed-in account and repository. If someone edits the issue first, reload and review the current version before explicitly keeping your draft against that version. Comments and descriptions currently display as plain text. Labels, milestones, attachments and importing provider discussions are not yet supported.
 
 The issue tracker requires a server advertising `issues.v1` and metadata schema 4. Take a backup before upgrading; an older server requires restoration of the pre-upgrade database.
+
+From an open issue you own, choose **Create agent task…**, describe the expected result and enter file patterns (one per line). Creation links the task atomically; retrying the same request does not duplicate it. The task page follows runs and resulting change requests. A connected orchestrator may pick up ready work automatically; this action does not prove execution, validation or approval. Closing the original issue remains a separate decision.

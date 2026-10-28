@@ -395,14 +395,24 @@ impl App {
     /// Creates a task (with dependencies).
     pub async fn create_task(&self, call: &Call, req: v1::CreateTaskRequest) -> ApiResult<v1::Task> {
         let idem = self.idem();
+        let issue_admin = if req.source_issue > 0 {
+            self.authorize(call, &req.repo, Cap::IssueWrite, None).await?;
+            self.authorize(call, &req.repo, Cap::IssueManage, None).await.is_ok()
+        } else {
+            false
+        };
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
-            let request = format!(
+            super::issues::check_task_source(repo, actor, issue_admin, req.source_issue, req.expected_issue_version)?;
+            let mut request = format!(
                 "create_task\0{actor}\0{}\0{}\0{}\0{}",
                 req.title,
                 req.description,
                 req.scope.join(","),
                 req.depends_on.join(",")
             );
+            if req.source_issue != 0 {
+                request.push_str(&format!("\0issue:{}:{}", req.source_issue, req.expected_issue_version));
+            }
             keyed(repo, idem, "task.create", &req.idempotency_key, &request, |claim| {
                 // The task, its dependencies and the idempotency record are one transaction.
                 let (_, response) = create_task_with(
@@ -413,6 +423,13 @@ impl App {
                     &req.depends_on,
                     actor.as_str(),
                     |tx, t| {
+                        super::issues::link_created_task(
+                            tx,
+                            actor,
+                            req.source_issue,
+                            req.expected_issue_version,
+                            &t.id,
+                        )?;
                         let response = task_view_in(tx, t)?;
                         claim.record(tx, &response)?;
                         Ok(response)

@@ -208,3 +208,19 @@ idempotent creates/comments, stale revision rejection and state/activity readbac
 Production Web UI build and TypeScript SDK type checking passed. This is not completion
 of `doc/goal.md`: provider discussion import, tracker labels/milestones/attachments,
 organizations and executable CI/CD remain outstanding.
+
+## Agent-native handoff follow-up — 2026-10-28
+
+An issue author or administrator can now create the associated agent task in the browser,
+with an explicit expected result and file patterns. `task.create` accepts a source issue and
+its inspected version. Task creation, linking and audit/activity records are atomic;
+a stale/closed/already-linked issue rolls back the task, and a retried request reuses the
+original task. Unrelated writers cannot attach tasks to somebody else's issue.
+
+Real HTTP verification covered stale-write rollback, author permissions, one task after
+an idempotent retry and the stored link. The fresh-server browser workflow additionally
+created the task through the handoff dialog, opened its permanent task page and returned
+to the linked issue (Chromium, 9.6 s). PostgreSQL 17 independently preserved issue and
+comment data through closing/reopening the metadata connection and rejected a stale CAS.
+TypeScript/Python client tours exercised the issue API. These checks do not establish
+that a real external coding agent ran or that it produced a reviewed/integrated change.

@@ -1,14 +1,14 @@
 # ADR 0016: durable repository issues
 
-Status: implemented; qualification in progress.
+Status: implemented; repository issue persistence qualified on SQLite and PostgreSQL.
 
 ## Decision
 
-User issues are separate from orchestrator tasks. An issue has a repository-local number, title, description, author, open/closed state, revision and optional link to an existing task in the same repository. Closing an issue does not finish its linked task. Immutable activity records retain comments and lifecycle events.
+User issues are separate from orchestrator tasks. An issue has a repository-local number, title, description, author, open/closed state, revision and optional link to an existing task in the same repository. Closing an issue does not finish its linked task. `task.create` can take `source_issue` and `expected_issue_version`: task creation, issue linking, audit and activity then commit in one transaction. Only the issue author or an administrator may use this handoff, in addition to the task and issue write permissions. A stale, closed or already-linked issue rolls back the new task. Existing task-creation idempotency fingerprints are unchanged when no source issue is supplied. Immutable activity records retain comments and lifecycle events.
 
 HTTP and gRPC expose the same service, advertised as `issues.v1`. Repository readers can read; writers can create and comment; only the author or repository administrators can edit or change state. Edits require the expected revision and reject stale writes. Creation and comments support idempotency keys. Mutations, activity, audit and event outbox records commit together. Continuations are bounded and scoped to their repository and filter, or issue.
 
-The browser provides a searchable list and permanent issue pages, discussion, state changes and task links. Drafts are kept in tab storage under account/repository/issue keys, without credentials. A conflicting update retains the local draft and requires explicit acknowledgement of the newer version before replacement. Live issue events refresh views without replacing an active edit draft.
+The browser provides a searchable list and permanent issue pages, discussion, state changes and task links. Drafts are kept in tab storage under account/repository/issue keys, without credentials. A conflicting update retains the local draft and requires explicit acknowledgement of the newer version before replacement. Live issue events refresh views without replacing an active edit draft. The handoff dialog asks for the expected result and explicit file patterns; it pins the source revision and retry key. A configured orchestrator may claim a ready task, but creating the task does not claim that an agent ran, passed checks or integrated a change.
 
 ## Storage and upgrades
 

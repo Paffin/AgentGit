@@ -83,7 +83,7 @@ fn a_version_1_database_migrates_forward_and_keeps_its_data() {
         conn.pragma_update(None, "user_version", 1).unwrap();
     }
     let m = Meta::open(&path).unwrap();
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
     assert_eq!(m.read(|tx| tx.meta_get("created_at")).unwrap().as_deref(), Some("5"), "creation time is kept");
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "existing rows survive");
     let job = m.write(|tx| tx.job_enqueue("k", &json!({}), None, Timestamp::from_millis(0))).unwrap();

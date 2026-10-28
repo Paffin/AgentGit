@@ -885,6 +885,12 @@
             "default": "",
             "type": "string"
           },
+          "expected_issue_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "idempotency_key": {
             "default": "",
             "type": "string"
@@ -899,6 +905,13 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "source_issue": {
+            "default": 0,
+            "description": "Optional source issue. Creation and linking commit atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "title": {
             "default": "",

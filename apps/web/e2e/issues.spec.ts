@@ -26,7 +26,9 @@ test('create, recover, discuss and reopen an issue through the browser', async (
       .getByLabel('Description', { exact: true })
       .fill('Keep the team discussion and history.')
     await page.reload()
-    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Move the team project')
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+      'Move the team project',
+    )
     await page.getByRole('button', { name: 'Create issue', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Move the team project #1' })).toBeVisible()
     const issueUrl = page.url()
@@ -47,6 +49,25 @@ test('create, recover, discuss and reopen an issue through the browser', async (
       .getByRole('button', { name: 'Reopen issue', exact: true })
       .click()
     await expect(page.getByRole('button', { name: 'Close issue', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Create agent task…', exact: true }).click()
+    const handoff = page.getByRole('dialog', { name: 'Create an agent task', exact: true })
+    await handoff
+      .getByRole('textbox', { name: 'Task title', exact: true })
+      .fill('Implement the migration request')
+    await handoff
+      .getByRole('textbox', { name: 'Expected result', exact: true })
+      .fill('Provide a reviewed migration change without losing discussion.')
+    await handoff.getByRole('textbox', { name: 'Allowed file paths', exact: true }).fill('src/**')
+    await handoff.getByRole('button', { name: 'Create and link task', exact: true }).click()
+    await expect(handoff).not.toBeVisible()
+    await page.getByRole('link', { name: 'Implement the migration request', exact: true }).click()
+    await expect(
+      page.getByRole('heading', { name: 'Implement the migration request', exact: true }),
+    ).toBeVisible()
+    await page.goto(issueUrl)
+    await expect(
+      page.getByRole('link', { name: 'Implement the migration request', exact: true }),
+    ).toBeVisible()
     await page.screenshot({ path: info.outputPath('issue-discussion.png'), fullPage: true })
     await page.getByRole('link', { name: 'Issues', exact: true }).click()
     await page.getByLabel('Search issues').fill('Move the team')

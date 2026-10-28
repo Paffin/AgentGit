@@ -21,6 +21,8 @@ from agentgit._generated.models import (
     Changeset,
     DirEntry,
     Event,
+    Issue,
+    IssueActivity,
     NegotiateResponse,
     Proposal,
     PutObjectResult,
@@ -37,6 +39,7 @@ from agentgit._generated.namespaces import (
     AsyncEventsApi,
     AsyncHistoryApi,
     AsyncIntegrationApi,
+    AsyncIssuesApi,
     AsyncJobsApi,
     AsyncLeasesApi,
     AsyncMigrationsApi,
@@ -50,13 +53,13 @@ from agentgit._generated.namespaces import (
     AsyncSessionApi,
     AsyncStreamsApi,
     AsyncTasksApi,
-    AsyncIssuesApi,
     AsyncTreeApi,
     AsyncWorkspacesApi,
     CredentialsApi,
     EventsApi,
     HistoryApi,
     IntegrationApi,
+    IssuesApi,
     JobsApi,
     LeasesApi,
     MigrationsApi,
@@ -70,7 +73,6 @@ from agentgit._generated.namespaces import (
     SessionApi,
     StreamsApi,
     TasksApi,
-    IssuesApi,
     TreeApi,
     WorkspacesApi,
 )
@@ -422,6 +424,26 @@ class AgentGitClient:
     @overload
     def paginate(
         self,
+        op_id: Literal["issue.list"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[Issue]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.activity"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[IssueActivity]: ...
+    @overload
+    def paginate(
+        self,
         op_id: Literal["repo.list"],
         /,
         *,
@@ -720,6 +742,26 @@ class AsyncAgentGitClient:
         )
         return _negotiated(hello)
 
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.list"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[Issue]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.activity"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[IssueActivity]: ...
     @overload
     def paginate(
         self,

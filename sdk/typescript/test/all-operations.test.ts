@@ -295,6 +295,23 @@ describe('the tour', () => {
     expect(plan).toMatchObject({ dry_run: true, runs: [], released_leases: [], revoked_credentials: 0 });
   });
 
+  it('creates and discusses an issue through the public client', async () => {
+    const issue = await alice.issues.create({ repo, title: 'Move the project', body: 'Keep history' });
+    expect((await alice.issues.get({ repo, number: issue.number })).title).toBe(issue.title);
+    expect((await alice.issues.list({ repo })).issues.some((item) => item.number === issue.number)).toBe(true);
+    expect((await alice.issues.comment({ repo, number: issue.number, body: 'Ready' })).body).toBe('Ready');
+    const closed = await alice.issues.update({
+      repo,
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      state: 'closed',
+      expected_version: issue.version,
+    });
+    expect(closed.state).toBe('closed');
+    expect((await alice.issues.activity({ repo, number: issue.number })).activity).toHaveLength(3);
+  });
+
   it('preflights and publishes Git migration with a stable upload key', async () => {
     const data = new Uint8Array(readFileSync(path.join(REPO_ROOT, 'sdk/fixtures/git-migration.bundle')));
     const options = { idempotencyKey: 'sdk-migration-tour', timeoutMs: 300_000 };

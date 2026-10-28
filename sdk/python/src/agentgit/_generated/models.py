@@ -505,9 +505,11 @@ class CreateTaskRequest:
     """The `CreateTaskRequest` message."""
     depends_on: list[str] = field(default_factory=list)
     description: str = field(default="")
+    expected_issue_version: int = field(default=0)
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     scope: list[str] = field(default_factory=list)
+    source_issue: int = field(default=0)
     title: str = field(default="")
 
 

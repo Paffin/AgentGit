@@ -24,7 +24,7 @@ The core that stores, merges and recovers never calls a language model; anything
 
 This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
 
-**In development (not in the published beta):** repository issues with comments, close/reopen, conflict-safe edits and agent-task links. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Schema 4 requires a pre-upgrade database backup.
+**In development (not in the published beta):** repository issues with comments, close/reopen, conflict-safe edits and an atomic handoff to agent tasks with an expected result and explicit file scope. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Schema 4 requires a pre-upgrade database backup.
 
 ## Coming from GitHub or GitLab?
 

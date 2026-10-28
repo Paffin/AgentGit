@@ -48,5 +48,18 @@ async fn issue_lifecycle_preserves_discussion_and_rejects_stale_edits() {
     assert_eq!(next.status, 200, "{}", next.json);
     assert_eq!(next.json["issues"][0]["title"], "Import project");
     assert_eq!(reader.get(&format!("{path}?state=closed&page_token={token}")).await.status, 400);
+    let mut task = json!({"title":"Implement the request", "scope":["src/**"], "source_issue":1, "expected_issue_version":2, "idempotency_key":"source-task-1"});
+    let tasks = "/v1/repos/acme/issues/tasks";
+    assert_eq!(other.post(tasks, task.clone()).await.status, 403);
+    assert_eq!(writer.post(tasks, task.clone()).await.status, 412);
+    assert_eq!(writer.get(tasks).await.json["tasks"], json!([]));
+    task["expected_issue_version"] = json!(3);
+    let queued = writer.post(tasks, task.clone()).await;
+    assert_eq!(queued.status, 200, "{}", queued.json);
+    assert_eq!(writer.post(tasks, task).await.json, queued.json);
+    let linked = reader.get(&issue).await;
+    assert_eq!(linked.json["task_id"], queued.json["id"]);
+    assert_eq!(linked.json["version"], 4);
+    assert_eq!(writer.get(tasks).await.json["tasks"].as_array().unwrap().len(), 1);
     srv.stop().await;
 }

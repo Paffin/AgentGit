@@ -397,8 +397,10 @@ export function createApi(c: ApiClient) {
           description?: string
           scope?: string[]
           depends_on?: string[]
+          source_issue?: number
+          expected_issue_version?: number
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Task>(r(repo, '/tasks'), body, o),
       finishTask: (repo: string, id: string, state: 'done' | 'cancelled', o?: SessionOpts) =>
         c.post<Task>(r(repo, `/tasks/${encodeURIComponent(id)}/finish`), { state }, o),

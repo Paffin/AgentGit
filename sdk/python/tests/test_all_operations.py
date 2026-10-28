@@ -318,6 +318,25 @@ def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     assert admin.admin.gc(repo=REPO, dry_run=True).dry_run
 
 
+def test_issue_discussion(tour: dict[str, AgentGitClient]) -> None:
+    alice = tour["alice"]
+    issue = alice.issues.create(repo=REPO, title="Move the project", body="Keep history")
+    assert alice.issues.get(repo=REPO, number=issue.number).title == issue.title
+    assert any(item.number == issue.number for item in alice.paginate("issue.list", repo=REPO))
+    comment = alice.issues.comment(repo=REPO, number=issue.number, body="Ready")
+    assert comment.body == "Ready"
+    closed = alice.issues.update(
+        repo=REPO,
+        number=issue.number,
+        title=issue.title,
+        body=issue.body,
+        state="closed",
+        expected_version=issue.version,
+    )
+    assert closed.state == "closed"
+    assert len(list(alice.paginate("issue.activity", repo=REPO, number=issue.number))) == 3
+
+
 def test_git_migration(tour: dict[str, AgentGitClient]) -> None:
     admin = tour["admin"]
     data = (REPO_ROOT / "sdk/fixtures/git-migration.bundle").read_bytes()

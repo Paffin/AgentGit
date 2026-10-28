@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/instance'
+import { randomHex } from '@/api/client'
 import type { IssueActivity } from '@/api/types'
 import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
@@ -44,6 +45,19 @@ const editing = ref(false),
   error = ref(''),
   message = ref(''),
   confirmState = ref(false)
+const taskDialog = ref(false)
+const taskSourceVersion = ref(0)
+const taskTitle = ref(''),
+  taskDescription = ref(''),
+  taskScope = ref('')
+let taskRequestId = randomHex()
+watch(
+  [taskTitle, taskDescription, taskScope],
+  () => {
+    taskRequestId = randomHex()
+  },
+  { flush: 'sync' },
+)
 const activity = ref<IssueActivity[]>([]),
   next = ref(''),
   loadingActivity = ref(false)
@@ -92,6 +106,7 @@ watch(
     editing.value = false
     busy.value = false
     confirmState.value = false
+    taskDialog.value = false
     error.value = ''
     message.value = ''
     activity.value = []
@@ -175,6 +190,62 @@ async function save(changeState = false) {
 function useLatestVersion() {
   if (issue.data.value) editDraft.draft.value.version = issue.data.value.version
 }
+function prepareTask() {
+  const row = issue.data.value
+  if (!row) return
+  taskSourceVersion.value = row.version
+  taskTitle.value = row.title
+  taskDescription.value = row.body
+  taskScope.value = ''
+  taskDialog.value = true
+  error.value = ''
+}
+async function createAgentTask() {
+  const row = issue.data.value
+  const paths = taskScope.value
+    .split('\n')
+    .map((path) => path.trim())
+    .filter(Boolean)
+  if (
+    !row ||
+    busy.value ||
+    !taskTitle.value.trim() ||
+    !taskDescription.value.trim() ||
+    !paths.length
+  )
+    return
+  const mine = scope.value
+  mutationController = new AbortController()
+  busy.value = true
+  error.value = ''
+  try {
+    await api.agents.createTask(
+      repo.value,
+      {
+        title: taskTitle.value.trim(),
+        description: taskDescription.value,
+        scope: paths,
+        source_issue: row.number,
+        expected_issue_version: taskSourceVersion.value,
+      },
+      {
+        token: auth.token,
+        signal: mutationController.signal,
+        idempotencyKey: taskRequestId,
+        quietUnauthenticated: true,
+      },
+    )
+    if (mine !== scope.value) return
+    taskDialog.value = false
+    await Promise.all([refresh(), tasks.reload()])
+    message.value =
+      'Agent task created and linked. Open it to follow execution and resulting changes.'
+  } catch (e) {
+    if (mine === scope.value) error.value = describeError(e)
+  } finally {
+    if (mine === scope.value) busy.value = false
+  }
+}
 async function comment() {
   if (!canWrite.value || busy.value || !commentDraft.draft.value.body.trim()) return
   const mine = scope.value
@@ -205,6 +276,7 @@ const actionText: Record<string, string> = {
   updated: 'updated this issue',
   closed: 'closed this issue',
   reopened: 'reopened this issue',
+  task_linked: 'linked an agent task',
   commented: 'commented',
 }
 useLiveReload(['issue'], refresh)
@@ -297,6 +369,52 @@ useLiveReload(['issue'], refresh)
           >{{ linkedTask?.title || issue.data.value.task_id }}</RouterLink
         ><span v-if="linkedTask"> · {{ linkedTask.state }}</span>
       </p>
+      <section
+        v-if="!issue.data.value.task_id && canEdit && auth.can(repo, 'createTask')"
+        class="agent-handoff"
+        aria-labelledby="agent-handoff-heading"
+      >
+        <h2 id="agent-handoff-heading">Turn this request into agent work</h2>
+        <p>
+          Define the expected result and file scope, then follow the task's runs, checks and change
+          requests.
+        </p>
+        <Button :disabled="busy || issue.data.value.state !== 'open'" @click="prepareTask"
+          >Create agent task…</Button
+        >
+      </section>
+      <Dialog v-model="taskDialog" title="Create an agent task" :busy="busy">
+        <p>
+          A configured orchestrator can pick up this task automatically. Creating it does not mean
+          the work has been executed or approved.
+        </p>
+        <TextField v-model="taskTitle" label="Task title" required :disabled="busy" />
+        <TextArea
+          v-model="taskDescription"
+          label="Expected result"
+          required
+          :rows="5"
+          :disabled="busy"
+        />
+        <TextArea
+          v-model="taskScope"
+          label="Allowed file paths"
+          :rows="3"
+          :disabled="busy"
+          hint="One path pattern per line, for example src/**. Use ** only when the task needs the entire repository. The executor's credential and policy still limit access."
+        />
+        <Alert v-if="error" tone="bad">{{ error }}</Alert>
+        <template #footer
+          ><Button :disabled="busy" @click="taskDialog = false">Cancel</Button
+          ><Button
+            variant="primary"
+            :loading="busy"
+            :disabled="!taskTitle.trim() || !taskDescription.trim() || !taskScope.trim()"
+            @click="createAgentTask"
+            >Create and link task</Button
+          ></template
+        >
+      </Dialog>
       <section aria-labelledby="discussion-heading" class="discussion">
         <h2 id="discussion-heading">Discussion and activity</h2>
         <ol>
@@ -348,6 +466,10 @@ useLiveReload(['issue'], refresh)
   </div>
 </template>
 <style scoped>
+.agent-handoff {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-4);
+}
 .issue-page {
   display: grid;
   gap: var(--s-4);

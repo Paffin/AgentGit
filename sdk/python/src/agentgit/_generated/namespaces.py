@@ -1401,13 +1401,15 @@ class TasksApi:
         repo: str,
         depends_on: Sequence[str] | None = None,
         description: str | None = None,
+        expected_issue_version: int | None = None,
         idempotency_key: str | None = None,
         scope: Sequence[str] | None = None,
+        source_issue: int | None = None,
         title: str | None = None,
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "idempotency_key": idempotency_key, "scope": scope, "title": title}, options, Task)
+        return self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
 
     def depend(
         self,
@@ -2806,13 +2808,15 @@ class AsyncTasksApi:
         repo: str,
         depends_on: Sequence[str] | None = None,
         description: str | None = None,
+        expected_issue_version: int | None = None,
         idempotency_key: str | None = None,
         scope: Sequence[str] | None = None,
+        source_issue: int | None = None,
         title: str | None = None,
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return await self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "idempotency_key": idempotency_key, "scope": scope, "title": title}, options, Task)
+        return await self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
 
     async def depend(
         self,

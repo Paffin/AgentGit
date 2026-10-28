@@ -1910,12 +1910,23 @@ export interface components {
       depends_on: string[]
       /** @default  */
       description: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      expected_issue_version: number
       /** @default  */
       idempotency_key: string
       /** @default  */
       repo: string
       /** @default [] */
       scope: string[]
+      /**
+       * Format: int64
+       * @description Optional source issue. Creation and linking commit atomically.
+       * @default 0
+       */
+      source_issue: number
       /** @default  */
       title: string
     }

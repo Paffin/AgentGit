@@ -228,3 +228,54 @@ impl App {
         .await
     }
 }
+
+/// Checks ownership before task creation; the transaction rechecks the issue version.
+pub(super) fn check_task_source(
+    repo: &ag_integrate::Repository,
+    actor: &Identity,
+    admin: bool,
+    source: u64,
+    version: u64,
+) -> ApiResult<()> {
+    if source == 0 {
+        if version != 0 {
+            return Err(ApiError::invalid("expected_issue_version requires source_issue"));
+        }
+        return Ok(());
+    }
+    number(source)?;
+    if version == 0 {
+        return Err(ApiError::invalid("expected_issue_version is required"));
+    }
+    let row = repo.meta().read(|tx| tx.issue(source))?.ok_or_else(|| ApiError::not_found("source issue not found"))?;
+    if !admin && !super::owns(&row.author, actor) {
+        return Err(ApiError::denied("only the issue author or an administrator can create its agent task"));
+    }
+    Ok(())
+}
+
+/// Linking runs inside task creation, so failure rolls back the new task too.
+pub(super) fn link_created_task(
+    tx: &Tx<'_>,
+    actor: &Identity,
+    source: u64,
+    version: u64,
+    task_id: &str,
+) -> Result<(), MetaError> {
+    if source == 0 {
+        return Ok(());
+    }
+    let mut row = found(tx, source)?;
+    if row.revision != version || row.task_id.is_some() || row.state != "open" {
+        return Err(MetaError::Invalid(
+            "source issue changed, is closed or already has an agent task; reload before creating".into(),
+        ));
+    }
+    row.task_id = Some(task_id.into());
+    if !tx.update_issue(&row, version)? {
+        return Err(MetaError::Invalid("source issue changed; reload before creating its agent task".into()));
+    }
+    row.revision += 1;
+    record(tx, &row, actor, "task_linked", task_id)?;
+    Ok(())
+}

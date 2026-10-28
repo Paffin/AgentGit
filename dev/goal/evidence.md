@@ -348,7 +348,7 @@ executor profile with capture enabled (4 cases, 12.1 s). The native check/run
 path was enabled with AG_ORCH_BIN. Unknown or encoded secrets may remain; this is
 not a live log stream. Deletion does not erase existing backups or journals.
 
-## Task-scoped history after the beta.4 candidate
+## Task-scoped history in the beta.4 candidate
 
 The task detail page now retrieves linked proposals and runs with server-side
 filters and continuation tokens, rather than filtering the latest repository-wide
@@ -358,3 +358,10 @@ read isolation. The focused browser scenario loads 51 linked proposals and 51
 linked runs alongside unrelated activity in Chromium desktop and phone viewport.
 The fixture uses API-created history; it does not qualify a new autonomous run or
 a physical phone. Typed SDK generation includes run pagination. See ADR 0023.
+
+Retry recovery qualification: the old 200-run agent window lost a spent attempt
+behind 205 later unrelated runs and left the task in progress (reproduced before
+the fix). Complete task-scoped recovery now cancels that exhausted task without
+launching another process. The real server/command regression and existing restart
+budget scenario pass together in 1.3 seconds. Client contract checks cover legacy
+truncation, repeated cursors/records, unrelated records and later-page failure.

@@ -498,3 +498,15 @@ a deletion marker prevents a delayed retry from recreating it. Output capture is
 independent of the task outcome, does not grant agent credentials extra powers,
 and cannot produce a successful check or approval. Failure to upload output is
 reported by the supervisor and does not turn a failed task into a successful one.
+
+### Retry budgets after restart
+
+The scheduler recovers a task's spent attempts from its stored run history. On
+servers advertising `tasks.history`, it follows task-filtered continuation pages;
+activity on other tasks does not reset the budget. Retrieval rejects incomplete or
+inconsistent pages and is bounded at 10,000 task runs. Recovery errors defer the
+task and appear in scheduler status; they never grant a fresh budget.
+
+Older servers can still recover from fewer than 200 agent runs. A full legacy
+200-run result may be truncated, so recovery waits with a diagnostic asking for a
+server update. Cancelling or finishing a task remains a separate operator action.

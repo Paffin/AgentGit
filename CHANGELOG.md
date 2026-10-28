@@ -7,10 +7,6 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
-### Fixed
-
-- Task pages load linked runs and change requests directly from server-filtered, paginated history, so newer repository activity no longer hides older work. Expanded history survives live refresh; HTTP/gRPC and SDKs expose the same task filters and run continuation tokens.
-
 ## [0.3.0-beta.4] - 2026-10-28
 
 ### Added
@@ -34,6 +30,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - The import wizard shows transfer coverage before uploading, exports a readable migration summary and checklist, and links directly to imported files, branches and team access. Administration tabs can be bookmarked and survive reloads.
 
 ### Fixed
+
+- Task pages load linked runs and change requests directly from server-filtered, paginated history, so newer repository activity no longer hides older work. Expanded history survives live refresh; HTTP/gRPC and SDKs expose the same task filters and run continuation tokens.
+- Orchestrator restart recovery reads complete task-scoped run history, so unrelated agent activity cannot reset a spent retry budget. Truncated history on older servers defers recovery instead of granting more attempts.
 
 - Release requests start every required workflow on the candidate commit, including packaging-only changes, instead of waiting for checks excluded by path filters.
 

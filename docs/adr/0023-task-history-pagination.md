@@ -1,6 +1,6 @@
 # ADR 0023: Task-scoped history with continuation tokens
 
-Status: implemented after the beta.4 release candidate.
+Status: implemented for the beta.4 release candidate.
 
 A task page previously filtered only the newest 100 repository runs and change
 requests in the browser. Activity elsewhere could hide every result of an older
@@ -27,3 +27,13 @@ combined filters, malformed tokens and an unrelated user's inability to read the
 repository. Chromium desktop and phone viewport each load all 51 linked runs and
 51 linked proposals with newer unrelated activity. This browser fixture qualifies
 history navigation, not autonomous agent execution or a physical phone.
+
+The native orchestrator uses the same task-scoped pages when recovering retry
+budgets after restart. Its former agent-wide 200-run window could lose a failed
+attempt behind unrelated work. It now rejects repeated cursors, repeated run IDs,
+unrelated records and incomplete retrieval rather than accepting partial history.
+Retrieval is bounded at 10,000 task runs; reaching a bound with more history defers
+recovery. On a server without `tasks.history`, fewer than 200 agent runs can still
+be inspected safely; a full legacy page is treated as potentially truncated.
+A real command/server regression reproduces the old failure with 205 unrelated
+runs and verifies that a spent task is cancelled without another process launch.

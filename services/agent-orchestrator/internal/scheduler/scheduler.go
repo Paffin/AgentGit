@@ -69,6 +69,11 @@ type Options struct {
 	Loop     config.Loop
 }
 
+// taskHistorySource reads all matching runs rather than a recent agent-wide window.
+type taskHistorySource interface {
+	ListTaskRuns(context.Context, string, string, string) ([]agwp.Run, error)
+}
+
 // schedulingSource is optional for test adapters and clients predating the launch gate.
 type executorPreparer interface {
 	PrepareExecutor(context.Context, string, string) error
@@ -389,6 +394,17 @@ func (s *Scheduler) notePredict(err error) {
 	}
 }
 
+func (s *Scheduler) taskRuns(ctx context.Context, repo, agent, task string) ([]agwp.Run, error) {
+	if source, ok := s.o.API.(taskHistorySource); ok {
+		return source.ListTaskRuns(ctx, repo, agent, task)
+	}
+	runs, err := s.o.API.ListRuns(ctx, repo, agent, false, 200)
+	if err == nil && len(runs) >= 200 {
+		return nil, fmt.Errorf("cannot recover retry budget from truncated task history")
+	}
+	return runs, err
+}
+
 // recoverBudget restores, for a task this process did not start, the attempts that earlier runs of it already
 // spent. The run history is on the server; the counters of a previous orchestrator process are gone. Without this
 // a restart would hand a task that failed `attempts` times another full budget, and a crash-looping executor
@@ -402,7 +418,7 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	if known {
 		return true
 	}
-	runs, err := s.o.API.ListRuns(ctx, repo, ex.Agent, false, 200)
+	runs, err := s.taskRuns(ctx, repo, ex.Agent, t.ID)
 	if err != nil {
 		s.setDeferred(t, ReasonStartFailed, "could not read the run history of the task: "+err.Error())
 		return false

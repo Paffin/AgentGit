@@ -6,7 +6,7 @@ test('refines queued instructions, preserves a stale draft and keeps executed ta
   cast,
   allowConsole,
 }, info) => {
-  allowConsole(/status of 412/)
+  allowConsole(/status of (400|412)/)
   const { repo } = await freshRepo(cast, 'task-refinement')
   const api = cast.as('dana')
   const base = `/v1/repos/${repo}`
@@ -26,6 +26,16 @@ test('refines queued instructions, preserves a stale draft and keeps executed ta
   await dialog
     .getByRole('textbox', { name: 'Scope (path globs)', exact: true })
     .fill('src/parser/**\ntests/parser/**')
+  await dialog.getByRole('textbox', { name: 'Scope (path globs)', exact: true }).fill('[')
+  await dialog.getByRole('button', { name: 'Save instructions', exact: true }).click()
+  await expect(dialog.getByText('Task was not saved', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+    'Implement Unicode parser',
+  )
+  await dialog
+    .getByRole('textbox', { name: 'Scope (path globs)', exact: true })
+    .fill('src/parser/**\ntests/parser/**')
+  await expect(dialog.getByRole('button', { name: 'Save instructions', exact: true })).toBeEnabled()
   await page.screenshot({ path: info.outputPath('edit-task.png'), fullPage: true })
   await dialog.getByRole('button', { name: 'Save instructions', exact: true }).click()
   await expect(dialog).not.toBeVisible()

@@ -38,7 +38,7 @@ async fn refinement_is_atomic_authorized_and_replay_safe() {
     assert_eq!(writer.call("PATCH", &path, Some(reused), &[]).await.status, 422);
     assert_eq!(writer.call("PATCH", &path, Some(json!({"content":content})), &[]).await.status, 400);
     let invalid = json!({"content":{"title":" ","scope":["["]},"expected":content});
-    assert_eq!(writer.call("PATCH", &path, Some(invalid), &[]).await.status, 412);
+    assert_eq!(writer.call("PATCH", &path, Some(invalid), &[]).await.status, 400);
     assert_eq!(writer.get(&path).await.json, left.json);
     let key = ag_crypto::KeyPair::generate().unwrap().public().to_hex();
     assert_eq!(admin.post(&format!("{base}/agents"), json!({"name":"bot","public_key":key})).await.status, 200);

@@ -625,6 +625,7 @@ impl App {
     /// Refines instructions only before any run has used the task.
     pub async fn update_task(&self, call: &Call, req: v1::UpdateTaskRequest) -> ApiResult<v1::Task> {
         let content = task_content(req.content.as_ref())?;
+        content.validate().map_err(ApiError::invalid)?;
         let expected = task_content(req.expected.as_ref())?;
         let repo_name = require(&req.repo, "repo")?.to_owned();
         let operator = self.authorize(call, &req.repo, Cap::AgentOperate, None).await.is_ok();

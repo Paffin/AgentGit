@@ -318,6 +318,7 @@ Servers advertising `tasks.edit` expose `PATCH /v1/repos/{owner}/{rname}/tasks/{
 (`task.update`, `AgentService.UpdateTask`). Both `content` and `expected` are required objects
 with `title`, `description`, and `scope`; omitted string/array members inside them use protocol
 defaults. The caller needs `task.write` and must be the creator or have `agent.operate`.
+Invalid titles or path patterns return `invalid_argument` so a form can be corrected in place.
 Only an open task with no run history may change. A full-content mismatch returns
 `failed_precondition`; timestamps alone are not concurrency tokens.
 

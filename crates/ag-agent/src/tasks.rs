@@ -20,6 +20,13 @@ pub struct TaskContent {
     pub scope: Vec<String>,
 }
 
+impl TaskContent {
+    /// Validates user-supplied instructions using the same rules as task creation.
+    pub fn validate(&self) -> Result<(), String> {
+        validate_content(&self.title, &self.scope)
+    }
+}
+
 impl From<&TaskRow> for TaskContent {
     fn from(task: &TaskRow) -> Self {
         Self { title: task.title.clone(), description: task.description.clone(), scope: task.scope.clone() }
@@ -46,7 +53,7 @@ pub fn update_in(
     actor: &str,
     operator: bool,
 ) -> Result<TaskRow, MetaError> {
-    validate_content(&content.title, &content.scope).map_err(MetaError::Invalid)?;
+    content.validate().map_err(MetaError::Invalid)?;
     let task = tx.task(id)?.ok_or_else(|| MetaError::NotFound(format!("task '{id}'")))?;
     check_refinement(tx, &task, expected, actor, operator)?;
     if TaskContent::from(&task) == *content {

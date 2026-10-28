@@ -1,0 +1,17 @@
+# Ordered platform backlog
+
+Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
+All 142 matrix rows remain in scope. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+
+| Stage | Outcome and acceptance | Current state |
+| --- | --- | --- |
+| P0 editor ownership | A browser-created edit submits once, retains its original session across retries, preserves the draft after cancellation, and cannot redirect a different session. Prove both a clean-server UI path and negative transport cases. | Implemented in the current candidate; targeted real-browser checks passed; exact-head CI pending. |
+| P0 confidential-draft boundary | Define who can read draft metadata and referenced objects before adding account-backed autosave. Test owner, other reader, unrelated project and admin; document compatibility. | Open. Workspace read/list is currently repository-readable. |
+| P1 multi-file editing | Edit, add, rename and delete several files in one browser change request; preview the exact combined diff, preserve base/modes and recover the batch. No CLI preparation counts. | Open. Multi-file upload and a batch-write API exist; an editor for a batch does not. |
+| P1 review conversations | Durable line threads, resolution, suggestions and requested reviewers tied to an inspected head; stale approval remains invalid. | Open; single review comments are not a substitute. |
+| P1 identity and tracker | Organization/member/invitation lifecycle and user issues connected to orchestrator tasks, with role checks and history. | Open; see individual matrix rows. |
+| P2 execution | Configure a real executor from UI, run a DAG, retain logs/artifacts, cancel and safely retry with bounded resources. | Open; scripted stand-ins do not qualify this stage. |
+| P2 administration and portability | Browser setup/diagnostics, verified restore, hosted-data migration, release/registry/webhook lifecycle. | Open; assess each subsystem separately. |
+| External qualification | Real MCP host, clean macOS, physical device, human screen reader, independent pilots, comparable pinned-competitor benchmark. | Open issues #50, #51, #52, #53 and #55; unavailable equipment/participants are not replaced by simulation. |
+
+Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`, 2026-10-28. The published beta.2 release is available, but does not imply that these stages are complete.

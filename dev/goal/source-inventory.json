@@ -1,18 +1,18 @@
 [
   {
     "path": "README.md",
-    "sha256": "610d23072d49ae782515d5102635c3111491d9b0622bd6a29554547bc5f0a2b9",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "64d36180e75571c23a397d7a71734f6f7d409b17158c21949d69ebe91a62c922",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "ROADMAP.md",
-    "sha256": "9b5a87ef3aa43a424ad43385cbefa1c046d107a6bdeed956e332b82742757e92",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "fb936da18c96b69abfb2ff97a2a589fd3ad4a6e57d0805e07ecb1415930125a1",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "CHANGELOG.md",
-    "sha256": "8a22c2130a5ee5307c0886c1d51388a84ac3831be956a3fb94bdabbdf8bdb342",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "b18cae9c205d61a85e908854050e40a86169d327410ba04ef04c05e678c9df56",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "docs/README.md",
@@ -46,7 +46,7 @@
   },
   {
     "path": "docs/getting-started.md",
-    "sha256": "9ca2ac483a9be65559b1c99220c223f2ea2f16e682cf020581c4f52cdb724983",
+    "sha256": "a968cff7d9518d4e677fe4dac128ec6c8397be7ee789962f77f74bb3f4902646",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -81,17 +81,17 @@
   },
   {
     "path": "docs/protocol/agwp-v1.md",
-    "sha256": "9f7595325d8c9927442010304ec27c1fad51e695ff4c3508f536239ca64f0c33",
+    "sha256": "34a354d67a710afb68cee660181bcf10ac7ce3eed4b0893aa2e6b3d1370f6a64",
     "review": "inventory only; detailed review not claimed"
   },
   {
     "path": "docs/protocol/README.md",
-    "sha256": "58d9852810240963dff248aba8e1e607bb42b1995c3fbbb9aef47559b85afda4",
+    "sha256": "ab3becb5767aaa409a81fd07c06cb7d99036d09f1af40a8a6962b4386fa93203",
     "review": "inventory only; detailed review not claimed"
   },
   {
     "path": "docs/community/beta.md",
-    "sha256": "c5a8a43f84498aff035a10a48cba3537217547c81c8f0e022fcde86007b6eebb",
+    "sha256": "27c80daf298394832bb4cff3c3baf4d47b2eeb7a6c0180c25d72244b71eb956b",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -116,7 +116,7 @@
   },
   {
     "path": "docs/adr/README.md",
-    "sha256": "3992b56d5c3f354287910702f1e8003b6bad6059d91bad2b789a5ce665222852",
+    "sha256": "1d11a25c6c969eadbe3178ab81d685b5eadf005b2028ac5e0cfd32d5f513230d",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -186,8 +186,8 @@
   },
   {
     "path": "docs/guides/web-ui.md",
-    "sha256": "7f0c9f41dba538ed6a82de6d9604ff7e24f7fc1726665c7cecbe00394f89c168",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "119de1755f42bc3bd78442eff75158c978dd6b6fbd7d400530eb7aadb004edea",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "docs/guides/remote.md",
@@ -196,7 +196,7 @@
   },
   {
     "path": "docs/guides/migrate-from-git.md",
-    "sha256": "0d400e64ccc39b36db8d1fe7e434796c8909377ecd8201556c15623bde0e7ee2",
+    "sha256": "4ddb5791add7c220c4218ece03d62d55881043b9e0a0d7a253948ae77e37aa7e",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -256,8 +256,8 @@
   },
   {
     "path": "docs/operations/releasing.md",
-    "sha256": "97c4e1997ceb2c58c363eddc73bdbd050aa209a6fd68a16dcd14d9866a9010bd",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "5d1e1f079ecb58f559564802ecc4f648ed419cc47ec584d4d18360115355de27",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "docs/operations/supply-chain.md",
@@ -291,7 +291,7 @@
   },
   {
     "path": "docs/operations/deployment.md",
-    "sha256": "1a49ba8434ac535d3db3c19d23cb847cf4d2429ec57412661154bc10826e5a62",
+    "sha256": "bb053c026e48e1b6d739a8c289f020ce1d0bbd8945ce7822ee4b5bd0df9fb730",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -301,7 +301,7 @@
   },
   {
     "path": "docs/reference/cli.md",
-    "sha256": "50617ae8de464a89dfbb176d5758b43503df08524da166bb65ea6be72008a19f",
+    "sha256": "3eb7baf3b12226b68cefe61921007772216ebc2b8cea0c595a4d086803f9b8bd",
     "review": "inventory only; detailed review not claimed"
   },
   {
@@ -331,8 +331,8 @@
   },
   {
     "path": "docs/architecture/testing.md",
-    "sha256": "8fee86cbe760091591a28708ccfb1f8bbb5bbbddc9cd39031e39afadd0b8f270",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "accd8372f9590677a026de3b601e0731d7c62ac9398ad2f8200a70be249510ff",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "docs/architecture/sandbox.md",
@@ -376,8 +376,8 @@
   },
   {
     "path": "docs/architecture/adr-traceability.md",
-    "sha256": "f5085b6b1bb6fb6b3d391dc46f5e75c0b1604235ff7c46ce8e495bcc3e9a815f",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "45dddfab4a09dde6cdd9c11cd5fd704993ea2cad5b7316cbde61a7ff7e3bfc80",
+    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
     "path": "docs/architecture/security.md",
@@ -538,5 +538,15 @@
     "path": "dev/audit/CONFIRMED.md",
     "sha256": "6a42beae6fb2902e9e45adba988e328bbbfb1c5c9ace01040c726a432c6ea085",
     "review": "inventory only; detailed review not claimed"
+  },
+  {
+    "path": "dev/goal/backlog.md",
+    "sha256": "8bf93e5c37f5ca12ca421ecaed9891e9e74bde1209d9ebe0078f5b97f8bf0696",
+    "review": "2026-10-28 updated qualification scope; matrix gaps retained"
+  },
+  {
+    "path": "dev/goal/coverage.csv",
+    "sha256": "407a78d9222dfc0d96352fb95c068b11a365844b773f203d960ceb968140d4e1",
+    "review": "2026-10-28 updated qualification scope; matrix gaps retained"
   }
 ]

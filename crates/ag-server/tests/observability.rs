@@ -285,7 +285,7 @@ async fn the_openapi_document_matches_the_router_and_the_checked_in_copy() {
     cfg.server.data_dir = dir.path().to_path_buf();
     let app = ag_server::app::App::new(cfg).unwrap();
     let (_, routes) = ag_server::server::build_router(app);
-    let spec = ag_server::routes::openapi(&routes, "0.1.0");
+    let spec = ag_server::routes::openapi(&routes, env!("CARGO_PKG_VERSION"));
 
     // Every route is documented exactly once.
     let mut seen = std::collections::BTreeSet::new();

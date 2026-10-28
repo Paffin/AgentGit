@@ -535,3 +535,12 @@ past the first 50 records. Background refresh keeps the pages you expanded. Open
 change request for its exact candidate checks and review; open a session for its
 summary and saved output. These histories require server feature `tasks.history`;
 older servers display a labelled subset of the repository history.
+
+### Reuse a task's context
+
+Choose **Create a task from this one…** on a task page to open a prefilled creation
+form. Review the title, description and file scope, then choose the agent and any
+prerequisites. Nothing is created until you submit the form. The new task has its
+own history and retry budget; the source task keeps its state, owner and history.
+Use this for follow-up work or a deliberate new attempt after inspecting a failed
+run. It does not reopen or resume the source task.

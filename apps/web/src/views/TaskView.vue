@@ -251,7 +251,14 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             <RelativeTime :ms="task.data.value.created_at_ms" />
           </p>
         </div>
-        <CopyButton :text="link" label="Copy task link" with-label />
+        <div class="actions">
+          <Button
+            v-if="canWrite"
+            :to="{ name: 'agents', params: routeParams, query: { tab: 'tasks', from_task: id } }"
+            >Create a task from this one…</Button
+          >
+          <CopyButton :text="link" label="Copy task link" with-label />
+        </div>
       </header>
       <div class="state">
         <Badge :tone="task.data.value.state === 'done' ? 'ok' : 'neutral'">{{

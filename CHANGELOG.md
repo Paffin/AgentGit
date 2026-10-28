@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Create a separate task from any task page with its title, description and file scope already filled in. Agent assignment, prerequisites, run history and retry budget start independently; creation remains explicit.
+
 ## [0.3.0-beta.4] - 2026-10-28
 
 ### Added

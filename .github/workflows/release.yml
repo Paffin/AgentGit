@@ -180,6 +180,18 @@ jobs:
           # Do not embed the build directory in the binaries.
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
         run: cargo build --release --locked --target ${{ matrix.target }} -p agentgit-cli -p agentgit-server -p agentgit-worker -p agentgit-mcp
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      - name: Build the native executor
+        working-directory: services/agent-orchestrator
+        env:
+          CGO_ENABLED: "0"
+        run: >-
+          go build -trimpath -buildvcs=false
+          -ldflags "-s -w -X github.com/Paffin/AgentGit/services/agent-orchestrator/internal/app.Version=$CARGO_VERSION"
+          -o "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/orchestrator" ./cmd/orchestrator
       - name: Archive
         run: |
           python3 scripts/package_release.py archive --version "$VERSION" --target ${{ matrix.target }} \
@@ -203,6 +215,8 @@ jobs:
           # ag-mcp has no build script, so its version line carries no commit: check the crate version only.
           v=$("$bin/ag-mcp" --version); echo "$v"
           [ "$v" = "ag-mcp $CARGO_VERSION" ] || { echo "::error::ag-mcp --version is '$v'"; exit 1; }
+          v=$("$bin/orchestrator" version); echo "$v"
+          [ "$v" = "agent-orchestrator $CARGO_VERSION" ] || { echo "::error::orchestrator version is '$v'"; exit 1; }
           tools=$("$bin/ag-mcp" --list-tools --server http://127.0.0.1:1)
           case "$tools" in *'"name": "task_claim"'*) ;; *) echo "::error::ag-mcp lists no task_claim tool"; exit 1;; esac
           AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
@@ -241,7 +255,7 @@ jobs:
           tool: cargo-cyclonedx@0.5.9
       # The same script the Security workflow runs on every change (so a break shows up there, not at release time).
       # The web UI SBOM it can also write is not a release asset yet: the release job below expects four binary inventories.
-      - name: One SBOM per shipped binary (from Cargo.lock; build-time dependencies included)
+      - name: One SBOM per Rust binary (from Cargo.lock; build-time dependencies included)
         run: scripts/sbom.sh --version "$VERSION" --out dist --no-web
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -561,6 +575,7 @@ jobs:
           "$prefix/bin/ag-server" --version
           "$prefix/bin/ag-worker" --version
           "$prefix/bin/ag-mcp" --version
+          [ "$("$prefix/bin/orchestrator" version)" = "agent-orchestrator $CARGO_VERSION" ]
           case "$("$prefix/bin/ag" --version)" in "ag $CARGO_VERSION "*) ;; *) echo "::error::unexpected version"; exit 1;; esac
       - name: A corrupted download is refused and installs nothing
         run: |

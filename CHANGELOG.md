@@ -11,6 +11,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Native Linux/macOS archives and the installer include `orchestrator`, so the Web UI executor setup needs no Go toolchain. Archives also include dependency license notices.
+
 - Opt-in saved stdout/stderr tails on permanent run pages, with known-secret redaction, stream download and operator deletion that blocks delayed reuploads. Capture remains off by default.
 - Browser executor setup prepares exact-repository service access, a token-free task profile and a separate private token; the native orchestrator reads it with `-token-file`. A fresh report from the unique setup identity confirms the connection.
 - Task creators can reserve a registered agent atomically at creation or issue handoff, then reassign queued work with stale-edit protection. The server and orchestrator enforce the choice.

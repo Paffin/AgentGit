@@ -192,7 +192,7 @@ class Packaging(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = pathlib.Path(self.tmp.name)
         self.bin = self.dir / "bin"
-        for b in ("ag", "ag-server", "ag-worker", "ag-mcp"):
+        for b in ("ag", "ag-server", "ag-worker", "ag-mcp", "orchestrator"):
             stub_bin(self.bin, b, self.version)
         self.dist = self.dir / "dist"
         self.target = host_target()
@@ -222,9 +222,9 @@ class Packaging(unittest.TestCase):
             members = {m.name: m for m in t.getmembers()}
         self.assertEqual(
             sorted(members),
-            sorted([top] + [f"{top}/{n}" for n in ("ag", "ag-server", "ag-worker", "ag-mcp", "LICENSE", "NOTICE", "README.md")]),
+            sorted([top] + [f"{top}/{n}" for n in ("ag", "ag-server", "ag-worker", "ag-mcp", "orchestrator", "LICENSE", "NOTICE", "README.md", "THIRD_PARTY_LICENSES.md")]),
         )
-        for n in ("ag", "ag-server", "ag-worker", "ag-mcp"):
+        for n in ("ag", "ag-server", "ag-worker", "ag-mcp", "orchestrator"):
             self.assertEqual(members[f"{top}/{n}"].mode, 0o755)
         for m in members.values():
             self.assertEqual((m.uid, m.gid, m.mtime), (0, 0, 1700000000))
@@ -275,7 +275,7 @@ class Packaging(unittest.TestCase):
         p, prefix = self.install()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn("checksum ok", p.stdout)
-        for b in ("ag", "ag-server", "ag-worker", "ag-mcp"):
+        for b in ("ag", "ag-server", "ag-worker", "ag-mcp", "orchestrator"):
             f = prefix / "bin" / b
             self.assertTrue(os.access(f, os.X_OK), f)
         self.assertEqual(run(prefix / "bin" / "ag", "--version").stdout.strip(), f"ag {self.version} (stub)")
@@ -303,23 +303,37 @@ class Packaging(unittest.TestCase):
         self.assertIn("checksum mismatch", p.stderr)
         self.assertFalse((prefix / "bin").exists(), "nothing may be installed after a failed check")
 
-    def test_an_incomplete_archive_does_not_replace_an_existing_install(self):
-        d = self.release_dir()
-        archive = next(d.glob("*.tar.gz"))
+    def remove_archive_binary(self, release, binary):
+        archive = next(release.glob("*.tar.gz"))
         with tarfile.open(archive) as source:
             members = [(m, source.extractfile(m).read() if m.isfile() else None)
-                       for m in source.getmembers() if not m.name.endswith("/ag-mcp")]
+                       for m in source.getmembers() if not m.name.endswith("/" + binary)]
         with tarfile.open(archive, "w:gz") as target:
             for member, content in members:
                 target.addfile(member, io.BytesIO(content) if content is not None else None)
-        (d / "SHA256SUMS").write_text(f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}\n")
-        old = self.dir / "prefix/bin/ag"
-        old.parent.mkdir(parents=True)
-        old.write_text("old installation")
-        result, _ = self.install(release=d)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ag-mcp", result.stderr)
-        self.assertEqual(old.read_text(), "old installation")
+        (release / "SHA256SUMS").write_text(f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}\n")
+
+    def test_an_incomplete_archive_does_not_replace_an_existing_install(self):
+        for binary in ("ag-mcp", "orchestrator"):
+            with self.subTest(binary=binary):
+                d = self.release_dir()
+                self.remove_archive_binary(d, binary)
+                old = self.dir / "prefix/bin/ag"
+                old.parent.mkdir(parents=True, exist_ok=True)
+                old.write_text("old installation")
+                result, _ = self.install(release=d)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(binary, result.stderr)
+                self.assertEqual(old.read_text(), "old installation")
+
+    def test_pre_beta4_archives_install_without_an_orchestrator(self):
+        self.version = "0.3.0-beta.3"
+        d = self.release_dir()
+        self.remove_archive_binary(d, "orchestrator")
+        result, prefix = self.install(release=d)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((prefix / "bin/ag").is_file())
+        self.assertFalse((prefix / "bin/orchestrator").exists())
 
     def test_old_github_cli_explains_how_to_enable_attestation_verification(self):
         d = self.release_dir()

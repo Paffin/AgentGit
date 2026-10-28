@@ -32,6 +32,7 @@ class Agentgit < Formula
 
   def install
     bin.install "ag", "ag-server", "ag-worker", "ag-mcp"
+    bin.install "orchestrator" if File.exist?("orchestrator")
     doc.install "README.md"
   end
 

@@ -453,7 +453,7 @@ Baseline: `b5629da` (published beta.5 documentation; immutable release source re
 - The Python SDK's real-server workflow plus generated-contract suite passed 18 tests (2.66 seconds).
   The TypeScript (12 tests) and Python (13 tests) live operation tours exercised all 119 operations,
   including `tasks.update`; both passed without skipped cases. Python strict typing passed 53 files.
-- The real Chromium desktop/phone workflow passed four cases in 12.8 seconds: save, reload,
+- The real Chromium desktop/phone workflow passed four cases in 11.5 seconds: save, reload,
   a concurrent edit winning without erasing the form draft, current-state reopening, post-launch
   refusal, and reader UI. This is viewport simulation, not physical-phone qualification. Chromium's
   accessibility tree reports the dialog name; the initial exact-label locator included the required

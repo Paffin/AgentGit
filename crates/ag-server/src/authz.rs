@@ -472,6 +472,7 @@ impl Binding {
 /// administer the installation (credentials, roles, policy, repositories, maintenance), and the operator powers
 /// over other agents. A test pins that every capability only administrators have is listed here.
 pub const NEVER_DELEGATED: &[Cap] = &[
+    Cap::IssueManage,
     Cap::RepoCreate,
     Cap::RepoConfigure,
     Cap::StreamCas,

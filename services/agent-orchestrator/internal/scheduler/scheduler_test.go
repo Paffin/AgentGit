@@ -740,6 +740,17 @@ func TestOperatorPauseDefersWorkUntilResumed(t *testing.T) {
 func TestQueuedAssignmentOverridesTheDefaultExecutor(t *testing.T) {
 	h := newHarness(t, func(r *config.Repo) { r.Schedule.Default = "first" }, nil,
 		command(t, "first", "sleep 0.05"), command(t, "chosen", "sleep 0.05"))
+	keys, err := agentkey.OpenStore(filepath.Join(h.dir, "keys"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := keys.Ensure("chosen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.w.Orch.RegisterAgent(context.Background(), repo, "chosen", key.PublicHex()); err != nil {
+		t.Fatal(err)
+	}
 	id := h.addTask("Explicit worker", []string{"src/**"})
 	if _, err := h.w.Orch.AssignTask(context.Background(), repo, id, "chosen", ""); err != nil {
 		t.Fatal(err)

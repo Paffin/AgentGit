@@ -343,8 +343,10 @@ Reopening the import page resumes the saved import for your account. After a tem
 With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
 asks for a title and description and opens a change request; nothing lands until it is reviewed and landed like any other.
 This uses the server's virtual workspaces: a draft is opened on the branch (from exactly what was on screen), the edit is
-applied as one version, the change request is opened from it, and the server workspace is removed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
+applied as one version, the change request is opened from it, and the server workspace is removed. While sending, the editor locks the submitted title and description. Requests and retries retain the initiating credential; leaving or changing account stops unsent follow-up steps and ignores late results. Cancellation does not undo a server operation that already completed; the local draft remains available if completion was not confirmed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
 If the upload cannot read the branch, **Retry branch** keeps your selected files, destination, title and description.
+
+A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed confidential drafts require a separate authorization boundary.
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
@@ -389,7 +391,7 @@ AgentGit words. This table is generated from `apps/web/src/lib/glossary.ts` (a t
 | policy | Rules | Who may land changes to a branch, and which checks and approvals are needed first. |
 | changeset | Version | One saved state of the files. |
 | run | Agent session | One working session of an agent on a task. |
-| workspace | Draft | A private working copy of a branch, where edits collect before they are proposed. |
+| workspace | Draft | An isolated working copy of a branch, where edits collect before they are proposed. |
 | quiet (stale heartbeat) | Silent | The agent has not reported in for a while. It may be stuck; this is a hint, not a verdict. |
 
 ## Not in the UI

@@ -231,7 +231,7 @@ export function createApi(c: ApiClient) {
           description?: string
           task_id?: string
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Proposal>(r(repo, '/proposals'), body, o),
     },
 
@@ -240,7 +240,7 @@ export function createApi(c: ApiClient) {
       create: (
         repo: string,
         body: { name: string; stream?: string; from_rev?: string },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, '/workspaces'), body, o),
       get: (repo: string, name: string, o?: Opts) =>
         c.get<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}`), undefined, o),
@@ -249,7 +249,7 @@ export function createApi(c: ApiClient) {
         repo: string,
         name: string,
         body: { changes: FileChange[]; message?: string; expected_head?: string },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}/changes`), body, o),
       /** Brings the stream head in. Conflicts change nothing until every one has a resolution. */
       sync: (repo: string, name: string, resolutions: FileChange[] = [], o?: Opts) =>
@@ -258,7 +258,7 @@ export function createApi(c: ApiClient) {
           resolutions.length ? { resolutions } : {},
           o,
         ),
-      remove: (repo: string, name: string, o?: Opts) =>
+      remove: (repo: string, name: string, o?: SessionOpts) =>
         c.del<Record<string, never>>(
           r(repo, `/workspaces/${encodeURIComponent(name)}`),
           undefined,

@@ -109,7 +109,7 @@ export const GLOSSARY = {
   workspace: {
     label: 'Draft',
     word: 'workspace',
-    tip: 'A private working copy of a branch, where edits collect before they are proposed.',
+    tip: 'An isolated working copy of a branch, where edits collect before they are proposed.',
   },
   quiet: {
     label: 'Silent',

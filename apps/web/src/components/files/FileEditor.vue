@@ -41,6 +41,30 @@ const router = useRouter()
 const board = useBoard()
 const toasts = useToasts()
 const auth = useAuth()
+let submission = 0
+let controller: AbortController | undefined
+function invalidateSubmission() {
+  submission++
+  controller?.abort()
+  busy.value = false
+}
+onBeforeUnmount(invalidateSubmission)
+watch(
+  [() => auth.identity, () => props.repo, () => props.path, () => props.stream],
+  () => {
+    invalidateSubmission()
+    // Let sign-out finish its existing leave/draft confirmation before unmounting.
+    if (auth.identity) emit('cancel')
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => auth.status,
+  (status) => {
+    if (status !== 'ready') invalidateSubmission()
+  },
+  { flush: 'sync' },
+)
 const draft = useFileDraft({
   identity: auth.identity,
   repo: props.repo,
@@ -68,6 +92,7 @@ const base = useResource(async () =>
 )
 const canPropose = computed(
   () =>
+    auth.status === 'ready' &&
     changed.value &&
     base.settled.value &&
     !base.error.value &&
@@ -147,6 +172,11 @@ function ask() {
 }
 
 async function propose() {
+  if (busy.value || !canPropose.value || !title.value.trim() || error.value?.isUnauthenticated)
+    return
+  const mine = ++submission
+  const current = new AbortController()
+  controller = current
   busy.value = true
   error.value = null
   try {
@@ -165,7 +195,9 @@ async function propose() {
       ],
       title: title.value.trim(),
       description: description.value.trim() || undefined,
+      request: { token: auth.token, quietUnauthenticated: true, signal: current.signal },
     })
+    if (mine !== submission || current.signal.aborted) return
     submitted.value = true
     busy.value = false
     asking.value = false
@@ -176,12 +208,13 @@ async function propose() {
       params: { owner: props.repo.split('/')[0], name: props.repo.split('/')[1], id: p.id },
     })
   } catch (e) {
+    if (mine !== submission || current.signal.aborted) return
     error.value =
       e instanceof ApiError
         ? e
         : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
   } finally {
-    busy.value = false
+    if (mine === submission) busy.value = false
   }
 }
 </script>
@@ -293,11 +326,12 @@ async function propose() {
         <TextField
           v-model="title"
           label="Title"
+          :disabled="busy"
           required
           autofocus
           hint="What this change does, in a few words."
         />
-        <TextArea v-model="description" label="Description (optional)" :rows="3" />
+        <TextArea v-model="description" label="Description (optional)" :rows="3" :disabled="busy" />
         <p class="faint">
           For <code class="mono">{{ stream }}</code
           >, changing <code class="mono">{{ filePath }}</code
@@ -305,6 +339,11 @@ async function propose() {
         </p>
         <Alert v-if="error" tone="bad" live="alert" title="Could not open the change request">
           {{ error.message }}
+          <Button
+            v-if="error.isUnauthenticated"
+            :to="{ path: '/signin', query: { next: router.currentRoute.value.fullPath } }"
+            >Sign in again</Button
+          >
         </Alert>
       </form>
       <template #footer>
@@ -314,7 +353,7 @@ async function propose() {
           form="propose-form"
           variant="primary"
           :loading="busy"
-          :disabled="!title.trim()"
+          :disabled="!title.trim() || !canPropose || error?.isUnauthenticated"
           data-testid="propose-submit"
           >Open change request</Button
         >

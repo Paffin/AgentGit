@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.
+
 - Diff line-number columns expand for large files, preventing old/new numbers from overlapping each other or the code. Keyboard scrolling remains available on narrow screens.
 
 - Role revocation preserves its confirmation after a failure and ignores late results after leaving the original context. Retries retain the initiating session.

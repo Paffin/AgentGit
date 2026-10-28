@@ -170,8 +170,16 @@ fn clone_push_review_integrate_and_pull() {
     assert_eq!(explained["standing"], "blocked");
     assert_eq!(explained["explanations"][0]["code"], "insufficient_approvals");
     assert!(explained["next"][0].as_str().unwrap().starts_with("ag remote review"));
-    // The author cannot approve her own change (writers hold no review power; bob does).
+    // Discussion does not need or grant approval rights.
+    ok(ag(
+        a.path(),
+        "user:alice",
+        &alice,
+        &["remote", "review", &prop, "--comment", "-m", "The explicit branch is intentional."],
+    ));
+    assert!(!ag(a.path(), "user:alice", &alice, &["remote", "review", &prop, "--approve"]).status.success());
     ok(ag(a.path(), "user:bob", &bob, &["remote", "review", &prop, "--approve", "-m", "lgtm"]));
+    ok(ag(a.path(), "user:bob", &bob, &["remote", "review", &prop, "--comment", "-m", "Approval still stands."]));
     let ready = ok(ag(a.path(), "user:carol", &carol, &["--json", "remote", "explain", &prop]));
     assert_eq!(serde_json::from_str::<Value>(&ready).unwrap()["standing"], "ready");
     let out = ok(ag(a.path(), "user:carol", &carol, &["remote", "integrate", &prop]));
@@ -179,6 +187,8 @@ fn clone_push_review_integrate_and_pull() {
     let closed = ag(a.path(), "user:carol", &carol, &["remote", "explain", &prop]);
     assert_eq!(closed.status.code(), Some(4), "{}", text(&closed));
     assert!(text(&closed).contains("already landed"), "{}", text(&closed));
+
+    ok(ag(a.path(), "user:alice", &alice, &["remote", "review", &prop, "--comment", "-m", "Confirmed after landing."]));
 
     // Dave clones: all files arrive, byte for byte.
     let d = tempfile::tempdir().unwrap();

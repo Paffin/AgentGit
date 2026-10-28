@@ -235,3 +235,13 @@ an operator: it reaps the runs of the remote's repository, revokes their credent
 `integrate`, `review`, `merge_preview`, `operation` and the rest with typed results (`Outcome`,
 `IntegrationResult`). Open one `Repository` per thread (`repo.reopen()`); processes and threads coordinate
 through SQLite. Over the network, use [`ag-server`](../operations/deployment.md) and its [clients](sdks.md) instead.
+
+## 10. Discussing a remote proposal (development)
+
+Use `ag remote review PROPOSAL --comment -m "Context for the reviewer"` to discuss a
+proposal, including after it lands. On servers advertising `proposals.comments`,
+writers can comment without approval rights. The CLI binds each comment to the head
+it fetches immediately before submission and retries transport failures with the
+same idempotency key. A concurrent head change rejects submission; inspect the new
+head before running the command again. Comments preserve existing review decisions.
+Older servers use the legacy review endpoint and its permissions.

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- CLI discussion uses the dedicated comment permission on capable servers, binds comments to the current proposal head and safely retries with an idempotency key. Older servers retain the legacy review path.
+
 - Proposal discussion comments for writers, reviewers and integrators, without granting approval rights. Comments are head-bound and idempotent, support closed proposals, and have tab-local draft recovery. Discussion no longer obscures an existing review decision in the browser summary.
 
 - Create a separate task from any task page with its title, description and file scope already filled in. Agent assignment, prerequisites, run history and retry budget start independently; creation remains explicit.

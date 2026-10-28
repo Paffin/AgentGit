@@ -793,6 +793,44 @@ fn print_done<T: Serialize>(cli: &Cli, value: &T, human: impl FnOnce() -> String
     print(cli, value, human)
 }
 
+async fn record_remote_review(client: &Client, repo: &str, id: &str, decision: &str, body: &str) -> Result<v1::Review> {
+    if decision == "comment"
+        && client.negotiate().await?.features.iter().any(|feature| feature == ag_protocol::features::PROPOSAL_COMMENTS)
+    {
+        let detail = client
+            .proposals()
+            .get(client.req(v1::GetProposalRequest { repo: repo.into(), id: id.into() }))
+            .await
+            .map_err(ClientError::from)?
+            .into_inner();
+        let proposal = detail.proposal.ok_or_else(|| anyhow!("server returned no proposal"))?;
+        let request = v1::CommentProposalRequest {
+            repo: repo.into(),
+            id: proposal.id,
+            body: body.into(),
+            expected_head: proposal.head,
+            idempotency_key: ag_crypto::random_id("comment")?,
+        };
+        return Ok(client
+            .retrying(|| async { client.proposals().comment(client.req(request.clone())).await })
+            .await?
+            .into_inner());
+    }
+    Ok(client
+        .proposals()
+        .review(client.req(v1::ReviewProposalRequest {
+            repo: repo.into(),
+            id: id.into(),
+            decision: decision.into(),
+            body: body.into(),
+            idempotency_key: String::new(),
+            expected_head: String::new(),
+        }))
+        .await
+        .map_err(ClientError::from)?
+        .into_inner())
+}
+
 async fn explain_remote(cli: &Cli, client: &Client, repo: &str, id: &str) -> Result<u8> {
     use crate::cmds::explain::{from_wire, render};
     let detail = client
@@ -1053,19 +1091,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     (_, _, true) => "comment",
                     _ => bail!("choose one of --approve, --request-changes, --comment"),
                 };
-                let rv = c
-                    .proposals()
-                    .review(c.req(v1::ReviewProposalRequest {
-                        repo,
-                        id: id.clone(),
-                        decision: decision.into(),
-                        body: message.clone(),
-                        idempotency_key: String::new(),
-                        expected_head: String::new(),
-                    }))
-                    .await
-                    .map_err(s)?
-                    .into_inner();
+                let rv = record_remote_review(&c, &repo, id, decision, message).await?;
                 print_done(cli, &rv, || format!("Recorded '{}' on head {}.", rv.decision, &rv.head[..12]))?;
             }
             RemoteCmd::Integrate { id, fencing_tokens } => {

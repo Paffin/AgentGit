@@ -338,6 +338,16 @@ Choose **Import from GitHub / GitLab** on Home or Repositories to upload a full 
 
 Reopening the import page resumes the saved import for your account. After a temporary error, **Retry previous import** opens the same staged result; an expired credential offers **Sign in again**. **Start new import** clears only this account's local reference, without deleting the staged import on the server. Recovery references are kept in this tab, separately by account; switching accounts hides the previous report. If browser storage is unavailable, keep the page open and save the report before leaving.
 
+## Edit several files together
+
+From **Code → Files**, choose **Edit multiple files** on a branch. Open existing text files or add new paths, switch between files in the left list, and edit their contents. Changing a file path stages a rename; **Delete file** stages removal and **Restore file** undoes it. Existing executable and symbolic-link modes are preserved.
+
+**Review changes** shows the staged before/after contents for the whole batch. Write one title and description, then **Open change request** sends all file operations as one workspace changeset and opens one review. The branch is unchanged until that request is reviewed and landed. A new or renamed path cannot silently overwrite an existing file; move/delete the existing file in the same batch or choose another path.
+
+The original starting revision and complete batch are saved in this tab, separately for each account, repository and branch. Reloading restores the batch. **Download draft** saves a JSON copy; **Start over** asks before deleting the local copy. Tab storage does not survive every browser cleanup or device loss. Storage errors remain visible and unreadable saved data is not automatically overwritten.
+
+This first editor supports up to 100 text files or link targets and 4 MiB of changed contents. Binary replacement remains available through **Upload files**. The pre-submission review displays staged contents; the created change request displays the server's final diff.
+
 ## Edit a file and propose a change
 
 With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
@@ -428,3 +438,5 @@ A failed next-page request keeps the loaded directory, history or change-request
 
 Review controls pause while the decision is being sent. The decision and comment are fixed when you submit; switching to another change request cannot redirect a pending send to that request. Responses from an earlier page do not clear the current draft.
 Branch creation, settings saves and landing also pause their editable controls while a request is pending. Failed attempts retain their values for correction and retry. Settings and landing results stay attached to the repository or change request that submitted them.
+
+Downloaded multi-file drafts can be loaded with **Restore draft** in the same repository and branch, including in another browser. Restoring keeps the original starting revision and asks before replacing unsent file edits. This is manual draft transfer, not account-backed server storage.

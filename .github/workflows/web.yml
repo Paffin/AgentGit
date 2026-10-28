@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
     paths:
+      # A release request requires this workflow on the exact main commit.
+      - "CHANGELOG.md"
       - "apps/web/**"
       - "docs/protocol/openapi.json"
       - "crates/ag-server/**"

@@ -31,6 +31,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Release requests start every required workflow on the candidate commit, including packaging-only changes, instead of waiting for checks excluded by path filters.
+
 - Run-bound event streams recheck the run before delivering buffered events, including when the run ends without its credential being explicitly revoked.
 
 ## [0.3.0-beta.3] - 2026-10-28

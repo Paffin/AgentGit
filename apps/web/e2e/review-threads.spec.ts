@@ -56,6 +56,15 @@ test('line discussions retain revision context, replies and resolution across re
   ).toBeEnabled()
   await thread.getByRole('button', { name: 'Resolve discussion', exact: true }).click()
   await expect(thread.getByText('Resolved', { exact: true })).toBeVisible()
+  const filters = page.getByRole('group', { name: 'Filter line discussions', exact: true })
+  await filters.getByRole('button', { name: 'Open', exact: true }).click()
+  await expect(thread).toBeHidden()
+  await expect(
+    page.getByText('No open discussions in the loaded results.', { exact: true }),
+  ).toBeVisible()
+  await filters.getByRole('button', { name: 'Resolved', exact: true }).click()
+  await expect(thread).toBeVisible()
+  await filters.getByRole('button', { name: 'All', exact: true }).click()
   await expect(
     thread.getByRole('textbox', { name: 'Reply to this discussion', exact: true }),
   ).toHaveCount(0)
@@ -75,6 +84,17 @@ test('line discussions retain revision context, replies and resolution across re
   await expect(thread.locator('pre')).toHaveText('keep this branch')
   await thread.getByRole('button', { name: 'Reopen discussion', exact: true }).click()
   await expect(thread.getByText('Open', { exact: true })).toBeVisible()
+  await thread.getByRole('button', { name: 'Replies and actions', exact: true }).click()
+  const replyDraft = thread.getByRole('textbox', { name: 'Reply to this discussion', exact: true })
+  await replyDraft.fill('Keep this draft while filtering.')
+  await filters.getByRole('button', { name: 'Resolved', exact: true }).click()
+  await expect(thread).toBeHidden()
+  await filters.getByRole('button', { name: 'Open', exact: true }).click()
+  await expect(replyDraft).toHaveValue('Keep this draft while filtering.')
+  await expect(filters.getByRole('button', { name: 'Open', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await page.screenshot({ path: info.outputPath('line-thread.png'), fullPage: true })
   await thread.getByRole('link', { name: 'View source at this revision', exact: true }).click()
   await expect(page.locator('[data-line="1"].target')).toHaveText('keep this branch')

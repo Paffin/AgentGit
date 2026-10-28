@@ -581,3 +581,8 @@ instead** preserves the existing quote/comment workflow.
 This requires repository schema 6. Back up existing data before running a newer
 development binary; older binaries reject upgraded repositories. Restore the
 pre-upgrade backup for rollback. See [ADR-0025](../adr/0025-line-review-threads.md).
+
+Discussion filters show all, open or resolved threads among the loaded results.
+Counts are marked as partial when more pages are available; use **Load more
+discussions** to include older threads. Switching filters preserves expanded
+reply drafts.

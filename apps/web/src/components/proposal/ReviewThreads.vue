@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import type { Proposal } from '@/api/types'
 import type { LineQuote } from '@/lib/diffDiscussion'
 import { api } from '@/api/instance'
@@ -23,6 +24,20 @@ const threads = usePagedResource(
   [() => props.repo, () => props.proposal.id, () => auth.token],
 )
 useLiveReload(['proposal'], () => threads.reload())
+const filter = ref<'all' | 'open' | 'resolved'>('all')
+const filters = ['all', 'open', 'resolved'] as const
+const counts = computed(() => {
+  const all = threads.data.value.length
+  const resolved = threads.data.value.filter((thread) => thread.resolved).length
+  return { all, open: all - resolved, resolved }
+})
+function showCreatedThread() {
+  filter.value = 'all'
+  void threads.reload()
+}
+watch([() => props.repo, () => props.proposal.id, () => auth.token], () => {
+  filter.value = 'all'
+})
 </script>
 
 <template>
@@ -39,7 +54,7 @@ useLiveReload(['proposal'], () => threads.reload())
       :quote="quote"
       @quoted="emit('quoted')"
       @general="(quote, body) => emit('general', quote, body)"
-      @created="threads.reload()"
+      @created="showCreatedThread"
     />
     <ErrorState
       v-if="threads.error.value"
@@ -48,8 +63,35 @@ useLiveReload(['proposal'], () => threads.reload())
       :error="threads.error.value"
       @retry="threads.reload()"
     />
+    <div v-if="threads.data.value.length" class="thread-filters">
+      <div role="group" aria-label="Filter line discussions" class="filter-buttons">
+        <Button
+          v-for="choice in filters"
+          :key="choice"
+          size="sm"
+          :variant="filter === choice ? 'primary' : 'secondary'"
+          :aria-pressed="filter === choice"
+          :label="choice === 'all' ? 'All' : choice === 'open' ? 'Open' : 'Resolved'"
+          @click="filter = choice"
+        >
+          {{ choice === 'all' ? 'All' : choice === 'open' ? 'Open' : 'Resolved' }}
+          <span aria-hidden="true">{{ counts[choice] }}</span>
+        </Button>
+      </div>
+      <span v-if="threads.next.value" class="muted">Counts cover loaded discussions.</span>
+    </div>
+    <p
+      v-if="
+        filter !== 'all' && counts[filter] === 0 && threads.settled.value && !threads.error.value
+      "
+      role="status"
+      class="muted"
+    >
+      No {{ filter }} discussions in the loaded results.
+    </p>
     <ReviewThreadCard
       v-for="thread in threads.data.value"
+      v-show="filter === 'all' || thread.resolved === (filter === 'resolved')"
       :key="thread.id"
       :repo="repo"
       :proposal="proposal"
@@ -63,7 +105,7 @@ useLiveReload(['proposal'], () => threads.reload())
       No line discussions yet. Select a line number in Files changed to start one.
     </p>
     <Button v-if="threads.next.value" :loading="threads.loading.value" @click="threads.more"
-      >Load older discussions</Button
+      >Load more discussions</Button
     >
   </section>
 </template>
@@ -79,6 +121,13 @@ header {
   justify-content: space-between;
   gap: var(--s-3);
   flex-wrap: wrap;
+}
+.thread-filters,
+.filter-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
 }
 .muted {
   color: var(--text-2);

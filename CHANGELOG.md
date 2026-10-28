@@ -21,6 +21,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Virtualized code and event lists batch scroll updates per frame, preserving keyboard scrolling and avoiding Firefox scroll-linked positioning warnings.
+
 - Code search clears results when the session changes, pins requests to the initiating credential, preserves literal query spaces and emphasizes matching text.
 
 - Update the workspace and fuzz Markdown parser lockfiles to pulldown-cmark 0.13.5, addressing RUSTSEC-2026-0414 in development tooling.

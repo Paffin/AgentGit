@@ -183,7 +183,15 @@ and the client decides.
 
 There is no `admin` group: policy, roles and credentials are deliberately unreachable (`--allow admin` is refused with
 that explanation). Resources (`agentgit://{owner}/{name}/{rev}/{path}`, files and directories) and four prompts
-(`work_a_task`, `review_proposal`, `resolve_conflicts`, `explore_repo`) come with the `read` group.
+(`work_a_task`, `review_proposal`, `resolve_conflicts`, `explore_repo`) are offered only when their required
+groups are enabled. Exploration needs `read`; task work also needs `workspace`, `propose` and `coordinate`;
+review needs `review`; conflict resolution needs `workspace`.
+
+The task and review prompts read complete line-discussion pages before resolving a thread. With `discuss`
+enabled, authors can address feedback and report their changes, while reviewers discuss the inspected revision
+without needing permission to edit it. Without `discuss`, these prompts only read existing discussions.
+Thread resolution does not approve or integrate a proposal. Task completion follows the requested outcome:
+if the task requires landed code, publishing a proposal alone does not complete it.
 
 A run is explicit, because MCP 2026-07-28 has no sessions: `task_claim` (or `run_start`) returns a `run_id`, and the
 agent passes it to the calls that act as that run. Two claims of one task are not two runs: the second is refused with

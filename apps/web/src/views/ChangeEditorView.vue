@@ -38,6 +38,8 @@ const base = ref<string | null>(null)
 const title = ref('')
 const description = ref('')
 const finding = ref(false)
+const restoreInput = ref<HTMLInputElement | null>(null)
+const pendingRestore = ref<BatchDraft | null>(null)
 const newPath = ref('')
 const error = ref('')
 const needsSignIn = ref(false)
@@ -94,6 +96,7 @@ async function load() {
   reviewing.value = false
   startingOver.value = false
   finding.value = false
+  pendingRestore.value = null
   storageError.value = ''
   blockedStorage.value = false
   restored.value = false
@@ -112,12 +115,7 @@ async function load() {
     const saved = restoreBatch(sessionStorage.getItem(key))
     readingDraft = false
     if (saved) {
-      files.value = saved.files
-      title.value = saved.title
-      description.value = saved.description
-      base.value = saved.base
-      selected.value = saved.files[0]?.id || ''
-      restored.value = true
+      applyDraft(saved)
     } else {
       const head = await api.streams.head(repo.value, stream.value, { signal: controller.signal })
       if (mine === context) base.value = head.head
@@ -317,12 +315,55 @@ function resetDraft() {
     storageError.value = 'The saved draft could not be removed.'
   }
 }
+function applyDraft(draft: BatchDraft) {
+  files.value = draft.files
+  title.value = draft.title
+  description.value = draft.description
+  base.value = draft.base
+  selected.value = draft.files[0]?.id || ''
+  restored.value = true
+  reviewing.value = false
+}
+function confirmRestore() {
+  if (!pendingRestore.value || busy.value) return
+  restoring = true
+  applyDraft(pendingRestore.value)
+  pendingRestore.value = null
+  blockedStorage.value = false
+  error.value = ''
+  restoring = false
+  save()
+}
+async function readDraftFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || busy.value) return
+  const mine = context
+  try {
+    if (file.size > BATCH_BYTES * 3) throw new Error('This draft is too large to restore.')
+    const raw = await file.text()
+    if (mine !== context) return
+    const envelope = JSON.parse(raw)
+    if (envelope?.repository !== repo.value || envelope?.stream !== stream.value) {
+      throw new Error('Open the repository and branch named in this draft before restoring it.')
+    }
+    const draft = restoreBatch(raw)
+    if (!draft) throw new Error('This file does not contain a change draft.')
+    pendingRestore.value = draft
+    if (!dirty.value && !title.value.trim() && !description.value.trim()) confirmRestore()
+  } catch (cause) {
+    if (mine === context) error.value = describeError(cause)
+  }
+}
 function download() {
   try {
     const content = blockedStorage.value
       ? sessionStorage.getItem(key)
       : JSON.stringify(
           {
+            repository: repo.value,
+            stream: stream.value,
             version: 1,
             base: base.value,
             files: files.value,
@@ -358,6 +399,17 @@ function download() {
         </p>
       </div>
       <div class="header-actions">
+        <input
+          ref="restoreInput"
+          class="restore-input"
+          type="file"
+          accept="application/json,.json"
+          aria-label="Saved change draft"
+          @change="readDraftFile"
+        />
+        <Button :disabled="busy || !auth.can(repo, 'editFiles')" @click="restoreInput?.click()"
+          >Restore draft</Button
+        >
         <Button :disabled="!files.length && !blockedStorage" @click="download"
           >Download draft</Button
         ><Button :disabled="busy" @click="startingOver = true">Start over</Button>
@@ -508,6 +560,17 @@ function download() {
       <FileFinder v-model="finding" :repo="repo" :rev="base || stream" @select="openFile" />
     </template>
     <Dialog
+      :model-value="pendingRestore !== null"
+      title="Replace this draft?"
+      description="This replaces the edits in this tab with the saved draft and its original starting revision. The branch is unchanged."
+      @update:model-value="pendingRestore = null"
+    >
+      <template #footer
+        ><Button @click="pendingRestore = null">Keep current draft</Button
+        ><Button variant="primary" @click="confirmRestore">Restore saved draft</Button></template
+      >
+    </Dialog>
+    <Dialog
       v-model="startingOver"
       title="Discard this saved draft?"
       description="Only this account's draft for this repository and branch is removed. The branch and change requests are unchanged."
@@ -531,6 +594,9 @@ function download() {
 </template>
 
 <style scoped>
+.restore-input {
+  display: none;
+}
 .change-editor {
   display: flex;
   flex-direction: column;

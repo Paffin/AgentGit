@@ -438,3 +438,5 @@ A failed next-page request keeps the loaded directory, history or change-request
 
 Review controls pause while the decision is being sent. The decision and comment are fixed when you submit; switching to another change request cannot redirect a pending send to that request. Responses from an earlier page do not clear the current draft.
 Branch creation, settings saves and landing also pause their editable controls while a request is pending. Failed attempts retain their values for correction and retry. Settings and landing results stay attached to the repository or change request that submitted them.
+
+Downloaded multi-file drafts can be loaded with **Restore draft** in the same repository and branch, including in another browser. Restoring keeps the original starting revision and asks before replacing unsent file edits. This is manual draft transfer, not account-backed server storage.

@@ -49,6 +49,16 @@ test('creates, recovers and edits several files in one change request through th
       await page.getByRole('button', { name: 'Add file', exact: true }).click()
       await page.getByLabel('Contents', { exact: true }).fill(`${name} original\n`)
     }
+    const downloaded = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Download draft', exact: true }).click()
+    const savedPath = info.outputPath('portable-draft.json')
+    await (await downloaded).saveAs(savedPath)
+    await page.getByRole('button', { name: 'Start over', exact: true }).click()
+    await page.getByRole('button', { name: 'Discard draft', exact: true }).click()
+    await page.getByLabel('Saved change draft').setInputFiles(savedPath)
+    await expect(
+      page.getByText('Draft recovered with its original starting revision.'),
+    ).toBeVisible()
     await page.reload()
     await expect(
       page.getByText('Draft recovered with its original starting revision.'),

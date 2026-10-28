@@ -64,6 +64,7 @@ caps! {
     ProposalCreate => "proposal.create",
     ProposalUpdate => "proposal.update",
     ProposalReview => "proposal.review",
+    ProposalComment => "proposal.comment",
     ProposalClose => "proposal.close",
     IntegratePrepare => "integrate.prepare",
     IntegrateValidate => "integrate.validate",
@@ -180,6 +181,7 @@ impl Role {
             StreamCreate,
             WorkspaceWrite,
             ProposalCreate,
+            ProposalComment,
             ProposalUpdate,
             ProposalClose,
             IntegrateValidate,
@@ -205,11 +207,11 @@ impl Role {
             }
             Role::Reviewer => {
                 set.extend(reader);
-                set.insert(ProposalReview);
+                set.extend([ProposalReview, ProposalComment]);
             }
             Role::Integrator => {
                 set.extend(reader);
-                set.extend([IntegrateRun, IntegrateValidate, QueueWrite, QueueRun, ProposalClose]);
+                set.extend([IntegrateRun, IntegrateValidate, QueueWrite, QueueRun, ProposalClose, ProposalComment]);
             }
             Role::Runner => {
                 set.extend(reader);

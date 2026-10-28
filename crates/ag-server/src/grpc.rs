@@ -377,6 +377,9 @@ impl ProposalService for Grpc {
     async fn review(&self, request: Request<v1::ReviewProposalRequest>) -> Result<Response<v1::Review>, Status> {
         unary!(self, request, "proposal.review", review_proposal)
     }
+    async fn comment(&self, request: Request<v1::CommentProposalRequest>) -> Result<Response<v1::Review>, Status> {
+        unary!(self, request, "proposal.comment", comment_proposal)
+    }
     async fn close(&self, request: Request<v1::CloseProposalRequest>) -> Result<Response<v1::Proposal>, Status> {
         unary!(self, request, "proposal.close", close_proposal)
     }

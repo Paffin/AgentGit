@@ -143,6 +143,16 @@ describe('the tour', () => {
     expect((await alice.proposals.update({ repo, id: p1.id, new_head: m2.head })).head).toBe(m2.head);
     expect((await alice.proposals.get({ repo, id: p1.id })).proposal.head).toBe(m2.head);
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
+    expect(
+      (
+        await bob.proposals.comment({
+          repo,
+          id: p1.id,
+          body: 'Clarified the original intent.',
+          expected_head: m2.head,
+        })
+      ).decision,
+    ).toBe('comment');
 
     // validation: queued, claimed, failed once, claimed again, completed with a signed attestation
     const queued = await alice.integration.validate({ repo, proposal: p1.id });

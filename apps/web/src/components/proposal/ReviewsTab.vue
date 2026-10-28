@@ -65,6 +65,7 @@ const stale = (r: Review) => r.head !== props.proposal.head
       <code class="mono">{{ shortId(proposal.head, 8) }}</code
       >, so those reviewers need to look again.
     </Alert>
+    <slot name="comment" />
     <EmptyState
       v-if="sorted.length === 0"
       icon="comment"
@@ -85,7 +86,9 @@ const stale = (r: Review) => r.head !== props.proposal.head
           <Badge :tone="info(r.decision).tone" :icon="info(r.decision).icon" size="sm">{{
             info(r.decision).label
           }}</Badge>
-          <Badge v-if="stale(r)" tone="warn" size="sm" icon="clock">stale</Badge>
+          <Badge v-if="stale(r) && r.decision !== 'comment'" tone="warn" size="sm" icon="clock"
+            >stale</Badge
+          >
           <span class="faint when"><RelativeTime :ms="r.timestamp_ms" /></span>
         </div>
         <p v-if="r.body" class="body">{{ r.body }}</p>
@@ -94,7 +97,12 @@ const stale = (r: Review) => r.head !== props.proposal.head
           <template v-if="stale(r)">
             · the proposal is now at
             <code class="mono">{{ shortId(proposal.head, 8) }}</code
-            >, so this review no longer counts</template
+            >,
+            {{
+              r.decision === 'comment'
+                ? 'this comment refers to the earlier head'
+                : 'this review no longer counts'
+            }}</template
           >
         </p>
       </li>

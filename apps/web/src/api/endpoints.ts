@@ -265,6 +265,12 @@ export function createApi(c: ApiClient) {
       },
       get: (repo: string, id: string, o?: Opts) =>
         c.get<ProposalDetail>(r(repo, `/proposals/${encodeURIComponent(id)}`), undefined, o),
+      comment: (
+        repo: string,
+        id: string,
+        body: { body: string; expected_head: string },
+        o?: SessionOpts,
+      ) => c.post<Review>(r(repo, `/proposals/${encodeURIComponent(id)}/comments`), body, o),
       review: (
         repo: string,
         id: string,

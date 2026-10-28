@@ -97,6 +97,7 @@ export const NAMESPACE_METHODS = {
   },
   proposals: {
     close: 'proposal.close',
+    comment: 'proposal.comment',
     create: 'proposal.create',
     get: 'proposal.get',
     list: 'proposal.list',
@@ -322,6 +323,8 @@ export interface Api {
   readonly proposals: {
     /** Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`) */
     close(request: Req<'proposal.close'>, options?: CallOptions): Promise<Res<'proposal.close'>>;
+    /** Add an idempotent discussion comment at the inspected head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments`, operation `proposal.comment`) */
+    comment(request: Req<'proposal.comment'>, options?: CallOptions): Promise<Res<'proposal.comment'>>;
     /** Open a proposal (`POST /v1/repos/{owner}/{rname}/proposals`, operation `proposal.create`) */
     create(request: Req<'proposal.create'>, options?: CallOptions): Promise<Res<'proposal.create'>>;
     /** One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`) */

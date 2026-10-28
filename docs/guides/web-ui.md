@@ -552,3 +552,14 @@ continue through repository history. The control disappears when there are no
 more records. Active sessions can also be paged. Servers supporting `tasks.history`
 use continuation tokens; older servers retain their 1,000-session retrieval limit
 and show a notice when it is reached. Switching account clears the previous list.
+
+### Discuss a change request (development)
+
+Choose **Discuss…** on an open change request, or open **Reviews** and use
+**Add to the discussion**. Writers, reviewers and integrators can comment; this
+does not grant or revoke approval. Comments remain available after closure.
+
+The tab saves your draft with the head you inspected. If the change request moves,
+inspect the new changes and acknowledge that head before posting. Retrying an
+unchanged submission does not create another comment. Line-anchored threads,
+thread resolution and code suggestions are not part of this first discussion flow.

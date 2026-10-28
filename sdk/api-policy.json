@@ -18,7 +18,8 @@
       "lease.acquire",
       "migration.prepare",
       "issue.create",
-      "issue.comment"
+      "issue.comment",
+      "proposal.comment"
     ],
     "natural": [
       "objects.put",

@@ -114,6 +114,28 @@ impl App {
         .await
     }
 
+    /// Adds discussion without granting approval privileges. Works on closed proposals too.
+    pub async fn comment_proposal(&self, call: &Call, req: v1::CommentProposalRequest) -> ApiResult<v1::Review> {
+        validate_comment_body(&req.body)?;
+        let expected: ChangesetId = parse_id(require(&req.expected_head, "expected_head")?, "inspected proposal head")?;
+        let idem = self.idem();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalComment, None, move |repo, actor| {
+            let id = repo.find_proposal(&req.id)?.id;
+            let fingerprint = serde_json::to_string(&(&id, actor.as_str(), &req.body, expected.to_hex()))
+                .map_err(ApiError::internal)?;
+            super::keyed(repo, idem, "proposal.comment", &req.idempotency_key, &fingerprint, |claim| {
+                let result = repo.meta().write(|tx| append_comment(tx, &id, actor, &req.body, &expected, claim))?;
+                result.ok_or_else(|| {
+                    ApiError::new(
+                        ag_protocol::ErrorCode::FailedPrecondition,
+                        "proposal head changed; inspect it before posting the comment",
+                    )
+                })
+            })
+        })
+        .await
+    }
+
     /// Closes an open proposal (the author, or anyone who may close proposals).
     pub async fn close_proposal(&self, call: &Call, req: v1::CloseProposalRequest) -> ApiResult<v1::Proposal> {
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalClose, None, move |repo, actor| {
@@ -127,4 +149,37 @@ impl App {
         })
         .await
     }
+}
+
+fn validate_comment_body(body: &str) -> ApiResult<()> {
+    if body.trim().is_empty() || body.len() > 16384 || body.contains('\0') {
+        return Err(ApiError::invalid("comment must be non-empty and at most 16 KiB"));
+    }
+    Ok(())
+}
+
+fn append_comment(
+    tx: &ag_storage::meta::Tx<'_>,
+    id: &str,
+    actor: &ag_types::Identity,
+    body: &str,
+    expected: &ChangesetId,
+    claim: &super::Claim,
+) -> Result<Option<v1::Review>, ag_storage::meta::MetaError> {
+    use ag_storage::meta::MetaError;
+    let proposal = tx.proposal(id)?.ok_or_else(|| MetaError::NotFound("proposal".into()))?;
+    if proposal.head != *expected {
+        return Ok(None);
+    }
+    let comment_id = tx.review_add(id, actor.as_str(), "comment", body, expected)?;
+    let stored = tx.review(comment_id)?.ok_or_else(|| MetaError::Corrupt("comment vanished".into()))?;
+    let response = convert::review(&stored);
+    tx.audit_append(
+        actor.as_str(),
+        "proposal.comment",
+        id,
+        &serde_json::json!({"head":expected,"comment_id":comment_id}),
+    )?;
+    claim.record(tx, &response)?;
+    Ok(Some(response))
 }

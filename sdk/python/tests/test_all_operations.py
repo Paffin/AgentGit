@@ -157,6 +157,12 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     assert alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head).head == m2.head
     assert alice.proposals.get(repo=REPO, id=p1.id).proposal.head == m2.head
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
+    assert (
+        bob.proposals.comment(
+            repo=REPO, id=p1.id, body="Clarified the original intent.", expected_head=m2.head
+        ).decision
+        == "comment"
+    )
 
     queued = alice.integration.validate(repo=REPO, proposal=p1.id)
     assert len(queued.jobs) == 1

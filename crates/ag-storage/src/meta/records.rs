@@ -354,11 +354,20 @@ impl Tx<'_> {
         Ok(id as u64)
     }
 
+    /// A single stored review or discussion entry.
+    pub fn review(&self, id: u64) -> Result<Option<ReviewRow>, MetaError> {
+        Ok(self.reviews_where("id = ?1", &params![id as i64])?.pop())
+    }
+
     /// All reviews of a proposal, oldest first.
     pub fn reviews(&self, proposal: &str) -> Result<Vec<ReviewRow>, MetaError> {
+        self.reviews_where("proposal = ?1 ORDER BY id", &params![proposal])
+    }
+
+    fn reviews_where(&self, clause: &str, args: &[Param<'_>]) -> Result<Vec<ReviewRow>, MetaError> {
         let rows = self.conn.query(
-            "SELECT id, proposal, reviewer, decision, body, head, ts FROM reviews WHERE proposal = ?1 ORDER BY id",
-            &params![proposal],
+            &format!("SELECT id, proposal, reviewer, decision, body, head, ts FROM reviews WHERE {clause}"),
+            args,
         )?;
         rows.iter()
             .map(|r| {

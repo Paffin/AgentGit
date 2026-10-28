@@ -168,9 +168,9 @@ Roles are bound to identities, patterns (`agent:*`) or OIDC groups, per reposito
 | Role | Grants |
 |---|---|
 | `reader` | read everything in a repository: history, trees, streams, proposals, events, policy, audit pins |
-| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals, request validation, enqueue, register agents and run as an agent (start, heartbeat and end the runs of **its own** agent identity only: acting for another agent needs `agent.operate`), tasks, leases, provenance |
-| `reviewer` | reader + review proposals |
-| `integrator` | reader + integrate proposals, request validation, run the queue, close proposals |
+| `writer` | reader + upload/publish, virtual workspaces, open/update/close proposals and add discussion comments, request validation, enqueue, register agents and run as an agent (start, heartbeat and end the runs of **its own** agent identity only: acting for another agent needs `agent.operate`), tasks, leases, provenance |
+| `reviewer` | reader + review proposals and add discussion comments |
+| `integrator` | reader + integrate proposals, request validation, run the queue, close proposals and add discussion comments |
 | `runner` | reader + claim execution jobs and submit attestations (execution-plane workers) |
 | `delegator` | writer + mint, list and revoke credentials for `agent:*` subjects (never for anyone else, never with a capability it lacks) + operate other agents' tasks and runs (`agent.operate`: start, heartbeat or end a run for another agent, finish a task whoever owns it, reap stale runs). For a service that starts agents; replaces `admin` for the orchestrator |
 | `admin` | everything, including policy, credentials, roles, GC, fsck, stream compare-and-swap |
@@ -243,3 +243,14 @@ continue in descending `(started_at, run_id)` order. `limit` retains its default
 100 and maximum 1000. Proposal lists keep `page_size` and their existing token
 contract. Empty filters preserve repository-wide listings. Check the feature
 before relying on task filtering: older servers may ignore unknown fields.
+
+### Proposal discussion
+
+Servers advertising `proposals.comments` accept `proposal.comment` through
+`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments` and gRPC `Comment`.
+Writers, reviewers and integrators may post discussion without approval rights.
+`body` must contain non-whitespace text, contain no NUL and fit in 16 KiB.
+`expected_head` is required; a mismatch returns `failed_precondition` without
+writing anything. An idempotency key records the response atomically with the
+comment. Comments use review records with `decision=comment`, remain available
+after closure and do not supersede approval or request-changes decisions.

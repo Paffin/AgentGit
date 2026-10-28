@@ -40,6 +40,7 @@ export function satisfies(have: ReadonlySet<Role>, need: Role): boolean {
 /** What the UI asks of the caller for each action (mirrors the table in docs/protocol/agwp-v1.md). */
 export const ACTION_ROLE = {
   review: 'reviewer',
+  commentProposal: 'writer',
   integrate: 'integrator',
   runQueue: 'integrator',
   enqueue: 'integrator',
@@ -61,6 +62,7 @@ export type Action = keyof typeof ACTION_ROLE
 /** Roles that may do an action (the table lists writers for some and integrators for others). */
 const ALSO_ALLOWED: Partial<Record<Action, readonly Role[]>> = {
   enqueue: ['writer'],
+  commentProposal: ['reviewer', 'integrator'],
   closeProposal: ['writer'],
   requestValidation: ['integrator'],
 }

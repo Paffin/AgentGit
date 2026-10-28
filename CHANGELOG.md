@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Proposal discussion comments for writers, reviewers and integrators, without granting approval rights. Comments are head-bound and idempotent, support closed proposals, and have tab-local draft recovery. Discussion no longer obscures an existing review decision in the browser summary.
+
 - Create a separate task from any task page with its title, description and file scope already filled in. Agent assignment, prerequisites, run history and retry budget start independently; creation remains explicit.
 - Browse the complete repository session history through continuation pages. Account changes clear the list immediately; older servers show their retrieval limit instead of an endless load-more control.
 

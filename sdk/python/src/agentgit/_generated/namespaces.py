@@ -27,6 +27,7 @@ from agentgit._generated.models import (
     ClaimJobRequest,
     ClaimJobResponse,
     CloseProposalRequest,
+    CommentProposalRequest,
     CompareAndSwapRequest,
     CompleteJobRequest,
     CompleteRunRequest,
@@ -1108,6 +1109,19 @@ class ProposalsApi:
     ) -> Proposal:
         """Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`)."""
         return self._c._call("proposal.close", {"repo": repo, "id": id, "idempotency_key": idempotency_key}, options, Proposal)
+
+    def comment(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        expected_head: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Review:
+        """Add an idempotent discussion comment at the inspected head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments`, operation `proposal.comment`)."""
+        return self._c._call("proposal.comment", {"repo": repo, "id": id, "body": body, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
 
     def create(
         self,
@@ -2607,6 +2621,19 @@ class AsyncProposalsApi:
     ) -> Proposal:
         """Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`)."""
         return await self._c._call("proposal.close", {"repo": repo, "id": id, "idempotency_key": idempotency_key}, options, Proposal)
+
+    async def comment(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        expected_head: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Review:
+        """Add an idempotent discussion comment at the inspected head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments`, operation `proposal.comment`)."""
+        return await self._c._call("proposal.comment", {"repo": repo, "id": id, "body": body, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
 
     async def create(
         self,

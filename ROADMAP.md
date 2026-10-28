@@ -16,7 +16,7 @@ backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
 The single-server Linux/SQLite/filesystem workflow is open to early adopters. Web and CLI migration preserve complete branch/tag history with a reconciliation report and retained source bundle. Hosting metadata migration, external MCP-host evidence, independent pilots and wider storage qualification remain separate open work; see the [beta programme](docs/community/beta.md).
 
-## Built since 0.1 (through `v0.3.0-beta.2`)
+## Built since 0.1 (through `v0.3.0-beta.4`)
 
 Each item is described, with what is and is not verified, in the [changelog](CHANGELOG.md) and the linked page.
 

@@ -365,3 +365,28 @@ the fix). Complete task-scoped recovery now cancels that exhausted task without
 launching another process. The real server/command regression and existing restart
 budget scenario pass together in 1.3 seconds. Client contract checks cover legacy
 truncation, repeated cursors/records, unrelated records and later-page failure.
+
+## Published beta.4 delivery, 2026-10-28
+
+Release `v0.3.0-beta.4` is published from
+`e67ba0925df12c61211bcb92620b67ad6fdcbb71` with four native platform
+archives, four Rust SBOMs, a Homebrew formula and checksums. The downloaded
+Linux x86_64 archive hashes to
+`db95a1bf5244a30ceff0a4030390604362bf2e5536942074ed55b9c819057a7e`,
+matching the exact release-workflow artifact used for local qualification.
+GitHub CLI 2.103.3 verified its signed provenance against the repository, exact
+release workflow and source digest, requiring a GitHub-hosted runner. The signed
+bundle was read from the GitHub API because this environment cannot fetch its
+Azure redirect directly.
+
+That same archive passed login, clone/push, protected review/integration,
+backup/restore and upgrade from the published beta.3 archive. The upgrade retained
+user records, moved metadata to schema 5 and refused opening it with the old
+binary. The native orchestrator in the archive reports beta.4. These checks do not
+qualify physical devices, an external model or an independent human pilot.
+
+The release workflow's native builds and archive smokes passed on all four
+platforms. Its final macOS installer job was still queued when this entry was
+written; publication and Linux provenance verification are complete. Newer main
+features, including task-context reuse and repository-wide history paging, are
+not part of this immutable tag.

@@ -24,7 +24,7 @@ The core that stores, merges and recovers never calls a language model; anything
 
 This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
 
-**Prepared for beta.4 (not published yet):** repository issues with comments, close/reopen, conflict-safe edits and an atomic handoff to agent tasks with an expected result and explicit file scope. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Operators can pause and resume new task-bound runs without interrupting existing sessions, and inspect current or historical runs through permanent links. Task creators can reserve a registered agent at creation or reassign queued work; the server and orchestrator enforce the choice. A registered agent still needs a configured executor. The registered-agent view shows expiring executor connection reports and last reported capacity. Its setup wizard prepares repository-scoped credentials and a task executor configuration; host installation remains a separate step. Optional bounded executor output can be viewed, downloaded and deleted from a run page. The development build uses schema 5; take a database backup before upgrading.
+**Available in beta.4:** repository issues with comments, close/reopen, conflict-safe edits and an atomic handoff to agent tasks with an expected result and explicit file scope. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Operators can pause and resume new task-bound runs without interrupting existing sessions, and inspect current or historical runs through permanent links. Task creators can reserve a registered agent at creation or reassign queued work; the server and orchestrator enforce the choice. A registered agent still needs a configured executor. The registered-agent view shows expiring executor connection reports and last reported capacity. Its setup wizard prepares repository-scoped credentials and a task executor configuration; host installation remains a separate step. Optional bounded executor output can be viewed, downloaded and deleted from a run page. This release uses schema 5; take a database backup before upgrading.
 
 ## Coming from GitHub or GitLab?
 
@@ -73,11 +73,11 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-The public beta is [`v0.3.0-beta.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+The public beta is [`v0.3.0-beta.4`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker`, `ag-mcp` and `orchestrator` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.3
-docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.3
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.4
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.4
 ```
 
 `--version` is needed while only pre-releases exist. For an existing rc.2 installation, see the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
@@ -106,7 +106,7 @@ ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, 
 ```
 
 `ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
-(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in `v0.3.0-beta.3`. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in `v0.3.0-beta.4`. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
 start on rc.2 in a few more lines.
 
 ### As a server
@@ -291,7 +291,7 @@ not been run in production by anyone but its authors, and there has been no exte
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
   per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
   job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Only prereleases are available; the current beta is `v0.3.0-beta.3`. No stable release, and no
+- Only prereleases are available; the current beta is `v0.3.0-beta.4`. No stable release, and no
   crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
   ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
   build first.

@@ -29,9 +29,9 @@ AgentGit — система контроля версий для репозит�
 Открытая ранняя бета: [статус и ограничения](#статус-и-ограничения) ниже, и в продакшене его не запускал никто,
 кроме авторов.
 
-**Готовится beta.4 (ещё не опубликована):** задачи из issues, выбор исполнителя, подключение оркестратора через Web UI, управление запуском и постоянные страницы запусков. Сохранение ограниченного вывода stdout/stderr включается отдельно; известные секреты маскируются, запись можно удалить. Для обновления потребуется резервная копия: используется схема метаданных 5.
+**В beta.4:** задачи из issues, выбор исполнителя, подключение оркестратора через Web UI, управление запуском и постоянные страницы запусков. Сохранение ограниченного вывода stdout/stderr включается отдельно; известные секреты маскируются, запись можно удалить. Для обновления потребуется резервная копия: используется схема метаданных 5.
 
-Опубликованная beta.3 не включает эти новые возможности. Установка исполнителя и доступ к модели остаются задачами владельца его хоста. Labels, milestones, вложения и импорт обсуждений пока не готовы. [Руководство Web UI](docs/guides/web-ui.md#repository-issues).
+Установка исполнителя и доступ к модели остаются задачами владельца его хоста. Labels, milestones, вложения и импорт обсуждений пока не готовы. [Руководство Web UI](docs/guides/web-ui.md#repository-issues).
 
 ## Переезд с GitHub или GitLab
 
@@ -83,11 +83,11 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # ставит бинарник `ag`
 ```
 
-Опубликованный кандидат — [`v0.3.0-beta.3`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3). Архивы доступны для установки. Они содержат `ag`, `ag-server`, `ag-worker` и `ag-mcp` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+Опубликованный кандидат — [`v0.3.0-beta.4`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4). Архивы доступны для установки. Они содержат `ag`, `ag-server`, `ag-worker`, `ag-mcp` и `orchestrator` для Linux и macOS; проверки выпуска отражены в [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.3
-docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.3
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.4
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.4
 ```
 
 Пока есть только пре-релизы, `--version` обязателен. Если у вас установлена rc.2, используйте [инструкцию для rc.2](docs/getting-started.md#on-020-rc2-until-the-next-release). [Отчёт о проверке rc.2](docs/operations/releasing.md) относится только к тому выпуску и не подтверждает готовность rc.3. Подробности — в [вариантах установки](docs/getting-started.md#install).
@@ -116,7 +116,7 @@ ag clone http://127.0.0.1:8080/demo/welcome              # правьте, `ag s
 ```
 
 `ag-server dev` печатает ссылку, которая входит в Web UI, и те же команды. Это режим для знакомства (только loopback,
-обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он включён в `v0.3.0-beta.3`. Для прежних архивов `v0.2.0-rc.2` [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
+обычный HTTP, учётные данные на 8 часов), а не развёртывание. Он включён в `v0.3.0-beta.4`. Для прежних архивов `v0.2.0-rc.2` [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) описывает тот же старт на
 rc.2 несколькими строками длиннее.
 
 ### Как сервер
@@ -304,7 +304,7 @@ AgentGit — ранняя публичная бета для одного Linux-
   включается на стороне клиента; действовать в чужом запуске можно только с `agent.operate`, которого у обычного
   writer нет. Токен ограждения (fencing) для захвата заданий передаётся по желанию клиента
   ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Доступны только пре-релизы; текущий кандидат — `v0.3.0-beta.3` (GitHub и GHCR). Стабильного релиза нет, пакетов в
+- Доступны только пре-релизы; текущий кандидат — `v0.3.0-beta.4` (GitHub и GHCR). Стабильного релиза нет, пакетов в
   crates.io, npm и PyPI нет; 21 крейт `agentgit-<x>` проверен только пробной публикацией
   ([релизы](docs/operations/releasing.md)). Схема метаданных 3 не читается старыми сборками: при обновлении реплик
   сначала запускайте новую сборку.

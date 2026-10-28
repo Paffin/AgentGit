@@ -2,7 +2,7 @@
 
 AgentGit offers an early public beta for small teams working with coding agents. The goal is to let a team review and land agent changes with checks tied to the exact candidate tree and a clear explanation when policy blocks a change.
 
-**Current status: early public beta (`0.3.0-beta.2`).** This opens the supported single-server workflow to early adopters; it does not claim independent pilot results or production readiness. The remaining qualification gates below stay visible.
+**Current status: early public beta (`0.3.0-beta.4`).** This opens the supported single-server workflow to early adopters; it does not claim independent pilot results or production readiness. The remaining qualification gates below stay visible.
 
 ## Supported beta target
 
@@ -16,6 +16,14 @@ AgentGit offers an early public beta for small teams working with coding agents.
 | Storage | Local filesystem | PostgreSQL/S3 qualification remains a separate track |
 
 This is the beta support scope, not a claim that every external qualification gate has passed. See [the readiness checklist](#release-gates).
+
+## Try the human-to-agent workflow
+
+Use **Agents & work → Registered agents → Connect an executor** to prepare scoped access.
+The [Web UI guide](../guides/web-ui.md#set-up-a-task-executor-development) explains the host
+prerequisites, separate private token and connection state. Create an issue, hand it to a
+scoped task, choose the connected agent, inspect its run, then review and integrate its
+change request. Output capture is optional and bounded; do not enable it for sensitive output.
 
 ## Join a pilot
 

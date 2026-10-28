@@ -1710,7 +1710,9 @@ Options:
       --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
       --scope <SCOPE>              Path glob the task is expected to touch (repeatable)
       --json                       Machine-readable JSON output
+      --source-task <SOURCE_TASK>  Original task for an independent follow-up
       --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --source-run <SOURCE_RUN>    Failed or abandoned run of --source-task
   -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
   -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help

@@ -770,6 +770,8 @@ pub fn task_brief(t: &Value) -> Value {
         "state": t["state"],
         "scope": t.get("scope").cloned().unwrap_or(json!([])),
         "depends_on": t.get("depends_on").cloned().unwrap_or(json!([])),
+        "source_task": t.get("source_task").cloned().unwrap_or(json!("")),
+        "source_run": t.get("source_run").cloned().unwrap_or(json!("")),
         "ready": t.get("ready").cloned().unwrap_or(json!(false)),
     })
 }

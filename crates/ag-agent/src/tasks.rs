@@ -56,6 +56,44 @@ pub fn create_task_with<R>(
     })
 }
 
+/// Records validated, immutable links while creating a separate follow-up task.
+pub fn attach_source(
+    tx: &Tx<'_>,
+    task: &str,
+    source_task: &str,
+    source_run: &str,
+    actor: &str,
+) -> Result<(), MetaError> {
+    if source_task.is_empty() {
+        return if source_run.is_empty() {
+            Ok(())
+        } else {
+            Err(MetaError::Invalid("source_run requires source_task".into()))
+        };
+    }
+    if task == source_task {
+        return Err(MetaError::Invalid("a task cannot be its own source".into()));
+    }
+    tx.task(source_task)?.ok_or_else(|| MetaError::NotFound("source task not found".into()))?;
+    let run = (!source_run.is_empty()).then_some(source_run);
+    validate_source_run(tx, source_task, run)?;
+    tx.task_link_source(task, source_task, run)?;
+    tx.audit_append(actor, "task.source", task, &json!({"source_task":source_task,"source_run":run}))?;
+    Ok(())
+}
+
+fn validate_source_run(tx: &Tx<'_>, source_task: &str, run: Option<&str>) -> Result<(), MetaError> {
+    if let Some(id) = run {
+        let row = tx.run(id)?.ok_or_else(|| MetaError::NotFound("source run not found".into()))?;
+        if row.task_id.as_deref() != Some(source_task) || !["failed", "abandoned"].contains(&row.status.as_str()) {
+            return Err(MetaError::Invalid(
+                "source run must be failed or abandoned and belong to the source task".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Makes `task` depend on `depends_on`, refusing self-dependencies and cycles.
 pub fn add_dependency(meta: &Meta, task: &str, depends_on: &str, actor: &str) -> Result<(), AgentError> {
     if task == depends_on {

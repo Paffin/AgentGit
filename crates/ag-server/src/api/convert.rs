@@ -169,6 +169,8 @@ pub fn task(t: &TaskRow, depends_on: Vec<String>, ready: bool) -> v1::Task {
         updated_at_ms: ms(t.updated_at),
         depends_on,
         ready,
+        source_task: t.source_task.clone().unwrap_or_default(),
+        source_run: t.source_run.clone().unwrap_or_default(),
     }
 }
 

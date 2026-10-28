@@ -61,7 +61,9 @@ pub mod features {
     pub const TASK_ASSIGNMENT: &str = "tasks.assignment";
     /// Opt-in bounded executor output snapshots.
     pub const RUN_OUTPUT: &str = "agents.run_output";
-    /// Task-filtered proposal and run history with run continuation tokens.
+    /// Immutable task/run source links for independent follow-up work.
+    pub const TASK_LINEAGE: &str = "tasks.lineage";
+    /// Task-filtered history.
     pub const TASK_HISTORY: &str = "tasks.history";
     /// Authors and collaborators can discuss proposals without approval rights.
     pub const PROPOSAL_THREADS: &str = "proposals.threads";
@@ -96,6 +98,7 @@ pub mod features {
         PROPOSAL_COMMENTS,
         PROPOSAL_THREADS,
         TASK_HISTORY,
+        TASK_LINEAGE,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

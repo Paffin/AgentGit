@@ -28,6 +28,8 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Development (`main`):** revision-bound line discussions are available in Web UI, CLI and MCP. The browser filters open/resolved threads without losing reply drafts; CLI JSON response shapes are documented for automation. Operators can also disable or re-enable new runs for an individual agent from the browser or `ag agent disable NAME --remote origin` (`enable` to restore admission) without deleting its key or history. These discussions require metadata schema 6. Back up before running a development binary on existing data; older binaries refuse upgraded repositories. [Design and rollback guidance](docs/adr/0025-line-review-threads.md).
 
+**Development upgrade:** persistent follow-up task links require metadata schema 7. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
+
 ## Coming from GitHub or GitLab?
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).

@@ -330,6 +330,12 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     runner.tasks.finish(repo=REPO, id=task.id, state="done")
     runner.agents.complete(repo=REPO, run_id=run.run_id, status="completed")
     assert alice.tasks.get(repo=REPO, id=dep.id).ready
+    follow_up = alice.tasks.create(repo=REPO, title="Separate follow-up", source_task=task.id)
+    assert follow_up.source_task == task.id
+    assert follow_up.source_run == ""
+    assert follow_up.owner == ""
+    assert follow_up.depends_on == []
+    assert alice.tasks.get(repo=REPO, id=task.id).state == "done"
     # The operator's call: nothing has been silent for an hour, so a dry run finds nothing to end.
     plan = tour["admin"].agents.reap_runs(repo=REPO, stale_after_ms=3_600_000, dry_run=True)
     assert (plan.dry_run, plan.runs, plan.released_leases, plan.revoked_credentials) == (True, [], [], 0)

@@ -857,3 +857,26 @@ fn schema_five_upgrades_without_altering_the_backup_or_existing_data() {
     drop(m);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn schema_six_tasks_upgrade_without_inventing_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("meta.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 6) {
+            conn.execute_batch(migration.sql).unwrap();
+        }
+        conn.execute("INSERT INTO meta (key, value) VALUES ('schema', '6')", []).unwrap();
+        conn.execute("INSERT INTO tasks (id,title,description,state,scope,created_by,created_at,updated_at) VALUES ('task_old','Existing task','Preserve λ','open','[]','user:old',10,10)", []).unwrap();
+        conn.pragma_update(None, "user_version", 6).unwrap();
+    }
+    let upgraded = Meta::open(&path).unwrap();
+    let task = upgraded.read(|tx| tx.task("task_old")).unwrap().unwrap();
+    assert_eq!(task.title, "Existing task");
+    assert_eq!(task.description, "Preserve λ");
+    assert!(task.source_task.is_none());
+    assert!(task.source_run.is_none());
+    drop(upgraded);
+    assert!(Meta::open(&path).unwrap().read(|tx| tx.task("task_old")).unwrap().is_some());
+}

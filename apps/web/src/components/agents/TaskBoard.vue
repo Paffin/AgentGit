@@ -65,6 +65,7 @@ const assignment = useAssignableAgents(
   () => props.repo,
   () => creating.value,
 )
+const lineageSupported = computed(() => !!auth.capabilities?.features.includes('tasks.lineage'))
 const title = ref('')
 const description = ref('')
 const scope = ref('')
@@ -75,7 +76,7 @@ let context = 0,
   controller: AbortController | undefined,
   requestId = randomHex()
 watch(
-  [title, description, scope, depends, assignee],
+  [title, description, scope, depends, assignee, copiedFrom, copiedRun, lineageSupported],
   () => {
     requestId = randomHex()
   },
@@ -141,7 +142,9 @@ function openCreate(source?: Task, run?: Run) {
   assignee.value = ''
   title.value = source?.title ?? ''
   description.value =
-    source && run ? followUpDescription(props.repo, source, run) : (source?.description ?? '')
+    source && run
+      ? followUpDescription(props.repo, source, run, !lineageSupported.value)
+      : (source?.description ?? '')
   scope.value = source?.scope.join('\n') ?? ''
   depends.value = []
   error.value = null
@@ -196,6 +199,8 @@ async function create() {
           .filter(Boolean),
         depends_on: depends.value,
         assignee: assignment.supported.value ? assignee.value : undefined,
+        source_task: lineageSupported.value ? copiedFrom.value?.id : undefined,
+        source_run: lineageSupported.value ? copiedRun.value?.run_id : undefined,
       },
       request,
     )
@@ -330,13 +335,18 @@ const toggle = (id: string, on: boolean) => {
         and prerequisites below; the source task stays unchanged.
       </p>
       <p v-if="copiedRun">
-        Failure context and a link to run
+        Failure context from run
         <RouterLink
           :to="{ name: 'run', params: { ...route.params, id: copiedRun.run_id }, query: {} }"
           >{{ copiedRun.run_id }}</RouterLink
         >
-        are included in the editable description. Review the cause and adjust the expected result
-        before creating the follow-up.
+        is included in the editable description.
+        {{
+          lineageSupported
+            ? 'Its source links are saved separately.'
+            : 'The description also keeps its source links.'
+        }}
+        Review the cause and adjust the expected result before creating the follow-up.
       </p>
       <form id="new-task" class="form" @submit.prevent="create">
         <SelectField

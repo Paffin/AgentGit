@@ -251,6 +251,12 @@ pub enum TaskCmd {
         /// Path glob the task is expected to touch (repeatable).
         #[arg(long)]
         scope: Vec<String>,
+        /// Original task for an independent follow-up.
+        #[arg(long)]
+        source_task: Option<String>,
+        /// Failed or abandoned run of --source-task.
+        #[arg(long, requires = "source_task")]
+        source_run: Option<String>,
     },
     /// List tasks.
     List {
@@ -279,26 +285,40 @@ pub enum TaskCmd {
     },
 }
 
+fn task_rows(rows: &[ag_storage::meta::TaskRow]) -> String {
+    let mut s = String::new();
+    for t in rows {
+        let _ = writeln!(
+            s,
+            "{}  {:<11} {}  owner {}  scope [{}]",
+            t.id,
+            t.state,
+            t.title,
+            t.owner.clone().unwrap_or_else(|| "-".into()),
+            t.scope.join(", ")
+        );
+        if let Some(source) = &t.source_task {
+            let run = t.source_run.as_deref().map(|id| format!(" · run {id}")).unwrap_or_default();
+            let _ = writeln!(s, "  from {source}{run}");
+        }
+    }
+    s
+}
+
 pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
     let meta = ctx.repo.meta();
-    let print = |rows: &Vec<ag_storage::meta::TaskRow>| {
-        let mut s = String::new();
-        for t in rows {
-            let _ = writeln!(
-                s,
-                "{}  {:<11} {}  owner {}  scope [{}]",
-                t.id,
-                t.state,
-                t.title,
-                t.owner.clone().unwrap_or_else(|| "-".into()),
-                t.scope.join(", ")
-            );
-        }
-        s
-    };
     match cmd {
-        TaskCmd::Create { title, description, scope } => {
-            let t = tasks::create_task(meta, title, description, scope, ctx.me.as_str())?;
+        TaskCmd::Create { title, description, scope, source_task, source_run } => {
+            let (_, t) = tasks::create_task_with(meta, title, description, scope, &[], ctx.me.as_str(), |tx, task| {
+                tasks::attach_source(
+                    tx,
+                    &task.id,
+                    source_task.as_deref().unwrap_or(""),
+                    source_run.as_deref().unwrap_or(""),
+                    ctx.me.as_str(),
+                )?;
+                tx.task(&task.id)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound("created task missing".into()))
+            })?;
             ctx.created(&t.id, &t, || format!("Created task {}", t.id))?;
         }
         TaskCmd::List { state } => {
@@ -306,7 +326,7 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
             if rows.is_empty() {
                 ctx.note("no tasks match; `ag task create TITLE` adds one");
             }
-            ctx.out(&rows, || print(&rows))?;
+            ctx.out(&rows, || task_rows(&rows))?;
         }
         TaskCmd::Depend { task, on } => {
             tasks::add_dependency(meta, task, on, ctx.me.as_str())?;
@@ -314,7 +334,7 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
         }
         TaskCmd::Ready => {
             let rows = tasks::ready_tasks(meta)?;
-            ctx.out(&rows, || print(&rows))?;
+            ctx.out(&rows, || task_rows(&rows))?;
         }
         TaskCmd::Done { task } => {
             tasks::finish_task(meta, task, "done", ctx.me.as_str())?;

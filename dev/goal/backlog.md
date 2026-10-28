@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission bring the inventory to 156 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission/source links bring the inventory to 157 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ attempts after restart. Included in the beta.4 candidate before publication.
 
 Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming, suggestions and reviewer assignment remain open.
 
-Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured retry lineage and richer retry policy controls remain open.
+Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured follow-up source links are now implemented with schema 7; explicit retry policy controls remain open.
 
 Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. General comments keep that contextual quote path; development servers now additionally provide durable line threads with replies and versioned resolution (schema 6). Suggestions and reviewer assignment remain open.
 
@@ -59,3 +59,5 @@ Line-thread persistence: SQLite and PostgreSQL share schema 6. Exact source revi
 Beta.5 release qualification: PR103 supplies native discussion JSON contracts and synchronized deployment defaults. The Windows upload check passed on `a36168b8d79f59b0557b9a9caa99f87b2ff9cb64`. Follow the release workflow for publication state and keep README installation instructions on the last verified published version. Web thread filtering and role-aware MCP feedback are implemented.
 
 Per-agent run admission: operators can disable or re-enable new runs through Web UI, HTTP/gRPC and SDKs. Native CLI shares the transaction implementation. Existing runs, credentials and history are preserved; cancellation and credential revocation are separate operations. See ADR-0026.
+
+Task source links: creation now validates and retains the original task and optional failed/abandoned run. UI, CLI and SDKs expose that relationship. Ownership, prerequisites and attempt budgets stay independent; this does not implement automatic retries. Upgrade requires a backup; see ADR-0027.

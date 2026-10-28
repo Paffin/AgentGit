@@ -610,3 +610,17 @@ ag agent enable my-agent --remote origin
 
 The CLI reads the current server state and submits the same guarded change. It
 requires `agent.list` to inspect the agent and `agent.operate` to change it.
+
+## Follow-up source links (development)
+
+Creating work from a task records its source task on servers advertising
+`tasks.lineage`. A follow-up from a failed run also records that exact run.
+The task page shows **Source of this task** with permanent links after reload;
+the original task lists its **Follow-up tasks** so the relationship can be navigated
+in both directions.
+Changing the copied description cannot change those relationships.
+
+The new task has its own assignment, prerequisites and attempt history; it does
+not reopen or reset the source task. Review its scope before creating it. Older
+servers retain links in the description only. This development feature requires
+metadata schema 7 and a pre-upgrade backup; see [ADR-0027](../adr/0027-task-source-links.md).

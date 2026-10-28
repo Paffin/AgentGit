@@ -34,7 +34,7 @@ impl Migration {
 }
 
 /// Schema version understood by this build.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
@@ -54,6 +54,11 @@ pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
         version: 6,
         name: "0006_review_threads.sql",
         sql: include_str!("../../migrations/sqlite/0006_review_threads.sql"),
+    },
+    Migration {
+        version: 7,
+        name: "0007_task_sources.sql",
+        sql: include_str!("../../migrations/sqlite/0007_task_sources.sql"),
     },
 ];
 
@@ -75,6 +80,11 @@ pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
         version: 6,
         name: "0006_review_threads.sql",
         sql: include_str!("../../migrations/postgres/0006_review_threads.sql"),
+    },
+    Migration {
+        version: 7,
+        name: "0007_task_sources.sql",
+        sql: include_str!("../../migrations/postgres/0007_task_sources.sql"),
     },
 ];
 

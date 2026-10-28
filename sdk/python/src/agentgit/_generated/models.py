@@ -574,6 +574,8 @@ class CreateTaskRequest:
     repo: str = field(default="")
     scope: list[str] = field(default_factory=list)
     source_issue: int = field(default=0)
+    source_run: str = field(default="")
+    source_task: str = field(default="")
     title: str = field(default="")
 
 
@@ -2126,6 +2128,8 @@ class Task:
     owner: str = field(default="")
     ready: bool = field(default=False)
     scope: list[str] = field(default_factory=list)
+    source_run: str = field(default="")
+    source_task: str = field(default="")
     state: str = field(default="")
     title: str = field(default="")
     updated_at_ms: int = field(default=0)

@@ -272,7 +272,17 @@ while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
 			c.Env = map[string]string{"DUMP": dump, "RELEASE": release}
 			c.Pass = []string{"PATH", "LEAKY_NOT_LISTED"}
 		})
-	task := e.task("env check", "src/**")
+	source := e.task("source work", "src/**")
+	status, body := e.w.Srv.Call(e.w.AliceT, "POST", "/v1/repos/"+repo+"/tasks", map[string]any{
+		"title": "env check", "scope": []string{"src/**"}, "source_task": source.ID,
+	})
+	if status != 200 {
+		t.Fatalf("create follow-up: %d %s", status, body)
+	}
+	var task agwp.Task
+	if err := json.Unmarshal(body, &task); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.mgr.Start(context.Background(), e.request(task, ex, Done)); err != nil {
 		t.Fatal(err)
 	}
@@ -324,8 +334,16 @@ while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
 	if mode, _ := os.ReadFile(dump + ".keymode"); !strings.HasPrefix(string(mode), "-rw-------") {
 		t.Errorf("key file mode = %q", mode)
 	}
-	if tf, _ := os.ReadFile(dump + ".task"); !strings.Contains(string(tf), "env check") {
-		t.Errorf("task file = %s", tf)
+	tf, err := os.ReadFile(dump + ".task")
+	if err != nil || !strings.Contains(string(tf), "env check") {
+		t.Fatalf("task file = %s, error = %v", tf, err)
+	}
+	var delivered map[string]any
+	if err := json.Unmarshal(tf, &delivered); err != nil {
+		t.Fatal(err)
+	}
+	if delivered["source_task"] != source.ID {
+		t.Fatalf("executor lost the task source: %v", delivered["source_task"])
 	}
 	// Done disposition: the owner (the agent) finished the task.
 	if got := e.w.GetTask(task.ID); got.State != agwp.TaskDone {

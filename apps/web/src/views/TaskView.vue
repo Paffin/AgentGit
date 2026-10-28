@@ -68,6 +68,11 @@ useLiveReload(['task', 'run', 'proposal'], () =>
   Promise.all([task.reload(), tasks.reload(), runs.reload(), changes.reload()]).then(() => {}),
 )
 const byId = computed(() => new Map((tasks.data.value || []).map((item) => [item.id, item])))
+const followUps = computed(() =>
+  (tasks.data.value || [])
+    .filter((item) => item.source_task === props.id)
+    .sort((a, b) => b.created_at_ms - a.created_at_ms),
+)
 const dependants = computed(() =>
   (tasks.data.value || []).filter((item) => item.depends_on.includes(props.id)),
 )
@@ -277,6 +282,25 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
           >Choose agent…</Button
         >
       </div>
+      <section v-if="task.data.value.source_task" aria-labelledby="task-source-heading">
+        <h2 id="task-source-heading">Source of this task</h2>
+        <p>
+          Created from
+          <RouterLink :to="taskLink(task.data.value.source_task)">{{
+            byId.get(task.data.value.source_task)?.title || task.data.value.source_task
+          }}</RouterLink>
+          <template v-if="task.data.value.source_run">
+            ·
+            <RouterLink
+              :to="{ name: 'run', params: { ...routeParams, id: task.data.value.source_run } }"
+              >View source run</RouterLink
+            >
+          </template>
+        </p>
+        <p class="muted">
+          This task has its own agent assignment, prerequisites and attempt history.
+        </p>
+      </section>
       <p v-if="task.data.value.description" class="description">
         {{ task.data.value.description }}
       </p>
@@ -348,6 +372,15 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
           <p v-else class="muted">No loaded tasks depend on this task.</p>
         </section>
       </div>
+      <section v-if="followUps.length" aria-label="Follow-up tasks">
+        <h2>Follow-up tasks</h2>
+        <ul class="items">
+          <li v-for="item in followUps" :key="item.id">
+            <RouterLink :to="taskLink(item.id)">{{ item.title }}</RouterLink>
+            <Badge size="sm">{{ item.state }}</Badge>
+          </li>
+        </ul>
+      </section>
       <section aria-label="Related change requests">
         <h2>Change requests</h2>
         <p class="muted hint">

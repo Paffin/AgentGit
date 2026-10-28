@@ -17,6 +17,73 @@ use crate::app::{App, Call};
 use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
 
+fn task_request_fingerprint(req: &v1::CreateTaskRequest, actor: &Identity) -> ApiResult<String> {
+    if !req.assignee.is_empty() {
+        ag_agent::registry::validate_name(&req.assignee)?;
+    }
+    if !req.source_task.is_empty() || !req.source_run.is_empty() {
+        let body = serde_json::to_string(&(
+            actor.as_str(),
+            &req.title,
+            &req.description,
+            &req.scope,
+            &req.depends_on,
+            req.source_issue,
+            req.expected_issue_version,
+            &req.assignee,
+            &req.source_task,
+            &req.source_run,
+        ))
+        .map_err(ApiError::internal)?;
+        return Ok(format!("create_task_source_v1\0{body}"));
+    }
+    // Preserve recorded keys for older clients and pre-upgrade task creation.
+    let mut request = format!(
+        "create_task\0{actor}\0{}\0{}\0{}\0{}",
+        req.title,
+        req.description,
+        req.scope.join(","),
+        req.depends_on.join(",")
+    );
+    if req.source_issue != 0 {
+        request.push_str(&format!("\0issue:{}:{}", req.source_issue, req.expected_issue_version));
+    }
+    if !req.assignee.is_empty() {
+        request.push_str(&format!("\0assignee:{}", req.assignee));
+    }
+    Ok(request)
+}
+
+fn created_task_row(
+    tx: &Tx<'_>,
+    t: &TaskRow,
+    req: &v1::CreateTaskRequest,
+    actor: &Identity,
+) -> Result<TaskRow, MetaError> {
+    ag_agent::tasks::attach_source(tx, &t.id, &req.source_task, &req.source_run, actor.as_str())?;
+    super::issues::link_created_task(tx, actor, req.source_issue, req.expected_issue_version, &t.id)?;
+    if !req.assignee.is_empty() {
+        return ag_agent::tasks::assign_in_tx(tx, &t.id, &req.assignee, "", actor.as_str(), false);
+    }
+    if req.source_task.is_empty() {
+        return Ok(t.clone());
+    }
+    tx.task(&t.id)?.ok_or_else(|| MetaError::NotFound("created task missing".into()))
+}
+
+fn created_task_response(
+    tx: &Tx<'_>,
+    t: &TaskRow,
+    req: &v1::CreateTaskRequest,
+    actor: &Identity,
+    claim: &super::Claim,
+) -> Result<v1::Task, MetaError> {
+    let row = created_task_row(tx, t, req, actor)?;
+    let response = task_view_in(tx, &row)?;
+    claim.record(tx, &response)?;
+    Ok(response)
+}
+
 /// Records one sweep deletes per repository (a bound on the length of its write transaction).
 const SWEEP_BATCH: usize = 1000;
 /// Marks a repository whose idempotency records written before they carried a time have been dated.
@@ -483,31 +550,29 @@ impl App {
         .await
     }
 
-    /// Creates a task (with dependencies).
+    /// Checks access to records used as the source of a new task.
+    async fn task_source_permissions(&self, call: &Call, req: &v1::CreateTaskRequest) -> ApiResult<bool> {
+        if !req.source_task.is_empty() || !req.source_run.is_empty() {
+            self.authorize(call, &req.repo, Cap::TaskRead, None).await?;
+        }
+        if !req.source_run.is_empty() {
+            self.authorize(call, &req.repo, Cap::AgentRead, None).await?;
+        }
+        if req.source_issue == 0 {
+            return Ok(false);
+        }
+        self.authorize(call, &req.repo, Cap::IssueWrite, None).await?;
+        Ok(self.authorize(call, &req.repo, Cap::IssueManage, None).await.is_ok())
+    }
+
+    /// Creates a task and records optional issue and follow-up sources atomically.
     pub async fn create_task(&self, call: &Call, req: v1::CreateTaskRequest) -> ApiResult<v1::Task> {
         let idem = self.idem();
-        let issue_admin = if req.source_issue > 0 {
-            self.authorize(call, &req.repo, Cap::IssueWrite, None).await?;
-            self.authorize(call, &req.repo, Cap::IssueManage, None).await.is_ok()
-        } else {
-            false
-        };
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
+        let issue_admin = self.task_source_permissions(call, &req).await?;
+        let repository = require(&req.repo, "repo")?.to_string();
+        self.with_repo_mut(call, &repository, Cap::TaskWrite, None, move |repo, actor| {
             super::issues::check_task_source(repo, actor, issue_admin, req.source_issue, req.expected_issue_version)?;
-            let mut request = format!(
-                "create_task\0{actor}\0{}\0{}\0{}\0{}",
-                req.title,
-                req.description,
-                req.scope.join(","),
-                req.depends_on.join(",")
-            );
-            if req.source_issue != 0 {
-                request.push_str(&format!("\0issue:{}:{}", req.source_issue, req.expected_issue_version));
-            }
-            if !req.assignee.is_empty() {
-                ag_agent::registry::validate_name(&req.assignee)?;
-                request.push_str(&format!("\0assignee:{}", req.assignee));
-            }
+            let request = task_request_fingerprint(&req, actor)?;
             keyed(repo, idem, "task.create", &req.idempotency_key, &request, |claim| {
                 // The task, its dependencies and the idempotency record are one transaction.
                 let (_, response) = create_task_with(
@@ -517,24 +582,7 @@ impl App {
                     &req.scope,
                     &req.depends_on,
                     actor.as_str(),
-                    |tx, t| {
-                        super::issues::link_created_task(
-                            tx,
-                            actor,
-                            req.source_issue,
-                            req.expected_issue_version,
-                            &t.id,
-                        )?;
-                        let response = if req.assignee.is_empty() {
-                            task_view_in(tx, t)?
-                        } else {
-                            let assigned =
-                                ag_agent::tasks::assign_in_tx(tx, &t.id, &req.assignee, "", actor.as_str(), false)?;
-                            task_view_in(tx, &assigned)?
-                        };
-                        claim.record(tx, &response)?;
-                        Ok(response)
-                    },
+                    |tx, t| created_task_response(tx, t, &req, actor, claim),
                 )?;
                 Ok(response)
             })

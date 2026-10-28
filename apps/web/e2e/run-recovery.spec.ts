@@ -37,7 +37,9 @@ test('continues failed work explicitly without reopening the source task or losi
   await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(
     /Preserve Unicode identifiers\.[\s\S]*Validation command exited with status 2\./,
   )
-  await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(new RegExp(run.runId))
+  await expect(dialog.getByLabel('Description', { exact: true })).not.toHaveValue(
+    new RegExp(run.runId),
+  )
   await expect(dialog.getByLabel('Scope (path globs)', { exact: true })).toHaveValue(
     'src/parser/**',
   )
@@ -58,10 +60,30 @@ test('continues failed work explicitly without reopening the source task or losi
   expect(tasks).toHaveLength(2)
   expect(tasks.find((item: { id: string }) => item.id === task.id).state).toBe('cancelled')
   const created = tasks.find((item: { id: string }) => item.id !== task.id)
-  expect(created.description).toContain(run.runId)
+  expect(created.description).toContain('Validation command exited with status 2.')
+  expect(created.description).not.toContain(run.runId)
   expect(created.state).toBe('open')
   expect(created.owner || '').toBe('')
   expect(created.depends_on || []).toEqual([])
+  expect(created.source_task).toBe(task.id)
+  expect(created.source_run).toBe(run.runId)
+  await page.reload()
+  const origin = page.getByRole('region', { name: 'Source of this task', exact: true })
+  await expect(
+    origin.getByRole('link', { name: 'Fix parser validation', exact: true }),
+  ).toHaveAttribute('href', new RegExp(`/tasks/${task.id}$`))
+  await expect(origin.getByRole('link', { name: 'View source run', exact: true })).toHaveAttribute(
+    'href',
+    new RegExp(`/runs/${run.runId}$`),
+  )
+  await origin.getByRole('link', { name: 'Fix parser validation', exact: true }).click()
+  const followUps = page.getByRole('region', { name: 'Follow-up tasks', exact: true })
+  await expect(
+    followUps.getByRole('link', { name: 'Continue parser validation', exact: true }),
+  ).toBeVisible()
+  await followUps.getByRole('link', { name: 'Continue parser validation', exact: true }).click()
+  await expect(origin).toBeVisible()
+  await page.screenshot({ path: info.outputPath('task-lineage.png'), fullPage: true })
 })
 
 test('does not combine an unrelated run with a task template', async ({ page, cast }) => {

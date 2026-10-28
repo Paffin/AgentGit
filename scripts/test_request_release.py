@@ -38,6 +38,15 @@ class Api:
 
 
 class ReleaseRequest(unittest.TestCase):
+    def test_every_required_workflow_runs_for_a_release_changelog_change(self):
+        from request_release import REQUIRED as workflows
+        root = Path(__file__).resolve().parent.parent
+        for workflow in workflows:
+            config = yaml.load((root / workflow).read_text(), Loader=yaml.BaseLoader)
+            push = config["on"]["push"]
+            if "paths" in push:
+                self.assertIn("CHANGELOG.md", push["paths"], workflow)
+
     def test_checks_finish_before_tag_and_dispatch(self):
         api = Api()
         seen = []

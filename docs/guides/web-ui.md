@@ -449,7 +449,7 @@ Downloaded multi-file drafts can be loaded with **Restore draft** in the same re
 
 ### Search file contents
 
-Open **Code → Search code** to find literal text at a branch or revision. Narrow the search to a file or folder and turn on **Match case** when needed. The query is kept in the URL, so Back and reload restore it. A result opens the exact searched revision and highlights the matching line.
+Open **Code → Search code** to find literal text at a branch or revision. Narrow the search to a file or folder and turn on **Match case** when needed. The query is kept in the URL, so Back and reload restore it. Leading and trailing spaces are preserved for literal searches, and matching text is emphasized in each result. Signing out or switching accounts clears the previous results and cancels pending requests. A result opens the exact searched revision and highlights the matching line.
 
 **Continue searching** examines the next part of the same immutable tree. An empty page does not mean the search is finished when this button is still present. Each request scans at most 1000 files / 16 MiB, and returns at most 50 matching lines in the UI. Files over 1 MiB, files with NUL bytes and invalid UTF-8 are skipped; the result reports their counts. Symbolic-link targets are searched as text, without following links. This first version is a bounded scan, not an indexed-search performance claim.
 

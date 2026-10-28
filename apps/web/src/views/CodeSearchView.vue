@@ -8,6 +8,7 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
 import { describeError } from '@/api/errors'
+import { searchHighlight } from '@/lib/searchHighlight'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Checkbox from '@/ui/Checkbox.vue'
@@ -27,6 +28,7 @@ const revision = ref(param('rev'))
 const prefix = ref(param('prefix'))
 const matchCase = ref(param('case') === '1')
 const supported = computed(() => auth.capabilities?.features.includes('tree.search') === true)
+const canSearch = computed(() => supported.value && auth.status === 'ready' && !!auth.identity)
 const results = ref<SearchMatch[]>([])
 const page = ref<SearchTreeResponse | null>(null)
 const skippedBinary = ref(0)
@@ -50,7 +52,7 @@ const target = (match: SearchMatch) => ({
   query: { rev: page.value?.rev, path: match.path, line: String(match.line) },
 })
 async function run(append = false) {
-  if (busy.value || !supported.value || !param('q')) return
+  if (busy.value || !canSearch.value || !param('q')) return
   const mine = context
   const q = param('q')
   const rev = append ? page.value?.rev : param('rev') || board.repo?.default_stream
@@ -73,7 +75,7 @@ async function run(append = false) {
         page_size: 50,
         page_token: append ? page.value?.next_page_token : undefined,
       },
-      { signal: controller.signal },
+      { signal: controller.signal, token: auth.token },
     )
     if (mine !== context) return
     if (append && page.value && response.tree_id !== page.value.tree_id)
@@ -101,7 +103,7 @@ function restart() {
 }
 function submit() {
   const next = {
-    q: query.value.trim() || undefined,
+    q: query.value || undefined,
     rev: revision.value.trim() || undefined,
     prefix: prefix.value.trim() || undefined,
     case: matchCase.value ? '1' : undefined,
@@ -116,7 +118,14 @@ function submit() {
   else void router.push({ query: next })
 }
 watch(
-  [repo, () => route.query, supported, () => board.repo?.default_stream],
+  [
+    repo,
+    () => route.query,
+    canSearch,
+    () => auth.token,
+    () => auth.identity,
+    () => board.repo?.default_stream,
+  ],
   () => {
     query.value = param('q')
     revision.value = param('rev')
@@ -161,11 +170,7 @@ onBeforeUnmount(() => {
           placeholder="src/"
         /><Checkbox v-model="matchCase" label="Match case" />
       </div>
-      <Button
-        type="submit"
-        variant="primary"
-        :loading="busy"
-        :disabled="!supported || !query.trim()"
+      <Button type="submit" variant="primary" :loading="busy" :disabled="!canSearch || !query"
         >Search</Button
       >
     </form>
@@ -223,7 +228,18 @@ onBeforeUnmount(() => {
         <li v-for="match in group.matches" :key="match.line">
           <RouterLink :to="target(match)"
             ><span class="line-number">Line {{ match.line }}</span
-            ><code>{{ match.text }}</code></RouterLink
+            ><code
+              ><template
+                v-for="(part, index) in searchHighlight(
+                  match.text,
+                  param('q'),
+                  param('case') === '1',
+                )"
+                :key="index"
+                ><mark v-if="part.match">{{ part.text }}</mark
+                ><template v-else>{{ part.text }}</template></template
+              ></code
+            ></RouterLink
           >
         </li>
       </ol>
@@ -294,6 +310,14 @@ li a:focus-visible {
 li code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+mark {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--text-3);
+  text-underline-offset: 0.2em;
 }
 .hint {
   font-size: var(--fs-xs);

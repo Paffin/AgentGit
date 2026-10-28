@@ -1,8 +1,9 @@
 # Roadmap
 
 AgentGit follows [ADR-0001](docs/adr/0001-final-architecture.md): correctness first, narrow before wide.
-This list is ordered by dependency, not by date, and it only lists what is **not** built. What exists is
-described in the [architecture traceability](docs/architecture/adr-traceability.md).
+The next-work list is ordered by dependency, not by date. Delivery status separates shipped
+capabilities from development; implementation evidence lives in the
+[architecture traceability](docs/architecture/adr-traceability.md).
 
 ## 0.1 — shipped (alpha)
 

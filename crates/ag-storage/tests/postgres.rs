@@ -83,6 +83,8 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     // schema 1, exactly as it would have been created by release 0.1 on PostgreSQL
     let m = open(&url, schema.name());
     m.write(|tx| {
+        tx.raw_execute("DROP TABLE issue_activity, issues", &[])?;
+        tx.raw_execute("DELETE FROM meta WHERE key = 'task_scheduling'", &[])?;
         tx.raw_execute("DROP TABLE jobs", &[])?;
         tx.raw_execute(
             "DROP INDEX proposals_by_created, proposals_by_state_created, proposals_by_stream_created",
@@ -105,7 +107,10 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
 
     m.write(|tx| tx.raw_execute("UPDATE meta SET value = '99' WHERE key = 'schema'", &[])).unwrap();
     let err = Meta::open_postgres(&url, schema.name(), Arc::new(SystemClock), Limits::default()).err().unwrap();
-    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 3 }), "{err}");
+    assert!(
+        matches!(err, MetaError::UnsupportedSchema { found: 99, supported } if supported == ag_storage::meta::SCHEMA_VERSION),
+        "{err}"
+    );
 }
 
 #[test]

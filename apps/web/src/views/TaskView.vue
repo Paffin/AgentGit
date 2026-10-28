@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ExecutionControl from '@/components/agents/ExecutionControl.vue'
+import TaskEditor from '@/components/agents/TaskEditor.vue'
 import { api } from '@/api/instance'
 import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
@@ -262,6 +263,20 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             :to="{ name: 'agents', params: routeParams, query: { tab: 'tasks', from_task: id } }"
             >Create a task from this one…</Button
           >
+          <TaskEditor
+            :repo="repo"
+            :task="task.data.value"
+            :has-runs="sessions.length > 0"
+            @saved="
+              (updated) => {
+                task.data.value = updated
+                board.touched(['tasks'])
+                task.reload()
+                tasks.reload()
+              }
+            "
+            @reload="task.reload()"
+          />
           <CopyButton :text="link" label="Copy task link" with-label />
         </div>
       </header>

@@ -84,6 +84,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag agent enable`](#ag-agent-enable)
 - [`ag task`](#ag-task)
 - [`ag task create`](#ag-task-create)
+- [`ag task edit`](#ag-task-edit)
 - [`ag task list`](#ag-task-list)
 - [`ag task depend`](#ag-task-depend)
 - [`ag task ready`](#ag-task-ready)
@@ -1677,6 +1678,7 @@ Usage: ag task [OPTIONS] <COMMAND>
 
 Commands:
   create  Create a task
+  edit    Refine instructions before a task's first run; concurrent edits are refused
   list    List tasks
   depend  Declare that TASK cannot start until ON is done
   ready   Open tasks whose dependencies are all done
@@ -1714,6 +1716,32 @@ Options:
       --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
       --source-run <SOURCE_RUN>    Failed or abandoned run of --source-task
   -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                       Print help
+  -V, --version                    Print version
+```
+
+## ag task edit
+
+```text
+Refine instructions before a task's first run; concurrent edits are refused
+
+Usage: ag task edit [OPTIONS] <--title <TITLE>|--description <DESCRIPTION>|--scope <SCOPE>|--clear-scope> <TASK>
+
+Arguments:
+  <TASK>  Task identifier
+
+Options:
+  -C, --repo <DIR>                 Operate on the repository at this path (default: discovered from the current directory)
+      --title <TITLE>              New title; omitted keeps the current title
+      --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --description <DESCRIPTION>  New description; an empty string clears it
+      --json                       Machine-readable JSON output
+      --scope <SCOPE>              Replace path scope (repeatable)
+      --clear-scope                Remove the expected file-path scope (repository policy still applies)
+      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --remote [<NAME>]            Edit on a configured server instead of locally (default name: origin)
   -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version

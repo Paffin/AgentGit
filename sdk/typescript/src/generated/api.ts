@@ -151,6 +151,7 @@ export const NAMESPACE_METHODS = {
     list: 'task.list',
     schedulingGet: 'task.scheduling.get',
     schedulingSet: 'task.scheduling.set',
+    update: 'task.update',
   },
   tree: {
     diff: 'tree.diff',
@@ -423,6 +424,8 @@ export interface Api {
     schedulingGet(request: Req<'task.scheduling.get'>, options?: CallOptions): Promise<Res<'task.scheduling.get'>>;
     /** Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`) */
     schedulingSet(request: Req<'task.scheduling.set'>, options?: CallOptions): Promise<Res<'task.scheduling.set'>>;
+    /** Refine task instructions before the first run (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}`, operation `task.update`) */
+    update(request: Req<'task.update'>, options?: CallOptions): Promise<Res<'task.update'>>;
   };
   readonly tree: {
     /** Per-file diffs between two revisions (`POST /v1/repos/{owner}/{rname}/diff`, operation `tree.diff`) */

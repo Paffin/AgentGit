@@ -310,3 +310,19 @@ Source task/run reads require `task.read`/`agent.read` in addition to `task.writ
 The links are immutable through the API. They do not inherit ownership,
 prerequisites or retry history. Requests without these fields preserve the old
 idempotency fingerprint. Metadata schema 7 requires a backup before upgrade.
+
+
+### Task instruction refinement
+
+Servers advertising `tasks.edit` expose `PATCH /v1/repos/{owner}/{rname}/tasks/{id}`
+(`task.update`, `AgentService.UpdateTask`). Both `content` and `expected` are required objects
+with `title`, `description`, and `scope`; omitted string/array members inside them use protocol
+defaults. The caller needs `task.write` and must be the creator or have `agent.operate`.
+Only an open task with no run history may change. A full-content mismatch returns
+`failed_precondition`; timestamps alone are not concurrency tokens.
+
+An optional idempotency key records the exact successful response atomically. Concurrent
+identical requests replay once, even if the original content is now stale; different content
+under that key is refused. Retry with the original body and key after an uncertain result.
+Owner, creation metadata, prerequisites and task/run source links are unaffected. No metadata
+migration is introduced. [Semantics](../adr/0028-task-instruction-refinement.md).

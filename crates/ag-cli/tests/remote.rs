@@ -427,3 +427,41 @@ fn an_operator_reaps_the_stale_runs_of_a_server_from_the_command_line() {
     let again = ok(ag(dir.path(), "user:boss", &boss, &["agent", "reap", "--remote", "--timeout", "1s"]));
     assert!(again.contains("Abandoned 0 run(s)"), "{again}");
 }
+
+#[test]
+fn remote_task_edit_uses_the_server_and_enforces_its_permissions() {
+    let srv = Server::start();
+    let repo = "acme/task-edit";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let alice = srv.user("user:alice", repo, Role::Writer);
+    let bob = srv.user("user:bob", repo, Role::Writer);
+    let handle = srv.app.repos.handle(repo).unwrap();
+    let task =
+        ag_agent::tasks::create_task(handle.meta(), "Initial", "Before", &["src/**".into()], "user:alice").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["init", "--namespace", repo]));
+    ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["remote", "add", "origin", &format!("{}/{repo}", srv.url), "--token-env", "AG_TOKEN"],
+    ));
+    let updated: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["--json", "task", "edit", &task.id, "--remote", "--title", "Remote λ", "--clear-scope"],
+    )))
+    .unwrap();
+    assert_eq!(updated["title"], "Remote λ");
+    assert_eq!(updated["scope"], serde_json::json!([]));
+    let saved = handle.meta().read(|tx| tx.task(&task.id)).unwrap().unwrap();
+    assert_eq!(saved.title, "Remote λ");
+    assert_eq!(saved.description, "Before");
+    let refused = ag(dir.path(), "user:bob", &bob, &["task", "edit", &task.id, "--remote", "--title", "Stolen"]);
+    assert!(!refused.status.success());
+    assert!(text(&refused).contains("creator"), "{}", text(&refused));
+}

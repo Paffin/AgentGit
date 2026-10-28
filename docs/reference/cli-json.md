@@ -1513,6 +1513,16 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
       "payload": {
         "actor": "string",
         "details": {
+          "after": {
+            "description": "string",
+            "scope": [],
+            "title": "string"
+          },
+          "before": {
+            "description": "string",
+            "scope": [],
+            "title": "string"
+          },
           "blockers": [
             {
               "code": "string",
@@ -1536,6 +1546,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "new_head": "string",
           "old_head": "null",
           "operation_id": "string",
+          "operator": "bool",
           "policy_version": "number",
           "proposal": "string",
           "resolved": "bool",
@@ -1543,6 +1554,7 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "status": "string",
           "stream": "string",
           "thread_id": "string",
+          "title": "string",
           "tree": "string",
           "version": "number"
         },
@@ -2124,6 +2136,46 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 {
   "state": "string",
   "task": "string"
+}
+```
+
+### ag task edit
+
+```json
+{
+  "created_at": "number",
+  "created_by": "string",
+  "description": "string",
+  "id": "string",
+  "owner": "null",
+  "scope": [
+    "string"
+  ],
+  "source_run": "null",
+  "source_task": "null",
+  "state": "string",
+  "title": "string",
+  "updated_at": "number"
+}
+```
+
+### ag task edit (remote)
+
+```json
+{
+  "created_at_ms": "number",
+  "created_by": "string",
+  "depends_on": [],
+  "description": "string",
+  "id": "string",
+  "owner": "string",
+  "ready": "bool",
+  "scope": [],
+  "source_run": "string",
+  "source_task": "string",
+  "state": "string",
+  "title": "string",
+  "updated_at_ms": "number"
 }
 ```
 

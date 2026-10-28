@@ -529,6 +529,9 @@ impl AgentService for Grpc {
     async fn create_task(&self, request: Request<v1::CreateTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.create", create_task)
     }
+    async fn update_task(&self, request: Request<v1::UpdateTaskRequest>) -> Result<Response<v1::Task>, Status> {
+        unary!(self, request, "task.update", update_task)
+    }
     async fn assign_task(&self, request: Request<v1::AssignTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.assign", assign_task)
     }

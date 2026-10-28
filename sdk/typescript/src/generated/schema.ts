@@ -1348,7 +1348,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Refine task instructions before the first run */
+        patch: operations["task.update"];
         trace?: never;
     };
     "/v1/repos/{owner}/{rname}/tasks/{id}/assignee": {
@@ -4783,6 +4784,15 @@ export interface components {
              */
             updated_at_ms: number;
         };
+        /** @description Instructions remain immutable once any run has used the task. */
+        TaskContent: {
+            /** @default  */
+            description: string;
+            /** @default [] */
+            scope: string[];
+            /** @default  */
+            title: string;
+        };
         TaskScheduling: {
             /** @default false */
             paused: boolean;
@@ -4873,6 +4883,18 @@ export interface components {
             idempotency_key: string;
             /** @default  */
             new_head: string;
+            /** @default  */
+            repo: string;
+        };
+        UpdateTaskRequest: {
+            /** @default null */
+            content: components["schemas"]["TaskContent"] | null;
+            /** @default null */
+            expected: components["schemas"]["TaskContent"] | null;
+            /** @default  */
+            id: string;
+            /** @default  */
+            idempotency_key: string;
             /** @default  */
             repo: string;
         };
@@ -8734,6 +8756,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

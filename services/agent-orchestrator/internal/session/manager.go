@@ -167,6 +167,14 @@ func (m *Manager) Start(ctx context.Context, req Request) (*Info, error) {
 		}
 		return nil, fmt.Errorf("start run: %w", err)
 	}
+	// Selection may predate an instruction edit. After claiming the task its
+	// instructions are frozen, so leases and the executor must use this version.
+	claimed, err := m.o.Orch.GetTask(ctx, req.Repo, req.Task.ID)
+	if err != nil {
+		m.completeRun(run.RunID, req.Repo, "failed", "could not read the claimed task")
+		return nil, fmt.Errorf("read claimed task: %w", err)
+	}
+	req.Task = *claimed
 	s := newSession(m, req, run, key)
 	fail := func(cause error, summary string) (*Info, error) {
 		m.completeRun(run.RunID, req.Repo, "failed", summary)

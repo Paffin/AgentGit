@@ -432,3 +432,38 @@ Nested threads, line anchors and resolution remain open work.
 - The real command-executor environment test reproduced the Go client dropping source metadata before writing `AG_TASK_FILE`. Adding the two optional fields preserves the server-provided source in the real executor file; that test passes in 0.34s. No live-model or independent MCP-host qualification is claimed.
 
 - Final browser loop also traverses source task → follow-up → source context on desktop and phone (4 scenarios, 11.8s). New servers keep long source URLs out of the editable description; older servers retain the textual fallback. Local SQLite and PostgreSQL agent suites each pass 23 tests; PostgreSQL migration checks pass 3 tests. All temporary database containers were removed.
+
+
+## Task instruction refinement after beta.5
+
+Baseline: `b5629da` (published beta.5 documentation; immutable release source remains
+`a36168b8d79f59b0557b9a9caa99f87b2ff9cb64`). Task editing adds no database migration.
+
+- The core compares complete expected title/description/scope inside the same write transaction
+  that checks creator/operator authority and absence of any run. A frozen-clock test covers stale
+  writes independently of timestamp resolution, invalid content, retained source links and refusal
+  after a failed run is put back in the queue. PostgreSQL 17 passed all 24 agent tests (4.02 seconds).
+- Real HTTP verifies writer/reader isolation, concurrent same-key replay with identical response,
+  stale content, key reuse with a different body, required fields, invalid content and refusal once
+  execution starts. A lost successful response remains replayable after the run starts. One real
+  update yields one audit entry. Initial focused HTTP proof: 0.14 seconds.
+- Native local and remote CLI tests exercise `ag task edit`, preserve omitted fields, clear scope
+  explicitly and refuse another writer or already running work. Generated local/remote JSON shapes
+  are recorded from those clients; no protocol operations were removed. The API inventory is 119.
+- The Python SDK's real-server workflow plus generated-contract suite passed 18 tests (2.66 seconds).
+  The TypeScript (12 tests) and Python (13 tests) live operation tours exercised all 119 operations,
+  including `tasks.update`; both passed without skipped cases. Python strict typing passed 53 files.
+- The real Chromium desktop/phone workflow passed four cases in 12.8 seconds: save, reload,
+  a concurrent edit winning without erasing the form draft, current-state reopening, post-launch
+  refusal, and reader UI. This is viewport simulation, not physical-phone qualification. Chromium's
+  accessibility tree reports the dialog name; the initial exact-label locator included the required
+  field marker and was corrected to locate the textbox by accessible name.
+- A real shell executor initially received the stale pre-edit task snapshot. The orchestrator now
+  rereads the task after it is claimed, before taking leases and writing `AG_TASK_FILE`. The same
+  regression passed with the refined description and retained source link (0.283 seconds).
+- Complexity/duplication and mutation-site tools were run on the changed core paths. New core/API
+  functions have cyclomatic complexity at most 9. Mutation-site discovery is not a kill score;
+  no fresh coverage percentage or exhaustive mutation claim is made.
+
+The form draft is held while the dialog is open; it is not account-backed autosave. Editing does
+not pause dispatch. Work started first freezes instructions, and a separate follow-up is required.

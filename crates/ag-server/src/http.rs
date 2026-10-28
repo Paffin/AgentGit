@@ -1401,6 +1401,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        patch,
+        "patch",
+        "/v1/repos/{owner}/{rname}/tasks/{id}",
+        "task.update",
+        "Agent",
+        "Refine task instructions before the first run",
+        v1::UpdateTaskRequest,
+        v1::Task,
+        update_task
+    );
+    route!(
+        r,
+        meta,
         put,
         "put",
         "/v1/repos/{owner}/{rname}/tasks/{id}/assignee",

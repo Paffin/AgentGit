@@ -121,6 +121,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
         .as_str()
         .unwrap()
         .to_string();
+    r.rec("task edit", &a.ag(&["--json", "task", "edit", &t1, "--title", "Detailed design"]).ok());
     let t2 = a.ag(&["--json", "task", "create", "Build"]).ok().json()["id"].as_str().unwrap().to_string();
     let t3 = a.ag(&["--json", "task", "create", "Cancel me"]).ok().json()["id"].as_str().unwrap().to_string();
     r.rec("task depend", &a.ag(&["--json", "task", "depend", &t2, &t1]).ok());

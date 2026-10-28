@@ -1836,6 +1836,7 @@ service AgentService {
   rpc ReapRuns(ReapRunsRequest) returns (ReapRunsResponse);
   rpc CreateTask(CreateTaskRequest) returns (Task);
   rpc AssignTask(AssignTaskRequest) returns (Task);
+  rpc UpdateTask(UpdateTaskRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc AddDependency(AddDependencyRequest) returns (Task);
@@ -1941,5 +1942,21 @@ message SetAgentStateRequest {
   string name = 2;
   bool disabled = 3;
   bool expected_disabled = 4;
+  string idempotency_key = 5;
+}
+
+// Instructions remain immutable once any run has used the task.
+message TaskContent {
+  string title = 1;
+  string description = 2;
+  repeated string scope = 3;
+}
+
+message UpdateTaskRequest {
+  string repo = 1;
+  string id = 2;
+  TaskContent content = 3;
+  // Full content observed when editing started; required, compared atomically.
+  TaskContent expected = 4;
   string idempotency_key = 5;
 }

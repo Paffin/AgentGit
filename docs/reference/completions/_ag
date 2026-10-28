@@ -1483,6 +1483,31 @@ never\:"Never colour"))' \
 ':title -- Title:_default' \
 && ret=0
 ;;
+(edit)
+_arguments "${_arguments_options[@]}" : \
+'--title=[New title; omitted keeps the current title]:TITLE:_default' \
+'--description=[New description; an empty string clears it]:DESCRIPTION:_default' \
+'(--clear-scope)*--scope=[Replace path scope (repeatable)]:SCOPE:_default' \
+'--remote=[Edit on a configured server instead of locally (default name\: origin)]::NAME:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--clear-scope[Remove the expected file-path scope (repository policy still applies)]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':task -- Task identifier:_default' \
+&& ret=0
+;;
 (list)
 _arguments "${_arguments_options[@]}" : \
 '--state=[Filter by state\: open, in_progress, done, cancelled]:STATE:_default' \
@@ -3882,6 +3907,7 @@ _ag__subcmd__sync_commands() {
 _ag__subcmd__task_commands() {
     local commands; commands=(
 'create:Create a task' \
+'edit:Refine instructions before a task'\''s first run; concurrent edits are refused' \
 'list:List tasks' \
 'depend:Declare that TASK cannot start until ON is done' \
 'ready:Open tasks whose dependencies are all done' \
@@ -3909,6 +3935,11 @@ _ag__subcmd__task__subcmd__depend_commands() {
 _ag__subcmd__task__subcmd__done_commands() {
     local commands; commands=()
     _describe -t commands 'ag task done commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__edit_commands] )) ||
+_ag__subcmd__task__subcmd__edit_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task edit commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__task__subcmd__list_commands] )) ||
 _ag__subcmd__task__subcmd__list_commands() {

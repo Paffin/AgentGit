@@ -38,7 +38,9 @@ Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundl
 
 The beta also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These changes are included in beta.2 and documented in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
 
-Next priorities are queued-task refinement, complete review workflows and hosting-metadata migration.
+Development also supports editing task instructions before the first run through Web UI, CLI and API, with concurrent-edit protection. This is not in beta.5 archives. [Task editing](docs/guides/web-ui.md#refine-queued-task-instructions-development).
+
+Next priorities are complete review workflows and hosting-metadata migration.
 The [roadmap](ROADMAP.md#next) separates delivered features, published releases and remaining qualification.
 
 ## See it work

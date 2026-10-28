@@ -283,6 +283,14 @@ while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
 	if err := json.Unmarshal(body, &task); err != nil {
 		t.Fatal(err)
 	}
+	// The dispatcher may have selected this task before its instructions were refined.
+	status, body = e.w.Srv.Call(e.w.AliceT, "PATCH", "/v1/repos/"+repo+"/tasks/"+task.ID, map[string]any{
+		"expected": map[string]any{"title": task.Title, "description": task.Description, "scope": task.Scope},
+		"content":  map[string]any{"title": "env check", "description": "Use the refined instructions", "scope": []string{"src/refined/**"}},
+	})
+	if status != 200 {
+		t.Fatalf("refine queued task: %d %s", status, body)
+	}
 	if _, err := e.mgr.Start(context.Background(), e.request(task, ex, Done)); err != nil {
 		t.Fatal(err)
 	}
@@ -341,6 +349,13 @@ while [ ! -f "$RELEASE" ]; do sleep 0.02; done`,
 	var delivered map[string]any
 	if err := json.Unmarshal(tf, &delivered); err != nil {
 		t.Fatal(err)
+	}
+	if delivered["description"] != "Use the refined instructions" {
+		t.Fatalf("executor received stale instructions: %v", delivered["description"])
+	}
+	paths, ok := delivered["scope"].([]any)
+	if !ok || len(paths) != 1 || paths[0] != "src/refined/**" {
+		t.Fatalf("executor received stale scope: %v", delivered["scope"])
 	}
 	if delivered["source_task"] != source.ID {
 		t.Fatalf("executor lost the task source: %v", delivered["source_task"])

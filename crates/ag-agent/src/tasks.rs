@@ -9,6 +9,91 @@ use serde_json::json;
 
 use crate::AgentError;
 
+/// Editable instructions, compared as a whole rather than by a wall-clock timestamp.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TaskContent {
+    /// Short description of the desired result.
+    pub title: String,
+    /// Detailed instructions.
+    pub description: String,
+    /// Expected file-path globs.
+    pub scope: Vec<String>,
+}
+
+impl From<&TaskRow> for TaskContent {
+    fn from(task: &TaskRow) -> Self {
+        Self { title: task.title.clone(), description: task.description.clone(), scope: task.scope.clone() }
+    }
+}
+
+fn validate_content(title: &str, scope: &[String]) -> Result<(), String> {
+    if title.trim().is_empty() {
+        return Err("task title is empty".into());
+    }
+    for g in scope {
+        ag_policy::PathMatcher::new(std::slice::from_ref(g))?;
+    }
+    Ok(())
+}
+
+/// Refines a task before its first run. Content, authorization, history, audit and
+/// caller-supplied idempotency records share the caller's write transaction.
+pub fn update_in(
+    tx: &Tx<'_>,
+    id: &str,
+    content: &TaskContent,
+    expected: &TaskContent,
+    actor: &str,
+    operator: bool,
+) -> Result<TaskRow, MetaError> {
+    validate_content(&content.title, &content.scope).map_err(MetaError::Invalid)?;
+    let task = tx.task(id)?.ok_or_else(|| MetaError::NotFound(format!("task '{id}'")))?;
+    check_refinement(tx, &task, expected, actor, operator)?;
+    if TaskContent::from(&task) == *content {
+        return Ok(task);
+    }
+    persist_content(tx, &task, content, actor, operator)
+}
+
+fn persist_content(
+    tx: &Tx<'_>,
+    task: &TaskRow,
+    content: &TaskContent,
+    actor: &str,
+    operator: bool,
+) -> Result<TaskRow, MetaError> {
+    tx.task_set_content(&task.id, &content.title, &content.description, &content.scope)?;
+    tx.audit_append(
+        actor,
+        "task.update",
+        &task.id,
+        &json!({"before":TaskContent::from(task),"after":content,"operator":operator}),
+    )?;
+    tx.outbox_push("task.update", &json!({"id":task.id}))?;
+    tx.task(&task.id)?.ok_or_else(|| MetaError::Corrupt("updated task missing".into()))
+}
+
+fn check_refinement(
+    tx: &Tx<'_>,
+    task: &TaskRow,
+    expected: &TaskContent,
+    actor: &str,
+    operator: bool,
+) -> Result<(), MetaError> {
+    if !operator && task.created_by.split('#').next() != actor.split('#').next() {
+        return Err(MetaError::Invalid("only the task creator or an operator can edit it".into()));
+    }
+    if task.state != "open" || !tx.runs_page(None, Some(&task.id), false, None, 1)?.is_empty() {
+        return Err(MetaError::Invalid(
+            "task instructions are immutable after the first run; create a follow-up task".into(),
+        ));
+    }
+    if TaskContent::from(task) != *expected {
+        return Err(MetaError::Invalid("task instructions changed; reload before saving".into()));
+    }
+    Ok(())
+}
+
 /// Creates a task. `scope` lists the path globs the task is expected to touch.
 pub fn create_task(
     meta: &Meta,
@@ -33,12 +118,7 @@ pub fn create_task_with<R>(
     actor: &str,
     also: impl Fn(&Tx<'_>, &TaskRow) -> Result<R, MetaError>,
 ) -> Result<(TaskRow, R), AgentError> {
-    if title.trim().is_empty() {
-        return Err(AgentError::Invalid("task title is empty".into()));
-    }
-    for g in scope {
-        ag_policy::PathMatcher::new(std::slice::from_ref(g)).map_err(AgentError::Invalid)?;
-    }
+    validate_content(title, scope).map_err(AgentError::Invalid)?;
     let id = random_id("task")?;
     meta.write(|tx| {
         let t = tx.task_create(&id, title, description, scope, actor)?;

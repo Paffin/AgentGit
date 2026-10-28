@@ -80,6 +80,14 @@ impl Idem {
 }
 
 impl Claim {
+    /// Checks for a concurrent winner before evaluating mutable preconditions.
+    pub(crate) fn ensure_available(&self, tx: &ag_storage::meta::Tx<'_>) -> Result<(), ag_storage::meta::MetaError> {
+        if self.keyed && tx.meta_get(&self.slot)?.is_some() && !self.idem.expired(tx, &self.slot)? {
+            return Err(ag_storage::meta::MetaError::AlreadyExists(format!("idempotency record {}", self.slot)));
+        }
+        Ok(())
+    }
+
     /// Records `response` as the answer to this key. Call it inside the creating transaction. If somebody else
     /// recorded the key first, the creation is rolled back with `AlreadyExists` and [`keyed`] replays theirs.
     pub(crate) fn record<T: serde::Serialize>(
@@ -91,9 +99,7 @@ impl Claim {
             return Ok(());
         }
         // A record that has outlived its lifetime is replaced: the key may be used again.
-        if tx.meta_get(&self.slot)?.is_some() && !self.idem.expired(tx, &self.slot)? {
-            return Err(ag_storage::meta::MetaError::AlreadyExists(format!("idempotency record {}", self.slot)));
-        }
+        self.ensure_available(tx)?;
         let json = serde_json::to_string(response)?;
         tx.meta_set(&time_slot(&self.slot), &padded_ms(self.idem.now_ms))?;
         tx.meta_set(&self.slot, &format!("{}\n{json}", self.hash))

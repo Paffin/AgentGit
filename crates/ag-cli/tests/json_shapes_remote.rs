@@ -157,6 +157,8 @@ fn record_remote_agents(srv: &Server, a: &Ag, token: &str, recorder: &mut Record
             name == "agent disable#remote"
         );
     }
+    let task = ag_agent::tasks::create_task(repo.meta(), "Before", "", &[], "user:root").unwrap();
+    recorder.rec("task edit#remote", &a.run_env("user:root", &["--json", "task", "edit", &task.id, "--remote", "--title", "After"], &[("AG_TOKEN", token)]).ok());
     let reader = srv.user("user:state-reader", "acme/demo", Role::Reader);
     assert_ne!(
         a.run_env("user:state-reader", &["agent", "disable", "cli-bot", "--remote"], &[("AG_TOKEN", &reader)]).code(),

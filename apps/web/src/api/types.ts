@@ -50,6 +50,7 @@ export type IntegrationOutcome = Omit<S['IntegrationOutcome'], 'blockers'> & { b
 export type IntegrationResult = Omit<S['IntegrationResult'], 'outcome'> & {
   outcome: IntegrationOutcome | null
 }
+export type TaskContent = S['TaskContent']
 export type Agent = S['Agent']
 export type Run = S['Run']
 export type RunOutput = S['RunOutput']

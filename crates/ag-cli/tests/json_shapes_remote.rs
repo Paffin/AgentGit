@@ -24,6 +24,7 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
 
     as_user("user:alice", &alice, &["init", "--namespace", "acme/demo"]).ok();
     as_user("user:alice", &alice, &["remote", "add", "origin", &url]).ok();
+    record_remote_agents(&srv, &a, &root, &mut r);
     r.rec("remote whoami", &as_user("user:alice", &alice, &["--json", "remote", "whoami"]).ok());
     r.rec("remote streams", &as_user("user:alice", &alice, &["--json", "remote", "streams"]).ok());
     a.write("policy.json", r#"{"approvals": {"min": 1}}"#);
@@ -139,4 +140,27 @@ fn record_discussions(r: &mut Recorder, a: &Ag, token: &str, proposal: &str, hea
         "remote discussion resolve",
         &run(&["--json", "remote", "discussion", "resolve", proposal, id, "--expected-version", "2"]).ok(),
     );
+}
+
+fn record_remote_agents(srv: &Server, a: &Ag, token: &str, recorder: &mut Recorder) {
+    let repo = srv.app.repos.handle("acme/demo").unwrap();
+    let key = ag_crypto::KeyPair::generate().unwrap();
+    ag_agent::registry::register_agent_with_key(repo.meta(), "cli-bot", &key.public(), "agent", "user:root").unwrap();
+    for (name, args) in [
+        ("agent list#remote", vec!["--json", "agent", "list", "--remote"]),
+        ("agent disable#remote", vec!["--json", "agent", "disable", "cli-bot", "--remote"]),
+        ("agent enable#remote", vec!["--json", "agent", "enable", "cli-bot", "--remote"]),
+    ] {
+        recorder.rec(name, &a.run_env("user:root", &args, &[("AG_TOKEN", token)]).ok());
+        assert_eq!(
+            repo.meta().read(|tx| tx.agent("cli-bot")).unwrap().unwrap().disabled,
+            name == "agent disable#remote"
+        );
+    }
+    let reader = srv.user("user:state-reader", "acme/demo", Role::Reader);
+    assert_ne!(
+        a.run_env("user:state-reader", &["agent", "disable", "cli-bot", "--remote"], &[("AG_TOKEN", &reader)]).code(),
+        0
+    );
+    assert!(!repo.meta().read(|tx| tx.agent("cli-bot")).unwrap().unwrap().disabled);
 }

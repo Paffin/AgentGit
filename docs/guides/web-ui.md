@@ -599,3 +599,14 @@ A concurrent state change is rejected instead of silently applying a decision
 from an outdated dialog. Close and reopen it to review the current state.
 These actions require the `agents.state` server feature and `agent.operate`
 permission (delegator or administrator). Earlier servers keep the status display.
+
+The equivalent remote CLI actions use the configured repository remote:
+
+```bash
+ag agent list --remote origin
+ag agent disable my-agent --remote origin
+ag agent enable my-agent --remote origin
+```
+
+The CLI reads the current server state and submits the same guarded change. It
+requires `agent.list` to inspect the agent and `agent.operate` to change it.

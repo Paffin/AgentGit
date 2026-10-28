@@ -52,7 +52,10 @@ async function apply() {
     open.value = false
     emit('changed')
   } catch (cause) {
-    if (mine === generation) error.value = describeError(cause)
+    if (mine === generation) {
+      error.value = describeError(cause)
+      emit('changed')
+    }
   } finally {
     if (mine === generation) busy.value = false
   }

@@ -7,6 +7,7 @@ test('registered keys and a reported executor connection are visibly different',
   page,
   cast,
   openAs,
+  allowConsole,
 }, info) => {
   const { repo } = await freshRepo(cast, 'executor-presence')
   const admin = cast.as('admin')
@@ -57,6 +58,26 @@ test('registered keys and a reported executor connection are visibly different',
   await expect(
     page.getByRole('button', { name: 'Disable agent connected-bot', exact: true }),
   ).toBeVisible()
+
+  // Another operator changes the state after this dialog captured its decision.
+  allowConsole(/status of 412/)
+  await page.getByRole('button', { name: 'Disable agent connected-bot', exact: true }).click()
+  await admin.ok_(
+    admin.patch(`/v1/repos/${repo}/agents/connected-bot`, {
+      disabled: true,
+      expected_disabled: false,
+    }),
+    'disable concurrently',
+  )
+  await disable.getByRole('button', { name: 'Disable agent', exact: true }).click()
+  await expect(disable.getByRole('alert')).toContainText('agent state changed')
+  await disable.getByRole('button', { name: 'Keep current state', exact: true }).click()
+  await page.getByRole('button', { name: 'Enable agent connected-bot', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Enable agent?', exact: true })
+    .getByRole('button', { name: 'Enable agent', exact: true })
+    .click()
+  await expect(connected).toBeVisible()
   await page.screenshot({ path: info.outputPath('agent-controls.png'), fullPage: true })
   const reader = await openAs('erin')
   await reader.goto(`/repos/${repo}/agents?tab=agents`)

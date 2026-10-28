@@ -9,7 +9,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
-- Per-agent run admission controls in Web UI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
+- Per-agent run admission controls in Web UI, remote CLI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
 
 ### Fixed
 

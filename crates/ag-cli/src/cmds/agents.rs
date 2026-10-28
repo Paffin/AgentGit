@@ -30,7 +30,11 @@ pub enum AgentCmd {
         role: String,
     },
     /// List agents.
-    List,
+    List {
+        /// Read a server's agents instead of the local repository (without a NAME: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
+    },
     /// Start a run. Prints the identity the agent must use (`agent:name#run_…`).
     Start {
         /// Agent name.
@@ -80,11 +84,17 @@ pub enum AgentCmd {
     Disable {
         /// Agent name.
         name: String,
+        /// Change the server's agent instead (requires agent.operate; without a NAME: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
     },
     /// Allow a disabled agent to run again.
     Enable {
         /// Agent name.
         name: String,
+        /// Change the server's agent instead (requires agent.operate; without a NAME: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
     },
 }
 
@@ -103,7 +113,18 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
                 )
             })?;
         }
-        AgentCmd::List => {
+        AgentCmd::List { remote: Some(remote) } => {
+            let rows = super::remote::list_agents(ctx, remote)?;
+            ctx.out(&rows, || {
+                rows.iter()
+                    .map(|row| {
+                        format!("{}  {}{}", row.identity, row.role, if row.disabled { "  [disabled]" } else { "" })
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })?;
+        }
+        AgentCmd::List { remote: None } => {
             let rows = meta.read(|tx| tx.agents())?;
             if rows.is_empty() {
                 ctx.note("no agents yet; `ag agent register NAME` creates one");
@@ -196,12 +217,20 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
                 )
             })?;
         }
-        AgentCmd::Disable { name } => {
-            registry::set_disabled(meta, name, true, None, ctx.me.as_str())?;
+        AgentCmd::Disable { name, remote } => {
+            if let Some(remote) = remote {
+                super::remote::set_agent_state(ctx, remote, name, true)?;
+            } else {
+                registry::set_disabled(meta, name, true, None, ctx.me.as_str())?;
+            }
             ctx.done(&json!({"disabled": name}), || format!("Disabled {name}"))?;
         }
-        AgentCmd::Enable { name } => {
-            registry::set_disabled(meta, name, false, None, ctx.me.as_str())?;
+        AgentCmd::Enable { name, remote } => {
+            if let Some(remote) = remote {
+                super::remote::set_agent_state(ctx, remote, name, false)?;
+            } else {
+                registry::set_disabled(meta, name, false, None, ctx.me.as_str())?;
+            }
             ctx.done(&json!({"enabled": name}), || format!("Enabled {name}"))?;
         }
     }

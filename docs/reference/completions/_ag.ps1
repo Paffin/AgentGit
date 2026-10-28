@@ -1054,6 +1054,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;agent;list' {
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Read a server''s agents instead of the local repository (without a NAME: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -1159,6 +1160,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;agent;disable' {
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Change the server''s agent instead (requires agent.operate; without a NAME: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
@@ -1175,6 +1177,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;agent;enable' {
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Change the server''s agent instead (requires agent.operate; without a NAME: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')

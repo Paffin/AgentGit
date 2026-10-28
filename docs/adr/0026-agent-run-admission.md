@@ -7,7 +7,10 @@ identity, key, history or currently running work. Reuse the existing `disabled`
 flag rather than introduce a second scheduling state. No metadata migration or
 VCS format change is required.
 
-The native CLI and API share the same transactional state-change function.
+The local CLI and API share the same transactional state-change function.
+The CLI `agent list/disable/enable --remote NAME` uses the same public gRPC API,
+negotiates `agents.state` for changes and captures the observed state before
+submitting a guarded, retry-safe mutation.
 Starting a run reads the agent's state inside the run creation transaction, so a
 start and a disable are serialized by repository metadata writes. Once disable
 commits, later starts are refused. Runs already admitted remain valid; disabling

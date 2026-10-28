@@ -235,6 +235,55 @@ pub(crate) fn reap_runs(ctx: &Ctx, remote: &str, stale_after_ms: u64, dry_run: b
     })
 }
 
+/// Lists registered identities from the configured remote.
+pub(crate) fn list_agents(ctx: &Ctx, remote: &str) -> Result<Vec<v1::Agent>> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        Ok(client
+            .agents()
+            .list(client.req(v1::ListAgentsRequest { repo: config.repo }))
+            .await
+            .map_err(ClientError::from)?
+            .into_inner()
+            .agents)
+    })
+}
+
+async fn require_agent_controls(client: &Client) -> Result<()> {
+    if !client.negotiate().await?.features.iter().any(|f| f == ag_protocol::features::AGENT_STATE) {
+        bail!("this server does not support agent state controls; update it before using this command");
+    }
+    Ok(())
+}
+
+/// Changes a remote agent only if its inspected state still matches.
+pub(crate) fn set_agent_state(ctx: &Ctx, remote: &str, agent: &str, disabled: bool) -> Result<()> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        require_agent_controls(&client).await?;
+        let agents = client
+            .agents()
+            .list(client.req(v1::ListAgentsRequest { repo: config.repo.clone() }))
+            .await
+            .map_err(ClientError::from)?
+            .into_inner()
+            .agents;
+        let current =
+            agents.iter().find(|row| row.name == agent).ok_or_else(|| anyhow!("agent '{agent}' not found"))?;
+        let request = v1::SetAgentStateRequest {
+            repo: config.repo,
+            name: agent.into(),
+            disabled,
+            expected_disabled: current.disabled,
+            idempotency_key: ag_crypto::random_id("agent-state")?,
+        };
+        client.retrying(|| async { client.agents().set_state(client.req(request.clone())).await }).await?;
+        Ok(())
+    })
+}
+
 fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
     let all = load_remotes(root)?;
     let name = name.unwrap_or("origin").to_string();

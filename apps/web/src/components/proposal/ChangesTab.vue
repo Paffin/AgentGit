@@ -1,18 +1,75 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import type { DiffResponse } from '@/api/types'
 import { shortId } from '@/lib/format'
+import TextField from '@/ui/TextField.vue'
+import Button from '@/ui/Button.vue'
 import Badge from '@/ui/Badge.vue'
 import DiffViewer from '@/ui/DiffViewer.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 
-defineProps<{
-  diff?: DiffResponse & { base: string }
+const props = defineProps<{
+  diff?: DiffResponse & { base: string; head?: string }
+  reviewScope?: string
   loading: boolean
   error: unknown
 }>()
 defineEmits<{ retry: [] }>()
 
+const query = ref('')
+const hideViewed = ref(false)
+const viewed = ref<string[]>([])
+const storageError = ref('')
+const storageKey = computed(() =>
+  props.reviewScope && props.diff?.head
+    ? 'agentgit.review.v1:' + JSON.stringify([props.reviewScope, props.diff.base, props.diff.head])
+    : '',
+)
+watch(
+  storageKey,
+  (key) => {
+    viewed.value = []
+    hideViewed.value = false
+    storageError.value = ''
+    if (!key) return
+    try {
+      const saved: unknown = JSON.parse(sessionStorage.getItem(key) || '[]')
+      if (!Array.isArray(saved) || !saved.every((path) => typeof path === 'string'))
+        throw new Error('Invalid progress')
+      viewed.value = saved
+    } catch {
+      storageError.value = 'Review progress could not be restored. You can still review every file.'
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
+const visibleFiles = computed(() =>
+  (props.diff?.files || []).filter(
+    (file) =>
+      file.path.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()) &&
+      (!hideViewed.value || !viewed.value.includes(file.path)),
+  ),
+)
+const viewedCount = computed(
+  () => props.diff?.files.filter((file) => viewed.value.includes(file.path)).length || 0,
+)
+function mark(path: string, checked: boolean) {
+  viewed.value = checked
+    ? [...new Set([...viewed.value, path])]
+    : viewed.value.filter((value) => value !== path)
+  if (!storageKey.value) return
+  try {
+    sessionStorage.setItem(storageKey.value, JSON.stringify(viewed.value))
+    storageError.value = ''
+  } catch {
+    storageError.value = 'Review progress is only in memory because this tab could not save it.'
+  }
+}
+function showAll() {
+  query.value = ''
+  hideViewed.value = false
+}
 function jump(i: number) {
   const el = document.getElementById(`diff-${i}`)
   if (!el) return
@@ -37,10 +94,31 @@ function jump(i: number) {
         <code class="mono">{{ diff.base ? shortId(diff.base, 8) : 'the empty tree' }}</code>
         with the proposal’s head. Context is three lines.
       </p>
+      <div v-if="diff.files.length" class="review-tools">
+        <TextField
+          v-model="query"
+          type="search"
+          label="Filter changed files"
+          placeholder="File name or path"
+        />
+        <label v-if="storageKey" class="hide-viewed"
+          ><input v-model="hideViewed" type="checkbox" aria-label="Hide viewed files" /> Hide viewed
+          files</label
+        >
+        <span v-if="storageKey" class="faint" role="status"
+          >{{ viewedCount }} of {{ diff.files.length }} loaded files viewed</span
+        >
+        <Button v-if="query || hideViewed" size="sm" @click="showAll">Show all files</Button>
+      </div>
+      <p v-if="storageKey" class="faint progress-note">
+        Viewed marks are saved in this tab for this exact comparison. They do not approve the change
+        request.
+      </p>
+      <p v-if="storageError" role="status" class="faint">{{ storageError }}</p>
       <div class="layout" :class="{ 'with-nav': diff.files.length > 1 }">
         <nav v-if="diff.files.length > 1" class="files" aria-label="Changed files">
           <ul role="list">
-            <li v-for="(f, i) in diff.files" :key="f.path">
+            <li v-for="(f, i) in visibleFiles" :key="f.path">
               <a :href="`#diff-${i}`" @click.prevent="jump(i)">
                 <span class="p mono">{{ f.path }}</span>
                 <span class="n">
@@ -60,13 +138,65 @@ function jump(i: number) {
             </li>
           </ul>
         </nav>
-        <DiffViewer :files="diff.files" :truncated="diff.truncated" />
+        <DiffViewer
+          :files="visibleFiles"
+          :truncated="diff.truncated"
+          :empty-title="diff.files.length ? 'No matching files' : 'No differences'"
+          :empty-description="
+            diff.files.length
+              ? 'Change the path filter or show viewed files to continue reviewing.'
+              : 'The two revisions have the same files.'
+          "
+        >
+          <template v-if="storageKey" #file-actions="{ file }">
+            <label class="viewed"
+              ><input
+                type="checkbox"
+                :aria-label="`Viewed ${file.path}`"
+                :checked="viewed.includes(file.path)"
+                @change="mark(file.path, ($event.target as HTMLInputElement).checked)"
+              />
+              Viewed</label
+            >
+          </template>
+        </DiffViewer>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+.review-tools {
+  display: flex;
+  align-items: end;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.review-tools :deep(.field) {
+  flex: 1;
+  min-width: 200px;
+}
+.hide-viewed,
+.viewed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 38px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.viewed {
+  font-size: var(--fs-xs);
+}
+.progress-note {
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-xs);
+}
+input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
 .sk {
   padding: var(--s-3);
 }

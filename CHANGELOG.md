@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Change-request diffs support path filtering, viewed-file marks and hiding reviewed files. Tab-local progress is scoped to the account and exact comparison; it never counts as approval. Server truncation warnings remain visible while filtering.
+
 ### Fixed
 
 - File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.

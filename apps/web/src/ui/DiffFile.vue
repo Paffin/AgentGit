@@ -58,6 +58,7 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
         <Icon :name="open ? 'chevron-down' : 'chevron-right'" :size="16" />
         <span class="path mono">{{ file.path }}</span>
       </button>
+      <slot name="actions" />
       <span class="meta">
         <Badge size="sm" :tone="statusTone">{{ file.status }}</Badge>
         <span v-if="file.binary" class="faint">binary</span>

@@ -142,3 +142,10 @@ Editor source commit: `9e3d3f9`. Eight new helper/component cases cover pre-canc
 Artifacts are retained outside source under `agentgit-quality/web-test-speed/goal-editor-{red-verified,final}*`; they include the JSON reports and recovered/pending screenshots. Older interrupted full runs are preserved as incomplete and are not counted as green qualification. The Browser runtime tool was unavailable; the repository's pinned Playwright runtime was used.
 
 The source audit also mapped workspace read/list: `Cap::WorkspaceRead` is inherited by repository readers and those routes do not perform owner filtering. Owner/admin checks guard modification/deletion. Documentation now describes workspace **isolation**, not confidentiality; account-backed confidential drafts remain blocked on a separate boundary design.
+
+
+## 2026-10-28 — file-by-file review workbench
+
+Baseline main `d3ee13716df7ccb8dc876685322603b324fcbb1c`. The change-request Files changed tab now filters loaded paths, records personal viewed-file marks and hides viewed files. Progress is keyed by account/repository/proposal and the exact diff base/head captured from the completed request, so head changes and account switches cannot reuse stale progress. This does not implement durable discussion threads or account-backed review state.
+
+Two new component scenarios failed before implementation because the filter and viewed controls did not exist. The targeted final checks passed 26 cases across diff rendering, proposal data and the new workbench. Production build and touched-file ESLint passed. A fresh real-server browser scenario created the repository and uploaded both files exclusively through UI, then filtered, marked, hid and reloaded progress: Chromium and phone viewport both passed without retries in 8.9 seconds. Axe found no serious/critical violations, and the viewport overflow assertion passed. Both screenshots were saved under `/workspace/agentgit-quality/review-workbench-results`; the phone screenshot was visually inspected. Physical devices and human screen-reader use remain unverified. No repository-wide test run or CI changes were needed for this slice.

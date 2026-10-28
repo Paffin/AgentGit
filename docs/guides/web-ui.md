@@ -192,6 +192,8 @@ verified; *Timeline* is the history of the proposal.
 
 Diff line-number columns fit the largest number in the displayed patch, including when a hunk crosses a digit boundary. Long lines scroll inside the diff; focus that region and use the arrow keys to read across.
 
+**Working through files.** In Files changed, filter the loaded paths by name or folder. Mark each file **Viewed** and turn on **Hide viewed files** to focus on the remainder. These marks are saved in the current browser tab for your account, repository, change request and exact comparison revisions; a changed head or base starts separate progress. They are personal reading aids, not approvals. Filtering never fetches missing files: an oversized server diff keeps its truncation warning even when no loaded files match. **Show all files** clears both filters.
+
 **Review drafts.** Closing the review dialog to inspect the diff keeps the comment and decision on this page. A reload still clears them. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your

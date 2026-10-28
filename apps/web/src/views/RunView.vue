@@ -77,6 +77,17 @@ const permalink = computed(
   () =>
     `${window.location.origin}/repos/${repo.value.split('/').map(encodeURIComponent).join('/')}/runs/${encodeURIComponent(props.id)}`,
 )
+const failed = computed(
+  () => !!run.data.value && ['failed', 'abandoned'].includes(run.data.value.status),
+)
+const terminalTask = computed(
+  () => !!task.data.value && ['done', 'cancelled'].includes(task.data.value.state),
+)
+const followUpLink = computed(() => ({
+  name: 'agents',
+  params: routeParams.value,
+  query: { tab: 'tasks', from_task: run.data.value?.task_id || '', from_run: props.id },
+}))
 const changesLink = computed(() => ({
   name: 'proposals',
   params: routeParams.value,
@@ -162,6 +173,27 @@ onBeforeUnmount(() => clearInterval(heartbeatPoll))
         <h2 id="summary-heading">Session summary</h2>
         <p class="summary">
           {{ run.data.value.summary || 'The agent has not provided a summary.' }}
+        </p>
+      </section>
+      <section v-if="failed && task.data.value" aria-labelledby="recovery-heading">
+        <h2 id="recovery-heading">Continue after this run</h2>
+        <p v-if="!terminalTask" class="muted">
+          The task is still active. Its executor may retry it. Review the current task and existing
+          changes before starting separate work.
+        </p>
+        <p v-else class="muted">
+          The source task is {{ task.data.value.state }}. Review the failure and any existing
+          changes before creating a separate follow-up.
+        </p>
+        <RouterLink :to="{ name: 'task', params: { ...routeParams, id: task.data.value.id } }"
+          >Review source task</RouterLink
+        >
+        <p v-if="terminalTask && auth.can(repo, 'createTask')">
+          <RouterLink :to="followUpLink">Create follow-up task…</RouterLink>
+          <span class="muted">
+            The form includes the source scope and failure context. Nothing runs until you create
+            the task.</span
+          >
         </p>
       </section>
       <section aria-labelledby="changes-heading">

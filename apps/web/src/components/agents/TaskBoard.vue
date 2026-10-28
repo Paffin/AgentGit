@@ -5,9 +5,10 @@ import { api } from '@/api/instance'
 import { randomHex } from '@/api/client'
 import { useAssignableAgents } from '@/composables/useAssignableAgents'
 import { ApiError, describeError } from '@/api/errors'
-import type { Task } from '@/api/types'
+import type { Task, Run } from '@/api/types'
 import { useLiveReload } from '@/composables/useLiveReload'
 import { useResource } from '@/composables/useResource'
+import { followUpDescription } from '@/lib/taskRecovery'
 import { requirementText } from '@/lib/roles'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
@@ -31,6 +32,7 @@ const auth = useAuth()
 const route = useRoute(),
   router = useRouter()
 const copiedFrom = ref<Task | null>(null)
+const copiedRun = ref<Run | null>(null)
 let handledSource = ''
 const board = useBoard()
 const toasts = useToasts()
@@ -93,6 +95,7 @@ watch(
     assignee.value = ''
     error.value = null
     copiedFrom.value = null
+    copiedRun.value = null
     handledSource = ''
   },
   { flush: 'sync' },
@@ -102,37 +105,66 @@ onBeforeUnmount(() => {
   controller?.abort()
 })
 const canCreate = computed(() => auth.can(props.repo, 'createTask'))
+const sourceTaskId = computed(() =>
+  typeof route.query.from_task === 'string' ? route.query.from_task : '',
+)
+const sourceRunId = computed(() =>
+  typeof route.query.from_run === 'string' ? route.query.from_run : '',
+)
+const sourceTask = useResource(
+  (signal) => api.agents.task(props.repo, sourceTaskId.value, { signal }),
+  {
+    watch: [() => props.repo, () => auth.token, sourceTaskId, canCreate],
+    enabled: () => !!sourceTaskId.value && canCreate.value,
+  },
+)
+const sourceRun = useResource(
+  (signal) => api.agents.run(props.repo, sourceRunId.value, { signal }),
+  {
+    watch: [() => props.repo, () => auth.token, sourceRunId, canCreate],
+    enabled: () => !!sourceRunId.value && !!sourceTaskId.value && canCreate.value,
+  },
+)
+const sourceMismatch = computed(
+  () =>
+    sourceRun.data.value &&
+    (sourceRun.data.value.task_id !== sourceTaskId.value ||
+      !['failed', 'abandoned'].includes(sourceRun.data.value.status)),
+)
 const candidates = computed(() =>
   (tasks.data.value ?? []).filter((t) => t.state !== 'cancelled' && t.state !== 'done'),
 )
 
-function openCreate(source?: Task) {
+function openCreate(source?: Task, run?: Run) {
+  copiedRun.value = run ?? null
   copiedFrom.value = source ?? null
   assignee.value = ''
   title.value = source?.title ?? ''
-  description.value = source?.description ?? ''
+  description.value =
+    source && run ? followUpDescription(props.repo, source, run) : (source?.description ?? '')
   scope.value = source?.scope.join('\n') ?? ''
   depends.value = []
   error.value = null
   creating.value = true
 }
 watch(
-  [() => route.query.from_task, () => tasks.data.value, canCreate],
+  [sourceTaskId, sourceRunId, () => sourceTask.data.value, () => sourceRun.data.value, canCreate],
   () => {
-    const id = route.query.from_task
-    if (typeof id !== 'string' || !canCreate.value || creating.value) return
-    const key = `${props.repo}:${id}`
+    const source = sourceTask.data.value
+    if (!source || source.id !== sourceTaskId.value || !canCreate.value || creating.value) return
+    const run = sourceRun.data.value
+    if (sourceRunId.value && (!run || run.run_id !== sourceRunId.value || sourceMismatch.value))
+      return
+    const key = `${props.repo}:${source.id}:${sourceRunId.value}`
     if (handledSource === key) return
-    const source = byId.value.get(id)
-    if (!source) return
     handledSource = key
-    openCreate(source)
+    openCreate(source, sourceRunId.value ? run : undefined)
   },
   { immediate: true },
 )
 function clearSourceQuery() {
   if (route.query.from_task)
-    void router.replace({ query: { ...route.query, from_task: undefined } })
+    void router.replace({ query: { ...route.query, from_task: undefined, from_run: undefined } })
 }
 function dismissCreate() {
   if (busy.value) return
@@ -211,6 +243,22 @@ const toggle = (id: string, on: boolean) => {
       >
     </div>
     <ErrorState
+      v-if="sourceTask.error.value"
+      what="source task"
+      :error="sourceTask.error.value"
+      @retry="sourceTask.reload()"
+    />
+    <ErrorState
+      v-if="sourceRun.error.value"
+      what="source run"
+      :error="sourceRun.error.value"
+      @retry="sourceRun.reload()"
+    />
+    <Alert v-if="sourceMismatch" tone="bad" title="Cannot use this run"
+      >The run must be a failed or abandoned session of the source task. Open the original run page
+      to choose the correct source.</Alert
+    >
+    <ErrorState
       v-if="tasks.error.value && !tasks.data.value"
       what="tasks"
       :error="tasks.error.value"
@@ -280,6 +328,15 @@ const toggle = (id: string, on: boolean) => {
           >{{ copiedFrom.title }}</RouterLink
         >. This creates a separate task with its own run history and retry budget. Choose its agent
         and prerequisites below; the source task stays unchanged.
+      </p>
+      <p v-if="copiedRun">
+        Failure context and a link to run
+        <RouterLink
+          :to="{ name: 'run', params: { ...route.params, id: copiedRun.run_id }, query: {} }"
+          >{{ copiedRun.run_id }}</RouterLink
+        >
+        are included in the editable description. Review the cause and adjust the expected result
+        before creating the follow-up.
       </p>
       <form id="new-task" class="form" @submit.prevent="create">
         <SelectField

@@ -245,3 +245,17 @@ it fetches immediately before submission and retries transport failures with the
 same idempotency key. A concurrent head change rejects submission; inspect the new
 head before running the command again. Comments preserve existing review decisions.
 Older servers use the legacy review endpoint and its permissions.
+
+## 11. Continuing after a failed run (development)
+
+Open the run page to inspect its summary, saved output and any change requests.
+A failed run may belong to an active task whose executor can still retry; use
+**Review source task** before starting separate work.
+
+For a finished or cancelled source task, **Create follow-up task…** opens an
+editable task form with the original scope and description, source task/run links
+and the failed run's summary. Review the failure and refine the expected result.
+Choose the agent and prerequisites explicitly. Cancel leaves the repository
+unchanged; **Create task** creates independent work and preserves the source task
+and its run history. Configured executors may pick up the new task once created.
+The source links are description text, not a structured retry relationship.

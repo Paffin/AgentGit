@@ -27,7 +27,7 @@ interface Hit {
 }
 const hits: Hit[] = [];
 
-const matchers = (Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][]).map((op) => ({
+const matchers = [...(Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][])].sort((a, b) => a.route.split("{").length - b.route.split("{").length).map((op) => ({
   op,
   re: new RegExp('^' + op.route.replace(/\{\*[^}]+\}/g, '.+').replace(/\{[^}]+\}/g, '[^/]+') + '$'),
 }));

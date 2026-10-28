@@ -90,7 +90,7 @@ fn a_version_1_database_migrates_forward_and_keeps_its_data() {
     assert_eq!(job.state, JobState::Queued, "the jobs table exists after migrating");
     let version: i64 =
         rusqlite::Connection::open(&path).unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, i64::from(SCHEMA_VERSION));
     let indexes: Vec<String> = rusqlite::Connection::open(&path)
         .unwrap()
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'proposals_by_%_created' OR name = 'proposals_by_created' ORDER BY name")

@@ -65,6 +65,7 @@ export type GetOperationRequest = S['GetOperationRequest'];
 export type GetPolicyRequest = S['GetPolicyRequest'];
 export type GetProposalRequest = S['GetProposalRequest'];
 export type GetRepoRequest = S['GetRepoRequest'];
+export type GetRunRequest = S['GetRunRequest'];
 export type GetTaskRequest = S['GetTaskRequest'];
 export type GetTaskSchedulingRequest = S['GetTaskSchedulingRequest'];
 export type GetTreeRequest = S['GetTreeRequest'];

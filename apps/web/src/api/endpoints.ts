@@ -376,6 +376,8 @@ export function createApi(c: ApiClient) {
         body: { name: string; public_key: string; role?: string },
         o?: Opts,
       ) => c.post<Agent>(r(repo, '/agents'), body, o),
+      run: (repo: string, id: string, o?: SessionOpts) =>
+        c.get<Run>(r(repo, `/runs/${encodeURIComponent(id)}`), undefined, o),
       runs: async (
         repo: string,
         q: { agent?: string; active_only?: boolean; limit?: number } = {},
@@ -390,7 +392,7 @@ export function createApi(c: ApiClient) {
       ) => c.json<TaskScheduling>(r(repo, '/tasks/scheduling'), { ...o, method: 'PUT', body }),
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
-      task: (repo: string, id: string, o?: Opts) =>
+      task: (repo: string, id: string, o?: SessionOpts) =>
         c.get<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), undefined, o),
       addDependency: (repo: string, id: string, dependency: string, o?: SessionOpts) =>
         c.post<Task>(
@@ -412,7 +414,7 @@ export function createApi(c: ApiClient) {
       ) => c.post<Task>(r(repo, '/tasks'), body, o),
       finishTask: (repo: string, id: string, state: 'done' | 'cancelled', o?: SessionOpts) =>
         c.post<Task>(r(repo, `/tasks/${encodeURIComponent(id)}/finish`), { state }, o),
-      leases: async (repo: string, activeOnly = true, o?: Opts) =>
+      leases: async (repo: string, activeOnly = true, o?: SessionOpts) =>
         (await c.get<{ leases: Lease[] }>(r(repo, '/leases'), { active_only: activeOnly }, o))
           .leases ?? [],
       releaseLease: (repo: string, id: string, o?: Opts) =>

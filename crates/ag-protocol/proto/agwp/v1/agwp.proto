@@ -992,6 +992,8 @@ message Run {
   string summary = 9;
 }
 
+message GetRunRequest { string repo = 1; string run_id = 2; }
+
 message StartRunRequest {
   string repo = 1;
   string agent = 2;
@@ -1703,6 +1705,7 @@ message SetTaskSchedulingRequest {
 }
 
 service AgentService {
+  rpc GetRun(GetRunRequest) returns (Run);
   rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
   rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);

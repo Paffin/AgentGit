@@ -1651,6 +1651,19 @@
         },
         "type": "object"
       },
+      "GetRunRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetTaskRequest": {
         "properties": {
           "id": {
@@ -10145,6 +10158,67 @@
           }
         },
         "summary": "Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/runs/{run_id}": {
+      "get": {
+        "operationId": "agent.get_run",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Look up a current or historical agent run",
         "tags": [
           "Agent"
         ]

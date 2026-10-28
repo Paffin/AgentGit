@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Permanent pages for current and historical agent runs show session state, heartbeat, summary, assigned task and active reservations, with exact-session change-request links.
+
 - Operators can pause and resume new task-bound agent runs from the Web UI. The decision persists, requires a matching revision, is enforced in the run-creation transaction and is respected by the orchestrator. Metadata schema 5 requires a pre-upgrade backup.
 
 - Repository issues with durable discussion, author/admin edits, close/reopen, revision conflict protection and optional agent-task links; Web UI and HTTP/gRPC APIs. The development build uses repository schema 5; back up before upgrading.

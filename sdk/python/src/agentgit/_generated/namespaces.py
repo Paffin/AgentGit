@@ -67,6 +67,7 @@ from agentgit._generated.models import (
     GetPolicyRequest,
     GetProposalRequest,
     GetRepoRequest,
+    GetRunRequest,
     GetTaskRequest,
     GetTaskSchedulingRequest,
     GetTreeRequest,
@@ -350,6 +351,16 @@ class AgentsApi:
     ) -> Run:
         """Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`)."""
         return self._c._call("agent.complete", {"repo": repo, "run_id": run_id, "idempotency_key": idempotency_key, "status": status, "summary": summary}, options, Run)
+
+    def get_run(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> Run:
+        """Look up a current or historical agent run (`GET /v1/repos/{owner}/{rname}/runs/{run_id}`, operation `agent.get_run`)."""
+        return self._c._call("agent.get_run", {"repo": repo, "run_id": run_id}, options, Run)
 
     def heartbeat(
         self,
@@ -1778,6 +1789,16 @@ class AsyncAgentsApi:
     ) -> Run:
         """Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`)."""
         return await self._c._call("agent.complete", {"repo": repo, "run_id": run_id, "idempotency_key": idempotency_key, "status": status, "summary": summary}, options, Run)
+
+    async def get_run(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> Run:
+        """Look up a current or historical agent run (`GET /v1/repos/{owner}/{rname}/runs/{run_id}`, operation `agent.get_run`)."""
+        return await self._c._call("agent.get_run", {"repo": repo, "run_id": run_id}, options, Run)
 
     async def heartbeat(
         self,

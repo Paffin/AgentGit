@@ -268,6 +268,7 @@ describe('the tour', () => {
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);
     const run = await bot.agents.startRun({ repo, agent: 'tour-bot', task_id: task.id });
     expect((await alice.agents.listRuns({ repo, active_only: true })).runs).toHaveLength(1);
+    expect((await alice.agents.getRun({ repo, run_id: run.run_id })).identity).toBe(run.identity);
     const runner = bot.withRun(run.run_id);
     await runner.agents.heartbeat({ repo, run_id: run.run_id });
     const lease = await runner.leases.acquire({

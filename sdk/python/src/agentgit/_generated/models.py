@@ -67,6 +67,7 @@ __all__ = [
     "GetPolicyRequest",
     "GetProposalRequest",
     "GetRepoRequest",
+    "GetRunRequest",
     "GetTaskRequest",
     "GetTaskSchedulingRequest",
     "GetTreeRequest",
@@ -787,6 +788,13 @@ class GetProposalRequest:
 class GetRepoRequest:
     """The `GetRepoRequest` message."""
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetRunRequest:
+    """The `GetRunRequest` message."""
+    repo: str = field(default="")
+    run_id: str = field(default="")
 
 
 @dataclass(kw_only=True)

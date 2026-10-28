@@ -20,6 +20,7 @@ export const NAMESPACE_METHODS = {
   },
   agents: {
     complete: 'agent.complete',
+    getRun: 'agent.get_run',
     heartbeat: 'agent.heartbeat',
     list: 'agent.list',
     listRuns: 'agent.list_runs',
@@ -184,6 +185,8 @@ export interface Api {
   readonly agents: {
     /** Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`) */
     complete(request: Req<'agent.complete'>, options?: CallOptions): Promise<Res<'agent.complete'>>;
+    /** Look up a current or historical agent run (`GET /v1/repos/{owner}/{rname}/runs/{run_id}`, operation `agent.get_run`) */
+    getRun(request: Req<'agent.get_run'>, options?: CallOptions): Promise<Res<'agent.get_run'>>;
     /** Run heartbeat (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/heartbeat`, operation `agent.heartbeat`) */
     heartbeat(request: Req<'agent.heartbeat'>, options?: CallOptions): Promise<Res<'agent.heartbeat'>>;
     /** List agents (`GET /v1/repos/{owner}/{rname}/agents`, operation `agent.list`) */

@@ -51,7 +51,7 @@ const tabs = computed<Tab[]>(() => {
       icon: 'proposal',
       tip: termTip('proposal'),
     },
-    { to: `${b}/agents`, label: 'Agents & work', icon: 'bot', group: ['agents', 'task'] },
+    { to: `${b}/agents`, label: 'Agents & work', icon: 'bot', group: ['agents', 'task', 'run'] },
     { to: `${b}/files`, label: 'Code', icon: 'folder', group: CODE_ROUTES },
   ]
   if (auth.hasRole(full.value, 'admin'))

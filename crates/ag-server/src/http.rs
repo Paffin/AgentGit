@@ -1141,6 +1141,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}",
+        "agent.get_run",
+        "Agent",
+        "Look up a current or historical agent run",
+        v1::GetRunRequest,
+        v1::Run,
+        get_run
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/runs/reap",

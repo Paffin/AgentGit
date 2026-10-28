@@ -242,3 +242,18 @@ during the pause, then ran it after resume. Chromium and phone workflows both ch
 the setting through the Web UI, reloaded it and confirmed a reader could not change it.
 The Web build, TypeScript SDK types and Python SDK types passed. No real external
 coding-model execution or browser executor installation is claimed.
+
+## Permanent run inspection — run-details branch, 2026-10-28
+
+`agent.get_run` looks up a run directly by its repository and ID, including after
+completion. The UI links to that stable page from the run table, live board and task.
+It shows the recorded summary and timing, current reservations, and an exact-session
+filter for change requests; it does not call a completed session a validated change.
+
+The focused HTTP case passed historical lookup, read permissions and unrelated-user
+isolation. Chromium and phone cases passed table-to-detail navigation, live completion,
+reload and filtering out another session of the same agent. Web build and both SDK type
+checks passed. These fixtures do not establish an external coding-model pilot or a full
+stdout log service. The repository's existing role-boundary invariant also found the
+new issue.manage permission missing from NEVER_DELEGATED; fixed and separately verified
+in the parent issue PR before merge.

@@ -379,6 +379,17 @@ impl App {
         }
     }
 
+    /// Looks up one current or historical run without scanning a recent-run list.
+    pub async fn get_run(&self, call: &Call, req: v1::GetRunRequest) -> ApiResult<v1::Run> {
+        let run_id = require(&req.run_id, "run_id")?.to_owned();
+        self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, move |repo, _| {
+            let row =
+                repo.meta().read(|tx| tx.run(&run_id))?.ok_or_else(|| ApiError::not_found("agent run not found"))?;
+            Ok(convert::run(&row))
+        })
+        .await
+    }
+
     /// Lists runs (newest first).
     pub async fn list_runs(&self, call: &Call, req: v1::ListRunsRequest) -> ApiResult<v1::ListRunsResponse> {
         let limit = if req.limit == 0 { 100 } else { req.limit.min(1000) } as usize;

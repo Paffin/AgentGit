@@ -474,3 +474,16 @@ The manual **Give an agent work** flow includes the task ID in the `ag push --ta
 **Agents & work → Task execution** shows whether new task-bound runs are allowed. An administrator or delegator can pause launches with a reason, or resume them after reviewing the effect. Resume makes every ready task eligible for configured executors. Existing runs continue during a pause; cancelling their task asks the connected orchestrator to stop its managed process. A manual external process may need to be stopped separately.
 
 The server enforces the pause when a new task-bound run is created, including direct API clients. It persists after restart. Allowing tasks does not install or connect an executor. This control requires `task.scheduling` and schema 5; take a database backup before upgrading.
+
+### Inspect an agent run
+
+Open a run from **Agent sessions**, the live board or a task page. The permanent URL
+survives completion and does not depend on a recent-run list. The page shows status,
+summary, heartbeat, timing, assigned task and current reservations. **View this run's
+change requests** selects the exact session, including closed and integrated requests.
+A completed session does not mean its changes passed review or were integrated.
+
+For a task-bound run, open its task to inspect dependencies and available cancellation
+actions. Connected orchestrators stop their managed process after seeing cancellation;
+manually launched external processes may need to be stopped separately. Agent summaries
+are not complete stdout logs. This page requires `agents.run_lookup` on the server.

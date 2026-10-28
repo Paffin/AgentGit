@@ -297,7 +297,14 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             <div>
               <IdentityLabel :identity="run.identity" />
               <p v-if="run.summary">{{ run.summary }}</p>
-              <code>{{ run.run_id }}</code>
+              <RouterLink
+                v-if="auth.capabilities?.features.includes('agents.run_lookup')"
+                :to="{ name: 'run', params: { ...routeParams, id: run.run_id } }"
+                >{{ run.run_id }}</RouterLink
+              >
+              <code v-if="!auth.capabilities?.features.includes('agents.run_lookup')">{{
+                run.run_id
+              }}</code>
             </div>
             <Badge size="sm">{{ run.status }}</Badge>
           </li>
@@ -326,7 +333,7 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       :description="
         finishing === 'done'
           ? 'Dependent tasks may become ready to start. This records task completion; it does not approve or land any code.'
-          : 'Dependent tasks will keep waiting for this task. Running agent sessions are not stopped by cancelling a task.'
+          : 'Dependent tasks will keep waiting. Connected orchestrators stop their managed sessions after observing cancellation; manually launched processes may need a separate stop.'
       "
       :dismissable="!busy"
       @update:model-value="finishing = null"

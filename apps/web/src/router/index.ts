@@ -138,6 +138,13 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Issue' },
       },
       {
+        path: 'runs/:id',
+        name: 'run',
+        props: true,
+        component: () => import('@/views/RunView.vue'),
+        meta: { title: 'Agent run' },
+      },
+      {
         path: 'tasks/:id',
         name: 'task',
         component: () => import('@/views/TaskView.vue'),

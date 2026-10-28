@@ -16,6 +16,7 @@ pub mod leases;
 pub mod predict;
 pub mod provenance;
 pub mod registry;
+pub mod scheduling;
 pub mod tasks;
 
 use ag_storage::meta::MetaError;

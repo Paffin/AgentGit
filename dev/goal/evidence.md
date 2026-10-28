@@ -226,3 +226,19 @@ TypeScript/Python client tours exercised the issue API. These checks do not esta
 that a real external coding agent ran or that it produced a reviewed/integrated change.
 
 The manual agent-onboarding follow-up passed the existing real-server/real-CLI Chromium workflow (8.4 s): the browser created a task and credential, its displayed shell commands submitted a task-linked change request, and the browser detected that request. The exact-task/principal matcher separately rejects another task and similarly named agents. This is shell workflow qualification, not a real coding-model pilot.
+
+## Operator task-launch gate — execution-control branch, 2026-10-28
+
+The engine now reads a persisted pause inside the same metadata transaction as task
+claim and run creation. Delegators/admins change it through HTTP/gRPC with an expected
+revision; readers can inspect it. Audit and outbox event share the write transaction.
+Schema 5 makes older binaries refuse the repository instead of ignoring this decision.
+
+Local qualification: the engine case passed on SQLite and PostgreSQL 17, including
+reopening metadata, refusing a new task run, keeping existing heartbeat/completion
+functional and rejecting a stale operator decision. The real HTTP case passed role
+and revision checks. The real Go orchestrator with a command executor kept a task open
+during the pause, then ran it after resume. Chromium and phone workflows both changed
+the setting through the Web UI, reloaded it and confirmed a reader could not change it.
+The Web build, TypeScript SDK types and Python SDK types passed. No real external
+coding-model execution or browser executor installation is claimed.

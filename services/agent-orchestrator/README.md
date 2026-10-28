@@ -243,6 +243,12 @@ review, close, policy, stream compare-and-swap, garbage collection, credential a
 and attestation, repository administration, agent registration and validation enqueueing. Service credential
 variables cannot be passed to executors either.
 
+### Operator pause from the Web UI
+
+The repository's **Task execution** control pauses new task-bound runs without interrupting existing sessions. The scheduler reads this persisted server decision, leaves ready tasks queued with `operator_pause`, and resumes placement after an operator permits launches again. It continues to observe completed/cancelled tasks during a pause.
+
+The server independently enforces the gate in the run-creation transaction. Use a server advertising `task.scheduling`; older servers without the endpoint keep their previous behavior. A failed read from a server that implements the endpoint defers the scheduling pass. This control does not install an executor or change its command/model configuration.
+
 ## Executor contract
 
 An executor is how an agent runs: a real program. (There is no built-in simulated agent: it was removed from the

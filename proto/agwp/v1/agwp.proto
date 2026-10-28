@@ -1687,7 +1687,24 @@ service IntegrationService {
   rpc RunQueue(RunQueueRequest) returns (RunQueueResponse);
 }
 
+message TaskScheduling {
+  bool paused = 1;
+  uint64 version = 2;
+  string reason = 3;
+  string updated_by = 4;
+  int64 updated_at_ms = 5;
+}
+message GetTaskSchedulingRequest { string repo = 1; }
+message SetTaskSchedulingRequest {
+  string repo = 1;
+  bool paused = 2;
+  string reason = 3;
+  uint64 expected_version = 4;
+}
+
 service AgentService {
+  rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
+  rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);
   rpc List(ListAgentsRequest) returns (ListAgentsResponse);
   rpc StartRun(StartRunRequest) returns (Run);

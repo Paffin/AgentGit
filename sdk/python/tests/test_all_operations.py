@@ -318,6 +318,17 @@ def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     assert admin.admin.gc(repo=REPO, dry_run=True).dry_run
 
 
+def test_operator_scheduling_gate(tour: dict[str, AgentGitClient]) -> None:
+    admin = tour["admin"]
+    initial = admin.tasks.scheduling_get(repo=REPO)
+    paused = admin.tasks.scheduling_set(
+        repo=REPO, paused=True, expected_version=initial.version, reason="Upgrade"
+    )
+    assert paused.paused
+    resumed = admin.tasks.scheduling_set(repo=REPO, paused=False, expected_version=paused.version)
+    assert not resumed.paused
+
+
 def test_issue_discussion(tour: dict[str, AgentGitClient]) -> None:
     alice = tour["alice"]
     issue = alice.issues.create(repo=REPO, title="Move the project", body="Keep history")

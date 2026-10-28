@@ -712,3 +712,27 @@ func TestNewRejectsBrokenRoutes(t *testing.T) {
 		t.Fatal("bad regexp accepted")
 	}
 }
+
+func TestOperatorPauseDefersWorkUntilResumed(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "bot", "sleep 0.05"))
+	if _, err := h.w.Orch.SetTaskScheduling(context.Background(), repo, true, "Operator maintenance", 0); err != nil {
+		t.Fatal(err)
+	}
+	task := h.addTask("Wait for the operator", []string{"src/**"})
+	h.reconcile()
+	if len(h.runs()) != 0 || h.state(task) != agwp.TaskOpen {
+		t.Fatal("paused work started")
+	}
+	if d, ok := h.deferral(task); !ok || d.Reason != ReasonOperatorPause {
+		t.Fatalf("deferral = %+v, present=%v", d, ok)
+	}
+	if !h.sched.Status().Paused {
+		t.Fatal("pause missing from status")
+	}
+	if _, err := h.w.Orch.SetTaskScheduling(context.Background(), repo, false, "", 1); err != nil {
+		t.Fatal(err)
+	}
+	h.reconcile()
+	h.eventually("resumed work to finish", func() bool { return h.state(task) == agwp.TaskDone })
+	h.waitIdle()
+}

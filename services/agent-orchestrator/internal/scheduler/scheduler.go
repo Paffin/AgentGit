@@ -68,6 +68,11 @@ type Options struct {
 	Loop     config.Loop
 }
 
+// schedulingSource is optional for test adapters and clients predating the launch gate.
+type schedulingSource interface {
+	TaskScheduling(context.Context, string) (*agwp.TaskScheduling, error)
+}
+
 type route struct {
 	exec  config.Executor
 	title *regexp.Regexp
@@ -113,7 +118,9 @@ type Scheduler struct {
 	// seeded: tasks whose retry budget was recovered from the server's run history (after a restart)
 	seeded map[string]bool
 	// predictErr is why the server's conflict prediction could not be read in the last pass ("" when it could)
-	predictErr string
+	predictErr  string
+	paused      bool
+	pauseReason string
 }
 
 // New builds a scheduler. It validates that every configured route exists.
@@ -240,6 +247,24 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 	s.cancelStoppedWork(byID)
 	s.resolveWaiting(ctx, tasks, activeRunTask, open)
 	s.countTasks(tasks)
+
+	if source, ok := s.o.API.(schedulingSource); ok {
+		policy, err := source.TaskScheduling(ctx, repo)
+		if err != nil {
+			return fmt.Errorf("read task scheduling: %w", err)
+		}
+		s.mu.Lock()
+		s.paused, s.pauseReason = policy.Paused, policy.Reason
+		s.mu.Unlock()
+		if policy.Paused {
+			for _, task := range tasks {
+				if task.State == agwp.TaskOpen && task.Ready {
+					s.setDeferred(task, ReasonOperatorPause, policy.Reason)
+				}
+			}
+			return nil
+		}
+	}
 
 	running := s.repoSessions()
 	slots := s.o.Repo.Schedule.Slots
@@ -776,15 +801,17 @@ func (s *Scheduler) pruneDeferred(seen map[string]bool) {
 
 // Status is the scheduler's part of /status.
 type Status struct {
-	Repo      string         `json:"repo"`
-	Slots     int            `json:"slots"`
-	Running   []session.Info `json:"running"`
-	Waiting   []Waiting      `json:"waiting_to_land"`
-	Deferred  []Deferral     `json:"deferred"`
-	Retrying  []Retry        `json:"retrying"`
-	Tasks     map[string]int `json:"tasks"`
-	LastPass  time.Time      `json:"last_pass,omitempty"`
-	LastError string         `json:"last_error,omitempty"`
+	Paused      bool           `json:"paused"`
+	PauseReason string         `json:"pause_reason,omitempty"`
+	Repo        string         `json:"repo"`
+	Slots       int            `json:"slots"`
+	Running     []session.Info `json:"running"`
+	Waiting     []Waiting      `json:"waiting_to_land"`
+	Deferred    []Deferral     `json:"deferred"`
+	Retrying    []Retry        `json:"retrying"`
+	Tasks       map[string]int `json:"tasks"`
+	LastPass    time.Time      `json:"last_pass,omitempty"`
+	LastError   string         `json:"last_error,omitempty"`
 	// PredictError is why the server's conflict prediction could not be read in the last pass; empty when it could.
 	PredictError string `json:"predict_error,omitempty"`
 }
@@ -814,6 +841,7 @@ func (s *Scheduler) Status() Status {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	st.Paused, st.PauseReason = s.paused, s.pauseReason
 	st.LastPass, st.LastError, st.PredictError = s.lastPass, s.lastErr, s.predictErr
 	st.Tasks = map[string]int{}
 	for k, v := range s.tasksSeen {

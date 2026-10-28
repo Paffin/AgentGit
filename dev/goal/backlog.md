@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added tree.search API row brings the inventory to 143 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added tree.search and task-scheduling rows bring the inventory to 144 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |
@@ -13,6 +13,7 @@ All original 142 matrix rows remain in scope; the added tree.search API row brin
 | P1 task navigation | Permanent task pages, prerequisite/dependant links and confirmed task completion/cancellation over real APIs. | Implemented and locally verified in Chromium and phone viewport; issue-to-task handoff now creates and links work atomically; full agent execution and browser-managed executor configuration remain open. |
 | P1 user issues | Repository-scoped issues, durable discussion, close/reopen, optimistic edits and task links. | Implemented on the working branch; focused HTTP lifecycle and real Chromium browser scenario passed. PostgreSQL persistence/reopen is qualified; broader qualification remains. Labels, milestones, attachments, boards and provider issue import remain open. |
 | P1 identity and tracker | Organization/member/invitation lifecycle and user issues connected to orchestrator tasks, with role checks and history. | Open; see individual matrix rows. |
+| P1 execution control | Operators pause/resume new task runs with durable state, a reason and server-side enforcement; existing runs keep their lifecycle. | Implemented on execution-control branch. Browser and real command scheduler qualification passed; external model and browser executor installation remain open. |
 | P2 execution | Configure a real executor from UI, run a DAG, retain logs/artifacts, cancel and safely retry with bounded resources. | Open; scripted stand-ins do not qualify this stage. |
 | P2 administration and portability | Browser setup/diagnostics, verified restore, hosted-data migration, release/registry/webhook lifecycle. | Open; assess each subsystem separately. |
 | External qualification | Real MCP host, clean macOS, physical device, human screen reader, independent pilots, comparable pinned-competitor benchmark. | Open issues #50, #51, #52, #53 and #55; unavailable equipment/participants are not replaced by simulation. |

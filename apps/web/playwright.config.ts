@@ -26,7 +26,7 @@ const screenshots = /screenshots\.spec\.ts/
 // Layout assertions are made at the viewports of the tablet and phone projects, not at desktop size.
 const layout = /responsive\.spec\.ts/
 const small =
-  /(responsive|accessibility|code-workflows|code-search|task-details|review-workbench|draft-recovery|review-drafts|multi-file-edit)\.spec\.ts/
+  /(responsive|accessibility|code-workflows|code-search|task-details|review-workbench|draft-recovery|review-drafts|multi-file-edit|execution-control)\.spec\.ts/
 const desktop = { viewport: { width: 1440, height: 900 } }
 
 export default defineConfig({

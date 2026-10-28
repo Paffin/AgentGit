@@ -664,3 +664,43 @@ impl App {
         .await
     }
 }
+
+fn scheduling_wire(row: ag_agent::scheduling::TaskScheduling) -> v1::TaskScheduling {
+    v1::TaskScheduling {
+        paused: row.paused,
+        version: row.version,
+        reason: row.reason,
+        updated_by: row.updated_by,
+        updated_at_ms: row.updated_at_ms,
+    }
+}
+impl App {
+    /// Reads the persisted gate for new task-bound runs.
+    pub async fn get_task_scheduling(
+        &self,
+        call: &Call,
+        req: v1::GetTaskSchedulingRequest,
+    ) -> ApiResult<v1::TaskScheduling> {
+        self.with_repo(call, require(&req.repo, "repo")?, Cap::TaskRead, None, |repo, _| {
+            Ok(scheduling_wire(ag_agent::scheduling::get(repo.meta())?))
+        })
+        .await
+    }
+    /// Pauses or resumes task launches; existing runs keep their own lifecycle.
+    pub async fn set_task_scheduling(
+        &self,
+        call: &Call,
+        req: v1::SetTaskSchedulingRequest,
+    ) -> ApiResult<v1::TaskScheduling> {
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            Ok(scheduling_wire(ag_agent::scheduling::set(
+                repo.meta(),
+                req.paused,
+                &req.reason,
+                req.expected_version,
+                actor.as_str(),
+            )?))
+        })
+        .await
+    }
+}

@@ -58,15 +58,11 @@ test('creates tasks, adds a prerequisite and finishes dependent work through per
       .click()
     await expect(page.getByText('Task marked done.', { exact: true })).toBeVisible()
     await page.goto(featureUrl)
-    await expect(
-      page.getByText('Ready: all prerequisites are done.', { exact: true }),
-    ).toBeVisible()
+    await expect(page.getByText('All prerequisites are complete.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Cancel task…', exact: true }).click()
     const cancel = page.getByRole('dialog', { name: 'Cancel this task?', exact: true })
     await cancel.getByRole('button', { name: 'Keep task unchanged', exact: true }).click()
-    await expect(
-      page.getByText('Ready: all prerequisites are done.', { exact: true }),
-    ).toBeVisible()
+    await expect(page.getByText('All prerequisites are complete.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Cancel task…', exact: true }).click()
     await cancel.getByRole('button', { name: 'Confirm cancellation', exact: true }).click()
     await expect(page.getByText('Task cancelled.', { exact: true })).toBeVisible()

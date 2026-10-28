@@ -68,6 +68,7 @@ from agentgit._generated.models import (
     GetProposalRequest,
     GetRepoRequest,
     GetTaskRequest,
+    GetTaskSchedulingRequest,
     GetTreeRequest,
     GetTreeResponse,
     GetWorkspaceRequest,
@@ -187,6 +188,7 @@ from agentgit._generated.models import (
     SearchTreeRequest,
     SearchTreeResponse,
     SetPolicyRequest,
+    SetTaskSchedulingRequest,
     StartRunRequest,
     Stream,
     SubmitAttestationRequest,
@@ -195,6 +197,7 @@ from agentgit._generated.models import (
     SyncWorkspaceRequest,
     SyncWorkspaceResponse,
     Task,
+    TaskScheduling,
     TreeEntry,
     UnpinRequest,
     UpdateIssueRequest,
@@ -1454,6 +1457,27 @@ class TasksApi:
     ) -> ListTasksResponse:
         """List tasks (`GET /v1/repos/{owner}/{rname}/tasks`, operation `task.list`)."""
         return self._c._call("task.list", {"repo": repo, "ready_only": ready_only, "state": state}, options, ListTasksResponse)
+
+    def scheduling_get(
+        self,
+        *,
+        repo: str,
+        options: CallOptions | None = None,
+    ) -> TaskScheduling:
+        """Read the gate for new task launches (`GET /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.get`)."""
+        return self._c._call("task.scheduling.get", {"repo": repo}, options, TaskScheduling)
+
+    def scheduling_set(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        paused: bool | None = None,
+        reason: str | None = None,
+        options: CallOptions | None = None,
+    ) -> TaskScheduling:
+        """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
+        return self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
 
 
 
@@ -2861,6 +2885,27 @@ class AsyncTasksApi:
     ) -> ListTasksResponse:
         """List tasks (`GET /v1/repos/{owner}/{rname}/tasks`, operation `task.list`)."""
         return await self._c._call("task.list", {"repo": repo, "ready_only": ready_only, "state": state}, options, ListTasksResponse)
+
+    async def scheduling_get(
+        self,
+        *,
+        repo: str,
+        options: CallOptions | None = None,
+    ) -> TaskScheduling:
+        """Read the gate for new task launches (`GET /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.get`)."""
+        return await self._c._call("task.scheduling.get", {"repo": repo}, options, TaskScheduling)
+
+    async def scheduling_set(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        paused: bool | None = None,
+        reason: str | None = None,
+        options: CallOptions | None = None,
+    ) -> TaskScheduling:
+        """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
+        return await self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
 
 
 

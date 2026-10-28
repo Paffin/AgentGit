@@ -46,7 +46,7 @@ const columns: Column[] = [
   { key: 'task', label: 'Task', width: 'minmax(0, 1.6fr)', hideBelow: 800 },
   { key: 'status', label: 'Status', width: '8.5rem' },
   { key: 'started_at_ms', label: 'Started', width: '7rem', hideBelow: 900 },
-  { key: 'heartbeat', label: 'Heartbeat', width: '9rem' },
+  { key: 'heartbeat', label: 'Heartbeat', width: '9rem', hideBelow: 600 },
   { key: 'summary', label: 'Summary', width: 'minmax(0, 1.4fr)', hideBelow: 1100 },
 ]
 const TONE: Record<string, 'ok' | 'info' | 'warn' | 'bad' | 'neutral'> = {
@@ -92,6 +92,9 @@ const options = [
       <template #cell-identity="{ row }">
         <IdentityLabel :identity="(row as Run).identity" />
         <p class="faint mono id">{{ (row as Run).run_id }}</p>
+        <p v-if="(row as Run).status === 'running'" class="faint compact-heartbeat">
+          Heartbeat <RelativeTime :ms="(row as Run).last_heartbeat_ms" />
+        </p>
       </template>
       <template #cell-task="{ row }"
         ><RouterLink
@@ -165,6 +168,14 @@ const options = [
 }
 .id {
   font-size: var(--fs-xs);
+}
+.compact-heartbeat {
+  display: none;
+}
+@media (max-width: 599px) {
+  .compact-heartbeat {
+    display: block;
+  }
 }
 .warn {
   color: var(--warn);

@@ -89,3 +89,5 @@ export interface Page<T> {
   items: T[]
   nextPageToken: string
 }
+
+export type TaskScheduling = S['TaskScheduling']

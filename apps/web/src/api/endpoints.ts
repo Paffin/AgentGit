@@ -38,6 +38,7 @@ import type {
   ServerEvent,
   Stream,
   Task,
+  TaskScheduling,
   TreeEntry,
   Attestation,
   FileChange,
@@ -380,6 +381,13 @@ export function createApi(c: ApiClient) {
         q: { agent?: string; active_only?: boolean; limit?: number } = {},
         o?: Opts,
       ) => (await c.get<{ runs: Run[] }>(r(repo, '/runs'), q, o)).runs ?? [],
+      scheduling: (repo: string, o?: SessionOpts) =>
+        c.get<TaskScheduling>(r(repo, '/tasks/scheduling'), undefined, o),
+      setScheduling: (
+        repo: string,
+        body: { paused: boolean; reason: string; expected_version: number },
+        o?: SessionOpts,
+      ) => c.json<TaskScheduling>(r(repo, '/tasks/scheduling'), { ...o, method: 'PUT', body }),
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
       task: (repo: string, id: string, o?: Opts) =>

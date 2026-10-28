@@ -1208,6 +1208,32 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         meta,
         get,
         "get",
+        "/v1/repos/{owner}/{rname}/tasks/scheduling",
+        "task.scheduling.get",
+        "Agent",
+        "Read the gate for new task launches",
+        v1::GetTaskSchedulingRequest,
+        v1::TaskScheduling,
+        get_task_scheduling
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/tasks/scheduling",
+        "task.scheduling.set",
+        "Agent",
+        "Pause or resume new task launches",
+        v1::SetTaskSchedulingRequest,
+        v1::TaskScheduling,
+        set_task_scheduling
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
         "/v1/repos/{owner}/{rname}/tasks/{id}",
         "task.get",
         "Agent",

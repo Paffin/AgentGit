@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ExecutionControl from '@/components/agents/ExecutionControl.vue'
 import GiveAgentWork from '@/components/agents/GiveAgentWork.vue'
 import AgentsList from '@/components/agents/AgentsList.vue'
 import LeaseTable from '@/components/agents/LeaseTable.vue'
@@ -58,6 +59,7 @@ const tabs = computed<TabItem<TabId>[]>(() => [
       <h1>Agents &amp; work</h1>
       <p class="muted">Give agents work, see who is working on what, and what each has reserved.</p>
     </div>
+    <ExecutionControl :repo="repo" />
     <GiveAgentWork :repo="repo" />
     <Card>
       <Tabs v-model="tab" :tabs="tabs" label="Agent coordination">

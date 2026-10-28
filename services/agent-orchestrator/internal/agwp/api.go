@@ -624,3 +624,26 @@ func (c *Client) ReplayEvents(ctx context.Context, repo string, afterSeq uint64,
 	}
 	return out.Events, out.LatestSeq, nil
 }
+
+// TaskScheduling reads the launch gate; older servers without this additive operation remain usable.
+func (c *Client) TaskScheduling(ctx context.Context, repo string) (*TaskScheduling, error) {
+	var out TaskScheduling
+	err := c.repoCall(ctx, "task.scheduling.get", http.MethodGet, repo, "/tasks/scheduling", nil, nil, &out)
+	if IsNotFound(err) {
+		return &out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetTaskScheduling changes the launch gate at an inspected revision.
+func (c *Client) SetTaskScheduling(ctx context.Context, repo string, paused bool, reason string, version uint64) (*TaskScheduling, error) {
+	var out TaskScheduling
+	body := map[string]any{"paused": paused, "reason": reason, "expected_version": version}
+	if err := c.repoCall(ctx, "task.scheduling.set", http.MethodPut, repo, "/tasks/scheduling", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

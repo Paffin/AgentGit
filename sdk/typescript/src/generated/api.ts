@@ -136,6 +136,8 @@ export const NAMESPACE_METHODS = {
     finish: 'task.finish',
     get: 'task.get',
     list: 'task.list',
+    schedulingGet: 'task.scheduling.get',
+    schedulingSet: 'task.scheduling.set',
   },
   tree: {
     diff: 'tree.diff',
@@ -378,6 +380,10 @@ export interface Api {
     get(request: Req<'task.get'>, options?: CallOptions): Promise<Res<'task.get'>>;
     /** List tasks (`GET /v1/repos/{owner}/{rname}/tasks`, operation `task.list`) */
     list(request: Req<'task.list'>, options?: CallOptions): Promise<Res<'task.list'>>;
+    /** Read the gate for new task launches (`GET /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.get`) */
+    schedulingGet(request: Req<'task.scheduling.get'>, options?: CallOptions): Promise<Res<'task.scheduling.get'>>;
+    /** Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`) */
+    schedulingSet(request: Req<'task.scheduling.set'>, options?: CallOptions): Promise<Res<'task.scheduling.set'>>;
   };
   readonly tree: {
     /** Per-file diffs between two revisions (`POST /v1/repos/{owner}/{rname}/diff`, operation `tree.diff`) */

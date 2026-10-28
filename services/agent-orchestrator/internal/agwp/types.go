@@ -471,3 +471,12 @@ func (r ProvenanceRecord) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(plain(r))
 }
+
+// TaskScheduling is the repository's operator-controlled gate for new task runs.
+type TaskScheduling struct {
+	Paused      bool   `json:"paused"`
+	Version     uint64 `json:"version"`
+	Reason      string `json:"reason"`
+	UpdatedBy   string `json:"updated_by"`
+	UpdatedAtMs int64  `json:"updated_at_ms"`
+}

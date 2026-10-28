@@ -295,6 +295,19 @@ describe('the tour', () => {
     expect(plan).toMatchObject({ dry_run: true, runs: [], released_leases: [], revoked_credentials: 0 });
   });
 
+  it('pauses and resumes task launches through an operator decision', async () => {
+    const initial = await admin.tasks.schedulingGet({ repo });
+    const paused = await admin.tasks.schedulingSet({
+      repo,
+      paused: true,
+      reason: 'Upgrade',
+      expected_version: initial.version,
+    });
+    expect(paused.paused).toBe(true);
+    const resumed = await admin.tasks.schedulingSet({ repo, paused: false, expected_version: paused.version });
+    expect(resumed.paused).toBe(false);
+  });
+
   it('creates and discusses an issue through the public client', async () => {
     const issue = await alice.issues.create({ repo, title: 'Move the project', body: 'Keep history' });
     expect((await alice.issues.get({ repo, number: issue.number })).title).toBe(issue.title);

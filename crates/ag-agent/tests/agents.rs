@@ -627,3 +627,25 @@ fn an_overlap_lists_at_most_the_documented_number_of_paths() {
     assert_eq!(o.paths.len(), predict::MAX_OVERLAP_PATHS);
     assert_eq!(o.paths[0], "src/m00.rs", "sorted");
 }
+
+#[test]
+fn scheduling_pause_persists_and_blocks_only_new_task_runs() {
+    let mut e = env();
+    e.meta = TestMeta::shared(e.clock.clone());
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let active_task = tasks::create_task(&e.meta, "Existing work", "", &[], "user:admin").unwrap();
+    let waiting_task = tasks::create_task(&e.meta, "Queued work", "", &[], "user:admin").unwrap();
+    let active = registry::start_run(&e.meta, "bot", Some(&active_task.id)).unwrap();
+    let paused = ag_agent::scheduling::set(&e.meta, true, "Maintenance", 0, "user:operator").unwrap();
+    assert!(paused.paused);
+    assert_eq!(paused.version, 1);
+    assert!(ag_agent::scheduling::get(&e.meta.reopen().unwrap()).unwrap().paused);
+    assert!(matches!(registry::start_run(&e.meta, "bot", Some(&waiting_task.id)), Err(AgentError::Conflict(_))));
+    assert_eq!(e.meta.read(|tx| tx.task(&waiting_task.id)).unwrap().unwrap().state, "open");
+    registry::heartbeat(&e.meta, &active.run_id).unwrap();
+    registry::finish_run(&e.meta, &active.run_id, "completed", None).unwrap();
+    assert!(ag_agent::scheduling::set(&e.meta, false, "", 0, "user:operator").is_err());
+    assert!(ag_agent::scheduling::get(&e.meta).unwrap().paused);
+    ag_agent::scheduling::set(&e.meta, false, "", 1, "user:operator").unwrap();
+    assert!(registry::start_run(&e.meta, "bot", Some(&waiting_task.id)).is_ok());
+}

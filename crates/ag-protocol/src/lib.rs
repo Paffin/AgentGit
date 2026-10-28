@@ -53,6 +53,8 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
+    /// Operators can pause and resume new task-bound agent runs.
+    pub const TASK_SCHEDULING: &str = "task.scheduling";
     /// Repository issue tracker with durable discussion and optimistic editing.
     pub const ISSUES: &str = "issues.v1";
 
@@ -73,6 +75,7 @@ pub mod features {
         PROPOSALS_REVIEW_HEAD,
         TREE_SEARCH,
         ISSUES,
+        TASK_SCHEDULING,
     ];
 }
 

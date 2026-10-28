@@ -1176,6 +1176,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/tasks/scheduling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the gate for new task launches */
+        get: operations["task.scheduling.get"];
+        /** Pause or resume new task launches */
+        put: operations["task.scheduling.set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/tasks/{id}": {
         parameters: {
             query?: never;
@@ -2432,6 +2450,10 @@ export interface components {
         GetTaskRequest: {
             /** @default  */
             id: string;
+            /** @default  */
+            repo: string;
+        };
+        GetTaskSchedulingRequest: {
             /** @default  */
             repo: string;
         };
@@ -4152,6 +4174,19 @@ export interface components {
             /** @default  */
             stream: string;
         };
+        SetTaskSchedulingRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default false */
+            paused: boolean;
+            /** @default  */
+            reason: string;
+            /** @default  */
+            repo: string;
+        };
         StartRunRequest: {
             /** @default  */
             agent: string;
@@ -4276,6 +4311,24 @@ export interface components {
              * @default 0
              */
             updated_at_ms: number;
+        };
+        TaskScheduling: {
+            /** @default false */
+            paused: boolean;
+            /** @default  */
+            reason: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /** @default  */
+            updated_by: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
         };
         TreeEntry: {
             /** @default  */
@@ -7633,6 +7686,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.scheduling.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskScheduling"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.scheduling.set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskSchedulingRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskScheduling"];
                 };
             };
             /** @description Error */

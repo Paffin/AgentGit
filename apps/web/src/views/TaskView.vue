@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ExecutionControl from '@/components/agents/ExecutionControl.vue'
 import { api } from '@/api/instance'
 import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
@@ -183,7 +184,7 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
         }}</Badge
         ><span v-if="active">{{
           task.data.value.ready
-            ? 'Ready: all prerequisites are done.'
+            ? 'All prerequisites are complete.'
             : 'Waiting for unfinished prerequisites.'
         }}</span
         ><span v-if="task.data.value.owner"
@@ -196,6 +197,7 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       <p v-if="task.data.value.scope.length" class="state">
         Scope <code v-for="path in task.data.value.scope" :key="path">{{ path }}</code>
       </p>
+      <ExecutionControl :repo="repo" />
       <Alert v-if="error && !finishing" tone="bad" live="alert" title="The task was not updated"
         >{{ error
         }}<a

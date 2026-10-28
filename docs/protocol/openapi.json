@@ -1664,6 +1664,15 @@
         },
         "type": "object"
       },
+      "GetTaskSchedulingRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetTreeRequest": {
         "properties": {
           "page_size": {
@@ -4581,6 +4590,29 @@
         },
         "type": "object"
       },
+      "SetTaskSchedulingRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paused": {
+            "default": false,
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "StartRunRequest": {
         "properties": {
           "agent": {
@@ -4796,6 +4828,34 @@
           "updated_at_ms": {
             "default": 0,
             "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "TaskScheduling": {
+        "properties": {
+          "paused": {
+            "default": false,
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "default": "",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
             "type": "integer"
           }
         },
@@ -10721,6 +10781,116 @@
           }
         },
         "summary": "Create a task",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/tasks/scheduling": {
+      "get": {
+        "operationId": "task.scheduling.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduling"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read the gate for new task launches",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "put": {
+        "operationId": "task.scheduling.set",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTaskSchedulingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduling"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Pause or resume new task launches",
         "tags": [
           "Agent"
         ]

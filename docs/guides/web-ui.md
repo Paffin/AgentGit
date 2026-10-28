@@ -468,3 +468,9 @@ The issue tracker requires a server advertising `issues.v1` and metadata schema 
 From an open issue you own, choose **Create agent task…**, describe the expected result and enter file patterns (one per line). Creation links the task atomically; retrying the same request does not duplicate it. The task page follows runs and resulting change requests. A connected orchestrator may pick up ready work automatically; this action does not prove execution, validation or approval. Closing the original issue remains a separate decision.
 
 The manual **Give an agent work** flow includes the task ID in the `ag push --task` command. Its progress follows only that task and agent, including run-scoped identities. An ended session without a linked change request is shown as ended, not still working. Changing the account or repository clears displayed credentials and cancels pending setup requests. This command-driven path does not claim that an external coding model was launched by the browser.
+
+### Pause and resume task execution
+
+**Agents & work → Task execution** shows whether new task-bound runs are allowed. An administrator or delegator can pause launches with a reason, or resume them after reviewing the effect. Resume makes every ready task eligible for configured executors. Existing runs continue during a pause; cancelling their task asks the connected orchestrator to stop its managed process. A manual external process may need to be stopped separately.
+
+The server enforces the pause when a new task-bound run is created, including direct API clients. It persists after restart. Allowing tasks does not install or connect an executor. This control requires `task.scheduling` and schema 5; take a database backup before upgrading.

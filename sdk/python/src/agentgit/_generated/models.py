@@ -68,6 +68,7 @@ __all__ = [
     "GetProposalRequest",
     "GetRepoRequest",
     "GetTaskRequest",
+    "GetTaskSchedulingRequest",
     "GetTreeRequest",
     "GetTreeResponse",
     "GetWorkspaceRequest",
@@ -187,6 +188,7 @@ __all__ = [
     "SearchTreeRequest",
     "SearchTreeResponse",
     "SetPolicyRequest",
+    "SetTaskSchedulingRequest",
     "StartRunRequest",
     "Stream",
     "SubmitAttestationRequest",
@@ -195,6 +197,7 @@ __all__ = [
     "SyncWorkspaceRequest",
     "SyncWorkspaceResponse",
     "Task",
+    "TaskScheduling",
     "TreeEntry",
     "UnpinRequest",
     "UpdateIssueRequest",
@@ -790,6 +793,12 @@ class GetRepoRequest:
 class GetTaskRequest:
     """The `GetTaskRequest` message."""
     id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetTaskSchedulingRequest:
+    """The `GetTaskSchedulingRequest` message."""
     repo: str = field(default="")
 
 
@@ -1837,6 +1846,15 @@ class SetPolicyRequest:
 
 
 @dataclass(kw_only=True)
+class SetTaskSchedulingRequest:
+    """The `SetTaskSchedulingRequest` message."""
+    expected_version: int = field(default=0)
+    paused: bool = field(default=False)
+    reason: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class StartRunRequest:
     """The `StartRunRequest` message."""
     agent: str = field(default="")
@@ -1909,6 +1927,16 @@ class Task:
     state: str = field(default="")
     title: str = field(default="")
     updated_at_ms: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class TaskScheduling:
+    """The `TaskScheduling` message."""
+    paused: bool = field(default=False)
+    reason: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    updated_by: str = field(default="")
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)

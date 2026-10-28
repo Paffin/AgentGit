@@ -69,6 +69,7 @@ __all__ = [
     "GetPolicyRequest",
     "GetProposalRequest",
     "GetRepoRequest",
+    "GetRunOutputRequest",
     "GetRunRequest",
     "GetTaskRequest",
     "GetTaskSchedulingRequest",
@@ -185,9 +186,11 @@ __all__ = [
     "RevokeRoleRequest",
     "RoleBinding",
     "Run",
+    "RunOutput",
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SaveRunOutputRequest",
     "SearchMatch",
     "SearchTreeRequest",
     "SearchTreeResponse",
@@ -814,6 +817,13 @@ class GetProposalRequest:
 class GetRepoRequest:
     """The `GetRepoRequest` message."""
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetRunOutputRequest:
+    """The `GetRunOutputRequest` message."""
+    repo: str = field(default="")
+    run_id: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1821,6 +1831,19 @@ class Run:
 
 
 @dataclass(kw_only=True)
+class RunOutput:
+    """The `RunOutput` message."""
+    available: bool = field(default=False)
+    captured_at_ms: int = field(default=0)
+    run_id: str = field(default="")
+    sequence: int = field(default=0)
+    stderr: str = field(default="")
+    stderr_bytes: int = field(default=0)
+    stdout: str = field(default="")
+    stdout_bytes: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class RunQueueRequest:
     """The `RunQueueRequest` message."""
     idempotency_key: str = field(default="")
@@ -1846,6 +1869,14 @@ class RunSpec:
     memory_mb: int = field(default=0)
     network: bool = field(default=False)
     timeout_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class SaveRunOutputRequest:
+    """The `SaveRunOutputRequest` message."""
+    output: RunOutput | None = field(default=None)
+    repo: str = field(default="")
+    run_id: str = field(default="")
 
 
 @dataclass(kw_only=True)

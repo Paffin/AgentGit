@@ -1729,6 +1729,19 @@
         },
         "type": "object"
       },
+      "GetRunOutputRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetRunRequest": {
         "properties": {
           "repo": {
@@ -4492,6 +4505,50 @@
         },
         "type": "object"
       },
+      "RunOutput": {
+        "properties": {
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "captured_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          },
+          "sequence": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stderr": {
+            "default": "",
+            "type": "string"
+          },
+          "stderr_bytes": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stdout": {
+            "default": "",
+            "type": "string"
+          },
+          "stdout_bytes": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RunQueueRequest": {
         "properties": {
           "idempotency_key": {
@@ -4581,6 +4638,30 @@
             "format": "int32",
             "minimum": 0,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SaveRunOutputRequest": {
+        "properties": {
+          "output": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RunOutput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -5263,7 +5344,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.3.0-beta.3"
+    "version": "0.3.0-beta.4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10545,6 +10626,195 @@
           }
         },
         "summary": "Run heartbeat",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/runs/{run_id}/output": {
+      "delete": {
+        "operationId": "agent.output.delete",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete saved executor output",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "get": {
+        "operationId": "agent.output.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read saved executor output",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "put": {
+        "operationId": "agent.output.save",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRunOutputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save bounded executor output",
         "tags": [
           "Agent"
         ]

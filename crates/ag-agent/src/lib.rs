@@ -14,6 +14,7 @@
 
 pub mod executor;
 pub mod leases;
+pub mod output;
 pub mod predict;
 pub mod provenance;
 pub mod registry;

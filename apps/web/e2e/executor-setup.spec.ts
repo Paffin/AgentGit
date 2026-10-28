@@ -21,7 +21,10 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     const dialog = page.getByRole('dialog', { name: 'Connect an executor', exact: true })
     await dialog.getByLabel('Agent name', { exact: true }).fill('setup-bot')
     await dialog.getByLabel('Executable on the executor host', { exact: true }).fill('/bin/sh')
-    await dialog.getByLabel('Arguments (JSON array)', { exact: true }).fill('["-c", "exit 0"]')
+    await dialog
+      .getByLabel('Arguments (JSON array)', { exact: true })
+      .fill('["-c", "echo executor-output; exit 0"]')
+    await dialog.getByLabel('Save diagnostic output in AgentGit', { exact: true }).check()
     await dialog.getByRole('button', { name: 'Prepare access for 24 hours', exact: true }).click()
     await expect(dialog.getByText('Waiting for the executor', { exact: true })).toBeVisible()
     const download = async (label: string, filename: string) => {
@@ -38,7 +41,8 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     expect(configText.includes(token)).toBe(false)
     const config = JSON.parse(configText)
     expect(config.repos[0].name).toBe(repo)
-    expect(config.executors[0].command).toEqual(['/bin/sh', '-c', 'exit 0'])
+    expect(config.executors[0].command).toEqual(['/bin/sh', '-c', 'echo executor-output; exit 0'])
+    expect(config.executors[0].publish_output).toBe(true)
     const executor = new Api(cast.baseURL, token)
     const identity = await executor.ok_(executor.get('/v1/whoami'), 'executor identity')
     expect(identity.identity).toMatch(/^service:exec-setup-bot-[a-f0-9]{16}$/)
@@ -87,6 +91,18 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
           { timeout: 45000 },
         )
         .toBe(true)
+    }
+    if (binary) {
+      const runs = await cast
+        .as('admin')
+        .ok_(cast.as('admin').get(`/v1/repos/${repo}/runs`), 'completed runs')
+      const output = await cast
+        .as('admin')
+        .ok_(
+          cast.as('admin').get(`/v1/repos/${repo}/runs/${runs.runs[0].run_id}/output`),
+          'saved native output',
+        )
+      expect(output.stdout).toContain('executor-output')
     }
     await page.screenshot({ path: info.outputPath('executor-setup.png'), fullPage: true })
     await dialog.getByRole('button', { name: 'Revoke this executor token', exact: true }).click()

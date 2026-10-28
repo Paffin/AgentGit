@@ -7,8 +7,11 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.4] - 2026-10-28
+
 ### Added
 
+- Opt-in saved stdout/stderr tails on permanent run pages, with known-secret redaction, stream download and operator deletion that blocks delayed reuploads. Capture remains off by default.
 - Browser executor setup prepares exact-repository service access, a token-free task profile and a separate private token; the native orchestrator reads it with `-token-file`. A fresh report from the unique setup identity confirms the connection.
 - Task creators can reserve a registered agent atomically at creation or issue handoff, then reassign queued work with stale-edit protection. The server and orchestrator enforce the choice.
 - Registered-agent views distinguish enabled keys from expiring executor connection reports and show last reported capacity. Configured executors register before their first task.

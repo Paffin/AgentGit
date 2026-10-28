@@ -32,3 +32,7 @@ separate configuration and private credential downloads, native launch and a
 verified connection state. Operator-owned host installation remains separate.
 Next: durable run output, retries/cancellation UX and direct links from a run to
 its candidate checks, review and integration outcome.
+
+Saved run output: opt-in final stdout/stderr tails with bounded storage, known-secret
+redaction, download and deletion tombstones. Live streaming and exhaustive secret
+detection are not claimed.

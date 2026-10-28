@@ -275,6 +275,13 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     run = bot.agents.start_run(repo=REPO, agent="tour-bot", task_id=task.id)
     assert len(alice.agents.list_runs(repo=REPO, active_only=True).runs) == 1
     assert alice.agents.get_run(repo=REPO, run_id=run.run_id).identity == run.identity
+    tour["admin"].agents.output_save(
+        repo=REPO,
+        run_id=run.run_id,
+        output={"sequence": 1, "stdout": "captured", "stderr": "", "stdout_bytes": 8, "stderr_bytes": 0},
+    )
+    assert alice.agents.output_get(repo=REPO, run_id=run.run_id).stdout == "captured"
+    tour["admin"].agents.output_delete(repo=REPO, run_id=run.run_id)
     runner = bot.with_run(run.run_id)
     runner.agents.heartbeat(repo=REPO, run_id=run.run_id)
     lease = runner.leases.acquire(repo=REPO, scope="src/**", exclusive=True, ttl_ms=30_000, task_id=task.id)

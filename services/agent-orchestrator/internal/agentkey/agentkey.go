@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
 )
@@ -196,4 +197,10 @@ func (s *Store) Ensure(name string) (*Key, error) {
 		return nil, err
 	}
 	return k, nil
+}
+
+// Scrub removes the private key's hex encodings from explicitly captured output.
+func (k *Key) Scrub(text string) string {
+	text = strings.ReplaceAll(text, hex.EncodeToString(k.priv), "[redacted]")
+	return strings.ReplaceAll(text, hex.EncodeToString(k.priv.Seed()), "[redacted]")
 }

@@ -332,3 +332,18 @@ Connection confirmation is scoped to a unique service identity for each setup,
 so an older executor using the same agent name cannot turn the new setup green.
 Revocation also removes that setup service's role binding, while preserving the
 agent role that another installation may use.
+
+## Opt-in saved executor output — run-output branch, 2026-10-28
+
+The native executor keeps output local by default. Explicit capture saves up to
+32 KiB per stream at completion, scrubbing the session token, signing-key hex
+and known environment values. Server-side permission and size checks, monotonic
+snapshots, idempotent retries and deletion tombstones passed the focused HTTP
+scenario. Real command execution confirmed redaction and unchanged default-off
+behavior. The Web UI renders text, supports download and confirms deletion.
+
+TypeScript/Python operation tours passed (12/13); focused Rust Clippy checks passed.
+Chromium and phone passed both output inspection/deletion and the downloaded native
+executor profile with capture enabled (4 cases, 12.1 s). The native check/run
+path was enabled with AG_ORCH_BIN. Unknown or encoded secrets may remain; this is
+not a live log stream. Deletion does not erase existing backups or journals.

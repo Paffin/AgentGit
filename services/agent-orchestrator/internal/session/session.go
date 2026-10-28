@@ -72,7 +72,7 @@ func (s *Session) Info() Info {
 		Repo: s.req.Repo, Executor: s.req.Executor.Name, Agent: s.req.Executor.Agent, RunID: s.run.RunID,
 		TaskID: s.req.Task.ID, TaskTitle: s.req.Task.Title, Scope: s.req.Task.Scope, Attempt: s.req.Attempt,
 		State: state, StartedAt: s.started, LastHeartbeat: s.lastBeat, Leases: append([]LeaseInfo(nil), s.leases...),
-		StopReason: s.stopReason, StderrTail: secret.Scrub(s.stderr.Last(512), s.token),
+		StopReason: s.stopReason, StderrTail: s.redact(s.stderr.Last(512)),
 	}
 }
 
@@ -236,6 +236,7 @@ func (s *Session) finish(exit Exit) {
 	if s.req.Decide != nil {
 		disposition = s.req.Decide(res)
 	}
+	s.publishOutput()
 	m.completeRun(s.run.RunID, s.req.Repo, status, res.Summary)
 	if disposition != Keep {
 		state := "done"
@@ -334,7 +335,7 @@ func (s *Session) result(exit Exit) Result {
 		fmt.Fprintf(&b, "; proposals: %s", strings.Join(ids, ", "))
 	}
 	if res.Outcome != OutcomeCompleted {
-		if tailTxt := strings.TrimSpace(secret.Scrub(s.stderr.Last(600), s.token)); tailTxt != "" {
+		if tailTxt := strings.TrimSpace(s.redact(s.stderr.Last(600))); tailTxt != "" {
 			b.WriteString("; stderr: " + tailOneLine(tailTxt, 500))
 		}
 	}
@@ -392,7 +393,7 @@ func (s *Session) readResult() string {
 	if json.Unmarshal(raw, &r) != nil {
 		return ""
 	}
-	return oneLine(secret.Scrub(strings.TrimSpace(r.Summary), s.token))
+	return oneLine(s.redact(strings.TrimSpace(r.Summary)))
 }
 
 // tailOneLine collapses s to one line and keeps its last max bytes: the end of

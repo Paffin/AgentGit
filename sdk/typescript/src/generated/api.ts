@@ -25,6 +25,9 @@ export const NAMESPACE_METHODS = {
     heartbeat: 'agent.heartbeat',
     list: 'agent.list',
     listRuns: 'agent.list_runs',
+    outputDelete: 'agent.output.delete',
+    outputGet: 'agent.output.get',
+    outputSave: 'agent.output.save',
     predict: 'agent.predict',
     reapRuns: 'agent.reap_runs',
     register: 'agent.register',
@@ -197,6 +200,12 @@ export interface Api {
     list(request: Req<'agent.list'>, options?: CallOptions): Promise<Res<'agent.list'>>;
     /** List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`) */
     listRuns(request: Req<'agent.list_runs'>, options?: CallOptions): Promise<Res<'agent.list_runs'>>;
+    /** Delete saved executor output (`DELETE /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.delete`) */
+    outputDelete(request: Req<'agent.output.delete'>, options?: CallOptions): Promise<Res<'agent.output.delete'>>;
+    /** Read saved executor output (`GET /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.get`) */
+    outputGet(request: Req<'agent.output.get'>, options?: CallOptions): Promise<Res<'agent.output.get'>>;
+    /** Save bounded executor output (`PUT /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.save`) */
+    outputSave(request: Req<'agent.output.save'>, options?: CallOptions): Promise<Res<'agent.output.save'>>;
     /** Predict overlapping work on a stream (`GET /v1/repos/{owner}/{rname}/predict`, operation `agent.predict`) */
     predict(request: Req<'agent.predict'>, options?: CallOptions): Promise<Res<'agent.predict'>>;
     /** Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials (`POST /v1/repos/{owner}/{rname}/runs/reap`, operation `agent.reap_runs`) */

@@ -49,6 +49,7 @@ export type IntegrationResult = Omit<S['IntegrationResult'], 'outcome'> & {
 }
 export type Agent = S['Agent']
 export type Run = S['Run']
+export type RunOutput = S['RunOutput']
 export type Issue = S['Issue']
 export type IssueActivity = S['IssueActivity']
 export type Task = S['Task']

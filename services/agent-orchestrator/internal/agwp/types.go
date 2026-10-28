@@ -492,3 +492,15 @@ type TaskScheduling struct {
 	UpdatedBy   string `json:"updated_by"`
 	UpdatedAtMs int64  `json:"updated_at_ms"`
 }
+
+// RunOutput is an opt-in bounded snapshot, never authoritative validation evidence.
+type RunOutput struct {
+	RunID        string `json:"run_id,omitempty"`
+	Available    bool   `json:"available,omitempty"`
+	Sequence     uint64 `json:"sequence"`
+	Stdout       string `json:"stdout"`
+	Stderr       string `json:"stderr"`
+	StdoutBytes  uint64 `json:"stdout_bytes"`
+	StderrBytes  uint64 `json:"stderr_bytes"`
+	CapturedAtMS int64  `json:"captured_at_ms,omitempty"`
+}

@@ -41,6 +41,7 @@ export interface ExecutorSetup {
   arguments: string
   environment: string
   slots: number
+  captureOutput?: boolean
 }
 
 export function executorSetupProblem(input: ExecutorSetup): string | null {
@@ -53,7 +54,8 @@ export function executorSetupProblem(input: ExecutorSetup): string | null {
   const argsProblem = argumentsProblem(input.arguments)
   if (argsProblem) return argsProblem
   if (!validSlots(input.slots)) return 'Choose 1–32 concurrent tasks.'
-  if (!validEnvironment(input.environment)) return 'Enter environment variable names, not values.'
+  if (!validEnvironment(input.environment))
+    return 'Use environment variable names, not values or AgentGit service credentials.'
   return null
 }
 
@@ -82,6 +84,7 @@ export function executorConfiguration(input: ExecutorSetup): string {
             name: input.agent,
             agent: input.agent,
             type: 'command',
+            ...(input.captureOutput ? { publish_output: true } : {}),
             slots: input.slots,
             command: [input.command.trim(), ...JSON.parse(input.arguments)],
             pass_env: [...new Set(['PATH', ...environmentNames(input.environment)])],
@@ -92,15 +95,6 @@ export function executorConfiguration(input: ExecutorSetup): string {
       2,
     ) + '\n'
   )
-}
-
-export function downloadSetupFile(name: string, contents: string, type = 'text/plain') {
-  const url = URL.createObjectURL(new Blob([contents], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function argumentsProblem(text: string): string | null {
@@ -131,7 +125,11 @@ function environmentNames(value: string): string[] {
   return value.split(/[\s,]+/).filter(Boolean)
 }
 function validEnvironment(value: string): boolean {
-  return environmentNames(value).every((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+  return environmentNames(value).every(
+    (name) =>
+      /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) &&
+      !['AG_TOKEN', 'AG_ORCH_TOKEN', 'AG_REVIEWER_TOKEN', 'AG_ADVISOR_TOKEN'].includes(name),
+  )
 }
 function isLoopback(hostname: string): boolean {
   return ['localhost', '[::1]'].includes(hostname) || /^127(?:\.\d{1,3}){3}$/.test(hostname)

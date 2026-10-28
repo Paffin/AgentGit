@@ -1010,6 +1010,18 @@ message Run {
   string summary = 9;
 }
 
+message RunOutput {
+  string run_id = 1;
+  bool available = 2;
+  uint64 sequence = 3;
+  string stdout = 4;
+  string stderr = 5;
+  uint64 stdout_bytes = 6;
+  uint64 stderr_bytes = 7;
+  int64 captured_at_ms = 8;
+}
+message GetRunOutputRequest { string repo = 1; string run_id = 2; }
+message SaveRunOutputRequest { string repo = 1; string run_id = 2; RunOutput output = 3; }
 message GetRunRequest { string repo = 1; string run_id = 2; }
 
 message StartRunRequest {
@@ -1735,6 +1747,9 @@ message SetTaskSchedulingRequest {
 
 service AgentService {
   rpc GetRun(GetRunRequest) returns (Run);
+  rpc GetRunOutput(GetRunOutputRequest) returns (RunOutput);
+  rpc SaveRunOutput(SaveRunOutputRequest) returns (RunOutput);
+  rpc DeleteRunOutput(GetRunOutputRequest) returns (Empty);
   rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
   rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);

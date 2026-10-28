@@ -513,3 +513,16 @@ Start the development orchestrator on the host using the displayed command. The
 wizard confirms a fresh connection from the service identity it just prepared, then
 the agent can be assigned tasks. Host installation and model availability are still
 external prerequisites. See the [orchestrator guide](orchestrator.md#connect-from-the-web-ui-development).
+
+### Saved executor output (development)
+
+In **Connect an executor**, **Save diagnostic output in AgentGit** is off by default.
+When enabled, the executor saves a bounded stdout/stderr tail at session end. Open
+its run page to switch streams, download text or delete the saved output. Deletion
+preserves the run outcome and audit trail and blocks later uploads for that run.
+Only an operator may save or delete output; repository readers may view it.
+
+At most 32 KiB per stream are saved. This is not a live log stream or a replacement
+for signed checks. Known credentials and private key encodings are removed by the
+orchestrator, but it cannot identify every possible secret. Enable capture only
+when the output is suitable for the repository's readers.

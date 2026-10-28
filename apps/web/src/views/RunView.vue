@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RunOutput from '@/components/agents/RunOutput.vue'
 import { computed, onBeforeUnmount } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
@@ -152,6 +153,7 @@ onBeforeUnmount(() => clearInterval(heartbeatPoll))
           {{ run.data.value.summary || 'The agent has not provided a summary.' }}
         </p>
       </section>
+      <RunOutput :repo="repo" :run-id="id" />
       <section aria-labelledby="task-heading">
         <h2 id="task-heading">Assigned task</h2>
         <p v-if="!run.data.value.task_id" class="muted">This session was started without a task.</p>

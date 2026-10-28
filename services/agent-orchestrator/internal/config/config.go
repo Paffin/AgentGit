@@ -213,20 +213,22 @@ type Index struct {
 
 // Executor describes one way of running an agent.
 type Executor struct {
-	Name    string            `yaml:"name"`
-	Type    string            `yaml:"type"` // command
-	Agent   string            `yaml:"agent"`
-	Slots   int               `yaml:"slots"`
-	Timeout time.Duration     `yaml:"timeout"`
-	Grace   time.Duration     `yaml:"grace"`
-	Beat    time.Duration     `yaml:"heartbeat"`
-	Cred    time.Duration     `yaml:"credential_ttl"`
-	Ops     []string          `yaml:"operations"`
-	Command []string          `yaml:"command"`
-	Dir     string            `yaml:"dir"`
-	Env     map[string]string `yaml:"env"`
-	Pass    []string          `yaml:"pass_env"`
-	Output  int               `yaml:"output_bytes"`
+	// PublishOutput opts in to saving a bounded redacted tail on the AgentGit server.
+	PublishOutput bool              `yaml:"publish_output"`
+	Name          string            `yaml:"name"`
+	Type          string            `yaml:"type"` // command
+	Agent         string            `yaml:"agent"`
+	Slots         int               `yaml:"slots"`
+	Timeout       time.Duration     `yaml:"timeout"`
+	Grace         time.Duration     `yaml:"grace"`
+	Beat          time.Duration     `yaml:"heartbeat"`
+	Cred          time.Duration     `yaml:"credential_ttl"`
+	Ops           []string          `yaml:"operations"`
+	Command       []string          `yaml:"command"`
+	Dir           string            `yaml:"dir"`
+	Env           map[string]string `yaml:"env"`
+	Pass          []string          `yaml:"pass_env"`
+	Output        int               `yaml:"output_bytes"`
 }
 
 // Default operations granted to an agent credential (capabilities of the

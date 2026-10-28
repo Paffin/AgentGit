@@ -484,3 +484,17 @@ uses `server.token_env: AG_ORCH_TOKEN` (the default). Other environment variable
 continue to come from the process environment. `config` and `ops` do not read this
 secret file. See [Web UI connection](../../docs/guides/orchestrator.md#connect-from-the-web-ui-development)
 for the repository-scoped setup wizard.
+
+### Opt-in saved output (development)
+
+An executor's `publish_output: true` saves the last 32 KiB of stdout and stderr to
+AgentGit when a session ends. The default remains false. The session credential,
+private signing-key hex encodings and known inherited/configured environment
+values are scrubbed before upload. This is best-effort redaction, not a guarantee
+that arbitrary output is safe to share; repository readers can inspect the result.
+
+The server must advertise `agents.run_output`. Operators can delete saved text;
+a deletion marker prevents a delayed retry from recreating it. Output capture is
+independent of the task outcome, does not grant agent credentials extra powers,
+and cannot produce a successful check or approval. Failure to upload output is
+reported by the supervisor and does not turn a failed task into a successful one.

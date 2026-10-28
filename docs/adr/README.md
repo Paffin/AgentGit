@@ -29,3 +29,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0019](0019-queued-task-assignment.md) | Atomic queued-agent reservation and assignment-aware dispatch |
 | [0020](0020-executor-connectivity.md) | Expiring executor connection reports and pre-run identity preparation |
 | [0021](0021-browser-executor-setup.md) | Browser-prepared scoped executor setup with separate private token files |
+| [0022](0022-saved-executor-output.md) | Opt-in bounded run output with redaction and deletion tombstones |

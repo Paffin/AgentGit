@@ -1126,6 +1126,25 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/runs/{run_id}/output': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read saved executor output */
+    get: operations['agent.output.get']
+    /** Save bounded executor output */
+    put: operations['agent.output.save']
+    post?: never
+    /** Delete saved executor output */
+    delete: operations['agent.output.delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/search': {
     parameters: {
       query?: never
@@ -2533,6 +2552,12 @@ export interface components {
     GetRepoRequest: {
       /** @default  */
       repo: string
+    }
+    GetRunOutputRequest: {
+      /** @default  */
+      repo: string
+      /** @default  */
+      run_id: string
     }
     GetRunRequest: {
       /** @default  */
@@ -4129,6 +4154,36 @@ export interface components {
       /** @default  */
       task_id: string
     }
+    RunOutput: {
+      /** @default false */
+      available: boolean
+      /**
+       * Format: int64
+       * @default 0
+       */
+      captured_at_ms: number
+      /** @default  */
+      run_id: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      sequence: number
+      /** @default  */
+      stderr: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      stderr_bytes: number
+      /** @default  */
+      stdout: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      stdout_bytes: number
+    }
     RunQueueRequest: {
       /**
        * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
@@ -4193,6 +4248,14 @@ export interface components {
        * @default 0
        */
       timeout_secs: number
+    }
+    SaveRunOutputRequest: {
+      /** @default null */
+      output: components['schemas']['RunOutput'] | null
+      /** @default  */
+      repo: string
+      /** @default  */
+      run_id: string
     }
     SearchMatch: {
       /**
@@ -7606,6 +7669,115 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HeartbeatResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'agent.output.get': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        run_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RunOutput']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'agent.output.save': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        run_id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveRunOutputRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RunOutput']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'agent.output.delete': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        run_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Empty']
         }
       }
       /** @description Error */

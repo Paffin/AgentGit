@@ -280,6 +280,13 @@ describe('the tour', () => {
     const run = await bot.agents.startRun({ repo, agent: 'tour-bot', task_id: task.id });
     expect((await alice.agents.listRuns({ repo, active_only: true })).runs).toHaveLength(1);
     expect((await alice.agents.getRun({ repo, run_id: run.run_id })).identity).toBe(run.identity);
+    await admin.agents.outputSave({
+      repo,
+      run_id: run.run_id,
+      output: { sequence: 1, stdout: 'captured', stderr: '', stdout_bytes: 8, stderr_bytes: 0 },
+    });
+    expect((await alice.agents.outputGet({ repo, run_id: run.run_id })).stdout).toBe('captured');
+    await admin.agents.outputDelete({ repo, run_id: run.run_id });
     const runner = bot.withRun(run.run_id);
     await runner.agents.heartbeat({ repo, run_id: run.run_id });
     const lease = await runner.leases.acquire({

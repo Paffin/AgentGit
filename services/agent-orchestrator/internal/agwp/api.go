@@ -664,3 +664,18 @@ func (c *Client) ReportExecutor(ctx context.Context, repo, agent, name string, s
 	return c.repoCall(ctx, "agent.executor.report", http.MethodPut, repo, "/agents/"+url.PathEscape(agent)+"/executor", nil,
 		map[string]any{"name": name, "slots": slots, "available": available, "ttl_secs": ttl}, &out)
 }
+
+// SaveRunOutput sends one explicitly enabled, redacted output snapshot as the operator.
+func (c *Client) SaveRunOutput(ctx context.Context, repo, run string, output RunOutput) error {
+	var out RunOutput
+	return c.repoCall(ctx, "agent.output.save", http.MethodPut, repo, "/runs/"+url.PathEscape(run)+"/output", nil, map[string]any{"output": output}, &out)
+}
+
+// GetRunOutput reads the last saved snapshot under the run's normal read permission.
+func (c *Client) GetRunOutput(ctx context.Context, repo, run string) (*RunOutput, error) {
+	var out RunOutput
+	if err := c.repoCall(ctx, "agent.output.get", http.MethodGet, repo, "/runs/"+url.PathEscape(run)+"/output", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

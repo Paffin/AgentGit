@@ -460,6 +460,24 @@ impl AgentService for Grpc {
     ) -> Result<Response<v1::ExecutorPresence>, Status> {
         unary!(self, request, "agent.executor.report", report_executor)
     }
+    async fn get_run_output(
+        &self,
+        request: Request<v1::GetRunOutputRequest>,
+    ) -> Result<Response<v1::RunOutput>, Status> {
+        unary!(self, request, "agent.output.get", get_run_output)
+    }
+    async fn save_run_output(
+        &self,
+        request: Request<v1::SaveRunOutputRequest>,
+    ) -> Result<Response<v1::RunOutput>, Status> {
+        unary!(self, request, "agent.output.save", save_run_output)
+    }
+    async fn delete_run_output(
+        &self,
+        request: Request<v1::GetRunOutputRequest>,
+    ) -> Result<Response<v1::Empty>, Status> {
+        unary!(self, request, "agent.output.delete", delete_run_output)
+    }
     async fn get_task_scheduling(
         &self,
         request: Request<v1::GetTaskSchedulingRequest>,

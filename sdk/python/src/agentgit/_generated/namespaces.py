@@ -69,6 +69,7 @@ from agentgit._generated.models import (
     GetPolicyRequest,
     GetProposalRequest,
     GetRepoRequest,
+    GetRunOutputRequest,
     GetRunRequest,
     GetTaskRequest,
     GetTaskSchedulingRequest,
@@ -185,9 +186,11 @@ from agentgit._generated.models import (
     RevokeRoleRequest,
     RoleBinding,
     Run,
+    RunOutput,
     RunQueueRequest,
     RunQueueResponse,
     RunSpec,
+    SaveRunOutputRequest,
     SearchMatch,
     SearchTreeRequest,
     SearchTreeResponse,
@@ -409,6 +412,37 @@ class AgentsApi:
     ) -> ListRunsResponse:
         """List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`)."""
         return self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit}, options, ListRunsResponse)
+
+    def output_delete(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> Empty:
+        """Delete saved executor output (`DELETE /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.delete`)."""
+        return self._c._call("agent.output.delete", {"repo": repo, "run_id": run_id}, options, Empty)
+
+    def output_get(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> RunOutput:
+        """Read saved executor output (`GET /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.get`)."""
+        return self._c._call("agent.output.get", {"repo": repo, "run_id": run_id}, options, RunOutput)
+
+    def output_save(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        output: RunOutput | Mapping[str, Any] | None = None,
+        options: CallOptions | None = None,
+    ) -> RunOutput:
+        """Save bounded executor output (`PUT /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.save`)."""
+        return self._c._call("agent.output.save", {"repo": repo, "run_id": run_id, "output": output}, options, RunOutput)
 
     def predict(
         self,
@@ -1874,6 +1908,37 @@ class AsyncAgentsApi:
     ) -> ListRunsResponse:
         """List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`)."""
         return await self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit}, options, ListRunsResponse)
+
+    async def output_delete(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> Empty:
+        """Delete saved executor output (`DELETE /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.delete`)."""
+        return await self._c._call("agent.output.delete", {"repo": repo, "run_id": run_id}, options, Empty)
+
+    async def output_get(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        options: CallOptions | None = None,
+    ) -> RunOutput:
+        """Read saved executor output (`GET /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.get`)."""
+        return await self._c._call("agent.output.get", {"repo": repo, "run_id": run_id}, options, RunOutput)
+
+    async def output_save(
+        self,
+        *,
+        repo: str,
+        run_id: str,
+        output: RunOutput | Mapping[str, Any] | None = None,
+        options: CallOptions | None = None,
+    ) -> RunOutput:
+        """Save bounded executor output (`PUT /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.save`)."""
+        return await self._c._call("agent.output.save", {"repo": repo, "run_id": run_id, "output": output}, options, RunOutput)
 
     async def predict(
         self,

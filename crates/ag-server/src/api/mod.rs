@@ -23,6 +23,7 @@ mod jobs;
 mod objects;
 mod proposals;
 mod repository;
+mod run_output;
 mod search;
 mod session;
 mod streams;

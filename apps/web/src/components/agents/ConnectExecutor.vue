@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadTextFile } from '@/lib/download'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
@@ -8,11 +9,11 @@ import { useAuth } from '@/stores/auth'
 import { useResource } from '@/composables/useResource'
 import { useServerNow } from '@/composables/useNow'
 import {
-  downloadSetupFile,
   executorConfiguration,
   executorSetupProblem,
   EXECUTOR_OPERATIONS,
 } from '@/lib/executorSetup'
+import Checkbox from '@/ui/Checkbox.vue'
 import Button from '@/ui/Button.vue'
 import Dialog from '@/ui/Dialog.vue'
 import TextField from '@/ui/TextField.vue'
@@ -27,6 +28,7 @@ const open = ref(false),
   busy = ref(false),
   error = ref(''),
   issued = ref(false)
+const captureOutput = ref(false)
 const serverUrl = ref(window.location.origin)
 const agent = ref('my-agent'),
   command = ref(''),
@@ -51,6 +53,7 @@ const settings = computed(() => ({
   arguments: args.value,
   environment: environment.value,
   slots: Number(slots.value),
+  captureOutput: captureOutput.value,
 }))
 const problem = computed(() => executorSetupProblem(settings.value))
 const agents = useResource((signal) => api.agents.list(props.repo, { signal, token: auth.token }), {
@@ -75,6 +78,7 @@ watch(
     controller?.abort()
     token.value = ''
     credentialId.value = ''
+    captureOutput.value = false
     issued.value = false
     open.value = false
     busy.value = false
@@ -138,14 +142,14 @@ async function prepare() {
   }
 }
 function downloadConfig() {
-  downloadSetupFile(
+  downloadTextFile(
     'agentgit-executor.json',
     executorConfiguration(settings.value),
     'application/json',
   )
 }
 function downloadToken() {
-  if (token.value) downloadSetupFile('agentgit-executor.token', token.value + '\n')
+  if (token.value) downloadTextFile('agentgit-executor.token', token.value + '\n')
 }
 async function revoke() {
   if (busy.value || !credentialId.value) return
@@ -214,6 +218,15 @@ async function revoke() {
           label="Concurrent tasks"
           :options="[1, 2, 4, 8].map((n) => ({ value: String(n), label: String(n) }))"
         />
+        <Checkbox
+          v-if="auth.capabilities?.features.includes('agents.run_output')"
+          v-model="captureOutput"
+          label="Save diagnostic output in AgentGit"
+        />
+        <p v-if="captureOutput" class="faint">
+          Saves the last 32 KiB of stdout and stderr when the run ends. Known credentials are
+          redacted, but output may contain other private data. Repository readers can view it.
+        </p>
       </fieldset>
       <dl v-else class="summary">
         <dt>Agent</dt>

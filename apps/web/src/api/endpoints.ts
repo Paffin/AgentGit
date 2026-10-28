@@ -39,6 +39,7 @@ import type {
   Stream,
   Task,
   TaskScheduling,
+  RunOutput,
   TreeEntry,
   Attestation,
   FileChange,
@@ -369,6 +370,15 @@ export function createApi(c: ApiClient) {
 
     // ---- agents ---------------------------------------------------------------------------------
     agents: {
+      runOutput: (repo: string, runId: string, o?: SessionOpts) =>
+        c.get<RunOutput>(r(repo, `/runs/${encodeURIComponent(runId)}/output`), undefined, o),
+      deleteRunOutput: (repo: string, runId: string, o?: SessionOpts) =>
+        c.del<Record<string, never>>(
+          r(repo, `/runs/${encodeURIComponent(runId)}/output`),
+          undefined,
+          o,
+        ),
+
       list: async (repo: string, o?: SessionOpts) =>
         (await c.get<{ agents: Agent[] }>(r(repo, '/agents'), undefined, o)).agents ?? [],
       register: (

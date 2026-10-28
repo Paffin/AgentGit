@@ -1234,6 +1234,45 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         meta,
         get,
         "get",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.get",
+        "Agent",
+        "Read saved executor output",
+        v1::GetRunOutputRequest,
+        v1::RunOutput,
+        get_run_output
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.save",
+        "Agent",
+        "Save bounded executor output",
+        v1::SaveRunOutputRequest,
+        v1::RunOutput,
+        save_run_output
+    );
+    route!(
+        r,
+        meta,
+        delete,
+        "delete",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.delete",
+        "Agent",
+        "Delete saved executor output",
+        v1::GetRunOutputRequest,
+        v1::Empty,
+        delete_run_output
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
         "/v1/repos/{owner}/{rname}/tasks/scheduling",
         "task.scheduling.get",
         "Agent",

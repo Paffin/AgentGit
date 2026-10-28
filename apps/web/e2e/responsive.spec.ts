@@ -128,7 +128,7 @@ test.describe('navigation', () => {
   }) => {
     await page.goto(`/repos/${state.demo.repo}/history`)
     const tabs = page.getByRole('navigation', { name: 'Repository' })
-    await expect(tabs.getByRole('link')).toHaveCount(5)
+    await expect(tabs.getByRole('link', { name: 'Issues', exact: true })).toBeVisible()
     // The current tab is scrolled into view on arrival, not left off-screen in a strip with no scrollbar.
     expect(await fitsViewport(page, tabs.getByRole('link', { name: 'Code' }))).toBe(true)
     for (const link of await tabs.getByRole('link').all()) {

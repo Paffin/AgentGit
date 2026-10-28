@@ -128,9 +128,9 @@ def validate_request(repo, sha, version):
 
 
 def required_assets(version):
-    from package_release import BINARIES
+    from package_release import RUST_BINARIES
     return ({f'agentgit-{version}-{target}.tar.gz' for target in TARGETS}
-            | {f'agentgit-{version}-{binary}.cdx.json' for binary in BINARIES}
+            | {f'agentgit-{version}-{binary}.cdx.json' for binary in RUST_BINARIES}
             | {'SHA256SUMS', 'agentgit.rb'})
 
 
@@ -148,6 +148,11 @@ def request_release(api, repo, sha, version, wait=None):
     release = api.optional(base + '/releases/tags/' + tag)
     if is_published(release, version):
         return 'already published ' + tag
+    ref = api.optional(base + '/git/ref/tags/' + tag)
+    if ref is not None:
+        pinned = tag_commit(api, base, ref)
+        if pinned != sha:
+            return f'{tag} already pinned to {pinned[:12]}; bump the version to release another commit'
     if not is_current(api, base, sha):
         return 'main moved; no release requested'
     (wait or wait_checks)(api, base, sha)

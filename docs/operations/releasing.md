@@ -69,6 +69,8 @@ gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
 # Observe both workflows; only a completed Release with its assets is a published version.
 ```
 
+Once a version tag is pinned, its release continues from that commit while main can advance. Later requests for the same version report the pinned commit without moving the tag or waiting for unrelated checks; bump the version to request another release. The publication check expects the four Rust SBOMs actually shipped; the native Go executor is inside each platform archive.
+
 Use a prerelease suffix for release candidates and betas. The published beta remains the installation target until the next release has completed; see [What is not proven](#what-is-not-proven).
 
 ## Verifying what you downloaded

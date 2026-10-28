@@ -7,6 +7,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.3] - 2026-10-28
+
 ### Added
 
 - Permanent task pages connect prerequisites, dependant tasks, agent sessions and change requests. Add prerequisites from the browser and confirm completion/cancellation with their consequences explained. Coordination tabs survive reloads.
@@ -48,6 +50,12 @@ on-disk formats are versioned and refuse to open when newer than the build under
 ### Changed
 
 - The real Keycloak browser job reuses the pinned Playwright runtime, avoiding repeated system-package downloads while retaining real-provider, embedded-server and reviewed-skip checks.
+
+### Known limits
+
+- Draft recovery and viewed-file progress are local to a browser tab. Multi-file JSON drafts can be transferred manually; there is no account-backed draft synchronization.
+- Code search scans literal text in files up to 1 MiB with bounded pages and explicit exclusions; it is not an indexed or regex search engine.
+- Task pages coordinate existing agent tasks; a full user issue tracker, durable line-review threads and the other roadmap subsystems remain open.
 
 ## [0.3.0-beta.2] — 2026-10-27
 
@@ -520,6 +528,8 @@ Local mode trusts the local user; no sandbox for `ag validate run`; flat tree ma
 detection; no network server. See [ROADMAP.md](ROADMAP.md) and
 [docs/architecture/security.md](docs/architecture/security.md).
 
-[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.2.0-rc.1...HEAD
+[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.3...HEAD
+[0.3.0-beta.3]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3
+[0.3.0-beta.2]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.2
 [0.2.0-rc.1]: https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.1
 [0.1.0]: https://github.com/Paffin/AgentGit/releases/tag/v0.1.0

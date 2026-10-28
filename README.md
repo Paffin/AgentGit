@@ -170,7 +170,7 @@ blockers that come with their fix as a button, guided flows to start a repositor
 instead of raw JSON, and editing a file and proposing it from the browser. These are included in beta.2.
 What is still missing is on the [roadmap](ROADMAP.md).
 
-The next-release changes add file-by-file review progress, reload recovery for review drafts, permanent task pages with prerequisite management and confirmed completion/cancellation, and server-side code search with links to matching lines. These source changes are listed under [Unreleased](CHANGELOG.md#unreleased); they are not part of the published beta.2 archives.
+The next-release changes add file-by-file review progress, reload recovery for review drafts, permanent task pages with prerequisite management and confirmed completion/cancellation, and server-side code search with links to matching lines. They are prepared for [beta.3](CHANGELOG.md), which is not published yet; the available beta.2 archives do not include them.
 
 A live board of runs, leases, tasks and the merge queue, with four independent verdicts per proposal. These are real
 screenshots of the UI running against a real server, captured by the end-to-end suite.

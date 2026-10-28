@@ -277,6 +277,8 @@ def stale_files(files: dict[str, str]) -> list[str]:
 def main() -> None:
     ag = find_ag()
     files = generate(ag)
+    files = {path: "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+             for path, text in files.items()}
     stale = stale_files(files)
     if "--check" in sys.argv:
         bad = [rel for rel, text in files.items() if not (REF / rel).exists() or (REF / rel).read_text() != text]

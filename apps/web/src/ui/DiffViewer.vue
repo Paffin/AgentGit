@@ -16,12 +16,14 @@ const props = withDefaults(
     emptyTitle?: string
     emptyDescription?: string
     anchorPrefix?: string
+    anchorForFile?: (file: FileDiff) => string
     discussLines?: boolean
   }>(),
   {
     truncated: false,
     discussLines: false,
     anchorPrefix: 'diff',
+    anchorForFile: undefined,
     emptyTitle: 'No differences',
     emptyDescription: 'The two revisions have the same files.',
   },
@@ -59,7 +61,7 @@ const totals = computed(() => ({
           v-for="(f, i) in files"
           :key="f.path"
           :file="f"
-          :anchor="`${anchorPrefix}-${i}`"
+          :anchor="anchorForFile ? anchorForFile(f) : `${anchorPrefix}-${i}`"
           :discuss-lines="discussLines"
           @discuss="$emit('discuss', $event)"
         >

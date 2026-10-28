@@ -278,3 +278,26 @@ Required checks are identified by their workflow file paths, so another workflow
 Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.
 
 Python CI uses `uv sync --locked`; package checks run `uv lock --check` before building. A version bump must therefore include the normalized project version in `sdk/python/uv.lock`, the public Python `__version__`, regenerated CLI reference and third-party licence list. Deployment defaults track the candidate workspace version; verify image availability before using them. Update published installation links only after the new release assets are verified.
+
+
+## Beta.5 publication evidence {#beta5-publication-evidence}
+
+`v0.3.0-beta.5` was published on 2026-10-28 from
+`a36168b8d79f59b0557b9a9caa99f87b2ff9cb64`. The complete
+[release run](https://github.com/Paffin/AgentGit/actions/runs/40738103603) passed, including
+Linux/macOS x86_64 and aarch64 native archive smoke flows, multi-architecture images, SBOMs,
+attestations and the three installation jobs. Those installation jobs exercise assembled
+release files; they are not independent clean-device or Homebrew qualification.
+
+The published Linux x86_64 archive was downloaded separately. Its SHA-256 matched the published
+`SHA256SUMS`: `123e924fa8d16cd636d1332c4b3667ed69be2fb6d0f6523e652f851a635e10e2`.
+GitHub attestation verification accepted the bundle with the repository, release workflow,
+exact source digest and rejection of self-hosted runners specified explicitly.
+
+The downloaded server created a repository and task at schema 6. Opening that data with
+development schema 7 preserved existing task/history/policy-related records, replayed the
+old task-creation idempotency key, and allowed a new persistent task-source link. The beta.5
+binary refused the upgraded schema; it successfully verified the untouched pre-upgrade backup.
+This verifies that upgrade path, not production readiness or a general downgrade operation.
+External MCP-host, clean macOS, physical-phone, screen-reader and pilot reports remain open in
+the [beta programme](../community/beta.md).

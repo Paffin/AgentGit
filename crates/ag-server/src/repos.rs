@@ -71,6 +71,8 @@ fn missing_local_data(name: &str) -> ApiError {
     .with_retry_after(1000)
 }
 
+/// Publishes only the reconstructible local configuration cache; the registry remains authoritative.
+/// Each first request owns its temporary file, so concurrent readers never observe partial JSON.
 fn publish_local_config(ag: &Path, text: &str) -> ApiResult<()> {
     std::fs::create_dir_all(ag).map_err(ApiError::internal)?;
     // Each request owns its temporary file: a shared PID name lets another thread truncate a

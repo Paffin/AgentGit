@@ -23,6 +23,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Pinned fuzz-tool setup tolerates partial cache restoration instead of failing when the executable already exists.
+
 - Concurrent first requests on a replica publish independent temporary repository configurations atomically, preventing truncated JSON and missing-file errors when a shared repository is first opened.
 
 - Virtualized code and event lists batch scroll updates per frame, preserving keyboard scrolling and avoiding Firefox scroll-linked positioning warnings.

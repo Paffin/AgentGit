@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- A multi-file browser editor stages text edits, additions, renames and deletions in one change request, with a shared preview and account/repository/branch-scoped tab recovery.
+
 ### Fixed
 
 - File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.

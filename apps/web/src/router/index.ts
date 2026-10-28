@@ -107,6 +107,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Files' },
       },
       {
+        path: 'edit',
+        name: 'change-editor',
+        component: () => import('@/views/ChangeEditorView.vue'),
+        meta: { title: 'Edit files' },
+      },
+      {
         path: 'compare',
         name: 'compare',
         component: () => import('@/views/CompareView.vue'),

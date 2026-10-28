@@ -113,7 +113,7 @@ jobs:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-${{ env.CARGO_FUZZ_VERSION }}-${{ runner.os }}-${{ env.FUZZ_NIGHTLY }}
       - if: steps.cargo-fuzz.outputs.cache-hit != 'true'
-        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked --force
       - name: Build every target
         working-directory: fuzz
         run: cargo fuzz build -s address --features heavy

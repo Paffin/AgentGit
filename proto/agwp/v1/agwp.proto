@@ -771,6 +771,48 @@ message CommentProposalRequest {
   string idempotency_key = 5;
 }
 
+// A line location is immutable; text is filled from the repository by the server.
+message ReviewLineAnchor {
+  string base = 1;
+  string head = 2;
+  string path = 3;
+  string side = 4;
+  uint32 line = 5;
+  string text = 6;
+}
+message ReviewThread {
+  string id = 1;
+  string proposal = 2;
+  ReviewLineAnchor anchor = 3;
+  string body = 4;
+  string author = 5;
+  bool resolved = 6;
+  uint64 version = 7;
+  int64 created_at_ms = 8;
+  int64 updated_at_ms = 9;
+}
+message ThreadComment {
+  uint64 id = 1;
+  string thread_id = 2;
+  string body = 3;
+  string author = 4;
+  int64 created_at_ms = 5;
+}
+message ListReviewThreadsRequest { string repo = 1; string id = 2; uint32 page_size = 3; string page_token = 4; }
+message ListReviewThreadsResponse { repeated ReviewThread threads = 1; string next_page_token = 2; }
+message CreateReviewThreadRequest {
+  string repo = 1;
+  string id = 2;
+  ReviewLineAnchor anchor = 3;
+  string body = 4;
+  string expected_head = 5;
+  string idempotency_key = 6;
+}
+message ListThreadCommentsRequest { string repo = 1; string id = 2; string thread_id = 3; uint32 page_size = 4; string page_token = 5; }
+message ListThreadCommentsResponse { repeated ThreadComment comments = 1; string next_page_token = 2; }
+message AddThreadCommentRequest { string repo = 1; string id = 2; string thread_id = 3; string body = 4; string idempotency_key = 5; }
+message ResolveReviewThreadRequest { string repo = 1; string id = 2; string thread_id = 3; bool resolved = 4; uint64 expected_version = 5; string idempotency_key = 6; }
+
 message CloseProposalRequest {
   string repo = 1;
   string id = 2;
@@ -1735,6 +1777,11 @@ service ProposalService {
   rpc Update(UpdateProposalRequest) returns (Proposal);
   rpc Review(ReviewProposalRequest) returns (Review);
   rpc Comment(CommentProposalRequest) returns (Review);
+  rpc ListThreads(ListReviewThreadsRequest) returns (ListReviewThreadsResponse);
+  rpc CreateThread(CreateReviewThreadRequest) returns (ReviewThread);
+  rpc ListThreadComments(ListThreadCommentsRequest) returns (ListThreadCommentsResponse);
+  rpc ReplyThread(AddThreadCommentRequest) returns (ThreadComment);
+  rpc ResolveThread(ResolveReviewThreadRequest) returns (ReviewThread);
   rpc Close(CloseProposalRequest) returns (Proposal);
 }
 

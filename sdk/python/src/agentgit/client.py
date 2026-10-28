@@ -27,8 +27,10 @@ from agentgit._generated.models import (
     Proposal,
     PutObjectResult,
     Repo,
+    ReviewThread,
     Run,
     SearchMatch,
+    ThreadComment,
     TreeEntry,
 )
 from agentgit._generated.namespaces import (
@@ -495,6 +497,26 @@ class AgentGitClient:
     @overload
     def paginate(
         self,
+        op_id: Literal["proposal.threads"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[ReviewThread]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["proposal.thread_comments"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[ThreadComment]: ...
+    @overload
+    def paginate(
+        self,
         op_id: Literal["tree.get", "jobs.candidate"],
         /,
         *,
@@ -823,6 +845,26 @@ class AsyncAgentGitClient:
         max_items: int | None = ...,
         **params: Any,
     ) -> AsyncIterator[Proposal]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["proposal.threads"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[ReviewThread]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["proposal.thread_comments"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[ThreadComment]: ...
     @overload
     def paginate(
         self,

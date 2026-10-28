@@ -38,6 +38,7 @@ mod issues;
 mod jobs;
 mod migrate;
 pub(crate) mod pg;
+mod review_threads;
 
 mod agents;
 mod changesets;
@@ -72,6 +73,7 @@ pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_sc
 pub use records::{
     AttestationRow, NewProposal, PinRow, PolicyRow, ProposalFilter, ProposalRow, ReviewRow, WorkspaceRow,
 };
+pub use review_threads::{ReviewThreadAnchorRow, ReviewThreadRow, ThreadCommentRow};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 
 /// Errors from the metadata store.

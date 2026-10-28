@@ -154,6 +154,29 @@ describe('the tour', () => {
       ).decision,
     ).toBe('comment');
 
+    const thread = await alice.proposals.threadCreate({
+      repo,
+      id: p1.id,
+      body: 'Explain this line.',
+      expected_head: m2.head,
+      anchor: { base: '', head: m2.head, path: 'd.txt', side: 'new', line: 1 },
+    });
+    expect(thread.anchor?.text).toBe('d');
+    await bob.proposals.threadReply({ repo, id: p1.id, thread_id: thread.id, body: 'It is required for recovery.' });
+    expect((await alice.proposals.threadComments({ repo, id: p1.id, thread_id: thread.id })).comments).toHaveLength(1);
+    expect(
+      (
+        await bob.proposals.threadResolve({
+          repo,
+          id: p1.id,
+          thread_id: thread.id,
+          resolved: true,
+          expected_version: thread.version + 1,
+        })
+      ).resolved,
+    ).toBe(true);
+    expect((await alice.proposals.threads({ repo, id: p1.id })).threads).toHaveLength(1);
+
     // validation: queued, claimed, failed once, claimed again, completed with a signed attestation
     const queued = await alice.integration.validate({ repo, proposal: p1.id });
     expect(queued.jobs).toHaveLength(1);

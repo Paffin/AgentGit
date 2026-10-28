@@ -254,3 +254,33 @@ Writers, reviewers and integrators may post discussion without approval rights.
 writing anything. An idempotency key records the response atomically with the
 comment. Comments use review records with `decision=comment`, remain available
 after closure and do not supersede approval or request-changes decisions.
+
+### Line review threads (development)
+
+`proposals.threads` advertises metadata schema 6 and these operations:
+
+| Operation | HTTP route relative to `/v1/repos/{owner}/{rname}/proposals/{id}` |
+|---|---|
+| `proposal.threads` | `GET /threads` |
+| `proposal.thread_create` | `POST /threads` |
+| `proposal.thread_comments` | `GET /threads/{thread_id}/comments` |
+| `proposal.thread_reply` | `POST /threads/{thread_id}/comments` |
+| `proposal.thread_resolve` | `PATCH /threads/{thread_id}` |
+
+Reads require proposal read access. Creating/replying requires `proposal.comment`.
+Resolution additionally requires the thread author, proposal author, reviewer or
+integrator. `expected_version` is mandatory; replies increment it, and a stale
+resolution returns `failed_precondition`. Reopen a resolved thread before replying.
+All three writes support transaction-scoped idempotency keys and audit events.
+
+Create with `body`, `expected_head` and `anchor` (`base`, `head`, `path`, `side`,
+`line`). `side` is `old` or `new`, and `line` is one-based. Head must match the
+current proposal; source revisions must be published in the repository. The
+server reads `anchor.text` itself and ignores supplied text. Text files are bounded
+to 8 MiB and individual source lines and message bodies to 16 KiB. Old-side anchors
+require a base revision. Anchors never move with later proposal updates.
+
+Both list operations use `page_size` (maximum 100) and `page_token`. Threads use
+creation-time keyset ordering; replies use increasing IDs. Tokens are scoped to
+the repository and owning proposal/thread. Thread resolution does not by itself
+approve a proposal or introduce an integration policy requirement.

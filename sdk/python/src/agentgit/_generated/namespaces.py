@@ -10,6 +10,7 @@ from agentgit._generated.models import (
     AcquireLeaseResponse,
     AddDependencyRequest,
     AddIssueCommentRequest,
+    AddThreadCommentRequest,
     Agent,
     AncestorsRequest,
     AncestorsResponse,
@@ -36,6 +37,7 @@ from agentgit._generated.models import (
     CreateIssueRequest,
     CreateProposalRequest,
     CreateRepoRequest,
+    CreateReviewThreadRequest,
     CreateStreamRequest,
     CreateTaskRequest,
     CreateWorkspaceRequest,
@@ -120,6 +122,8 @@ from agentgit._generated.models import (
     ListQueueResponse,
     ListReposRequest,
     ListReposResponse,
+    ListReviewThreadsRequest,
+    ListReviewThreadsResponse,
     ListRolesRequest,
     ListRolesResponse,
     ListRunsRequest,
@@ -128,6 +132,8 @@ from agentgit._generated.models import (
     ListStreamsResponse,
     ListTasksRequest,
     ListTasksResponse,
+    ListThreadCommentsRequest,
+    ListThreadCommentsResponse,
     ListWorkspacesRequest,
     ListWorkspacesResponse,
     LogRequest,
@@ -180,8 +186,11 @@ from agentgit._generated.models import (
     ResolvePathResponse,
     ResolveRevRequest,
     ResolveRevResponse,
+    ResolveReviewThreadRequest,
     Review,
+    ReviewLineAnchor,
     ReviewProposalRequest,
+    ReviewThread,
     RevokeCredentialRequest,
     RevokeCredentialResponse,
     RevokeRoleRequest,
@@ -206,6 +215,7 @@ from agentgit._generated.models import (
     SyncWorkspaceResponse,
     Task,
     TaskScheduling,
+    ThreadComment,
     TreeEntry,
     UnpinRequest,
     UpdateIssueRequest,
@@ -1176,6 +1186,72 @@ class ProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    def thread_comments(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListThreadCommentsResponse:
+        """List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`)."""
+        return self._c._call("proposal.thread_comments", {"repo": repo, "id": id, "thread_id": thread_id, "page_size": page_size, "page_token": page_token}, options, ListThreadCommentsResponse)
+
+    def thread_create(
+        self,
+        *,
+        repo: str,
+        id: str,
+        anchor: ReviewLineAnchor | Mapping[str, Any] | None = None,
+        body: str | None = None,
+        expected_head: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewThread:
+        """Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`)."""
+        return self._c._call("proposal.thread_create", {"repo": repo, "id": id, "anchor": anchor, "body": body, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, ReviewThread)
+
+    def thread_reply(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ThreadComment:
+        """Reply to a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_reply`)."""
+        return self._c._call("proposal.thread_reply", {"repo": repo, "id": id, "thread_id": thread_id, "body": body, "idempotency_key": idempotency_key}, options, ThreadComment)
+
+    def thread_resolve(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        expected_version: int | None = None,
+        idempotency_key: str | None = None,
+        resolved: bool | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewThread:
+        """Resolve or reopen a line discussion (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}`, operation `proposal.thread_resolve`)."""
+        return self._c._call("proposal.thread_resolve", {"repo": repo, "id": id, "thread_id": thread_id, "expected_version": expected_version, "idempotency_key": idempotency_key, "resolved": resolved}, options, ReviewThread)
+
+    def threads(
+        self,
+        *,
+        repo: str,
+        id: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListReviewThreadsResponse:
+        """List threads (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.threads`)."""
+        return self._c._call("proposal.threads", {"repo": repo, "id": id, "page_size": page_size, "page_token": page_token}, options, ListReviewThreadsResponse)
 
     def update(
         self,
@@ -2688,6 +2764,72 @@ class AsyncProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    async def thread_comments(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListThreadCommentsResponse:
+        """List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`)."""
+        return await self._c._call("proposal.thread_comments", {"repo": repo, "id": id, "thread_id": thread_id, "page_size": page_size, "page_token": page_token}, options, ListThreadCommentsResponse)
+
+    async def thread_create(
+        self,
+        *,
+        repo: str,
+        id: str,
+        anchor: ReviewLineAnchor | Mapping[str, Any] | None = None,
+        body: str | None = None,
+        expected_head: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewThread:
+        """Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`)."""
+        return await self._c._call("proposal.thread_create", {"repo": repo, "id": id, "anchor": anchor, "body": body, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, ReviewThread)
+
+    async def thread_reply(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ThreadComment:
+        """Reply to a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_reply`)."""
+        return await self._c._call("proposal.thread_reply", {"repo": repo, "id": id, "thread_id": thread_id, "body": body, "idempotency_key": idempotency_key}, options, ThreadComment)
+
+    async def thread_resolve(
+        self,
+        *,
+        repo: str,
+        id: str,
+        thread_id: str,
+        expected_version: int | None = None,
+        idempotency_key: str | None = None,
+        resolved: bool | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewThread:
+        """Resolve or reopen a line discussion (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}`, operation `proposal.thread_resolve`)."""
+        return await self._c._call("proposal.thread_resolve", {"repo": repo, "id": id, "thread_id": thread_id, "expected_version": expected_version, "idempotency_key": idempotency_key, "resolved": resolved}, options, ReviewThread)
+
+    async def threads(
+        self,
+        *,
+        repo: str,
+        id: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListReviewThreadsResponse:
+        """List threads (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.threads`)."""
+        return await self._c._call("proposal.threads", {"repo": repo, "id": id, "page_size": page_size, "page_token": page_token}, options, ListReviewThreadsResponse)
 
     async def update(
         self,

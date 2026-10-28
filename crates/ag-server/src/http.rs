@@ -981,6 +981,71 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/threads",
+        "proposal.threads",
+        "Proposal",
+        "List threads",
+        v1::ListReviewThreadsRequest,
+        v1::ListReviewThreadsResponse,
+        list_review_threads
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/threads",
+        "proposal.thread_create",
+        "Proposal",
+        "Create a line discussion",
+        v1::CreateReviewThreadRequest,
+        v1::ReviewThread,
+        create_review_thread
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments",
+        "proposal.thread_comments",
+        "Proposal",
+        "List thread replies",
+        v1::ListThreadCommentsRequest,
+        v1::ListThreadCommentsResponse,
+        list_thread_comments
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments",
+        "proposal.thread_reply",
+        "Proposal",
+        "Reply to a line discussion",
+        v1::AddThreadCommentRequest,
+        v1::ThreadComment,
+        reply_review_thread
+    );
+    route!(
+        r,
+        meta,
+        patch,
+        "patch",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}",
+        "proposal.thread_resolve",
+        "Proposal",
+        "Resolve or reopen a line discussion",
+        v1::ResolveReviewThreadRequest,
+        v1::ReviewThread,
+        resolve_review_thread
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/proposals/{id}/close",

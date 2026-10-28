@@ -231,6 +231,28 @@ fn fsck_finds_pins_proposals_and_workspaces_that_point_at_nothing() {
     let p = repo.propose("main", &c1, "t", "", &id("user:alice"), None).unwrap();
     repo.workspace_create("scratch", &main, &id("user:alice")).unwrap();
     repo.meta().write(|tx| tx.workspace_update("scratch", Some(&c1), Some(&c1))).unwrap();
+    repo.meta()
+        .write(|tx| {
+            tx.insert_review_thread(&ag_storage::meta::ReviewThreadRow {
+                id: "thread_missing".into(),
+                proposal: p.id.clone(),
+                anchor: ag_storage::meta::ReviewThreadAnchorRow {
+                    base: None,
+                    head: c1,
+                    path: "a".into(),
+                    side: "new".into(),
+                    line: 1,
+                    source_text: "1".into(),
+                },
+                body: "question".into(),
+                author: "user:alice".into(),
+                resolved: false,
+                version: 1,
+                created_at_ms: 1,
+                updated_at_ms: 1,
+            })
+        })
+        .unwrap();
     let ok = repo.fsck().unwrap();
     assert!(ok.is_ok(), "unpublished but stored roots are healthy: {:?}", ok.issues);
 
@@ -239,6 +261,7 @@ fn fsck_finds_pins_proposals_and_workspaces_that_point_at_nothing() {
     let g = Param::from(ghost.to_hex());
     repo.meta()
         .write(|tx| {
+            tx.raw_execute("UPDATE review_threads SET source_head = ?1", std::slice::from_ref(&g))?;
             tx.raw_execute("UPDATE pins SET changeset = ?1", std::slice::from_ref(&g))?;
             tx.raw_execute("UPDATE proposals SET head = ?1 WHERE id = ?2", &[g.clone(), Param::from(p.id.as_str())])?;
             tx.raw_execute(
@@ -251,7 +274,7 @@ fn fsck_finds_pins_proposals_and_workspaces_that_point_at_nothing() {
     let repo = Repository::open(dir.path()).unwrap();
     let rep = repo.fsck().unwrap();
     let kinds: Vec<&str> = rep.issues.iter().map(|i| i.kind.as_str()).collect();
-    for kind in ["dangling_pin", "dangling_proposal_head", "dangling_workspace_ref"] {
+    for kind in ["dangling_pin", "dangling_proposal_head", "dangling_workspace_ref", "dangling_thread_revision"] {
         assert!(kinds.contains(&kind), "{kind} missing from {:?}", rep.issues);
     }
     assert_eq!(kinds.iter().filter(|k| **k == "dangling_workspace_ref").count(), 2, "head and base: {:?}", rep.issues);

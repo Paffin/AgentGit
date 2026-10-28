@@ -96,6 +96,31 @@
         },
         "type": "object"
       },
+      "AddThreadCommentRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "thread_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Agent": {
         "properties": {
           "created_at_ms": {
@@ -904,6 +929,42 @@
             "type": "string"
           },
           "name": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateReviewThreadRequest": {
+        "properties": {
+          "anchor": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReviewLineAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_head": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
             "default": "",
             "type": "string"
           }
@@ -2817,6 +2878,45 @@
         },
         "type": "object"
       },
+      "ListReviewThreadsRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "page_size": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_token": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListReviewThreadsResponse": {
+        "properties": {
+          "next_page_token": {
+            "default": "",
+            "type": "string"
+          },
+          "threads": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewThread"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ListRolesRequest": {
         "properties": {
           "repo": {
@@ -2941,6 +3041,49 @@
               "$ref": "#/components/schemas/Task"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListThreadCommentsRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "page_size": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_token": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "thread_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListThreadCommentsResponse": {
+        "properties": {
+          "comments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThreadComment"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -4371,6 +4514,37 @@
         },
         "type": "object"
       },
+      "ResolveReviewThreadRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "resolved": {
+            "default": false,
+            "type": "boolean"
+          },
+          "thread_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Review": {
         "properties": {
           "body": {
@@ -4409,6 +4583,38 @@
         },
         "type": "object"
       },
+      "ReviewLineAnchor": {
+        "description": "A line location is immutable; text is filled from the repository by the server.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "line": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "side": {
+            "default": "",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ReviewProposalRequest": {
         "properties": {
           "body": {
@@ -4436,6 +4642,58 @@
           "repo": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReviewThread": {
+        "properties": {
+          "anchor": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReviewLineAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "author": {
+            "default": "",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "created_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "proposal": {
+            "default": "",
+            "type": "string"
+          },
+          "resolved": {
+            "default": false,
+            "type": "boolean"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -5109,6 +5367,34 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ThreadComment": {
+        "properties": {
+          "author": {
+            "default": "",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "created_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "thread_id": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -9615,6 +9901,407 @@
           }
         },
         "summary": "Review the current head",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/threads": {
+      "get": {
+        "operationId": "proposal.threads",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReviewThreadsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List threads",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "post": {
+        "operationId": "proposal.thread_create",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReviewThreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewThread"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a line discussion",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}": {
+      "patch": {
+        "operationId": "proposal.thread_resolve",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveReviewThreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewThread"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Resolve or reopen a line discussion",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments": {
+      "get": {
+        "operationId": "proposal.thread_comments",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListThreadCommentsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List thread replies",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "post": {
+        "operationId": "proposal.thread_reply",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddThreadCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadComment"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reply to a line discussion",
         "tags": [
           "Proposal"
         ]

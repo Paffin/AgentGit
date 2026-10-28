@@ -759,3 +759,101 @@ fn task_history_filters_before_limits_and_pages_tied_timestamps() {
     let page = m.read(|tx| tx.proposals_page(&filter, Some((last.created_at.as_millis(), &last.id)), 2)).unwrap();
     assert_eq!(page.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["history-000"]);
 }
+
+#[test]
+fn review_thread_lifecycle_preserves_anchors_and_rolls_back_failed_replies() {
+    let m = TestMeta::shared(clock());
+    let a: ChangesetId = "11".repeat(32).parse().unwrap();
+    let b: ChangesetId = "22".repeat(32).parse().unwrap();
+    m.write(|tx| {
+        tx.proposal_create(&NewProposal {
+            id: "prop_threads",
+            stream: "main",
+            head: &b,
+            title: "t",
+            description: "",
+            author: "user:a",
+            task_id: None,
+        })?;
+        for id in ["thread_a", "thread_b"] {
+            tx.insert_review_thread(&ReviewThreadRow {
+                id: id.into(),
+                proposal: "prop_threads".into(),
+                anchor: ReviewThreadAnchorRow {
+                    base: Some(a),
+                    head: b,
+                    path: "file.txt".into(),
+                    side: "new".into(),
+                    line: 1,
+                    source_text: "line".into(),
+                },
+                body: "question".into(),
+                author: "user:a".into(),
+                resolved: false,
+                version: 1,
+                created_at_ms: tx.now().as_millis(),
+                updated_at_ms: tx.now().as_millis(),
+            })?;
+        }
+        tx.add_thread_comment("thread_a", "answer", "user:b")?;
+        Ok(())
+    })
+    .unwrap();
+    let failed: Result<(), MetaError> = m.write(|tx| {
+        tx.add_thread_comment("thread_a", "rollback", "user:b")?;
+        Err(MetaError::Invalid("injected failure".into()))
+    });
+    assert!(failed.is_err());
+    assert_eq!(m.read(|tx| tx.thread_comments("thread_a", 0, 20)).unwrap().len(), 1);
+    assert!(!m.write(|tx| tx.resolve_review_thread("thread_a", 1, true)).unwrap());
+    assert!(m.write(|tx| tx.resolve_review_thread("thread_a", 2, true)).unwrap());
+    assert!(m.write(|tx| tx.add_thread_comment("thread_a", "must reopen", "user:b")).is_err());
+    let row = m.read(|tx| tx.review_thread("prop_threads", "thread_a")).unwrap().unwrap();
+    assert_eq!(row.version, 3);
+    assert!(row.resolved);
+    assert!(m.read(|tx| tx.review_thread("other_proposal", "thread_a")).unwrap().is_none());
+    let page = m.read(|tx| tx.review_threads("prop_threads", None, 1)).unwrap();
+    assert_eq!(page[0].id, "thread_b");
+    let next = m.read(|tx| tx.review_threads("prop_threads", Some((page[0].created_at_ms, &page[0].id)), 1)).unwrap();
+    assert_eq!(next[0].id, "thread_a");
+    m.write(|tx| tx.proposal_set_state("prop_threads", "closed", None)).unwrap();
+    assert_eq!(m.read(|tx| tx.live_roots()).unwrap(), vec![a, b]);
+    let reopened = m.reopen().unwrap();
+    assert_eq!(
+        reopened.read(|tx| tx.review_thread("prop_threads", "thread_a")).unwrap().unwrap().anchor.source_text,
+        "line"
+    );
+}
+
+#[test]
+fn schema_five_upgrades_without_altering_the_backup_or_existing_data() {
+    let dir = std::env::temp_dir().join(crate::testing::unique("agtest-v5"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meta.db");
+    let backup = dir.join("backup.db");
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 5) {
+            connection.execute_batch(migration.sql).unwrap();
+        }
+        connection.execute("INSERT INTO meta(key,value) VALUES('schema','5'),('created_at','5')", []).unwrap();
+        connection
+            .execute(
+                "INSERT INTO streams(name,head,version,created_at,created_by) VALUES('main',NULL,0,1,'user:original')",
+                [],
+            )
+            .unwrap();
+        connection.pragma_update(None, "user_version", 5).unwrap();
+    }
+    std::fs::copy(&path, &backup).unwrap();
+    let m = Meta::open(&path).unwrap();
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("6"));
+    assert_eq!(m.read(|tx| tx.stream("main")).unwrap().unwrap().created_by, "user:original");
+    assert!(m.read(|tx| tx.review_threads("none", None, 1)).unwrap().is_empty());
+    let old = rusqlite::Connection::open(&backup).unwrap();
+    let version: i64 = old.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
+    assert_eq!(version, 5);
+    drop(old);
+    drop(m);
+    std::fs::remove_dir_all(dir).unwrap();
+}

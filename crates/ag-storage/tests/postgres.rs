@@ -83,6 +83,7 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     // schema 1, exactly as it would have been created by release 0.1 on PostgreSQL
     let m = open(&url, schema.name());
     m.write(|tx| {
+        tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
         tx.raw_execute("DROP TABLE issue_activity, issues", &[])?;
         tx.raw_execute("DELETE FROM meta WHERE key = 'task_scheduling'", &[])?;
         tx.raw_execute("DROP TABLE jobs", &[])?;
@@ -625,4 +626,22 @@ fn issues_survive_reopen_with_comments_and_compare_and_swap() {
         .unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].revision, 2);
+}
+
+#[test]
+fn schema_five_upgrades_to_line_threads_without_losing_existing_rows() {
+    let Some(url) = url() else { return };
+    let schema = TempSchema::new(&url);
+    let m = open(&url, schema.name());
+    m.write(|tx| {
+        tx.create_stream(&StreamName::new("main").unwrap(), "user:before-upgrade")?;
+        tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
+        tx.raw_execute("UPDATE meta SET value = '5' WHERE key = 'schema'", &[])
+    })
+    .unwrap();
+    drop(m);
+    let m = open(&url, schema.name());
+    assert_eq!(m.read(|tx| tx.stream("main")).unwrap().unwrap().created_by, "user:before-upgrade");
+    assert!(m.read(|tx| tx.review_threads("none", None, 10)).unwrap().is_empty());
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("6"));
 }

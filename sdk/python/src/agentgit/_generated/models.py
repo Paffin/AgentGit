@@ -10,6 +10,7 @@ __all__ = [
     "AcquireLeaseResponse",
     "AddDependencyRequest",
     "AddIssueCommentRequest",
+    "AddThreadCommentRequest",
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
@@ -36,6 +37,7 @@ __all__ = [
     "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
+    "CreateReviewThreadRequest",
     "CreateStreamRequest",
     "CreateTaskRequest",
     "CreateWorkspaceRequest",
@@ -120,6 +122,8 @@ __all__ = [
     "ListQueueResponse",
     "ListReposRequest",
     "ListReposResponse",
+    "ListReviewThreadsRequest",
+    "ListReviewThreadsResponse",
     "ListRolesRequest",
     "ListRolesResponse",
     "ListRunsRequest",
@@ -128,6 +132,8 @@ __all__ = [
     "ListStreamsResponse",
     "ListTasksRequest",
     "ListTasksResponse",
+    "ListThreadCommentsRequest",
+    "ListThreadCommentsResponse",
     "ListWorkspacesRequest",
     "ListWorkspacesResponse",
     "LogRequest",
@@ -180,8 +186,11 @@ __all__ = [
     "ResolvePathResponse",
     "ResolveRevRequest",
     "ResolveRevResponse",
+    "ResolveReviewThreadRequest",
     "Review",
+    "ReviewLineAnchor",
     "ReviewProposalRequest",
+    "ReviewThread",
     "RevokeCredentialRequest",
     "RevokeCredentialResponse",
     "RevokeRoleRequest",
@@ -206,6 +215,7 @@ __all__ = [
     "SyncWorkspaceResponse",
     "Task",
     "TaskScheduling",
+    "ThreadComment",
     "TreeEntry",
     "UnpinRequest",
     "UpdateIssueRequest",
@@ -255,6 +265,16 @@ class AddIssueCommentRequest:
     idempotency_key: str = field(default="")
     number: int = field(default=0)
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class AddThreadCommentRequest:
+    """The `AddThreadCommentRequest` message."""
+    body: str = field(default="")
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
+    thread_id: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -520,6 +540,17 @@ class CreateRepoRequest:
     description: str = field(default="")
     idempotency_key: str = field(default="")
     name: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class CreateReviewThreadRequest:
+    """The `CreateReviewThreadRequest` message."""
+    anchor: ReviewLineAnchor | None = field(default=None)
+    body: str = field(default="")
+    expected_head: str = field(default="")
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1245,6 +1276,22 @@ class ListReposResponse:
 
 
 @dataclass(kw_only=True)
+class ListReviewThreadsRequest:
+    """The `ListReviewThreadsRequest` message."""
+    id: str = field(default="")
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListReviewThreadsResponse:
+    """The `ListReviewThreadsResponse` message."""
+    next_page_token: str = field(default="")
+    threads: list[ReviewThread] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
 class ListRolesRequest:
     """The `ListRolesRequest` message."""
     repo: str = field(default="")
@@ -1300,6 +1347,23 @@ class ListTasksRequest:
 class ListTasksResponse:
     """The `ListTasksResponse` message."""
     tasks: list[Task] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class ListThreadCommentsRequest:
+    """The `ListThreadCommentsRequest` message."""
+    id: str = field(default="")
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    repo: str = field(default="")
+    thread_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListThreadCommentsResponse:
+    """The `ListThreadCommentsResponse` message."""
+    comments: list[ThreadComment] = field(default_factory=list)
+    next_page_token: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1779,6 +1843,17 @@ class ResolveRevResponse:
 
 
 @dataclass(kw_only=True)
+class ResolveReviewThreadRequest:
+    """The `ResolveReviewThreadRequest` message."""
+    expected_version: int = field(default=0)
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
+    resolved: bool = field(default=False)
+    thread_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class Review:
     """The `Review` message."""
     body: str = field(default="")
@@ -1791,6 +1866,17 @@ class Review:
 
 
 @dataclass(kw_only=True)
+class ReviewLineAnchor:
+    """A line location is immutable; text is filled from the repository by the server."""
+    base: str = field(default="")
+    head: str = field(default="")
+    line: int = field(default=0)
+    path: str = field(default="")
+    side: str = field(default="")
+    text: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class ReviewProposalRequest:
     """The `ReviewProposalRequest` message."""
     body: str = field(default="")
@@ -1799,6 +1885,20 @@ class ReviewProposalRequest:
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ReviewThread:
+    """The `ReviewThread` message."""
+    anchor: ReviewLineAnchor | None = field(default=None)
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    id: str = field(default="")
+    proposal: str = field(default="")
+    resolved: bool = field(default=False)
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -2028,6 +2128,16 @@ class TaskScheduling:
     updated_at_ms: int = field(default=0)
     updated_by: str = field(default="")
     version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class ThreadComment:
+    """The `ThreadComment` message."""
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    id: int = field(default=0)
+    thread_id: str = field(default="")
 
 
 @dataclass(kw_only=True)

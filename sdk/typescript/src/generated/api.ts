@@ -102,6 +102,11 @@ export const NAMESPACE_METHODS = {
     get: 'proposal.get',
     list: 'proposal.list',
     review: 'proposal.review',
+    threadComments: 'proposal.thread_comments',
+    threadCreate: 'proposal.thread_create',
+    threadReply: 'proposal.thread_reply',
+    threadResolve: 'proposal.thread_resolve',
+    threads: 'proposal.threads',
     update: 'proposal.update',
   },
   provenance: {
@@ -333,6 +338,16 @@ export interface Api {
     list(request: Req<'proposal.list'>, options?: CallOptions): Promise<Res<'proposal.list'>>;
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
+    /** List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`) */
+    threadComments(request: Req<'proposal.thread_comments'>, options?: CallOptions): Promise<Res<'proposal.thread_comments'>>;
+    /** Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`) */
+    threadCreate(request: Req<'proposal.thread_create'>, options?: CallOptions): Promise<Res<'proposal.thread_create'>>;
+    /** Reply to a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_reply`) */
+    threadReply(request: Req<'proposal.thread_reply'>, options?: CallOptions): Promise<Res<'proposal.thread_reply'>>;
+    /** Resolve or reopen a line discussion (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}`, operation `proposal.thread_resolve`) */
+    threadResolve(request: Req<'proposal.thread_resolve'>, options?: CallOptions): Promise<Res<'proposal.thread_resolve'>>;
+    /** List threads (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.threads`) */
+    threads(request: Req<'proposal.threads'>, options?: CallOptions): Promise<Res<'proposal.threads'>>;
     /** Move a proposal to a newer head (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.update`) */
     update(request: Req<'proposal.update'>, options?: CallOptions): Promise<Res<'proposal.update'>>;
   };

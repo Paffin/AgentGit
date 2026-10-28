@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { DiffResponse } from '@/api/types'
+import type { DiffLine, LineQuote } from '@/lib/diffDiscussion'
 import { shortId } from '@/lib/format'
 import TextField from '@/ui/TextField.vue'
 import Button from '@/ui/Button.vue'
@@ -12,10 +13,15 @@ import Skeleton from '@/ui/Skeleton.vue'
 const props = defineProps<{
   diff?: DiffResponse & { base: string; head?: string }
   reviewScope?: string
+  canDiscuss?: boolean
   loading: boolean
   error: unknown
 }>()
-defineEmits<{ retry: [] }>()
+const emit = defineEmits<{ retry: []; discuss: [quote: LineQuote] }>()
+function discuss(line: DiffLine) {
+  if (props.canDiscuss && props.diff?.head)
+    emit('discuss', { ...line, base: props.diff.base, head: props.diff.head })
+}
 
 const query = ref('')
 const hideViewed = ref(false)
@@ -140,6 +146,8 @@ function jump(i: number) {
         </nav>
         <DiffViewer
           :files="visibleFiles"
+          :discuss-lines="canDiscuss && !!diff.head"
+          @discuss="discuss"
           :truncated="diff.truncated"
           :empty-title="diff.files.length ? 'No matching files' : 'No differences'"
           :empty-description="

@@ -51,3 +51,5 @@ attempts after restart. Included in the beta.4 candidate before publication.
 Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming and rich review threads remain open.
 
 Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured retry lineage and richer retry policy controls remain open.
+
+Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. This is a contextual plain-text comment, not a line thread; structured anchors, replies and resolution remain open.

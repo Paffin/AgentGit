@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { formatLineQuote, type LineQuote } from '@/lib/diffDiscussion'
 import type { Proposal } from '@/api/types'
 import { api } from '@/api/instance'
 import { describeError } from '@/api/errors'
@@ -10,8 +11,8 @@ import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import TextArea from '@/ui/TextArea.vue'
 
-const props = defineProps<{ repo: string; proposal: Proposal }>()
-const emit = defineEmits<{ done: [] }>()
+const props = defineProps<{ repo: string; proposal: Proposal; quote?: LineQuote | null }>()
+const emit = defineEmits<{ done: []; quoted: [] }>()
 const auth = useAuth(),
   toasts = useToasts()
 const supported = computed(() => !!auth.capabilities?.features.includes('proposals.comments'))
@@ -19,6 +20,20 @@ const allowed = computed(() => auth.can(props.repo, 'commentProposal'))
 const draft = useCommentDraft(
   () => (auth.identity ? JSON.stringify([auth.identity, props.repo, props.proposal.id]) : ''),
   () => props.proposal.head,
+)
+const form = ref<HTMLFormElement | null>(null)
+watch(
+  () => props.quote,
+  async (quote) => {
+    if (!quote || !supported.value || !allowed.value) return
+    if (!draft.body.value) draft.head.value = quote.head
+    const existing = draft.body.value.trimEnd()
+    draft.body.value = `${existing ? existing + '\n\n' : ''}${formatLineQuote(quote)}\n\n`
+    emit('quoted')
+    await nextTick()
+    form.value?.querySelector('textarea')?.focus()
+  },
+  { immediate: true },
 )
 const stale = computed(() => draft.head.value !== props.proposal.head)
 const busy = ref(false),
@@ -74,7 +89,7 @@ async function submit() {
 </script>
 
 <template>
-  <form v-if="supported && allowed" class="comment-form" @submit.prevent="submit">
+  <form ref="form" v-if="supported && allowed" class="comment-form" @submit.prevent="submit">
     <TextArea
       v-model="draft.body.value"
       label="Add to the discussion"

@@ -36,6 +36,9 @@ Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundl
 
 The beta also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These changes are included in beta.2 and documented in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
 
+Next priorities are queued-task refinement, complete review workflows and hosting-metadata migration.
+The [roadmap](ROADMAP.md#next) separates delivered features, the release candidate and remaining qualification.
+
 ## See it work
 
 A person, two agents and a CI service share one stream. The output is trimmed from
@@ -150,8 +153,9 @@ the [Web UI](docs/guides/web-ui.md) on it. Compose, Kubernetes, TLS and PostgreS
 
 ## How it compares
 
-GitHub, GitLab and Bitbucket are mature hosting platforms with a great deal AgentGit does not have: issue tracking,
-hosted CI, security scanning, permissions at scale, support. The table covers only the question AgentGit is built around:
+GitHub, GitLab and Bitbucket are mature hosting platforms with broader project management,
+hosted CI, security scanning, permissions at scale and support. AgentGit has repository issues and
+agent-task handoff; labels, milestones, attachments and hosting-metadata import remain open. The table covers only the question AgentGit is built around:
 how a change lands when several untrusted actors write to one codebase. Cells about the platforms describe their
 public documentation; the page linked below has the sources, the access date and the much longer list of what they do better.
 

@@ -90,17 +90,17 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
     { immediate: false },
   )
 
-  const diff = useResource<DiffResponse & { base: string }>(
+  const diff = useResource<DiffResponse & { base: string; head: string }>(
     async () => {
       const p = proposal.value
-      if (!p) return { files: [], truncated: false, base: '' }
+      if (!p) return { files: [], truncated: false, base: '', head: '' }
       const base = await diffBase(repo.value, p)
       const res = await api.tree.diff(repo.value, {
         from: base,
         to: p.integrated_as || p.head,
         context: 3,
       })
-      return { ...res, base }
+      return { ...res, base, head: p.integrated_as || p.head }
     },
     { immediate: false },
   )

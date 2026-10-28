@@ -12,9 +12,16 @@ const props = withDefaults(
     /** The server stopped early: more files changed than were returned. */
     truncated?: boolean
     /** Prefix for per-file anchors (`#<prefix>-3`). */
+    emptyTitle?: string
+    emptyDescription?: string
     anchorPrefix?: string
   }>(),
-  { truncated: false, anchorPrefix: 'diff' },
+  {
+    truncated: false,
+    anchorPrefix: 'diff',
+    emptyTitle: 'No differences',
+    emptyDescription: 'The two revisions have the same files.',
+  },
 )
 
 const totals = computed(() => ({
@@ -25,11 +32,16 @@ const totals = computed(() => ({
 
 <template>
   <div class="viewer">
+    <div v-if="truncated" class="trunc" role="note">
+      <Icon name="alert" :size="16" />
+      The diff was cut off by the server because it is too large. Some changed files are missing
+      from this view.
+    </div>
     <EmptyState
       v-if="files.length === 0"
       icon="diff"
-      title="No differences"
-      description="The two revisions have the same files."
+      :title="emptyTitle"
+      :description="emptyDescription"
       compact
     />
     <template v-else>
@@ -38,18 +50,10 @@ const totals = computed(() => ({
         <span class="plus">+{{ totals.additions }}</span>
         <span class="minus">−{{ totals.deletions }}</span>
       </p>
-      <div v-if="truncated" class="trunc" role="note">
-        <Icon name="alert" :size="16" />
-        The diff was cut off by the server because it is too large. Only the first
-        {{ plural(files.length, 'file') }} are shown.
-      </div>
       <div class="files">
-        <DiffFile
-          v-for="(f, i) in files"
-          :key="f.path"
-          :file="f"
-          :anchor="`${anchorPrefix}-${i}`"
-        />
+        <DiffFile v-for="(f, i) in files" :key="f.path" :file="f" :anchor="`${anchorPrefix}-${i}`">
+          <template #actions><slot name="file-actions" :file="f" /></template>
+        </DiffFile>
       </div>
     </template>
   </div>

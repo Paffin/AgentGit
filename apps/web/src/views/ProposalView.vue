@@ -453,6 +453,7 @@ function changed() {
         <template #changes>
           <ChangesTab
             :diff="data.diff.data.value"
+            :review-scope="JSON.stringify([auth.identity, repo, proposal.id])"
             :loading="data.diff.loading.value"
             :error="data.diff.error.value"
             @retry="data.diff.reload()"

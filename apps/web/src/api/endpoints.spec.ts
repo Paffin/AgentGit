@@ -22,6 +22,13 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
       options,
     )
   if (operation === 'workspace-remove') return api.workspaces.remove('acme/new', 'edit', options)
+  if (operation === 'review')
+    return api.proposals.review(
+      'acme/new',
+      'proposal-one',
+      { decision: 'comment', expected_head: 'head' },
+      options,
+    )
   if (operation === 'proposal-create')
     return api.proposals.create(
       'acme/new',
@@ -43,6 +50,7 @@ describe('repository setup request ownership', () => {
     'workspace-modify',
     'workspace-remove',
     'proposal-create',
+    'review',
   ])('keeps the initial session during a %s retry', async (operation) => {
     let token = 'initial-session'
     const credentials: (string | null)[] = []
@@ -76,6 +84,7 @@ describe('repository setup request ownership', () => {
     'workspace-modify',
     'workspace-remove',
     'proposal-create',
+    'review',
   ])('does not reject a new session when an old %s request receives 401', async (operation) => {
     const rejected = vi.fn()
     const client = new ApiClient({

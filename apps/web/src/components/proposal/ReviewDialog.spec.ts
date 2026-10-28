@@ -1,9 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/api/errors'
 import type { Proposal } from '@/api/types'
 import ReviewDialog from './ReviewDialog.vue'
 import { useToasts } from '@/stores/toasts'
+
+const auth = reactive({ identity: 'user:reviewer', token: 'review-token', status: 'ready' })
+vi.mock('@/stores/auth', () => ({ useAuth: () => auth }))
 
 const { review, capabilities } = vi.hoisted(() => ({ review: vi.fn(), capabilities: vi.fn() }))
 vi.mock('@/api/instance', () => ({ api: { capabilities, proposals: { review } } }))
@@ -33,6 +38,8 @@ function show() {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()
+  Object.assign(auth, { identity: 'user:reviewer', token: 'review-token', status: 'ready' })
   review.mockReset()
   capabilities.mockReset().mockResolvedValue({ features: ['proposals.review_head'] })
 })
@@ -67,11 +74,20 @@ describe('unfinished review', () => {
     expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe('Checked the retry path.')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(review).toHaveBeenLastCalledWith('acme/demo', 'proposal-one', {
-      decision: 'comment',
-      expected_head: 'head-one',
-      body: 'Checked the retry path.',
-    })
+    expect(review).toHaveBeenLastCalledWith(
+      'acme/demo',
+      'proposal-one',
+      {
+        decision: 'comment',
+        expected_head: 'head-one',
+        body: 'Checked the retry path.',
+      },
+      expect.objectContaining({
+        token: 'review-token',
+        quietUnauthenticated: true,
+        signal: expect.any(AbortSignal),
+      }),
+    )
     expect(w.emitted('done')).toEqual([[]])
     await w.setProps({ modelValue: false })
     await w.setProps({ modelValue: true })
@@ -147,11 +163,20 @@ describe('unfinished review', () => {
     review.mockResolvedValueOnce({})
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(review).toHaveBeenCalledWith('acme/demo', 'proposal-one', {
-      decision: 'request_changes',
-      expected_head: 'head-two',
-      body: 'Checked the old implementation',
-    })
+    expect(review).toHaveBeenCalledWith(
+      'acme/demo',
+      'proposal-one',
+      {
+        decision: 'request_changes',
+        expected_head: 'head-two',
+        body: 'Checked the old implementation',
+      },
+      expect.objectContaining({
+        token: 'review-token',
+        quietUnauthenticated: true,
+        signal: expect.any(AbortSignal),
+      }),
+    )
     w.unmount()
   })
 
@@ -192,11 +217,20 @@ describe('review submission snapshot', () => {
     await w.setProps({ proposal: { ...proposal, head: 'head-two' } })
     finish({ features: ['proposals.review_head'] })
     await flushPromises()
-    expect(review).toHaveBeenCalledWith('acme/demo', 'proposal-one', {
-      decision: 'request_changes',
-      body: 'Checked the original code',
-      expected_head: 'head-one',
-    })
+    expect(review).toHaveBeenCalledWith(
+      'acme/demo',
+      'proposal-one',
+      {
+        decision: 'request_changes',
+        body: 'Checked the original code',
+        expected_head: 'head-one',
+      },
+      expect.objectContaining({
+        token: 'review-token',
+        quietUnauthenticated: true,
+        signal: expect.any(AbortSignal),
+      }),
+    )
     expect(useToasts().items.at(-1)?.title).toBe('Changes requested')
     w.unmount()
   })
@@ -244,11 +278,20 @@ describe('review submission snapshot', () => {
     await w.get('textarea').setValue('Corrected review')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(review).toHaveBeenLastCalledWith('acme/demo', 'proposal-one', {
-      decision: 'comment',
-      body: 'Corrected review',
-      expected_head: 'head-one',
-    })
+    expect(review).toHaveBeenLastCalledWith(
+      'acme/demo',
+      'proposal-one',
+      {
+        decision: 'comment',
+        body: 'Corrected review',
+        expected_head: 'head-one',
+      },
+      expect.objectContaining({
+        token: 'review-token',
+        quietUnauthenticated: true,
+        signal: expect.any(AbortSignal),
+      }),
+    )
     w.unmount()
   })
 
@@ -285,11 +328,20 @@ describe('review submission snapshot', () => {
       await flushPromises()
       if (pending === 'capabilities') expect(review).not.toHaveBeenCalled()
       else
-        expect(review).toHaveBeenCalledWith('acme/demo', 'proposal-one', {
-          decision: 'approve',
-          body: 'Original proposal review',
-          expected_head: 'head-one',
-        })
+        expect(review).toHaveBeenCalledWith(
+          'acme/demo',
+          'proposal-one',
+          {
+            decision: 'approve',
+            body: 'Original proposal review',
+            expected_head: 'head-one',
+          },
+          expect.objectContaining({
+            token: 'review-token',
+            quietUnauthenticated: true,
+            signal: expect.any(AbortSignal),
+          }),
+        )
       expect(w.get('textarea').element.value).toBe('New proposal draft')
       expect(w.emitted('done')).toBeUndefined()
       expect(w.emitted('update:modelValue')).toBeUndefined()
@@ -328,11 +380,20 @@ describe('review submission snapshot', () => {
     finishNew()
     await flushPromises()
     expect(useToasts().items).toHaveLength(1)
-    expect(review).toHaveBeenLastCalledWith('acme/demo', 'proposal-two', {
-      decision: 'approve',
-      expected_head: 'head-two',
-      body: 'New pending review',
-    })
+    expect(review).toHaveBeenLastCalledWith(
+      'acme/demo',
+      'proposal-two',
+      {
+        decision: 'approve',
+        expected_head: 'head-two',
+        body: 'New pending review',
+      },
+      expect.objectContaining({
+        token: 'review-token',
+        quietUnauthenticated: true,
+        signal: expect.any(AbortSignal),
+      }),
+    )
     w.unmount()
   })
 
@@ -373,4 +434,97 @@ describe('review submission snapshot', () => {
     expect(toasts.items).toHaveLength(0)
     expect(w.emitted('done')).toBeUndefined()
   })
+})
+
+it('recovers the exact review draft after remount and requires review of a new head', async () => {
+  let w = show()
+  await w.get('textarea').setValue('Keep my reasoning across a reload')
+  await w.get('input[value="request_changes"]').setValue()
+  w.unmount()
+  w = show()
+  expect(w.get('textarea').element.value).toBe('Keep my reasoning across a reload')
+  expect((w.get('input[value="request_changes"]').element as HTMLInputElement).checked).toBe(true)
+  await w.setProps({ proposal: { ...proposal, head: 'head-two' } })
+  expect(w.text()).toContain('The proposal changed')
+  w.unmount()
+  w = show()
+  await w.setProps({ proposal: { ...proposal, head: 'head-two' } })
+  expect(w.text()).toContain('The proposal changed')
+  await w.get('form').trigger('submit')
+  expect(review).not.toHaveBeenCalled()
+  w.unmount()
+})
+
+it('keeps drafts separate when the signed-in account changes', async () => {
+  const w = show()
+  await w.get('textarea').setValue('Reviewer private reasoning')
+  auth.identity = 'user:other'
+  auth.token = 'other-token'
+  await flushPromises()
+  expect(w.get('textarea').element.value).toBe('')
+  await w.get('textarea').setValue('Other reviewer reasoning')
+  auth.identity = 'user:reviewer'
+  auth.token = 'review-token'
+  await flushPromises()
+  expect(w.get('textarea').element.value).toBe('Reviewer private reasoning')
+  w.unmount()
+})
+
+it('does not send an old review after a credential change during the capability check', async () => {
+  let finish!: (value: { features: string[] }) => void
+  capabilities.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const w = show()
+  await w.get('textarea').setValue('Belongs to the original credential')
+  await w.get('form').trigger('submit')
+  auth.token = 'replacement-token'
+  await flushPromises()
+  finish({ features: ['proposals.review_head'] })
+  await flushPromises()
+  expect(review).not.toHaveBeenCalled()
+  expect(w.get('textarea').element.value).toBe('Belongs to the original credential')
+  w.unmount()
+})
+
+it('does not clear another account draft when an old review finishes', async () => {
+  let finish!: () => void
+  review.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const w = show()
+  await w.get('textarea').setValue('Original account review')
+  await w.get('form').trigger('submit')
+  await flushPromises()
+  auth.identity = 'user:other'
+  auth.token = 'other-token'
+  await flushPromises()
+  await w.get('textarea').setValue('Other account draft')
+  finish()
+  await flushPromises()
+  expect(w.get('textarea').element.value).toBe('Other account draft')
+  expect(w.emitted('done')).toBeUndefined()
+  expect(useToasts().items).toHaveLength(0)
+  w.unmount()
+})
+
+it('keeps a rejected review and requests sign-in before sending it again', async () => {
+  review.mockRejectedValueOnce(
+    new ApiError({ status: 401, code: 'unauthenticated', message: 'Session expired' }),
+  )
+  const w = show()
+  await w.get('textarea').setValue('Keep this review after expiry')
+  await w.get('form').trigger('submit')
+  await flushPromises()
+  expect(w.get('textarea').element.value).toBe('Keep this review after expiry')
+  expect(w.get('a').text()).toContain('Sign in again')
+  await w.get('form').trigger('submit')
+  expect(review).toHaveBeenCalledTimes(1)
+  w.unmount()
 })

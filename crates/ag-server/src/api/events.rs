@@ -141,6 +141,12 @@ impl App {
                     return None;
                 }
                 if let Some(ev) = st.buffer.pop_front() {
+                    if st.call.principal.scope.bound_run().is_some()
+                        && let Err(error) = st.credential_still_valid().await
+                    {
+                        st.done = true;
+                        return Some((Err(error), st));
+                    }
                     st.last_sent = Instant::now();
                     if ev.seq > st.live_after {
                         // Only events recorded after the subscription began measure the live path (not a replay).
@@ -225,9 +231,10 @@ impl FeedState {
         if expires > 0 && self.app.clock.now().as_millis() >= expires {
             return Err(ApiError::new(ag_protocol::ErrorCode::Unauthenticated, "the credential expired"));
         }
-        // (A stream opened with a run-bound credential ends with the run without a check here: every poll of the
-        // log is an operation of its own and refuses a credential whose run is over, see `effective_actor`.)
-        self.app.auth.still_active(&self.call.principal).await
+        self.app.auth.still_active(&self.call.principal).await?;
+        // Recheck the effective run after reading a batch: it may have ended during that read.
+        self.app.ensure_bound_run_alive(&self.call.principal).await?;
+        self.app.authorize(&self.call, &self.repo, Cap::EventsRead, None).await
     }
 }
 

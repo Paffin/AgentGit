@@ -18,7 +18,8 @@ is not credential revocation or process termination. Task cancellation and run
 reaping retain their separate meanings.
 
 `PATCH /agents/{name}` and `AgentService.SetState` require `agent.operate` and the
-existing observed `expected_disabled` value. This is a current-state comparison,
+existing observed `expected_disabled` value. An agent principal may change only
+its own identity, consistent with the other agent operations. This is a current-state comparison,
 not a revision history check. An idempotency key records the response in the same
 transaction as the state change, audit record and `agent.state` outbox event.
 Retries replay that response; reusing a key for another actor or request fails.

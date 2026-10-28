@@ -18,6 +18,8 @@ async fn operator_controls_are_replay_safe_and_do_not_end_running_work() {
     let disable = json!({"disabled":true,"expected_disabled":false,"idempotency_key":"disable-once"});
     let writer = user_with_role(&s, "user:writer", repo, "writer").await;
     assert_eq!(writer.call("PATCH", &path, Some(disable.clone()), &[]).await.status, 403);
+    let other_agent = user_with_role(&s, "agent:other", repo, "delegator").await;
+    assert_eq!(other_agent.call("PATCH", &path, Some(disable.clone()), &[]).await.status, 403);
     let (left, right) = tokio::join!(
         admin.call("PATCH", &path, Some(disable.clone()), &[]),
         admin.call("PATCH", &path, Some(disable.clone()), &[])

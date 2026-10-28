@@ -181,6 +181,7 @@ impl App {
         let key = req.idempotency_key.clone();
         let idem = self.idem();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            check_agent_scope(actor, &req.name)?;
             let request = serde_json::to_string(&(actor.as_str(), &req.name, req.disabled, req.expected_disabled))
                 .map_err(ApiError::internal)?;
             keyed(repo, idem, "agent.state", &key, &request, |claim| {

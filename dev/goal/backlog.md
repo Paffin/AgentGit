@@ -56,6 +56,6 @@ Line discussion entry: proposal diff gutters can quote a specific old/new line i
 
 Line-thread persistence: SQLite and PostgreSQL share schema 6. Exact source revisions remain GC roots, clients cannot forge stored line text, replies advance the resolution version, and concurrent resolution is rejected. Upgrade/rollback from published beta.4 and API/SDK/browser qualification are recorded with ADR-0025.
 
-Release readiness after `c7b860ef311e0121cd502abe1315cae43df36baf`: beta.5 is not published. Complete native discussion JSON contracts, synchronized deployment image defaults and Windows upload qualification before tagging. Web thread filtering and role-aware MCP feedback are implemented. Keep README installation instructions on the last published version until artifact verification.
+Beta.5 release qualification: PR103 supplies native discussion JSON contracts and synchronized deployment defaults. The Windows upload check passed on `a36168b8d79f59b0557b9a9caa99f87b2ff9cb64`. Follow the release workflow for publication state and keep README installation instructions on the last verified published version. Web thread filtering and role-aware MCP feedback are implemented.
 
 Per-agent run admission: operators can disable or re-enable new runs through Web UI, HTTP/gRPC and SDKs. Native CLI shares the transaction implementation. Existing runs, credentials and history are preserved; cancellation and credential revocation are separate operations. See ADR-0026.

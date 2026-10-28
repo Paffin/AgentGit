@@ -46,6 +46,13 @@ test('registered keys and a reported executor connection are visibly different',
   await disable.getByRole('button', { name: 'Disable agent', exact: true }).click()
   await expect(disable).toBeHidden()
   await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'connected-bot' })
+      .getByText('New runs disabled', { exact: true })
+      .filter({ visible: true }),
+  ).toBeVisible()
+  await expect(
     page.getByRole('button', { name: 'Enable agent connected-bot', exact: true }),
   ).toBeVisible()
   await page.reload()

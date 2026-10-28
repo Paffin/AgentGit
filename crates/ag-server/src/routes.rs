@@ -199,7 +199,16 @@ pub fn openapi(routes: &[RouteMeta], server_version: &str) -> Value {
                     "rname" => ("rname", "Repository name (second half of owner/name)".to_string()),
                     other => (other, String::new()),
                 };
-                json!({"name": name, "in": "path", "required": true, "description": desc, "schema": {"type": "string"}})
+                let schema = match &r.payload {
+                    Payload::Json { request, .. } => schemas
+                        .get(request)
+                        .and_then(|s| s.get("properties"))
+                        .and_then(|props| props.get(name))
+                        .cloned(),
+                    Payload::Raw => None,
+                }
+                .unwrap_or_else(|| json!({"type": "string"}));
+                json!({"name": name, "in": "path", "required": true, "description": desc, "schema": schema})
             })
             .collect();
         let mut op = json!({

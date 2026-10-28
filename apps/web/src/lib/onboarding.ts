@@ -1,3 +1,5 @@
+import { samePrincipal } from './identity'
+
 // The commands of the "connect your first agent" panel. They are plain data built here (and not typed into a
 // template) so that a test can take them from the page and run them against a real server: e2e/onboarding.spec.ts
 // does exactly that. Nothing in them is invented: the endpoints are the server's (`POST /v1/roles`,
@@ -117,6 +119,8 @@ export interface AgentWorkInput {
   token: string
   /** What the agent should do, in the task's own words. */
   title: string
+  /** Attach the submitted change to this exact task. */
+  taskId?: string
 }
 
 /**
@@ -137,6 +141,21 @@ export function agentWorkLines(input: AgentWorkInput): string[] | null {
     'ag remote whoami',
     '# ...the agent makes its changes here...',
     `ag snapshot -m ${shellQuote(title)}`,
-    `ag push -t ${shellQuote(title)}`,
+    `ag push${input.taskId ? ` --task ${shellQuote(input.taskId)}` : ''} -t ${shellQuote(title)}`,
   ]
+}
+
+/** An agent's other tasks and similarly named identities are not progress on this request. */
+export function matchesAgentTask(
+  expectedTask: string,
+  expectedAgent: string,
+  task: string,
+  identity: string,
+): boolean {
+  return (
+    !!expectedTask &&
+    !!expectedAgent &&
+    task === expectedTask &&
+    samePrincipal(identity, expectedAgent)
+  )
 }

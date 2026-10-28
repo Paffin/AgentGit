@@ -5562,7 +5562,7 @@ export interface operations {
         owner: string
         /** @description Repository name (second half of owner/name) */
         rname: string
-        number: string
+        number: number
       }
       cookie?: never
     }
@@ -5597,7 +5597,7 @@ export interface operations {
         owner: string
         /** @description Repository name (second half of owner/name) */
         rname: string
-        number: string
+        number: number
       }
       cookie?: never
     }
@@ -5639,7 +5639,7 @@ export interface operations {
         owner: string
         /** @description Repository name (second half of owner/name) */
         rname: string
-        number: string
+        number: number
       }
       cookie?: never
     }
@@ -5674,7 +5674,7 @@ export interface operations {
         owner: string
         /** @description Repository name (second half of owner/name) */
         rname: string
-        number: string
+        number: number
       }
       cookie?: never
     }

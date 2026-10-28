@@ -466,3 +466,5 @@ The browser retains unsent drafts in the current tab, scoped to the signed-in ac
 The issue tracker requires a server advertising `issues.v1` and metadata schema 4. Take a backup before upgrading; an older server requires restoration of the pre-upgrade database.
 
 From an open issue you own, choose **Create agent task…**, describe the expected result and enter file patterns (one per line). Creation links the task atomically; retrying the same request does not duplicate it. The task page follows runs and resulting change requests. A connected orchestrator may pick up ready work automatically; this action does not prove execution, validation or approval. Closing the original issue remains a separate decision.
+
+The manual **Give an agent work** flow includes the task ID in the `ag push --task` command. Its progress follows only that task and agent, including run-scoped identities. An ended session without a linked change request is shown as ended, not still working. Changing the account or repository clears displayed credentials and cancels pending setup requests. This command-driven path does not claim that an external coding model was launched by the browser.

@@ -224,3 +224,5 @@ to the linked issue (Chromium, 9.6 s). PostgreSQL 17 independently preserved iss
 comment data through closing/reopening the metadata connection and rejected a stale CAS.
 TypeScript/Python client tours exercised the issue API. These checks do not establish
 that a real external coding agent ran or that it produced a reviewed/integrated change.
+
+The manual agent-onboarding follow-up passed the existing real-server/real-CLI Chromium workflow (8.4 s): the browser created a task and credential, its displayed shell commands submitted a task-linked change request, and the browser detected that request. The exact-task/principal matcher separately rejects another task and similarly named agents. This is shell workflow qualification, not a real coding-model pilot.

@@ -23,3 +23,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0013](0013-directory-renames.md) | Directory renames in the tree merge (`ag-merge/3`); copy detection for blame and show |
 | [0014](0014-review-head-precondition.md) | Optional expected-head precondition for atomically recording reviews |
 | [0015](0015-bounded-revision-code-search.md) | Bounded literal code search tied to an immutable revision |
+| [0016](0016-repository-issues.md) | Durable repository issues and atomic handoff to scoped agent tasks |

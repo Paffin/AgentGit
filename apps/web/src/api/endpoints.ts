@@ -479,7 +479,7 @@ export function createApi(c: ApiClient) {
           scope?: Partial<CredentialScope>
           ttl_secs: number
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<{ credential: Credential; token: string }>('/v1/credentials', body, o),
       revokeCredential: (id: string, o?: Opts) =>
         c.del<{ revoked: boolean }>(`/v1/credentials/${encodeURIComponent(id)}`, undefined, o),

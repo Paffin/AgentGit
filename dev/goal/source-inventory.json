@@ -1,8 +1,8 @@
 [
   {
     "path": "README.md",
-    "sha256": "64d36180e75571c23a397d7a71734f6f7d409b17158c21949d69ebe91a62c922",
-    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
+    "sha256": "3d00214bb41b43f2aed6a46ed3ef5589b02045e815250ca97bded0ba3a3a4dab",
+    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
   },
   {
     "path": "ROADMAP.md",
@@ -11,8 +11,8 @@
   },
   {
     "path": "CHANGELOG.md",
-    "sha256": "1b51e5273deecfebb43f4195d5bc3e7c4df6435cff27a872c9c30ec456d5bb91",
-    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
+    "sha256": "6733aa926b0c39abb237a027e38580e1aa1bf36aaf1045e1b43ab3e5ef61ffa7",
+    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
   },
   {
     "path": "docs/README.md",
@@ -186,8 +186,8 @@
   },
   {
     "path": "docs/guides/web-ui.md",
-    "sha256": "f3d6f64fec1776dd7f3f373ad8b75d2914f66514852756788ae222fdb431e693",
-    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
+    "sha256": "10932401549d7a35d976e6bbd642b00a1a4c602352ebd482e1013fef02140a19",
+    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
   },
   {
     "path": "docs/guides/remote.md",

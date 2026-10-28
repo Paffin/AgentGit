@@ -29,6 +29,11 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
       { decision: 'comment', expected_head: 'head' },
       options,
     )
+
+  if (operation === 'task-dependency')
+    return api.agents.addDependency('acme/new', 'task-one', 'task-two', options)
+  if (operation === 'task-finish')
+    return api.agents.finishTask('acme/new', 'task-one', 'done', options)
   if (operation === 'proposal-create')
     return api.proposals.create(
       'acme/new',
@@ -51,6 +56,9 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'review',
+
+    'task-dependency',
+    'task-finish',
   ])('keeps the initial session during a %s retry', async (operation) => {
     let token = 'initial-session'
     const credentials: (string | null)[] = []
@@ -85,6 +93,9 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'review',
+
+    'task-dependency',
+    'task-finish',
   ])('does not reject a new session when an old %s request receives 401', async (operation) => {
     const rejected = vi.fn()
     const client = new ApiClient({

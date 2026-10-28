@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Run } from '@/api/types'
 import { useLiveReload } from '@/composables/useLiveReload'
@@ -92,7 +93,13 @@ const options = [
         <IdentityLabel :identity="(row as Run).identity" />
         <p class="faint mono id">{{ (row as Run).run_id }}</p>
       </template>
-      <template #cell-task="{ row }">{{ taskTitle(row as Run) || '–' }}</template>
+      <template #cell-task="{ row }"
+        ><RouterLink
+          v-if="(row as Run).task_id"
+          :to="`/repos/${repo.split('/').map(encodeURIComponent).join('/')}/tasks/${encodeURIComponent((row as Run).task_id)}`"
+          >{{ taskTitle(row as Run) }}</RouterLink
+        ><span v-else>–</span></template
+      >
       <template #cell-status="{ row }">
         <Badge
           v-if="(row as Run).status === 'running' && health(row as Run).liveness === 'stale'"

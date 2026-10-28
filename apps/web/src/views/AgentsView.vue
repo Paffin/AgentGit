@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import GiveAgentWork from '@/components/agents/GiveAgentWork.vue'
 import AgentsList from '@/components/agents/AgentsList.vue'
 import LeaseTable from '@/components/agents/LeaseTable.vue'
@@ -17,7 +18,17 @@ const board = useBoard()
 usePageTitle(() => `Agents & work · ${repo.value}`)
 
 type TabId = 'runs' | 'tasks' | 'leases' | 'agents'
-const tab = ref<TabId>('runs')
+const route = useRoute()
+const router = useRouter()
+const tab = computed<TabId>({
+  get: () =>
+    ['runs', 'tasks', 'leases', 'agents'].includes(String(route.query.tab))
+      ? (route.query.tab as TabId)
+      : 'runs',
+  set: (value) => {
+    void router.replace({ query: { ...route.query, tab: value === 'runs' ? undefined : value } })
+  },
+})
 const tabs = computed<TabItem<TabId>[]>(() => [
   {
     id: 'runs',

@@ -3,7 +3,7 @@
 use ag_protocol::v1;
 
 /// Number of message types the decoders below cover.
-pub const COUNT: usize = 221;
+pub const COUNT: usize = 222;
 
 /// Name of message type `idx`.
 pub fn name(idx: usize) -> &'static str {
@@ -228,7 +228,8 @@ pub fn name(idx: usize) -> &'static str {
         217 => "AddIssueCommentRequest",
         218 => "ListIssueActivityRequest",
         219 => "ListIssueActivityResponse",
-        220 => "Empty",
+        220 => "SetAgentStateRequest",
+        221 => "Empty",
         _ => unreachable!(),
     }
 }
@@ -457,7 +458,8 @@ pub fn check_proto(idx: usize, data: &[u8]) {
         217 => if let Ok(m) = v1::AddIssueCommentRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AddIssueCommentRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         218 => if let Ok(m) = v1::ListIssueActivityRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssueActivityRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         219 => if let Ok(m) = v1::ListIssueActivityResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssueActivityResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
-        220 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        220 => if let Ok(m) = v1::SetAgentStateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SetAgentStateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        221 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         _ => unreachable!(),
     }
 }
@@ -685,7 +687,8 @@ pub fn check_json(idx: usize, data: &[u8]) {
         217 => if let Ok(m) = serde_json::from_slice::<v1::AddIssueCommentRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AddIssueCommentRequest>(&s).unwrap(), m); },
         218 => if let Ok(m) = serde_json::from_slice::<v1::ListIssueActivityRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssueActivityRequest>(&s).unwrap(), m); },
         219 => if let Ok(m) = serde_json::from_slice::<v1::ListIssueActivityResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssueActivityResponse>(&s).unwrap(), m); },
-        220 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
+        220 => if let Ok(m) = serde_json::from_slice::<v1::SetAgentStateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SetAgentStateRequest>(&s).unwrap(), m); },
+        221 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
         _ => unreachable!(),
     }
 }

@@ -204,6 +204,7 @@ from agentgit._generated.models import (
     SearchMatch,
     SearchTreeRequest,
     SearchTreeResponse,
+    SetAgentStateRequest,
     SetPolicyRequest,
     SetTaskSchedulingRequest,
     StartRunRequest,
@@ -490,6 +491,19 @@ class AgentsApi:
     ) -> Agent:
         """Register an agent and its public key (`POST /v1/repos/{owner}/{rname}/agents`, operation `agent.register`)."""
         return self._c._call("agent.register", {"repo": repo, "idempotency_key": idempotency_key, "name": name, "public_key": public_key, "role": role}, options, Agent)
+
+    def set_state(
+        self,
+        *,
+        repo: str,
+        name: str,
+        disabled: bool | None = None,
+        expected_disabled: bool | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Agent:
+        """Enable or disable new runs for an agent (`PATCH /v1/repos/{owner}/{rname}/agents/{name}`, operation `agent.set_state`)."""
+        return self._c._call("agent.set_state", {"repo": repo, "name": name, "disabled": disabled, "expected_disabled": expected_disabled, "idempotency_key": idempotency_key}, options, Agent)
 
     def start_run(
         self,
@@ -2068,6 +2082,19 @@ class AsyncAgentsApi:
     ) -> Agent:
         """Register an agent and its public key (`POST /v1/repos/{owner}/{rname}/agents`, operation `agent.register`)."""
         return await self._c._call("agent.register", {"repo": repo, "idempotency_key": idempotency_key, "name": name, "public_key": public_key, "role": role}, options, Agent)
+
+    async def set_state(
+        self,
+        *,
+        repo: str,
+        name: str,
+        disabled: bool | None = None,
+        expected_disabled: bool | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Agent:
+        """Enable or disable new runs for an agent (`PATCH /v1/repos/{owner}/{rname}/agents/{name}`, operation `agent.set_state`)."""
+        return await self._c._call("agent.set_state", {"repo": repo, "name": name, "disabled": disabled, "expected_disabled": expected_disabled, "idempotency_key": idempotency_key}, options, Agent)
 
     async def start_run(
         self,

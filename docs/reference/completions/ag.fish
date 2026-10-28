@@ -681,6 +681,7 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from list" -l remote -d 'Read a server\'s agents instead of the local repository (without a NAME: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from list" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -748,6 +749,7 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from reap" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -l remote -d 'Change the server\'s agent instead (requires agent.operate; without a NAME: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -758,6 +760,7 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from disable" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -l remote -d 'Change the server\'s agent instead (requires agent.operate; without a NAME: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'

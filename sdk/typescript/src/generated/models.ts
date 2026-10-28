@@ -202,6 +202,7 @@ export type SaveRunOutputRequest = S['SaveRunOutputRequest'];
 export type SearchMatch = S['SearchMatch'];
 export type SearchTreeRequest = S['SearchTreeRequest'];
 export type SearchTreeResponse = S['SearchTreeResponse'];
+export type SetAgentStateRequest = S['SetAgentStateRequest'];
 export type SetPolicyRequest = S['SetPolicyRequest'];
 export type SetTaskSchedulingRequest = S['SetTaskSchedulingRequest'];
 export type StartRunRequest = S['StartRunRequest'];

@@ -286,6 +286,8 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     key = generate_agent_key()
     bot.agents.register(repo=REPO, name="tour-bot", public_key=key.public_key_hex)
     assert "tour-bot" in [a.name for a in alice.agents.list(repo=REPO).agents]
+    assert tour["admin"].agents.set_state(repo=REPO, name="tour-bot", disabled=True, expected_disabled=False).disabled
+    assert not tour["admin"].agents.set_state(repo=REPO, name="tour-bot", disabled=False, expected_disabled=True).disabled
     tour["admin"].agents.executor_report(
         repo=REPO, agent="tour-bot", name="command", slots=1, available=1, ttl_secs=90
     )

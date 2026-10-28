@@ -297,6 +297,12 @@ describe('the tour', () => {
     const key = generateAgentKey();
     await bot.agents.register({ repo, name: 'tour-bot', public_key: key.publicKeyHex });
     expect((await alice.agents.list({ repo })).agents.map((a) => a.name)).toContain('tour-bot');
+    expect(
+      (await admin.agents.setState({ repo, name: 'tour-bot', disabled: true, expected_disabled: false })).disabled,
+    ).toBe(true);
+    expect(
+      (await admin.agents.setState({ repo, name: 'tour-bot', disabled: false, expected_disabled: true })).disabled,
+    ).toBe(false);
     await admin.agents.executorReport({
       repo,
       agent: 'tour-bot',

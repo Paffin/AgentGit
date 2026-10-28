@@ -412,3 +412,12 @@ Nested threads, line anchors and resolution remain open work.
 - Recorded all five native discussion command responses against the real server and generated their CLI reference. All three local/remote JSON contract tests pass; no existing keys were removed or retyped.
 - Deployment checks pass with kustomize, promtool and Docker Compose present. Four real-server Git migration scenarios pass on Linux with HTTP 100-continue for upload authentication; hosted Windows confirmation remains required.
 - Updated English/Russian READMEs without changing published-beta.4 install links. Reconciled the original line-discussion matrix row and stale review gaps with the implemented thread slice; inventory is 155 rows. Suggestions, requested reviewers and external-device/host/pilot checks remain open.
+
+## Per-agent run admission (development)
+
+- Shared CLI/API transaction changes the existing disabled flag with an observed-state precondition. Run creation reads that flag inside the write transaction, eliminating the former read/write gap. No schema or object-format change.
+- Core lifecycle suite: 22 tests pass on SQLite (0.17s) and PostgreSQL 17 (2.72s). Temporary PostgreSQL container removed afterward. The real HTTP scenario checks operator permissions, simultaneous same-key replay, mismatched key reuse, stale-state rejection and a running session surviving disable.
+- Real-server browser scenario passes desktop and phone: disable, reload, enable, observe connection again, and hide controls from a reader (2 tests, 9.4s). No browser console errors. The UI explicitly distinguishes stopping new runs from terminating existing work.
+- Generated TypeScript/Python SDKs and 118-operation tours pass (12 TypeScript tests, 13 Python tests); Python type checking passes. OpenAPI, protobuf copies and fuzz message inventory remain synchronized. Hosted full-platform qualification remains separate.
+
+- Extended the same slice with native `ag agent list/disable/enable --remote`: reads and changes the configured server through AGWP, refuses unsupported state controls, and retains the existing local command JSON shapes. Remote JSON shapes and generated help/man/completions are included. Browser stale-confirmation recovery refreshes the agent row without silently applying the stale decision.

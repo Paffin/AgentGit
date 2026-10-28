@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ConnectExecutor from './ConnectExecutor.vue'
+import AgentStateControl from './AgentStateControl.vue'
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { useServerNow } from '@/composables/useNow'
 import { api } from '@/api/instance'
@@ -43,6 +44,11 @@ const refresh = setInterval(() => {
 }, 20_000)
 onBeforeUnmount(() => clearInterval(refresh))
 
+const canManage = computed(
+  () =>
+    auth.can(props.repo, 'controlExecution') &&
+    !!auth.capabilities?.features.includes('agents.state'),
+)
 const columns = computed<Column[]>(() =>
   (
     [
@@ -136,13 +142,28 @@ async function register() {
       <template #cell-identity="{ row }"
         ><IdentityLabel :identity="(row as Agent).identity" :size="22" />
         <span v-if="hasPresence" class="executor-mobile">
-          {{ connected(row as Agent) ? 'Executor connected' : 'No recent executor report' }}
+          {{
+            (row as Agent).disabled
+              ? 'New runs disabled'
+              : connected(row as Agent)
+                ? 'Executor connected'
+                : 'No recent executor report'
+          }}
         </span>
+        <div v-if="canManage" class="agent-actions">
+          <AgentStateControl :repo="repo" :agent="row as Agent" @changed="agents.reload()" />
+        </div>
       </template>
       <template #cell-executor="{ row }">
         <div class="executor">
           <Badge :tone="connected(row as Agent) ? 'ok' : 'neutral'" size="sm">
-            {{ connected(row as Agent) ? 'Connected' : 'No recent report' }}
+            {{
+              (row as Agent).disabled
+                ? 'New runs disabled'
+                : connected(row as Agent)
+                  ? 'Connected'
+                  : 'No recent report'
+            }}
           </Badge>
           <template v-if="(row as Agent).executor">
             <span>{{ (row as Agent).executor!.name }}</span>
@@ -228,6 +249,9 @@ async function register() {
 </template>
 
 <style scoped>
+.agent-actions {
+  margin-top: var(--s-2);
+}
 .agents {
   display: flex;
   flex-direction: column;

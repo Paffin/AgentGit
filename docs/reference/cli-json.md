@@ -96,7 +96,23 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag agent disable (remote)
+
+```json
+{
+  "disabled": "string"
+}
+```
+
 ### ag agent enable
+
+```json
+{
+  "enabled": "string"
+}
+```
+
+### ag agent enable (remote)
 
 ```json
 {
@@ -128,6 +144,22 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
   {
     "created_at": "number",
     "disabled": "bool",
+    "identity": "string",
+    "name": "string",
+    "public_key": "string",
+    "role": "string"
+  }
+]
+```
+
+### ag agent list (remote)
+
+```json
+[
+  {
+    "created_at_ms": "number",
+    "disabled": "bool",
+    "executor": "null",
     "identity": "string",
     "name": "string",
     "public_key": "string",
@@ -1500,12 +1532,14 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "default_stream": "string",
           "hash": "string",
           "head": "string",
+          "key_id": "string",
           "new_head": "string",
           "old_head": "null",
           "operation_id": "string",
           "policy_version": "number",
           "proposal": "string",
           "resolved": "bool",
+          "role": "string",
           "status": "string",
           "stream": "string",
           "thread_id": "string",

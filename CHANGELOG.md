@@ -7,6 +7,14 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Per-agent run admission controls in Web UI, remote CLI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
+
+### Fixed
+
+- Agent enabled-state checks now occur inside the run creation transaction, preventing a run from starting after a concurrent disable has committed.
+
 ## [0.3.0-beta.5] - 2026-10-28
 
 **Upgrade:** repository metadata moves to schema 6. Back up before upgrading; restoring the pre-upgrade backup is required to return to an older binary. Line-discussion revisions are retained by GC and checked by `ag verify`.

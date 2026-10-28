@@ -1819,6 +1819,7 @@ service AgentService {
   rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
   rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);
+  rpc SetState(SetAgentStateRequest) returns (Agent);
   rpc ReportExecutor(ReportExecutorRequest) returns (ExecutorPresence);
   rpc List(ListAgentsRequest) returns (ListAgentsResponse);
   rpc StartRun(StartRunRequest) returns (Run);
@@ -1925,4 +1926,13 @@ service IssueService {
   rpc Update(UpdateIssueRequest) returns (Issue);
   rpc AddComment(AddIssueCommentRequest) returns (IssueActivity);
   rpc ListActivity(ListIssueActivityRequest) returns (ListIssueActivityResponse);
+}
+
+// Controls admission of new runs. Existing runs, keys and role bindings are preserved.
+message SetAgentStateRequest {
+  string repo = 1;
+  string name = 2;
+  bool disabled = 3;
+  bool expected_disabled = 4;
+  string idempotency_key = 5;
 }

@@ -22,7 +22,8 @@
       "proposal.comment",
       "proposal.thread_create",
       "proposal.thread_reply",
-      "proposal.thread_resolve"
+      "proposal.thread_resolve",
+      "agent.set_state"
     ],
     "natural": [
       "objects.put",

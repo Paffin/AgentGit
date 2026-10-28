@@ -31,6 +31,7 @@ export const NAMESPACE_METHODS = {
     predict: 'agent.predict',
     reapRuns: 'agent.reap_runs',
     register: 'agent.register',
+    setState: 'agent.set_state',
     startRun: 'agent.start_run',
   },
   credentials: {
@@ -218,6 +219,8 @@ export interface Api {
     reapRuns(request: Req<'agent.reap_runs'>, options?: CallOptions): Promise<Res<'agent.reap_runs'>>;
     /** Register an agent and its public key (`POST /v1/repos/{owner}/{rname}/agents`, operation `agent.register`) */
     register(request: Req<'agent.register'>, options?: CallOptions): Promise<Res<'agent.register'>>;
+    /** Enable or disable new runs for an agent (`PATCH /v1/repos/{owner}/{rname}/agents/{name}`, operation `agent.set_state`) */
+    setState(request: Req<'agent.set_state'>, options?: CallOptions): Promise<Res<'agent.set_state'>>;
     /** Start a run (returns the identity to act as) (`POST /v1/repos/{owner}/{rname}/runs`, operation `agent.start_run`) */
     startRun(request: Req<'agent.start_run'>, options?: CallOptions): Promise<Res<'agent.start_run'>>;
   };

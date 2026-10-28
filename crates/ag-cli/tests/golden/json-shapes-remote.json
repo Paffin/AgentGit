@@ -1,5 +1,22 @@
 {
   "commands": {
+    "agent disable#remote": {
+      "disabled": "string"
+    },
+    "agent enable#remote": {
+      "enabled": "string"
+    },
+    "agent list#remote": [
+      {
+        "created_at_ms": "number",
+        "disabled": "bool",
+        "executor": "null",
+        "identity": "string",
+        "name": "string",
+        "public_key": "string",
+        "role": "string"
+      }
+    ],
     "auth status": {
       "checked_online": "bool",
       "connections": [
@@ -219,12 +236,14 @@
               "default_stream": "string",
               "hash": "string",
               "head": "string",
+              "key_id": "string",
               "new_head": "string",
               "old_head": "null",
               "operation_id": "string",
               "policy_version": "number",
               "proposal": "string",
               "resolved": "bool",
+              "role": "string",
               "status": "string",
               "stream": "string",
               "thread_id": "string",

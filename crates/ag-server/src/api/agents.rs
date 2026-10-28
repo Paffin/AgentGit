@@ -176,6 +176,43 @@ impl App {
         .await
     }
 
+    /// Changes new-run admission; existing sessions and credentials are preserved.
+    pub async fn set_agent_state(&self, call: &Call, req: v1::SetAgentStateRequest) -> ApiResult<v1::Agent> {
+        let key = req.idempotency_key.clone();
+        let idem = self.idem();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            check_agent_scope(actor, &req.name)?;
+            let request = serde_json::to_string(&(actor.as_str(), &req.name, req.disabled, req.expected_disabled))
+                .map_err(ApiError::internal)?;
+            keyed(repo, idem, "agent.state", &key, &request, |claim| {
+                repo.meta()
+                    .write(|tx| {
+                        let mut row =
+                            tx.agent(&req.name)?.ok_or_else(|| MetaError::NotFound("agent not found".into()))?;
+                        row.disabled = req.disabled;
+                        let response = convert::agent(&row);
+                        // Claim the key first so a concurrent retry replays instead of failing the state comparison.
+                        claim.record(tx, &response)?;
+                        ag_agent::registry::set_disabled_in(
+                            tx,
+                            &req.name,
+                            req.disabled,
+                            Some(req.expected_disabled),
+                            actor.as_str(),
+                        )?;
+                        Ok(response)
+                    })
+                    .map_err(|error| match error {
+                        MetaError::Invalid(message) => {
+                            ApiError::new(ag_protocol::ErrorCode::FailedPrecondition, message)
+                        }
+                        other => other.into(),
+                    })
+            })
+        })
+        .await
+    }
+
     /// Reports expiring executor connectivity; only an operator may report it.
     pub async fn report_executor(
         &self,

@@ -4,13 +4,16 @@
 .SH NAME
 ag\-agent\-disable \- Stop an agent from starting new runs
 .SH SYNOPSIS
-\fBag agent disable\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fINAME\fR>
+\fBag agent disable\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fINAME\fR>
 .SH DESCRIPTION
 Stop an agent from starting new runs
 .SH OPTIONS
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-remote\fR [\fI<NAME>\fR]
+Change the server\*(Aqs agent instead (requires agent.operate; without a NAME: origin)
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY

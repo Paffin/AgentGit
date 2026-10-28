@@ -586,3 +586,27 @@ Discussion filters show all, open or resolved threads among the loaded results.
 Counts are marked as partial when more pages are available; use **Load more
 discussions** to include older threads. Switching filters preserves expanded
 reply drafts.
+
+## Enable or disable new runs for one agent (development)
+
+Under **Agents & work → Registered agents**, an operator can choose **Disable…**
+or **Enable…** beside an agent. The confirmation names the identity and explains
+the effect. Disabling prevents new runs; it does not delete the public key,
+revoke credentials, erase history or terminate existing processes. Cancel the
+relevant tasks separately when managed sessions must stop.
+
+A concurrent state change is rejected instead of silently applying a decision
+from an outdated dialog. Close and reopen it to review the current state.
+These actions require the `agents.state` server feature and `agent.operate`
+permission (delegator or administrator). Earlier servers keep the status display.
+
+The equivalent remote CLI actions use the configured repository remote:
+
+```bash
+ag agent list --remote origin
+ag agent disable my-agent --remote origin
+ag agent enable my-agent --remote origin
+```
+
+The CLI reads the current server state and submits the same guarded change. It
+requires `agent.list` to inspect the agent and `agent.operate` to change it.

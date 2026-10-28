@@ -203,7 +203,13 @@ fn man_pages_cover_every_command_and_are_well_formed() {
     let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/reference/man");
     if shipped.is_dir() {
         for n in &names {
-            let want = strip_build_stamp(&fs::read_to_string(dir.path().join(n)).unwrap());
+            // gen_cli_docs.py also removes trailing whitespace from every generated line.
+            let want = strip_build_stamp(&fs::read_to_string(dir.path().join(n)).unwrap())
+                .lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
             let have = fs::read_to_string(shipped.join(n)).unwrap_or_else(|e| panic!("docs/reference/man/{n}: {e}"));
             assert!(want == have, "docs/reference/man/{n} is out of date: run python3 scripts/gen_cli_docs.py");
         }

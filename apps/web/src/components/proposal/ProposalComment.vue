@@ -11,7 +11,12 @@ import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import TextArea from '@/ui/TextArea.vue'
 
-const props = defineProps<{ repo: string; proposal: Proposal; quote?: LineQuote | null }>()
+const props = defineProps<{
+  repo: string
+  proposal: Proposal
+  quote?: LineQuote | null
+  quoteText?: string
+}>()
 const emit = defineEmits<{ done: []; quoted: [] }>()
 const auth = useAuth(),
   toasts = useToasts()
@@ -28,7 +33,9 @@ watch(
     if (!quote || !supported.value || !allowed.value) return
     if (!draft.body.value) draft.head.value = quote.head
     const existing = draft.body.value.trimEnd()
-    draft.body.value = `${existing ? existing + '\n\n' : ''}${formatLineQuote(quote)}\n\n`
+    draft.body.value =
+      [existing, props.quoteText?.trimEnd(), formatLineQuote(quote)].filter(Boolean).join('\n\n') +
+      '\n\n'
     emit('quoted')
     await nextTick()
     form.value?.querySelector('textarea')?.focus()
@@ -89,7 +96,7 @@ async function submit() {
 </script>
 
 <template>
-  <form ref="form" v-if="supported && allowed" class="comment-form" @submit.prevent="submit">
+  <form v-if="supported && allowed" ref="form" class="comment-form" @submit.prevent="submit">
     <TextArea
       v-model="draft.body.value"
       label="Add to the discussion"

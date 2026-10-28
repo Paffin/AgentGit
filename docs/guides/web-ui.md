@@ -563,3 +563,21 @@ The tab saves your draft with the head you inspected. If the change request move
 inspect the new changes and acknowledge that head before posting. Retrying an
 unchanged submission does not create another comment. Line-anchored threads,
 thread resolution and code suggestions are not part of this first discussion flow.
+
+## Line discussions (development)
+
+On servers supporting `proposals.threads`, select an old/new line number in the
+change request diff. **Start a line discussion** keeps the exact file, revision,
+side and line with your question. Its draft is saved in this tab. If the proposal
+changes first, select a line in the current diff before posting.
+
+Open **Replies and actions** to read and answer a thread. **Resolve discussion**
+and **Reopen discussion** are available to the thread author, proposal author,
+reviewers and integrators. Concurrent replies change the version and reject stale
+resolution. Threads on former heads show **Earlier head** and retain their source
+text. Discussion is separate from review approval. **Use general discussion
+instead** preserves the existing quote/comment workflow.
+
+This requires repository schema 6. Back up existing data before running a newer
+development binary; older binaries reject upgraded repositories. Restore the
+pre-upgrade backup for rollback. See [ADR-0025](../adr/0025-line-review-threads.md).

@@ -1,6 +1,6 @@
 # ADR 0025: Revision-bound line review threads
 
-Status: in implementation, development after beta.4.
+Status: implemented in development after beta.4.
 
 Plain discussion comments and quoted code do not represent reply groups or a
 resolution state. Add separate repository-local review threads, without using

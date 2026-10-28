@@ -262,11 +262,15 @@ The source links are description text, not a structured retry relationship.
 
 ## 12. Discussing a specific changed line (development)
 
-On a proposal's **Files changed** tab, select a line number to quote that line in
-**Reviews**. The draft records the file, old/new side, line number and exact
-revision; an old-side quote names the comparison's base. Existing draft text is
-preserved. Add your question and select **Add comment** to post it.
+On a server advertising `proposals.threads`, select a line number in **Files
+changed** to start a line discussion. Enter the question, then **Start discussion**.
+The selected line and draft survive reloads. Replies stay with that discussion;
+its author, proposal author, reviewers and integrators can resolve or reopen it.
+A new reply invalidates a stale resolution attempt. The server verifies the line
+and retains its exact source revision after the proposal changes.
 
-Quotes are plain-text discussion context. They do not create a resolvable line
-thread, follow a line across revisions or approve the change. If the proposal
-head changes, inspect the new changes before acknowledging and posting the draft.
+Threads on a former head show **Earlier head**. They are not silently moved to a
+new line, and resolving them does not grant approval. Use **Use general discussion
+instead** to quote the line in the ordinary comment composer. Servers with only
+`proposals.comments` keep this quote-only behavior. See
+[the schema 6 upgrade and rollback guidance](../adr/0025-line-review-threads.md).

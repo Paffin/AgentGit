@@ -33,6 +33,8 @@ import type {
   Repo,
   Req,
   Review,
+  ReviewThread,
+  ThreadComment,
   RoleBinding,
   Run,
   ServerEvent,
@@ -271,6 +273,64 @@ export function createApi(c: ApiClient) {
         body: { body: string; expected_head: string },
         o?: SessionOpts,
       ) => c.post<Review>(r(repo, `/proposals/${encodeURIComponent(id)}/comments`), body, o),
+      threads: async (
+        repo: string,
+        id: string,
+        q: { page_size?: number; page_token?: string } = {},
+        o?: Opts,
+      ): Promise<Page<ReviewThread>> => {
+        const result = await c.get<{ threads: ReviewThread[]; next_page_token: string }>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/threads`),
+          q,
+          o,
+        )
+        return { items: result.threads ?? [], nextPageToken: result.next_page_token ?? '' }
+      },
+      createThread: (
+        repo: string,
+        id: string,
+        body: Omit<Req<'CreateReviewThreadRequest'>, 'repo' | 'id'>,
+        o?: SessionOpts,
+      ) => c.post<ReviewThread>(r(repo, `/proposals/${encodeURIComponent(id)}/threads`), body, o),
+      threadComments: async (
+        repo: string,
+        id: string,
+        thread: string,
+        q: { page_size?: number; page_token?: string } = {},
+        o?: Opts,
+      ): Promise<Page<ThreadComment>> => {
+        const result = await c.get<{ comments: ThreadComment[]; next_page_token: string }>(
+          r(
+            repo,
+            `/proposals/${encodeURIComponent(id)}/threads/${encodeURIComponent(thread)}/comments`,
+          ),
+          q,
+          o,
+        )
+        return { items: result.comments ?? [], nextPageToken: result.next_page_token ?? '' }
+      },
+      replyThread: (repo: string, id: string, thread: string, body: string, o?: SessionOpts) =>
+        c.post<ThreadComment>(
+          r(
+            repo,
+            `/proposals/${encodeURIComponent(id)}/threads/${encodeURIComponent(thread)}/comments`,
+          ),
+          { body },
+          o,
+        ),
+      resolveThread: (
+        repo: string,
+        id: string,
+        thread: string,
+        resolved: boolean,
+        version: number,
+        o?: SessionOpts,
+      ) =>
+        c.patch<ReviewThread>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/threads/${encodeURIComponent(thread)}`),
+          { resolved, expected_version: version },
+          o,
+        ),
       review: (
         repo: string,
         id: string,

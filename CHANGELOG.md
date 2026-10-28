@@ -7,6 +7,11 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Create a separate task from any task page with its title, description and file scope already filled in. Agent assignment, prerequisites, run history and retry budget start independently; creation remains explicit.
+- Browse the complete repository session history through continuation pages. Account changes clear the list immediately; older servers show their retrieval limit instead of an endless load-more control.
+
 ## [0.3.0-beta.4] - 2026-10-28
 
 ### Added

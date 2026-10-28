@@ -398,7 +398,7 @@ export function createApi(c: ApiClient) {
           task_id?: string
           page_token?: string
         } = {},
-        o?: Opts,
+        o?: SessionOpts,
       ): Promise<Page<Run>> => {
         const result = await c.get<{ runs: Run[]; next_page_token?: string }>(
           r(repo, '/runs'),
@@ -410,7 +410,7 @@ export function createApi(c: ApiClient) {
       runs: async (
         repo: string,
         q: { agent?: string; active_only?: boolean; limit?: number } = {},
-        o?: Opts,
+        o?: SessionOpts,
       ) => (await c.get<{ runs: Run[] }>(r(repo, '/runs'), q, o)).runs ?? [],
       scheduling: (repo: string, o?: SessionOpts) =>
         c.get<TaskScheduling>(r(repo, '/tasks/scheduling'), undefined, o),

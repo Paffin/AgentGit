@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { randomHex } from '@/api/client'
 import { useAssignableAgents } from '@/composables/useAssignableAgents'
@@ -28,6 +28,10 @@ import SelectField from '@/ui/SelectField.vue'
 
 const props = defineProps<{ repo: string }>()
 const auth = useAuth()
+const route = useRoute(),
+  router = useRouter()
+const copiedFrom = ref<Task | null>(null)
+let handledSource = ''
 const board = useBoard()
 const toasts = useToasts()
 
@@ -88,6 +92,8 @@ watch(
     depends.value = []
     assignee.value = ''
     error.value = null
+    copiedFrom.value = null
+    handledSource = ''
   },
   { flush: 'sync' },
 )
@@ -100,15 +106,40 @@ const candidates = computed(() =>
   (tasks.data.value ?? []).filter((t) => t.state !== 'cancelled' && t.state !== 'done'),
 )
 
-function openCreate() {
+function openCreate(source?: Task) {
+  copiedFrom.value = source ?? null
   assignee.value = ''
-  title.value = ''
-  description.value = ''
-  scope.value = ''
+  title.value = source?.title ?? ''
+  description.value = source?.description ?? ''
+  scope.value = source?.scope.join('\n') ?? ''
   depends.value = []
   error.value = null
   creating.value = true
 }
+watch(
+  [() => route.query.from_task, () => tasks.data.value, canCreate],
+  () => {
+    const id = route.query.from_task
+    if (typeof id !== 'string' || !canCreate.value || creating.value) return
+    const key = `${props.repo}:${id}`
+    if (handledSource === key) return
+    const source = byId.value.get(id)
+    if (!source) return
+    handledSource = key
+    openCreate(source)
+  },
+  { immediate: true },
+)
+function clearSourceQuery() {
+  if (route.query.from_task)
+    void router.replace({ query: { ...route.query, from_task: undefined } })
+}
+function dismissCreate() {
+  if (busy.value) return
+  creating.value = false
+  clearSourceQuery()
+}
+
 async function create() {
   if (busy.value || !canCreate.value || !title.value.trim()) return
   const mine = context
@@ -122,7 +153,7 @@ async function create() {
   busy.value = true
   error.value = null
   try {
-    await api.agents.createTask(
+    const created = await api.agents.createTask(
       props.repo,
       {
         title: title.value.trim(),
@@ -137,10 +168,16 @@ async function create() {
       request,
     )
     if (mine !== context) return
+    const reused = copiedFrom.value !== null
     creating.value = false
     toasts.ok('Task created')
-    await tasks.reload()
     board.touched(['tasks'])
+    if (reused) {
+      await router.push({ name: 'task', params: { ...route.params, id: created.id }, query: {} })
+    } else {
+      clearSourceQuery()
+      await tasks.reload()
+    }
   } catch (e) {
     if (mine !== context) return
     error.value =
@@ -169,7 +206,7 @@ const toggle = (id: string, on: boolean) => {
         variant="primary"
         :disabled="!canCreate"
         :disabled-reason="requirementText('createTask')"
-        @click="openCreate"
+        @click="openCreate()"
         >New task</Button
       >
     </div>
@@ -229,7 +266,21 @@ const toggle = (id: string, on: boolean) => {
       </section>
     </div>
 
-    <Dialog v-model="creating" title="New task" :dismissable="!busy" size="lg">
+    <Dialog
+      :model-value="creating"
+      :title="copiedFrom ? 'Create a task from this one' : 'New task'"
+      :dismissable="!busy"
+      size="lg"
+      @update:model-value="dismissCreate"
+    >
+      <p v-if="copiedFrom">
+        Title, description and file scope copied from
+        <RouterLink
+          :to="{ name: 'task', params: { ...route.params, id: copiedFrom.id }, query: {} }"
+          >{{ copiedFrom.title }}</RouterLink
+        >. This creates a separate task with its own run history and retry budget. Choose its agent
+        and prerequisites below; the source task stays unchanged.
+      </p>
       <form id="new-task" class="form" @submit.prevent="create">
         <SelectField
           v-if="assignment.supported.value"
@@ -280,7 +331,7 @@ const toggle = (id: string, on: boolean) => {
         }}</Alert>
       </form>
       <template #footer>
-        <Button :disabled="busy" @click="creating = false">Cancel</Button>
+        <Button :disabled="busy" @click="dismissCreate">Cancel</Button>
         <Button type="submit" form="new-task" variant="primary" :loading="busy">Create task</Button>
       </template>
     </Dialog>

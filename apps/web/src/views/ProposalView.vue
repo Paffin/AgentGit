@@ -11,6 +11,7 @@ import ProvenanceTab from '@/components/proposal/ProvenanceTab.vue'
 import ReviewDialog from '@/components/proposal/ReviewDialog.vue'
 import ReviewsTab from '@/components/proposal/ReviewsTab.vue'
 import ProposalComment from '@/components/proposal/ProposalComment.vue'
+import ReviewThreads from '@/components/proposal/ReviewThreads.vue'
 import TimelineTab from '@/components/proposal/TimelineTab.vue'
 import ValidationTab from '@/components/proposal/ValidationTab.vue'
 import { useProposalData } from '@/composables/useProposalData'
@@ -64,16 +65,29 @@ const tab = computed<TabId>({
   },
 })
 const lineQuote = ref<LineQuote | null>(null)
+const generalQuote = ref<LineQuote | null>(null)
+const generalQuoteText = ref('')
+const threadsSupported = computed(() => !!auth.capabilities?.features.includes('proposals.threads'))
 watch(
   [repo, idRef, () => auth.token],
   () => {
     lineQuote.value = null
+    generalQuote.value = null
+    generalQuoteText.value = ''
   },
   { flush: 'sync' },
 )
 function discussLine(quote: LineQuote) {
-  lineQuote.value = quote
+  if (threadsSupported.value) lineQuote.value = quote
+  else {
+    generalQuoteText.value = ''
+    generalQuote.value = quote
+  }
   tab.value = 'reviews'
+}
+function useGeneralDiscussion(quote: LineQuote, body: string) {
+  generalQuoteText.value = body
+  generalQuote.value = quote
 }
 const tabs = computed<TabItem<TabId>[]>(() => [
   {
@@ -489,9 +503,9 @@ function changed() {
               auth.can(repo, 'commentProposal') &&
               !!auth.capabilities?.features.includes('proposals.comments')
             "
-            @discuss="discussLine"
             :loading="data.diff.loading.value"
             :error="data.diff.error.value"
+            @discuss="discussLine"
             @retry="data.diff.reload()"
           />
         </template>
@@ -504,12 +518,20 @@ function changed() {
             :review-reason="requirementText('review')"
             @review="reviewing = true"
           >
-            <template #comment
-              ><ProposalComment
+            <template #comment>
+              <ReviewThreads
+                v-if="threadsSupported"
                 :repo="repo"
                 :proposal="proposal"
                 :quote="lineQuote"
                 @quoted="lineQuote = null"
+                @general="useGeneralDiscussion" />
+              <ProposalComment
+                :repo="repo"
+                :proposal="proposal"
+                :quote="generalQuote"
+                :quote-text="generalQuoteText"
+                @quoted="generalQuote = null"
                 @done="changed"
             /></template>
           </ReviewsTab>

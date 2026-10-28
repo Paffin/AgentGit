@@ -164,6 +164,21 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
         == "comment"
     )
 
+    thread = alice.proposals.thread_create(
+        repo=REPO,
+        id=p1.id,
+        body="Explain this line.",
+        expected_head=m2.head,
+        anchor={"base": "", "head": m2.head, "path": "d.txt", "side": "new", "line": 1},
+    )
+    assert thread.anchor is not None and thread.anchor.text == "d"
+    bob.proposals.thread_reply(repo=REPO, id=p1.id, thread_id=thread.id, body="It is required for recovery.")
+    assert len(alice.proposals.thread_comments(repo=REPO, id=p1.id, thread_id=thread.id).comments) == 1
+    assert bob.proposals.thread_resolve(
+        repo=REPO, id=p1.id, thread_id=thread.id, resolved=True, expected_version=thread.version + 1
+    ).resolved
+    assert len(alice.proposals.threads(repo=REPO, id=p1.id).threads) == 1
+
     queued = alice.integration.validate(repo=REPO, proposal=p1.id)
     assert len(queued.jobs) == 1
     first = ci.jobs.claim(repo=REPO, worker="tour").job

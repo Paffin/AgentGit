@@ -568,7 +568,7 @@ impl Tx<'_> {
         Ok(self.conn.execute("DELETE FROM workspaces WHERE name = ?1", &params![name])? > 0)
     }
 
-    /// Heads that must stay reachable: stream heads, pins, open proposals and workspaces.
+    /// Heads that must stay reachable, including immutable review-thread sources.
     pub fn live_roots(&self) -> Result<Vec<ChangesetId>, MetaError> {
         let mut roots = Vec::new();
         for sql in [
@@ -582,6 +582,7 @@ impl Tx<'_> {
                 roots.push(parse::<ChangesetId>(r.str(0)?, "root")?);
             }
         }
+        roots.extend(self.review_thread_roots()?);
         roots.sort();
         roots.dedup();
         Ok(roots)

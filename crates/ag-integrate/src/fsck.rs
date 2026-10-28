@@ -154,7 +154,7 @@ impl Repository {
     }
 
     /// The references that keep changesets alive and point at something the object store cannot produce: pins
-    /// (`dangling_pin`), open proposals (`dangling_proposal_head`) and workspaces (`dangling_workspace_ref`).
+    /// (`dangling_pin`), open proposals (`dangling_proposal_head`) workspaces (`dangling_workspace_ref`) and line discussions (`dangling_thread_revision`).
     /// Garbage collection starts from these and refuses to run when one is unreadable. They may name changesets
     /// that are stored but not published yet (a proposal waiting for its integration, a workspace snapshot), so the
     /// test is "can the object store produce it", not "is it published". Cheap compared to [`Repository::fsck`]: it
@@ -167,14 +167,22 @@ impl Repository {
         for p in self.meta.read(|tx| tx.proposals_list(Some("open"), ALL_ROWS))? {
             self.check_root(&mut r, "dangling_proposal_head", &format!("open proposal {}", p.id), &p.head);
         }
+        for root in self.meta.read(|tx| tx.review_thread_roots())? {
+            self.check_root(&mut r, "dangling_thread_revision", "review thread source", &root);
+        }
+        self.check_workspace_roots(&mut r)?;
+        Ok(r.issues)
+    }
+
+    fn check_workspace_roots(&self, r: &mut FsckReport) -> Result<()> {
         for w in self.meta.read(|tx| tx.workspaces())? {
             for (what, id) in [("head", &w.head), ("base", &w.base)] {
                 if let Some(id) = id {
-                    self.check_root(&mut r, "dangling_workspace_ref", &format!("workspace '{}' {what}", w.name), id);
+                    self.check_root(r, "dangling_workspace_ref", &format!("workspace '{}' {what}", w.name), id);
                 }
             }
         }
-        Ok(r.issues)
+        Ok(())
     }
 
     /// Records an issue of `kind` unless the object store yields the changeset `id` that `what` points at.

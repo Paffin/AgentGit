@@ -380,6 +380,36 @@ impl ProposalService for Grpc {
     async fn comment(&self, request: Request<v1::CommentProposalRequest>) -> Result<Response<v1::Review>, Status> {
         unary!(self, request, "proposal.comment", comment_proposal)
     }
+    async fn list_threads(
+        &self,
+        request: Request<v1::ListReviewThreadsRequest>,
+    ) -> Result<Response<v1::ListReviewThreadsResponse>, Status> {
+        unary!(self, request, "proposal.threads", list_review_threads)
+    }
+    async fn create_thread(
+        &self,
+        request: Request<v1::CreateReviewThreadRequest>,
+    ) -> Result<Response<v1::ReviewThread>, Status> {
+        unary!(self, request, "proposal.thread_create", create_review_thread)
+    }
+    async fn list_thread_comments(
+        &self,
+        request: Request<v1::ListThreadCommentsRequest>,
+    ) -> Result<Response<v1::ListThreadCommentsResponse>, Status> {
+        unary!(self, request, "proposal.thread_comments", list_thread_comments)
+    }
+    async fn reply_thread(
+        &self,
+        request: Request<v1::AddThreadCommentRequest>,
+    ) -> Result<Response<v1::ThreadComment>, Status> {
+        unary!(self, request, "proposal.thread_reply", reply_review_thread)
+    }
+    async fn resolve_thread(
+        &self,
+        request: Request<v1::ResolveReviewThreadRequest>,
+    ) -> Result<Response<v1::ReviewThread>, Status> {
+        unary!(self, request, "proposal.thread_resolve", resolve_review_thread)
+    }
     async fn close(&self, request: Request<v1::CloseProposalRequest>) -> Result<Response<v1::Proposal>, Status> {
         unary!(self, request, "proposal.close", close_proposal)
     }

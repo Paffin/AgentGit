@@ -99,6 +99,11 @@ test('quotes a diff line into the existing discussion draft with its exact revis
   await text.fill('My question about this implementation:')
   await page.getByRole('tab', { name: /^Files changed/ }).click()
   await page.getByRole('button', { name: 'Discuss new line 1 of message.txt', exact: true }).click()
+  await page
+    .getByRole('textbox', { name: 'Start this discussion', exact: true })
+    .fill('Follow this edge case.')
+  await page.getByRole('button', { name: 'Use general discussion instead', exact: true }).click()
+  await expect(text).toHaveValue(/Follow this edge case\./)
   await expect(text).toBeFocused()
   await expect(text).toHaveValue(
     new RegExp(

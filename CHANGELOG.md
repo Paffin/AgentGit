@@ -13,6 +13,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Durable line review threads: server-verified revision anchors, paged replies, conflict-safe resolution/reopening and Web UI draft recovery. Discussion remains separate from approvals. Metadata schema 6 retains thread source revisions as GC roots; back up before upgrading, and restore that backup to roll back to older binaries.
+
 - Quote an added or removed diff line directly into proposal discussion. Quotes include the file, side, line number and exact compared revision, preserve existing draft text and require explicit posting.
 
 - Failed-run pages distinguish active source tasks from finished ones. Finished tasks can seed an explicit follow-up with source links, failure summary and file scope; agent assignment and prerequisites start independently. Unrelated run/task sources are rejected before prefilling.
@@ -41,7 +43,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Operators can pause and resume new task-bound agent runs from the Web UI. The decision persists, requires a matching revision, is enforced in the run-creation transaction and is respected by the orchestrator. Metadata schema 5 requires a pre-upgrade backup.
 
-- Repository issues with durable discussion, author/admin edits, close/reopen, revision conflict protection and optional agent-task links; Web UI and HTTP/gRPC APIs. The development build uses repository schema 5; back up before upgrading.
+- Repository issues with durable discussion, author/admin edits, close/reopen, revision conflict protection and optional agent-task links; Web UI and HTTP/gRPC APIs. This release uses repository schema 5; back up before upgrading.
 - Manual agent onboarding now attaches submitted changes to the exact task, ignores unrelated runs/proposals and clears pending credentials on account changes.
 - Create an agent task directly from an issue with an explicit expected result and file scope; task creation and source linking are atomic and retries are idempotent.
 - Tab-scoped issue drafts and live discussion refresh; generated Python and TypeScript SDK issue operations.
@@ -586,8 +588,10 @@ Local mode trusts the local user; no sandbox for `ag validate run`; flat tree ma
 detection; no network server. See [ROADMAP.md](ROADMAP.md) and
 [docs/architecture/security.md](docs/architecture/security.md).
 
-[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.3...HEAD
+[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.4...HEAD
 [0.3.0-beta.3]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3
 [0.3.0-beta.2]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.2
 [0.2.0-rc.1]: https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.1
 [0.1.0]: https://github.com/Paffin/AgentGit/releases/tag/v0.1.0
+
+[0.3.0-beta.4]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4

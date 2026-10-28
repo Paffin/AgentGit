@@ -9,7 +9,7 @@ All original 142 matrix rows remain in scope; the added search, scheduling and r
 | P0 confidential-draft boundary | Define who can read draft metadata and referenced objects before adding account-backed autosave. Test owner, other reader, unrelated project and admin; document compatibility. | Open. Workspace read/list is currently repository-readable. |
 | P1 code search | Find literal content at a revision, continue a bounded scan and open the pinned matching line. | Merged in PR78; HTTP, gRPC, real-browser qualification and hosted checks passed. Exclusions are explicit; indexed/global/regex search remains open. |
 | P1 multi-file editing | Edit, add, rename and delete several files in one browser change request; preview the exact combined diff, preserve base/modes and recover the batch. No CLI preparation counts. | Basic editor merged in PR75 and verified in two browser profiles; broader role, large-batch and device qualification remains. |
-| P1 review conversations | Durable line threads, resolution, suggestions and requested reviewers tied to an inspected head; stale approval remains invalid. | Author/reviewer discussion is implemented with separate comment permission, head binding, draft recovery and idempotent writes. Line threads, resolution, suggestions and requested reviewers remain open. |
+| P1 review conversations | Durable line threads, resolution, suggestions and requested reviewers tied to an inspected head; stale approval remains invalid. | General discussion and revision-bound line threads are implemented with separate comment permission, paged replies, draft recovery, idempotent writes and versioned resolution. Suggestions, requested reviewers and policy-required resolution remain open. |
 | P1 task navigation | Permanent task pages, prerequisite/dependant links and confirmed task completion/cancellation over real APIs. | Implemented and locally verified in Chromium and phone viewport; issue-to-task handoff now creates and links work atomically; browser executor configuration and final saved output are implemented; live-model and independent-pilot qualification remain open. |
 | P1 user issues | Repository-scoped issues, durable discussion, close/reopen, optimistic edits and task links. | Implemented on main; focused HTTP lifecycle and real Chromium browser scenario passed. PostgreSQL persistence/reopen is qualified; broader qualification remains. Labels, milestones, attachments, boards and provider issue import remain open. |
 | P1 identity and tracker | Organization/member/invitation lifecycle and user issues connected to orchestrator tasks, with role checks and history. | Open; see individual matrix rows. |
@@ -41,15 +41,17 @@ Task history: task-filtered proposal/run listing and run continuation tokens now
 back the browser page. Older task results stay reachable after unrelated repository
 activity; explicit load-more and live-refresh retention are locally qualified.
 Executor installation is included in the beta.4 candidate archives. The next
-workflow gap remains rich review conversations and safe failed-run recovery, not
+workflow gap remains suggestions/reviewer assignment and structured failed-run recovery, not
 additional repository-wide test infrastructure.
 
 Retry-budget recovery now follows complete task-scoped history and refuses
 truncated legacy history. This prevents unrelated agent work from granting extra
 attempts after restart. Included in the beta.4 candidate before publication.
 
-Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming and rich review threads remain open.
+Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming, suggestions and reviewer assignment remain open.
 
 Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured retry lineage and richer retry policy controls remain open.
 
-Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. This is a contextual plain-text comment, not a line thread; structured anchors, replies and resolution remain open.
+Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. General comments keep that contextual quote path; development servers now additionally provide durable line threads with replies and versioned resolution (schema 6). Suggestions and reviewer assignment remain open.
+
+Line-thread persistence: SQLite and PostgreSQL share schema 6. Exact source revisions remain GC roots, clients cannot forge stored line text, replies advance the resolution version, and concurrent resolution is rejected. Upgrade/rollback from published beta.4 and API/SDK/browser qualification are recorded with ADR-0025.

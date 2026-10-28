@@ -10,6 +10,8 @@ A fair comparison is mostly a list of what the other tools are good at. This pag
   the [sources](#sources) at the end say what was read and when. If something here is wrong or out of date,
   please [open an issue](https://github.com/Paffin/AgentGit/issues) and we will fix the page.
 
+Development note: `main` now includes revision-bound line discussions, replies and optimistic resolution ([ADR-0025](adr/0025-line-review-threads.md)); these are not in the published beta.4 archive. Suggestions, requested reviewers and a policy requiring all discussions to be resolved remain unfinished. This is progress toward review-workflow parity, not evidence of overall superiority over GitLab or GitHub.
+
 ## The problem AgentGit is built around
 
 Several actors change one codebase at the same time, and not all of them are equally trusted: people, coding agents, CI. Then

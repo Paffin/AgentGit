@@ -32,3 +32,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0022](0022-saved-executor-output.md) | Opt-in bounded run output with redaction and deletion tombstones |
 | [0023](0023-task-history-pagination.md) | Task-filtered history and keyset continuation for agent runs |
 | [0024](0024-proposal-discussion-comments.md) | Head-bound discussion comments without approval privileges |
+| [0025](0025-line-review-threads.md) | Revision-bound line discussion, paged replies and optimistic resolution |

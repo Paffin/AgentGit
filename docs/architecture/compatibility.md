@@ -91,3 +91,5 @@ Fixtures are **append-only**. Never regenerate or edit one: its whole value is t
 Repository schema 4 adds durable user issues and activity ([ADR-0016](../adr/0016-repository-issues.md)). Before upgrading, take a database backup. Binaries supporting only schema 3 refuse the upgraded repository; downgrade by restoring the pre-upgrade backup. Control-plane schema remains 3.
 
 Repository schema 5 initializes the operator task-launch gate ([ADR-0017](../adr/0017-task-execution-gate.md)). Binaries that do not enforce this gate refuse the newer schema instead of ignoring a pause.
+
+Repository schema 6 adds line review threads and replies ([ADR-0025](../adr/0025-line-review-threads.md)). A transaction upgrades schema 5 without changing existing records. Threads retain their immutable source revisions as GC roots, even after resolution or proposal closure. Take a backup before upgrade. Older binaries refuse schema 6; rollback means restoring the pre-upgrade backup, not opening upgraded data with an older binary.

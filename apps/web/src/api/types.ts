@@ -25,6 +25,9 @@ export type SearchTreeResponse = S['SearchTreeResponse']
 export type SearchMatch = S['SearchMatch']
 export type Proposal = S['Proposal']
 export type Review = S['Review']
+export type ReviewThread = S['ReviewThread']
+export type ThreadComment = S['ThreadComment']
+export type ReviewLineAnchor = S['ReviewLineAnchor']
 export type ProposalDetail = S['ProposalDetail']
 /**
  * The OpenAPI document describes free-form JSON objects (`type: object` with no properties), which the

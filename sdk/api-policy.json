@@ -19,7 +19,10 @@
       "migration.prepare",
       "issue.create",
       "issue.comment",
-      "proposal.comment"
+      "proposal.comment",
+      "proposal.thread_create",
+      "proposal.thread_reply",
+      "proposal.thread_resolve"
     ],
     "natural": [
       "objects.put",

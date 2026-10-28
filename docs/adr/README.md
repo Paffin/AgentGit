@@ -23,3 +23,10 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0013](0013-directory-renames.md) | Directory renames in the tree merge (`ag-merge/3`); copy detection for blame and show |
 | [0014](0014-review-head-precondition.md) | Optional expected-head precondition for atomically recording reviews |
 | [0015](0015-bounded-revision-code-search.md) | Bounded literal code search tied to an immutable revision |
+| [0016](0016-repository-issues.md) | Durable repository issues and atomic handoff to scoped agent tasks |
+| [0017](0017-task-execution-gate.md) | Persisted operator gate for new task-bound runs, enforced by the agent engine |
+| [0018](0018-permanent-run-pages.md) | Exact historical run lookup and permanent browser pages tied to session identity |
+| [0019](0019-queued-task-assignment.md) | Atomic queued-agent reservation and assignment-aware dispatch |
+| [0020](0020-executor-connectivity.md) | Expiring executor connection reports and pre-run identity preparation |
+| [0021](0021-browser-executor-setup.md) | Browser-prepared scoped executor setup with separate private token files |
+| [0022](0022-saved-executor-output.md) | Opt-in bounded run output with redaction and deletion tombstones |

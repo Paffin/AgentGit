@@ -53,7 +53,10 @@ fn opening_twice_at_once_migrates_exactly_once() {
             .collect();
         let metas: Vec<Meta> = handles.into_iter().map(|h| h.join().unwrap()).collect();
         let m = &metas[0];
-        assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
+        assert_eq!(
+            m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(),
+            Some(ag_storage::meta::SCHEMA_VERSION.to_string().as_str())
+        );
         let tables = m
             .read(|tx| {
                 tx.raw_query(
@@ -80,6 +83,8 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     // schema 1, exactly as it would have been created by release 0.1 on PostgreSQL
     let m = open(&url, schema.name());
     m.write(|tx| {
+        tx.raw_execute("DROP TABLE issue_activity, issues", &[])?;
+        tx.raw_execute("DELETE FROM meta WHERE key = 'task_scheduling'", &[])?;
         tx.raw_execute("DROP TABLE jobs", &[])?;
         tx.raw_execute(
             "DROP INDEX proposals_by_created, proposals_by_state_created, proposals_by_stream_created",
@@ -92,14 +97,20 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     drop(m);
 
     let m = open(&url, schema.name());
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
+    assert_eq!(
+        m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(),
+        Some(ag_storage::meta::SCHEMA_VERSION.to_string().as_str())
+    );
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "data survives the migration");
     let job = m.write(|tx| tx.job_enqueue("k", &serde_json::json!({}), None, Timestamp::from_millis(0))).unwrap();
     assert_eq!(job.attempts, 0, "the jobs table exists again");
 
     m.write(|tx| tx.raw_execute("UPDATE meta SET value = '99' WHERE key = 'schema'", &[])).unwrap();
     let err = Meta::open_postgres(&url, schema.name(), Arc::new(SystemClock), Limits::default()).err().unwrap();
-    assert!(matches!(err, MetaError::UnsupportedSchema { found: 99, supported: 3 }), "{err}");
+    assert!(
+        matches!(err, MetaError::UnsupportedSchema { found: 99, supported } if supported == ag_storage::meta::SCHEMA_VERSION),
+        "{err}"
+    );
 }
 
 #[test]
@@ -316,7 +327,10 @@ fn idle_pooled_connections_that_died_are_replaced_transparently() {
         .unwrap();
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(m.write(|tx| tx.next_counter("c")).unwrap(), 4, "the first use after the kill just works");
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
+    assert_eq!(
+        m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(),
+        Some(ag_storage::meta::SCHEMA_VERSION.to_string().as_str())
+    );
 }
 
 #[test]
@@ -582,4 +596,33 @@ fn tls_connections_work_and_certificates_are_verified_when_asked() {
     let bad_ca = verify.replace(&ca, "/nonexistent/ca.pem");
     let err = Meta::open_postgres(&bad_ca, schema.name(), clock, Limits::default()).err().unwrap();
     assert!(matches!(err, MetaError::Invalid(_)), "{err}");
+}
+
+#[test]
+fn issues_survive_reopen_with_comments_and_compare_and_swap() {
+    let Some(url) = url() else { return };
+    let schema = TempSchema::new(&url);
+    let m = open(&url, schema.name());
+    let created = m
+        .write(|tx| {
+            let issue = tx.insert_issue("Migration", "Keep history", "user:author", None)?;
+            tx.add_issue_activity(issue.number, "commented", "Ready", "user:reviewer")?;
+            Ok(issue)
+        })
+        .unwrap();
+    drop(m);
+    let m = open(&url, schema.name());
+    let mut row = m.read(|tx| tx.issue(created.number)).unwrap().unwrap();
+    assert_eq!(row.title, "Migration");
+    assert_eq!(m.read(|tx| tx.issue_activity(created.number, 0, 10)).unwrap()[0].body, "Ready");
+    row.state = "closed".into();
+    assert!(m.write(|tx| tx.update_issue(&row, 1)).unwrap());
+    assert!(!m.write(|tx| tx.update_issue(&row, 1)).unwrap());
+    let rows = m
+        .read(|tx| {
+            tx.issues(ag_storage::meta::IssueFilter { state: "closed", query: "migration", before: 0, limit: 10 })
+        })
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].revision, 2);
 }

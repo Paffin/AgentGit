@@ -9,6 +9,7 @@ import { useServerNow } from '@/composables/useNow'
 import { formatDuration, shortId } from '@/lib/format'
 import { runHealth } from '@/lib/runs'
 import { useBoard } from '@/stores/board'
+import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
 import Badge from '@/ui/Badge.vue'
 import Button from '@/ui/Button.vue'
@@ -22,6 +23,7 @@ import type { Column } from '@/ui/types'
 
 const props = defineProps<{ repo: string }>()
 const board = useBoard()
+const auth = useAuth()
 const prefs = usePrefs()
 const now = useServerNow()
 
@@ -46,7 +48,7 @@ const columns: Column[] = [
   { key: 'task', label: 'Task', width: 'minmax(0, 1.6fr)', hideBelow: 800 },
   { key: 'status', label: 'Status', width: '8.5rem' },
   { key: 'started_at_ms', label: 'Started', width: '7rem', hideBelow: 900 },
-  { key: 'heartbeat', label: 'Heartbeat', width: '9rem' },
+  { key: 'heartbeat', label: 'Heartbeat', width: '9rem', hideBelow: 600 },
   { key: 'summary', label: 'Summary', width: 'minmax(0, 1.4fr)', hideBelow: 1100 },
 ]
 const TONE: Record<string, 'ok' | 'info' | 'warn' | 'bad' | 'neutral'> = {
@@ -90,8 +92,16 @@ const options = [
       :loading="!runs.settled.value"
     >
       <template #cell-identity="{ row }">
-        <IdentityLabel :identity="(row as Run).identity" />
+        <RouterLink
+          v-if="auth.capabilities?.features.includes('agents.run_lookup')"
+          :to="`/repos/${repo.split('/').map(encodeURIComponent).join('/')}/runs/${encodeURIComponent((row as Run).run_id)}`"
+          ><IdentityLabel :identity="(row as Run).identity"
+        /></RouterLink>
+        <IdentityLabel v-else :identity="(row as Run).identity" />
         <p class="faint mono id">{{ (row as Run).run_id }}</p>
+        <p v-if="(row as Run).status === 'running'" class="faint compact-heartbeat">
+          Heartbeat <RelativeTime :ms="(row as Run).last_heartbeat_ms" />
+        </p>
       </template>
       <template #cell-task="{ row }"
         ><RouterLink
@@ -165,6 +175,14 @@ const options = [
 }
 .id {
   font-size: var(--fs-xs);
+}
+.compact-heartbeat {
+  display: none;
+}
+@media (max-width: 599px) {
+  .compact-heartbeat {
+    display: block;
+  }
 }
 .warn {
   color: var(--warn);

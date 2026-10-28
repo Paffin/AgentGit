@@ -11,6 +11,7 @@ import (
 
 // Deferral reasons (stable strings: metrics labels and status output).
 const (
+	ReasonOperatorPause      = "operator_pause"      // repository operator paused new task launches
 	ReasonExclusiveLease     = "exclusive_lease"     // someone else holds an exclusive lease on an overlapping scope
 	ReasonForeignLease       = "foreign_lease"       // someone else holds a soft lease on an overlapping scope
 	ReasonRunningTask        = "running_task"        // one of our sessions works on an overlapping scope

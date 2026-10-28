@@ -630,18 +630,12 @@ func TestOrphanedRunIsReapedAndItsLeaseReleased(t *testing.T) {
 	o.waitReady()
 
 	// An agent run nobody supervises: started with the agent's own credential, taking a lease.
-	key, err := agentkey.Generate()
-	if err != nil {
-		t.Fatal(err)
-	}
 	m, err := w.Srv.Admin.MintCredential(ctx, agwp.MintRequest{Subject: "agent:ghost", TTLSecs: 600, Scope: agwp.CredentialScope{Repos: []string{w.Repo}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ghost := w.Srv.Client(m.Token.Reveal(), "ghost")
-	if _, err := ghost.RegisterAgent(ctx, w.Repo, "ghost", key.PublicHex()); err != nil {
-		t.Fatalf("register: %v", err)
-	}
+	// Startup has already registered and verified the executor's local key.
 	run, err := ghost.StartRun(ctx, w.Repo, "ghost", "")
 	if err != nil {
 		t.Fatal(err)

@@ -76,6 +76,9 @@ caps! {
     AgentRead => "agent.read",
     AgentRegister => "agent.register",
     AgentRun => "agent.run",
+    IssueRead => "issue.read",
+    IssueWrite => "issue.write",
+    IssueManage => "issue.manage",
     TaskRead => "task.read",
     TaskWrite => "task.write",
     LeaseRead => "lease.read",
@@ -162,6 +165,7 @@ impl Role {
             AttestationRead,
             AgentRead,
             TaskRead,
+            IssueRead,
             LeaseRead,
             ProvenanceRead,
             Predict,
@@ -183,6 +187,7 @@ impl Role {
             AgentRegister,
             AgentRun,
             TaskWrite,
+            IssueWrite,
             LeaseWrite,
             ProvenanceWrite,
         ];
@@ -467,6 +472,7 @@ impl Binding {
 /// administer the installation (credentials, roles, policy, repositories, maintenance), and the operator powers
 /// over other agents. A test pins that every capability only administrators have is listed here.
 pub const NEVER_DELEGATED: &[Cap] = &[
+    Cap::IssueManage,
     Cap::RepoCreate,
     Cap::RepoConfigure,
     Cap::StreamCas,

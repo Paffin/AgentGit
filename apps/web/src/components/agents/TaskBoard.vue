@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
+import { randomHex } from '@/api/client'
+import { useAssignableAgents } from '@/composables/useAssignableAgents'
 import { ApiError, describeError } from '@/api/errors'
 import type { Task } from '@/api/types'
 import { useLiveReload } from '@/composables/useLiveReload'
@@ -22,17 +24,20 @@ import RelativeTime from '@/ui/RelativeTime.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import TextArea from '@/ui/TextArea.vue'
 import TextField from '@/ui/TextField.vue'
+import SelectField from '@/ui/SelectField.vue'
 
 const props = defineProps<{ repo: string }>()
 const auth = useAuth()
 const board = useBoard()
 const toasts = useToasts()
 
-const tasks = useResource<Task[]>(() => api.agents.tasks(props.repo), { watch: [() => props.repo] })
+const tasks = useResource<Task[]>(() => api.agents.tasks(props.repo), {
+  watch: [() => props.repo, () => auth.token],
+})
 useLiveReload(['task', 'run'], () => tasks.reload())
 
 const COLUMNS = [
-  { id: 'open', title: 'Open', hint: 'Waiting for an owner' },
+  { id: 'open', title: 'Open', hint: 'Queued or waiting for prerequisites' },
   { id: 'in_progress', title: 'In progress', hint: 'Claimed by a run' },
   { id: 'done', title: 'Done', hint: 'Finished' },
   { id: 'cancelled', title: 'Cancelled', hint: 'Dropped' },
@@ -49,18 +54,54 @@ const waitingFor = (t: Task) => t.depends_on.filter((d) => byId.value.get(d)?.st
 
 // ---- create -----------------------------------------------------------------------------------------
 const creating = ref(false)
+const assignee = ref('')
+const assignment = useAssignableAgents(
+  () => props.repo,
+  () => creating.value,
+)
 const title = ref('')
 const description = ref('')
 const scope = ref('')
 const depends = ref<string[]>([])
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
+let context = 0,
+  controller: AbortController | undefined,
+  requestId = randomHex()
+watch(
+  [title, description, scope, depends, assignee],
+  () => {
+    requestId = randomHex()
+  },
+  { deep: true, flush: 'sync' },
+)
+watch(
+  [() => props.repo, () => auth.token],
+  () => {
+    context++
+    controller?.abort()
+    creating.value = false
+    busy.value = false
+    title.value = ''
+    description.value = ''
+    scope.value = ''
+    depends.value = []
+    assignee.value = ''
+    error.value = null
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  context++
+  controller?.abort()
+})
 const canCreate = computed(() => auth.can(props.repo, 'createTask'))
 const candidates = computed(() =>
   (tasks.data.value ?? []).filter((t) => t.state !== 'cancelled' && t.state !== 'done'),
 )
 
 function openCreate() {
+  assignee.value = ''
   title.value = ''
   description.value = ''
   scope.value = ''
@@ -69,29 +110,45 @@ function openCreate() {
   creating.value = true
 }
 async function create() {
+  if (busy.value || !canCreate.value || !title.value.trim()) return
+  const mine = context
+  controller = new AbortController()
+  const request = {
+    token: auth.token,
+    signal: controller.signal,
+    idempotencyKey: requestId,
+    quietUnauthenticated: true,
+  }
   busy.value = true
   error.value = null
   try {
-    await api.agents.createTask(props.repo, {
-      title: title.value.trim(),
-      description: description.value.trim() || undefined,
-      scope: scope.value
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-      depends_on: depends.value,
-    })
+    await api.agents.createTask(
+      props.repo,
+      {
+        title: title.value.trim(),
+        description: description.value.trim() || undefined,
+        scope: scope.value
+          .split(/[\n,]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+        depends_on: depends.value,
+        assignee: assignment.supported.value ? assignee.value : undefined,
+      },
+      request,
+    )
+    if (mine !== context) return
     creating.value = false
     toasts.ok('Task created')
     await tasks.reload()
     board.touched(['tasks'])
   } catch (e) {
+    if (mine !== context) return
     error.value =
       e instanceof ApiError
         ? e
         : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 
@@ -174,16 +231,33 @@ const toggle = (id: string, on: boolean) => {
 
     <Dialog v-model="creating" title="New task" :dismissable="!busy" size="lg">
       <form id="new-task" class="form" @submit.prevent="create">
+        <SelectField
+          v-if="assignment.supported.value"
+          v-model="assignee"
+          label="Assigned agent"
+          :options="assignment.options.value"
+          :disabled="busy || assignment.agents.loading.value"
+          hint="Configured executors may pick up ready tasks after you create them."
+        />
+        <ErrorState
+          v-if="assignment.agents.error.value"
+          compact
+          what="available agents"
+          :error="assignment.agents.error.value"
+          @retry="assignment.agents.reload()"
+        />
         <TextField
           v-model="title"
+          :disabled="busy"
           label="Title"
           required
           autofocus
           placeholder="Extract the session store"
         />
-        <TextArea v-model="description" label="Description" :rows="3" />
+        <TextArea v-model="description" :disabled="busy" label="Description" :rows="3" />
         <TextArea
           v-model="scope"
+          :disabled="busy"
           label="Scope (path globs)"
           :rows="2"
           mono
@@ -195,6 +269,7 @@ const toggle = (id: string, on: boolean) => {
           <Checkbox
             v-for="t in candidates"
             :key="t.id"
+            :disabled="busy"
             :model-value="depends.includes(t.id)"
             :label="t.title"
             @update:model-value="toggle(t.id, $event)"

@@ -712,3 +712,72 @@ func TestNewRejectsBrokenRoutes(t *testing.T) {
 		t.Fatal("bad regexp accepted")
 	}
 }
+
+func TestOperatorPauseDefersWorkUntilResumed(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "bot", "sleep 0.05"))
+	if _, err := h.w.Orch.SetTaskScheduling(context.Background(), repo, true, "Operator maintenance", 0); err != nil {
+		t.Fatal(err)
+	}
+	task := h.addTask("Wait for the operator", []string{"src/**"})
+	h.reconcile()
+	if len(h.runs()) != 0 || h.state(task) != agwp.TaskOpen {
+		t.Fatal("paused work started")
+	}
+	if d, ok := h.deferral(task); !ok || d.Reason != ReasonOperatorPause {
+		t.Fatalf("deferral = %+v, present=%v", d, ok)
+	}
+	if !h.sched.Status().Paused {
+		t.Fatal("pause missing from status")
+	}
+	if _, err := h.w.Orch.SetTaskScheduling(context.Background(), repo, false, "", 1); err != nil {
+		t.Fatal(err)
+	}
+	h.reconcile()
+	h.eventually("resumed work to finish", func() bool { return h.state(task) == agwp.TaskDone })
+	h.waitIdle()
+}
+
+func TestQueuedAssignmentOverridesTheDefaultExecutor(t *testing.T) {
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Default = "first" }, nil,
+		command(t, "first", "sleep 0.05"), command(t, "chosen", "sleep 0.05"))
+	keys, err := agentkey.OpenStore(filepath.Join(h.dir, "keys"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := keys.Ensure("chosen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.w.Orch.RegisterAgent(context.Background(), repo, "chosen", key.PublicHex()); err != nil {
+		t.Fatal(err)
+	}
+	id := h.addTask("Explicit worker", []string{"src/**"})
+	if _, err := h.w.Orch.AssignTask(context.Background(), repo, id, "chosen", ""); err != nil {
+		t.Fatal(err)
+	}
+	h.reconcile()
+	h.eventually("chosen executor to finish", func() bool { return h.state(id) == agwp.TaskDone })
+	h.waitIdle()
+	runs := h.runs()
+	if len(runs) != 1 || runs[0].Agent != "chosen" {
+		t.Fatalf("assignment ignored: %+v", runs)
+	}
+}
+
+func TestSchedulerReportsItsExecutorConnection(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "connected-bot", "sleep 0.05"))
+	h.reconcile()
+	agents, err := h.orch.ListAgents(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, agent := range agents {
+		if agent.Name == "connected-bot" {
+			if agent.Executor == nil || !agent.Executor.Connected || agent.Executor.Slots != 4 {
+				t.Fatalf("executor presence = %+v", agent.Executor)
+			}
+			return
+		}
+	}
+	t.Fatal("registered executor missing")
+}

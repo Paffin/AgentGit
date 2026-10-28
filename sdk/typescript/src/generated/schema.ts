@@ -192,6 +192,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/agents/{agent}/executor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report expiring executor connectivity */
+        put: operations["agent.executor.report"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/attestations": {
         parameters: {
             query?: never;
@@ -425,6 +442,76 @@ export interface paths {
         get: operations["history.resolve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List user issues */
+        get: operations["issue.list"];
+        put?: never;
+        /** Create a user issue */
+        post: operations["issue.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a user issue */
+        get: operations["issue.get"];
+        /** Edit or close an issue at an expected version */
+        put: operations["issue.update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues/{number}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read issue discussion and history */
+        get: operations["issue.activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues/{number}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an issue comment */
+        post: operations["issue.comment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -985,6 +1072,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up a current or historical agent run */
+        get: operations["agent.get_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/runs/{run_id}/complete": {
         parameters: {
             query?: never;
@@ -1014,6 +1118,25 @@ export interface paths {
         /** Run heartbeat */
         post: operations["agent.heartbeat"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/runs/{run_id}/output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read saved executor output */
+        get: operations["agent.output.get"];
+        /** Save bounded executor output */
+        put: operations["agent.output.save"];
+        post?: never;
+        /** Delete saved executor output */
+        delete: operations["agent.output.delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1106,6 +1229,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/tasks/scheduling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the gate for new task launches */
+        get: operations["task.scheduling.get"];
+        /** Pause or resume new task launches */
+        put: operations["task.scheduling.set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/tasks/{id}": {
         parameters: {
             query?: never;
@@ -1116,6 +1257,23 @@ export interface paths {
         /** One task */
         get: operations["task.get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/tasks/{id}/assignee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign queued work to a registered agent */
+        put: operations["task.assign"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1356,6 +1514,19 @@ export interface components {
             /** @default  */
             task: string;
         };
+        AddIssueCommentRequest: {
+            /** @default  */
+            body: string;
+            /** @default  */
+            idempotency_key: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /** @default  */
+            repo: string;
+        };
         Agent: {
             /**
              * Format: int64
@@ -1364,6 +1535,8 @@ export interface components {
             created_at_ms: number;
             /** @default false */
             disabled: boolean;
+            /** @default null */
+            executor: components["schemas"]["ExecutorPresence"] | null;
             /** @default  */
             identity: string;
             /** @default  */
@@ -1402,6 +1575,22 @@ export interface components {
             changeset_ids: string[];
             /** @default  */
             next_page_token: string;
+        };
+        AssignTaskRequest: {
+            /**
+             * @description Registered agent name; empty restores automatic routing.
+             * @default
+             */
+            agent: string;
+            /**
+             * @description Owner inspected by the caller; empty means unassigned.
+             * @default
+             */
+            expected_owner: string;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
         };
         Attestation: {
             /** @default  */
@@ -1775,6 +1964,18 @@ export interface components {
             /** @default  */
             path: string;
         };
+        CreateIssueRequest: {
+            /** @default  */
+            body: string;
+            /** @default  */
+            idempotency_key: string;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            task_id: string;
+            /** @default  */
+            title: string;
+        };
         CreateProposalRequest: {
             /** @default  */
             description: string;
@@ -1821,16 +2022,32 @@ export interface components {
             repo: string;
         };
         CreateTaskRequest: {
+            /**
+             * @description Optional initial agent assignment, saved before the task becomes visible.
+             * @default
+             */
+            assignee: string;
             /** @default [] */
             depends_on: string[];
             /** @default  */
             description: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_issue_version: number;
             /** @default  */
             idempotency_key: string;
             /** @default  */
             repo: string;
             /** @default [] */
             scope: string[];
+            /**
+             * Format: int64
+             * @description Optional source issue. Creation and linking commit atomically.
+             * @default 0
+             */
+            source_issue: number;
             /** @default  */
             title: string;
         };
@@ -2038,6 +2255,34 @@ export interface components {
              * @default
              */
             topic: string;
+        };
+        ExecutorPresence: {
+            /**
+             * Format: int32
+             * @default 0
+             */
+            available: number;
+            /** @default false */
+            connected: boolean;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expires_at_ms: number;
+            /** @default  */
+            name: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            reported_at_ms: number;
+            /** @default  */
+            reported_by: string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            slots: number;
         };
         ExtendLeaseRequest: {
             /** @default  */
@@ -2275,6 +2520,15 @@ export interface components {
              */
             rev: string;
         };
+        GetIssueRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /** @default  */
+            repo: string;
+        };
         GetJobRequest: {
             /** @default  */
             job_id: string;
@@ -2314,9 +2568,25 @@ export interface components {
             /** @default  */
             repo: string;
         };
+        GetRunOutputRequest: {
+            /** @default  */
+            repo: string;
+            /** @default  */
+            run_id: string;
+        };
+        GetRunRequest: {
+            /** @default  */
+            repo: string;
+            /** @default  */
+            run_id: string;
+        };
         GetTaskRequest: {
             /** @default  */
             id: string;
+            /** @default  */
+            repo: string;
+        };
+        GetTaskSchedulingRequest: {
             /** @default  */
             repo: string;
         };
@@ -2488,6 +2758,62 @@ export interface components {
              * @default
              */
             state: string;
+        };
+        /** @description User-facing tracker issues are distinct from executable agent tasks. */
+        Issue: {
+            /** @default  */
+            author: string;
+            /** @default  */
+            body: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            created_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /** @default  */
+            state: string;
+            /** @default  */
+            task_id: string;
+            /** @default  */
+            title: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
+        };
+        IssueActivity: {
+            /** @default  */
+            author: string;
+            /** @default  */
+            body: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            created_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            id: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            issue_number: number;
+            /** @default  */
+            kind: string;
         };
         Job: {
             /**
@@ -2682,6 +3008,49 @@ export interface components {
             next_page_token: string;
             /** @default  */
             tree_id: string;
+        };
+        ListIssueActivityRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            page_size: number;
+            /** @default  */
+            page_token: string;
+            /** @default  */
+            repo: string;
+        };
+        ListIssueActivityResponse: {
+            /** @default [] */
+            activity: components["schemas"]["IssueActivity"][];
+            /** @default  */
+            next_page_token: string;
+        };
+        ListIssuesRequest: {
+            /**
+             * Format: int32
+             * @default 0
+             */
+            page_size: number;
+            /** @default  */
+            page_token: string;
+            /** @default  */
+            query: string;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            state: string;
+        };
+        ListIssuesResponse: {
+            /** @default [] */
+            issues: components["schemas"]["Issue"][];
+            /** @default  */
+            next_page_token: string;
         };
         ListJobsRequest: {
             /**
@@ -3611,6 +3980,29 @@ export interface components {
              */
             stream_count: number;
         };
+        ReportExecutorRequest: {
+            /** @default  */
+            agent: string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            available: number;
+            /** @default  */
+            name: string;
+            /** @default  */
+            repo: string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            slots: number;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            ttl_secs: number;
+        };
         RequestValidationRequest: {
             /**
              * @description Checks to validate (default: all required checks that have a runner).
@@ -3783,6 +4175,36 @@ export interface components {
             /** @default  */
             task_id: string;
         };
+        RunOutput: {
+            /** @default false */
+            available: boolean;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            captured_at_ms: number;
+            /** @default  */
+            run_id: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            sequence: number;
+            /** @default  */
+            stderr: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            stderr_bytes: number;
+            /** @default  */
+            stdout: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            stdout_bytes: number;
+        };
         RunQueueRequest: {
             /**
              * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
@@ -3847,6 +4269,14 @@ export interface components {
              * @default 0
              */
             timeout_secs: number;
+        };
+        SaveRunOutputRequest: {
+            /** @default null */
+            output: components["schemas"]["RunOutput"] | null;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            run_id: string;
         };
         SearchMatch: {
             /**
@@ -3937,6 +4367,19 @@ export interface components {
             repo: string;
             /** @default  */
             stream: string;
+        };
+        SetTaskSchedulingRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default false */
+            paused: boolean;
+            /** @default  */
+            reason: string;
+            /** @default  */
+            repo: string;
         };
         StartRunRequest: {
             /** @default  */
@@ -4063,6 +4506,24 @@ export interface components {
              */
             updated_at_ms: number;
         };
+        TaskScheduling: {
+            /** @default false */
+            paused: boolean;
+            /** @default  */
+            reason: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /** @default  */
+            updated_by: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
+        };
         TreeEntry: {
             /** @default  */
             blob_id: string;
@@ -4083,6 +4544,29 @@ export interface components {
             name: string;
             /** @default  */
             repo: string;
+        };
+        UpdateIssueRequest: {
+            /** @default  */
+            body: string;
+            /**
+             * Format: int64
+             * @description Required: rejects changes made after the caller loaded the issue.
+             * @default 0
+             */
+            expected_version: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            state: string;
+            /** @default  */
+            task_id: string;
+            /** @default  */
+            title: string;
         };
         UpdateProposalRequest: {
             /** @default  */
@@ -4696,6 +5180,45 @@ export interface operations {
             };
         };
     };
+    "agent.executor.report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                agent: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportExecutorRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutorPresence"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     "integration.attestations": {
         parameters: {
             query?: {
@@ -5247,6 +5770,234 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolveRevResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.list": {
+        parameters: {
+            query?: {
+                page_size?: number;
+                page_token?: string;
+                query?: string;
+                state?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListIssuesResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.activity": {
+        parameters: {
+            query?: {
+                page_size?: number;
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListIssueActivityResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.comment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddIssueCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueActivity"];
                 };
             };
             /** @description Error */
@@ -6839,6 +7590,41 @@ export interface operations {
             };
         };
     };
+    "agent.get_run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     "agent.complete": {
         parameters: {
             query?: never;
@@ -6904,6 +7690,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HeartbeatResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "agent.output.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "agent.output.save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveRunOutputRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "agent.output.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Empty"];
                 };
             };
             /** @description Error */
@@ -7181,6 +8076,78 @@ export interface operations {
             };
         };
     };
+    "task.scheduling.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskScheduling"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.scheduling.set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskSchedulingRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskScheduling"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     "task.get": {
         parameters: {
             query?: never;
@@ -7195,6 +8162,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignTaskRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

@@ -53,6 +53,18 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
+    /// Expiring operator reports distinguish connected executors from registered keys.
+    pub const EXECUTOR_PRESENCE: &str = "agents.executor_presence";
+    /// Explicit queued task assignment.
+    pub const TASK_ASSIGNMENT: &str = "tasks.assignment";
+    /// Opt-in bounded executor output snapshots.
+    pub const RUN_OUTPUT: &str = "agents.run_output";
+    /// Exact run lookup.
+    pub const RUN_LOOKUP: &str = "agents.run_lookup";
+    /// Operators can pause and resume new task-bound agent runs.
+    pub const TASK_SCHEDULING: &str = "task.scheduling";
+    /// Repository issue tracker with durable discussion and optimistic editing.
+    pub const ISSUES: &str = "issues.v1";
 
     /// Review submission can atomically require the exact head inspected by the caller.
     pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
@@ -70,6 +82,12 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         TREE_SEARCH,
+        ISSUES,
+        TASK_SCHEDULING,
+        RUN_LOOKUP,
+        RUN_OUTPUT,
+        TASK_ASSIGNMENT,
+        EXECUTOR_PRESENCE,
     ];
 }
 

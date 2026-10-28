@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADMIN_TOKEN_VAR,
+  agentWorkLines,
+  matchesAgentTask,
   TOKEN_SLOT,
   connectSteps,
   directoryFor,
@@ -64,4 +66,26 @@ describe('connect steps', () => {
     expect(shellQuote("it's")).toBe(`'it'\\''s'`)
     expect(directoryFor('acme/webapp')).toBe('webapp')
   })
+})
+
+describe('task handoff commands', () => {
+  it('links the proposal to the exact task and quotes the task identifier', () => {
+    const lines = agentWorkLines({
+      origin: 'https://ag.example.com',
+      repo: 'acme/app',
+      token: 'agt_test',
+      title: 'Fix parser',
+      taskId: "task_one'quoted",
+    })
+    expect(lines?.at(-1)).toBe("ag push --task 'task_one'\\''quoted' -t 'Fix parser'")
+  })
+})
+
+it('counts only the same task and exact agent principal, including run identities', () => {
+  expect(matchesAgentTask('task_one', 'agent:worker', 'task_one', 'agent:worker#run_1')).toBe(true)
+  expect(matchesAgentTask('task_one', 'agent:worker', 'task_other', 'agent:worker#run_1')).toBe(
+    false,
+  )
+  expect(matchesAgentTask('task_one', 'agent:worker', 'task_one', 'agent:worker-other')).toBe(false)
+  expect(matchesAgentTask('', 'agent:worker', '', 'agent:worker')).toBe(false)
 })

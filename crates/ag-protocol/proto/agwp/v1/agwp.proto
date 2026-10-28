@@ -955,6 +955,23 @@ message RunQueueResponse {
 // Agents: identities, runs, tasks, leases, provenance, prediction
 // ---------------------------------------------------------------------------
 
+message ExecutorPresence {
+  string name = 1;
+  string reported_by = 2;
+  int64 reported_at_ms = 3;
+  int64 expires_at_ms = 4;
+  uint32 slots = 5;
+  uint32 available = 6;
+  bool connected = 7;
+}
+message ReportExecutorRequest {
+  string repo = 1;
+  string agent = 2;
+  string name = 3;
+  uint32 slots = 4;
+  uint32 available = 5;
+  uint32 ttl_secs = 6;
+}
 message Agent {
   string name = 1;
   string identity = 2;
@@ -962,6 +979,7 @@ message Agent {
   string role = 4;
   int64 created_at_ms = 5;
   bool disabled = 6;
+  ExecutorPresence executor = 7;
 }
 
 message RegisterAgentRequest {
@@ -991,6 +1009,20 @@ message Run {
   int64 last_heartbeat_ms = 8;
   string summary = 9;
 }
+
+message RunOutput {
+  string run_id = 1;
+  bool available = 2;
+  uint64 sequence = 3;
+  string stdout = 4;
+  string stderr = 5;
+  uint64 stdout_bytes = 6;
+  uint64 stderr_bytes = 7;
+  int64 captured_at_ms = 8;
+}
+message GetRunOutputRequest { string repo = 1; string run_id = 2; }
+message SaveRunOutputRequest { string repo = 1; string run_id = 2; RunOutput output = 3; }
+message GetRunRequest { string repo = 1; string run_id = 2; }
 
 message StartRunRequest {
   string repo = 1;
@@ -1073,6 +1105,20 @@ message CreateTaskRequest {
   repeated string scope = 4;
   repeated string depends_on = 5;
   string idempotency_key = 6;
+  // Optional source issue. Creation and linking commit atomically.
+  uint64 source_issue = 7;
+  uint64 expected_issue_version = 8;
+  // Optional initial agent assignment, saved before the task becomes visible.
+  string assignee = 9;
+}
+
+message AssignTaskRequest {
+  string repo = 1;
+  string id = 2;
+  // Registered agent name; empty restores automatic routing.
+  string agent = 3;
+  // Owner inspected by the caller; empty means unassigned.
+  string expected_owner = 4;
 }
 
 message GetTaskRequest {
@@ -1684,8 +1730,30 @@ service IntegrationService {
   rpc RunQueue(RunQueueRequest) returns (RunQueueResponse);
 }
 
+message TaskScheduling {
+  bool paused = 1;
+  uint64 version = 2;
+  string reason = 3;
+  string updated_by = 4;
+  int64 updated_at_ms = 5;
+}
+message GetTaskSchedulingRequest { string repo = 1; }
+message SetTaskSchedulingRequest {
+  string repo = 1;
+  bool paused = 2;
+  string reason = 3;
+  uint64 expected_version = 4;
+}
+
 service AgentService {
+  rpc GetRun(GetRunRequest) returns (Run);
+  rpc GetRunOutput(GetRunOutputRequest) returns (RunOutput);
+  rpc SaveRunOutput(SaveRunOutputRequest) returns (RunOutput);
+  rpc DeleteRunOutput(GetRunOutputRequest) returns (Empty);
+  rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
+  rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);
+  rpc ReportExecutor(ReportExecutorRequest) returns (ExecutorPresence);
   rpc List(ListAgentsRequest) returns (ListAgentsResponse);
   rpc StartRun(StartRunRequest) returns (Run);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -1693,6 +1761,7 @@ service AgentService {
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc ReapRuns(ReapRunsRequest) returns (ReapRunsResponse);
   rpc CreateTask(CreateTaskRequest) returns (Task);
+  rpc AssignTask(AssignTaskRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc AddDependency(AddDependencyRequest) returns (Task);
@@ -1748,4 +1817,46 @@ message GetCandidateRequest {
   string expected_tree_id = 3;
   uint32 page_size = 4;
   string page_token = 5;
+}
+
+// User-facing tracker issues are distinct from executable agent tasks.
+message Issue {
+  uint64 number = 1;
+  string title = 2;
+  string body = 3;
+  string author = 4;
+  string state = 5;
+  int64 created_at_ms = 6;
+  int64 updated_at_ms = 7;
+  uint64 version = 8;
+  string task_id = 9;
+}
+message IssueActivity {
+  uint64 id = 1;
+  uint64 issue_number = 2;
+  string kind = 3;
+  string body = 4;
+  string author = 5;
+  int64 created_at_ms = 6;
+}
+message CreateIssueRequest { string repo = 1; string title = 2; string body = 3; string task_id = 4; string idempotency_key = 5; }
+message GetIssueRequest { string repo = 1; uint64 number = 2; }
+message ListIssuesRequest { string repo = 1; string state = 2; string query = 3; uint32 page_size = 4; string page_token = 5; }
+message ListIssuesResponse { repeated Issue issues = 1; string next_page_token = 2; }
+message UpdateIssueRequest {
+  string repo = 1; uint64 number = 2; string title = 3; string body = 4;
+  string state = 5; string task_id = 6;
+  // Required: rejects changes made after the caller loaded the issue.
+  uint64 expected_version = 7;
+}
+message AddIssueCommentRequest { string repo = 1; uint64 number = 2; string body = 3; string idempotency_key = 4; }
+message ListIssueActivityRequest { string repo = 1; uint64 number = 2; uint32 page_size = 3; string page_token = 4; }
+message ListIssueActivityResponse { repeated IssueActivity activity = 1; string next_page_token = 2; }
+service IssueService {
+  rpc Create(CreateIssueRequest) returns (Issue);
+  rpc Get(GetIssueRequest) returns (Issue);
+  rpc List(ListIssuesRequest) returns (ListIssuesResponse);
+  rpc Update(UpdateIssueRequest) returns (Issue);
+  rpc AddComment(AddIssueCommentRequest) returns (IssueActivity);
+  rpc ListActivity(ListIssueActivityRequest) returns (ListIssueActivityResponse);
 }

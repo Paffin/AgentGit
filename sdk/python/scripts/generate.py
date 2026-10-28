@@ -269,7 +269,10 @@ def build_ops() -> list[Op]:
             ns, name = place_of(op_id)
             body = bodies.get("request") or content_kind(o.get("requestBody", {}).get("content")) or "none"
             response = bodies.get("response") or content_kind(o["responses"]["200"].get("content")) or "json"
-            path_params = [p["name"] for p in parameters if p["in"] == "path"]
+            path_schemas = {
+                p["name"]: p.get("schema", {"type": "string"}) for p in parameters if p["in"] == "path"
+            }
+            path_params = list(path_schemas)
             repo_scoped = "owner" in path_params and "rname" in path_params
             params: list[Param] = []
             if repo_scoped:
@@ -277,7 +280,7 @@ def build_ops() -> list[Op]:
             for p in path_params:
                 if p in ("owner", "rname"):
                     continue
-                params.append(Param(py_name(p), p, "str", True))
+                params.append(Param(py_name(p), p, model_type(path_schemas[p]), True))
             used = {p.wire for p in params}
             if body == "json":
                 for wire, prop in sorted(req_schema.get("properties", {}).items()):

@@ -243,6 +243,12 @@ review, close, policy, stream compare-and-swap, garbage collection, credential a
 and attestation, repository administration, agent registration and validation enqueueing. Service credential
 variables cannot be passed to executors either.
 
+### Operator pause from the Web UI
+
+The repository's **Task execution** control pauses new task-bound runs without interrupting existing sessions. The scheduler reads this persisted server decision, leaves ready tasks queued with `operator_pause`, and resumes placement after an operator permits launches again. It continues to observe completed/cancelled tasks during a pause.
+
+The server independently enforces the gate in the run-creation transaction. Use a server advertising `task.scheduling`; older servers without the endpoint keep their previous behavior. A failed read from a server that implements the endpoint defers the scheduling pass. This control does not install an executor or change its command/model configuration.
+
 ## Executor contract
 
 An executor is how an agent runs: a real program. (There is no built-in simulated agent: it was removed from the
@@ -467,3 +473,28 @@ These are findings, not complaints; each is covered or handled as described.
 ## License
 
 Apache-2.0. Direct dependency: `gopkg.in/yaml.v3` (MIT and Apache-2.0, dual).
+
+### Private token file
+
+The development build accepts `-token-file FILE` for `run` and `check`. It reads the
+orchestrator credential from a separate file instead of putting its value into a
+command line or YAML/JSON configuration. On Unix the file must be private (`chmod
+600`); the file must contain a single token and be at most 16 KiB. The configuration
+uses `server.token_env: AG_ORCH_TOKEN` (the default). Other environment variables
+continue to come from the process environment. `config` and `ops` do not read this
+secret file. See [Web UI connection](../../docs/guides/orchestrator.md#connect-from-the-web-ui-development)
+for the repository-scoped setup wizard.
+
+### Opt-in saved output (development)
+
+An executor's `publish_output: true` saves the last 32 KiB of stdout and stderr to
+AgentGit when a session ends. The default remains false. The session credential,
+private signing-key hex encodings and known inherited/configured environment
+values are scrubbed before upload. This is best-effort redaction, not a guarantee
+that arbitrary output is safe to share; repository readers can inspect the result.
+
+The server must advertise `agents.run_output`. Operators can delete saved text;
+a deletion marker prevents a delayed retry from recreating it. Output capture is
+independent of the task outcome, does not grant agent credentials extra powers,
+and cannot produce a successful check or approval. Failure to upload output is
+reported by the supervisor and does not turn a failed task into a successful one.

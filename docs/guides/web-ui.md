@@ -342,6 +342,8 @@ Leaving the wizard does not delete a repository that was already created, and a 
 
 Choose **Import from GitHub / GitLab** on Home or Repositories to upload a full Git bundle. **Check the import** stages it for review; only **Publish repository** makes the destination available. See the [Git migration guide](migrate-from-git.md) for what transfers and what needs a separate migration.
 
+Before uploading, the page shows which data the Git bundle transfers and which project data needs a separate move. **Save migration summary** downloads a plain-text handoff with counts, branch/tag mappings, warnings and a checklist; **Technical report → Download JSON** keeps the machine-readable record available. After publishing, direct links lead to files, branches and team access. Administration tabs are bookmarkable and survive reloads.
+
 Reopening the import page resumes the saved import for your account. After a temporary error, **Retry previous import** opens the same staged result; an expired credential offers **Sign in again**. **Start new import** clears only this account's local reference, without deleting the staged import on the server. Recovery references are kept in this tab, separately by account; switching accounts hides the previous report. If browser storage is unavailable, keep the page open and save the report before leaving.
 
 ## Edit several files together
@@ -454,3 +456,73 @@ Open **Code → Search code** to find literal text at a branch or revision. Narr
 **Continue searching** examines the next part of the same immutable tree. An empty page does not mean the search is finished when this button is still present. Each request scans at most 1000 files / 16 MiB, and returns at most 50 matching lines in the UI. Files over 1 MiB, files with NUL bytes and invalid UTF-8 are skipped; the result reports their counts. Symbolic-link targets are searched as text, without following links. This first version is a bounded scan, not an indexed-search performance claim.
 
 The page explains when an older server needs an update instead of displaying a misleading empty result. The HTTP and gRPC operation, cursor contract and SDK access are described in [ADR 0015](../adr/0015-bounded-revision-code-search.md) and the [protocol reference](../protocol/agwp-v1.md#literal-content-search).
+
+### Repository issues
+
+Open **Issues** in a repository to search or filter open and closed issues. Writers can create issues and add comments. Authors and administrators can edit, close and reopen them. Each issue has a permanent URL and can link to an existing agent task; closing it does not complete that task.
+
+The browser retains unsent drafts in the current tab, scoped to the signed-in account and repository. If someone edits the issue first, reload and review the current version before explicitly keeping your draft against that version. Comments and descriptions currently display as plain text. Labels, milestones, attachments and importing provider discussions are not yet supported.
+
+The issue tracker requires a server advertising `issues.v1` and metadata schema 4. Take a backup before upgrading; an older server requires restoration of the pre-upgrade database.
+
+From an open issue you own, choose **Create agent task…**, describe the expected result and enter file patterns (one per line). Creation links the task atomically; retrying the same request does not duplicate it. The task page follows runs and resulting change requests. A connected orchestrator may pick up ready work automatically; this action does not prove execution, validation or approval. Closing the original issue remains a separate decision.
+
+The manual **Give an agent work** flow includes the task ID in the `ag push --task` command. Its progress follows only that task and agent, including run-scoped identities. An ended session without a linked change request is shown as ended, not still working. Changing the account or repository clears displayed credentials and cancels pending setup requests. This command-driven path does not claim that an external coding model was launched by the browser.
+
+### Pause and resume task execution
+
+**Agents & work → Task execution** shows whether new task-bound runs are allowed. An administrator or delegator can pause launches with a reason, or resume them after reviewing the effect. Resume makes every ready task eligible for configured executors. Existing runs continue during a pause; cancelling their task asks the connected orchestrator to stop its managed process. A manual external process may need to be stopped separately.
+
+The server enforces the pause when a new task-bound run is created, including direct API clients. It persists after restart. Allowing tasks does not install or connect an executor. This control requires `task.scheduling` and schema 5; take a database backup before upgrading.
+
+### Inspect an agent run
+
+Open a run from **Agent sessions**, the live board or a task page. The permanent URL
+survives completion and does not depend on a recent-run list. The page shows status,
+summary, heartbeat, timing, assigned task and current reservations. **View this run's
+change requests** selects the exact session, including closed and integrated requests.
+A completed session does not mean its changes passed review or were integrated.
+
+For a task-bound run, open its task to inspect dependencies and available cancellation
+actions. Connected orchestrators stop their managed process after seeing cancellation;
+manually launched external processes may need to be stopped separately. Agent summaries
+are not complete stdout logs. This page requires `agents.run_lookup` on the server.
+
+### Choose the agent before execution (development)
+
+In **New task**, or when handing an issue to an agent, choose an **Assigned agent**. The reservation is saved atomically with the task. **Automatic routing** leaves the choice to the configured orchestrator. Registration alone does not install or start an executor.
+
+On a queued task's page, its creator or an operator can use **Choose agent…** to change the reservation or restore automatic routing. A stale assignment is rejected; reopen the dialog after reviewing the current task. Once a run starts, the assignment cannot be changed. Open the linked run to follow that execution and then inspect its change requests for review and integration.
+
+### Executor connection (development)
+
+**Agents & work → Registered agents** separates the agent's enabled key from its executor connection. A recent report shows the executor name, last contact and free slots at that moment. Without a fresh report it shows **No recent report**; a registered key alone is not a connected executor.
+
+The Go orchestrator renews these reports while its scheduler runs. Reports expire automatically, survive server restart and contain no commands, environment variables or credentials. Only an operator can report connectivity; readers can inspect it. Capacity is a snapshot, and a connected orchestrator does not prove that its command, model credentials or next task will succeed. Task assignment remains available when the executor is offline so work can wait for its return. Older orchestrators do not send these reports.
+
+### Set up a task executor (development)
+
+Administrators can choose **Registered agents → Connect an executor…** to prepare
+repository-scoped access and download a task-only orchestrator configuration. Enter
+an agent program installed on the executor host; its arguments are a JSON array and
+only named environment variables are inherited. No model credentials are sent to the
+browser or server. The private token downloads separately, expires in 24 hours, and
+can be revoked from the wizard or credential settings.
+
+Start the development orchestrator on the host using the displayed command. The
+wizard confirms a fresh connection from the service identity it just prepared, then
+the agent can be assigned tasks. Host installation and model availability are still
+external prerequisites. See the [orchestrator guide](orchestrator.md#connect-from-the-web-ui-development).
+
+### Saved executor output (development)
+
+In **Connect an executor**, **Save diagnostic output in AgentGit** is off by default.
+When enabled, the executor saves a bounded stdout/stderr tail at session end. Open
+its run page to switch streams, download text or delete the saved output. Deletion
+preserves the run outcome and audit trail and blocks later uploads for that run.
+Only an operator may save or delete output; repository readers may view it.
+
+At most 32 KiB per stream are saved. This is not a live log stream or a replacement
+for signed checks. Known credentials and private key encodings are removed by the
+orchestrator, but it cannot identify every possible secret. Enable capture only
+when the output is suitable for the repository's readers.

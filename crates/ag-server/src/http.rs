@@ -184,7 +184,13 @@ async fn parse_request<Req: DeserializeOwned>(
             }
         }
         for (k, v) in &params {
-            obj.insert(k.clone(), Value::String(v.clone()));
+            // Issue numbers are numeric path parameters; resource IDs remain strings.
+            let value = if k == "number" {
+                Value::from(v.parse::<u64>().map_err(|_| ApiError::invalid("invalid issue number"))?)
+            } else {
+                Value::String(v.clone())
+            };
+            obj.insert(k.clone(), value);
         }
         if let Some(key) = headers.get("idempotency-key").and_then(|v| v.to_str().ok())
             && !key.is_empty()
@@ -1135,6 +1141,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}",
+        "agent.get_run",
+        "Agent",
+        "Look up a current or historical agent run",
+        v1::GetRunRequest,
+        v1::Run,
+        get_run
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/runs/reap",
@@ -1200,6 +1219,84 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/agents/{agent}/executor",
+        "agent.executor.report",
+        "Agent",
+        "Report expiring executor connectivity",
+        v1::ReportExecutorRequest,
+        v1::ExecutorPresence,
+        report_executor
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.get",
+        "Agent",
+        "Read saved executor output",
+        v1::GetRunOutputRequest,
+        v1::RunOutput,
+        get_run_output
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.save",
+        "Agent",
+        "Save bounded executor output",
+        v1::SaveRunOutputRequest,
+        v1::RunOutput,
+        save_run_output
+    );
+    route!(
+        r,
+        meta,
+        delete,
+        "delete",
+        "/v1/repos/{owner}/{rname}/runs/{run_id}/output",
+        "agent.output.delete",
+        "Agent",
+        "Delete saved executor output",
+        v1::GetRunOutputRequest,
+        v1::Empty,
+        delete_run_output
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/tasks/scheduling",
+        "task.scheduling.get",
+        "Agent",
+        "Read the gate for new task launches",
+        v1::GetTaskSchedulingRequest,
+        v1::TaskScheduling,
+        get_task_scheduling
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/tasks/scheduling",
+        "task.scheduling.set",
+        "Agent",
+        "Pause or resume new task launches",
+        v1::SetTaskSchedulingRequest,
+        v1::TaskScheduling,
+        set_task_scheduling
+    );
+    route!(
+        r,
+        meta,
         get,
         "get",
         "/v1/repos/{owner}/{rname}/tasks/{id}",
@@ -1209,6 +1306,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::GetTaskRequest,
         v1::Task,
         get_task
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/tasks/{id}/assignee",
+        "task.assign",
+        "Agent",
+        "Assign queued work to a registered agent",
+        v1::AssignTaskRequest,
+        v1::Task,
+        assign_task
     );
     route!(
         r,
@@ -1650,6 +1760,84 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     );
 
     crate::jobs_http::add_routes(&mut r, &mut meta);
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/issues",
+        "issue.create",
+        "Issues",
+        "Create a user issue",
+        v1::CreateIssueRequest,
+        v1::Issue,
+        create_issue
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/issues",
+        "issue.list",
+        "Issues",
+        "List user issues",
+        v1::ListIssuesRequest,
+        v1::ListIssuesResponse,
+        list_issues
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/issues/{number}",
+        "issue.get",
+        "Issues",
+        "Read a user issue",
+        v1::GetIssueRequest,
+        v1::Issue,
+        get_issue
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/issues/{number}",
+        "issue.update",
+        "Issues",
+        "Edit or close an issue at an expected version",
+        v1::UpdateIssueRequest,
+        v1::Issue,
+        update_issue
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/issues/{number}/comments",
+        "issue.comment",
+        "Issues",
+        "Add an issue comment",
+        v1::AddIssueCommentRequest,
+        v1::IssueActivity,
+        add_issue_comment
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/issues/{number}/activity",
+        "issue.activity",
+        "Issues",
+        "Read issue discussion and history",
+        v1::ListIssueActivityRequest,
+        v1::ListIssueActivityResponse,
+        list_issue_activity
+    );
     crate::migration::add_routes(&mut r, &mut meta);
 
     (r.with_state(app), meta)

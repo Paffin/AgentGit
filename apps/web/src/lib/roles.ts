@@ -46,6 +46,8 @@ export const ACTION_ROLE = {
   closeProposal: 'integrator',
   requestValidation: 'writer',
   createTask: 'writer',
+  controlExecution: 'delegator',
+  createIssue: 'writer',
   editFiles: 'writer',
   connectAgent: 'admin',
   manageLeases: 'writer',

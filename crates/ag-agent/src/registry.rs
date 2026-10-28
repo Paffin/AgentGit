@@ -160,6 +160,9 @@ pub fn start_run_with<R>(
     let extra = meta
         .write(|tx| {
             if let Some(t) = task_id {
+                if crate::scheduling::in_tx(tx)?.paused {
+                    return Err(MetaError::Invalid("new task runs are paused by a repository operator".into()));
+                }
                 // Somebody else's task, a finished one, one that waits for others: refused here, as ever.
                 crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;
                 // And a task is worked on by one run at a time: a second run of the same agent (same owner, so the

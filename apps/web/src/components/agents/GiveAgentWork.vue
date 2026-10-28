@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
+import { randomHex } from '@/api/client'
 import { ApiError, describeError } from '@/api/errors'
 import type { Task } from '@/api/types'
 import CommandBlock from '@/components/CommandBlock.vue'
 import ConnectAgentPanel from '@/components/ConnectAgentPanel.vue'
-import { agentWorkLines, subjectProblem } from '@/lib/onboarding'
+import { agentWorkLines, matchesAgentTask, subjectProblem } from '@/lib/onboarding'
 import { requirementText } from '@/lib/roles'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
@@ -39,29 +40,59 @@ const task = ref<Task | null>(null)
 const taskBusy = ref(false)
 const taskError = ref<ApiError | null>(null)
 
+let context = 0
+let controller: AbortController | undefined
+let taskKey = randomHex()
+watch(
+  [title, details, scope],
+  () => {
+    taskKey = randomHex()
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  context++
+  controller?.abort()
+})
+
 const asError = (e: unknown) =>
   e instanceof ApiError
     ? e
     : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
 
 async function createTask() {
+  if (taskBusy.value || !canTask.value || !title.value.trim()) return
+  const mine = context
+  controller = new AbortController()
+  const request = {
+    token: auth.token,
+    signal: controller.signal,
+    idempotencyKey: taskKey,
+    quietUnauthenticated: true,
+  }
   taskBusy.value = true
   taskError.value = null
   try {
-    task.value = await api.agents.createTask(props.repo, {
-      title: title.value.trim(),
-      description: details.value.trim() || undefined,
-      scope: scope.value
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    })
+    const created = await api.agents.createTask(
+      props.repo,
+      {
+        title: title.value.trim(),
+        description: details.value.trim() || undefined,
+        scope: scope.value
+          .split(/[\n,]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+      request,
+    )
+    if (mine !== context) return
+    task.value = created
     board.touched(['tasks'])
-    toasts.ok('Task created', task.value.title)
+    toasts.ok('Task created', created.title)
   } catch (e) {
-    taskError.value = asError(e)
+    if (mine === context) taskError.value = asError(e)
   } finally {
-    taskBusy.value = false
+    if (mine === context) taskBusy.value = false
   }
 }
 
@@ -74,26 +105,60 @@ const connectBusy = ref(false)
 const connectError = ref<ApiError | null>(null)
 const connected = ref('')
 
+watch(
+  [() => props.repo, () => auth.token],
+  () => {
+    context++
+    controller?.abort()
+    title.value = ''
+    details.value = ''
+    scope.value = ''
+    agentName.value = 'my-agent'
+    taskKey = randomHex()
+    token.value = ''
+    connected.value = ''
+    task.value = null
+    taskBusy.value = false
+    connectBusy.value = false
+    taskError.value = null
+    connectError.value = null
+  },
+  { flush: 'sync' },
+)
+
 async function connect() {
+  if (connectBusy.value || !canConnect.value || !task.value || subjectError.value) return
+  const mine = context
+  const repository = props.repo
+  const principal = subject.value
+  const taskTitle = task.value.title
+  controller = new AbortController()
+  const request = { token: auth.token, signal: controller.signal, quietUnauthenticated: true }
   connectBusy.value = true
   connectError.value = null
   try {
-    await api.admin.grantRole({ subject: subject.value, repo: props.repo, role: 'writer' })
-    const minted = await api.admin.mintCredential({
-      subject: subject.value,
-      description: `Connected from the web UI for ${task.value?.title ?? 'a task'}`,
-      scope: { repos: [props.repo] },
-      ttl_secs: 3600,
-    })
+    await api.admin.grantRole({ subject: principal, repo: repository, role: 'writer' }, request)
+    if (mine !== context) return
+    const minted = await api.admin.mintCredential(
+      {
+        subject: principal,
+        description: `Connected from the web UI for ${taskTitle}`,
+        scope: { repos: [repository] },
+        ttl_secs: 3600,
+      },
+      request,
+    )
+    if (mine !== context) return
     token.value = minted.token
-    connected.value = subject.value
-    toasts.ok('Agent connected', `${subject.value} may write to ${props.repo} for an hour.`)
+    connected.value = principal
+    toasts.ok('Agent connected', `${principal} may write to ${repository} for an hour.`)
   } catch (e) {
-    connectError.value = asError(e)
+    if (mine === context) connectError.value = asError(e)
   } finally {
-    connectBusy.value = false
+    if (mine === context) connectBusy.value = false
   }
 }
+
 function forget() {
   token.value = ''
 }
@@ -105,26 +170,38 @@ const lines = computed(() =>
         repo: props.repo,
         token: token.value,
         title: task.value?.title ?? title.value,
+        taskId: task.value?.id,
       })
     : null,
 )
 const prompt = computed(() =>
   task.value
-    ? `Your task: ${task.value.title}.${task.value.description ? ` ${task.value.description}` : ''}${
+    ? `Your task (${task.value.id}): ${task.value.title}.${task.value.description ? ` ${task.value.description}` : ''}${
         task.value.scope.length ? ` Only touch: ${task.value.scope.join(', ')}.` : ''
-      } Work in a clone of ${props.repo}, snapshot your changes and push them as a change request.`
+      } Work in a clone of ${props.repo}, snapshot your changes and push them as a change request linked to task ${task.value.id}.`
     : '',
 )
 
 // ---- 3. watching -----------------------------------------------------------------------------------------
 const agentRun = computed(() =>
   connected.value
-    ? board.runs.find((r) => r.agent === connected.value.replace(/^agent:/, ''))
+    ? board.runs
+        .filter((r) =>
+          matchesAgentTask(task.value?.id ?? '', connected.value, r.task_id, r.identity),
+        )
+        .sort((a, b) => b.started_at_ms - a.started_at_ms)[0]
     : undefined,
 )
 const agentProposal = computed(() =>
   connected.value
-    ? board.cards.find((c) => c.proposal.author.startsWith(connected.value))
+    ? board.cards.find((c) =>
+        matchesAgentTask(
+          task.value?.id ?? '',
+          connected.value,
+          c.proposal.task_id,
+          c.proposal.author,
+        ),
+      )
     : undefined,
 )
 const steps = computed(() => [
@@ -132,7 +209,13 @@ const steps = computed(() => [
   { id: 'agent', label: 'Agent connected', done: !!connected.value },
   {
     id: 'run',
-    label: agentRun.value ? 'Agent started working' : 'Waiting for the agent to start',
+    label: agentRun.value
+      ? agentRun.value.status === 'running'
+        ? 'Agent started working'
+        : 'Agent session ended'
+      : agentProposal.value
+        ? 'Agent submitted changes'
+        : 'Waiting for the agent to start',
     done: !!agentRun.value || !!agentProposal.value,
   },
   { id: 'cr', label: 'Change request opened', done: !!agentProposal.value },
@@ -278,11 +361,16 @@ const repoBase = computed(() => `/repos/${props.repo}`)
           >{{ agentProposal.proposal.title }}</RouterLink
         >. Review it next.
       </p>
-      <p v-else-if="agentRun" class="faint" data-testid="agent-working">
+      <p v-else-if="agentRun?.status === 'running'" class="faint" data-testid="agent-working">
         {{ connected }} is working. Its change request appears here and under Change requests.
       </p>
+      <p v-else-if="agentRun" class="faint" data-testid="agent-ended">
+        The agent session ended ({{ agentRun.status }}) without a linked change request. Open the
+        task to inspect its runs.
+      </p>
       <p v-else class="faint" data-testid="agent-waiting">
-        Nothing yet. When the agent runs the commands above, it shows up here by itself.
+        No run or change request is linked to this task yet. Sending a change with the commands
+        above links it automatically.
       </p>
     </section>
 

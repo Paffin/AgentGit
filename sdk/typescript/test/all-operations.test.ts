@@ -27,10 +27,12 @@ interface Hit {
 }
 const hits: Hit[] = [];
 
-const matchers = (Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][]).map((op) => ({
-  op,
-  re: new RegExp('^' + op.route.replace(/\{\*[^}]+\}/g, '.+').replace(/\{[^}]+\}/g, '[^/]+') + '$'),
-}));
+const matchers = [...(Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][])]
+  .sort((a, b) => a.route.split('{').length - b.route.split('{').length)
+  .map((op) => ({
+    op,
+    re: new RegExp('^' + op.route.replace(/\{\*[^}]+\}/g, '.+').replace(/\{[^}]+\}/g, '[^/]+') + '$'),
+  }));
 
 const recording: typeof fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -262,12 +264,29 @@ describe('the tour', () => {
     const key = generateAgentKey();
     await bot.agents.register({ repo, name: 'tour-bot', public_key: key.publicKeyHex });
     expect((await alice.agents.list({ repo })).agents.map((a) => a.name)).toContain('tour-bot');
-    const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'] });
+    await admin.agents.executorReport({
+      repo,
+      agent: 'tour-bot',
+      name: 'command',
+      slots: 1,
+      available: 1,
+      ttl_secs: 90,
+    });
+    const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'], assignee: 'tour-bot' });
+    await alice.tasks.assign({ repo, id: task.id, agent: 'tour-bot', expected_owner: 'agent:tour-bot' });
     const dep = await alice.tasks.create({ repo, title: 'depends' });
     await alice.tasks.depend({ repo, task: dep.id, depends_on: task.id });
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);
     const run = await bot.agents.startRun({ repo, agent: 'tour-bot', task_id: task.id });
     expect((await alice.agents.listRuns({ repo, active_only: true })).runs).toHaveLength(1);
+    expect((await alice.agents.getRun({ repo, run_id: run.run_id })).identity).toBe(run.identity);
+    await admin.agents.outputSave({
+      repo,
+      run_id: run.run_id,
+      output: { sequence: 1, stdout: 'captured', stderr: '', stdout_bytes: 8, stderr_bytes: 0 },
+    });
+    expect((await alice.agents.outputGet({ repo, run_id: run.run_id })).stdout).toBe('captured');
+    await admin.agents.outputDelete({ repo, run_id: run.run_id });
     const runner = bot.withRun(run.run_id);
     await runner.agents.heartbeat({ repo, run_id: run.run_id });
     const lease = await runner.leases.acquire({
@@ -293,6 +312,36 @@ describe('the tour', () => {
     // The operator's call: nothing has been silent for an hour, so a dry run finds nothing to end.
     const plan = await admin.agents.reapRuns({ repo, stale_after_ms: 3_600_000, dry_run: true });
     expect(plan).toMatchObject({ dry_run: true, runs: [], released_leases: [], revoked_credentials: 0 });
+  });
+
+  it('pauses and resumes task launches through an operator decision', async () => {
+    const initial = await admin.tasks.schedulingGet({ repo });
+    const paused = await admin.tasks.schedulingSet({
+      repo,
+      paused: true,
+      reason: 'Upgrade',
+      expected_version: initial.version,
+    });
+    expect(paused.paused).toBe(true);
+    const resumed = await admin.tasks.schedulingSet({ repo, paused: false, expected_version: paused.version });
+    expect(resumed.paused).toBe(false);
+  });
+
+  it('creates and discusses an issue through the public client', async () => {
+    const issue = await alice.issues.create({ repo, title: 'Move the project', body: 'Keep history' });
+    expect((await alice.issues.get({ repo, number: issue.number })).title).toBe(issue.title);
+    expect((await alice.issues.list({ repo })).issues.some((item) => item.number === issue.number)).toBe(true);
+    expect((await alice.issues.comment({ repo, number: issue.number, body: 'Ready' })).body).toBe('Ready');
+    const closed = await alice.issues.update({
+      repo,
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      state: 'closed',
+      expected_version: issue.version,
+    });
+    expect(closed.state).toBe('closed');
+    expect((await alice.issues.activity({ repo, number: issue.number })).activity).toHaveLength(3);
   });
 
   it('preflights and publishes Git migration with a stable upload key', async () => {

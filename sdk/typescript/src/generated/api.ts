@@ -20,9 +20,14 @@ export const NAMESPACE_METHODS = {
   },
   agents: {
     complete: 'agent.complete',
+    executorReport: 'agent.executor.report',
+    getRun: 'agent.get_run',
     heartbeat: 'agent.heartbeat',
     list: 'agent.list',
     listRuns: 'agent.list_runs',
+    outputDelete: 'agent.output.delete',
+    outputGet: 'agent.output.get',
+    outputSave: 'agent.output.save',
     predict: 'agent.predict',
     reapRuns: 'agent.reap_runs',
     register: 'agent.register',
@@ -51,6 +56,14 @@ export const NAMESPACE_METHODS = {
     integrate: 'integration.integrate',
     prepare: 'integration.prepare',
     validate: 'integration.validate',
+  },
+  issues: {
+    activity: 'issue.activity',
+    comment: 'issue.comment',
+    create: 'issue.create',
+    get: 'issue.get',
+    list: 'issue.list',
+    update: 'issue.update',
   },
   jobs: {
     candidate: 'jobs.candidate',
@@ -123,11 +136,14 @@ export const NAMESPACE_METHODS = {
     reflog: 'stream.reflog',
   },
   tasks: {
+    assign: 'task.assign',
     create: 'task.create',
     depend: 'task.depend',
     finish: 'task.finish',
     get: 'task.get',
     list: 'task.list',
+    schedulingGet: 'task.scheduling.get',
+    schedulingSet: 'task.scheduling.set',
   },
   tree: {
     diff: 'tree.diff',
@@ -174,12 +190,22 @@ export interface Api {
   readonly agents: {
     /** Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`) */
     complete(request: Req<'agent.complete'>, options?: CallOptions): Promise<Res<'agent.complete'>>;
+    /** Report expiring executor connectivity (`PUT /v1/repos/{owner}/{rname}/agents/{agent}/executor`, operation `agent.executor.report`) */
+    executorReport(request: Req<'agent.executor.report'>, options?: CallOptions): Promise<Res<'agent.executor.report'>>;
+    /** Look up a current or historical agent run (`GET /v1/repos/{owner}/{rname}/runs/{run_id}`, operation `agent.get_run`) */
+    getRun(request: Req<'agent.get_run'>, options?: CallOptions): Promise<Res<'agent.get_run'>>;
     /** Run heartbeat (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/heartbeat`, operation `agent.heartbeat`) */
     heartbeat(request: Req<'agent.heartbeat'>, options?: CallOptions): Promise<Res<'agent.heartbeat'>>;
     /** List agents (`GET /v1/repos/{owner}/{rname}/agents`, operation `agent.list`) */
     list(request: Req<'agent.list'>, options?: CallOptions): Promise<Res<'agent.list'>>;
     /** List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`) */
     listRuns(request: Req<'agent.list_runs'>, options?: CallOptions): Promise<Res<'agent.list_runs'>>;
+    /** Delete saved executor output (`DELETE /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.delete`) */
+    outputDelete(request: Req<'agent.output.delete'>, options?: CallOptions): Promise<Res<'agent.output.delete'>>;
+    /** Read saved executor output (`GET /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.get`) */
+    outputGet(request: Req<'agent.output.get'>, options?: CallOptions): Promise<Res<'agent.output.get'>>;
+    /** Save bounded executor output (`PUT /v1/repos/{owner}/{rname}/runs/{run_id}/output`, operation `agent.output.save`) */
+    outputSave(request: Req<'agent.output.save'>, options?: CallOptions): Promise<Res<'agent.output.save'>>;
     /** Predict overlapping work on a stream (`GET /v1/repos/{owner}/{rname}/predict`, operation `agent.predict`) */
     predict(request: Req<'agent.predict'>, options?: CallOptions): Promise<Res<'agent.predict'>>;
     /** Operator: end the runs that stopped heartbeating, release their leases and revoke their credentials (`POST /v1/repos/{owner}/{rname}/runs/reap`, operation `agent.reap_runs`) */
@@ -228,6 +254,20 @@ export interface Api {
     prepare(request: Req<'integration.prepare'>, options?: CallOptions): Promise<Res<'integration.prepare'>>;
     /** Queue validation jobs for the candidate (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/validate`, operation `integration.validate`) */
     validate(request: Req<'integration.validate'>, options?: CallOptions): Promise<Res<'integration.validate'>>;
+  };
+  readonly issues: {
+    /** Read issue discussion and history (`GET /v1/repos/{owner}/{rname}/issues/{number}/activity`, operation `issue.activity`) */
+    activity(request: Req<'issue.activity'>, options?: CallOptions): Promise<Res<'issue.activity'>>;
+    /** Add an issue comment (`POST /v1/repos/{owner}/{rname}/issues/{number}/comments`, operation `issue.comment`) */
+    comment(request: Req<'issue.comment'>, options?: CallOptions): Promise<Res<'issue.comment'>>;
+    /** Create a user issue (`POST /v1/repos/{owner}/{rname}/issues`, operation `issue.create`) */
+    create(request: Req<'issue.create'>, options?: CallOptions): Promise<Res<'issue.create'>>;
+    /** Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`) */
+    get(request: Req<'issue.get'>, options?: CallOptions): Promise<Res<'issue.get'>>;
+    /** List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`) */
+    list(request: Req<'issue.list'>, options?: CallOptions): Promise<Res<'issue.list'>>;
+    /** Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`) */
+    update(request: Req<'issue.update'>, options?: CallOptions): Promise<Res<'issue.update'>>;
   };
   readonly jobs: {
     /** The candidate tree of a proposal, for a worker to check out (`GET /v1/repos/{owner}/{rname}/proposals/{proposal}/candidate`, operation `jobs.candidate`) */
@@ -346,6 +386,8 @@ export interface Api {
     reflog(request: Req<'stream.reflog'>, options?: CallOptions): Promise<Res<'stream.reflog'>>;
   };
   readonly tasks: {
+    /** Assign queued work to a registered agent (`PUT /v1/repos/{owner}/{rname}/tasks/{id}/assignee`, operation `task.assign`) */
+    assign(request: Req<'task.assign'>, options?: CallOptions): Promise<Res<'task.assign'>>;
     /** Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`) */
     create(request: Req<'task.create'>, options?: CallOptions): Promise<Res<'task.create'>>;
     /** Add a task dependency (`POST /v1/repos/{owner}/{rname}/tasks/{task}/dependencies`, operation `task.depend`) */
@@ -356,6 +398,10 @@ export interface Api {
     get(request: Req<'task.get'>, options?: CallOptions): Promise<Res<'task.get'>>;
     /** List tasks (`GET /v1/repos/{owner}/{rname}/tasks`, operation `task.list`) */
     list(request: Req<'task.list'>, options?: CallOptions): Promise<Res<'task.list'>>;
+    /** Read the gate for new task launches (`GET /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.get`) */
+    schedulingGet(request: Req<'task.scheduling.get'>, options?: CallOptions): Promise<Res<'task.scheduling.get'>>;
+    /** Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`) */
+    schedulingSet(request: Req<'task.scheduling.set'>, options?: CallOptions): Promise<Res<'task.scheduling.set'>>;
   };
   readonly tree: {
     /** Per-file diffs between two revisions (`POST /v1/repos/{owner}/{rname}/diff`, operation `tree.diff`) */

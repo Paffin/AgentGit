@@ -627,3 +627,59 @@ fn an_overlap_lists_at_most_the_documented_number_of_paths() {
     assert_eq!(o.paths.len(), predict::MAX_OVERLAP_PATHS);
     assert_eq!(o.paths[0], "src/m00.rs", "sorted");
 }
+
+#[test]
+fn scheduling_pause_persists_and_blocks_only_new_task_runs() {
+    let mut e = env();
+    e.meta = TestMeta::shared(e.clock.clone());
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let active_task = tasks::create_task(&e.meta, "Existing work", "", &[], "user:admin").unwrap();
+    let waiting_task = tasks::create_task(&e.meta, "Queued work", "", &[], "user:admin").unwrap();
+    let active = registry::start_run(&e.meta, "bot", Some(&active_task.id)).unwrap();
+    let paused = ag_agent::scheduling::set(&e.meta, true, "Maintenance", 0, "user:operator").unwrap();
+    assert!(paused.paused);
+    assert_eq!(paused.version, 1);
+    assert!(ag_agent::scheduling::get(&e.meta.reopen().unwrap()).unwrap().paused);
+    assert!(matches!(registry::start_run(&e.meta, "bot", Some(&waiting_task.id)), Err(AgentError::Conflict(_))));
+    assert_eq!(e.meta.read(|tx| tx.task(&waiting_task.id)).unwrap().unwrap().state, "open");
+    registry::heartbeat(&e.meta, &active.run_id).unwrap();
+    registry::finish_run(&e.meta, &active.run_id, "completed", None).unwrap();
+    assert!(ag_agent::scheduling::set(&e.meta, false, "", 0, "user:operator").is_err());
+    assert!(ag_agent::scheduling::get(&e.meta).unwrap().paused);
+    ag_agent::scheduling::set(&e.meta, false, "", 1, "user:operator").unwrap();
+    assert!(registry::start_run(&e.meta, "bot", Some(&waiting_task.id)).is_ok());
+}
+
+#[test]
+fn queued_assignment_blocks_other_agents_and_cannot_change_a_running_task() {
+    let e = env();
+    for agent in ["first", "chosen"] {
+        registry::register_agent(&e.meta, &e.keys, agent, "agent", "user:admin").unwrap();
+    }
+    let t = tasks::create_task(&e.meta, "Choose a worker", "", &[], "user:alice").unwrap();
+    let assigned = tasks::assign_task(&e.meta, &t.id, "chosen", "", "user:alice", false).unwrap();
+    assert_eq!(assigned.owner.as_deref(), Some("agent:chosen"));
+    assert_eq!(assigned.state, "open");
+    assert!(tasks::assign_task(&e.meta, &t.id, "first", "", "user:alice", false).is_err());
+    assert!(registry::start_run(&e.meta, "first", Some(&t.id)).is_err());
+    let unassigned = tasks::assign_task(&e.meta, &t.id, "", "agent:chosen", "user:alice", false).unwrap();
+    assert_eq!(unassigned.owner, None);
+    tasks::assign_task(&e.meta, &t.id, "chosen", "", "user:alice", false).unwrap();
+    let run = registry::start_run(&e.meta, "chosen", Some(&t.id)).unwrap();
+    assert!(tasks::assign_task(&e.meta, &t.id, "first", "agent:chosen", "user:admin", true).is_err());
+    assert_eq!(e.meta.read(|tx| tx.run(&run.run_id)).unwrap().unwrap().task_id.as_deref(), Some(t.id.as_str()));
+}
+
+#[test]
+fn executor_reports_survive_reopen_and_expire_without_renewal() {
+    let mut e = env();
+    e.meta = TestMeta::shared(e.clock.clone());
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let saved = ag_agent::executor::report(&e.meta, "bot", "command", 2, 1, 30, "service:orchestrator").unwrap();
+    let reopened = e.meta.reopen().unwrap();
+    let stored = reopened.read(|tx| ag_agent::executor::read(tx, "bot")).unwrap().unwrap();
+    assert_eq!(stored.expires_at_ms, saved.reported_at_ms + 30_000);
+    e.clock.advance_ms(30_000);
+    assert!(reopened.read(|tx| Ok(tx.now().as_millis() >= stored.expires_at_ms)).unwrap());
+    assert!(ag_agent::executor::report(&e.meta, "bot", "command", 2, 3, 30, "service:orchestrator").is_err());
+}

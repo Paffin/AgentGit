@@ -102,12 +102,24 @@ type Stream struct {
 }
 
 // Agent is a registered agent.
+// ExecutorPresence is a recent operator report, not proof of a successful task.
+type ExecutorPresence struct {
+	Name         string `json:"name"`
+	ReportedBy   string `json:"reported_by"`
+	ReportedAtMS int64  `json:"reported_at_ms"`
+	ExpiresAtMS  int64  `json:"expires_at_ms"`
+	Slots        uint32 `json:"slots"`
+	Available    uint32 `json:"available"`
+	Connected    bool   `json:"connected"`
+}
+
 type Agent struct {
-	Name      string `json:"name"`
-	Identity  string `json:"identity"`
-	PublicKey string `json:"public_key"`
-	Role      string `json:"role"`
-	Disabled  bool   `json:"disabled"`
+	Executor  *ExecutorPresence `json:"executor,omitempty"`
+	Name      string            `json:"name"`
+	Identity  string            `json:"identity"`
+	PublicKey string            `json:"public_key"`
+	Role      string            `json:"role"`
+	Disabled  bool              `json:"disabled"`
 }
 
 // Run is one execution of an agent.
@@ -470,4 +482,25 @@ func (r ProvenanceRecord) MarshalJSON() ([]byte, error) {
 		r.Parameters = map[string]string{}
 	}
 	return json.Marshal(plain(r))
+}
+
+// TaskScheduling is the repository's operator-controlled gate for new task runs.
+type TaskScheduling struct {
+	Paused      bool   `json:"paused"`
+	Version     uint64 `json:"version"`
+	Reason      string `json:"reason"`
+	UpdatedBy   string `json:"updated_by"`
+	UpdatedAtMs int64  `json:"updated_at_ms"`
+}
+
+// RunOutput is an opt-in bounded snapshot, never authoritative validation evidence.
+type RunOutput struct {
+	RunID        string `json:"run_id,omitempty"`
+	Available    bool   `json:"available,omitempty"`
+	Sequence     uint64 `json:"sequence"`
+	Stdout       string `json:"stdout"`
+	Stderr       string `json:"stderr"`
+	StdoutBytes  uint64 `json:"stdout_bytes"`
+	StderrBytes  uint64 `json:"stderr_bytes"`
+	CapturedAtMS int64  `json:"captured_at_ms,omitempty"`
 }

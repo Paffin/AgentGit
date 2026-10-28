@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,6 +69,19 @@ type Options struct {
 	Loop     config.Loop
 }
 
+// schedulingSource is optional for test adapters and clients predating the launch gate.
+type executorPreparer interface {
+	PrepareExecutor(context.Context, string, string) error
+}
+
+type executorReporter interface {
+	ReportExecutor(context.Context, string, string, string, uint32, uint32, uint32) error
+}
+
+type schedulingSource interface {
+	TaskScheduling(context.Context, string) (*agwp.TaskScheduling, error)
+}
+
 type route struct {
 	exec  config.Executor
 	title *regexp.Regexp
@@ -101,19 +115,22 @@ type Scheduler struct {
 	kick *loop.Kicker
 	run  *loop.Runner
 
-	mu        sync.Mutex
-	attempts  map[string]int
-	tempFails map[string]int
-	retryAt   map[string]time.Time
-	awaiting  map[string]awaitInfo
-	deferred  map[string]Deferral
-	lastPass  time.Time
-	lastErr   string
-	tasksSeen map[string]int
+	mu         sync.Mutex
+	attempts   map[string]int
+	tempFails  map[string]int
+	retryAt    map[string]time.Time
+	awaiting   map[string]awaitInfo
+	deferred   map[string]Deferral
+	lastReport time.Time
+	lastPass   time.Time
+	lastErr    string
+	tasksSeen  map[string]int
 	// seeded: tasks whose retry budget was recovered from the server's run history (after a restart)
 	seeded map[string]bool
 	// predictErr is why the server's conflict prediction could not be read in the last pass ("" when it could)
-	predictErr string
+	predictErr  string
+	paused      bool
+	pauseReason string
 }
 
 // New builds a scheduler. It validates that every configured route exists.
@@ -199,6 +216,7 @@ func (s *Scheduler) managedAgent(identity string) bool {
 // Reconcile is one scheduling pass. It is safe to call concurrently with
 // session callbacks and from tests.
 func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
+	s.reportExecutors(ctx)
 	repo := s.o.Repo.Name
 	defer func() {
 		s.mu.Lock()
@@ -240,6 +258,24 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 	s.cancelStoppedWork(byID)
 	s.resolveWaiting(ctx, tasks, activeRunTask, open)
 	s.countTasks(tasks)
+
+	if source, ok := s.o.API.(schedulingSource); ok {
+		policy, err := source.TaskScheduling(ctx, repo)
+		if err != nil {
+			return fmt.Errorf("read task scheduling: %w", err)
+		}
+		s.mu.Lock()
+		s.paused, s.pauseReason = policy.Paused, policy.Reason
+		s.mu.Unlock()
+		if policy.Paused {
+			for _, task := range tasks {
+				if task.State == agwp.TaskOpen && task.Ready {
+					s.setDeferred(task, ReasonOperatorPause, policy.Reason)
+				}
+			}
+			return nil
+		}
+	}
 
 	running := s.repoSessions()
 	slots := s.o.Repo.Schedule.Slots
@@ -417,12 +453,12 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	return true
 }
 
-// executorFor chooses the executor for a candidate; an adopted task must go
-// to the executor whose agent owns it.
+// executorFor respects an explicit assignment before considering routing rules.
+// An agent this process does not supervise is left to its own orchestrator.
 func (s *Scheduler) executorFor(t agwp.Task) (config.Executor, bool) {
-	if t.State == agwp.TaskInProgress && t.Owner != "" {
-		if len(t.Owner) > 6 {
-			if e, ok := s.agents[t.Owner[6:]]; ok {
+	if t.Owner != "" {
+		if name, ok := strings.CutPrefix(t.Owner, "agent:"); ok {
+			if e, ok := s.agents[name]; ok {
 				return e, true
 			}
 		}
@@ -776,15 +812,17 @@ func (s *Scheduler) pruneDeferred(seen map[string]bool) {
 
 // Status is the scheduler's part of /status.
 type Status struct {
-	Repo      string         `json:"repo"`
-	Slots     int            `json:"slots"`
-	Running   []session.Info `json:"running"`
-	Waiting   []Waiting      `json:"waiting_to_land"`
-	Deferred  []Deferral     `json:"deferred"`
-	Retrying  []Retry        `json:"retrying"`
-	Tasks     map[string]int `json:"tasks"`
-	LastPass  time.Time      `json:"last_pass,omitempty"`
-	LastError string         `json:"last_error,omitempty"`
+	Paused      bool           `json:"paused"`
+	PauseReason string         `json:"pause_reason,omitempty"`
+	Repo        string         `json:"repo"`
+	Slots       int            `json:"slots"`
+	Running     []session.Info `json:"running"`
+	Waiting     []Waiting      `json:"waiting_to_land"`
+	Deferred    []Deferral     `json:"deferred"`
+	Retrying    []Retry        `json:"retrying"`
+	Tasks       map[string]int `json:"tasks"`
+	LastPass    time.Time      `json:"last_pass,omitempty"`
+	LastError   string         `json:"last_error,omitempty"`
 	// PredictError is why the server's conflict prediction could not be read in the last pass; empty when it could.
 	PredictError string `json:"predict_error,omitempty"`
 }
@@ -814,6 +852,7 @@ func (s *Scheduler) Status() Status {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	st.Paused, st.PauseReason = s.paused, s.pauseReason
 	st.LastPass, st.LastError, st.PredictError = s.lastPass, s.lastErr, s.predictErr
 	st.Tasks = map[string]int{}
 	for k, v := range s.tasksSeen {
@@ -832,4 +871,38 @@ func (s *Scheduler) Status() Status {
 	sort.Slice(st.Deferred, func(i, j int) bool { return st.Deferred[i].Task < st.Deferred[j].Task })
 	sort.Slice(st.Retrying, func(i, j int) bool { return st.Retrying[i].Task < st.Retrying[j].Task })
 	return st
+}
+
+// Presence describes this process and its last capacity snapshot, never task success.
+func (s *Scheduler) reportExecutors(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	reporter, ok := s.o.API.(executorReporter)
+	if !ok {
+		return
+	}
+	now := s.o.Clock.Now()
+	s.mu.Lock()
+	if !s.lastReport.IsZero() && now.Sub(s.lastReport) < 20*time.Second {
+		s.mu.Unlock()
+		return
+	}
+	s.lastReport = now
+	s.mu.Unlock()
+	ttl := uint32(90)
+	if interval := s.o.Loop.Reconcile / time.Second * 3; interval > 90 {
+		ttl = uint32(min(interval, 900))
+	}
+	for _, ex := range s.o.Execs {
+		if preparer, ok := s.o.Sessions.(executorPreparer); ok {
+			if err := preparer.PrepareExecutor(ctx, s.o.Repo.Name, ex.Agent); err != nil {
+				s.log.Warn("could not prepare executor identity", "agent", ex.Agent, "err", err)
+				continue
+			}
+		}
+		available := max(0, s.o.Sessions.FreeSlots(ex))
+		if err := reporter.ReportExecutor(ctx, s.o.Repo.Name, ex.Agent, ex.Name, uint32(ex.Slots), uint32(available), ttl); err != nil {
+			s.log.Debug("executor presence was not accepted", "agent", ex.Agent, "err", err)
+		}
+	}
 }

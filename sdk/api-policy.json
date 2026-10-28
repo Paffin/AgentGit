@@ -16,7 +16,9 @@
       "task.create",
       "agent.start_run",
       "lease.acquire",
-      "migration.prepare"
+      "migration.prepare",
+      "issue.create",
+      "issue.comment"
     ],
     "natural": [
       "objects.put",
@@ -86,6 +88,7 @@
     "admin.credentials": "credentials",
     "admin.roles": "roles",
     "admin": "admin",
-    "migration": "migrations"
+    "migration": "migrations",
+    "issue": "issues"
   }
 }

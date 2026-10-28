@@ -9,9 +9,11 @@ __all__ = [
     "AcquireLeaseRequest",
     "AcquireLeaseResponse",
     "AddDependencyRequest",
+    "AddIssueCommentRequest",
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
+    "AssignTaskRequest",
     "Attestation",
     "AuditEntry",
     "AuthConfig",
@@ -30,6 +32,7 @@ __all__ = [
     "CompleteRunRequest",
     "ConfigureRepoRequest",
     "Conflict",
+    "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
     "CreateStreamRequest",
@@ -46,6 +49,7 @@ __all__ = [
     "ErrorEnvelope",
     "ErrorInfo",
     "Event",
+    "ExecutorPresence",
     "ExtendLeaseRequest",
     "FailJobRequest",
     "FileChange",
@@ -59,12 +63,16 @@ __all__ = [
     "GcResponse",
     "GetCandidateRequest",
     "GetChangesetRequest",
+    "GetIssueRequest",
     "GetJobRequest",
     "GetOperationRequest",
     "GetPolicyRequest",
     "GetProposalRequest",
     "GetRepoRequest",
+    "GetRunOutputRequest",
+    "GetRunRequest",
     "GetTaskRequest",
+    "GetTaskSchedulingRequest",
     "GetTreeRequest",
     "GetTreeResponse",
     "GetWorkspaceRequest",
@@ -77,6 +85,8 @@ __all__ = [
     "IntegrateRequest",
     "IntegrationOutcome",
     "IntegrationResult",
+    "Issue",
+    "IssueActivity",
     "Job",
     "Lease",
     "LeaseRef",
@@ -91,6 +101,10 @@ __all__ = [
     "ListCredentialsResponse",
     "ListDirectoryRequest",
     "ListDirectoryResponse",
+    "ListIssueActivityRequest",
+    "ListIssueActivityResponse",
+    "ListIssuesRequest",
+    "ListIssuesResponse",
     "ListJobsRequest",
     "ListJobsResponse",
     "ListLeasesRequest",
@@ -158,6 +172,7 @@ __all__ = [
     "ReplayRequest",
     "ReplayResponse",
     "Repo",
+    "ReportExecutorRequest",
     "RequestValidationRequest",
     "RequestValidationResponse",
     "ResolvePathRequest",
@@ -171,13 +186,16 @@ __all__ = [
     "RevokeRoleRequest",
     "RoleBinding",
     "Run",
+    "RunOutput",
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SaveRunOutputRequest",
     "SearchMatch",
     "SearchTreeRequest",
     "SearchTreeResponse",
     "SetPolicyRequest",
+    "SetTaskSchedulingRequest",
     "StartRunRequest",
     "Stream",
     "SubmitAttestationRequest",
@@ -186,8 +204,10 @@ __all__ = [
     "SyncWorkspaceRequest",
     "SyncWorkspaceResponse",
     "Task",
+    "TaskScheduling",
     "TreeEntry",
     "UnpinRequest",
+    "UpdateIssueRequest",
     "UpdateProposalRequest",
     "ValidationStatus",
     "ValidationTask",
@@ -228,10 +248,20 @@ class AddDependencyRequest:
 
 
 @dataclass(kw_only=True)
+class AddIssueCommentRequest:
+    """The `AddIssueCommentRequest` message."""
+    body: str = field(default="")
+    idempotency_key: str = field(default="")
+    number: int = field(default=0)
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class Agent:
     """The `Agent` message."""
     created_at_ms: int = field(default=0)
     disabled: bool = field(default=False)
+    executor: ExecutorPresence | None = field(default=None)
     identity: str = field(default="")
     name: str = field(default="")
     public_key: str = field(default="")
@@ -253,6 +283,15 @@ class AncestorsResponse:
     """The `AncestorsResponse` message."""
     changeset_ids: list[str] = field(default_factory=list)
     next_page_token: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class AssignTaskRequest:
+    """The `AssignTaskRequest` message."""
+    agent: str = field(default="")
+    expected_owner: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -442,6 +481,16 @@ class Conflict:
 
 
 @dataclass(kw_only=True)
+class CreateIssueRequest:
+    """The `CreateIssueRequest` message."""
+    body: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class CreateProposalRequest:
     """The `CreateProposalRequest` message."""
     description: str = field(default="")
@@ -474,11 +523,14 @@ class CreateStreamRequest:
 @dataclass(kw_only=True)
 class CreateTaskRequest:
     """The `CreateTaskRequest` message."""
+    assignee: str = field(default="")
     depends_on: list[str] = field(default_factory=list)
     description: str = field(default="")
+    expected_issue_version: int = field(default=0)
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     scope: list[str] = field(default_factory=list)
+    source_issue: int = field(default=0)
     title: str = field(default="")
 
 
@@ -589,6 +641,18 @@ class Event:
     seq: int = field(default=0)
     timestamp_ms: int = field(default=0)
     topic: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ExecutorPresence:
+    """The `ExecutorPresence` message."""
+    available: int = field(default=0)
+    connected: bool = field(default=False)
+    expires_at_ms: int = field(default=0)
+    name: str = field(default="")
+    reported_at_ms: int = field(default=0)
+    reported_by: str = field(default="")
+    slots: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -714,6 +778,13 @@ class GetChangesetRequest:
 
 
 @dataclass(kw_only=True)
+class GetIssueRequest:
+    """The `GetIssueRequest` message."""
+    number: int = field(default=0)
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class GetJobRequest:
     """The `GetJobRequest` message."""
     job_id: str = field(default="")
@@ -749,9 +820,29 @@ class GetRepoRequest:
 
 
 @dataclass(kw_only=True)
+class GetRunOutputRequest:
+    """The `GetRunOutputRequest` message."""
+    repo: str = field(default="")
+    run_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetRunRequest:
+    """The `GetRunRequest` message."""
+    repo: str = field(default="")
+    run_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class GetTaskRequest:
     """The `GetTaskRequest` message."""
     id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetTaskSchedulingRequest:
+    """The `GetTaskSchedulingRequest` message."""
     repo: str = field(default="")
 
 
@@ -861,6 +952,31 @@ class IntegrationResult:
     operation_id: str = field(default="")
     outcome: IntegrationOutcome = field(default_factory=lambda: IntegrationOutcome())
     state: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class Issue:
+    """User-facing tracker issues are distinct from executable agent tasks."""
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    number: int = field(default=0)
+    state: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class IssueActivity:
+    """The `IssueActivity` message."""
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    id: int = field(default=0)
+    issue_number: int = field(default=0)
+    kind: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -981,6 +1097,39 @@ class ListDirectoryResponse:
     entries: list[DirEntry] = field(default_factory=list)
     next_page_token: str = field(default="")
     tree_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssueActivityRequest:
+    """The `ListIssueActivityRequest` message."""
+    number: int = field(default=0)
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssueActivityResponse:
+    """The `ListIssueActivityResponse` message."""
+    activity: list[IssueActivity] = field(default_factory=list)
+    next_page_token: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssuesRequest:
+    """The `ListIssuesRequest` message."""
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    query: str = field(default="")
+    repo: str = field(default="")
+    state: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssuesResponse:
+    """The `ListIssuesResponse` message."""
+    issues: list[Issue] = field(default_factory=list)
+    next_page_token: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1561,6 +1710,17 @@ class Repo:
 
 
 @dataclass(kw_only=True)
+class ReportExecutorRequest:
+    """The `ReportExecutorRequest` message."""
+    agent: str = field(default="")
+    available: int = field(default=0)
+    name: str = field(default="")
+    repo: str = field(default="")
+    slots: int = field(default=0)
+    ttl_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class RequestValidationRequest:
     """The `RequestValidationRequest` message."""
     checks: list[str] = field(default_factory=list)
@@ -1671,6 +1831,19 @@ class Run:
 
 
 @dataclass(kw_only=True)
+class RunOutput:
+    """The `RunOutput` message."""
+    available: bool = field(default=False)
+    captured_at_ms: int = field(default=0)
+    run_id: str = field(default="")
+    sequence: int = field(default=0)
+    stderr: str = field(default="")
+    stderr_bytes: int = field(default=0)
+    stdout: str = field(default="")
+    stdout_bytes: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class RunQueueRequest:
     """The `RunQueueRequest` message."""
     idempotency_key: str = field(default="")
@@ -1696,6 +1869,14 @@ class RunSpec:
     memory_mb: int = field(default=0)
     network: bool = field(default=False)
     timeout_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class SaveRunOutputRequest:
+    """The `SaveRunOutputRequest` message."""
+    output: RunOutput | None = field(default=None)
+    repo: str = field(default="")
+    run_id: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1738,6 +1919,15 @@ class SetPolicyRequest:
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SetTaskSchedulingRequest:
+    """The `SetTaskSchedulingRequest` message."""
+    expected_version: int = field(default=0)
+    paused: bool = field(default=False)
+    reason: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1816,6 +2006,16 @@ class Task:
 
 
 @dataclass(kw_only=True)
+class TaskScheduling:
+    """The `TaskScheduling` message."""
+    paused: bool = field(default=False)
+    reason: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    updated_by: str = field(default="")
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class TreeEntry:
     """The `TreeEntry` message."""
     blob_id: str = field(default="")
@@ -1830,6 +2030,18 @@ class UnpinRequest:
     """The `UnpinRequest` message."""
     name: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class UpdateIssueRequest:
+    """The `UpdateIssueRequest` message."""
+    body: str = field(default="")
+    expected_version: int = field(default=0)
+    number: int = field(default=0)
+    repo: str = field(default="")
+    state: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
 
 
 @dataclass(kw_only=True)

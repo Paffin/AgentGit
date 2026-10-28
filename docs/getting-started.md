@@ -3,7 +3,7 @@
 Five minutes, and nothing to build: **no Rust, no Node, no tokens to make by hand.** You download the programs, start an
 evaluation server that sets itself up, sign in, land a first change, and see a policy say no and tell you why.
 
-> **Version.** This guide targets the published [`v0.3.0-beta.2` candidate](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.2), which includes `ag-server dev`, `ag login`,
+> **Version.** This guide targets the published [`v0.3.0-beta.3` candidate](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3), which includes `ag-server dev`, `ag login`,
 > `ag explain` and policy presets. If you still use the previous candidate, use
 > [the 0.2.0-rc.2 procedure](#on-020-rc2-until-the-next-release). This is an early public beta; independent production qualification is still pending.
 
@@ -13,7 +13,7 @@ A release archive for Linux or macOS (x86_64 and aarch64). The script checks the
 puts `ag`, `ag-server`, `ag-worker` and `ag-mcp` in `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.2   # use the candidate version
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.3   # use the candidate version
 ag --version
 ```
 
@@ -184,7 +184,7 @@ out) and `ag-worker` (runs validation jobs), and `ag-mcp` for agents. Pick the w
 **1. Release archive (Linux and macOS, x86_64 and aarch64)** — a script that checks what it downloads:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.2   # no stable release yet: `latest` skips pre-releases
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.3   # no stable release yet: `latest` skips pre-releases
 ag --version                              # ag 0.3.0-beta.2 (549555c82219 2026-10-27): version, commit, commit date
 ```
 
@@ -205,7 +205,7 @@ tar xzf agentgit-$V-$T.tar.gz && install agentgit-$V-$T/ag* ~/.local/bin/
 ```
 
 **2. Container images** (`linux/amd64` and `linux/arm64`, distroless, non-root):
-`docker run --rm ghcr.io/paffin/agentgit-cli:0.3.0-beta.2 --version`, and
+`docker run --rm ghcr.io/paffin/agentgit-cli:0.3.0-beta.3 --version`, and
 `ghcr.io/paffin/agentgit-server` for the server — see [Deploying `ag-server`](operations/deployment.md).
 
 **3. Homebrew / Scoop.** The repository carries a formula and a manifest *template* under

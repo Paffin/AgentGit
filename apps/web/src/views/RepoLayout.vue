@@ -44,13 +44,14 @@ const tabs = computed<Tab[]>(() => {
   const b = base.value
   const list: Tab[] = [
     { to: b, label: 'Overview', icon: 'activity', exact: true },
+    { to: `${b}/issues`, label: 'Issues', icon: 'list', group: ['issues', 'issue'] },
     {
       to: `${b}/proposals`,
       label: termLabel('proposal', true),
       icon: 'proposal',
       tip: termTip('proposal'),
     },
-    { to: `${b}/agents`, label: 'Agents & work', icon: 'bot', group: ['agents', 'task'] },
+    { to: `${b}/agents`, label: 'Agents & work', icon: 'bot', group: ['agents', 'task', 'run'] },
     { to: `${b}/files`, label: 'Code', icon: 'folder', group: CODE_ROUTES },
   ]
   if (auth.hasRole(full.value, 'admin'))

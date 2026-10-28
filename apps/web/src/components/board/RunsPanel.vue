@@ -5,6 +5,7 @@ import { useServerNow } from '@/composables/useNow'
 import { formatDuration } from '@/lib/format'
 import { runHealth } from '@/lib/runs'
 import { useBoard } from '@/stores/board'
+import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
 import Badge from '@/ui/Badge.vue'
 import Card from '@/ui/Card.vue'
@@ -18,6 +19,7 @@ import Skeleton from '@/ui/Skeleton.vue'
 
 defineProps<{ repo: string }>()
 const board = useBoard()
+const auth = useAuth()
 const prefs = usePrefs()
 const now = useServerNow()
 
@@ -106,7 +108,12 @@ const staleOptions = computed(() => {
           :data-run="r.run.run_id"
         >
           <div class="top">
-            <IdentityLabel :identity="r.run.identity" :size="22" />
+            <RouterLink
+              v-if="auth.capabilities?.features.includes('agents.run_lookup')"
+              :to="`/repos/${repo.split('/').map(encodeURIComponent).join('/')}/runs/${encodeURIComponent(r.run.run_id)}`"
+              ><IdentityLabel :identity="r.run.identity" :size="22"
+            /></RouterLink>
+            <IdentityLabel v-else :identity="r.run.identity" :size="22" />
             <Badge v-if="r.health.liveness === 'stale'" tone="warn" icon="alert" size="sm"
               >Quiet</Badge
             >

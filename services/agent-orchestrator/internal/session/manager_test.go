@@ -882,3 +882,37 @@ func TestAgentReportsServerRefusals(t *testing.T) {
 		t.Fatalf("result = %+v", res)
 	}
 }
+
+func TestOptedInOutputIsSavedWithKnownSecretsRemoved(t *testing.T) {
+	e := newEnv(t)
+	ex := commandExec(t, "output-bot", `printf '%s\n' "$AG_TOKEN" "$LEAKY"; cat "$AG_KEY_FILE"; printf 'diagnostic failure\n' >&2; exit 2`, func(c *config.Executor) { c.PublishOutput = true; c.Pass = append(c.Pass, "LEAKY") })
+	info, err := e.mgr.Start(context.Background(), e.request(e.task("capture output"), ex, Keep))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.wait(20 * time.Second)
+	e.idle()
+	out, err := e.orch.GetRunOutput(context.Background(), repo, info.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Available || !strings.Contains(out.Stderr, "diagnostic failure") {
+		t.Fatal("expected captured output and failure diagnostic")
+	}
+	if strings.Contains(out.Stdout, "parent-value") || strings.Contains(out.Stdout, "agt_") {
+		t.Fatal("saved output contains known credentials")
+	}
+	var key struct {
+		Secret string `json:"secret"`
+	}
+	raw, err := os.ReadFile(e.keys.Path("output-bot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &key); err != nil {
+		t.Fatal(err)
+	}
+	if key.Secret == "" || strings.Contains(out.Stdout, key.Secret) {
+		t.Fatal("saved output contains the private signing key")
+	}
+}

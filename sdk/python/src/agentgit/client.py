@@ -21,6 +21,8 @@ from agentgit._generated.models import (
     Changeset,
     DirEntry,
     Event,
+    Issue,
+    IssueActivity,
     NegotiateResponse,
     Proposal,
     PutObjectResult,
@@ -37,6 +39,7 @@ from agentgit._generated.namespaces import (
     AsyncEventsApi,
     AsyncHistoryApi,
     AsyncIntegrationApi,
+    AsyncIssuesApi,
     AsyncJobsApi,
     AsyncLeasesApi,
     AsyncMigrationsApi,
@@ -56,6 +59,7 @@ from agentgit._generated.namespaces import (
     EventsApi,
     HistoryApi,
     IntegrationApi,
+    IssuesApi,
     JobsApi,
     LeasesApi,
     MigrationsApi,
@@ -254,6 +258,7 @@ class AgentGitClient:
     objects: _ObjectsExt
     operations: OperationsApi
     agents: AgentsApi
+    issues: IssuesApi
     tasks: TasksApi
     leases: LeasesApi
     provenance: ProvenanceApi
@@ -307,6 +312,7 @@ class AgentGitClient:
         self.objects = _ObjectsExt(self)
         self.operations = OperationsApi(self)
         self.agents = AgentsApi(self)
+        self.issues = IssuesApi(self)
         self.tasks = TasksApi(self)
         self.leases = LeasesApi(self)
         self.provenance = ProvenanceApi(self)
@@ -415,6 +421,26 @@ class AgentGitClient:
         )
         return _negotiated(hello)
 
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.list"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[Issue]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.activity"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[IssueActivity]: ...
     @overload
     def paginate(
         self,
@@ -561,6 +587,7 @@ class AsyncAgentGitClient:
     objects: _AsyncObjectsExt
     operations: AsyncOperationsApi
     agents: AsyncAgentsApi
+    issues: AsyncIssuesApi
     tasks: AsyncTasksApi
     leases: AsyncLeasesApi
     provenance: AsyncProvenanceApi
@@ -616,6 +643,7 @@ class AsyncAgentGitClient:
         self.objects = _AsyncObjectsExt(self)
         self.operations = AsyncOperationsApi(self)
         self.agents = AsyncAgentsApi(self)
+        self.issues = AsyncIssuesApi(self)
         self.tasks = AsyncTasksApi(self)
         self.leases = AsyncLeasesApi(self)
         self.provenance = AsyncProvenanceApi(self)
@@ -714,6 +742,26 @@ class AsyncAgentGitClient:
         )
         return _negotiated(hello)
 
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.list"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[Issue]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["issue.activity"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[IssueActivity]: ...
     @overload
     def paginate(
         self,

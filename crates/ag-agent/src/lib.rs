@@ -12,10 +12,13 @@
 //!   stored apart from the immutable changeset;
 //! * [`predict`] — early detection of overlapping work.
 
+pub mod executor;
 pub mod leases;
+pub mod output;
 pub mod predict;
 pub mod provenance;
 pub mod registry;
+pub mod scheduling;
 pub mod tasks;
 
 use ag_storage::meta::MetaError;

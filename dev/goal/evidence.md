@@ -191,3 +191,159 @@ Crapper reduced the initial scanner from CC39 to functions no higher than CC9; n
 After integrating the task-pages main commit `49156f9f9eb9129cc9ce8850802a43f34f543cd9`, the combined search/task browser scenarios passed 4/4 in18.8s on the newly built real server. Search includes a verified visible jump to line2000; the OpenAPI document matches the running server's generated schema. Task, review and search changes are all retained.
 
 Final integration validation also passed 48 focused code-rendering, role and transport checks. Rust formatting and touched server/test Clippy passed with warnings denied. All original goal rows remain present; `tree.search` is an added API row, not a replacement for broader search goals.
+
+## Repository issue slice — 2026-10-28, working branch
+
+Implemented user issues separately from orchestrator tasks: repository-local numbering,
+search and state filters, descriptions, immutable discussion/activity, author/admin edits,
+close/reopen, optimistic revisions and optional same-repository task links. API mutations
+write activity, audit and event outbox in the same metadata transaction. SQLite and
+PostgreSQL schema 4 migrations are present; live PostgreSQL qualification is not claimed.
+
+The real-browser scenario in `apps/web/e2e/issues.spec.ts` passed against the actual server:
+UI-created repository and issue, draft restoration after reload, comment, close, reload,
+reopen and search. Local screenshot: `/workspace/agentgit-quality/issues-browser/`.
+The focused HTTP lifecycle exercises readers, author, unrelated writer and outsider,
+idempotent creates/comments, stale revision rejection and state/activity readback.
+Production Web UI build and TypeScript SDK type checking passed. This is not completion
+of `doc/goal.md`: provider discussion import, tracker labels/milestones/attachments,
+organizations and executable CI/CD remain outstanding.
+
+## Agent-native handoff follow-up — 2026-10-28
+
+An issue author or administrator can now create the associated agent task in the browser,
+with an explicit expected result and file patterns. `task.create` accepts a source issue and
+its inspected version. Task creation, linking and audit/activity records are atomic;
+a stale/closed/already-linked issue rolls back the task, and a retried request reuses the
+original task. Unrelated writers cannot attach tasks to somebody else's issue.
+
+Real HTTP verification covered stale-write rollback, author permissions, one task after
+an idempotent retry and the stored link. The fresh-server browser workflow additionally
+created the task through the handoff dialog, opened its permanent task page and returned
+to the linked issue (Chromium, 9.6 s). PostgreSQL 17 independently preserved issue and
+comment data through closing/reopening the metadata connection and rejected a stale CAS.
+TypeScript/Python client tours exercised the issue API. These checks do not establish
+that a real external coding agent ran or that it produced a reviewed/integrated change.
+
+The manual agent-onboarding follow-up passed the existing real-server/real-CLI Chromium workflow (8.4 s): the browser created a task and credential, its displayed shell commands submitted a task-linked change request, and the browser detected that request. The exact-task/principal matcher separately rejects another task and similarly named agents. This is shell workflow qualification, not a real coding-model pilot.
+
+## Operator task-launch gate — execution-control branch, 2026-10-28
+
+The engine now reads a persisted pause inside the same metadata transaction as task
+claim and run creation. Delegators/admins change it through HTTP/gRPC with an expected
+revision; readers can inspect it. Audit and outbox event share the write transaction.
+Schema 5 makes older binaries refuse the repository instead of ignoring this decision.
+
+Local qualification: the engine case passed on SQLite and PostgreSQL 17, including
+reopening metadata, refusing a new task run, keeping existing heartbeat/completion
+functional and rejecting a stale operator decision. The real HTTP case passed role
+and revision checks. The real Go orchestrator with a command executor kept a task open
+during the pause, then ran it after resume. Chromium and phone workflows both changed
+the setting through the Web UI, reloaded it and confirmed a reader could not change it.
+The Web build, TypeScript SDK types and Python SDK types passed. No real external
+coding-model execution or browser executor installation is claimed.
+
+## Permanent run inspection — run-details branch, 2026-10-28
+
+`agent.get_run` looks up a run directly by its repository and ID, including after
+completion. The UI links to that stable page from the run table, live board and task.
+It shows the recorded summary and timing, current reservations, and an exact-session
+filter for change requests; it does not call a completed session a validated change.
+
+The focused HTTP case passed historical lookup, read permissions and unrelated-user
+isolation. Chromium and phone cases passed table-to-detail navigation, live completion,
+reload and filtering out another session of the same agent. Web build and both SDK type
+checks passed. These fixtures do not establish an external coding-model pilot or a full
+stdout log service. The repository's existing role-boundary invariant also found the
+new issue.manage permission missing from NEVER_DELEGATED; fixed and separately verified
+in the parent issue PR before merge.
+
+## Queued agent assignment — task-assignment branch, 2026-10-28
+
+Task creation and issue handoff can reserve an enabled registered agent in the
+same transaction. The task creator/operator can change a queued reservation with
+an expected-owner check or restore automatic routing. The existing atomic claim
+rejects another agent; active work cannot be reassigned.
+
+Engine and HTTP cases passed competing claims, stale edits, non-creator rejection,
+running-task rejection, unassignment and rollback of an invalid issue-linked
+creation. The real Go command executor ran the explicitly selected agent instead
+of the default executor. Chromium and phone workflows both passed creation,
+reassignment, reload and launch enforcement (2 cases, 7.6 s). Web build/types and
+TypeScript/Python operation tours passed (12/13 cases). The operation recorder
+now matches static routes before variable routes, avoiding misattributing
+`tasks/scheduling` to `tasks/{id}`. Migration verification compares with the schema
+registry rather than the obsolete hard-coded version 3.
+
+Evidence artifacts are in `/workspace/agentgit-quality/assignment-*`. No live
+external coding-model pilot or browser executor installation is claimed.
+
+Crapper complexity inspection split assignment validation and agent resolution into
+separate units; no coverage-derived CRAP score is claimed. Dryer found no duplicate
+candidates in the focused units. Mutator discovery was inspected; no mutation kill
+rate is claimed for this slice.
+
+## Executor connectivity — executor-presence branch, 2026-10-28
+
+The Go scheduler prepares and verifies configured executor identities before their
+first run, then sends expiring operator reports with name and available/total slots.
+The server uses its own receive/expiry times, rejects ordinary writers and invalid
+capacity, and exposes the latest report through the agent list. A report is not a
+command health check, successful model invocation or aggregate fleet capacity.
+
+Focused engine and HTTP scenarios passed persistence, expiry timestamps, role checks
+and invalid capacity. Real-server Go scenarios passed executor reporting before the
+first task and dispatch to the explicitly assigned command executor. This run used
+AG_SERVER_BIN explicitly; no skipped test is counted as runtime evidence. The prior
+standalone assignment fixture was corrected to register its chosen key before use.
+
+TypeScript/Python operation tours passed (12/13 cases), and the Web build and type
+checks passed. Chromium and phone workflows exercised the registered-only versus
+connected states and reload. The registered-agent tab now opens directly to its
+agents, without the unrelated task-creation form above it. Crapper complexity,
+focused duplicate analysis and mutation-site discovery were inspected; no coverage
+percentage or mutation kill rate is claimed.
+
+## Browser executor setup — executor-setup branch, 2026-10-28
+
+The administrator prepares exact-repository service/agent roles and a 24-hour
+scoped credential. The generated task-only JSON contains no bearer secret; a
+separate private token file is read by the native `-token-file` option. Disabled
+review/advisor components no longer require irrelevant credentials during check.
+The wizard waits for a new report by a unique per-setup service identity and supports revoke.
+
+Chromium and phone qualification downloaded the real files, checked the credential
+scope, invoked the real native `check` and `run` commands, observed connection,
+created an assigned task, waited for that command executor to complete and revoked
+the token (11.9 s desktop, 10.9 s phone). The native branch of this browser test
+requires AG_ORCH_BIN; CI without it still covers downloads, scope and revocation.
+No external coding model was invoked. The token file is deleted from test scratch
+space and is not retained as an artifact. Credential-file tests also reject unsafe
+Unix permissions and invalid content. Web type/build checks passed.
+
+Existing merge blockers were repaired in the parent stack: the PostgreSQL v1
+fixture now removes tables from newer migrations, generated protocol fuzz types
+match each branch, Python formatting is current, the orphan-run fixture respects
+pre-run registration, and live event streams revalidate run-bound credentials
+before buffered delivery. Focused PostgreSQL, stream and real orphan-run checks
+passed; the test assertions were retained.
+
+Connection confirmation is scoped to a unique service identity for each setup,
+so an older executor using the same agent name cannot turn the new setup green.
+Revocation also removes that setup service's role binding, while preserving the
+agent role that another installation may use.
+
+## Opt-in saved executor output — run-output branch, 2026-10-28
+
+The native executor keeps output local by default. Explicit capture saves up to
+32 KiB per stream at completion, scrubbing the session token, signing-key hex
+and known environment values. Server-side permission and size checks, monotonic
+snapshots, idempotent retries and deletion tombstones passed the focused HTTP
+scenario. Real command execution confirmed redaction and unchanged default-off
+behavior. The Web UI renders text, supports download and confirms deletion.
+
+TypeScript/Python operation tours passed (12/13); focused Rust Clippy checks passed.
+Chromium and phone passed both output inspection/deletion and the downloaded native
+executor profile with capture enabled (4 cases, 12.1 s). The native check/run
+path was enabled with AG_ORCH_BIN. Unknown or encoded secrets may remain; this is
+not a live log stream. Deletion does not erase existing backups or journals.

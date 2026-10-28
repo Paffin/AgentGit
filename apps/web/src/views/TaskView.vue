@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ExecutionControl from '@/components/agents/ExecutionControl.vue'
 import { api } from '@/api/instance'
 import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useResource } from '@/composables/useResource'
+import { useAssignableAgents } from '@/composables/useAssignableAgents'
 import { useLiveReload } from '@/composables/useLiveReload'
 import { useAuth } from '@/stores/auth'
 import { useBoard } from '@/stores/board'
@@ -81,6 +83,58 @@ const error = ref('')
 const message = ref('')
 const needsSignIn = ref(false)
 const finishing = ref<'done' | 'cancelled' | null>(null)
+const assigning = ref(false),
+  assignee = ref('')
+const assignment = useAssignableAgents(
+  () => repo.value,
+  () => assigning.value,
+)
+let expectedOwner = ''
+const canAssign = computed(
+  () =>
+    assignment.supported.value &&
+    canWrite.value &&
+    task.data.value?.state === 'open' &&
+    (samePrincipal(task.data.value.created_by, auth.identity) ||
+      auth.hasRole(repo.value, 'delegator') ||
+      auth.hasRole(repo.value, 'admin')),
+)
+function chooseAgent() {
+  if (!canAssign.value || !task.data.value) return
+  expectedOwner = task.data.value.owner || ''
+  assignee.value = expectedOwner.startsWith('agent:') ? expectedOwner.slice(6) : ''
+  error.value = ''
+  assigning.value = true
+}
+async function saveAssignment() {
+  if (busy.value || !canAssign.value) return
+  const mine = context
+  controller = new AbortController()
+  busy.value = true
+  error.value = ''
+  try {
+    const result = await api.agents.assignTask(
+      repo.value,
+      props.id,
+      assignee.value,
+      expectedOwner,
+      { token: auth.token, signal: controller.signal, quietUnauthenticated: true },
+    )
+    if (mine !== context) return
+    task.data.value = result
+    assigning.value = false
+    message.value = result.owner
+      ? 'Agent assigned. It can pick up this task when ready and execution is allowed.'
+      : 'Task returned to automatic routing.'
+    board.touched(['tasks'])
+    await tasks.reload()
+  } catch (cause) {
+    if (mine === context) error.value = describeError(cause)
+  } finally {
+    if (mine === context) busy.value = false
+  }
+}
+
 const windowOrigin = typeof window === 'undefined' ? '' : window.location.origin
 const link = computed(() =>
   typeof window === 'undefined'
@@ -96,6 +150,8 @@ watch(
     controller?.abort()
     busy.value = false
     finishing.value = null
+    assigning.value = false
+    assignee.value = ''
     dependency.value = ''
     error.value = ''
     message.value = ''
@@ -183,12 +239,16 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
         }}</Badge
         ><span v-if="active">{{
           task.data.value.ready
-            ? 'Ready: all prerequisites are done.'
+            ? 'All prerequisites are complete.'
             : 'Waiting for unfinished prerequisites.'
         }}</span
         ><span v-if="task.data.value.owner"
-          >Owned by <IdentityLabel :identity="task.data.value.owner" /></span
-        ><span v-else>Unassigned</span>
+          >{{ task.data.value.state === 'open' ? 'Assigned to' : 'Owned by' }}
+          <IdentityLabel :identity="task.data.value.owner" /></span
+        ><span v-else>Automatic routing</span
+        ><Button v-if="canAssign" size="sm" :disabled="busy" @click="chooseAgent"
+          >Choose agent…</Button
+        >
       </div>
       <p v-if="task.data.value.description" class="description">
         {{ task.data.value.description }}
@@ -196,7 +256,12 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       <p v-if="task.data.value.scope.length" class="state">
         Scope <code v-for="path in task.data.value.scope" :key="path">{{ path }}</code>
       </p>
-      <Alert v-if="error && !finishing" tone="bad" live="alert" title="The task was not updated"
+      <ExecutionControl :repo="repo" />
+      <Alert
+        v-if="error && !finishing && !assigning"
+        tone="bad"
+        live="alert"
+        title="The task was not updated"
         >{{ error
         }}<a
           v-if="needsSignIn"
@@ -295,7 +360,14 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             <div>
               <IdentityLabel :identity="run.identity" />
               <p v-if="run.summary">{{ run.summary }}</p>
-              <code>{{ run.run_id }}</code>
+              <RouterLink
+                v-if="auth.capabilities?.features.includes('agents.run_lookup')"
+                :to="{ name: 'run', params: { ...routeParams, id: run.run_id } }"
+                >{{ run.run_id }}</RouterLink
+              >
+              <code v-if="!auth.capabilities?.features.includes('agents.run_lookup')">{{
+                run.run_id
+              }}</code>
             </div>
             <Badge size="sm">{{ run.status }}</Badge>
           </li>
@@ -324,7 +396,7 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       :description="
         finishing === 'done'
           ? 'Dependent tasks may become ready to start. This records task completion; it does not approve or land any code.'
-          : 'Dependent tasks will keep waiting for this task. Running agent sessions are not stopped by cancelling a task.'
+          : 'Dependent tasks will keep waiting. Connected orchestrators stop their managed sessions after observing cancellation; manually launched processes may need a separate stop.'
       "
       :dismissable="!busy"
       @update:model-value="finishing = null"
@@ -348,6 +420,40 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
         ></template
       ></Dialog
     >
+    <Dialog v-model="assigning" title="Choose an agent" :busy="busy">
+      <p>
+        The assignment is reserved before execution. A configured executor for the chosen agent can
+        start when the task is ready and task execution is allowed.
+      </p>
+      <SelectField
+        v-model="assignee"
+        label="Assigned agent"
+        :options="assignment.options.value"
+        :disabled="busy || assignment.agents.loading.value"
+      />
+      <ErrorState
+        v-if="assignment.agents.error.value"
+        :error="assignment.agents.error.value"
+        @retry="assignment.agents.reload()"
+      />
+      <Alert v-if="error" tone="bad"
+        >{{ error }} Close this dialog and review the current assignment before retrying.</Alert
+      >
+      <template #footer
+        ><Button :disabled="busy" @click="assigning = false">Keep current assignment</Button
+        ><Button
+          variant="primary"
+          :loading="busy"
+          :disabled="
+            !canAssign ||
+            assignment.agents.loading.value ||
+            (assignee ? 'agent:' + assignee : '') === expectedOwner
+          "
+          @click="saveAssignment"
+          >Save assignment</Button
+        ></template
+      >
+    </Dialog>
   </div>
 </template>
 

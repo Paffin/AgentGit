@@ -94,7 +94,7 @@ fn record_from_wire(r: &v1::ProvenanceRecord) -> ApiResult<ProvenanceRecord> {
 
 impl App {
     /// The lifetime of idempotency records and the time to judge them by.
-    fn idem(&self) -> Idem {
+    pub(super) fn idem(&self) -> Idem {
         let ttl_ms = self.cfg.repos.idempotency_ttl_secs.saturating_mul(1000);
         Idem { ttl_ms: i64::try_from(ttl_ms).unwrap_or(i64::MAX), now_ms: self.clock.now().as_millis() }
     }
@@ -176,12 +176,46 @@ impl App {
         .await
     }
 
+    /// Reports expiring executor connectivity; only an operator may report it.
+    pub async fn report_executor(
+        &self,
+        call: &Call,
+        req: v1::ReportExecutorRequest,
+    ) -> ApiResult<v1::ExecutorPresence> {
+        let now = self.clock.now().as_millis();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            let presence = ag_agent::executor::report(
+                repo.meta(),
+                &req.agent,
+                &req.name,
+                req.slots,
+                req.available,
+                req.ttl_secs,
+                actor.as_str(),
+            )?;
+            Ok(executor_view(presence, now, false))
+        })
+        .await
+    }
+
     /// All registered agents.
     pub async fn list_agents(&self, call: &Call, req: v1::ListAgentsRequest) -> ApiResult<v1::ListAgentsResponse> {
         self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, |repo, _| {
-            Ok(v1::ListAgentsResponse {
-                agents: repo.meta().read(|tx| tx.agents())?.iter().map(convert::agent).collect(),
-            })
+            repo.meta()
+                .read(|tx| {
+                    let agents = tx
+                        .agents()?
+                        .iter()
+                        .map(|row| {
+                            let mut agent = convert::agent(row);
+                            agent.executor = ag_agent::executor::read(tx, &row.name)?
+                                .map(|p| executor_view(p, tx.now().as_millis(), row.disabled));
+                            Ok(agent)
+                        })
+                        .collect::<Result<Vec<_>, MetaError>>()?;
+                    Ok(v1::ListAgentsResponse { agents })
+                })
+                .map_err(Into::into)
         })
         .await
     }
@@ -379,6 +413,17 @@ impl App {
         }
     }
 
+    /// Looks up one current or historical run without scanning a recent-run list.
+    pub async fn get_run(&self, call: &Call, req: v1::GetRunRequest) -> ApiResult<v1::Run> {
+        let run_id = require(&req.run_id, "run_id")?.to_owned();
+        self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, move |repo, _| {
+            let row =
+                repo.meta().read(|tx| tx.run(&run_id))?.ok_or_else(|| ApiError::not_found("agent run not found"))?;
+            Ok(convert::run(&row))
+        })
+        .await
+    }
+
     /// Lists runs (newest first).
     pub async fn list_runs(&self, call: &Call, req: v1::ListRunsRequest) -> ApiResult<v1::ListRunsResponse> {
         let limit = if req.limit == 0 { 100 } else { req.limit.min(1000) } as usize;
@@ -395,14 +440,28 @@ impl App {
     /// Creates a task (with dependencies).
     pub async fn create_task(&self, call: &Call, req: v1::CreateTaskRequest) -> ApiResult<v1::Task> {
         let idem = self.idem();
+        let issue_admin = if req.source_issue > 0 {
+            self.authorize(call, &req.repo, Cap::IssueWrite, None).await?;
+            self.authorize(call, &req.repo, Cap::IssueManage, None).await.is_ok()
+        } else {
+            false
+        };
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
-            let request = format!(
+            super::issues::check_task_source(repo, actor, issue_admin, req.source_issue, req.expected_issue_version)?;
+            let mut request = format!(
                 "create_task\0{actor}\0{}\0{}\0{}\0{}",
                 req.title,
                 req.description,
                 req.scope.join(","),
                 req.depends_on.join(",")
             );
+            if req.source_issue != 0 {
+                request.push_str(&format!("\0issue:{}:{}", req.source_issue, req.expected_issue_version));
+            }
+            if !req.assignee.is_empty() {
+                ag_agent::registry::validate_name(&req.assignee)?;
+                request.push_str(&format!("\0assignee:{}", req.assignee));
+            }
             keyed(repo, idem, "task.create", &req.idempotency_key, &request, |claim| {
                 // The task, its dependencies and the idempotency record are one transaction.
                 let (_, response) = create_task_with(
@@ -413,13 +472,48 @@ impl App {
                     &req.depends_on,
                     actor.as_str(),
                     |tx, t| {
-                        let response = task_view_in(tx, t)?;
+                        super::issues::link_created_task(
+                            tx,
+                            actor,
+                            req.source_issue,
+                            req.expected_issue_version,
+                            &t.id,
+                        )?;
+                        let response = if req.assignee.is_empty() {
+                            task_view_in(tx, t)?
+                        } else {
+                            let assigned =
+                                ag_agent::tasks::assign_in_tx(tx, &t.id, &req.assignee, "", actor.as_str(), false)?;
+                            task_view_in(tx, &assigned)?
+                        };
                         claim.record(tx, &response)?;
                         Ok(response)
                     },
                 )?;
                 Ok(response)
             })
+        })
+        .await
+    }
+
+    /// Assigns queued work without changing a running task's ownership.
+    pub async fn assign_task(&self, call: &Call, req: v1::AssignTaskRequest) -> ApiResult<v1::Task> {
+        let operator = self.authorize(call, &req.repo, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
+            let existing =
+                repo.meta().read(|tx| tx.task(&req.id))?.ok_or_else(|| ApiError::not_found("task not found"))?;
+            if !operator && !super::owns(&existing.created_by, actor) {
+                return Err(ApiError::denied("only the task creator or an operator can assign it"));
+            }
+            let task = ag_agent::tasks::assign_task(
+                repo.meta(),
+                &req.id,
+                &req.agent,
+                &req.expected_owner,
+                actor.as_str(),
+                operator,
+            )?;
+            task_view(repo, &task)
         })
         .await
     }
@@ -645,5 +739,57 @@ impl App {
             })
         })
         .await
+    }
+}
+
+fn scheduling_wire(row: ag_agent::scheduling::TaskScheduling) -> v1::TaskScheduling {
+    v1::TaskScheduling {
+        paused: row.paused,
+        version: row.version,
+        reason: row.reason,
+        updated_by: row.updated_by,
+        updated_at_ms: row.updated_at_ms,
+    }
+}
+impl App {
+    /// Reads the persisted gate for new task-bound runs.
+    pub async fn get_task_scheduling(
+        &self,
+        call: &Call,
+        req: v1::GetTaskSchedulingRequest,
+    ) -> ApiResult<v1::TaskScheduling> {
+        self.with_repo(call, require(&req.repo, "repo")?, Cap::TaskRead, None, |repo, _| {
+            Ok(scheduling_wire(ag_agent::scheduling::get(repo.meta())?))
+        })
+        .await
+    }
+    /// Pauses or resumes task launches; existing runs keep their own lifecycle.
+    pub async fn set_task_scheduling(
+        &self,
+        call: &Call,
+        req: v1::SetTaskSchedulingRequest,
+    ) -> ApiResult<v1::TaskScheduling> {
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            Ok(scheduling_wire(ag_agent::scheduling::set(
+                repo.meta(),
+                req.paused,
+                &req.reason,
+                req.expected_version,
+                actor.as_str(),
+            )?))
+        })
+        .await
+    }
+}
+
+fn executor_view(p: ag_agent::executor::Presence, now: i64, disabled: bool) -> v1::ExecutorPresence {
+    v1::ExecutorPresence {
+        connected: !disabled && now < p.expires_at_ms,
+        name: p.name,
+        reported_by: p.reported_by,
+        reported_at_ms: p.reported_at_ms,
+        expires_at_ms: p.expires_at_ms,
+        slots: p.slots,
+        available: p.available,
     }
 }

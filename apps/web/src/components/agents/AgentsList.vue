@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import ConnectExecutor from './ConnectExecutor.vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
+import { useServerNow } from '@/composables/useNow'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Agent } from '@/api/types'
@@ -27,17 +29,32 @@ const auth = useAuth()
 const toasts = useToasts()
 
 const agents = useResource<Agent[]>(() => api.agents.list(props.repo), {
-  watch: [() => props.repo],
+  watch: [() => props.repo, () => auth.token],
 })
 useLiveReload(['agent'], () => agents.reload())
+const now = useServerNow()
+const hasPresence = computed(
+  () => !!auth.capabilities?.features.includes('agents.executor_presence'),
+)
+const connected = (agent: Agent) =>
+  !agent.disabled && !!agent.executor && now.value < agent.executor.expires_at_ms
+const refresh = setInterval(() => {
+  if (hasPresence.value && document.visibilityState === 'visible') void agents.reload()
+}, 20_000)
+onBeforeUnmount(() => clearInterval(refresh))
 
-const columns: Column[] = [
-  { key: 'identity', label: 'Agent', width: 'minmax(0, 1.6fr)' },
-  { key: 'role', label: 'Role', width: '7rem' },
-  { key: 'status', label: 'Status', width: '7rem' },
-  { key: 'public_key', label: 'Public key', width: 'minmax(0, 1.4fr)', hideBelow: 900 },
-  { key: 'created_at_ms', label: 'Registered', width: '8rem', align: 'end' },
-]
+const columns = computed<Column[]>(() =>
+  (
+    [
+      { key: 'identity', label: 'Agent', width: 'minmax(0, 1.6fr)' },
+      { key: 'executor', label: 'Executor connection', width: 'minmax(0, 1.4fr)', hideBelow: 800 },
+      { key: 'role', label: 'Role', width: '7rem', hideBelow: 600 },
+      { key: 'status', label: 'Status', width: '7rem' },
+      { key: 'public_key', label: 'Public key', width: 'minmax(0, 1.4fr)', hideBelow: 900 },
+      { key: 'created_at_ms', label: 'Registered', width: '8rem', align: 'end', hideBelow: 600 },
+    ] satisfies Column[]
+  ).filter((column) => column.key !== 'executor' || hasPresence.value),
+)
 
 const registering = ref(false)
 const name = ref('')
@@ -84,10 +101,11 @@ async function register() {
 
 <template>
   <div class="agents">
+    <ConnectExecutor :repo="repo" />
     <div class="bar">
       <p class="muted">
         Agents are long-lived principals with an Ed25519 key; each execution is a separate run with
-        its own identity.
+        its own identity. A registered key does not start an executor.
       </p>
       <Button
         icon="plus"
@@ -97,6 +115,10 @@ async function register() {
         >Register agent</Button
       >
     </div>
+    <p v-if="hasPresence" class="faint">
+      Connection is reported by a running orchestrator and expires without renewal. It does not
+      confirm that a model, credentials or task command will succeed.
+    </p>
     <ErrorState
       v-if="agents.error.value && !agents.data.value"
       what="agents"
@@ -112,8 +134,28 @@ async function register() {
       :loading="!agents.settled.value"
     >
       <template #cell-identity="{ row }"
-        ><IdentityLabel :identity="(row as Agent).identity" :size="22"
-      /></template>
+        ><IdentityLabel :identity="(row as Agent).identity" :size="22" />
+        <span v-if="hasPresence" class="executor-mobile">
+          {{ connected(row as Agent) ? 'Executor connected' : 'No recent executor report' }}
+        </span>
+      </template>
+      <template #cell-executor="{ row }">
+        <div class="executor">
+          <Badge :tone="connected(row as Agent) ? 'ok' : 'neutral'" size="sm">
+            {{ connected(row as Agent) ? 'Connected' : 'No recent report' }}
+          </Badge>
+          <template v-if="(row as Agent).executor">
+            <span>{{ (row as Agent).executor!.name }}</span>
+            <span v-if="connected(row as Agent)" class="faint"
+              >{{ (row as Agent).executor!.available }} / {{ (row as Agent).executor!.slots }} slots
+              free at last report</span
+            >
+            <span class="faint"
+              >Last contact <RelativeTime :ms="(row as Agent).executor!.reported_at_ms"
+            /></span>
+          </template>
+        </div>
+      </template>
       <template #cell-status="{ row }"
         ><Badge size="sm" :tone="(row as Agent).disabled ? 'bad' : 'ok'" dot>{{
           (row as Agent).disabled ? 'disabled' : 'enabled'
@@ -202,5 +244,23 @@ async function register() {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+.executor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.executor-mobile {
+  display: none;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+@media (max-width: 799px) {
+  .executor-mobile {
+    display: block;
+    margin-top: 4px;
+  }
 }
 </style>

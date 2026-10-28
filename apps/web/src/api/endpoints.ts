@@ -5,6 +5,8 @@ import { filePath, repoPath } from './client'
 import type { ApiClient, RequestOptions } from './client'
 import type {
   Agent,
+  Issue,
+  IssueActivity,
   AuditEntry,
   AuthConfig,
   Capabilities,
@@ -36,6 +38,8 @@ import type {
   ServerEvent,
   Stream,
   Task,
+  TaskScheduling,
+  RunOutput,
   TreeEntry,
   Attestation,
   FileChange,
@@ -198,6 +202,46 @@ export function createApi(c: ApiClient) {
       ) => c.post<DiffResponse>(r(repo, '/diff'), body, { ...o, readOnly: true }),
     },
 
+    issues: {
+      list: (
+        repo: string,
+        q: { state?: string; query?: string; page_size?: number; page_token?: string } = {},
+        o?: SessionOpts,
+      ) => c.get<{ issues: Issue[]; next_page_token: string }>(r(repo, '/issues'), q, o),
+      get: (repo: string, number: number, o?: SessionOpts) =>
+        c.get<Issue>(r(repo, `/issues/${number}`), undefined, o),
+      create: (
+        repo: string,
+        body: { title: string; body: string; task_id?: string },
+        o?: SessionOpts,
+      ) => c.post<Issue>(r(repo, '/issues'), body, o),
+      update: (
+        repo: string,
+        number: number,
+        body: {
+          title: string
+          body: string
+          state: string
+          task_id: string
+          expected_version: number
+        },
+        o?: SessionOpts,
+      ) => c.json<Issue>(r(repo, `/issues/${number}`), { ...o, method: 'PUT', body }),
+      comment: (repo: string, number: number, body: string, o?: SessionOpts) =>
+        c.post<IssueActivity>(r(repo, `/issues/${number}/comments`), { body }, o),
+      activity: (
+        repo: string,
+        number: number,
+        q: { page_size?: number; page_token?: string } = {},
+        o?: SessionOpts,
+      ) =>
+        c.get<{ activity: IssueActivity[]; next_page_token: string }>(
+          r(repo, `/issues/${number}/activity`),
+          q,
+          o,
+        ),
+    },
+
     // ---- proposals ------------------------------------------------------------------------------
     proposals: {
       list: async (
@@ -326,21 +370,51 @@ export function createApi(c: ApiClient) {
 
     // ---- agents ---------------------------------------------------------------------------------
     agents: {
-      list: async (repo: string, o?: Opts) =>
+      runOutput: (repo: string, runId: string, o?: SessionOpts) =>
+        c.get<RunOutput>(r(repo, `/runs/${encodeURIComponent(runId)}/output`), undefined, o),
+      deleteRunOutput: (repo: string, runId: string, o?: SessionOpts) =>
+        c.del<Record<string, never>>(
+          r(repo, `/runs/${encodeURIComponent(runId)}/output`),
+          undefined,
+          o,
+        ),
+
+      list: async (repo: string, o?: SessionOpts) =>
         (await c.get<{ agents: Agent[] }>(r(repo, '/agents'), undefined, o)).agents ?? [],
       register: (
         repo: string,
         body: { name: string; public_key: string; role?: string },
         o?: Opts,
       ) => c.post<Agent>(r(repo, '/agents'), body, o),
+      run: (repo: string, id: string, o?: SessionOpts) =>
+        c.get<Run>(r(repo, `/runs/${encodeURIComponent(id)}`), undefined, o),
       runs: async (
         repo: string,
         q: { agent?: string; active_only?: boolean; limit?: number } = {},
         o?: Opts,
       ) => (await c.get<{ runs: Run[] }>(r(repo, '/runs'), q, o)).runs ?? [],
+      scheduling: (repo: string, o?: SessionOpts) =>
+        c.get<TaskScheduling>(r(repo, '/tasks/scheduling'), undefined, o),
+      setScheduling: (
+        repo: string,
+        body: { paused: boolean; reason: string; expected_version: number },
+        o?: SessionOpts,
+      ) => c.json<TaskScheduling>(r(repo, '/tasks/scheduling'), { ...o, method: 'PUT', body }),
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
-      task: (repo: string, id: string, o?: Opts) =>
+      assignTask: (
+        repo: string,
+        id: string,
+        agent: string,
+        expectedOwner: string,
+        o?: SessionOpts,
+      ) =>
+        c.put<Task>(
+          r(repo, `/tasks/${encodeURIComponent(id)}/assignee`),
+          { agent, expected_owner: expectedOwner },
+          o,
+        ),
+      task: (repo: string, id: string, o?: SessionOpts) =>
         c.get<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), undefined, o),
       addDependency: (repo: string, id: string, dependency: string, o?: SessionOpts) =>
         c.post<Task>(
@@ -355,12 +429,15 @@ export function createApi(c: ApiClient) {
           description?: string
           scope?: string[]
           depends_on?: string[]
+          source_issue?: number
+          expected_issue_version?: number
+          assignee?: string
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Task>(r(repo, '/tasks'), body, o),
       finishTask: (repo: string, id: string, state: 'done' | 'cancelled', o?: SessionOpts) =>
         c.post<Task>(r(repo, `/tasks/${encodeURIComponent(id)}/finish`), { state }, o),
-      leases: async (repo: string, activeOnly = true, o?: Opts) =>
+      leases: async (repo: string, activeOnly = true, o?: SessionOpts) =>
         (await c.get<{ leases: Lease[] }>(r(repo, '/leases'), { active_only: activeOnly }, o))
           .leases ?? [],
       releaseLease: (repo: string, id: string, o?: Opts) =>
@@ -435,9 +512,9 @@ export function createApi(c: ApiClient) {
           scope?: Partial<CredentialScope>
           ttl_secs: number
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<{ credential: Credential; token: string }>('/v1/credentials', body, o),
-      revokeCredential: (id: string, o?: Opts) =>
+      revokeCredential: (id: string, o?: SessionOpts) =>
         c.del<{ revoked: boolean }>(`/v1/credentials/${encodeURIComponent(id)}`, undefined, o),
     },
   }

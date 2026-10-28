@@ -138,6 +138,7 @@ pub fn agent(a: &AgentRow) -> v1::Agent {
         role: a.role.clone(),
         created_at_ms: ms(a.created_at),
         disabled: a.disabled,
+        executor: None,
     }
 }
 

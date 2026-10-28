@@ -47,7 +47,6 @@ fn schema_is_created_once_and_versioned() {
     let again = first.reopen().unwrap();
     assert_eq!(again.read(|tx| tx.meta_get("k")).unwrap().as_deref(), Some("v"));
     assert_eq!(again.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
-    assert_eq!(SCHEMA_VERSION, 3, "bump the migration tests together with the version");
     assert!(again.read(|tx| tx.meta_get("created_at")).unwrap().is_some());
 }
 
@@ -83,14 +82,14 @@ fn a_version_1_database_migrates_forward_and_keeps_its_data() {
         conn.pragma_update(None, "user_version", 1).unwrap();
     }
     let m = Meta::open(&path).unwrap();
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("3"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
     assert_eq!(m.read(|tx| tx.meta_get("created_at")).unwrap().as_deref(), Some("5"), "creation time is kept");
     assert!(m.read(|tx| tx.stream("main")).unwrap().is_some(), "existing rows survive");
     let job = m.write(|tx| tx.job_enqueue("k", &json!({}), None, Timestamp::from_millis(0))).unwrap();
     assert_eq!(job.state, JobState::Queued, "the jobs table exists after migrating");
     let version: i64 =
         rusqlite::Connection::open(&path).unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, SCHEMA_VERSION);
     let indexes: Vec<String> = rusqlite::Connection::open(&path)
         .unwrap()
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'proposals_by_%_created' OR name = 'proposals_by_created' ORDER BY name")

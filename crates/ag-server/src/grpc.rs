@@ -13,6 +13,7 @@ use ag_protocol::v1::{
     execution_service_server::{ExecutionService, ExecutionServiceServer},
     history_service_server::{HistoryService, HistoryServiceServer},
     integration_service_server::{IntegrationService, IntegrationServiceServer},
+    issue_service_server::{IssueService, IssueServiceServer},
     object_service_server::{ObjectService, ObjectServiceServer},
     proposal_service_server::{ProposalService, ProposalServiceServer},
     protocol_service_server::{ProtocolService, ProtocolServiceServer},
@@ -432,6 +433,9 @@ impl AgentService for Grpc {
     async fn list(&self, request: Request<v1::ListAgentsRequest>) -> Result<Response<v1::ListAgentsResponse>, Status> {
         unary!(self, request, "agent.list", list_agents)
     }
+    async fn get_run(&self, request: Request<v1::GetRunRequest>) -> Result<Response<v1::Run>, Status> {
+        unary!(self, request, "agent.get_run", get_run)
+    }
     async fn start_run(&self, request: Request<v1::StartRunRequest>) -> Result<Response<v1::Run>, Status> {
         unary!(self, request, "agent.start_run", start_run)
     }
@@ -450,8 +454,47 @@ impl AgentService for Grpc {
     async fn reap_runs(&self, request: Request<v1::ReapRunsRequest>) -> Result<Response<v1::ReapRunsResponse>, Status> {
         unary!(self, request, "agent.reap_runs", reap_runs)
     }
+    async fn report_executor(
+        &self,
+        request: Request<v1::ReportExecutorRequest>,
+    ) -> Result<Response<v1::ExecutorPresence>, Status> {
+        unary!(self, request, "agent.executor.report", report_executor)
+    }
+    async fn get_run_output(
+        &self,
+        request: Request<v1::GetRunOutputRequest>,
+    ) -> Result<Response<v1::RunOutput>, Status> {
+        unary!(self, request, "agent.output.get", get_run_output)
+    }
+    async fn save_run_output(
+        &self,
+        request: Request<v1::SaveRunOutputRequest>,
+    ) -> Result<Response<v1::RunOutput>, Status> {
+        unary!(self, request, "agent.output.save", save_run_output)
+    }
+    async fn delete_run_output(
+        &self,
+        request: Request<v1::GetRunOutputRequest>,
+    ) -> Result<Response<v1::Empty>, Status> {
+        unary!(self, request, "agent.output.delete", delete_run_output)
+    }
+    async fn get_task_scheduling(
+        &self,
+        request: Request<v1::GetTaskSchedulingRequest>,
+    ) -> Result<Response<v1::TaskScheduling>, Status> {
+        unary!(self, request, "task.scheduling.get", get_task_scheduling)
+    }
+    async fn set_task_scheduling(
+        &self,
+        request: Request<v1::SetTaskSchedulingRequest>,
+    ) -> Result<Response<v1::TaskScheduling>, Status> {
+        unary!(self, request, "task.scheduling.set", set_task_scheduling)
+    }
     async fn create_task(&self, request: Request<v1::CreateTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.create", create_task)
+    }
+    async fn assign_task(&self, request: Request<v1::AssignTaskRequest>) -> Result<Response<v1::Task>, Status> {
+        unary!(self, request, "task.assign", assign_task)
     }
     async fn get_task(&self, request: Request<v1::GetTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.get", get_task)
@@ -628,6 +671,34 @@ impl ExecutionService for Grpc {
     }
 }
 
+#[tonic::async_trait]
+impl IssueService for Grpc {
+    async fn create(&self, request: Request<v1::CreateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.create", create_issue)
+    }
+    async fn get(&self, request: Request<v1::GetIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.get", get_issue)
+    }
+    async fn list(&self, request: Request<v1::ListIssuesRequest>) -> Result<Response<v1::ListIssuesResponse>, Status> {
+        unary!(self, request, "issue.list", list_issues)
+    }
+    async fn update(&self, request: Request<v1::UpdateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.update", update_issue)
+    }
+    async fn add_comment(
+        &self,
+        request: Request<v1::AddIssueCommentRequest>,
+    ) -> Result<Response<v1::IssueActivity>, Status> {
+        unary!(self, request, "issue.comment", add_issue_comment)
+    }
+    async fn list_activity(
+        &self,
+        request: Request<v1::ListIssueActivityRequest>,
+    ) -> Result<Response<v1::ListIssueActivityResponse>, Status> {
+        unary!(self, request, "issue.activity", list_issue_activity)
+    }
+}
+
 /// Builds the gRPC services as an axum router (so they share the HTTP port).
 pub fn router(app: App) -> axum::Router {
     let (unary, chunked) = (max_unary_message(&app.cfg), max_chunk_message(&app.cfg));
@@ -642,6 +713,7 @@ pub fn router(app: App) -> axum::Router {
     }
     tonic::service::Routes::new(svc!(ProtocolServiceServer))
         .add_service(svc!(RepositoryServiceServer))
+        .add_service(svc!(IssueServiceServer))
         .add_service(svc!(ObjectServiceServer, chunked))
         .add_service(svc!(HistoryServiceServer))
         .add_service(svc!(TreeServiceServer))

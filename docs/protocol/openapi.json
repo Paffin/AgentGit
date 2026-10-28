@@ -73,6 +73,29 @@
         },
         "type": "object"
       },
+      "AddIssueCommentRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Agent": {
         "properties": {
           "created_at_ms": {
@@ -83,6 +106,17 @@
           "disabled": {
             "default": false,
             "type": "boolean"
+          },
+          "executor": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExecutorPresence"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "identity": {
             "default": "",
@@ -149,6 +183,29 @@
             "type": "array"
           },
           "next_page_token": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AssignTaskRequest": {
+        "properties": {
+          "agent": {
+            "default": "",
+            "description": "Registered agent name; empty restores automatic routing.",
+            "type": "string"
+          },
+          "expected_owner": {
+            "default": "",
+            "description": "Owner inspected by the caller; empty means unassigned.",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
             "default": "",
             "type": "string"
           }
@@ -746,6 +803,31 @@
         },
         "type": "object"
       },
+      "CreateIssueRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "task_id": {
+            "default": "",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CreateProposalRequest": {
         "properties": {
           "description": {
@@ -826,6 +908,11 @@
       },
       "CreateTaskRequest": {
         "properties": {
+          "assignee": {
+            "default": "",
+            "description": "Optional initial agent assignment, saved before the task becomes visible.",
+            "type": "string"
+          },
           "depends_on": {
             "default": [],
             "items": {
@@ -836,6 +923,12 @@
           "description": {
             "default": "",
             "type": "string"
+          },
+          "expected_issue_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "idempotency_key": {
             "default": "",
@@ -851,6 +944,13 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "source_issue": {
+            "default": 0,
+            "description": "Optional source issue. Creation and linking commit atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "title": {
             "default": "",
@@ -1160,6 +1260,45 @@
             "default": "",
             "description": "The audit action the event is a view of, e.g. \"stream.integrate\", \"proposal.create\", \"proposal.review\",\n\"changeset.publish\", \"lease.acquire\", \"run.start\", \"job.enqueue\", \"policy.set\". SubscribeRequest.topics\nmatches by exact name, by dotted prefix (\"proposal\" matches \"proposal.create\" and \"proposal.review\") or\n\"\\*\" (everything).",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExecutorPresence": {
+        "properties": {
+          "available": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "connected": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expires_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "reported_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "reported_by": {
+            "default": "",
+            "type": "string"
+          },
+          "slots": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1507,6 +1646,21 @@
         },
         "type": "object"
       },
+      "GetIssueRequest": {
+        "properties": {
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetJobRequest": {
         "properties": {
           "job_id": {
@@ -1575,12 +1729,47 @@
         },
         "type": "object"
       },
+      "GetRunOutputRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetRunRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetTaskRequest": {
         "properties": {
           "id": {
             "default": "",
             "type": "string"
           },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetTaskSchedulingRequest": {
+        "properties": {
           "repo": {
             "default": "",
             "type": "string"
@@ -1879,6 +2068,88 @@
           "state": {
             "default": "",
             "description": "Intent state: prepared, ready, integrated, blocked, rejected, aborted, ...",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Issue": {
+        "description": "User-facing tracker issues are distinct from executable agent tasks.",
+        "properties": {
+          "author": {
+            "default": "",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "created_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "default": "",
+            "type": "string"
+          },
+          "task_id": {
+            "default": "",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "IssueActivity": {
+        "properties": {
+          "author": {
+            "default": "",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "created_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "issue_number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "kind": {
+            "default": "",
             "type": "string"
           }
         },
@@ -2202,6 +2473,90 @@
             "type": "string"
           },
           "tree_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListIssueActivityRequest": {
+        "properties": {
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_token": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListIssueActivityResponse": {
+        "properties": {
+          "activity": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IssueActivity"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListIssuesRequest": {
+        "properties": {
+          "page_size": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_token": {
+            "default": "",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "state": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListIssuesResponse": {
+        "properties": {
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
             "default": "",
             "type": "string"
           }
@@ -3838,6 +4193,41 @@
         },
         "type": "object"
       },
+      "ReportExecutorRequest": {
+        "properties": {
+          "agent": {
+            "default": "",
+            "type": "string"
+          },
+          "available": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "slots": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ttl_secs": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RequestValidationRequest": {
         "properties": {
           "checks": {
@@ -4115,6 +4505,50 @@
         },
         "type": "object"
       },
+      "RunOutput": {
+        "properties": {
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "captured_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
+          },
+          "sequence": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stderr": {
+            "default": "",
+            "type": "string"
+          },
+          "stderr_bytes": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stdout": {
+            "default": "",
+            "type": "string"
+          },
+          "stdout_bytes": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RunQueueRequest": {
         "properties": {
           "idempotency_key": {
@@ -4204,6 +4638,30 @@
             "format": "int32",
             "minimum": 0,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SaveRunOutputRequest": {
+        "properties": {
+          "output": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RunOutput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "run_id": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -4333,6 +4791,29 @@
             "type": "string"
           },
           "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SetTaskSchedulingRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paused": {
+            "default": false,
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
             "default": "",
             "type": "string"
           }
@@ -4559,6 +5040,34 @@
         },
         "type": "object"
       },
+      "TaskScheduling": {
+        "properties": {
+          "paused": {
+            "default": false,
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "default": "",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "TreeEntry": {
         "properties": {
           "blob_id": {
@@ -4593,6 +5102,44 @@
             "type": "string"
           },
           "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateIssueRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "description": "Required: rejects changes made after the caller loaded the issue.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "state": {
+            "default": "",
+            "type": "string"
+          },
+          "task_id": {
+            "default": "",
+            "type": "string"
+          },
+          "title": {
             "default": "",
             "type": "string"
           }
@@ -4797,7 +5344,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.3.0-beta.3"
+    "version": "0.3.0-beta.4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5011,6 +5558,7 @@
             "name": "credential_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -5547,6 +6095,77 @@
           }
         },
         "summary": "Register an agent and its public key",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/agents/{agent}/executor": {
+      "put": {
+        "operationId": "agent.executor.report",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportExecutorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutorPresence"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Report expiring executor connectivity",
         "tags": [
           "Agent"
         ]
@@ -6576,6 +7195,444 @@
         ]
       }
     },
+    "/v1/repos/{owner}/{rname}/issues": {
+      "get": {
+        "operationId": "issue.list",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIssuesResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List user issues",
+        "tags": [
+          "Issues"
+        ]
+      },
+      "post": {
+        "operationId": "issue.create",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a user issue",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/{number}": {
+      "get": {
+        "operationId": "issue.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a user issue",
+        "tags": [
+          "Issues"
+        ]
+      },
+      "put": {
+        "operationId": "issue.update",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Edit or close an issue at an expected version",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/{number}/activity": {
+      "get": {
+        "operationId": "issue.activity",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIssueActivityResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read issue discussion and history",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/{number}/comments": {
+      "post": {
+        "operationId": "issue.comment",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddIssueCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueActivity"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add an issue comment",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
     "/v1/repos/{owner}/{rname}/jobs": {
       "get": {
         "operationId": "jobs.list",
@@ -6675,6 +7732,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -6735,6 +7793,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -6805,6 +7864,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -6875,6 +7935,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -7077,6 +8138,7 @@
             "name": "lease_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -7137,6 +8199,7 @@
             "name": "lease_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8186,6 +9249,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
+              "description": "Id or unique prefix.",
               "type": "string"
             }
           }
@@ -8244,6 +9309,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8314,6 +9380,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8384,6 +9451,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8454,6 +9522,7 @@
             "name": "proposal",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           },
@@ -8543,6 +9612,7 @@
             "name": "proposal",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8613,6 +9683,7 @@
             "name": "proposal",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -8683,6 +9754,7 @@
             "name": "proposal",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -9356,6 +10428,67 @@
         ]
       }
     },
+    "/v1/repos/{owner}/{rname}/runs/{run_id}": {
+      "get": {
+        "operationId": "agent.get_run",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Look up a current or historical agent run",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
     "/v1/repos/{owner}/{rname}/runs/{run_id}/complete": {
       "post": {
         "operationId": "agent.complete",
@@ -9384,6 +10517,7 @@
             "name": "run_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -9454,6 +10588,7 @@
             "name": "run_id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -9491,6 +10626,195 @@
           }
         },
         "summary": "Run heartbeat",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/runs/{run_id}/output": {
+      "delete": {
+        "operationId": "agent.output.delete",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete saved executor output",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "get": {
+        "operationId": "agent.output.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read saved executor output",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "put": {
+        "operationId": "agent.output.save",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRunOutputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save bounded executor output",
         "tags": [
           "Agent"
         ]
@@ -9990,6 +11314,116 @@
         ]
       }
     },
+    "/v1/repos/{owner}/{rname}/tasks/scheduling": {
+      "get": {
+        "operationId": "task.scheduling.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduling"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read the gate for new task launches",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "put": {
+        "operationId": "task.scheduling.set",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTaskSchedulingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduling"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Pause or resume new task launches",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
     "/v1/repos/{owner}/{rname}/tasks/{id}": {
       "get": {
         "operationId": "task.get",
@@ -10018,6 +11452,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10045,6 +11480,77 @@
           }
         },
         "summary": "One task",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/tasks/{id}/assignee": {
+      "put": {
+        "operationId": "task.assign",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Assign queued work to a registered agent",
         "tags": [
           "Agent"
         ]
@@ -10078,6 +11584,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10148,6 +11655,7 @@
             "name": "task",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10567,6 +12075,7 @@
             "name": "name",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10625,6 +12134,7 @@
             "name": "name",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10685,6 +12195,7 @@
             "name": "name",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }
@@ -10755,6 +12266,7 @@
             "name": "name",
             "required": true,
             "schema": {
+              "default": "",
               "type": "string"
             }
           }

@@ -624,3 +624,58 @@ func (c *Client) ReplayEvents(ctx context.Context, repo string, afterSeq uint64,
 	}
 	return out.Events, out.LatestSeq, nil
 }
+
+// TaskScheduling reads the launch gate; older servers without this additive operation remain usable.
+func (c *Client) TaskScheduling(ctx context.Context, repo string) (*TaskScheduling, error) {
+	var out TaskScheduling
+	err := c.repoCall(ctx, "task.scheduling.get", http.MethodGet, repo, "/tasks/scheduling", nil, nil, &out)
+	if IsNotFound(err) {
+		return &out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetTaskScheduling changes the launch gate at an inspected revision.
+func (c *Client) SetTaskScheduling(ctx context.Context, repo string, paused bool, reason string, version uint64) (*TaskScheduling, error) {
+	var out TaskScheduling
+	body := map[string]any{"paused": paused, "reason": reason, "expected_version": version}
+	if err := c.repoCall(ctx, "task.scheduling.set", http.MethodPut, repo, "/tasks/scheduling", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// AssignTask selects a registered agent while a task is still queued.
+func (c *Client) AssignTask(ctx context.Context, repo, id, agent, expectedOwner string) (*Task, error) {
+	var out Task
+	body := map[string]any{"agent": agent, "expected_owner": expectedOwner}
+	if err := c.repoCall(ctx, "task.assign", http.MethodPut, repo, "/tasks/"+url.PathEscape(id)+"/assignee", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ReportExecutor renews a bounded connectivity report without sending commands or secrets.
+func (c *Client) ReportExecutor(ctx context.Context, repo, agent, name string, slots, available, ttl uint32) error {
+	var out ExecutorPresence
+	return c.repoCall(ctx, "agent.executor.report", http.MethodPut, repo, "/agents/"+url.PathEscape(agent)+"/executor", nil,
+		map[string]any{"name": name, "slots": slots, "available": available, "ttl_secs": ttl}, &out)
+}
+
+// SaveRunOutput sends one explicitly enabled, redacted output snapshot as the operator.
+func (c *Client) SaveRunOutput(ctx context.Context, repo, run string, output RunOutput) error {
+	var out RunOutput
+	return c.repoCall(ctx, "agent.output.save", http.MethodPut, repo, "/runs/"+url.PathEscape(run)+"/output", nil, map[string]any{"output": output}, &out)
+}
+
+// GetRunOutput reads the last saved snapshot under the run's normal read permission.
+func (c *Client) GetRunOutput(ctx context.Context, repo, run string) (*RunOutput, error) {
+	var out RunOutput
+	if err := c.repoCall(ctx, "agent.output.get", http.MethodGet, repo, "/runs/"+url.PathEscape(run)+"/output", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

@@ -215,3 +215,72 @@ pub fn dependents(meta: &Meta, task: &str) -> Result<BTreeSet<String>, AgentErro
         Ok(out)
     })?)
 }
+
+/// Assigns queued work to a registered agent, or returns it to automatic routing.
+/// The creator or an operator may assign only while the task is still open.
+pub fn assign_task(
+    meta: &Meta,
+    id: &str,
+    agent: &str,
+    expected_owner: &str,
+    actor: &str,
+    operator: bool,
+) -> Result<TaskRow, AgentError> {
+    if !agent.is_empty() {
+        crate::registry::validate_name(agent)?;
+    }
+    meta.write(|tx| assign_in_tx(tx, id, agent, expected_owner, actor, operator)).map_err(|e| match e {
+        MetaError::Invalid(m) => AgentError::Conflict(m),
+        MetaError::NotFound(m) => AgentError::NotFound(m),
+        other => AgentError::Meta(other),
+    })
+}
+
+/// Composes assignment with task creation and its idempotency record in one transaction.
+pub fn assign_in_tx(
+    tx: &Tx<'_>,
+    id: &str,
+    agent: &str,
+    expected_owner: &str,
+    actor: &str,
+    operator: bool,
+) -> Result<TaskRow, MetaError> {
+    let task = tx.task(id)?.ok_or_else(|| MetaError::NotFound(format!("task '{id}'")))?;
+    check_assignment(tx, &task, expected_owner, actor, operator)?;
+    let owner = assignment_owner(tx, agent)?;
+    tx.task_set_owner(id, owner.as_deref())?;
+    let detail = json!({"from":task.owner,"to":owner,"operator":operator});
+    tx.audit_append(actor, "task.assign", id, &detail)?;
+    tx.outbox_push("task.assign", &detail)?;
+    tx.task(id)?.ok_or_else(|| MetaError::Corrupt("assigned task missing".into()))
+}
+
+fn check_assignment(
+    tx: &Tx<'_>,
+    task: &TaskRow,
+    expected_owner: &str,
+    actor: &str,
+    operator: bool,
+) -> Result<(), MetaError> {
+    if !operator && task.created_by.split('#').next() != actor.split('#').next() {
+        return Err(MetaError::Invalid("only the task creator or an operator can assign it".into()));
+    }
+    if task.state != "open" || !tx.runs_running_for_task(&task.id)?.is_empty() {
+        return Err(MetaError::Invalid("only queued tasks can be reassigned; stop the current work first".into()));
+    }
+    if task.owner.as_deref().unwrap_or("") != expected_owner {
+        return Err(MetaError::Invalid("the task assignment changed; reload before choosing an agent".into()));
+    }
+    Ok(())
+}
+
+fn assignment_owner(tx: &Tx<'_>, agent: &str) -> Result<Option<String>, MetaError> {
+    if agent.is_empty() {
+        return Ok(None);
+    }
+    let registered = tx.agent(agent)?.ok_or_else(|| MetaError::NotFound(format!("agent '{agent}'")))?;
+    if registered.disabled {
+        return Err(MetaError::Invalid("the selected agent is disabled".into()));
+    }
+    Ok(Some(registered.identity))
+}

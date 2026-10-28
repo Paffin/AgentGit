@@ -42,7 +42,7 @@ MATCHERS = [
             + "$"
         ),
     )
-    for op in OPERATIONS.values()
+    for op in sorted(OPERATIONS.values(), key=lambda op: op.route.count("{"))
 ]
 
 
@@ -264,12 +264,24 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     key = generate_agent_key()
     bot.agents.register(repo=REPO, name="tour-bot", public_key=key.public_key_hex)
     assert "tour-bot" in [a.name for a in alice.agents.list(repo=REPO).agents]
-    task = alice.tasks.create(repo=REPO, title="tour task", scope=["src/**"])
+    tour["admin"].agents.executor_report(
+        repo=REPO, agent="tour-bot", name="command", slots=1, available=1, ttl_secs=90
+    )
+    task = alice.tasks.create(repo=REPO, title="tour task", scope=["src/**"], assignee="tour-bot")
+    alice.tasks.assign(repo=REPO, id=task.id, agent="tour-bot", expected_owner="agent:tour-bot")
     dep = alice.tasks.create(repo=REPO, title="depends")
     alice.tasks.depend(repo=REPO, task=dep.id, depends_on=task.id)
     assert len(alice.tasks.list(repo=REPO).tasks) == 2
     run = bot.agents.start_run(repo=REPO, agent="tour-bot", task_id=task.id)
     assert len(alice.agents.list_runs(repo=REPO, active_only=True).runs) == 1
+    assert alice.agents.get_run(repo=REPO, run_id=run.run_id).identity == run.identity
+    tour["admin"].agents.output_save(
+        repo=REPO,
+        run_id=run.run_id,
+        output={"sequence": 1, "stdout": "captured", "stderr": "", "stdout_bytes": 8, "stderr_bytes": 0},
+    )
+    assert alice.agents.output_get(repo=REPO, run_id=run.run_id).stdout == "captured"
+    tour["admin"].agents.output_delete(repo=REPO, run_id=run.run_id)
     runner = bot.with_run(run.run_id)
     runner.agents.heartbeat(repo=REPO, run_id=run.run_id)
     lease = runner.leases.acquire(repo=REPO, scope="src/**", exclusive=True, ttl_ms=30_000, task_id=task.id)
@@ -316,6 +328,36 @@ def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     admin.admin.unpin(repo=REPO, name="release-1")
     assert admin.admin.fsck(repo=REPO).ok
     assert admin.admin.gc(repo=REPO, dry_run=True).dry_run
+
+
+def test_operator_scheduling_gate(tour: dict[str, AgentGitClient]) -> None:
+    admin = tour["admin"]
+    initial = admin.tasks.scheduling_get(repo=REPO)
+    paused = admin.tasks.scheduling_set(
+        repo=REPO, paused=True, expected_version=initial.version, reason="Upgrade"
+    )
+    assert paused.paused
+    resumed = admin.tasks.scheduling_set(repo=REPO, paused=False, expected_version=paused.version)
+    assert not resumed.paused
+
+
+def test_issue_discussion(tour: dict[str, AgentGitClient]) -> None:
+    alice = tour["alice"]
+    issue = alice.issues.create(repo=REPO, title="Move the project", body="Keep history")
+    assert alice.issues.get(repo=REPO, number=issue.number).title == issue.title
+    assert any(item.number == issue.number for item in alice.paginate("issue.list", repo=REPO))
+    comment = alice.issues.comment(repo=REPO, number=issue.number, body="Ready")
+    assert comment.body == "Ready"
+    closed = alice.issues.update(
+        repo=REPO,
+        number=issue.number,
+        title=issue.title,
+        body=issue.body,
+        state="closed",
+        expected_version=issue.version,
+    )
+    assert closed.state == "closed"
+    assert len(list(alice.paginate("issue.activity", repo=REPO, number=issue.number))) == 3
 
 
 def test_git_migration(tour: dict[str, AgentGitClient]) -> None:

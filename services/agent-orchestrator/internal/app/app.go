@@ -169,7 +169,9 @@ func (a *App) buildClients() error {
 	revEnv, advEnv := a.cfg.Server.ReviewerEnv, a.cfg.Server.AdvisorEnv
 	if a.getenv(revEnv) == "" {
 		a.shared["reviewer"] = revEnv
-		a.log.Warn("no reviewer credential: automated reviews are posted with the orchestrator's identity (set "+revEnv+" for a separate service:reviewer)", "env", revEnv)
+		if a.identityEnabled("reviewer") {
+			a.log.Warn("no reviewer credential: automated reviews are posted with the orchestrator's identity (set "+revEnv+" for a separate service:reviewer)", "env", revEnv)
+		}
 		revEnv = a.cfg.Server.TokenEnv
 	}
 	if a.reviewer, err = mk("reviewer", revEnv); err != nil {

@@ -49,6 +49,7 @@ from agentgit._generated.models import (
     ErrorEnvelope,
     ErrorInfo,
     Event,
+    ExecutorPresence,
     ExtendLeaseRequest,
     FailJobRequest,
     FileChange,
@@ -170,6 +171,7 @@ from agentgit._generated.models import (
     ReplayRequest,
     ReplayResponse,
     Repo,
+    ReportExecutorRequest,
     RequestValidationRequest,
     RequestValidationResponse,
     ResolvePathRequest,
@@ -352,6 +354,20 @@ class AgentsApi:
     ) -> Run:
         """Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`)."""
         return self._c._call("agent.complete", {"repo": repo, "run_id": run_id, "idempotency_key": idempotency_key, "status": status, "summary": summary}, options, Run)
+
+    def executor_report(
+        self,
+        *,
+        repo: str,
+        agent: str,
+        available: int | None = None,
+        name: str | None = None,
+        slots: int | None = None,
+        ttl_secs: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ExecutorPresence:
+        """Report expiring executor connectivity (`PUT /v1/repos/{owner}/{rname}/agents/{agent}/executor`, operation `agent.executor.report`)."""
+        return self._c._call("agent.executor.report", {"repo": repo, "agent": agent, "available": available, "name": name, "slots": slots, "ttl_secs": ttl_secs}, options, ExecutorPresence)
 
     def get_run(
         self,
@@ -1803,6 +1819,20 @@ class AsyncAgentsApi:
     ) -> Run:
         """Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`)."""
         return await self._c._call("agent.complete", {"repo": repo, "run_id": run_id, "idempotency_key": idempotency_key, "status": status, "summary": summary}, options, Run)
+
+    async def executor_report(
+        self,
+        *,
+        repo: str,
+        agent: str,
+        available: int | None = None,
+        name: str | None = None,
+        slots: int | None = None,
+        ttl_secs: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ExecutorPresence:
+        """Report expiring executor connectivity (`PUT /v1/repos/{owner}/{rname}/agents/{agent}/executor`, operation `agent.executor.report`)."""
+        return await self._c._call("agent.executor.report", {"repo": repo, "agent": agent, "available": available, "name": name, "slots": slots, "ttl_secs": ttl_secs}, options, ExecutorPresence)
 
     async def get_run(
         self,

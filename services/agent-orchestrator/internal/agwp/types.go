@@ -102,12 +102,24 @@ type Stream struct {
 }
 
 // Agent is a registered agent.
+// ExecutorPresence is a recent operator report, not proof of a successful task.
+type ExecutorPresence struct {
+	Name         string `json:"name"`
+	ReportedBy   string `json:"reported_by"`
+	ReportedAtMS int64  `json:"reported_at_ms"`
+	ExpiresAtMS  int64  `json:"expires_at_ms"`
+	Slots        uint32 `json:"slots"`
+	Available    uint32 `json:"available"`
+	Connected    bool   `json:"connected"`
+}
+
 type Agent struct {
-	Name      string `json:"name"`
-	Identity  string `json:"identity"`
-	PublicKey string `json:"public_key"`
-	Role      string `json:"role"`
-	Disabled  bool   `json:"disabled"`
+	Executor  *ExecutorPresence `json:"executor,omitempty"`
+	Name      string            `json:"name"`
+	Identity  string            `json:"identity"`
+	PublicKey string            `json:"public_key"`
+	Role      string            `json:"role"`
+	Disabled  bool              `json:"disabled"`
 }
 
 // Run is one execution of an agent.

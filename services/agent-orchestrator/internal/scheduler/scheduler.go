@@ -70,6 +70,14 @@ type Options struct {
 }
 
 // schedulingSource is optional for test adapters and clients predating the launch gate.
+type executorPreparer interface {
+	PrepareExecutor(context.Context, string, string) error
+}
+
+type executorReporter interface {
+	ReportExecutor(context.Context, string, string, string, uint32, uint32, uint32) error
+}
+
 type schedulingSource interface {
 	TaskScheduling(context.Context, string) (*agwp.TaskScheduling, error)
 }
@@ -107,15 +115,16 @@ type Scheduler struct {
 	kick *loop.Kicker
 	run  *loop.Runner
 
-	mu        sync.Mutex
-	attempts  map[string]int
-	tempFails map[string]int
-	retryAt   map[string]time.Time
-	awaiting  map[string]awaitInfo
-	deferred  map[string]Deferral
-	lastPass  time.Time
-	lastErr   string
-	tasksSeen map[string]int
+	mu         sync.Mutex
+	attempts   map[string]int
+	tempFails  map[string]int
+	retryAt    map[string]time.Time
+	awaiting   map[string]awaitInfo
+	deferred   map[string]Deferral
+	lastReport time.Time
+	lastPass   time.Time
+	lastErr    string
+	tasksSeen  map[string]int
 	// seeded: tasks whose retry budget was recovered from the server's run history (after a restart)
 	seeded map[string]bool
 	// predictErr is why the server's conflict prediction could not be read in the last pass ("" when it could)
@@ -207,6 +216,7 @@ func (s *Scheduler) managedAgent(identity string) bool {
 // Reconcile is one scheduling pass. It is safe to call concurrently with
 // session callbacks and from tests.
 func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
+	s.reportExecutors(ctx)
 	repo := s.o.Repo.Name
 	defer func() {
 		s.mu.Lock()
@@ -861,4 +871,38 @@ func (s *Scheduler) Status() Status {
 	sort.Slice(st.Deferred, func(i, j int) bool { return st.Deferred[i].Task < st.Deferred[j].Task })
 	sort.Slice(st.Retrying, func(i, j int) bool { return st.Retrying[i].Task < st.Retrying[j].Task })
 	return st
+}
+
+// Presence describes this process and its last capacity snapshot, never task success.
+func (s *Scheduler) reportExecutors(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	reporter, ok := s.o.API.(executorReporter)
+	if !ok {
+		return
+	}
+	now := s.o.Clock.Now()
+	s.mu.Lock()
+	if !s.lastReport.IsZero() && now.Sub(s.lastReport) < 20*time.Second {
+		s.mu.Unlock()
+		return
+	}
+	s.lastReport = now
+	s.mu.Unlock()
+	ttl := uint32(90)
+	if interval := s.o.Loop.Reconcile / time.Second * 3; interval > 90 {
+		ttl = uint32(min(interval, 900))
+	}
+	for _, ex := range s.o.Execs {
+		if preparer, ok := s.o.Sessions.(executorPreparer); ok {
+			if err := preparer.PrepareExecutor(ctx, s.o.Repo.Name, ex.Agent); err != nil {
+				s.log.Warn("could not prepare executor identity", "agent", ex.Agent, "err", err)
+				continue
+			}
+		}
+		available := max(0, s.o.Sessions.FreeSlots(ex))
+		if err := reporter.ReportExecutor(ctx, s.o.Repo.Name, ex.Agent, ex.Name, uint32(ex.Slots), uint32(available), ttl); err != nil {
+			s.log.Debug("executor presence was not accepted", "agent", ex.Agent, "err", err)
+		}
+	}
 }

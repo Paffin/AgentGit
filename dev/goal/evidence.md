@@ -282,3 +282,24 @@ Crapper complexity inspection split assignment validation and agent resolution i
 separate units; no coverage-derived CRAP score is claimed. Dryer found no duplicate
 candidates in the focused units. Mutator discovery was inspected; no mutation kill
 rate is claimed for this slice.
+
+## Executor connectivity — executor-presence branch, 2026-10-28
+
+The Go scheduler prepares and verifies configured executor identities before their
+first run, then sends expiring operator reports with name and available/total slots.
+The server uses its own receive/expiry times, rejects ordinary writers and invalid
+capacity, and exposes the latest report through the agent list. A report is not a
+command health check, successful model invocation or aggregate fleet capacity.
+
+Focused engine and HTTP scenarios passed persistence, expiry timestamps, role checks
+and invalid capacity. Real-server Go scenarios passed executor reporting before the
+first task and dispatch to the explicitly assigned command executor. This run used
+AG_SERVER_BIN explicitly; no skipped test is counted as runtime evidence. The prior
+standalone assignment fixture was corrected to register its chosen key before use.
+
+TypeScript/Python operation tours passed (12/13 cases), and the Web build and type
+checks passed. Chromium and phone workflows exercised the registered-only versus
+connected states and reload. The registered-agent tab now opens directly to its
+agents, without the unrelated task-creation form above it. Crapper complexity,
+focused duplicate analysis and mutation-site discovery were inspected; no coverage
+percentage or mutation kill rate is claimed.

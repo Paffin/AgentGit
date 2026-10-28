@@ -49,6 +49,7 @@ __all__ = [
     "ErrorEnvelope",
     "ErrorInfo",
     "Event",
+    "ExecutorPresence",
     "ExtendLeaseRequest",
     "FailJobRequest",
     "FileChange",
@@ -170,6 +171,7 @@ __all__ = [
     "ReplayRequest",
     "ReplayResponse",
     "Repo",
+    "ReportExecutorRequest",
     "RequestValidationRequest",
     "RequestValidationResponse",
     "ResolvePathRequest",
@@ -256,6 +258,7 @@ class Agent:
     """The `Agent` message."""
     created_at_ms: int = field(default=0)
     disabled: bool = field(default=False)
+    executor: ExecutorPresence | None = field(default=None)
     identity: str = field(default="")
     name: str = field(default="")
     public_key: str = field(default="")
@@ -635,6 +638,18 @@ class Event:
     seq: int = field(default=0)
     timestamp_ms: int = field(default=0)
     topic: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ExecutorPresence:
+    """The `ExecutorPresence` message."""
+    available: int = field(default=0)
+    connected: bool = field(default=False)
+    expires_at_ms: int = field(default=0)
+    name: str = field(default="")
+    reported_at_ms: int = field(default=0)
+    reported_by: str = field(default="")
+    slots: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -1682,6 +1697,17 @@ class Repo:
     object_backend: str = field(default="")
     quota: Quota = field(default_factory=lambda: Quota())
     stream_count: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class ReportExecutorRequest:
+    """The `ReportExecutorRequest` message."""
+    agent: str = field(default="")
+    available: int = field(default=0)
+    name: str = field(default="")
+    repo: str = field(default="")
+    slots: int = field(default=0)
+    ttl_secs: int = field(default=0)
 
 
 @dataclass(kw_only=True)

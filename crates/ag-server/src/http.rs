@@ -1219,6 +1219,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/agents/{agent}/executor",
+        "agent.executor.report",
+        "Agent",
+        "Report expiring executor connectivity",
+        v1::ReportExecutorRequest,
+        v1::ExecutorPresence,
+        report_executor
+    );
+    route!(
+        r,
+        meta,
         get,
         "get",
         "/v1/repos/{owner}/{rname}/tasks/scheduling",

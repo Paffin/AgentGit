@@ -669,3 +669,17 @@ fn queued_assignment_blocks_other_agents_and_cannot_change_a_running_task() {
     assert!(tasks::assign_task(&e.meta, &t.id, "first", "agent:chosen", "user:admin", true).is_err());
     assert_eq!(e.meta.read(|tx| tx.run(&run.run_id)).unwrap().unwrap().task_id.as_deref(), Some(t.id.as_str()));
 }
+
+#[test]
+fn executor_reports_survive_reopen_and_expire_without_renewal() {
+    let mut e = env();
+    e.meta = TestMeta::shared(e.clock.clone());
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let saved = ag_agent::executor::report(&e.meta, "bot", "command", 2, 1, 30, "service:orchestrator").unwrap();
+    let reopened = e.meta.reopen().unwrap();
+    let stored = reopened.read(|tx| ag_agent::executor::read(tx, "bot")).unwrap().unwrap();
+    assert_eq!(stored.expires_at_ms, saved.reported_at_ms + 30_000);
+    e.clock.advance_ms(30_000);
+    assert!(reopened.read(|tx| Ok(tx.now().as_millis() >= stored.expires_at_ms)).unwrap());
+    assert!(ag_agent::executor::report(&e.meta, "bot", "command", 2, 3, 30, "service:orchestrator").is_err());
+}

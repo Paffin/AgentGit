@@ -107,6 +107,17 @@
             "default": false,
             "type": "boolean"
           },
+          "executor": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExecutorPresence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "identity": {
             "default": "",
             "type": "string"
@@ -1249,6 +1260,45 @@
             "default": "",
             "description": "The audit action the event is a view of, e.g. \"stream.integrate\", \"proposal.create\", \"proposal.review\",\n\"changeset.publish\", \"lease.acquire\", \"run.start\", \"job.enqueue\", \"policy.set\". SubscribeRequest.topics\nmatches by exact name, by dotted prefix (\"proposal\" matches \"proposal.create\" and \"proposal.review\") or\n\"\\*\" (everything).",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExecutorPresence": {
+        "properties": {
+          "available": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "connected": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expires_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "reported_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "reported_by": {
+            "default": "",
+            "type": "string"
+          },
+          "slots": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -4130,6 +4180,41 @@
         },
         "type": "object"
       },
+      "ReportExecutorRequest": {
+        "properties": {
+          "agent": {
+            "default": "",
+            "type": "string"
+          },
+          "available": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "slots": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ttl_secs": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RequestValidationRequest": {
         "properties": {
           "checks": {
@@ -5929,6 +6014,77 @@
           }
         },
         "summary": "Register an agent and its public key",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/agents/{agent}/executor": {
+      "put": {
+        "operationId": "agent.executor.report",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportExecutorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutorPresence"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Report expiring executor connectivity",
         "tags": [
           "Agent"
         ]

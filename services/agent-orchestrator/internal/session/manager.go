@@ -227,6 +227,16 @@ func (m *Manager) Start(ctx context.Context, req Request) (*Info, error) {
 	return &info, nil
 }
 
+// PrepareExecutor registers and verifies the local key before tasks can be assigned to it.
+// It does not start a process or mint a run credential.
+func (m *Manager) PrepareExecutor(ctx context.Context, repo, agent string) error {
+	key, err := m.o.Keys.Ensure(agent)
+	if err != nil {
+		return fmt.Errorf("agent key: %w", err)
+	}
+	return m.ensureAgent(ctx, repo, agent, key.PublicHex())
+}
+
 // ensureAgent registers the agent with its public key unless it already is.
 func (m *Manager) ensureAgent(ctx context.Context, repo, agent, pub string) error {
 	k := repo + "|" + agent

@@ -53,7 +53,9 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
-    /// Creators and operators can assign queued tasks to registered agents.
+    /// Expiring operator reports distinguish connected executors from registered keys.
+    pub const EXECUTOR_PRESENCE: &str = "agents.executor_presence";
+    /// Explicit queued task assignment.
     pub const TASK_ASSIGNMENT: &str = "tasks.assignment";
     /// Exact lookup of a current or historical agent run.
     pub const RUN_LOOKUP: &str = "agents.run_lookup";
@@ -82,6 +84,7 @@ pub mod features {
         TASK_SCHEDULING,
         RUN_LOOKUP,
         TASK_ASSIGNMENT,
+        EXECUTOR_PRESENCE,
     ];
 }
 

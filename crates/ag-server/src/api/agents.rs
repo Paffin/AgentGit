@@ -176,12 +176,46 @@ impl App {
         .await
     }
 
+    /// Reports expiring executor connectivity; only an operator may report it.
+    pub async fn report_executor(
+        &self,
+        call: &Call,
+        req: v1::ReportExecutorRequest,
+    ) -> ApiResult<v1::ExecutorPresence> {
+        let now = self.clock.now().as_millis();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::AgentOperate, None, move |repo, actor| {
+            let presence = ag_agent::executor::report(
+                repo.meta(),
+                &req.agent,
+                &req.name,
+                req.slots,
+                req.available,
+                req.ttl_secs,
+                actor.as_str(),
+            )?;
+            Ok(executor_view(presence, now, false))
+        })
+        .await
+    }
+
     /// All registered agents.
     pub async fn list_agents(&self, call: &Call, req: v1::ListAgentsRequest) -> ApiResult<v1::ListAgentsResponse> {
         self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, |repo, _| {
-            Ok(v1::ListAgentsResponse {
-                agents: repo.meta().read(|tx| tx.agents())?.iter().map(convert::agent).collect(),
-            })
+            repo.meta()
+                .read(|tx| {
+                    let agents = tx
+                        .agents()?
+                        .iter()
+                        .map(|row| {
+                            let mut agent = convert::agent(row);
+                            agent.executor = ag_agent::executor::read(tx, &row.name)?
+                                .map(|p| executor_view(p, tx.now().as_millis(), row.disabled));
+                            Ok(agent)
+                        })
+                        .collect::<Result<Vec<_>, MetaError>>()?;
+                    Ok(v1::ListAgentsResponse { agents })
+                })
+                .map_err(Into::into)
         })
         .await
     }
@@ -745,5 +779,17 @@ impl App {
             )?))
         })
         .await
+    }
+}
+
+fn executor_view(p: ag_agent::executor::Presence, now: i64, disabled: bool) -> v1::ExecutorPresence {
+    v1::ExecutorPresence {
+        connected: !disabled && now < p.expires_at_ms,
+        name: p.name,
+        reported_by: p.reported_by,
+        reported_at_ms: p.reported_at_ms,
+        expires_at_ms: p.expires_at_ms,
+        slots: p.slots,
+        available: p.available,
     }
 }

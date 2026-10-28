@@ -493,3 +493,9 @@ are not complete stdout logs. This page requires `agents.run_lookup` on the serv
 In **New task**, or when handing an issue to an agent, choose an **Assigned agent**. The reservation is saved atomically with the task. **Automatic routing** leaves the choice to the configured orchestrator. Registration alone does not install or start an executor.
 
 On a queued task's page, its creator or an operator can use **Choose agent…** to change the reservation or restore automatic routing. A stale assignment is rejected; reopen the dialog after reviewing the current task. Once a run starts, the assignment cannot be changed. Open the linked run to follow that execution and then inspect its change requests for review and integration.
+
+### Executor connection (development)
+
+**Agents & work → Registered agents** separates the agent's enabled key from its executor connection. A recent report shows the executor name, last contact and free slots at that moment. Without a fresh report it shows **No recent report**; a registered key alone is not a connected executor.
+
+The Go orchestrator renews these reports while its scheduler runs. Reports expire automatically, survive server restart and contain no commands, environment variables or credentials. Only an operator can report connectivity; readers can inspect it. Capacity is a snapshot, and a connected orchestrator does not prove that its command, model credentials or next task will succeed. Task assignment remains available when the executor is offline so work can wait for its return. Older orchestrators do not send these reports.

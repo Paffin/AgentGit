@@ -12,6 +12,7 @@
 //!   stored apart from the immutable changeset;
 //! * [`predict`] — early detection of overlapping work.
 
+pub mod executor;
 pub mod leases;
 pub mod predict;
 pub mod provenance;

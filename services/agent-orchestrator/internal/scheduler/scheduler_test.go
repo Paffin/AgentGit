@@ -763,3 +763,21 @@ func TestQueuedAssignmentOverridesTheDefaultExecutor(t *testing.T) {
 		t.Fatalf("assignment ignored: %+v", runs)
 	}
 }
+
+func TestSchedulerReportsItsExecutorConnection(t *testing.T) {
+	h := newHarness(t, nil, nil, command(t, "connected-bot", "sleep 0.05"))
+	h.reconcile()
+	agents, err := h.orch.ListAgents(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, agent := range agents {
+		if agent.Name == "connected-bot" {
+			if agent.Executor == nil || !agent.Executor.Connected || agent.Executor.Slots != 4 {
+				t.Fatalf("executor presence = %+v", agent.Executor)
+			}
+			return
+		}
+	}
+	t.Fatal("registered executor missing")
+}

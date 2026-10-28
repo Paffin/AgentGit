@@ -454,6 +454,12 @@ impl AgentService for Grpc {
     async fn reap_runs(&self, request: Request<v1::ReapRunsRequest>) -> Result<Response<v1::ReapRunsResponse>, Status> {
         unary!(self, request, "agent.reap_runs", reap_runs)
     }
+    async fn report_executor(
+        &self,
+        request: Request<v1::ReportExecutorRequest>,
+    ) -> Result<Response<v1::ExecutorPresence>, Status> {
+        unary!(self, request, "agent.executor.report", report_executor)
+    }
     async fn get_task_scheduling(
         &self,
         request: Request<v1::GetTaskSchedulingRequest>,

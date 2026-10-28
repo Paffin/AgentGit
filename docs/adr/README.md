@@ -27,3 +27,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0017](0017-task-execution-gate.md) | Persisted operator gate for new task-bound runs, enforced by the agent engine |
 | [0018](0018-permanent-run-pages.md) | Exact historical run lookup and permanent browser pages tied to session identity |
 | [0019](0019-queued-task-assignment.md) | Atomic queued-agent reservation and assignment-aware dispatch |
+| [0020](0020-executor-connectivity.md) | Expiring executor connection reports and pre-run identity preparation |

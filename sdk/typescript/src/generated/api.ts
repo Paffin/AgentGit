@@ -20,6 +20,7 @@ export const NAMESPACE_METHODS = {
   },
   agents: {
     complete: 'agent.complete',
+    executorReport: 'agent.executor.report',
     getRun: 'agent.get_run',
     heartbeat: 'agent.heartbeat',
     list: 'agent.list',
@@ -186,6 +187,8 @@ export interface Api {
   readonly agents: {
     /** Finish a run (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/complete`, operation `agent.complete`) */
     complete(request: Req<'agent.complete'>, options?: CallOptions): Promise<Res<'agent.complete'>>;
+    /** Report expiring executor connectivity (`PUT /v1/repos/{owner}/{rname}/agents/{agent}/executor`, operation `agent.executor.report`) */
+    executorReport(request: Req<'agent.executor.report'>, options?: CallOptions): Promise<Res<'agent.executor.report'>>;
     /** Look up a current or historical agent run (`GET /v1/repos/{owner}/{rname}/runs/{run_id}`, operation `agent.get_run`) */
     getRun(request: Req<'agent.get_run'>, options?: CallOptions): Promise<Res<'agent.get_run'>>;
     /** Run heartbeat (`POST /v1/repos/{owner}/{rname}/runs/{run_id}/heartbeat`, operation `agent.heartbeat`) */

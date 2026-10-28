@@ -955,6 +955,23 @@ message RunQueueResponse {
 // Agents: identities, runs, tasks, leases, provenance, prediction
 // ---------------------------------------------------------------------------
 
+message ExecutorPresence {
+  string name = 1;
+  string reported_by = 2;
+  int64 reported_at_ms = 3;
+  int64 expires_at_ms = 4;
+  uint32 slots = 5;
+  uint32 available = 6;
+  bool connected = 7;
+}
+message ReportExecutorRequest {
+  string repo = 1;
+  string agent = 2;
+  string name = 3;
+  uint32 slots = 4;
+  uint32 available = 5;
+  uint32 ttl_secs = 6;
+}
 message Agent {
   string name = 1;
   string identity = 2;
@@ -962,6 +979,7 @@ message Agent {
   string role = 4;
   int64 created_at_ms = 5;
   bool disabled = 6;
+  ExecutorPresence executor = 7;
 }
 
 message RegisterAgentRequest {
@@ -1720,6 +1738,7 @@ service AgentService {
   rpc GetTaskScheduling(GetTaskSchedulingRequest) returns (TaskScheduling);
   rpc SetTaskScheduling(SetTaskSchedulingRequest) returns (TaskScheduling);
   rpc Register(RegisterAgentRequest) returns (Agent);
+  rpc ReportExecutor(ReportExecutorRequest) returns (ExecutorPresence);
   rpc List(ListAgentsRequest) returns (ListAgentsResponse);
   rpc StartRun(StartRunRequest) returns (Run);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);

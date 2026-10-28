@@ -657,3 +657,10 @@ func (c *Client) AssignTask(ctx context.Context, repo, id, agent, expectedOwner 
 	}
 	return &out, nil
 }
+
+// ReportExecutor renews a bounded connectivity report without sending commands or secrets.
+func (c *Client) ReportExecutor(ctx context.Context, repo, agent, name string, slots, available, ttl uint32) error {
+	var out ExecutorPresence
+	return c.repoCall(ctx, "agent.executor.report", http.MethodPut, repo, "/agents/"+url.PathEscape(agent)+"/executor", nil,
+		map[string]any{"name": name, "slots": slots, "available": available, "ttl_secs": ttl}, &out)
+}

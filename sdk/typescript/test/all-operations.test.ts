@@ -264,6 +264,14 @@ describe('the tour', () => {
     const key = generateAgentKey();
     await bot.agents.register({ repo, name: 'tour-bot', public_key: key.publicKeyHex });
     expect((await alice.agents.list({ repo })).agents.map((a) => a.name)).toContain('tour-bot');
+    await admin.agents.executorReport({
+      repo,
+      agent: 'tour-bot',
+      name: 'command',
+      slots: 1,
+      available: 1,
+      ttl_secs: 90,
+    });
     const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'], assignee: 'tour-bot' });
     await alice.tasks.assign({ repo, id: task.id, agent: 'tour-bot', expected_owner: 'agent:tour-bot' });
     const dep = await alice.tasks.create({ repo, title: 'depends' });

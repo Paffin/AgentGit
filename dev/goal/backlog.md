@@ -24,3 +24,5 @@ Next product priority: finish the browser path from a human request to bounded a
 Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`, 2026-10-28. The published beta.2 release is available, but does not imply that these stages are complete.
 
 Queued assignment: implemented on `feature/task-assignment`. Task creation and issue handoff can reserve a registered agent atomically. Creator/operator edits use expected-owner comparison and cannot change running work. Dispatch respects the reserved executor; browser executor setup remains open.
+
+Executor connectivity: development implementation distinguishes registered keys from recent operator-reported executors, prepares configured identities before their first task and displays last capacity. Browser provisioning, command health checks and durable execution logs remain open.

@@ -59,8 +59,8 @@ const tabs = computed<TabItem<TabId>[]>(() => [
       <h1>Agents &amp; work</h1>
       <p class="muted">Give agents work, see who is working on what, and what each has reserved.</p>
     </div>
-    <ExecutionControl :repo="repo" />
-    <GiveAgentWork :repo="repo" />
+    <ExecutionControl v-if="tab === 'runs' || tab === 'tasks'" :repo="repo" />
+    <GiveAgentWork v-if="tab === 'runs' || tab === 'tasks'" :repo="repo" />
     <Card>
       <Tabs v-model="tab" :tabs="tabs" label="Agent coordination">
         <template #runs><RunsTable :repo="repo" /></template>

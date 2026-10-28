@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Fixed
+
+- Task pages load linked runs and change requests directly from server-filtered, paginated history, so newer repository activity no longer hides older work. Expanded history survives live refresh; HTTP/gRPC and SDKs expose the same task filters and run continuation tokens.
+
 ## [0.3.0-beta.4] - 2026-10-28
 
 ### Added

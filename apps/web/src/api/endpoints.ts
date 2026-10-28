@@ -250,6 +250,7 @@ export function createApi(c: ApiClient) {
           state?: string
           stream?: string
           author?: string
+          task_id?: string
           page_size?: number
           page_token?: string
         } = {},
@@ -388,6 +389,24 @@ export function createApi(c: ApiClient) {
       ) => c.post<Agent>(r(repo, '/agents'), body, o),
       run: (repo: string, id: string, o?: SessionOpts) =>
         c.get<Run>(r(repo, `/runs/${encodeURIComponent(id)}`), undefined, o),
+      runPage: async (
+        repo: string,
+        q: {
+          agent?: string
+          active_only?: boolean
+          limit?: number
+          task_id?: string
+          page_token?: string
+        } = {},
+        o?: Opts,
+      ): Promise<Page<Run>> => {
+        const result = await c.get<{ runs: Run[]; next_page_token?: string }>(
+          r(repo, '/runs'),
+          q,
+          o,
+        )
+        return { items: result.runs ?? [], nextPageToken: result.next_page_token ?? '' }
+      },
       runs: async (
         repo: string,
         q: { agent?: string; active_only?: boolean; limit?: number } = {},

@@ -36,3 +36,10 @@ its candidate checks, review and integration outcome.
 Saved run output: opt-in final stdout/stderr tails with bounded storage, known-secret
 redaction, download and deletion tombstones. Live streaming and exhaustive secret
 detection are not claimed.
+
+Task history: task-filtered proposal/run listing and run continuation tokens now
+back the browser page. Older task results stay reachable after unrelated repository
+activity; explicit load-more and live-refresh retention are locally qualified.
+Executor installation is included in the beta.4 candidate archives. The next
+workflow gap remains rich review conversations and safe failed-run recovery, not
+additional repository-wide test infrastructure.

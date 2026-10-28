@@ -206,6 +206,8 @@ pub struct ProposalFilter<'a> {
     pub stream: Option<&'a str>,
     /// Author identity, exactly as stored.
     pub author: Option<&'a str>,
+    /// Linked task, exactly as stored.
+    pub task_id: Option<&'a str>,
 }
 
 /// The `WHERE … ORDER BY … LIMIT` of [`Tx::proposals_page`] and its arguments (separate so that a test can ask the
@@ -217,7 +219,9 @@ pub(crate) fn proposals_page_clause<'a>(
 ) -> (String, Vec<Param<'a>>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut args: Vec<Param<'_>> = Vec::new();
-    for (column, value) in [("state", filter.state), ("stream", filter.stream), ("author", filter.author)] {
+    for (column, value) in
+        [("state", filter.state), ("stream", filter.stream), ("author", filter.author), ("task_id", filter.task_id)]
+    {
         if let Some(v) = value {
             args.push(Param::from(v));
             clauses.push(format!("{column} = ?{}", args.len()));

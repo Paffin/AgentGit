@@ -7,6 +7,7 @@ import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useResource } from '@/composables/useResource'
+import { usePagedResource } from '@/composables/usePagedResource'
 import { useAssignableAgents } from '@/composables/useAssignableAgents'
 import { useLiveReload } from '@/composables/useLiveReload'
 import { useAuth } from '@/stores/auth'
@@ -34,12 +35,33 @@ const task = useResource((signal) => api.agents.task(repo.value, props.id, { sig
 const tasks = useResource((signal) => api.agents.tasks(repo.value, {}, { signal }), {
   watch: scope,
 })
-const runs = useResource((signal) => api.agents.runs(repo.value, { limit: 100 }, { signal }), {
-  watch: scope,
-})
-const changes = useResource(
-  (signal) => api.proposals.list(repo.value, { page_size: 100 }, { signal }),
-  { watch: scope },
+const historySupported = computed(() => !!auth.capabilities?.features.includes('tasks.history'))
+const historyScope = [...scope, () => auth.token, historySupported]
+const runs = usePagedResource(
+  (cursor, signal) =>
+    api.agents.runPage(
+      repo.value,
+      {
+        limit: historySupported.value ? 50 : 100,
+        task_id: historySupported.value ? props.id : undefined,
+        page_token: cursor,
+      },
+      { signal },
+    ),
+  historyScope,
+)
+const changes = usePagedResource(
+  (cursor, signal) =>
+    api.proposals.list(
+      repo.value,
+      {
+        page_size: historySupported.value ? 50 : 100,
+        task_id: historySupported.value ? props.id : undefined,
+        page_token: cursor,
+      },
+      { signal },
+    ),
+  historyScope,
 )
 usePageTitle(() => `${task.data.value?.title || 'Task'} · ${repo.value}`)
 useLiveReload(['task', 'run', 'proposal'], () =>
@@ -50,9 +72,7 @@ const dependants = computed(() =>
   (tasks.data.value || []).filter((item) => item.depends_on.includes(props.id)),
 )
 const sessions = computed(() => (runs.data.value || []).filter((run) => run.task_id === props.id))
-const proposals = computed(() =>
-  (changes.data.value?.items || []).filter((change) => change.task_id === props.id),
-)
+const proposals = computed(() => changes.data.value.filter((change) => change.task_id === props.id))
 const taskLink = (id: string) => ({ name: 'task', params: { ...routeParams.value, id } })
 const active = computed(
   () => !!task.data.value && ['open', 'in_progress'].includes(task.data.value.state),
@@ -324,9 +344,11 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       <section aria-label="Related change requests">
         <h2>Change requests</h2>
         <p class="muted hint">
-          Matches from the newest 100 change requests in this repository{{
-            changes.data.value?.nextPageToken ? '; older requests may not be shown' : ''
-          }}.
+          {{
+            historySupported
+              ? 'Changes linked to this task, newest first.'
+              : 'This server does not support task filtering. Matches are from the loaded repository history.'
+          }}
         </p>
         <ErrorState
           v-if="changes.error.value"
@@ -343,11 +365,25 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             ><Badge size="sm">{{ proposal.state }}</Badge>
           </li>
         </ul>
-        <p v-else class="muted">No matching change requests in the loaded page.</p>
+        <p v-else-if="!changes.loading.value" class="muted">
+          No matching change requests in the loaded history.
+        </p>
+        <p v-if="changes.loading.value && !changes.data.value.length" role="status">
+          Loading change requests…
+        </p>
+        <Button v-if="changes.next.value" :loading="changes.loading.value" @click="changes.more"
+          >Load older change requests</Button
+        >
       </section>
       <section aria-label="Related agent sessions">
         <h2>Agent sessions</h2>
-        <p class="muted hint">Matches from the most recent 100 sessions in this repository.</p>
+        <p class="muted hint">
+          {{
+            historySupported
+              ? 'Sessions linked to this task, newest first.'
+              : 'This server does not support task filtering. Matches are from the loaded repository history.'
+          }}
+        </p>
         <ErrorState
           v-if="runs.error.value"
           compact
@@ -372,7 +408,15 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
             <Badge size="sm">{{ run.status }}</Badge>
           </li>
         </ul>
-        <p v-else class="muted">No matching sessions in the loaded results.</p>
+        <p v-else-if="!runs.loading.value" class="muted">
+          No matching sessions in the loaded history.
+        </p>
+        <p v-if="runs.loading.value && !runs.data.value.length" role="status">
+          Loading agent sessions…
+        </p>
+        <Button v-if="runs.next.value" :loading="runs.loading.value" @click="runs.more"
+          >Load older sessions</Button
+        >
       </section>
       <footer v-if="active" class="actions">
         <Button

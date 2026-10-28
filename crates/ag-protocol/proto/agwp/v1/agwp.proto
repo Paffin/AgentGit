@@ -732,6 +732,8 @@ message ListProposalsRequest {
   string author = 4;
   uint32 page_size = 5;
   string page_token = 6;
+  // Match the linked task before paging. Empty matches all tasks.
+  string task_id = 7;
 }
 
 message ListProposalsResponse {
@@ -1054,9 +1056,15 @@ message ListRunsRequest {
   string agent = 2;
   bool active_only = 3;
   uint32 limit = 4;
+  // Match the linked task before paging. Empty matches all tasks.
+  string task_id = 5;
+  string page_token = 6;
 }
 
-message ListRunsResponse { repeated Run runs = 1; }
+message ListRunsResponse {
+  repeated Run runs = 1;
+  string next_page_token = 2;
+}
 
 // Ends the runs of a repository that stopped heartbeating, releases the leases they (and finished runs) still
 // hold, and revokes the credentials bound to them. An operator action (capability `agent.operate`); every

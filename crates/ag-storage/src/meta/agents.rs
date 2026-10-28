@@ -280,27 +280,42 @@ impl Tx<'_> {
 
     /// Runs of an agent (or all), newest first.
     pub fn runs(&self, agent: Option<&str>, limit: usize) -> Result<Vec<RunRow>, MetaError> {
-        match agent {
-            Some(a) => {
-                self.runs_where("agent = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2", &params![a, limit as i64])
-            }
-            None => self.runs_where("1 = 1 ORDER BY started_at DESC, run_id DESC LIMIT ?1", &params![limit as i64]),
-        }
+        self.runs_page(agent, None, false, None, limit)
     }
 
-    /// The newest `limit` runs that are still running (the filter applies before the limit, so a long-running
-    /// run is not pushed out of the answer by newer finished ones).
+    /// The newest `limit` active runs, filtering before limiting.
     pub fn runs_running(&self, agent: Option<&str>, limit: usize) -> Result<Vec<RunRow>, MetaError> {
-        match agent {
-            Some(a) => self.runs_where(
-                "status = 'running' AND agent = ?1 ORDER BY started_at DESC, run_id DESC LIMIT ?2",
-                &params![a, limit as i64],
-            ),
-            None => self.runs_where(
-                "status = 'running' ORDER BY started_at DESC, run_id DESC LIMIT ?1",
-                &params![limit as i64],
-            ),
+        self.runs_page(agent, None, true, None, limit)
+    }
+
+    /// Filtered keyset page of runs, including historical runs outside the repository's recent list.
+    pub fn runs_page(
+        &self,
+        agent: Option<&str>,
+        task_id: Option<&str>,
+        active_only: bool,
+        after: Option<(i64, &str)>,
+        limit: usize,
+    ) -> Result<Vec<RunRow>, MetaError> {
+        let mut clauses = Vec::new();
+        let mut args = Vec::new();
+        for (column, value) in [("agent", agent), ("task_id", task_id)] {
+            if let Some(value) = value {
+                args.push(Param::from(value));
+                clauses.push(format!("{column} = ?{}", args.len()));
+            }
         }
+        if active_only {
+            clauses.push("status = 'running'".into());
+        }
+        if let Some((started, id)) = after {
+            args.push(Param::from(started));
+            args.push(Param::from(id));
+            clauses.push(format!("(started_at, run_id) < (?{}, ?{})", args.len() - 1, args.len()));
+        }
+        args.push(Param::from(limit as i64));
+        let clause = if clauses.is_empty() { "1 = 1".into() } else { clauses.join(" AND ") };
+        self.runs_where(&format!("{clause} ORDER BY started_at DESC, run_id DESC LIMIT ?{}", args.len()), &args)
     }
 
     /// The runs of `task_id` that are still running, oldest first.

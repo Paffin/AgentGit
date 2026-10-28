@@ -233,3 +233,13 @@ Servers advertising `proposals.review_head` accept `expected_head` on review req
 Servers advertising `tree.search` support `TreeService.Search` and HTTP `GET /v1/repos/{owner}/{rname}/search` under `tree.read` authorization. Parameters: `rev`, `query`, optional `case_sensitive`, file/directory `path_prefix`, `page_size` (default 50, maximum 100), and `page_token`.
 
 Responses include the resolved `rev`, `tree_id`, matching `path`/1-based `line`/bounded `text`, `next_page_token`, and per-page `files_scanned`, `scanned_bytes`, `skipped_binary`, `skipped_large`. Continue with the returned immutable `rev` and unchanged search inputs. A continuation token is invalid for a different repository, tree, query, case mode or prefix. A token can be returned even if the page contains no matches, because each request scans at most 1000 files and 16 MiB. Invalid UTF-8/NUL-containing files and files over 1 MiB are skipped. See [ADR 0015](../adr/0015-bounded-revision-code-search.md).
+
+### Task-scoped history
+
+Servers advertising `tasks.history` accept `task_id` on proposal and run list
+requests. The filter is applied before pagination. Run lists accept `page_token`
+and return `next_page_token`; pass the returned token with the same filters to
+continue in descending `(started_at, run_id)` order. `limit` retains its default
+100 and maximum 1000. Proposal lists keep `page_size` and their existing token
+contract. Empty filters preserve repository-wide listings. Check the feature
+before relying on task filtering: older servers may ignore unknown fields.

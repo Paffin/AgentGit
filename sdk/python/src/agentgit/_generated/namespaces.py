@@ -408,10 +408,12 @@ class AgentsApi:
         active_only: bool | None = None,
         agent: str | None = None,
         limit: int | None = None,
+        page_token: str | None = None,
+        task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListRunsResponse:
         """List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`)."""
-        return self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit}, options, ListRunsResponse)
+        return self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit, "page_token": page_token, "task_id": task_id}, options, ListRunsResponse)
 
     def output_delete(
         self,
@@ -1141,10 +1143,11 @@ class ProposalsApi:
         page_token: str | None = None,
         state: str | None = None,
         stream: str | None = None,
+        task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream}, options, ListProposalsResponse)
+        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     def review(
         self,
@@ -1904,10 +1907,12 @@ class AsyncAgentsApi:
         active_only: bool | None = None,
         agent: str | None = None,
         limit: int | None = None,
+        page_token: str | None = None,
+        task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListRunsResponse:
         """List runs (`GET /v1/repos/{owner}/{rname}/runs`, operation `agent.list_runs`)."""
-        return await self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit}, options, ListRunsResponse)
+        return await self._c._call("agent.list_runs", {"repo": repo, "active_only": active_only, "agent": agent, "limit": limit, "page_token": page_token, "task_id": task_id}, options, ListRunsResponse)
 
     async def output_delete(
         self,
@@ -2637,10 +2642,11 @@ class AsyncProposalsApi:
         page_token: str | None = None,
         state: str | None = None,
         stream: str | None = None,
+        task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream}, options, ListProposalsResponse)
+        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     async def review(
         self,

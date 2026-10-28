@@ -298,3 +298,49 @@ test('uploads binary and text files with an explicit replacement review', async 
   expect(response.ok()).toBe(true)
   expect(await response.body()).toEqual(Buffer.from([0, 255, 12, 88]))
 })
+
+test('large line numbers remain readable while the diff scrolls with the keyboard', async ({
+  page,
+  cast,
+}) => {
+  const { repo } = await freshRepo(cast, 'diff-line-numbers')
+  const author = cast.as('dana')
+  const lines = Array.from({ length: 10_000 }, (_, i) => `Entry ${i + 1}`)
+  const before = await commitFiles(
+    author,
+    repo,
+    { 'large.txt': lines.join('\n') + '\n' },
+    'Large source',
+  )
+  lines[9_999] = `Changed entry ${'long code '.repeat(40)}`
+  const after = await commitFiles(
+    author,
+    repo,
+    { 'large.txt': lines.join('\n') + '\n' },
+    'Change last line',
+    { fromRev: before.head },
+  )
+  await page.goto(`/repos/${repo}/compare?from=${before.head}&to=${after.head}`)
+  const file = page.locator('section.file', { has: page.getByText('large.txt', { exact: true }) })
+  await expect(file.locator('.no').filter({ hasText: '10000' }).first()).toBeVisible()
+  const fits = await file.locator('.no').evaluateAll((cells) =>
+    cells.every((cell) => {
+      if (!cell.textContent?.trim()) return true
+      const range = document.createRange()
+      range.selectNodeContents(cell)
+      const rect = cell.getBoundingClientRect()
+      const style = getComputedStyle(cell)
+      return (
+        range.getBoundingClientRect().width <=
+        rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + 1
+      )
+    }),
+  )
+  expect(fits).toBe(true)
+  const region = file.locator('.diff')
+  await expect(region).toHaveAttribute('tabindex', '0')
+  await region.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})

@@ -401,9 +401,9 @@ export function createApi(c: ApiClient) {
         c.post<FsckResponse>(r(repo, '/fsck'), {}, { timeoutMs: 120_000, ...o }),
       roles: async (q: { subject?: string; repo?: string } = {}, o?: Opts) =>
         (await c.get<{ bindings: RoleBinding[] }>('/v1/roles', q, o)).bindings ?? [],
-      grantRole: (body: { subject: string; repo: string; role: string }, o?: Opts) =>
+      grantRole: (body: { subject: string; repo: string; role: string }, o?: SessionOpts) =>
         c.post<RoleBinding>('/v1/roles', body, o),
-      revokeRole: (q: { subject: string; repo: string; role: string }, o?: Opts) =>
+      revokeRole: (q: { subject: string; repo: string; role: string }, o?: SessionOpts) =>
         c.del<Record<string, never>>('/v1/roles', q, o),
       credentials: async (q: { subject?: string; include_revoked?: boolean } = {}, o?: Opts) =>
         (await c.get<{ credentials: Credential[] }>('/v1/credentials', q, o)).credentials ?? [],

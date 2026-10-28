@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Repo } from '@/api/types'
 import { formatDate, plural } from '@/lib/format'
@@ -25,7 +25,20 @@ const all = ref<Repo[]>([])
 const loading = ref(true)
 const next = ref('')
 const error = ref<unknown>(null)
-const search = ref('')
+const route = useRoute()
+const router = useRouter()
+const readSearch = (value: unknown): string => (typeof value === 'string' ? value : '')
+const search = ref(readSearch(route.query.q))
+watch(
+  () => route.query.q,
+  (value) => {
+    search.value = readSearch(value)
+  },
+)
+function updateSearch(value: string) {
+  search.value = value
+  void router.replace({ query: { ...route.query, q: value || undefined } })
+}
 let serial = 0
 
 const columns: Column[] = [
@@ -112,12 +125,13 @@ const split = (name: string) => {
 
     <div class="tools">
       <TextField
-        v-model="search"
+        :model-value="search"
         label="Search repositories"
         hide-label
         type="search"
         placeholder="Search by name or description"
         class="search"
+        @update:model-value="updateSearch"
       >
         <template #prefix><span class="mag" aria-hidden="true">⌕</span></template>
       </TextField>

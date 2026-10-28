@@ -5,13 +5,20 @@ import { createApi } from './endpoints'
 
 const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
   const options = { token: 'initial-session', quietUnauthenticated: true }
+  if (operation === 'revoke')
+    return api.admin.revokeRole(
+      { subject: 'user:alice', repo: 'acme/new', role: 'reader' },
+      options,
+    )
+  if (operation === 'grant')
+    return api.admin.grantRole({ subject: 'user:alice', repo: 'acme/new', role: 'writer' }, options)
   return operation === 'create'
     ? api.repos.create({ name: 'acme/new' }, options)
     : api.admin.setPolicy('acme/new', 'main', '{}', options)
 }
 
 describe('repository setup request ownership', () => {
-  it.each(['create', 'policy'])(
+  it.each(['create', 'policy', 'grant', 'revoke'])(
     'keeps the initial session during a %s retry',
     async (operation) => {
       let token = 'initial-session'
@@ -38,7 +45,7 @@ describe('repository setup request ownership', () => {
     },
   )
 
-  it.each(['create', 'policy'])(
+  it.each(['create', 'policy', 'grant', 'revoke'])(
     'does not reject a new session when an old %s request receives 401',
     async (operation) => {
       const rejected = vi.fn()

@@ -9,6 +9,14 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Diff line-number columns expand for large files, preventing old/new numbers from overlapping each other or the code. Keyboard scrolling remains available on narrow screens.
+
+- Role revocation preserves its confirmation after a failure and ignores late results after leaving the original context. Retries retain the initiating session.
+
+- Role grants retain the submitted binding and initiating session while pending. Late results cannot affect a different repository or account; failures preserve the form for retry.
+
+- Repository search survives opening a result, browser Back and page reload; bookmarked filters keep searching the loaded list without extra requests.
+
 - Git import instructions accept the copied SSH addresses from GitHub and nested GitLab groups, with shell-safe commands and editable destination suggestions.
 
 - History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.

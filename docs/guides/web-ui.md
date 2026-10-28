@@ -190,6 +190,8 @@ attestation (who signed, for which tree, under which policy version, in which en
 what the agent said about itself (rationale, inputs, parameters), always as untrusted text, with whether the signature
 verified; *Timeline* is the history of the proposal.
 
+Diff line-number columns fit the largest number in the displayed patch, including when a hunk crosses a digit boundary. Long lines scroll inside the diff; focus that region and use the arrow keys to read across.
+
 **Review drafts.** Closing the review dialog to inspect the diff keeps the comment and decision on this page. A reload still clears them. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your
@@ -253,7 +255,7 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
   suggestion, settings that can never be satisfied), the server's own refusal shown verbatim if it still rejects the
   document, and a **version history with a diff between any two versions**. Saving creates a new version. Attestations made
   under an older version stop counting, on purpose, and the UI says so.
-- **Roles** and **Credentials.** Grant and revoke roles. Mint tokens for yourself, or, as an administrator, for an
+- **Roles** and **Credentials.** Grant and revoke roles. While a role grant is pending, its fields are locked; failures keep the binding for correction and retry. Failed revocations also keep their confirmation available for retry. A rejected session offers sign-in. Mint tokens for yourself, or, as an administrator, for an
   agent or service, optionally limited to repositories, streams or operations. A new token is **shown exactly once**: in full, selected and with
   a copy button (and a button to hide it), and gone from the page when you close the dialog. The server keeps only a hash, so it cannot show it again.
 - **Settings and quota**, **GC and fsck** (garbage collection always starts as a *dry run*; the real run is only offered
@@ -407,6 +409,8 @@ again immediately. If a repository or proposal cannot be read, or a summary limi
 notice remains visible. An incomplete summary is never evidence that no work needs attention. Open the repository
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.
+
+The Repositories list keeps its search in the URL. Open a repository and use browser **Back** to return to the same filtered list, or bookmark the search. Search covers only loaded repositories; use **Load more** to include the rest.
 
 The change-request list keeps **State**, **Author** and **Search loaded change requests** in its URL. After opening a request, browser **Back** restores those filters. Bookmark or copy the list URL to reuse them. Typing a filter keeps focus in the field; the text search still covers only the loaded results.
 The browser tab keeps the repository name while filters or anchors change, so several open repositories remain distinguishable.

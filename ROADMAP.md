@@ -17,7 +17,7 @@ backup, tamper-evident audit · Git import/export · the `ag` CLI.
 
 The single-server Linux/SQLite/filesystem workflow is open to early adopters. Web and CLI migration preserve complete branch/tag history with a reconciliation report and retained source bundle. Hosting metadata migration, external MCP-host evidence, independent pilots and wider storage qualification remain separate open work; see the [beta programme](docs/community/beta.md).
 
-## Built since 0.1 (through `v0.3.0-beta.4`)
+## Built since 0.1 (through `v0.3.0-beta.5`)
 
 Each item is described, with what is and is not verified, in the [changelog](CHANGELOG.md) and the linked page.
 
@@ -80,7 +80,7 @@ is not proof that a downloadable archive has passed release verification.
 | Baseline | Available work | Compatibility |
 |---|---|---|
 | Published `v0.3.0-beta.4` | Git migration with reconciliation, code search, multi-file editing, issues → tasks → assigned executor → run → change request, saved output, task/run history | Metadata schema 5; [release](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4) |
-| `v0.3.0-beta.5` release candidate | Revision-bound review threads, replies and resolution across Web UI/CLI/MCP; thread filters and review-context handoff | Metadata schema 6; [release workflow](https://github.com/Paffin/AgentGit/actions/runs/40738103603) |
+| Published `v0.3.0-beta.5` | Revision-bound review threads, replies and resolution across Web UI/CLI/MCP; thread filters and review-context handoff | Metadata schema 6; [release and verification](docs/operations/releasing.md#beta5-publication-evidence) |
 | Development `main` after beta.5's tagged commit | Per-agent new-run admission controls and durable source links for follow-up tasks across API, clients and executor | Metadata schema 7; [admission controls](docs/adr/0026-agent-run-admission.md), [task sources](docs/adr/0027-task-source-links.md) |
 
 Back up before opening existing repositories with a newer schema. Rollback means restoring
@@ -95,10 +95,10 @@ result, understand policy decisions and land a verified change. Migration must l
 team reach that workflow without losing its history or silently discarding hosting metadata.
 Work in the following order; keep each deliverable usable across the relevant clients.
 
-1. **Complete the current delivery.** Verify beta.5's published archives, checksums and provenance,
-   exercise upgrade from the published binary, then update installation instructions and the
-   release baseline above. Admission controls and task sources are already merged; they need
-   their own subsequent release and schema-7 upgrade notice, not a replacement beta.5 tag.
+1. **Deliver the next development slice.** Beta.5 is published; its Linux archive checksum,
+   provenance and upgrade to development schema 7 have been verified. Admission controls and
+   task sources are already merged; they need their own subsequent release and schema-7 upgrade
+   notice, not a replacement beta.5 tag.
 2. **Finish the daily task and review workflow.** Add safe refinement of queued task instructions
    and scope; keep historical runs and source links intact. Then add review suggestions,
    requested reviewers and policy-required thread resolution. Preserve drafts, exact-head

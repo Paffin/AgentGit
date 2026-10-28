@@ -2411,6 +2411,159 @@ never\:"Never colour"))' \
 ':id -- Proposal id:_default' \
 && ret=0
 ;;
+(discussion)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__remote__subcmd__discussion_commands" \
+"*::: :->discussion" \
+&& ret=0
+
+    case $state in
+    (discussion)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-remote-discussion-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--page-token=[Continue a preceding response]:PAGE_TOKEN:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(replies)
+_arguments "${_arguments_options[@]}" : \
+'--page-token=[Continue a preceding response]:PAGE_TOKEN:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+':thread -- Thread id returned by list or start:_default' \
+&& ret=0
+;;
+(start)
+_arguments "${_arguments_options[@]}" : \
+'--head=[Exact proposal head you inspected]:HEAD:_default' \
+'--path=[Repository-relative file path]:PATH:_default' \
+'--line=[One-based line number]:LINE:_default' \
+'--side=[Side of the diff. Old-side lines require --base]:SIDE:(old new)' \
+'--base=[Exact base changeset used for the comparison]:BASE:_default' \
+'-m+[Initial discussion text]:MESSAGE:_default' \
+'--message=[Initial discussion text]:MESSAGE:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+&& ret=0
+;;
+(reply)
+_arguments "${_arguments_options[@]}" : \
+'-m+[Reply text]:MESSAGE:_default' \
+'--message=[Reply text]:MESSAGE:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+':thread -- Thread id:_default' \
+&& ret=0
+;;
+(resolve)
+_arguments "${_arguments_options[@]}" : \
+'--expected-version=[Version from the latest discussion list response]:EXPECTED_VERSION:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--reopen[Reopen instead of resolving]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id:_default' \
+':thread -- Thread id:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (integrate)
 _arguments "${_arguments_options[@]}" : \
 '*--fencing-token=[Fencing tokens of exclusive leases the author holds]:FENCING_TOKENS:_default' \
@@ -3537,6 +3690,7 @@ _ag__subcmd__remote_commands() {
 'prepare:What would integrating do now, and what is missing?' \
 'explain:Explain why a server proposal cannot land, with the next commands. Changes nothing' \
 'review:Review a proposal'\''s current head' \
+'discussion:Read and participate in revision-bound line discussions' \
 'integrate:Integrate a proposal into its stream' \
 'close:Close a proposal without integrating it' \
 'streams:List streams' \
@@ -3567,6 +3721,42 @@ _ag__subcmd__remote__subcmd__cat_commands() {
 _ag__subcmd__remote__subcmd__close_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote close commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion_commands() {
+    local commands; commands=(
+'list:List line discussions, including resolved and earlier-head threads' \
+'replies:Read replies to a line discussion' \
+'start:Start a thread on the exact revision and line you inspected' \
+'reply:Reply to an open line discussion' \
+'resolve:Resolve or reopen a thread only at the version you read' \
+    )
+    _describe -t commands 'ag remote discussion commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion__subcmd__list_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote discussion list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion__subcmd__replies_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion__subcmd__replies_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote discussion replies commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion__subcmd__reply_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion__subcmd__reply_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote discussion reply commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion__subcmd__resolve_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion__subcmd__resolve_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote discussion resolve commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__discussion__subcmd__start_commands] )) ||
+_ag__subcmd__remote__subcmd__discussion__subcmd__start_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote discussion start commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__events_commands] )) ||
 _ag__subcmd__remote__subcmd__events_commands() {

@@ -164,12 +164,7 @@ fn review(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
         .hint("Read the new head with proposal_status, look at it (diff, read_file), then review again with the new `head`."));
     }
     ctx.check_cancelled()?;
-    let r = ctx.api.send(
-        "POST",
-        &format!("{}/proposals/{}/reviews", repo_path(&repo), enc(id)),
-        Some(&json!({"decision": decision, "body": body})),
-        &ctx.opts(None),
-    )?;
+    let r = submit_review(ctx, &repo, id, reviewed, decision, body)?;
     Ok(ToolOutput::new(
         format!("Recorded `{decision}` on proposal {} for head {}.", crate::sanitize::attr_value(id), short(reviewed)),
         json!({"review": {
@@ -180,6 +175,39 @@ fn review(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
             "head": r.get("head").cloned().unwrap_or(json!(reviewed)),
         }}),
     ))
+}
+
+fn submit_review(
+    ctx: &CallCtx<'_>,
+    repo: &str,
+    id: &str,
+    head: &str,
+    decision: &str,
+    body: &str,
+) -> Result<Value, ToolError> {
+    let opts = ctx.opts(None);
+    if decision == "comment" && ctx.api.supports("proposals.comments", &opts)? {
+        let key = new_key("comment");
+        return Ok(ctx.api.send(
+            "POST",
+            &format!("{}/proposals/{}/comments", repo_path(repo), enc(id)),
+            Some(&json!({"body":body,"expected_head":head})),
+            &ctx.opts_keyed(None, &key),
+        )?);
+    }
+    if !ctx.api.supports("proposals.review_head", &opts)? {
+        return Err(ToolError::local(
+            "server_update_required",
+            "The server cannot atomically enforce the head you inspected.",
+        )
+        .hint("Update the server before submitting this review."));
+    }
+    Ok(ctx.api.send(
+        "POST",
+        &format!("{}/proposals/{}/reviews", repo_path(repo), enc(id)),
+        Some(&json!({"decision":decision,"body":body,"expected_head":head})),
+        &opts,
+    )?)
 }
 
 fn integrate(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {

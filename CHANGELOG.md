@@ -13,6 +13,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Native CLI discussion commands and MCP tools share the browser’s revision-bound threads. MCP has a separate default `discuss` group while approval/integration stay opt-in; its review tool now sends atomic head preconditions and uses dedicated author comments.
+
 - Durable line review threads: server-verified revision anchors, paged replies, conflict-safe resolution/reopening and Web UI draft recovery. Discussion remains separate from approvals. Metadata schema 6 retains thread source revisions as GC roots; back up before upgrading, and restore that backup to roll back to older binaries.
 
 - Quote an added or removed diff line directly into proposal discussion. Quotes include the file, side, line number and exact compared revision, preserve existing draft text and require explicit posting.

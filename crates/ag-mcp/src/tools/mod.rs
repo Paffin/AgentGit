@@ -10,6 +10,7 @@ use crate::config::{Config, Group, check_repo_name};
 use crate::output::{ToolError, ToolOutput};
 
 pub mod coordinate;
+pub mod discussions;
 pub mod proposals;
 pub mod read;
 pub mod workspace;
@@ -99,6 +100,7 @@ impl Registry {
         tools.extend(read::tools());
         tools.extend(workspace::tools());
         tools.extend(proposals::tools());
+        tools.extend(discussions::tools());
         tools.extend(coordinate::tools());
         Self::from_tools(tools)
     }

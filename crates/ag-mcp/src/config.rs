@@ -18,6 +18,8 @@ pub enum Group {
     Propose,
     /// Runs, task claims and completion, leases.
     Coordinate,
+    /// Discuss code without granting approval or integration tools.
+    Discuss,
     /// Approve, request changes or comment on a proposal.
     Review,
     /// Land a proposal on its stream. Off unless the operator passes `--enable-integrate`.
@@ -26,8 +28,15 @@ pub enum Group {
 
 impl Group {
     /// Every group.
-    pub const ALL: [Group; 6] =
-        [Group::Read, Group::Workspace, Group::Propose, Group::Coordinate, Group::Review, Group::Integrate];
+    pub const ALL: [Group; 7] = [
+        Group::Read,
+        Group::Workspace,
+        Group::Propose,
+        Group::Coordinate,
+        Group::Discuss,
+        Group::Review,
+        Group::Integrate,
+    ];
 
     /// The name used in flags and messages.
     pub fn as_str(self) -> &'static str {
@@ -36,6 +45,7 @@ impl Group {
             Group::Workspace => "workspace",
             Group::Propose => "propose",
             Group::Coordinate => "coordinate",
+            Group::Discuss => "discuss",
             Group::Review => "review",
             Group::Integrate => "integrate",
         }
@@ -48,6 +58,7 @@ impl Group {
             "workspace" => Ok(Group::Workspace),
             "propose" => Ok(Group::Propose),
             "coordinate" => Ok(Group::Coordinate),
+            "discuss" => Ok(Group::Discuss),
             "review" => Ok(Group::Review),
             "integrate" => Err("`integrate` lands code on a stream; it cannot be switched on through --allow. \
                                 Pass --enable-integrate explicitly if you really want the integrate tool"
@@ -55,7 +66,7 @@ impl Group {
             "admin" => Err("there is no `admin` group: policy, roles and credentials are deliberately not reachable \
                             through MCP"
                 .into()),
-            other => Err(format!("unknown group `{other}` (read, workspace, propose, coordinate, review)")),
+            other => Err(format!("unknown group `{other}` (read, workspace, propose, coordinate, discuss, review)")),
         }
     }
 }
@@ -67,7 +78,8 @@ impl fmt::Display for Group {
 }
 
 /// The groups switched on when `--allow` is not given.
-pub const DEFAULT_GROUPS: [Group; 4] = [Group::Read, Group::Workspace, Group::Propose, Group::Coordinate];
+pub const DEFAULT_GROUPS: [Group; 5] =
+    [Group::Read, Group::Workspace, Group::Propose, Group::Coordinate, Group::Discuss];
 
 /// Whether the calls of a run use a credential of their own (ADR-0010 in the AgentGit repository).
 ///
@@ -358,6 +370,7 @@ mod tests {
                 && c.allows(Group::Workspace)
                 && c.allows(Group::Propose)
                 && c.allows(Group::Coordinate)
+                && c.allows(Group::Discuss)
         );
         assert!(!c.allows(Group::Review) && !c.allows(Group::Integrate));
         c.validate().unwrap();

@@ -170,6 +170,74 @@ fn clone_push_review_integrate_and_pull() {
     assert_eq!(explained["standing"], "blocked");
     assert_eq!(explained["explanations"][0]["code"], "insufficient_approvals");
     assert!(explained["next"][0].as_str().unwrap().starts_with("ag remote review"));
+    // Line discussions use the same durable state as the browser.
+    let detail: Value =
+        serde_json::from_str(&ok(ag(a.path(), "user:alice", &alice, &["--json", "remote", "proposal", &prop])))
+            .unwrap();
+    let inspected = detail["proposal"]["head"].as_str().unwrap();
+    let thread: Value = serde_json::from_str(&ok(ag(
+        a.path(),
+        "user:alice",
+        &alice,
+        &[
+            "--json",
+            "remote",
+            "discussion",
+            "start",
+            &prop,
+            "--head",
+            inspected,
+            "--path",
+            "src/lib.rs",
+            "--line",
+            "1",
+            "-m",
+            "Why this function?",
+        ],
+    )))
+    .unwrap();
+    let thread_id = thread["id"].as_str().unwrap();
+    assert_eq!(thread["anchor"]["text"], "fn one() {}");
+    let listed: Value = serde_json::from_str(&ok(ag(
+        a.path(),
+        "user:alice",
+        &alice,
+        &["--json", "remote", "discussion", "list", &prop],
+    )))
+    .unwrap();
+    assert_eq!(listed["threads"].as_array().unwrap().len(), 1);
+    ok(ag(
+        a.path(),
+        "user:bob",
+        &bob,
+        &["remote", "discussion", "reply", &prop, thread_id, "-m", "It is the public entry point."],
+    ));
+    let replies: Value = serde_json::from_str(&ok(ag(
+        a.path(),
+        "user:alice",
+        &alice,
+        &["--json", "remote", "discussion", "replies", &prop, thread_id],
+    )))
+    .unwrap();
+    assert_eq!(replies["comments"].as_array().unwrap().len(), 1);
+    assert!(
+        !ag(
+            a.path(),
+            "user:alice",
+            &alice,
+            &["remote", "discussion", "resolve", &prop, thread_id, "--expected-version", "1"]
+        )
+        .status
+        .success()
+    );
+    let resolved: Value = serde_json::from_str(&ok(ag(
+        a.path(),
+        "user:alice",
+        &alice,
+        &["--json", "remote", "discussion", "resolve", &prop, thread_id, "--expected-version", "2"],
+    )))
+    .unwrap();
+    assert_eq!(resolved["resolved"], true);
     // Discussion does not need or grant approval rights.
     ok(ag(
         a.path(),

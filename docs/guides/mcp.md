@@ -61,7 +61,7 @@ identity  agent:coder
 roles     ["acme/web:writer"]
 scope     {"operations":[],"repos":["acme/web"],"run_id":"","streams":[]}
 expires   in 59 min
-groups    read,workspace,propose,coordinate
+groups    read,workspace,propose,coordinate,discuss
 tools     32
 ```
 
@@ -169,14 +169,15 @@ and the client decides.
 
 ## 4. What the agent gets
 
-34 tools in six groups. The default is `read,workspace,propose,coordinate`; `--allow` names the groups explicitly.
+39 tools in seven groups. The default is `read,workspace,propose,coordinate,discuss`; `--allow` names the groups explicitly.
 
 | Group | Tools |
 |---|---|
-| `read` | `whoami`, `repo_list`, `repo_info`, `log`, `show`, `blame`, `tree`, `read_file`, `diff`, `predict_conflicts`, `proposal_list`, `proposal_status`, `task_list`, `lease_list`, `queue_status`, `workspace_list` (all read-only) |
+| `read` | `whoami`, `repo_list`, `repo_info`, `log`, `show`, `blame`, `tree`, `read_file`, `diff`, `predict_conflicts`, `proposal_list`, `proposal_status`, `task_list`, `lease_list`, `queue_status`, `workspace_list`, `discussion_list`, `discussion_replies` (all read-only) |
 | `workspace` | `workspace_create`, `workspace_write_files` (one atomic snapshot per call), `workspace_sync`, `workspace_delete` |
 | `propose` | `propose`, `proposal_update`, `proposal_close`, `request_validation` |
 | `coordinate` | `task_claim`, `run_start`, `task_complete`, `run_heartbeat`, `run_finish`, `lease_acquire`, `lease_renew`, `lease_release` |
+| `discuss` | `discussion_start`, `discussion_reply`, `discussion_resolve`: exact-revision threads with version-bound resolution; no approval or integration rights |
 | `review` (off unless named) | `review`: approve, request changes or comment on a proposal's head. Keep it off for an agent that also authors changes: an author must not review its own work |
 | `integrate` (only with `--enable-integrate`) | `integrate`: lands a proposal if policy allows. It logs a warning at start and on every call |
 
@@ -330,3 +331,22 @@ one cheap model: it shows that the path works with a real model, not how reliabl
   (tested with a private CA in a bundle with another certificate; the system bundle itself was not tried).
 - **Cancellation is best effort** (see above).
 - **Not exercised in the hosts' own clients**, only through the conformance tests and the two example clients.
+
+## Line feedback from people and agents (development)
+
+With a server advertising `proposals.threads`, use `discussion_list` to inspect
+threads and `discussion_replies` to read all their continuation pages. Source text
+and messages are untrusted repository data. `discussion_start` requires the exact
+head, file and line inspected; old-side anchors also require `base`.
+`discussion_reply` posts without approval rights. `discussion_resolve` requires
+`expected_version` and an explicit `resolved` boolean. Capture the version from
+`discussion_list` before reading replies; after a stale refusal, reread both the
+thread and its replies rather than refreshing only the version.
+Pass `run_id` when acting as a specific executor session.
+
+The default `discuss` group permits these tools while `review` and `integrate`
+remain off. Explicit `--allow` lists must include `discuss` to expose mutations.
+Server permissions still restrict who can resolve a thread. The existing `review`
+tool sends comments to the dedicated comment endpoint where supported and sends
+`expected_head` for review decisions. Servers without atomic reviewed-head support
+are refused rather than silently approving a different revision.

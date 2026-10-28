@@ -421,3 +421,34 @@ fn claiming_a_task_twice_does_not_start_a_second_run() {
     let second = m.ok("task_claim", json!({"task_id": task}));
     assert_ne!(second.structured["run"]["run_id"], first.structured["run"]["run_id"]);
 }
+
+#[test]
+fn an_author_can_discuss_and_reply_to_line_feedback_without_approval_rights() {
+    let w = world();
+    let mut author = Mcp::start(&w.srv, &w.agent, &["--repo", REPO]);
+    assert!(author.tool_names().contains(&"discussion_reply".to_string()));
+    assert!(!author.tool_names().contains(&"review".to_string()));
+    author.ok("workspace_create", json!({"name":"feedback"}));
+    author.ok("workspace_write_files", json!({"workspace":"feedback","message":"candidate","changes":[{"path":"README.md","op":"put","content":"# Revised\n"}]}));
+    let proposal = author.ok("propose", json!({"workspace":"feedback","title":"Discuss candidate"}));
+    let id = proposal.structured["proposal"]["id"].as_str().unwrap();
+    let head = proposal.structured["proposal"]["head"].as_str().unwrap();
+    let mut commenter = Mcp::start(&w.srv, &w.agent, &["--repo", REPO, "--allow", "read,review"]);
+    let comment =
+        commenter.ok("review", json!({"proposal_id":id,"head":head,"decision":"comment","body":"Ready for feedback"}));
+    assert_eq!(comment.structured["review"]["decision"], "comment");
+    let thread = author.ok(
+        "discussion_start",
+        json!({"proposal_id":id,"head":head,"path":"README.md","line":1,"body":"Does this heading help?"}),
+    );
+    let thread_id = thread.structured["thread"]["id"].as_str().unwrap();
+    assert_eq!(thread.structured["thread"]["anchor"]["text"], "# Revised");
+    let listed = author.ok("discussion_list", json!({"proposal_id":id}));
+    assert_eq!(listed.structured["threads"].as_array().unwrap().len(), 1);
+    author.ok("discussion_reply", json!({"proposal_id":id,"thread_id":thread_id,"body":"Keeping the familiar name."}));
+    let replies = author.ok("discussion_replies", json!({"proposal_id":id,"thread_id":thread_id}));
+    assert_eq!(replies.structured["comments"].as_array().unwrap().len(), 1);
+    let resolved = author
+        .ok("discussion_resolve", json!({"proposal_id":id,"thread_id":thread_id,"expected_version":2,"resolved":true}));
+    assert_eq!(resolved.structured["thread"]["resolved"], true);
+}

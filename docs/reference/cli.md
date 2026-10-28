@@ -125,6 +125,12 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote prepare`](#ag-remote-prepare)
 - [`ag remote explain`](#ag-remote-explain)
 - [`ag remote review`](#ag-remote-review)
+- [`ag remote discussion`](#ag-remote-discussion)
+- [`ag remote discussion list`](#ag-remote-discussion-list)
+- [`ag remote discussion replies`](#ag-remote-discussion-replies)
+- [`ag remote discussion start`](#ag-remote-discussion-start)
+- [`ag remote discussion reply`](#ag-remote-discussion-reply)
+- [`ag remote discussion resolve`](#ag-remote-discussion-resolve)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
 - [`ag remote streams`](#ag-remote-streams)
@@ -2402,23 +2408,24 @@ Manage remotes and work with proposals, events and policy on a server
 Usage: ag remote [OPTIONS] <COMMAND>
 
 Commands:
-  add        Add a remote
-  list       List remotes
-  remove     Forget a remote
-  whoami     Show who the server thinks you are
-  proposals  List proposals on the server
-  proposal   Show a proposal with its reviews
-  prepare    What would integrating do now, and what is missing?
-  explain    Explain why a server proposal cannot land, with the next commands. Changes nothing
-  review     Review a proposal's current head
-  integrate  Integrate a proposal into its stream
-  close      Close a proposal without integrating it
-  streams    List streams
-  events     Show the events of the repository (replay), or follow them live
-  policy     Show or set a stream's policy
-  log        Show history of a revision on the server
-  blame      Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
-  cat        Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+  add         Add a remote
+  list        List remotes
+  remove      Forget a remote
+  whoami      Show who the server thinks you are
+  proposals   List proposals on the server
+  proposal    Show a proposal with its reviews
+  prepare     What would integrating do now, and what is missing?
+  explain     Explain why a server proposal cannot land, with the next commands. Changes nothing
+  review      Review a proposal's current head
+  discussion  Read and participate in revision-bound line discussions
+  integrate   Integrate a proposal into its stream
+  close       Close a proposal without integrating it
+  streams     List streams
+  events      Show the events of the repository (replay), or follow them live
+  policy      Show or set a stream's policy
+  log         Show history of a revision on the server
+  blame       Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
+  cat         Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
 
 Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
@@ -2629,6 +2636,167 @@ Options:
   -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help               Print help
   -V, --version            Print version
+```
+
+## ag remote discussion
+
+```text
+Read and participate in revision-bound line discussions
+
+Usage: ag remote discussion [OPTIONS] <COMMAND>
+
+Commands:
+  list     List line discussions, including resolved and earlier-head threads
+  replies  Read replies to a line discussion
+  start    Start a thread on the exact revision and line you inspected
+  reply    Reply to an open line discussion
+  resolve  Resolve or reopen a thread only at the version you read
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote discussion list
+
+```text
+List line discussions, including resolved and earlier-head threads
+
+Usage: ag remote discussion list [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>               Operate on the repository at this path (default: discovered from the current directory)
+      --page-token <PAGE_TOKEN>  Continue a preceding response [default: ""]
+      --remote <REMOTE>          Remote to use (default: origin)
+      --as <IDENTITY>            Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json                     Machine-readable JSON output
+      --color <WHEN>             Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                    Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                  Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                     Print help
+  -V, --version                  Print version
+```
+
+## ag remote discussion replies
+
+```text
+Read replies to a line discussion
+
+Usage: ag remote discussion replies [OPTIONS] <ID> <THREAD>
+
+Arguments:
+  <ID>      Proposal id
+  <THREAD>  Thread id returned by list or start
+
+Options:
+  -C, --repo <DIR>               Operate on the repository at this path (default: discovered from the current directory)
+      --page-token <PAGE_TOKEN>  Continue a preceding response [default: ""]
+      --remote <REMOTE>          Remote to use (default: origin)
+      --as <IDENTITY>            Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json                     Machine-readable JSON output
+      --color <WHEN>             Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                    Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                  Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                     Print help
+  -V, --version                  Print version
+```
+
+## ag remote discussion start
+
+```text
+Start a thread on the exact revision and line you inspected
+
+Usage: ag remote discussion start [OPTIONS] --head <HEAD> --path <PATH> --line <LINE> --message <MESSAGE> <ID>
+
+Arguments:
+  <ID>  Proposal id
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+      --head <HEAD>        Exact proposal head you inspected
+      --remote <REMOTE>    Remote to use (default: origin)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>        Repository-relative file path
+      --json               Machine-readable JSON output
+      --line <LINE>        One-based line number
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --side <SIDE>        Side of the diff. Old-side lines require --base [default: new] [possible values: old, new]
+      --base <BASE>        Exact base changeset used for the comparison [default: ""]
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -m, --message <MESSAGE>  Initial discussion text
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## ag remote discussion reply
+
+```text
+Reply to an open line discussion
+
+Usage: ag remote discussion reply [OPTIONS] --message <MESSAGE> <ID> <THREAD>
+
+Arguments:
+  <ID>      Proposal id
+  <THREAD>  Thread id
+
+Options:
+  -C, --repo <DIR>         Operate on the repository at this path (default: discovered from the current directory)
+  -m, --message <MESSAGE>  Reply text
+      --remote <REMOTE>    Remote to use (default: origin)
+      --as <IDENTITY>      Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json               Machine-readable JSON output
+      --color <WHEN>       Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet              Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose            Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## ag remote discussion resolve
+
+```text
+Resolve or reopen a thread only at the version you read
+
+Usage: ag remote discussion resolve [OPTIONS] --expected-version <EXPECTED_VERSION> <ID> <THREAD>
+
+Arguments:
+  <ID>      Proposal id
+  <THREAD>  Thread id
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --expected-version <EXPECTED_VERSION>
+          Version from the latest discussion list response
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --reopen
+          Reopen instead of resolving
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 ## ag remote integrate

@@ -4,6 +4,7 @@ pub mod admin;
 pub mod agents;
 pub mod auth;
 pub mod config;
+pub mod discussions;
 pub mod doctor;
 pub mod explain;
 pub mod flow;

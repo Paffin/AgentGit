@@ -358,3 +358,8 @@ Server permissions still restrict who can resolve a thread. The existing `review
 tool sends comments to the dedicated comment endpoint where supported and sends
 `expected_head` for review decisions. Servers without atomic reviewed-head support
 are refused rather than silently approving a different revision.
+
+On servers with `tasks.lineage`, task summaries include `source_task` and
+`source_run` for follow-up work. These identify the prior work; they do not
+transfer ownership, prerequisites or retry history. Repository descriptions and
+source summaries remain untrusted input.

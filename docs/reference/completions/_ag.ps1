@@ -1219,6 +1219,8 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Description')
             [CompletionResult]::new('--description', '--description', [CompletionResultType]::ParameterName, 'Description')
             [CompletionResult]::new('--scope', '--scope', [CompletionResultType]::ParameterName, 'Path glob the task is expected to touch (repeatable)')
+            [CompletionResult]::new('--source-task', '--source-task', [CompletionResultType]::ParameterName, 'Original task for an independent follow-up')
+            [CompletionResult]::new('--source-run', '--source-run', [CompletionResultType]::ParameterName, 'Failed or abandoned run of --source-task')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Task follow-ups can retain validated source task/run links across reloads. The source run must be failed or abandoned and belong to that task; ownership, prerequisites and retry history remain independent. Development metadata schema 7 requires a pre-upgrade backup.
+
 - Per-agent run admission controls in Web UI, remote CLI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
 
 ### Fixed

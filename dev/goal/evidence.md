@@ -421,3 +421,14 @@ Nested threads, line anchors and resolution remain open work.
 - Generated TypeScript/Python SDKs and 118-operation tours pass (12 TypeScript tests, 13 Python tests); Python type checking passes. OpenAPI, protobuf copies and fuzz message inventory remain synchronized. Hosted full-platform qualification remains separate.
 
 - Extended the same slice with native `ag agent list/disable/enable --remote`: reads and changes the configured server through AGWP, refuses unsupported state controls, and retains the existing local command JSON shapes. Remote JSON shapes and generated help/man/completions are included. Browser stale-confirmation recovery refreshes the agent row without silently applying the stale decision.
+
+## Persistent task sources (development schema 7)
+
+- Task creation records source task and optional failed/abandoned source run in the same transaction as the new task, audit and idempotency response. Invalid relationships leave no partial task. New-source requests use a versioned JSON fingerprint; a reproduced delimiter collision is covered by the HTTP regression while older request fingerprints remain unchanged.
+- SQLite schema 6-to-7 migration preserves existing task data with empty sources. PostgreSQL 17 migration and concurrent opening checks pass; the 23-test agent core suite passes on PostgreSQL.
+- Native development schema-6 binaries create the baseline repository; the upgraded server preserves old rows and idempotency replay, writes a follow-up, and the old binary refuses schema 7. Restoring the backup allows the old binary to read it. The same upgrade/replay/rollback check also passes using the verified published beta.4 archive (schema 5). The development schema-6 baseline is not represented as a published beta.5 archive.
+- Real-server browser checks cover cancelled-source follow-up creation, source links after reload, independent assignment/dependencies and unrelated-run rejection on desktop and phone. TypeScript and Python SDK tours pass (12 and 13 tests). Local CLI JSON shapes add source fields without removing old fields, and --source-task/--source-run create a traceable independent task.
+
+- The real command-executor environment test reproduced the Go client dropping source metadata before writing `AG_TASK_FILE`. Adding the two optional fields preserves the server-provided source in the real executor file; that test passes in 0.34s. No live-model or independent MCP-host qualification is claimed.
+
+- Final browser loop also traverses source task → follow-up → source context on desktop and phone (4 scenarios, 11.8s). New servers keep long source URLs out of the editable description; older servers retain the textual fallback. Local SQLite and PostgreSQL agent suites each pass 23 tests; PostgreSQL migration checks pass 3 tests. All temporary database containers were removed.

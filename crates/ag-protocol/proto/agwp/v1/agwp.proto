@@ -1156,6 +1156,9 @@ message Task {
   repeated string depends_on = 10;
   // True when every dependency is done.
   bool ready = 11;
+  // Immutable source links for independently scheduled follow-up work.
+  string source_task = 12;
+  string source_run = 13;
 }
 
 message CreateTaskRequest {
@@ -1170,6 +1173,10 @@ message CreateTaskRequest {
   uint64 expected_issue_version = 8;
   // Optional initial agent assignment, saved before the task becomes visible.
   string assignee = 9;
+  // Optional source task; does not inherit ownership, prerequisites or retry history.
+  string source_task = 10;
+  // Optional failed/abandoned run belonging to source_task.
+  string source_run = 11;
 }
 
 message AssignTaskRequest {

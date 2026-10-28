@@ -4727,7 +4727,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__task__subcmd__create)
-            opts="-d -C -q -v -h -V --description --scope --repo --as --json --color --quiet --verbose --help --version"
+            opts="-d -C -q -v -h -V --description --scope --source-task --source-run --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4742,6 +4742,14 @@ _ag() {
                     return 0
                     ;;
                 --scope)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --source-task)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --source-run)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

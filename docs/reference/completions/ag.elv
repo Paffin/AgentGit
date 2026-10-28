@@ -1153,6 +1153,8 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand -d 'Description'
             cand --description 'Description'
             cand --scope 'Path glob the task is expected to touch (repeatable)'
+            cand --source-task 'Original task for an independent follow-up'
+            cand --source-run 'Failed or abandoned run of --source-task'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'

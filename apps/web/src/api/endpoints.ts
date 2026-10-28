@@ -529,6 +529,8 @@ export function createApi(c: ApiClient) {
           source_issue?: number
           expected_issue_version?: number
           assignee?: string
+          source_task?: string
+          source_run?: string
         },
         o?: SessionOpts,
       ) => c.post<Task>(r(repo, '/tasks'), body, o),

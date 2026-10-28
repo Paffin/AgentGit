@@ -2177,6 +2177,16 @@ export interface components {
              * @default 0
              */
             source_issue: number;
+            /**
+             * @description Optional failed/abandoned run belonging to source_task.
+             * @default
+             */
+            source_run: string;
+            /**
+             * @description Optional source task; does not inherit ownership, prerequisites or retry history.
+             * @default
+             */
+            source_task: string;
             /** @default  */
             title: string;
         };
@@ -4753,6 +4763,13 @@ export interface components {
             ready: boolean;
             /** @default [] */
             scope: string[];
+            /** @default  */
+            source_run: string;
+            /**
+             * @description Immutable source links for independently scheduled follow-up work.
+             * @default
+             */
+            source_task: string;
             /**
              * @description "open", "in_progress", "done", "cancelled".
              * @default

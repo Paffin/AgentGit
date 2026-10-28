@@ -2083,6 +2083,26 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
   "scope": [
     "string"
   ],
+  "source_run": "null",
+  "source_task": "null",
+  "state": "string",
+  "title": "string",
+  "updated_at": "number"
+}
+```
+
+### ag task create (follow-up)
+
+```json
+{
+  "created_at": "number",
+  "created_by": "string",
+  "description": "string",
+  "id": "string",
+  "owner": "null",
+  "scope": [],
+  "source_run": "string",
+  "source_task": "string",
   "state": "string",
   "title": "string",
   "updated_at": "number"
@@ -2120,6 +2140,8 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "scope": [
       "string"
     ],
+    "source_run": "null",
+    "source_task": "null",
     "state": "string",
     "title": "string",
     "updated_at": "number"
@@ -2140,6 +2162,8 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "scope": [
       "string"
     ],
+    "source_run": "null",
+    "source_task": "null",
     "state": "string",
     "title": "string",
     "updated_at": "number"

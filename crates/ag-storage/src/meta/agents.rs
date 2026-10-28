@@ -64,6 +64,10 @@ pub struct TaskRow {
     pub created_at: Timestamp,
     /// Last update.
     pub updated_at: Timestamp,
+    /// Original task of this follow-up, if any.
+    pub source_task: Option<String>,
+    /// Failed or abandoned run that motivated this follow-up, if any.
+    pub source_run: Option<String>,
 }
 
 /// A lease on a scope (path glob).
@@ -140,7 +144,8 @@ pub struct QueueRow {
 
 const AGENT_COLS: &str = "name, identity, public_key, role, created_at, disabled";
 const RUN_COLS: &str = "run_id, agent, task_id, started_at, finished_at, status, last_heartbeat, summary";
-const TASK_COLS: &str = "id, title, description, owner, state, scope, created_by, created_at, updated_at";
+const TASK_COLS: &str =
+    "id, title, description, owner, state, scope, created_by, created_at, updated_at, source_task, source_run";
 const LEASE_COLS: &str = "id, scope, holder, exclusive, token, acquired_at, expires_at, released_at, task_id";
 const QUEUE_COLS: &str = "id, stream, proposal, state, enqueued_by, enqueued_at, processed_at, outcome";
 const PROVENANCE_COLS: &str = "id, changeset, agent, run_id, record, public_key, signature, created_at";
@@ -180,6 +185,8 @@ fn task_row(r: &Row) -> Result<TaskRow, MetaError> {
         created_by: r.string(6)?,
         created_at: ts(r.i64(7)?),
         updated_at: ts(r.i64(8)?),
+        source_task: r.opt_string(9)?,
+        source_run: r.opt_string(10)?,
     })
 }
 
@@ -374,6 +381,18 @@ impl Tx<'_> {
             &params![id, title, description, serde_json::to_string(scope)?, created_by, now],
         )?;
         self.task(id)?.ok_or_else(|| MetaError::Corrupt("task vanished".into()))
+    }
+
+    /// Attaches creation-time source links once; callers validate the source semantics.
+    pub fn task_link_source(&self, id: &str, source_task: &str, source_run: Option<&str>) -> Result<(), MetaError> {
+        let changed = self.conn.execute(
+            "UPDATE tasks SET source_task = ?1, source_run = ?2 WHERE id = ?3 AND source_task IS NULL AND source_run IS NULL",
+            &params![source_task, source_run, id],
+        )?;
+        if changed != 1 {
+            return Err(MetaError::Invalid("task source is already set or task is missing".into()));
+        }
+        Ok(())
     }
 
     /// Looks up a task.

@@ -298,3 +298,15 @@ The existing `disabled` flag controls admission of new runs, checked in their
 creation transaction. Existing sessions and their credentials remain valid;
 this operation is not an emergency credential-revocation or process-kill API.
 See [ADR-0026](../adr/0026-agent-run-admission.md).
+
+## Task sources (development)
+
+`tasks.lineage` adds `source_task` and `source_run` to task creation and task
+responses. Both default to empty. A nonempty run requires a source task and must
+be a failed or abandoned run of that task in the same repository. Validation and
+source recording commit with task creation, audit and its idempotency response.
+Source task/run reads require `task.read`/`agent.read` in addition to `task.write`.
+
+The links are immutable through the API. They do not inherit ownership,
+prerequisites or retry history. Requests without these fields preserve the old
+idempotency fingerprint. Metadata schema 7 requires a backup before upgrade.

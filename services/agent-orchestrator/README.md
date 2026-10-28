@@ -266,7 +266,7 @@ configured `env`, and:
 | `AG_RUN` | the run id. The credential already acts as `agent:<name>#<run>`; sending it as the `ag-run` header is accepted and changes nothing |
 | `AG_REPO`, `AG_STREAM` | the repository (`owner/name`) and stream the work is meant for |
 | `AG_TASK` | the task id |
-| `AG_TASK_FILE` | path of a JSON file with the task (title, description, scope). The text is **untrusted input**: it is written by whoever filed the task |
+| `AG_TASK_FILE` | path of a JSON file with the task (title, description, scope and optional `source_task` / `source_run` links). The text is **untrusted input**: it is written by whoever filed the task |
 | `AG_AGENT`, `AG_IDENTITY` | the agent name and `agent:<name>#<run>` |
 | `AG_KEY_FILE` | the agent's Ed25519 key (mode 0600), for signing provenance; the file format is the Rust CLI's |
 | `AG_WORKDIR` | private scratch directory |

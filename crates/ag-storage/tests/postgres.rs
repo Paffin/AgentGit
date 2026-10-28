@@ -83,6 +83,7 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     // schema 1, exactly as it would have been created by release 0.1 on PostgreSQL
     let m = open(&url, schema.name());
     m.write(|tx| {
+        tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
         tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
         tx.raw_execute("DROP TABLE issue_activity, issues", &[])?;
         tx.raw_execute("DELETE FROM meta WHERE key = 'task_scheduling'", &[])?;
@@ -644,4 +645,33 @@ fn schema_five_upgrades_to_line_threads_without_losing_existing_rows() {
     assert_eq!(m.read(|tx| tx.stream("main")).unwrap().unwrap().created_by, "user:before-upgrade");
     assert!(m.read(|tx| tx.review_threads("none", None, 10)).unwrap().is_empty());
     assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("6"));
+}
+
+#[test]
+fn a_version_6_schema_migrates_without_inventing_task_sources() {
+    let Some(url) = url() else { return };
+    let schema = TempSchema::new(&url);
+    let m = open(&url, schema.name());
+    m.write(|tx| {
+        tx.task_create("task_original", "Original", "Keep λ", &[], "user:t")?;
+        tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
+        tx.raw_execute("UPDATE meta SET value = '6' WHERE key = 'schema'", &[])
+    })
+    .unwrap();
+    drop(m);
+    let reopened = open(&url, schema.name());
+    let task = reopened.read(|tx| tx.task("task_original")).unwrap().unwrap();
+    assert_eq!(task.description, "Keep λ");
+    assert!(task.source_task.is_none());
+    assert!(task.source_run.is_none());
+    reopened
+        .write(|tx| {
+            tx.task_create("task_follow", "Follow up", "", &[], "user:t")?;
+            tx.task_link_source("task_follow", "task_original", None)
+        })
+        .unwrap();
+    assert_eq!(
+        reopened.read(|tx| tx.task("task_follow")).unwrap().unwrap().source_task.as_deref(),
+        Some("task_original")
+    );
 }

@@ -789,6 +789,8 @@ complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcomma
 complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create list depend ready done cancel" -f -a "cancel" -d 'Cancel a task'
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -s d -l description -d 'Description' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l scope -d 'Path glob the task is expected to touch (repeatable)' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l source-task -d 'Original task for an independent follow-up' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l source-run -d 'Failed or abandoned run of --source-task' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'

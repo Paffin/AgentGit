@@ -1040,6 +1040,16 @@
             "minimum": 0,
             "type": "integer"
           },
+          "source_run": {
+            "default": "",
+            "description": "Optional failed/abandoned run belonging to source_task.",
+            "type": "string"
+          },
+          "source_task": {
+            "default": "",
+            "description": "Optional source task; does not inherit ownership, prerequisites or retry history.",
+            "type": "string"
+          },
           "title": {
             "default": "",
             "type": "string"
@@ -5351,6 +5361,15 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "source_run": {
+            "default": "",
+            "type": "string"
+          },
+          "source_task": {
+            "default": "",
+            "description": "Immutable source links for independently scheduled follow-up work.",
+            "type": "string"
           },
           "state": {
             "default": "",

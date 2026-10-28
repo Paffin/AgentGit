@@ -697,3 +697,30 @@ fn disabling_an_agent_is_guarded_and_keeps_existing_runs() {
     registry::set_disabled(&e.meta, "bot", false, Some(true), "user:admin").unwrap();
     registry::start_run(&e.meta, "bot", None).unwrap();
 }
+
+#[test]
+fn follow_up_records_its_source_without_sharing_execution_state() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let source = tasks::create_task(&e.meta, "source", "", &["src/**".into()], "user:admin").unwrap();
+    let run = registry::start_run(&e.meta, "bot", Some(&source.id)).unwrap();
+    registry::finish_run(&e.meta, &run.run_id, "failed", Some("executor failed")).unwrap();
+    let (follow_up, ()) = tasks::create_task_with(&e.meta, "follow up", "", &[], &[], "user:admin", |tx, task| {
+        tasks::attach_source(tx, &task.id, &source.id, &run.run_id, "user:admin")
+    })
+    .unwrap();
+    let saved = e.meta.read(|tx| tx.task(&follow_up.id)).unwrap().unwrap();
+    assert_eq!(saved.source_task.as_deref(), Some(source.id.as_str()));
+    assert_eq!(saved.source_run.as_deref(), Some(run.run_id.as_str()));
+    assert_eq!(saved.state, "open");
+    assert!(saved.owner.is_none());
+    assert!(e.meta.read(|tx| tx.task_deps(&follow_up.id)).unwrap().is_empty());
+    let count = e.meta.read(|tx| tx.tasks(None)).unwrap().len();
+    assert!(
+        tasks::create_task_with(&e.meta, "bad", "", &[], &[], "user:admin", |tx, task| {
+            tasks::attach_source(tx, &task.id, &follow_up.id, &run.run_id, "user:admin")
+        })
+        .is_err()
+    );
+    assert_eq!(e.meta.read(|tx| tx.tasks(None)).unwrap().len(), count);
+}

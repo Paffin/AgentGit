@@ -153,6 +153,18 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("agent disable", &a.ag(&["--json", "agent", "disable", "bot"]).ok());
     r.rec("agent enable", &a.ag(&["--json", "agent", "enable", "bot"]).ok());
 
+    let failed =
+        a.ag(&["--json", "agent", "start", "bot", "--task", &t2]).ok().json()["run_id"].as_str().unwrap().to_string();
+    a.ag(&["agent", "finish", &failed, "--status", "failed"]).ok();
+    let follow_up = r.rec(
+        "task create#follow-up",
+        &a.ag(&["--json", "task", "create", "Follow up", "--source-task", &t2, "--source-run", &failed]).ok(),
+    );
+    assert_eq!(follow_up["source_task"], t2);
+    assert_eq!(follow_up["source_run"], failed);
+    assert!(a.ag(&["task", "list"]).ok().stdout().contains(&format!("from {t2} · run {failed}")));
+    assert!(follow_up["owner"].is_null());
+
     // -- workspaces -----------------------------------------------------------------------------------------------------
     let ws = out.path().join("ws");
     r.rec("workspace create", &a.ag(&["--json", "workspace", "create", "side", "--dir", ws.to_str().unwrap()]).ok());

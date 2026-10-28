@@ -348,6 +348,9 @@ describe('the tour', () => {
     await runner.tasks.finish({ repo, id: task.id, state: 'done' });
     await runner.agents.complete({ repo, run_id: run.run_id, status: 'completed' });
     expect((await alice.tasks.get({ repo, id: dep.id })).ready).toBe(true);
+    const followUp = await alice.tasks.create({ repo, title: 'Separate follow-up', source_task: task.id });
+    expect(followUp).toMatchObject({ source_task: task.id, source_run: '', owner: '', depends_on: [] });
+    expect((await alice.tasks.get({ repo, id: task.id })).state).toBe('done');
     // The operator's call: nothing has been silent for an hour, so a dry run finds nothing to end.
     const plan = await admin.agents.reapRuns({ repo, stale_after_ms: 3_600_000, dry_run: true });
     expect(plan).toMatchObject({ dry_run: true, runs: [], released_leases: [], revoked_credentials: 0 });

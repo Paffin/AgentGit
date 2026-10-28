@@ -156,6 +156,8 @@ type Task struct {
 	CreatedBy   string   `json:"created_by"`
 	CreatedAtMs int64    `json:"created_at_ms"`
 	UpdatedAtMs int64    `json:"updated_at_ms"`
+	SourceTask  string   `json:"source_task,omitempty"`
+	SourceRun   string   `json:"source_run,omitempty"`
 }
 
 // Lease is a soft or exclusive claim on a path scope.

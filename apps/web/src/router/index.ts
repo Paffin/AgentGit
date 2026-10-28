@@ -119,6 +119,13 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Compare' },
       },
       {
+        path: 'tasks/:id',
+        name: 'task',
+        component: () => import('@/views/TaskView.vue'),
+        props: true,
+        meta: { title: 'Task' },
+      },
+      {
         path: 'agents',
         name: 'agents',
         component: () => import('@/views/AgentsView.vue'),

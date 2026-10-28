@@ -33,6 +33,7 @@ export function satisfies(have: ReadonlySet<Role>, need: Role): boolean {
   if (have.size === 0) return false
   if (have.has('admin')) return true
   if (need === 'reader') return true
+  if (need === 'writer' && have.has('delegator')) return true
   return have.has(need)
 }
 

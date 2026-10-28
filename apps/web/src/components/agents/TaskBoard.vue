@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Task } from '@/api/types'
@@ -94,16 +95,6 @@ async function create() {
   }
 }
 
-async function finish(t: Task, state: 'done' | 'cancelled') {
-  try {
-    await api.agents.finishTask(props.repo, t.id, state)
-    toasts.ok(state === 'done' ? 'Task marked done' : 'Task cancelled', t.title)
-    await tasks.reload()
-    board.touched(['tasks'])
-  } catch (e) {
-    toasts.error('Could not update the task', e)
-  }
-}
 const toggle = (id: string, on: boolean) => {
   depends.value = on ? [...depends.value, id] : depends.value.filter((x) => x !== id)
 }
@@ -143,7 +134,12 @@ const toggle = (id: string, on: boolean) => {
         <p class="faint hint">{{ c.hint }}</p>
         <ul role="list" class="list">
           <li v-for="t in grouped[c.id]" :key="t.id" class="task" :data-task="t.id">
-            <p class="t">{{ t.title }}</p>
+            <p class="t">
+              <RouterLink
+                :to="`/repos/${repo.split('/').map(encodeURIComponent).join('/')}/tasks/${encodeURIComponent(t.id)}`"
+                >{{ t.title }}</RouterLink
+              >
+            </p>
             <p v-if="t.description" class="d">{{ t.description }}</p>
             <p class="chips">
               <Badge
@@ -167,26 +163,6 @@ const toggle = (id: string, on: boolean) => {
               <IdentityLabel v-if="t.owner" :identity="t.owner" :size="16" />
               <span v-else>unowned</span>
               <RelativeTime :ms="t.updated_at_ms" />
-            </p>
-            <p v-if="c.id === 'in_progress' || c.id === 'open'" class="acts">
-              <Button
-                size="sm"
-                variant="ghost"
-                icon="check"
-                :disabled="!canCreate"
-                :disabled-reason="requirementText('createTask')"
-                @click="finish(t, 'done')"
-                >Done</Button
-              >
-              <Button
-                size="sm"
-                variant="ghost"
-                icon="x"
-                :disabled="!canCreate"
-                :disabled-reason="requirementText('createTask')"
-                @click="finish(t, 'cancelled')"
-                >Cancel</Button
-              >
             </p>
           </li>
           <li v-if="!grouped[c.id]?.length" class="none">
@@ -314,10 +290,6 @@ h3 {
   align-items: center;
   gap: var(--s-2);
   font-size: var(--fs-xs);
-}
-.acts {
-  display: flex;
-  gap: 4px;
 }
 .none {
   list-style: none;

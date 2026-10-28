@@ -327,6 +327,14 @@ export function createApi(c: ApiClient) {
       ) => (await c.get<{ runs: Run[] }>(r(repo, '/runs'), q, o)).runs ?? [],
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
+      task: (repo: string, id: string, o?: Opts) =>
+        c.get<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), undefined, o),
+      addDependency: (repo: string, id: string, dependency: string, o?: SessionOpts) =>
+        c.post<Task>(
+          r(repo, `/tasks/${encodeURIComponent(id)}/dependencies`),
+          { depends_on: dependency },
+          o,
+        ),
       createTask: (
         repo: string,
         body: {
@@ -337,7 +345,7 @@ export function createApi(c: ApiClient) {
         },
         o?: Opts,
       ) => c.post<Task>(r(repo, '/tasks'), body, o),
-      finishTask: (repo: string, id: string, state: 'done' | 'cancelled', o?: Opts) =>
+      finishTask: (repo: string, id: string, state: 'done' | 'cancelled', o?: SessionOpts) =>
         c.post<Task>(r(repo, `/tasks/${encodeURIComponent(id)}/finish`), { state }, o),
       leases: async (repo: string, activeOnly = true, o?: Opts) =>
         (await c.get<{ leases: Lease[] }>(r(repo, '/leases'), { active_only: activeOnly }, o))

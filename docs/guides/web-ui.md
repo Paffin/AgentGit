@@ -235,6 +235,10 @@ command-line-only version is under *Prefer the command line only?*
 Below: *Agent sessions* (active, or the history of finished ones with their summaries), *Tasks* (a board by state, with what each is
 waiting for), *Reservations*, and *Registered agents* with their identities and public keys.
 
+**Task details.** Open a task title from the board or an agent session to get a permanent task page. It shows the owner, state, scope, prerequisites and tasks waiting on it. Writers can add a prerequisite through the form; the server refuses cycles. Completing a task may make its dependants ready, but does not approve or land code. Cancelling a task leaves dependants waiting and does not stop an agent session. Both actions require confirmation and the server's owner/operator permissions. The selected coordination tab survives reload and Back to tasks.
+
+Related change requests and agent sessions are explicitly limited to matches in the newest 100 repository results. The page does not claim to show all historical work. Removing dependencies, editing existing task descriptions and a full user-issue tracker remain outside this slice.
+
 ## Administration
 
 Visible only where you hold the `admin` role; anyone else sees what the page needs instead of controls.

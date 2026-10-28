@@ -1,0 +1,432 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { api } from '@/api/instance'
+import { describeError, isApiError } from '@/api/errors'
+import { useRepoName } from '@/composables/useRepoName'
+import { usePageTitle } from '@/composables/usePageTitle'
+import { useResource } from '@/composables/useResource'
+import { useLiveReload } from '@/composables/useLiveReload'
+import { useAuth } from '@/stores/auth'
+import { useBoard } from '@/stores/board'
+import { samePrincipal } from '@/lib/identity'
+import Alert from '@/ui/Alert.vue'
+import Badge from '@/ui/Badge.vue'
+import Button from '@/ui/Button.vue'
+import CopyButton from '@/ui/CopyButton.vue'
+import Dialog from '@/ui/Dialog.vue'
+import ErrorState from '@/ui/ErrorState.vue'
+import IdentityLabel from '@/ui/IdentityLabel.vue'
+import RelativeTime from '@/ui/RelativeTime.vue'
+import SelectField from '@/ui/SelectField.vue'
+import Skeleton from '@/ui/Skeleton.vue'
+
+const props = defineProps<{ id: string }>()
+const { repo, routeParams } = useRepoName()
+const auth = useAuth()
+const board = useBoard()
+const scope = [repo, () => props.id, () => auth.identity]
+const task = useResource((signal) => api.agents.task(repo.value, props.id, { signal }), {
+  watch: scope,
+})
+const tasks = useResource((signal) => api.agents.tasks(repo.value, {}, { signal }), {
+  watch: scope,
+})
+const runs = useResource((signal) => api.agents.runs(repo.value, { limit: 100 }, { signal }), {
+  watch: scope,
+})
+const changes = useResource(
+  (signal) => api.proposals.list(repo.value, { page_size: 100 }, { signal }),
+  { watch: scope },
+)
+usePageTitle(() => `${task.data.value?.title || 'Task'} · ${repo.value}`)
+useLiveReload(['task', 'run', 'proposal'], () =>
+  Promise.all([task.reload(), tasks.reload(), runs.reload(), changes.reload()]).then(() => {}),
+)
+const byId = computed(() => new Map((tasks.data.value || []).map((item) => [item.id, item])))
+const dependants = computed(() =>
+  (tasks.data.value || []).filter((item) => item.depends_on.includes(props.id)),
+)
+const sessions = computed(() => (runs.data.value || []).filter((run) => run.task_id === props.id))
+const proposals = computed(() =>
+  (changes.data.value?.items || []).filter((change) => change.task_id === props.id),
+)
+const taskLink = (id: string) => ({ name: 'task', params: { ...routeParams.value, id } })
+const active = computed(
+  () => !!task.data.value && ['open', 'in_progress'].includes(task.data.value.state),
+)
+const canWrite = computed(() => auth.can(repo.value, 'createTask'))
+const canFinish = computed(
+  () =>
+    canWrite.value &&
+    !!task.data.value &&
+    (!task.data.value.owner ||
+      samePrincipal(task.data.value.owner, auth.identity) ||
+      auth.hasRole(repo.value, 'delegator')),
+)
+const options = computed(() => [
+  { value: '', label: 'Choose a prerequisite task' },
+  ...(tasks.data.value || [])
+    .filter(
+      (item) =>
+        item.id !== props.id &&
+        !task.data.value?.depends_on.includes(item.id) &&
+        item.state !== 'cancelled',
+    )
+    .map((item) => ({ value: item.id, label: `${item.title} · ${item.state}` })),
+])
+const dependency = ref('')
+const busy = ref(false)
+const error = ref('')
+const message = ref('')
+const needsSignIn = ref(false)
+const finishing = ref<'done' | 'cancelled' | null>(null)
+const windowOrigin = typeof window === 'undefined' ? '' : window.location.origin
+const link = computed(() =>
+  typeof window === 'undefined'
+    ? ''
+    : `${window.location.origin}/repos/${repo.value.split('/').map(encodeURIComponent).join('/')}/tasks/${encodeURIComponent(props.id)}`,
+)
+let context = 0
+let controller: AbortController | undefined
+watch(
+  [repo, () => props.id, () => auth.identity, () => auth.token],
+  () => {
+    context++
+    controller?.abort()
+    busy.value = false
+    finishing.value = null
+    dependency.value = ''
+    error.value = ''
+    message.value = ''
+    needsSignIn.value = false
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  context++
+  controller?.abort()
+})
+async function change(kind: 'dependency' | 'done' | 'cancelled') {
+  if (
+    busy.value ||
+    needsSignIn.value ||
+    !active.value ||
+    !canWrite.value ||
+    (kind !== 'dependency' && !canFinish.value) ||
+    (kind === 'dependency' && !dependency.value)
+  )
+    return
+  const mine = context
+  const repository = repo.value
+  const id = props.id
+  const selected = dependency.value
+  controller = new AbortController()
+  const request = { token: auth.token, signal: controller.signal, quietUnauthenticated: true }
+  busy.value = true
+  error.value = ''
+  message.value = ''
+  try {
+    const result =
+      kind === 'dependency'
+        ? await api.agents.addDependency(repository, id, selected, request)
+        : await api.agents.finishTask(repository, id, kind, request)
+    if (mine !== context) return
+    task.data.value = result
+    dependency.value = ''
+    finishing.value = null
+    message.value =
+      kind === 'dependency'
+        ? 'Prerequisite added.'
+        : kind === 'done'
+          ? 'Task marked done.'
+          : 'Task cancelled.'
+    board.touched(['tasks'])
+    await tasks.reload()
+  } catch (cause) {
+    if (mine === context) {
+      error.value = describeError(cause)
+      needsSignIn.value = isApiError(cause) && cause.isUnauthenticated
+    }
+  } finally {
+    if (mine === context) busy.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="task-page">
+    <RouterLink :to="{ name: 'agents', params: routeParams, query: { tab: 'tasks' } }"
+      >Back to tasks</RouterLink
+    >
+    <ErrorState
+      v-if="task.error.value && !task.data.value"
+      what="this task"
+      :error="task.error.value"
+      @retry="task.reload()"
+    />
+    <Skeleton v-else-if="!task.data.value" :lines="6" />
+    <template v-else>
+      <header class="heading">
+        <div>
+          <h1>{{ task.data.value.title }}</h1>
+          <p class="muted">
+            Created by <IdentityLabel :identity="task.data.value.created_by" /> ·
+            <RelativeTime :ms="task.data.value.created_at_ms" />
+          </p>
+        </div>
+        <CopyButton :text="link" label="Copy task link" with-label />
+      </header>
+      <div class="state">
+        <Badge :tone="task.data.value.state === 'done' ? 'ok' : 'neutral'">{{
+          task.data.value.state
+        }}</Badge
+        ><span v-if="active">{{
+          task.data.value.ready
+            ? 'Ready: all prerequisites are done.'
+            : 'Waiting for unfinished prerequisites.'
+        }}</span
+        ><span v-if="task.data.value.owner"
+          >Owned by <IdentityLabel :identity="task.data.value.owner" /></span
+        ><span v-else>Unassigned</span>
+      </div>
+      <p v-if="task.data.value.description" class="description">
+        {{ task.data.value.description }}
+      </p>
+      <p v-if="task.data.value.scope.length" class="state">
+        Scope <code v-for="path in task.data.value.scope" :key="path">{{ path }}</code>
+      </p>
+      <Alert v-if="error && !finishing" tone="bad" live="alert" title="The task was not updated"
+        >{{ error
+        }}<a
+          v-if="needsSignIn"
+          :href="'/signin?next=' + encodeURIComponent(link.replace(windowOrigin, ''))"
+          >Sign in again</a
+        ></Alert
+      >
+      <p v-if="message" role="status">{{ message }}</p>
+      <div class="columns">
+        <section aria-label="Task prerequisites">
+          <h2>Prerequisites</h2>
+          <ErrorState
+            v-if="tasks.error.value"
+            compact
+            what="task dependencies"
+            :error="tasks.error.value"
+            @retry="tasks.reload()"
+          />
+          <ul v-if="task.data.value.depends_on.length" class="items">
+            <li v-for="dependencyId in task.data.value.depends_on" :key="dependencyId">
+              <RouterLink :to="taskLink(dependencyId)">{{
+                byId.get(dependencyId)?.title || dependencyId
+              }}</RouterLink
+              ><Badge size="sm" :tone="byId.get(dependencyId)?.state === 'done' ? 'ok' : 'warn'">{{
+                byId.get(dependencyId)?.state || 'Not loaded'
+              }}</Badge>
+            </li>
+          </ul>
+          <p v-else class="muted">No prerequisites.</p>
+          <form
+            v-if="active && canWrite"
+            class="dependency-form"
+            @submit.prevent="change('dependency')"
+          >
+            <SelectField
+              v-model="dependency"
+              label="Add prerequisite"
+              :options="options"
+              :disabled="busy || tasks.loading.value"
+            /><Button type="submit" :disabled="busy || !dependency || needsSignIn"
+              >Add prerequisite</Button
+            >
+          </form>
+          <p v-if="active && canWrite" class="muted hint">
+            The task will wait for this prerequisite. Circular dependencies are rejected by the
+            server.
+          </p>
+        </section>
+        <section aria-label="Dependent tasks">
+          <h2>Waiting on this task</h2>
+          <ul v-if="dependants.length" class="items">
+            <li v-for="item in dependants" :key="item.id">
+              <RouterLink :to="taskLink(item.id)">{{ item.title }}</RouterLink
+              ><Badge size="sm">{{ item.state }}</Badge>
+            </li>
+          </ul>
+          <p v-else class="muted">No loaded tasks depend on this task.</p>
+        </section>
+      </div>
+      <section aria-label="Related change requests">
+        <h2>Change requests</h2>
+        <p class="muted hint">
+          Matches from the newest 100 change requests in this repository{{
+            changes.data.value?.nextPageToken ? '; older requests may not be shown' : ''
+          }}.
+        </p>
+        <ErrorState
+          v-if="changes.error.value"
+          compact
+          what="related change requests"
+          :error="changes.error.value"
+          @retry="changes.reload()"
+        />
+        <ul v-if="proposals.length" class="items">
+          <li v-for="proposal in proposals" :key="proposal.id">
+            <RouterLink :to="{ name: 'proposal', params: { ...routeParams, id: proposal.id } }">{{
+              proposal.title
+            }}</RouterLink
+            ><Badge size="sm">{{ proposal.state }}</Badge>
+          </li>
+        </ul>
+        <p v-else class="muted">No matching change requests in the loaded page.</p>
+      </section>
+      <section aria-label="Related agent sessions">
+        <h2>Agent sessions</h2>
+        <p class="muted hint">Matches from the most recent 100 sessions in this repository.</p>
+        <ErrorState
+          v-if="runs.error.value"
+          compact
+          what="agent sessions"
+          :error="runs.error.value"
+          @retry="runs.reload()"
+        />
+        <ul v-if="sessions.length" class="items">
+          <li v-for="run in sessions" :key="run.run_id">
+            <div>
+              <IdentityLabel :identity="run.identity" />
+              <p v-if="run.summary">{{ run.summary }}</p>
+              <code>{{ run.run_id }}</code>
+            </div>
+            <Badge size="sm">{{ run.status }}</Badge>
+          </li>
+        </ul>
+        <p v-else class="muted">No matching sessions in the loaded results.</p>
+      </section>
+      <footer v-if="active" class="actions">
+        <Button
+          :disabled="busy || !canFinish || needsSignIn"
+          :disabled-reason="
+            !canFinish ? 'Only the task owner or an operator can finish an owned task.' : undefined
+          "
+          @click="finishing = 'done'"
+          >Mark done…</Button
+        ><Button
+          variant="danger"
+          :disabled="busy || !canFinish || needsSignIn"
+          @click="finishing = 'cancelled'"
+          >Cancel task…</Button
+        >
+      </footer>
+    </template>
+    <Dialog
+      :model-value="finishing !== null"
+      :title="finishing === 'done' ? 'Mark this task done?' : 'Cancel this task?'"
+      :description="
+        finishing === 'done'
+          ? 'Dependent tasks may become ready to start. This records task completion; it does not approve or land any code.'
+          : 'Dependent tasks will keep waiting for this task. Running agent sessions are not stopped by cancelling a task.'
+      "
+      :dismissable="!busy"
+      @update:model-value="finishing = null"
+      ><p>{{ task.data.value?.title }}</p>
+      <Alert v-if="error" tone="bad" live="alert" title="The task was not updated"
+        >{{ error
+        }}<a
+          v-if="needsSignIn"
+          :href="'/signin?next=' + encodeURIComponent(link.replace(windowOrigin, ''))"
+          >Sign in again</a
+        ></Alert
+      >
+      <template #footer
+        ><Button :disabled="busy" @click="finishing = null">Keep task unchanged</Button
+        ><Button
+          :variant="finishing === 'cancelled' ? 'danger' : 'primary'"
+          :loading="busy"
+          :disabled="needsSignIn"
+          @click="finishing && change(finishing)"
+          >Confirm {{ finishing === 'done' ? 'completion' : 'cancellation' }}</Button
+        ></template
+      ></Dialog
+    >
+  </div>
+</template>
+
+<style scoped>
+.task-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.heading,
+.state,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.heading {
+  justify-content: space-between;
+}
+.heading h1 {
+  overflow-wrap: anywhere;
+}
+.description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+section {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-3);
+  min-width: 0;
+}
+h2 {
+  font-size: var(--fs-md);
+  margin-bottom: var(--s-3);
+}
+.items {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.items li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+.items code {
+  overflow-wrap: anywhere;
+}
+.dependency-form {
+  display: flex;
+  align-items: end;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.dependency-form > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.hint {
+  font-size: var(--fs-xs);
+  margin-top: var(--s-2);
+}
+.actions {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-3);
+}
+@media (max-width: 720px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

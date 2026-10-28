@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Permanent task pages connect prerequisites, dependant tasks, agent sessions and change requests. Add prerequisites from the browser and confirm completion/cancellation with their consequences explained. Coordination tabs survive reloads.
+
 - A multi-file browser editor stages text edits, additions, renames and deletions in one change request, with a shared preview and account/repository/branch-scoped tab recovery.
 
 - Review drafts preserve comments, decisions and inspected heads across page reloads in the same tab, separately per account and proposal. Review submission retains its initiating credential and offers reauthentication after expiry.

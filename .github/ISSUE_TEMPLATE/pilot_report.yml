@@ -5,7 +5,7 @@ labels: ["beta", "feedback"]
 body:
   - type: markdown
     attributes:
-      value: "Thank you for testing AgentGit. It is still alpha. Use a non-critical repository and never include credentials, private source or customer data."
+      value: "Thank you for testing AgentGit. This is an early public beta. Use a non-critical repository and never include credentials, private source or customer data."
   - type: input
     id: version
     attributes:
@@ -20,6 +20,17 @@ body:
       description: Which agent or MCP host, and what were you trying to accomplish?
     validations:
       required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Last step you completed
+      options:
+        - Installed and opened the Web UI
+        - Created or imported a repository
+        - Connected an executor
+        - Ran an agent task
+        - Reviewed a change request
+        - Integrated the change
   - type: textarea
     id: experience
     attributes:

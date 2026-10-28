@@ -4,6 +4,7 @@ AgentGit is open-source source control for teams and coding agents. A useful fir
 
 - **Watch it:** [A three-minute exact-tree workflow](demo.md), with a transcript and recorder.
 - **Try it:** [Getting started](../getting-started.md). Read the version note before installing.
+- **Connect a task executor:** [Browser setup](../guides/web-ui.md#set-up-a-task-executor-development), then follow a scoped task to its run, review and integration.
 - **Try it with a team:** [Beta programme](beta.md). The early public beta has a narrow support scope; the checklist records the remaining independent qualification.
 - **Report a problem:** [Bug report](https://github.com/Paffin/AgentGit/issues/new?template=bug_report.yml).
 - **Discuss a workflow:** [Discussions](https://github.com/Paffin/AgentGit/discussions). Include your goal, what you tried and what blocked it.

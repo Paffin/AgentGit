@@ -1,6 +1,6 @@
 # ADR 0023: Task-scoped history with continuation tokens
 
-Status: implemented for the beta.4 release candidate.
+Status: implemented in beta.4.
 
 A task page previously filtered only the newest 100 repository runs and change
 requests in the browser. Activity elsewhere could hide every result of an older

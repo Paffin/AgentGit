@@ -36,7 +36,7 @@ The recorder starts a loopback development server, creates temporary credentials
 
 [Linux verification record](../assets/rc3-linux-verification.json) records a separate run against the publicly downloaded archive: onboarding, protected-path review, backup/restore and an upgrade from rc.2 preserving policy, a reviewed proposal, the stream head and ten audit entries. The archive checksum matches the published `SHA256SUMS`. Local provenance-bundle retrieval returned HTTP 403; [the release workflow](https://github.com/Paffin/AgentGit/actions/runs/40470846262) separately verifies attestations and installs the archives on Linux x86_64, Linux ARM64 and macOS.
 
-These checks do not replace [the external pilot and platform gates](beta.md). The project remains alpha.
+These checks do not replace [the external pilot and platform gates](beta.md). The project is an early public beta; independent pilot qualification remains open.
 
 ## Additional rc.3 qualification
 

@@ -21,7 +21,10 @@ it('filters both navigation and patches without losing the server truncation war
       reviewScope: 'reader:repo:proposal',
     },
   })
+  const before = w.findAll('section.file')[1]!.attributes('id')
   await w.get('input[type="search"]').setValue('DOCS/')
+  expect(w.get('section.file').attributes('id')).toBe(before)
+  expect(w.get('nav a').attributes('href')).toBe(`#${before}`)
   expect(w.findAll('section.file')).toHaveLength(1)
   expect(w.get('section.file').text()).toContain('docs/two.md')
   expect(w.get('nav').text()).not.toContain('src/one.ts')

@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Fixed
+
+- Filtering changed files or hiding viewed files preserves each file’s original diff anchor, so navigation links do not change their target when the visible list shrinks.
+
 ### Added
 
 - Quote an added or removed diff line directly into proposal discussion. Quotes include the file, side, line number and exact compared revision, preserve existing draft text and require explicit posting.

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { DiffResponse } from '@/api/types'
+import type { DiffResponse, FileDiff } from '@/api/types'
 import type { DiffLine, LineQuote } from '@/lib/diffDiscussion'
 import { shortId } from '@/lib/format'
 import TextField from '@/ui/TextField.vue'
@@ -57,6 +57,10 @@ const visibleFiles = computed(() =>
       (!hideViewed.value || !viewed.value.includes(file.path)),
   ),
 )
+const fileAnchors = computed(
+  () => new Map((props.diff?.files || []).map((file, index) => [file.path, `diff-${index}`])),
+)
+const anchorForFile = (file: FileDiff) => fileAnchors.value.get(file.path) || ''
 const viewedCount = computed(
   () => props.diff?.files.filter((file) => viewed.value.includes(file.path)).length || 0,
 )
@@ -76,8 +80,8 @@ function showAll() {
   query.value = ''
   hideViewed.value = false
 }
-function jump(i: number) {
-  const el = document.getElementById(`diff-${i}`)
+function jump(file: FileDiff) {
+  const el = document.getElementById(anchorForFile(file))
   if (!el) return
   el.scrollIntoView({ block: 'start', behavior: 'auto' })
   el.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
@@ -124,8 +128,8 @@ function jump(i: number) {
       <div class="layout" :class="{ 'with-nav': diff.files.length > 1 }">
         <nav v-if="diff.files.length > 1" class="files" aria-label="Changed files">
           <ul role="list">
-            <li v-for="(f, i) in visibleFiles" :key="f.path">
-              <a :href="`#diff-${i}`" @click.prevent="jump(i)">
+            <li v-for="f in visibleFiles" :key="f.path">
+              <a :href="`#${anchorForFile(f)}`" @click.prevent="jump(f)">
                 <span class="p mono">{{ f.path }}</span>
                 <span class="n">
                   <Badge
@@ -146,8 +150,8 @@ function jump(i: number) {
         </nav>
         <DiffViewer
           :files="visibleFiles"
+          :anchor-for-file="anchorForFile"
           :discuss-lines="canDiscuss && !!diff.head"
-          @discuss="discuss"
           :truncated="diff.truncated"
           :empty-title="diff.files.length ? 'No matching files' : 'No differences'"
           :empty-description="
@@ -155,6 +159,7 @@ function jump(i: number) {
               ? 'Change the path filter or show viewed files to continue reviewing.'
               : 'The two revisions have the same files.'
           "
+          @discuss="discuss"
         >
           <template v-if="storageKey" #file-actions="{ file }">
             <label class="viewed"

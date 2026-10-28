@@ -69,6 +69,8 @@ test.describe('a proposal in the demo repository', () => {
     await expect(changes.locator('.row.k-del').first()).toBeVisible()
 
     // Jumping to a file from the list moves focus into that file's header.
+    await changes.getByRole('searchbox', { name: 'Filter changed files' }).fill('session.ts')
+    await expect(nav.getByRole('link')).toHaveAttribute('href', '#diff-1')
     await nav.getByRole('link', { name: /session\.ts/ }).click()
     await expect(page.locator('#diff-1 button').first()).toBeFocused()
     // A file can be collapsed and expanded again from the keyboard.

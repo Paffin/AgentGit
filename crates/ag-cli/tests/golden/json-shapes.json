@@ -887,6 +887,21 @@
       "state": "string",
       "task": "string"
     },
+    "task edit": {
+      "created_at": "number",
+      "created_by": "string",
+      "description": "string",
+      "id": "string",
+      "owner": "null",
+      "scope": [
+        "string"
+      ],
+      "source_run": "null",
+      "source_task": "null",
+      "state": "string",
+      "title": "string",
+      "updated_at": "number"
+    },
     "task list": [
       {
         "created_at": "number",

@@ -624,3 +624,21 @@ The new task has its own assignment, prerequisites and attempt history; it does
 not reopen or reset the source task. Review its scope before creating it. Older
 servers retain links in the description only. This development feature requires
 metadata schema 7 and a pre-upgrade backup; see [ADR-0027](../adr/0027-task-source-links.md).
+
+
+### Refine queued task instructions (development)
+
+On a task page, choose **Edit task…** to change its title, description and file scope before
+its first run. Only the creator or an operator can save. **Save instructions** applies the
+change explicitly; assignment, prerequisites and source links remain unchanged.
+
+If another person edits the instructions first, your save is refused and the dialog retains
+your draft. Copy anything you need, close and reopen the dialog to read the current version.
+If execution has already started, create a follow-up task instead: completed and failed runs
+keep the instructions they actually received. Editing does not pause a connected executor.
+
+This requires server feature `tasks.edit` and is not in beta.5 archives. The same operation is
+available through `ag task edit TASK --title "Clear expected result"` (local), or with
+`--remote origin` for a configured server. `--description` replaces the description;
+repeat `--scope` to replace path patterns, or use `--clear-scope`. Omitted fields are preserved.
+See [ADR-0028](../adr/0028-task-instruction-refinement.md).

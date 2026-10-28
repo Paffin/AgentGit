@@ -284,6 +284,45 @@ pub(crate) fn set_agent_state(ctx: &Ctx, remote: &str, agent: &str, disabled: bo
     })
 }
 
+/// Refines a remote task using the same full-content precondition as the browser.
+pub(crate) fn update_task(ctx: &Ctx, remote: &str, id: &str, changes: &super::agents::TaskEdit) -> Result<v1::Task> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        if !client.negotiate().await?.features.iter().any(|f| f == ag_protocol::features::TASK_EDIT) {
+            bail!("this server does not support task editing; update it before using this command");
+        }
+        let task = client
+            .agents()
+            .get_task(client.req(v1::GetTaskRequest { repo: config.repo.clone(), id: id.into() }))
+            .await
+            .map_err(ClientError::from)?
+            .into_inner();
+        let current =
+            ag_agent::tasks::TaskContent { title: task.title, description: task.description, scope: task.scope };
+        let content = changes.apply(&current);
+        let request = v1::UpdateTaskRequest {
+            repo: config.repo,
+            id: id.into(),
+            content: Some(v1::TaskContent {
+                title: content.title,
+                description: content.description,
+                scope: content.scope,
+            }),
+            expected: Some(v1::TaskContent {
+                title: current.title,
+                description: current.description,
+                scope: current.scope,
+            }),
+            idempotency_key: ag_crypto::random_id("task-edit")?,
+        };
+        Ok(client
+            .retrying(|| async { client.agents().update_task(client.req(request.clone())).await })
+            .await?
+            .into_inner())
+    })
+}
+
 fn resolve_remote(root: &Path, name: Option<&str>) -> Result<(String, Remote)> {
     let all = load_remotes(root)?;
     let name = name.unwrap_or("origin").to_string();

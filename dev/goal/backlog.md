@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission/source links bring the inventory to 157 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission/source links plus task refinement bring the inventory to 158 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |
@@ -61,3 +61,14 @@ Beta.5 release qualification: PR103 supplies native discussion JSON contracts an
 Per-agent run admission: operators can disable or re-enable new runs through Web UI, HTTP/gRPC and SDKs. Native CLI shares the transaction implementation. Existing runs, credentials and history are preserved; cancellation and credential revocation are separate operations. See ADR-0026.
 
 Task source links: creation now validates and retains the original task and optional failed/abandoned run. UI, CLI and SDKs expose that relationship. Ownership, prerequisites and attempt budgets stay independent; this does not implement automatic retries. Upgrade requires a backup; see ADR-0027.
+
+
+Task refinement: development supports title, description and scope edits before the first run.
+Full-content comparison, task eligibility and the update share the write transaction. Native CLI,
+HTTP/gRPC, SDKs and Web UI share the operation. The orchestrator rereads a claimed task before
+constructing its executor input and leases, so a stale dispatch snapshot cannot bypass the edit.
+Historical tasks require a separate follow-up. See ADR-0028 and the evidence journal.
+
+Beta.5 is now published from a36168b. Its downloaded Linux archive passed checksum, exact-source
+attestation and schema-7 upgrade/backup checks; details are in the release guide. This does not
+close external device, host or pilot qualification.

@@ -286,13 +286,29 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     key = generate_agent_key()
     bot.agents.register(repo=REPO, name="tour-bot", public_key=key.public_key_hex)
     assert "tour-bot" in [a.name for a in alice.agents.list(repo=REPO).agents]
-    assert tour["admin"].agents.set_state(repo=REPO, name="tour-bot", disabled=True, expected_disabled=False).disabled
-    assert not tour["admin"].agents.set_state(repo=REPO, name="tour-bot", disabled=False, expected_disabled=True).disabled
+    assert (
+        tour["admin"]
+        .agents.set_state(repo=REPO, name="tour-bot", disabled=True, expected_disabled=False)
+        .disabled
+    )
+    assert (
+        not tour["admin"]
+        .agents.set_state(repo=REPO, name="tour-bot", disabled=False, expected_disabled=True)
+        .disabled
+    )
     tour["admin"].agents.executor_report(
         repo=REPO, agent="tour-bot", name="command", slots=1, available=1, ttl_secs=90
     )
     task = alice.tasks.create(repo=REPO, title="tour task", scope=["src/**"], assignee="tour-bot")
     alice.tasks.assign(repo=REPO, id=task.id, agent="tour-bot", expected_owner="agent:tour-bot")
+    refined = alice.tasks.update(
+        repo=REPO,
+        id=task.id,
+        expected={"title": task.title, "description": task.description, "scope": task.scope},
+        content={"title": "Refined tour task", "description": "A concrete result", "scope": ["src/**"]},
+    )
+    assert refined.title == "Refined tour task"
+    assert alice.tasks.get(repo=REPO, id=task.id).description == "A concrete result"
     dep = alice.tasks.create(repo=REPO, title="depends")
     alice.tasks.depend(repo=REPO, task=dep.id, depends_on=task.id)
     assert len(alice.tasks.list(repo=REPO).tasks) == 2

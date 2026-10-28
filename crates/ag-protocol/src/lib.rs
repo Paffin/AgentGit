@@ -63,6 +63,8 @@ pub mod features {
     pub const RUN_OUTPUT: &str = "agents.run_output";
     /// Immutable task/run source links for independent follow-up work.
     pub const TASK_LINEAGE: &str = "tasks.lineage";
+    /// Compare-and-swap task instructions before the first run.
+    pub const TASK_EDIT: &str = "tasks.edit";
     /// Task-filtered history.
     pub const TASK_HISTORY: &str = "tasks.history";
     /// Authors and collaborators can discuss proposals without approval rights.
@@ -99,6 +101,7 @@ pub mod features {
         PROPOSAL_THREADS,
         TASK_HISTORY,
         TASK_LINEAGE,
+        TASK_EDIT,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

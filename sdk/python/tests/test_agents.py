@@ -273,3 +273,15 @@ def test_credentials_bound_to_a_run_act_only_as_it_and_die_with_it() -> None:
             bot.agents.reap_runs(repo=REPO, stale_after_ms=1000)
     finally:
         server.stop()
+
+
+def test_task_refinement_uses_content_preconditions(team: dict[str, AgentGitClient]) -> None:
+    alice = team["alice"]
+    task = alice.tasks.create(repo=REPO, title="Refine before execution")
+    expected = {"title": task.title, "description": task.description, "scope": task.scope}
+    content = {"title": "Refined λ", "description": "Concrete result", "scope": ["src/**"]}
+    updated = alice.tasks.update(repo=REPO, id=task.id, content=content, expected=expected)
+    assert updated.title == "Refined λ"
+    assert alice.tasks.get(repo=REPO, id=task.id).description == "Concrete result"
+    with pytest.raises(FailedPreconditionError):
+        alice.tasks.update(repo=REPO, id=task.id, content=content, expected=expected)

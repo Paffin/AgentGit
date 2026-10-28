@@ -400,6 +400,9 @@ _ag() {
             ag__subcmd__task,done)
                 cmd="ag__subcmd__task__subcmd__done"
                 ;;
+            ag__subcmd__task,edit)
+                cmd="ag__subcmd__task__subcmd__edit"
+                ;;
             ag__subcmd__task,list)
                 cmd="ag__subcmd__task__subcmd__list"
                 ;;
@@ -4667,7 +4670,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__task)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version create list depend ready done cancel"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version create edit list depend ready done cancel"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4813,6 +4816,52 @@ _ag() {
                 return 0
             fi
             case "${prev}" in
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__task__subcmd__edit)
+            opts="-C -q -v -h -V --title --description --scope --clear-scope --remote --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --title)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --description)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --scope)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

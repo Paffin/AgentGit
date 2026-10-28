@@ -413,6 +413,24 @@ impl Tx<'_> {
         rows.iter().map(task_row).collect()
     }
 
+    /// Replaces task instructions; the caller must check eligibility in this transaction.
+    pub fn task_set_content(
+        &self,
+        id: &str,
+        title: &str,
+        description: &str,
+        scope: &[String],
+    ) -> Result<(), MetaError> {
+        let n = self.conn.execute(
+            "UPDATE tasks SET title=?1, description=?2, scope=?3, updated_at=?4 WHERE id=?5",
+            &params![title, description, serde_json::to_string(scope)?, self.now().as_millis(), id],
+        )?;
+        if n == 0 {
+            return Err(MetaError::NotFound(format!("task '{id}'")));
+        }
+        Ok(())
+    }
+
     /// Sets the owner and/or state of a task.
     pub fn task_update(&self, id: &str, owner: Option<&str>, state: Option<&str>) -> Result<(), MetaError> {
         let n = self.conn.execute(

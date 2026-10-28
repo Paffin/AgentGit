@@ -239,6 +239,34 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
 
 // ---- tasks -----------------------------------------------------------------
 
+/// Partial instruction replacement shared by local and remote edits.
+#[derive(Args, Debug)]
+#[group(required = true, multiple = true)]
+pub struct TaskEdit {
+    /// New title; omitted keeps the current title.
+    #[arg(long)]
+    pub title: Option<String>,
+    /// New description; an empty string clears it.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// Replace path scope (repeatable).
+    #[arg(long, conflicts_with = "clear_scope")]
+    pub scope: Vec<String>,
+    /// Remove the expected file-path scope (repository policy still applies).
+    #[arg(long)]
+    pub clear_scope: bool,
+}
+
+impl TaskEdit {
+    pub(super) fn apply(&self, current: &tasks::TaskContent) -> tasks::TaskContent {
+        tasks::TaskContent {
+            title: self.title.clone().unwrap_or_else(|| current.title.clone()),
+            description: self.description.clone().unwrap_or_else(|| current.description.clone()),
+            scope: if self.clear_scope || !self.scope.is_empty() { self.scope.clone() } else { current.scope.clone() },
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum TaskCmd {
     /// Create a task.
@@ -257,6 +285,16 @@ pub enum TaskCmd {
         /// Failed or abandoned run of --source-task.
         #[arg(long, requires = "source_task")]
         source_run: Option<String>,
+    },
+    /// Refine instructions before a task's first run; concurrent edits are refused.
+    Edit {
+        /// Task identifier.
+        task: String,
+        #[command(flatten)]
+        changes: TaskEdit,
+        /// Edit on a configured server instead of locally (default name: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
     },
     /// List tasks.
     List {
@@ -320,6 +358,19 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
                 tx.task(&task.id)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound("created task missing".into()))
             })?;
             ctx.created(&t.id, &t, || format!("Created task {}", t.id))?;
+        }
+        TaskCmd::Edit { task, changes, remote } => {
+            if let Some(remote) = remote {
+                let updated = super::remote::update_task(ctx, remote, task, changes)?;
+                ctx.done(&updated, || format!("Updated task {}: {}", updated.id, updated.title))?;
+            } else {
+                let current = meta.read(|tx| tx.task(task))?.ok_or_else(|| anyhow!("task '{task}' not found"))?;
+                let expected = tasks::TaskContent::from(&current);
+                let content = changes.apply(&expected);
+                let updated =
+                    meta.write(|tx| tasks::update_in(tx, task, &content, &expected, ctx.me.as_str(), false))?;
+                ctx.done(&updated, || format!("Updated task {}: {}", updated.id, updated.title))?;
+            }
         }
         TaskCmd::List { state } => {
             let rows = meta.read(|tx| tx.tasks(state.as_deref()))?;

@@ -5388,6 +5388,27 @@
         },
         "type": "object"
       },
+      "TaskContent": {
+        "description": "Instructions remain immutable once any run has used the task.",
+        "properties": {
+          "description": {
+            "default": "",
+            "type": "string"
+          },
+          "scope": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TaskScheduling": {
         "properties": {
           "paused": {
@@ -5534,6 +5555,46 @@
             "type": "string"
           },
           "new_head": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateTaskRequest": {
+        "properties": {
+          "content": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskContent",
+                "description": "Full content observed when editing started; required, compared atomically."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
             "default": "",
             "type": "string"
           },
@@ -5720,7 +5781,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.3.0-beta.5"
+    "version": "0.3.0-beta.6"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -12428,6 +12489,75 @@
           }
         },
         "summary": "One task",
+        "tags": [
+          "Agent"
+        ]
+      },
+      "patch": {
+        "operationId": "task.update",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Refine task instructions before the first run",
         "tags": [
           "Agent"
         ]

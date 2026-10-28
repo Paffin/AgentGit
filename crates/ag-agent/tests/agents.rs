@@ -724,3 +724,46 @@ fn follow_up_records_its_source_without_sharing_execution_state() {
     );
     assert_eq!(e.meta.read(|tx| tx.tasks(None)).unwrap().len(), count);
 }
+
+#[test]
+fn task_refinement_preserves_sources_and_rejects_stale_or_started_work() {
+    let e = env();
+    let source = tasks::create_task(&e.meta, "Source", "", &[], "user:alice").unwrap();
+    let (_, task) =
+        tasks::create_task_with(&e.meta, "Initial", "Before", &["src/**".into()], &[], "user:alice", |tx, task| {
+            tasks::attach_source(tx, &task.id, &source.id, "", "user:alice")?;
+            tx.task(&task.id)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound("task".into()))
+        })
+        .unwrap();
+    let expected = tasks::TaskContent::from(&task);
+    let content = tasks::TaskContent {
+        title: "Refined λ".into(),
+        description: "Expected result".into(),
+        scope: vec!["lib/**".into()],
+    };
+    let edit = |expected: &tasks::TaskContent, actor: &str, operator: bool| {
+        e.meta.write(|tx| tasks::update_in(tx, &task.id, &content, expected, actor, operator))
+    };
+    assert!(edit(&expected, "user:bob", false).is_err());
+    let updated = edit(&expected, "user:alice", false).unwrap();
+    assert_eq!(tasks::TaskContent::from(&updated), content);
+    assert_eq!(updated.created_by, task.created_by);
+    assert_eq!(updated.owner, task.owner);
+    assert_eq!(updated.source_task.as_deref(), Some(source.id.as_str()));
+    assert_eq!(updated.source_run, task.source_run);
+    assert!(edit(&expected, "user:alice", false).is_err());
+    // Equality compares the full content, even when the clock has not ticked.
+    assert_eq!(updated.updated_at, task.updated_at);
+    let invalid = tasks::TaskContent { title: " ".into(), ..content.clone() };
+    assert!(e.meta.write(|tx| tasks::update_in(tx, &task.id, &invalid, &content, "user:alice", false)).is_err());
+    let invalid = tasks::TaskContent { scope: vec!["[".into()], ..content.clone() };
+    assert!(e.meta.write(|tx| tasks::update_in(tx, &task.id, &invalid, &content, "user:alice", false)).is_err());
+    assert_eq!(tasks::TaskContent::from(&e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap()), content);
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let run = registry::start_run(&e.meta, "bot", Some(&task.id)).unwrap();
+    assert!(edit(&content, "user:admin", true).is_err());
+    registry::finish_run(&e.meta, &run.run_id, "failed", Some("Retry needed")).unwrap();
+    // Failed work may become queued again, but its historical instructions stay immutable.
+    e.meta.write(|tx| tx.task_update(&task.id, None, Some("open"))).unwrap();
+    assert!(edit(&content, "user:admin", true).is_err());
+}

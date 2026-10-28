@@ -610,3 +610,20 @@ fn integrate_takes_its_idempotency_key_as_key_or_idempotency_key() {
     let help = a.ag(&["integrate", "--help"]).ok().stdout();
     assert!(help.contains("--idempotency-key"), "{help}");
 }
+
+#[test]
+fn task_edit_changes_only_instructions_before_execution() {
+    let ag = Ag::new();
+    let task =
+        ag.ag(&["--json", "task", "create", "Initial", "--description", "Before", "--scope", "src/**"]).ok().json();
+    let id = task["id"].as_str().unwrap();
+    let updated = ag.ag(&["--json", "task", "edit", id, "--title", "Refined λ", "--clear-scope"]).ok().json();
+    assert_eq!(updated["title"], "Refined λ");
+    assert_eq!(updated["description"], "Before");
+    assert_eq!(updated["scope"], serde_json::json!([]));
+    assert_ne!(ag.run_as("user:bob", &["task", "edit", id, "--title", "Stolen"]).code(), 0);
+    assert_ne!(ag.ag(&["task", "edit", id]).code(), 0);
+    ag.ag(&["agent", "register", "bot"]).ok();
+    ag.ag(&["agent", "start", "bot", "--task", id]).ok();
+    assert_ne!(ag.ag(&["task", "edit", id, "--title", "Too late"]).code(), 0);
+}

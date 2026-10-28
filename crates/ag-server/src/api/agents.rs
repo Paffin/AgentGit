@@ -141,6 +141,38 @@ fn task_view(repo: &ag_integrate::Repository, t: &TaskRow) -> ApiResult<v1::Task
     Ok(repo.meta().read(|tx| task_view_in(tx, t))?)
 }
 
+fn task_content(value: Option<&v1::TaskContent>) -> ApiResult<ag_agent::tasks::TaskContent> {
+    let value = value.ok_or_else(|| ApiError::invalid("content and expected are required"))?;
+    Ok(ag_agent::tasks::TaskContent {
+        title: value.title.clone(),
+        description: value.description.clone(),
+        scope: value.scope.clone(),
+    })
+}
+
+fn task_edit_error(error: MetaError) -> ApiError {
+    match error {
+        MetaError::Invalid(message) => ApiError::new(ag_protocol::ErrorCode::FailedPrecondition, message),
+        other => other.into(),
+    }
+}
+
+fn update_task_in(
+    tx: &Tx<'_>,
+    req: &v1::UpdateTaskRequest,
+    content: &ag_agent::tasks::TaskContent,
+    expected: &ag_agent::tasks::TaskContent,
+    actor: &Identity,
+    operator: bool,
+    claim: &super::Claim,
+) -> Result<v1::Task, MetaError> {
+    claim.ensure_available(tx)?;
+    let updated = ag_agent::tasks::update_in(tx, &req.id, content, expected, actor.as_str(), operator)?;
+    let response = task_view_in(tx, &updated)?;
+    claim.record(tx, &response)?;
+    Ok(response)
+}
+
 fn record_from_wire(r: &v1::ProvenanceRecord) -> ApiResult<ProvenanceRecord> {
     let opt = |s: &str| (!s.is_empty()).then(|| s.to_string());
     Ok(ProvenanceRecord {
@@ -585,6 +617,31 @@ impl App {
                     |tx, t| created_task_response(tx, t, &req, actor, claim),
                 )?;
                 Ok(response)
+            })
+        })
+        .await
+    }
+
+    /// Refines instructions only before any run has used the task.
+    pub async fn update_task(&self, call: &Call, req: v1::UpdateTaskRequest) -> ApiResult<v1::Task> {
+        let content = task_content(req.content.as_ref())?;
+        content.validate().map_err(ApiError::invalid)?;
+        let expected = task_content(req.expected.as_ref())?;
+        let repo_name = require(&req.repo, "repo")?.to_owned();
+        let operator = self.authorize(call, &req.repo, Cap::AgentOperate, None).await.is_ok();
+        let idem = self.idem();
+        self.with_repo_mut(call, &repo_name, Cap::TaskWrite, None, move |repo, actor| {
+            let existing =
+                repo.meta().read(|tx| tx.task(&req.id))?.ok_or_else(|| ApiError::not_found("task not found"))?;
+            if !operator && !super::owns(&existing.created_by, actor) {
+                return Err(ApiError::denied("only the task creator or an operator can edit it"));
+            }
+            let request = serde_json::to_string(&(actor.as_str(), &req.id, &req.content, &req.expected))
+                .map_err(ApiError::internal)?;
+            keyed(repo, idem, "task.update", &req.idempotency_key, &request, |claim| {
+                repo.meta()
+                    .write(|tx| update_task_in(tx, &req, &content, &expected, actor, operator, claim))
+                    .map_err(task_edit_error)
             })
         })
         .await

@@ -499,6 +499,13 @@ export function createApi(c: ApiClient) {
       ) => c.json<TaskScheduling>(r(repo, '/tasks/scheduling'), { ...o, method: 'PUT', body }),
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
+      updateTask: (
+        repo: string,
+        id: string,
+        content: Pick<Task, 'title' | 'description' | 'scope'>,
+        expected: Pick<Task, 'title' | 'description' | 'scope'>,
+        o?: SessionOpts,
+      ) => c.patch<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), { content, expected }, o),
       assignTask: (
         repo: string,
         id: string,

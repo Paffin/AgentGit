@@ -7,7 +7,13 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.6] - 2026-10-28
+
+**Upgrade:** metadata schema 7 adds persistent task-source links. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
+
 ### Added
+
+- Queued tasks can be refined before their first run through Web UI, local/remote CLI and HTTP/gRPC/SDKs. Full-content preconditions protect concurrent edits, keyed retries replay atomically, and historical instructions remain immutable after any run.
 
 - Task follow-ups can retain validated source task/run links across reloads. The source run must be failed or abandoned and belong to that task; ownership, prerequisites and retry history remain independent. Development metadata schema 7 requires a pre-upgrade backup.
 
@@ -16,6 +22,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 ### Fixed
 
 - Agent enabled-state checks now occur inside the run creation transaction, preventing a run from starting after a concurrent disable has committed.
+- The orchestrator rereads a task after claiming it so instruction edits committed after task selection reach the executor and its file leases.
 
 ## [0.3.0-beta.5] - 2026-10-28
 

@@ -35,3 +35,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0025](0025-line-review-threads.md) | Revision-bound line discussion, paged replies and optimistic resolution |
 | [0026](0026-agent-run-admission.md) | Transactional per-agent run admission across CLI, API and browser |
 | [0027](0027-task-source-links.md) | Persistent, validated source links for independent follow-up tasks |
+
+- [0028 — Task instruction refinement](0028-task-instruction-refinement.md)

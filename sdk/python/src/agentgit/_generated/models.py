@@ -215,12 +215,14 @@ __all__ = [
     "SyncWorkspaceRequest",
     "SyncWorkspaceResponse",
     "Task",
+    "TaskContent",
     "TaskScheduling",
     "ThreadComment",
     "TreeEntry",
     "UnpinRequest",
     "UpdateIssueRequest",
     "UpdateProposalRequest",
+    "UpdateTaskRequest",
     "ValidationStatus",
     "ValidationTask",
     "VerifyAuditRequest",
@@ -2136,6 +2138,14 @@ class Task:
 
 
 @dataclass(kw_only=True)
+class TaskContent:
+    """Instructions remain immutable once any run has used the task."""
+    description: str = field(default="")
+    scope: list[str] = field(default_factory=list)
+    title: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class TaskScheduling:
     """The `TaskScheduling` message."""
     paused: bool = field(default=False)
@@ -2190,6 +2200,16 @@ class UpdateProposalRequest:
     id: str = field(default="")
     idempotency_key: str = field(default="")
     new_head: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class UpdateTaskRequest:
+    """The `UpdateTaskRequest` message."""
+    content: TaskContent | None = field(default=None)
+    expected: TaskContent | None = field(default=None)
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
     repo: str = field(default="")
 
 

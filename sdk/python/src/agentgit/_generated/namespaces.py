@@ -215,12 +215,14 @@ from agentgit._generated.models import (
     SyncWorkspaceRequest,
     SyncWorkspaceResponse,
     Task,
+    TaskContent,
     TaskScheduling,
     ThreadComment,
     TreeEntry,
     UnpinRequest,
     UpdateIssueRequest,
     UpdateProposalRequest,
+    UpdateTaskRequest,
     ValidationStatus,
     ValidationTask,
     VerifyAuditRequest,
@@ -1662,6 +1664,19 @@ class TasksApi:
     ) -> TaskScheduling:
         """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
         return self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
+
+    def update(
+        self,
+        *,
+        repo: str,
+        id: str,
+        content: TaskContent | Mapping[str, Any] | None = None,
+        expected: TaskContent | Mapping[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Refine task instructions before the first run (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}`, operation `task.update`)."""
+        return self._c._call("task.update", {"repo": repo, "id": id, "content": content, "expected": expected, "idempotency_key": idempotency_key}, options, Task)
 
 
 
@@ -3255,6 +3270,19 @@ class AsyncTasksApi:
     ) -> TaskScheduling:
         """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
         return await self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
+
+    async def update(
+        self,
+        *,
+        repo: str,
+        id: str,
+        content: TaskContent | Mapping[str, Any] | None = None,
+        expected: TaskContent | Mapping[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Refine task instructions before the first run (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}`, operation `task.update`)."""
+        return await self._c._call("task.update", {"repo": repo, "id": id, "content": content, "expected": expected, "idempotency_key": idempotency_key}, options, Task)
 
 
 

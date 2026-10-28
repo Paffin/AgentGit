@@ -23,7 +23,8 @@
       "proposal.thread_create",
       "proposal.thread_reply",
       "proposal.thread_resolve",
-      "agent.set_state"
+      "agent.set_state",
+      "task.update"
     ],
     "natural": [
       "objects.put",

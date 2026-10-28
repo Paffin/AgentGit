@@ -116,6 +116,84 @@
       "title": "string",
       "updated_at_ms": "number"
     },
+    "remote discussion list": {
+      "next_page_token": "string",
+      "threads": [
+        {
+          "anchor": {
+            "base": "string",
+            "head": "string",
+            "line": "number",
+            "path": "string",
+            "side": "string",
+            "text": "string"
+          },
+          "author": "string",
+          "body": "string",
+          "created_at_ms": "number",
+          "id": "string",
+          "proposal": "string",
+          "resolved": "bool",
+          "updated_at_ms": "number",
+          "version": "number"
+        }
+      ]
+    },
+    "remote discussion replies": {
+      "comments": [
+        {
+          "author": "string",
+          "body": "string",
+          "created_at_ms": "number",
+          "id": "number",
+          "thread_id": "string"
+        }
+      ],
+      "next_page_token": "string"
+    },
+    "remote discussion reply": {
+      "author": "string",
+      "body": "string",
+      "created_at_ms": "number",
+      "id": "number",
+      "thread_id": "string"
+    },
+    "remote discussion resolve": {
+      "anchor": {
+        "base": "string",
+        "head": "string",
+        "line": "number",
+        "path": "string",
+        "side": "string",
+        "text": "string"
+      },
+      "author": "string",
+      "body": "string",
+      "created_at_ms": "number",
+      "id": "string",
+      "proposal": "string",
+      "resolved": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote discussion start": {
+      "anchor": {
+        "base": "string",
+        "head": "string",
+        "line": "number",
+        "path": "string",
+        "side": "string",
+        "text": "string"
+      },
+      "author": "string",
+      "body": "string",
+      "created_at_ms": "number",
+      "id": "string",
+      "proposal": "string",
+      "resolved": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
     "remote events": {
       "events": [
         {
@@ -146,8 +224,10 @@
               "operation_id": "string",
               "policy_version": "number",
               "proposal": "string",
+              "resolved": "bool",
               "status": "string",
               "stream": "string",
+              "thread_id": "string",
               "tree": "string",
               "version": "number"
             },

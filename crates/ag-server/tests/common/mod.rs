@@ -132,6 +132,9 @@ impl Http {
                         .method("PUT")
                         .uri(&url)
                         .header("authorization", format!("Bearer {token}"))
+                        // Let authentication reject the request before sending its body.
+                        // Otherwise Windows may reset an upload while the client is still writing.
+                        .header("expect", "100-continue")
                         .header("content-type", "application/octet-stream")
                         .body(bytes)
                         .unwrap(),

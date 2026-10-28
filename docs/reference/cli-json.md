@@ -1369,6 +1369,109 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag remote discussion list
+
+```json
+{
+  "next_page_token": "string",
+  "threads": [
+    {
+      "anchor": {
+        "base": "string",
+        "head": "string",
+        "line": "number",
+        "path": "string",
+        "side": "string",
+        "text": "string"
+      },
+      "author": "string",
+      "body": "string",
+      "created_at_ms": "number",
+      "id": "string",
+      "proposal": "string",
+      "resolved": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    }
+  ]
+}
+```
+
+### ag remote discussion replies
+
+```json
+{
+  "comments": [
+    {
+      "author": "string",
+      "body": "string",
+      "created_at_ms": "number",
+      "id": "number",
+      "thread_id": "string"
+    }
+  ],
+  "next_page_token": "string"
+}
+```
+
+### ag remote discussion reply
+
+```json
+{
+  "author": "string",
+  "body": "string",
+  "created_at_ms": "number",
+  "id": "number",
+  "thread_id": "string"
+}
+```
+
+### ag remote discussion resolve
+
+```json
+{
+  "anchor": {
+    "base": "string",
+    "head": "string",
+    "line": "number",
+    "path": "string",
+    "side": "string",
+    "text": "string"
+  },
+  "author": "string",
+  "body": "string",
+  "created_at_ms": "number",
+  "id": "string",
+  "proposal": "string",
+  "resolved": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote discussion start
+
+```json
+{
+  "anchor": {
+    "base": "string",
+    "head": "string",
+    "line": "number",
+    "path": "string",
+    "side": "string",
+    "text": "string"
+  },
+  "author": "string",
+  "body": "string",
+  "created_at_ms": "number",
+  "id": "string",
+  "proposal": "string",
+  "resolved": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
 ### ag remote events
 
 ```json
@@ -1402,8 +1505,10 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "operation_id": "string",
           "policy_version": "number",
           "proposal": "string",
+          "resolved": "bool",
           "status": "string",
           "stream": "string",
+          "thread_id": "string",
           "tree": "string",
           "version": "number"
         },

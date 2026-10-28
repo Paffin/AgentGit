@@ -171,7 +171,8 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
         expected_head=m2.head,
         anchor={"base": "", "head": m2.head, "path": "d.txt", "side": "new", "line": 1},
     )
-    assert thread.anchor is not None and thread.anchor.text == "d"
+    assert thread.anchor is not None
+    assert thread.anchor.text == "d"
     bob.proposals.thread_reply(repo=REPO, id=p1.id, thread_id=thread.id, body="It is required for recovery.")
     assert len(alice.proposals.thread_comments(repo=REPO, id=p1.id, thread_id=thread.id).comments) == 1
     assert bob.proposals.thread_resolve(

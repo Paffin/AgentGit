@@ -1749,3 +1749,45 @@ message GetCandidateRequest {
   uint32 page_size = 4;
   string page_token = 5;
 }
+
+// User-facing tracker issues are distinct from executable agent tasks.
+message Issue {
+  uint64 number = 1;
+  string title = 2;
+  string body = 3;
+  string author = 4;
+  string state = 5;
+  int64 created_at_ms = 6;
+  int64 updated_at_ms = 7;
+  uint64 version = 8;
+  string task_id = 9;
+}
+message IssueActivity {
+  uint64 id = 1;
+  uint64 issue_number = 2;
+  string kind = 3;
+  string body = 4;
+  string author = 5;
+  int64 created_at_ms = 6;
+}
+message CreateIssueRequest { string repo = 1; string title = 2; string body = 3; string task_id = 4; string idempotency_key = 5; }
+message GetIssueRequest { string repo = 1; uint64 number = 2; }
+message ListIssuesRequest { string repo = 1; string state = 2; string query = 3; uint32 page_size = 4; string page_token = 5; }
+message ListIssuesResponse { repeated Issue issues = 1; string next_page_token = 2; }
+message UpdateIssueRequest {
+  string repo = 1; uint64 number = 2; string title = 3; string body = 4;
+  string state = 5; string task_id = 6;
+  // Required: rejects changes made after the caller loaded the issue.
+  uint64 expected_version = 7;
+}
+message AddIssueCommentRequest { string repo = 1; uint64 number = 2; string body = 3; string idempotency_key = 4; }
+message ListIssueActivityRequest { string repo = 1; uint64 number = 2; uint32 page_size = 3; string page_token = 4; }
+message ListIssueActivityResponse { repeated IssueActivity activity = 1; string next_page_token = 2; }
+service IssueService {
+  rpc Create(CreateIssueRequest) returns (Issue);
+  rpc Get(GetIssueRequest) returns (Issue);
+  rpc List(ListIssuesRequest) returns (ListIssuesResponse);
+  rpc Update(UpdateIssueRequest) returns (Issue);
+  rpc AddComment(AddIssueCommentRequest) returns (IssueActivity);
+  rpc ListActivity(ListIssueActivityRequest) returns (ListIssueActivityResponse);
+}

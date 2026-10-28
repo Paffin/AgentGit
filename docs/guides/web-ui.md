@@ -456,3 +456,11 @@ Open **Code → Search code** to find literal text at a branch or revision. Narr
 **Continue searching** examines the next part of the same immutable tree. An empty page does not mean the search is finished when this button is still present. Each request scans at most 1000 files / 16 MiB, and returns at most 50 matching lines in the UI. Files over 1 MiB, files with NUL bytes and invalid UTF-8 are skipped; the result reports their counts. Symbolic-link targets are searched as text, without following links. This first version is a bounded scan, not an indexed-search performance claim.
 
 The page explains when an older server needs an update instead of displaying a misleading empty result. The HTTP and gRPC operation, cursor contract and SDK access are described in [ADR 0015](../adr/0015-bounded-revision-code-search.md) and the [protocol reference](../protocol/agwp-v1.md#literal-content-search).
+
+### Repository issues
+
+Open **Issues** in a repository to search or filter open and closed issues. Writers can create issues and add comments. Authors and administrators can edit, close and reopen them. Each issue has a permanent URL and can link to an existing agent task; closing it does not complete that task.
+
+The browser retains unsent drafts in the current tab, scoped to the signed-in account and repository. If someone edits the issue first, reload and review the current version before explicitly keeping your draft against that version. Comments and descriptions currently display as plain text. Labels, milestones, attachments and importing provider discussions are not yet supported.
+
+The issue tracker requires a server advertising `issues.v1` and metadata schema 4. Take a backup before upgrading; an older server requires restoration of the pre-upgrade database.

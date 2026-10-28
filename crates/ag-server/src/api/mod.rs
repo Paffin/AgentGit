@@ -18,6 +18,7 @@ mod convert;
 mod events;
 mod history;
 mod integration;
+mod issues;
 mod jobs;
 mod objects;
 mod proposals;

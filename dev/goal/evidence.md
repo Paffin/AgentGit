@@ -191,3 +191,20 @@ Crapper reduced the initial scanner from CC39 to functions no higher than CC9; n
 After integrating the task-pages main commit `49156f9f9eb9129cc9ce8850802a43f34f543cd9`, the combined search/task browser scenarios passed 4/4 in18.8s on the newly built real server. Search includes a verified visible jump to line2000; the OpenAPI document matches the running server's generated schema. Task, review and search changes are all retained.
 
 Final integration validation also passed 48 focused code-rendering, role and transport checks. Rust formatting and touched server/test Clippy passed with warnings denied. All original goal rows remain present; `tree.search` is an added API row, not a replacement for broader search goals.
+
+## Repository issue slice — 2026-10-28, working branch
+
+Implemented user issues separately from orchestrator tasks: repository-local numbering,
+search and state filters, descriptions, immutable discussion/activity, author/admin edits,
+close/reopen, optimistic revisions and optional same-repository task links. API mutations
+write activity, audit and event outbox in the same metadata transaction. SQLite and
+PostgreSQL schema 4 migrations are present; live PostgreSQL qualification is not claimed.
+
+The real-browser scenario in `apps/web/e2e/issues.spec.ts` passed against the actual server:
+UI-created repository and issue, draft restoration after reload, comment, close, reload,
+reopen and search. Local screenshot: `/workspace/agentgit-quality/issues-browser/`.
+The focused HTTP lifecycle exercises readers, author, unrelated writer and outsider,
+idempotent creates/comments, stale revision rejection and state/activity readback.
+Production Web UI build and TypeScript SDK type checking passed. This is not completion
+of `doc/goal.md`: provider discussion import, tracker labels/milestones/attachments,
+organizations and executable CI/CD remain outstanding.

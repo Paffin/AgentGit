@@ -34,7 +34,7 @@ impl Migration {
 }
 
 /// Schema version understood by this build.
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
@@ -44,6 +44,7 @@ pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
         name: "0003_proposal_paging.sql",
         sql: include_str!("../../migrations/sqlite/0003_proposal_paging.sql"),
     },
+    Migration { version: 4, name: "0004_issues.sql", sql: include_str!("../../migrations/sqlite/0004_issues.sql") },
 ];
 
 pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
@@ -54,6 +55,7 @@ pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
         name: "0003_proposal_paging.sql",
         sql: include_str!("../../migrations/postgres/0003_proposal_paging.sql"),
     },
+    Migration { version: 4, name: "0004_issues.sql", sql: include_str!("../../migrations/postgres/0004_issues.sql") },
 ];
 
 #[cfg(test)]

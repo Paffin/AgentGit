@@ -44,6 +44,7 @@ const tabs = computed<Tab[]>(() => {
   const b = base.value
   const list: Tab[] = [
     { to: b, label: 'Overview', icon: 'activity', exact: true },
+    { to: `${b}/issues`, label: 'Issues', icon: 'list', group: ['issues', 'issue'] },
     {
       to: `${b}/proposals`,
       label: termLabel('proposal', true),

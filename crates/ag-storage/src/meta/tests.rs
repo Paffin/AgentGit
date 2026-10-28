@@ -47,7 +47,7 @@ fn schema_is_created_once_and_versioned() {
     let again = first.reopen().unwrap();
     assert_eq!(again.read(|tx| tx.meta_get("k")).unwrap().as_deref(), Some("v"));
     assert_eq!(again.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some(SCHEMA_VERSION.to_string().as_str()));
-    assert_eq!(SCHEMA_VERSION, 3, "bump the migration tests together with the version");
+    assert_eq!(SCHEMA_VERSION, 4, "bump the migration tests together with the version");
     assert!(again.read(|tx| tx.meta_get("created_at")).unwrap().is_some());
 }
 

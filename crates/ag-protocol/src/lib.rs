@@ -53,6 +53,8 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
+    /// Repository issue tracker with durable discussion and optimistic editing.
+    pub const ISSUES: &str = "issues.v1";
 
     /// Review submission can atomically require the exact head inspected by the caller.
     pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
@@ -70,6 +72,7 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         TREE_SEARCH,
+        ISSUES,
     ];
 }
 

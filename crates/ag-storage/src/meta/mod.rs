@@ -34,6 +34,7 @@
 //! backend only decides how a transaction is opened and closed.
 
 pub mod db;
+mod issues;
 mod jobs;
 mod migrate;
 pub(crate) mod pg;
@@ -63,6 +64,7 @@ pub use agents::{AgentRow, LeaseRow, ProvenanceRow, QueueRow, RunRow, TaskRow};
 pub use changesets::ChangesetInfo;
 pub use db::{Dialect, Param, Row, Value};
 pub use intents::{IntentRow, IntentState, NewIntent};
+pub use issues::{IssueActivityRow, IssueFilter, IssueRow};
 pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
 pub use migrate::{Migration, SCHEMA_VERSION};
 pub use outbox::{AuditEntry, AuditReport, OutboxRow};

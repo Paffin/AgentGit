@@ -9,6 +9,7 @@ __all__ = [
     "AcquireLeaseRequest",
     "AcquireLeaseResponse",
     "AddDependencyRequest",
+    "AddIssueCommentRequest",
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
@@ -30,6 +31,7 @@ __all__ = [
     "CompleteRunRequest",
     "ConfigureRepoRequest",
     "Conflict",
+    "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
     "CreateStreamRequest",
@@ -59,6 +61,7 @@ __all__ = [
     "GcResponse",
     "GetCandidateRequest",
     "GetChangesetRequest",
+    "GetIssueRequest",
     "GetJobRequest",
     "GetOperationRequest",
     "GetPolicyRequest",
@@ -77,6 +80,8 @@ __all__ = [
     "IntegrateRequest",
     "IntegrationOutcome",
     "IntegrationResult",
+    "Issue",
+    "IssueActivity",
     "Job",
     "Lease",
     "LeaseRef",
@@ -91,6 +96,10 @@ __all__ = [
     "ListCredentialsResponse",
     "ListDirectoryRequest",
     "ListDirectoryResponse",
+    "ListIssueActivityRequest",
+    "ListIssueActivityResponse",
+    "ListIssuesRequest",
+    "ListIssuesResponse",
     "ListJobsRequest",
     "ListJobsResponse",
     "ListLeasesRequest",
@@ -188,6 +197,7 @@ __all__ = [
     "Task",
     "TreeEntry",
     "UnpinRequest",
+    "UpdateIssueRequest",
     "UpdateProposalRequest",
     "ValidationStatus",
     "ValidationTask",
@@ -225,6 +235,15 @@ class AddDependencyRequest:
     depends_on: str = field(default="")
     repo: str = field(default="")
     task: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class AddIssueCommentRequest:
+    """The `AddIssueCommentRequest` message."""
+    body: str = field(default="")
+    idempotency_key: str = field(default="")
+    number: int = field(default=0)
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -439,6 +458,16 @@ class Conflict:
     kind: str = field(default="")
     message: str = field(default="")
     path: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class CreateIssueRequest:
+    """The `CreateIssueRequest` message."""
+    body: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -714,6 +743,13 @@ class GetChangesetRequest:
 
 
 @dataclass(kw_only=True)
+class GetIssueRequest:
+    """The `GetIssueRequest` message."""
+    number: int = field(default=0)
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class GetJobRequest:
     """The `GetJobRequest` message."""
     job_id: str = field(default="")
@@ -864,6 +900,31 @@ class IntegrationResult:
 
 
 @dataclass(kw_only=True)
+class Issue:
+    """User-facing tracker issues are distinct from executable agent tasks."""
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    number: int = field(default=0)
+    state: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class IssueActivity:
+    """The `IssueActivity` message."""
+    author: str = field(default="")
+    body: str = field(default="")
+    created_at_ms: int = field(default=0)
+    id: int = field(default=0)
+    issue_number: int = field(default=0)
+    kind: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class Job:
     """The `Job` message."""
     attempts: int = field(default=0)
@@ -981,6 +1042,39 @@ class ListDirectoryResponse:
     entries: list[DirEntry] = field(default_factory=list)
     next_page_token: str = field(default="")
     tree_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssueActivityRequest:
+    """The `ListIssueActivityRequest` message."""
+    number: int = field(default=0)
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssueActivityResponse:
+    """The `ListIssueActivityResponse` message."""
+    activity: list[IssueActivity] = field(default_factory=list)
+    next_page_token: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssuesRequest:
+    """The `ListIssuesRequest` message."""
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    query: str = field(default="")
+    repo: str = field(default="")
+    state: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListIssuesResponse:
+    """The `ListIssuesResponse` message."""
+    issues: list[Issue] = field(default_factory=list)
+    next_page_token: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1830,6 +1924,18 @@ class UnpinRequest:
     """The `UnpinRequest` message."""
     name: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class UpdateIssueRequest:
+    """The `UpdateIssueRequest` message."""
+    body: str = field(default="")
+    expected_version: int = field(default=0)
+    number: int = field(default=0)
+    repo: str = field(default="")
+    state: str = field(default="")
+    task_id: str = field(default="")
+    title: str = field(default="")
 
 
 @dataclass(kw_only=True)

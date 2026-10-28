@@ -5,6 +5,8 @@ import { filePath, repoPath } from './client'
 import type { ApiClient, RequestOptions } from './client'
 import type {
   Agent,
+  Issue,
+  IssueActivity,
   AuditEntry,
   AuthConfig,
   Capabilities,
@@ -196,6 +198,46 @@ export function createApi(c: ApiClient) {
         body: { from?: string; to: string; paths?: string[]; context?: number },
         o?: Opts,
       ) => c.post<DiffResponse>(r(repo, '/diff'), body, { ...o, readOnly: true }),
+    },
+
+    issues: {
+      list: (
+        repo: string,
+        q: { state?: string; query?: string; page_size?: number; page_token?: string } = {},
+        o?: SessionOpts,
+      ) => c.get<{ issues: Issue[]; next_page_token: string }>(r(repo, '/issues'), q, o),
+      get: (repo: string, number: number, o?: SessionOpts) =>
+        c.get<Issue>(r(repo, `/issues/${number}`), undefined, o),
+      create: (
+        repo: string,
+        body: { title: string; body: string; task_id?: string },
+        o?: SessionOpts,
+      ) => c.post<Issue>(r(repo, '/issues'), body, o),
+      update: (
+        repo: string,
+        number: number,
+        body: {
+          title: string
+          body: string
+          state: string
+          task_id: string
+          expected_version: number
+        },
+        o?: SessionOpts,
+      ) => c.json<Issue>(r(repo, `/issues/${number}`), { ...o, method: 'PUT', body }),
+      comment: (repo: string, number: number, body: string, o?: SessionOpts) =>
+        c.post<IssueActivity>(r(repo, `/issues/${number}/comments`), { body }, o),
+      activity: (
+        repo: string,
+        number: number,
+        q: { page_size?: number; page_token?: string } = {},
+        o?: SessionOpts,
+      ) =>
+        c.get<{ activity: IssueActivity[]; next_page_token: string }>(
+          r(repo, `/issues/${number}/activity`),
+          q,
+          o,
+        ),
     },
 
     // ---- proposals ------------------------------------------------------------------------------

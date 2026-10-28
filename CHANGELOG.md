@@ -9,6 +9,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Repository issues with durable discussion, author/admin edits, close/reopen, revision conflict protection and optional agent-task links; Web UI and HTTP/gRPC APIs. Repository metadata upgrades to schema 4; back up before upgrading.
+- Tab-scoped issue drafts and live discussion refresh; generated Python and TypeScript SDK issue operations.
+
 - The import wizard shows transfer coverage before uploading, exports a readable migration summary and checklist, and links directly to imported files, branches and team access. Administration tabs can be bookmarked and survive reloads.
 
 ## [0.3.0-beta.3] - 2026-10-28

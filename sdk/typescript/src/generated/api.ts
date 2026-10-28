@@ -52,6 +52,14 @@ export const NAMESPACE_METHODS = {
     prepare: 'integration.prepare',
     validate: 'integration.validate',
   },
+  issues: {
+    activity: 'issue.activity',
+    comment: 'issue.comment',
+    create: 'issue.create',
+    get: 'issue.get',
+    list: 'issue.list',
+    update: 'issue.update',
+  },
   jobs: {
     candidate: 'jobs.candidate',
     claim: 'jobs.claim',
@@ -228,6 +236,20 @@ export interface Api {
     prepare(request: Req<'integration.prepare'>, options?: CallOptions): Promise<Res<'integration.prepare'>>;
     /** Queue validation jobs for the candidate (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/validate`, operation `integration.validate`) */
     validate(request: Req<'integration.validate'>, options?: CallOptions): Promise<Res<'integration.validate'>>;
+  };
+  readonly issues: {
+    /** Read issue discussion and history (`GET /v1/repos/{owner}/{rname}/issues/{number}/activity`, operation `issue.activity`) */
+    activity(request: Req<'issue.activity'>, options?: CallOptions): Promise<Res<'issue.activity'>>;
+    /** Add an issue comment (`POST /v1/repos/{owner}/{rname}/issues/{number}/comments`, operation `issue.comment`) */
+    comment(request: Req<'issue.comment'>, options?: CallOptions): Promise<Res<'issue.comment'>>;
+    /** Create a user issue (`POST /v1/repos/{owner}/{rname}/issues`, operation `issue.create`) */
+    create(request: Req<'issue.create'>, options?: CallOptions): Promise<Res<'issue.create'>>;
+    /** Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`) */
+    get(request: Req<'issue.get'>, options?: CallOptions): Promise<Res<'issue.get'>>;
+    /** List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`) */
+    list(request: Req<'issue.list'>, options?: CallOptions): Promise<Res<'issue.list'>>;
+    /** Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`) */
+    update(request: Req<'issue.update'>, options?: CallOptions): Promise<Res<'issue.update'>>;
   };
   readonly jobs: {
     /** The candidate tree of a proposal, for a worker to check out (`GET /v1/repos/{owner}/{rname}/proposals/{proposal}/candidate`, operation `jobs.candidate`) */

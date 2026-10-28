@@ -125,6 +125,19 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Compare' },
       },
       {
+        path: 'issues',
+        name: 'issues',
+        component: () => import('@/views/IssuesView.vue'),
+        meta: { title: 'Issues' },
+      },
+      {
+        path: 'issues/:number',
+        name: 'issue',
+        component: () => import('@/views/IssueView.vue'),
+        props: true,
+        meta: { title: 'Issue' },
+      },
+      {
         path: 'tasks/:id',
         name: 'task',
         component: () => import('@/views/TaskView.vue'),

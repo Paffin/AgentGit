@@ -50,6 +50,7 @@ from agentgit._generated.namespaces import (
     AsyncSessionApi,
     AsyncStreamsApi,
     AsyncTasksApi,
+    AsyncIssuesApi,
     AsyncTreeApi,
     AsyncWorkspacesApi,
     CredentialsApi,
@@ -69,6 +70,7 @@ from agentgit._generated.namespaces import (
     SessionApi,
     StreamsApi,
     TasksApi,
+    IssuesApi,
     TreeApi,
     WorkspacesApi,
 )
@@ -254,6 +256,7 @@ class AgentGitClient:
     objects: _ObjectsExt
     operations: OperationsApi
     agents: AgentsApi
+    issues: IssuesApi
     tasks: TasksApi
     leases: LeasesApi
     provenance: ProvenanceApi
@@ -307,6 +310,7 @@ class AgentGitClient:
         self.objects = _ObjectsExt(self)
         self.operations = OperationsApi(self)
         self.agents = AgentsApi(self)
+        self.issues = IssuesApi(self)
         self.tasks = TasksApi(self)
         self.leases = LeasesApi(self)
         self.provenance = ProvenanceApi(self)
@@ -561,6 +565,7 @@ class AsyncAgentGitClient:
     objects: _AsyncObjectsExt
     operations: AsyncOperationsApi
     agents: AsyncAgentsApi
+    issues: AsyncIssuesApi
     tasks: AsyncTasksApi
     leases: AsyncLeasesApi
     provenance: AsyncProvenanceApi
@@ -616,6 +621,7 @@ class AsyncAgentGitClient:
         self.objects = _AsyncObjectsExt(self)
         self.operations = AsyncOperationsApi(self)
         self.agents = AsyncAgentsApi(self)
+        self.issues = AsyncIssuesApi(self)
         self.tasks = AsyncTasksApi(self)
         self.leases = AsyncLeasesApi(self)
         self.provenance = AsyncProvenanceApi(self)

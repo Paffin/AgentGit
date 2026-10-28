@@ -3,7 +3,7 @@
 use ag_protocol::v1;
 
 /// Number of message types the decoders below cover.
-pub const COUNT: usize = 190;
+pub const COUNT: usize = 200;
 
 /// Name of message type `idx`.
 pub fn name(idx: usize) -> &'static str {
@@ -197,7 +197,17 @@ pub fn name(idx: usize) -> &'static str {
         186 => "ListJobsRequest",
         187 => "ListJobsResponse",
         188 => "GetCandidateRequest",
-        189 => "Empty",
+        189 => "Issue",
+        190 => "IssueActivity",
+        191 => "CreateIssueRequest",
+        192 => "GetIssueRequest",
+        193 => "ListIssuesRequest",
+        194 => "ListIssuesResponse",
+        195 => "UpdateIssueRequest",
+        196 => "AddIssueCommentRequest",
+        197 => "ListIssueActivityRequest",
+        198 => "ListIssueActivityResponse",
+        199 => "Empty",
         _ => unreachable!(),
     }
 }
@@ -395,7 +405,17 @@ pub fn check_proto(idx: usize, data: &[u8]) {
         186 => if let Ok(m) = v1::ListJobsRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListJobsRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         187 => if let Ok(m) = v1::ListJobsResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListJobsResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         188 => if let Ok(m) = v1::GetCandidateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetCandidateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
-        189 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        189 => if let Ok(m) = v1::Issue::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Issue::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        190 => if let Ok(m) = v1::IssueActivity::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::IssueActivity::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        191 => if let Ok(m) = v1::CreateIssueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::CreateIssueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        192 => if let Ok(m) = v1::GetIssueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::GetIssueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        193 => if let Ok(m) = v1::ListIssuesRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssuesRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        194 => if let Ok(m) = v1::ListIssuesResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssuesResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        195 => if let Ok(m) = v1::UpdateIssueRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UpdateIssueRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        196 => if let Ok(m) = v1::AddIssueCommentRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::AddIssueCommentRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        197 => if let Ok(m) = v1::ListIssueActivityRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssueActivityRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        198 => if let Ok(m) = v1::ListIssueActivityResponse::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::ListIssueActivityResponse::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        199 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         _ => unreachable!(),
     }
 }
@@ -592,7 +612,17 @@ pub fn check_json(idx: usize, data: &[u8]) {
         186 => if let Ok(m) = serde_json::from_slice::<v1::ListJobsRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListJobsRequest>(&s).unwrap(), m); },
         187 => if let Ok(m) = serde_json::from_slice::<v1::ListJobsResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListJobsResponse>(&s).unwrap(), m); },
         188 => if let Ok(m) = serde_json::from_slice::<v1::GetCandidateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetCandidateRequest>(&s).unwrap(), m); },
-        189 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
+        189 => if let Ok(m) = serde_json::from_slice::<v1::Issue>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Issue>(&s).unwrap(), m); },
+        190 => if let Ok(m) = serde_json::from_slice::<v1::IssueActivity>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::IssueActivity>(&s).unwrap(), m); },
+        191 => if let Ok(m) = serde_json::from_slice::<v1::CreateIssueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::CreateIssueRequest>(&s).unwrap(), m); },
+        192 => if let Ok(m) = serde_json::from_slice::<v1::GetIssueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::GetIssueRequest>(&s).unwrap(), m); },
+        193 => if let Ok(m) = serde_json::from_slice::<v1::ListIssuesRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssuesRequest>(&s).unwrap(), m); },
+        194 => if let Ok(m) = serde_json::from_slice::<v1::ListIssuesResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssuesResponse>(&s).unwrap(), m); },
+        195 => if let Ok(m) = serde_json::from_slice::<v1::UpdateIssueRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UpdateIssueRequest>(&s).unwrap(), m); },
+        196 => if let Ok(m) = serde_json::from_slice::<v1::AddIssueCommentRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::AddIssueCommentRequest>(&s).unwrap(), m); },
+        197 => if let Ok(m) = serde_json::from_slice::<v1::ListIssueActivityRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssueActivityRequest>(&s).unwrap(), m); },
+        198 => if let Ok(m) = serde_json::from_slice::<v1::ListIssueActivityResponse>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::ListIssueActivityResponse>(&s).unwrap(), m); },
+        199 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
         _ => unreachable!(),
     }
 }

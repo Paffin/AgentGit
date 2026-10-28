@@ -9,6 +9,7 @@ from agentgit._generated.models import (
     AcquireLeaseRequest,
     AcquireLeaseResponse,
     AddDependencyRequest,
+    AddIssueCommentRequest,
     Agent,
     AncestorsRequest,
     AncestorsResponse,
@@ -30,6 +31,7 @@ from agentgit._generated.models import (
     CompleteRunRequest,
     ConfigureRepoRequest,
     Conflict,
+    CreateIssueRequest,
     CreateProposalRequest,
     CreateRepoRequest,
     CreateStreamRequest,
@@ -59,6 +61,7 @@ from agentgit._generated.models import (
     GcResponse,
     GetCandidateRequest,
     GetChangesetRequest,
+    GetIssueRequest,
     GetJobRequest,
     GetOperationRequest,
     GetPolicyRequest,
@@ -77,6 +80,8 @@ from agentgit._generated.models import (
     IntegrateRequest,
     IntegrationOutcome,
     IntegrationResult,
+    Issue,
+    IssueActivity,
     Job,
     Lease,
     LeaseRef,
@@ -91,6 +96,10 @@ from agentgit._generated.models import (
     ListCredentialsResponse,
     ListDirectoryRequest,
     ListDirectoryResponse,
+    ListIssueActivityRequest,
+    ListIssueActivityResponse,
+    ListIssuesRequest,
+    ListIssuesResponse,
     ListJobsRequest,
     ListJobsResponse,
     ListLeasesRequest,
@@ -188,6 +197,7 @@ from agentgit._generated.models import (
     Task,
     TreeEntry,
     UnpinRequest,
+    UpdateIssueRequest,
     UpdateProposalRequest,
     ValidationStatus,
     ValidationTask,
@@ -648,6 +658,91 @@ class IntegrationApi:
     ) -> RequestValidationResponse:
         """Queue validation jobs for the candidate (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/validate`, operation `integration.validate`)."""
         return self._c._call("integration.validate", {"repo": repo, "proposal": proposal, "checks": checks, "idempotency_key": idempotency_key}, options, RequestValidationResponse)
+
+
+
+class IssuesApi:
+    """The `issues` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: SyncCaller) -> None:
+        self._c = caller
+
+    def activity(
+        self,
+        *,
+        repo: str,
+        number: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListIssueActivityResponse:
+        """Read issue discussion and history (`GET /v1/repos/{owner}/{rname}/issues/{number}/activity`, operation `issue.activity`)."""
+        return self._c._call("issue.activity", {"repo": repo, "number": number, "page_size": page_size, "page_token": page_token}, options, ListIssueActivityResponse)
+
+    def comment(
+        self,
+        *,
+        repo: str,
+        number: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueActivity:
+        """Add an issue comment (`POST /v1/repos/{owner}/{rname}/issues/{number}/comments`, operation `issue.comment`)."""
+        return self._c._call("issue.comment", {"repo": repo, "number": number, "body": body, "idempotency_key": idempotency_key}, options, IssueActivity)
+
+    def create(
+        self,
+        *,
+        repo: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        task_id: str | None = None,
+        title: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Create a user issue (`POST /v1/repos/{owner}/{rname}/issues`, operation `issue.create`)."""
+        return self._c._call("issue.create", {"repo": repo, "body": body, "idempotency_key": idempotency_key, "task_id": task_id, "title": title}, options, Issue)
+
+    def get(
+        self,
+        *,
+        repo: str,
+        number: str,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
+        return self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    def list(
+        self,
+        *,
+        repo: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        query: str | None = None,
+        state: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListIssuesResponse:
+        """List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`)."""
+        return self._c._call("issue.list", {"repo": repo, "page_size": page_size, "page_token": page_token, "query": query, "state": state}, options, ListIssuesResponse)
+
+    def update(
+        self,
+        *,
+        repo: str,
+        number: str,
+        body: str | None = None,
+        expected_version: int | None = None,
+        state: str | None = None,
+        task_id: str | None = None,
+        title: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`)."""
+        return self._c._call("issue.update", {"repo": repo, "number": number, "body": body, "expected_version": expected_version, "state": state, "task_id": task_id, "title": title}, options, Issue)
 
 
 
@@ -1968,6 +2063,91 @@ class AsyncIntegrationApi:
     ) -> RequestValidationResponse:
         """Queue validation jobs for the candidate (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/validate`, operation `integration.validate`)."""
         return await self._c._call("integration.validate", {"repo": repo, "proposal": proposal, "checks": checks, "idempotency_key": idempotency_key}, options, RequestValidationResponse)
+
+
+
+class AsyncIssuesApi:
+    """The `issues` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: AsyncCaller) -> None:
+        self._c = caller
+
+    async def activity(
+        self,
+        *,
+        repo: str,
+        number: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListIssueActivityResponse:
+        """Read issue discussion and history (`GET /v1/repos/{owner}/{rname}/issues/{number}/activity`, operation `issue.activity`)."""
+        return await self._c._call("issue.activity", {"repo": repo, "number": number, "page_size": page_size, "page_token": page_token}, options, ListIssueActivityResponse)
+
+    async def comment(
+        self,
+        *,
+        repo: str,
+        number: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueActivity:
+        """Add an issue comment (`POST /v1/repos/{owner}/{rname}/issues/{number}/comments`, operation `issue.comment`)."""
+        return await self._c._call("issue.comment", {"repo": repo, "number": number, "body": body, "idempotency_key": idempotency_key}, options, IssueActivity)
+
+    async def create(
+        self,
+        *,
+        repo: str,
+        body: str | None = None,
+        idempotency_key: str | None = None,
+        task_id: str | None = None,
+        title: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Create a user issue (`POST /v1/repos/{owner}/{rname}/issues`, operation `issue.create`)."""
+        return await self._c._call("issue.create", {"repo": repo, "body": body, "idempotency_key": idempotency_key, "task_id": task_id, "title": title}, options, Issue)
+
+    async def get(
+        self,
+        *,
+        repo: str,
+        number: str,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
+        return await self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    async def list(
+        self,
+        *,
+        repo: str,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        query: str | None = None,
+        state: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListIssuesResponse:
+        """List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`)."""
+        return await self._c._call("issue.list", {"repo": repo, "page_size": page_size, "page_token": page_token, "query": query, "state": state}, options, ListIssuesResponse)
+
+    async def update(
+        self,
+        *,
+        repo: str,
+        number: str,
+        body: str | None = None,
+        expected_version: int | None = None,
+        state: str | None = None,
+        task_id: str | None = None,
+        title: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Issue:
+        """Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`)."""
+        return await self._c._call("issue.update", {"repo": repo, "number": number, "body": body, "expected_version": expected_version, "state": state, "task_id": task_id, "title": title}, options, Issue)
 
 
 

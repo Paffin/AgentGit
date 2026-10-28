@@ -94,7 +94,7 @@ fn record_from_wire(r: &v1::ProvenanceRecord) -> ApiResult<ProvenanceRecord> {
 
 impl App {
     /// The lifetime of idempotency records and the time to judge them by.
-    fn idem(&self) -> Idem {
+    pub(super) fn idem(&self) -> Idem {
         let ttl_ms = self.cfg.repos.idempotency_ttl_secs.saturating_mul(1000);
         Idem { ttl_ms: i64::try_from(ttl_ms).unwrap_or(i64::MAX), now_ms: self.clock.now().as_millis() }
     }

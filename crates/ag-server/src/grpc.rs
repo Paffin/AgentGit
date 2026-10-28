@@ -13,6 +13,7 @@ use ag_protocol::v1::{
     execution_service_server::{ExecutionService, ExecutionServiceServer},
     history_service_server::{HistoryService, HistoryServiceServer},
     integration_service_server::{IntegrationService, IntegrationServiceServer},
+    issue_service_server::{IssueService, IssueServiceServer},
     object_service_server::{ObjectService, ObjectServiceServer},
     proposal_service_server::{ProposalService, ProposalServiceServer},
     protocol_service_server::{ProtocolService, ProtocolServiceServer},
@@ -628,6 +629,34 @@ impl ExecutionService for Grpc {
     }
 }
 
+#[tonic::async_trait]
+impl IssueService for Grpc {
+    async fn create(&self, request: Request<v1::CreateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.create", create_issue)
+    }
+    async fn get(&self, request: Request<v1::GetIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.get", get_issue)
+    }
+    async fn list(&self, request: Request<v1::ListIssuesRequest>) -> Result<Response<v1::ListIssuesResponse>, Status> {
+        unary!(self, request, "issue.list", list_issues)
+    }
+    async fn update(&self, request: Request<v1::UpdateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
+        unary!(self, request, "issue.update", update_issue)
+    }
+    async fn add_comment(
+        &self,
+        request: Request<v1::AddIssueCommentRequest>,
+    ) -> Result<Response<v1::IssueActivity>, Status> {
+        unary!(self, request, "issue.comment", add_issue_comment)
+    }
+    async fn list_activity(
+        &self,
+        request: Request<v1::ListIssueActivityRequest>,
+    ) -> Result<Response<v1::ListIssueActivityResponse>, Status> {
+        unary!(self, request, "issue.activity", list_issue_activity)
+    }
+}
+
 /// Builds the gRPC services as an axum router (so they share the HTTP port).
 pub fn router(app: App) -> axum::Router {
     let (unary, chunked) = (max_unary_message(&app.cfg), max_chunk_message(&app.cfg));
@@ -642,6 +671,7 @@ pub fn router(app: App) -> axum::Router {
     }
     tonic::service::Routes::new(svc!(ProtocolServiceServer))
         .add_service(svc!(RepositoryServiceServer))
+        .add_service(svc!(IssueServiceServer))
         .add_service(svc!(ObjectServiceServer, chunked))
         .add_service(svc!(HistoryServiceServer))
         .add_service(svc!(TreeServiceServer))

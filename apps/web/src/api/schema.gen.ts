@@ -434,6 +434,76 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/issues': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List user issues */
+    get: operations['issue.list']
+    put?: never
+    /** Create a user issue */
+    post: operations['issue.create']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/repos/{owner}/{rname}/issues/{number}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read a user issue */
+    get: operations['issue.get']
+    /** Edit or close an issue at an expected version */
+    put: operations['issue.update']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/repos/{owner}/{rname}/issues/{number}/activity': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read issue discussion and history */
+    get: operations['issue.activity']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/repos/{owner}/{rname}/issues/{number}/comments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Add an issue comment */
+    post: operations['issue.comment']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/jobs': {
     parameters: {
       query?: never
@@ -1359,6 +1429,19 @@ export interface components {
       /** @default  */
       task: string
     }
+    AddIssueCommentRequest: {
+      /** @default  */
+      body: string
+      /** @default  */
+      idempotency_key: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /** @default  */
+      repo: string
+    }
     Agent: {
       /**
        * Format: int64
@@ -1764,6 +1847,18 @@ export interface components {
       message: string
       /** @default  */
       path: string
+    }
+    CreateIssueRequest: {
+      /** @default  */
+      body: string
+      /** @default  */
+      idempotency_key: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      task_id: string
+      /** @default  */
+      title: string
     }
     CreateProposalRequest: {
       /** @default  */
@@ -2260,6 +2355,15 @@ export interface components {
        */
       rev: string
     }
+    GetIssueRequest: {
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /** @default  */
+      repo: string
+    }
     GetJobRequest: {
       /** @default  */
       job_id: string
@@ -2471,6 +2575,62 @@ export interface components {
        */
       state: string
     }
+    /** @description User-facing tracker issues are distinct from executable agent tasks. */
+    Issue: {
+      /** @default  */
+      author: string
+      /** @default  */
+      body: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      created_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /** @default  */
+      state: string
+      /** @default  */
+      task_id: string
+      /** @default  */
+      title: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      updated_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      version: number
+    }
+    IssueActivity: {
+      /** @default  */
+      author: string
+      /** @default  */
+      body: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      created_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      id: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      issue_number: number
+      /** @default  */
+      kind: string
+    }
     Job: {
       /**
        * Format: int32
@@ -2661,6 +2821,49 @@ export interface components {
       next_page_token: string
       /** @default  */
       tree_id: string
+    }
+    ListIssueActivityRequest: {
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /**
+       * Format: int32
+       * @default 0
+       */
+      page_size: number
+      /** @default  */
+      page_token: string
+      /** @default  */
+      repo: string
+    }
+    ListIssueActivityResponse: {
+      /** @default [] */
+      activity: components['schemas']['IssueActivity'][]
+      /** @default  */
+      next_page_token: string
+    }
+    ListIssuesRequest: {
+      /**
+       * Format: int32
+       * @default 0
+       */
+      page_size: number
+      /** @default  */
+      page_token: string
+      /** @default  */
+      query: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      state: string
+    }
+    ListIssuesResponse: {
+      /** @default [] */
+      issues: components['schemas']['Issue'][]
+      /** @default  */
+      next_page_token: string
     }
     ListJobsRequest: {
       /**
@@ -4063,6 +4266,29 @@ export interface components {
       /** @default  */
       repo: string
     }
+    UpdateIssueRequest: {
+      /** @default  */
+      body: string
+      /**
+       * Format: int64
+       * @description Required: rejects changes made after the caller loaded the issue.
+       * @default 0
+       */
+      expected_version: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /** @default  */
+      repo: string
+      /** @default  */
+      state: string
+      /** @default  */
+      task_id: string
+      /** @default  */
+      title: string
+    }
     UpdateProposalRequest: {
       /** @default  */
       id: string
@@ -5226,6 +5452,234 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ResolveRevResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.list': {
+    parameters: {
+      query?: {
+        page_size?: number
+        page_token?: string
+        query?: string
+        state?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ListIssuesResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.create': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateIssueRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Issue']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.get': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        number: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Issue']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.update': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        number: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateIssueRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Issue']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.activity': {
+    parameters: {
+      query?: {
+        page_size?: number
+        page_token?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        number: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ListIssueActivityResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.comment': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        number: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddIssueCommentRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['IssueActivity']
         }
       }
       /** @description Error */

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Failed-run pages distinguish active source tasks from finished ones. Finished tasks can seed an explicit follow-up with source links, failure summary and file scope; agent assignment and prerequisites start independently. Unrelated run/task sources are rejected before prefilling.
+
 - Run pages show the exact session’s change requests directly, with state, target stream, continuation pages and links into diff/checks/review. Results from other runs of the same agent stay separate.
 
 - CLI discussion uses the dedicated comment permission on capable servers, binds comments to the current proposal head and safely retries with an idempotency key. Older servers retain the legacy review path.

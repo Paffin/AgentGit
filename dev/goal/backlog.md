@@ -49,3 +49,5 @@ truncated legacy history. This prevents unrelated agent work from granting extra
 attempts after restart. Included in the beta.4 candidate before publication.
 
 Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming and rich review threads remain open.
+
+Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured retry lineage and richer retry policy controls remain open.

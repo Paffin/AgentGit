@@ -148,7 +148,7 @@ export function createApi(c: ApiClient) {
           page_size?: number
           page_token?: string
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.get<SearchTreeResponse>(r(repo, '/search'), q, o),
       manifest: async (
         repo: string,

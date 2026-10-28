@@ -23,6 +23,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Code search clears results when the session changes, pins requests to the initiating credential, preserves literal query spaces and emphasizes matching text.
+
 - Update the workspace and fuzz Markdown parser lockfiles to pulldown-cmark 0.13.5, addressing RUSTSEC-2026-0414 in development tooling.
 
 - File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.

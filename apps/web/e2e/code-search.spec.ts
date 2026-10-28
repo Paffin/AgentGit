@@ -69,6 +69,7 @@ test('searches uploaded contents, continues on the same revision and opens the m
     await expect(
       page.getByRole('region', { name: 'Matches in src.txt', exact: true }).getByRole('link'),
     ).toHaveCount(60)
+    await expect(page.locator('mark').first()).toHaveText(/needle/i)
     await expect(page.getByText('Some files were excluded', { exact: true })).toBeVisible()
     await page
       .getByRole('region', { name: 'Matches in src.txt', exact: true })

@@ -28,3 +28,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0018](0018-permanent-run-pages.md) | Exact historical run lookup and permanent browser pages tied to session identity |
 | [0019](0019-queued-task-assignment.md) | Atomic queued-agent reservation and assignment-aware dispatch |
 | [0020](0020-executor-connectivity.md) | Expiring executor connection reports and pre-run identity preparation |
+| [0021](0021-browser-executor-setup.md) | Browser-prepared scoped executor setup with separate private token files |

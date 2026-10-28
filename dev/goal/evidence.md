@@ -303,3 +303,32 @@ connected states and reload. The registered-agent tab now opens directly to its
 agents, without the unrelated task-creation form above it. Crapper complexity,
 focused duplicate analysis and mutation-site discovery were inspected; no coverage
 percentage or mutation kill rate is claimed.
+
+## Browser executor setup — executor-setup branch, 2026-10-28
+
+The administrator prepares exact-repository service/agent roles and a 24-hour
+scoped credential. The generated task-only JSON contains no bearer secret; a
+separate private token file is read by the native `-token-file` option. Disabled
+review/advisor components no longer require irrelevant credentials during check.
+The wizard waits for a new report by a unique per-setup service identity and supports revoke.
+
+Chromium and phone qualification downloaded the real files, checked the credential
+scope, invoked the real native `check` and `run` commands, observed connection,
+created an assigned task, waited for that command executor to complete and revoked
+the token (11.9 s desktop, 10.9 s phone). The native branch of this browser test
+requires AG_ORCH_BIN; CI without it still covers downloads, scope and revocation.
+No external coding model was invoked. The token file is deleted from test scratch
+space and is not retained as an artifact. Credential-file tests also reject unsafe
+Unix permissions and invalid content. Web type/build checks passed.
+
+Existing merge blockers were repaired in the parent stack: the PostgreSQL v1
+fixture now removes tables from newer migrations, generated protocol fuzz types
+match each branch, Python formatting is current, the orphan-run fixture respects
+pre-run registration, and live event streams revalidate run-bound credentials
+before buffered delivery. Focused PostgreSQL, stream and real orphan-run checks
+passed; the test assertions were retained.
+
+Connection confirmation is scoped to a unique service identity for each setup,
+so an older executor using the same agent name cannot turn the new setup green.
+Revocation also removes that setup service's role binding, while preserving the
+agent role that another installation may use.

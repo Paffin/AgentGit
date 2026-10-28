@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/config"
 	"os"
 	"os/exec"
 	"sort"
@@ -81,6 +82,9 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		{"reviewer", a.reviewer, ReviewerOps(), []string{"reviewer", "admin"}},
 		{"advisor", a.advisorClient, AdvisorOps(), []string{"reviewer", "admin"}},
 	} {
+		if !a.identityEnabled(id.label) {
+			continue
+		}
 		p, err := id.c.Whoami(ctx)
 		if err != nil {
 			rep.add("error", id.label, "credential rejected: %v", err)
@@ -181,4 +185,19 @@ func (a *App) Check(ctx context.Context) CheckReport {
 		rep.add("ok", "state_dir", "%s is usable", a.cfg.State)
 	}
 	return rep
+}
+
+func (a *App) identityEnabled(label string) bool {
+	if label == "orchestrator" {
+		return true
+	}
+	for _, repo := range a.cfg.Repos {
+		if label == "reviewer" && config.On(repo.Review.Enabled) {
+			return true
+		}
+		if label == "advisor" && config.On(repo.Advisor.Enabled) {
+			return true
+		}
+	}
+	return false
 }

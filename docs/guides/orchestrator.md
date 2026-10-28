@@ -483,3 +483,35 @@ where they are. To reach the admin API from outside the container set `listen` t
 - A very long agent session (over 55 minutes) is not supported: agent credentials cannot outlive an hour.
 - Concurrent sessions of one agent are not isolated from each other (section 4).
 - See the README's list of server behaviours the service works around, and of what has not been verified.
+
+## Connect from the Web UI (development)
+
+Open **Agents & work → Registered agents → Connect an executor…** as a repository
+administrator. Enter the installed agent executable, its argument array, environment
+variable **names** it needs and its concurrency. The wizard grants a repository-only
+service identity the delegator role, grants the agent its writer role and issues a
+24-hour credential scoped to the task executor's operations. It cannot approve,
+integrate, change policy or administer roles.
+
+Download the configuration and private token separately into one directory on the
+executor host. With the development orchestrator installed, run:
+
+```sh
+chmod 600 agentgit-executor.token
+orchestrator run -config agentgit-executor.json -token-file agentgit-executor.token
+```
+
+The token is not a command argument or configuration value. `-token-file` overrides
+`AG_ORCH_TOKEN` for `run` and `check`; it refuses non-private files on Unix, empty or
+oversized tokens. A generated profile disables automated reviewers, conflict advisors,
+indexing and validation scheduling; those remain separately configurable. Its local
+control endpoint uses an available loopback port, and its state directory separates
+repositories and agent names.
+
+The wizard waits for a fresh report from **this service identity** before showing
+connected. Assign a task after connection and follow its run and change request in the
+Web UI. Downloaded credentials survive closing the dialog; use **Revoke this executor
+token** or repository credential settings to invalidate one. If token creation has an
+uncertain network outcome, the error identifies the credential description to revoke
+before retrying. The wizard never installs software or provides a coding model on the
+host. This flow requires the development build and is not in beta.3.

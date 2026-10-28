@@ -499,3 +499,17 @@ On a queued task's page, its creator or an operator can use **Choose agent…** 
 **Agents & work → Registered agents** separates the agent's enabled key from its executor connection. A recent report shows the executor name, last contact and free slots at that moment. Without a fresh report it shows **No recent report**; a registered key alone is not a connected executor.
 
 The Go orchestrator renews these reports while its scheduler runs. Reports expire automatically, survive server restart and contain no commands, environment variables or credentials. Only an operator can report connectivity; readers can inspect it. Capacity is a snapshot, and a connected orchestrator does not prove that its command, model credentials or next task will succeed. Task assignment remains available when the executor is offline so work can wait for its return. Older orchestrators do not send these reports.
+
+### Set up a task executor (development)
+
+Administrators can choose **Registered agents → Connect an executor…** to prepare
+repository-scoped access and download a task-only orchestrator configuration. Enter
+an agent program installed on the executor host; its arguments are a JSON array and
+only named environment variables are inherited. No model credentials are sent to the
+browser or server. The private token downloads separately, expires in 24 hours, and
+can be revoked from the wizard or credential settings.
+
+Start the development orchestrator on the host using the displayed command. The
+wizard confirms a fresh connection from the service identity it just prepared, then
+the agent can be assigned tasks. Host installation and model availability are still
+external prerequisites. See the [orchestrator guide](orchestrator.md#connect-from-the-web-ui-development).

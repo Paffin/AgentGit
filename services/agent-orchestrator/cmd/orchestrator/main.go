@@ -47,6 +47,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	path := fs.String("config", getenv("AG_ORCH_CONFIG"), "configuration file (YAML or JSON); default $AG_ORCH_CONFIG")
+	tokenFile := fs.String("token-file", "", "read AG_ORCH_TOKEN from a private file (run/check)")
 	asJSON := fs.Bool("json", false, "machine-readable output (check)")
 	forWho := fs.String("for", "", "ops: print only one identity's operations (orchestrator, reviewer, advisor or agent)")
 	asFlags := fs.Bool("flags", false, "ops: print the operations as --operation flags for 'ag-server admin mint' (needs -for)")
@@ -59,6 +60,14 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	if *path == "" {
 		fmt.Fprintln(stderr, "orchestrator: no configuration file: pass -config or set AG_ORCH_CONFIG")
 		return 2
+	}
+	if *tokenFile != "" && (cmd == "run" || cmd == "check") {
+		var err error
+		getenv, err = credentialEnv(*tokenFile, getenv)
+		if err != nil {
+			fmt.Fprintln(stderr, "orchestrator:", err)
+			return 2
+		}
 	}
 	load := config.Load
 	if cmd == "ops" || cmd == "config" {
@@ -111,7 +120,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	return 2
 }
 
-const usage = `usage: orchestrator [run|check|ops|config|version] [-config FILE]
+const usage = `usage: orchestrator [run|check|ops|config|version] [-config FILE] [-token-file FILE]
 
   run      run the service (default)
   check    verify the configuration, credentials and server; changes nothing

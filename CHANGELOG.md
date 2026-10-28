@@ -9,6 +9,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Browser executor setup prepares exact-repository service access, a token-free task profile and a separate private token; the native orchestrator reads it with `-token-file`. A fresh report from the unique setup identity confirms the connection.
+- Task creators can reserve a registered agent atomically at creation or issue handoff, then reassign queued work with stale-edit protection. The server and orchestrator enforce the choice.
+- Registered-agent views distinguish enabled keys from expiring executor connection reports and show last reported capacity. Configured executors register before their first task.
+
 - Permanent pages for current and historical agent runs show session state, heartbeat, summary, assigned task and active reservations, with exact-session change-request links.
 
 - Operators can pause and resume new task-bound agent runs from the Web UI. The decision persists, requires a matching revision, is enforced in the run-creation transaction and is respected by the orchestrator. Metadata schema 5 requires a pre-upgrade backup.
@@ -19,6 +23,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Tab-scoped issue drafts and live discussion refresh; generated Python and TypeScript SDK issue operations.
 
 - The import wizard shows transfer coverage before uploading, exports a readable migration summary and checklist, and links directly to imported files, branches and team access. Administration tabs can be bookmarked and survive reloads.
+
+### Fixed
+
+- Run-bound event streams recheck the run before delivering buffered events, including when the run ends without its credential being explicitly revoked.
 
 ## [0.3.0-beta.3] - 2026-10-28
 

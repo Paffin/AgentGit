@@ -26,3 +26,9 @@ Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`,
 Queued assignment: implemented on `feature/task-assignment`. Task creation and issue handoff can reserve a registered agent atomically. Creator/operator edits use expected-owner comparison and cannot change running work. Dispatch respects the reserved executor; browser executor setup remains open.
 
 Executor connectivity: development implementation distinguishes registered keys from recent operator-reported executors, prepares configured identities before their first task and displays last capacity. Browser provisioning, command health checks and durable execution logs remain open.
+
+Browser executor setup: implemented exact-repository role/token preparation,
+separate configuration and private credential downloads, native launch and a
+verified connection state. Operator-owned host installation remains separate.
+Next: durable run output, retries/cancellation UX and direct links from a run to
+its candidate checks, review and integration outcome.

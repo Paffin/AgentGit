@@ -473,3 +473,14 @@ These are findings, not complaints; each is covered or handled as described.
 ## License
 
 Apache-2.0. Direct dependency: `gopkg.in/yaml.v3` (MIT and Apache-2.0, dual).
+
+### Private token file
+
+The development build accepts `-token-file FILE` for `run` and `check`. It reads the
+orchestrator credential from a separate file instead of putting its value into a
+command line or YAML/JSON configuration. On Unix the file must be private (`chmod
+600`); the file must contain a single token and be at most 16 KiB. The configuration
+uses `server.token_env: AG_ORCH_TOKEN` (the default). Other environment variables
+continue to come from the process environment. `config` and `ops` do not read this
+secret file. See [Web UI connection](../../docs/guides/orchestrator.md#connect-from-the-web-ui-development)
+for the repository-scoped setup wizard.

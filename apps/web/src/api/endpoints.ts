@@ -504,7 +504,7 @@ export function createApi(c: ApiClient) {
         },
         o?: SessionOpts,
       ) => c.post<{ credential: Credential; token: string }>('/v1/credentials', body, o),
-      revokeCredential: (id: string, o?: Opts) =>
+      revokeCredential: (id: string, o?: SessionOpts) =>
         c.del<{ revoked: boolean }>(`/v1/credentials/${encodeURIComponent(id)}`, undefined, o),
     },
   }

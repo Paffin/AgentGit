@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ConnectExecutor from './ConnectExecutor.vue'
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { useServerNow } from '@/composables/useNow'
 import { api } from '@/api/instance'
@@ -100,6 +101,7 @@ async function register() {
 
 <template>
   <div class="agents">
+    <ConnectExecutor :repo="repo" />
     <div class="bar">
       <p class="muted">
         Agents are long-lived principals with an Ed25519 key; each execution is a separate run with

@@ -212,6 +212,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
           @click="uploading = true"
           >Upload files</Button
         >
+        <Button
+          v-if="canEdit"
+          :to="{ name: 'change-editor', params: route.params, query: { stream: rev } }"
+          >Edit multiple files</Button
+        >
         <datalist id="rev-list">
           <option v-for="s in streamNames" :key="s" :value="s" />
         </datalist>

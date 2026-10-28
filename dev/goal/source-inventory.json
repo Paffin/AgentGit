@@ -11,7 +11,7 @@
   },
   {
     "path": "CHANGELOG.md",
-    "sha256": "b18cae9c205d61a85e908854050e40a86169d327410ba04ef04c05e678c9df56",
+    "sha256": "1b51e5273deecfebb43f4195d5bc3e7c4df6435cff27a872c9c30ec456d5bb91",
     "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
@@ -186,7 +186,7 @@
   },
   {
     "path": "docs/guides/web-ui.md",
-    "sha256": "119de1755f42bc3bd78442eff75158c978dd6b6fbd7d400530eb7aadb004edea",
+    "sha256": "f3d6f64fec1776dd7f3f373ad8b75d2914f66514852756788ae222fdb431e693",
     "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
   },
   {
@@ -541,12 +541,12 @@
   },
   {
     "path": "dev/goal/backlog.md",
-    "sha256": "8bf93e5c37f5ca12ca421ecaed9891e9e74bde1209d9ebe0078f5b97f8bf0696",
+    "sha256": "13b5aa375ab0c251c74c916132f9b2013640a9a49466044e55002ed3ed3efc40",
     "review": "2026-10-28 updated qualification scope; matrix gaps retained"
   },
   {
     "path": "dev/goal/coverage.csv",
-    "sha256": "407a78d9222dfc0d96352fb95c068b11a365844b773f203d960ceb968140d4e1",
+    "sha256": "bd019d94cb4b1333e811bbddc44da97c1fb94cd204009bad23dc41c96ca398ce",
     "review": "2026-10-28 updated qualification scope; matrix gaps retained"
   }
 ]

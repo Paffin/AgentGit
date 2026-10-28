@@ -143,6 +143,12 @@ Artifacts are retained outside source under `agentgit-quality/web-test-speed/goa
 
 The source audit also mapped workspace read/list: `Cap::WorkspaceRead` is inherited by repository readers and those routes do not perform owner filtering. Owner/admin checks guard modification/deletion. Documentation now describes workspace **isolation**, not confidentiality; account-backed confidential drafts remain blocked on a separate boundary design.
 
+## 2026-10-28 — multi-file browser editing
+
+A dedicated Code editor now stages existing text/link-target edits, new files, renames and removals in one draft and one change request. It preserves modes and the original base, refuses duplicate paths and unintended replacement, and restores a scoped tab draft. The reviewer sees before/after staged contents; the proposal contains the server diff. The UI states its 100-file/4MiB limit.
+
+The real-browser scenario starts a fresh server, signs in through the UI, creates a repository, creates two files in one proposal, reloads and recovers the batch, lands it, then renames/edits one file and deletes the other in a second single proposal. It lands and rereads the result after reload. Chromium desktop and phone viewport passed2/2 in22.3s with no retries or console allowances. Three targeted model cases cover batch operation order/modes, duplicate/unsafe paths and draft decoding; type and targeted lint checks passed. This is a concrete first P1 code-editing slice, not full platform readiness. Physical devices, binary editing, remote draft recovery and large-batch measurements remain open.
+
 
 ## 2026-10-28 — file-by-file review workbench
 

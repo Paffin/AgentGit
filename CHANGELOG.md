@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- A multi-file browser editor stages text edits, additions, renames and deletions in one change request, with a shared preview and account/repository/branch-scoped tab recovery.
+
 - Review drafts preserve comments, decisions and inspected heads across page reloads in the same tab, separately per account and proposal. Review submission retains its initiating credential and offers reauthentication after expiry.
 
 - Change-request diffs support path filtering, viewed-file marks and hiding reviewed files. Tab-local progress is scoped to the account and exact comparison; it never counts as approval. Server truncation warnings remain visible while filtering.

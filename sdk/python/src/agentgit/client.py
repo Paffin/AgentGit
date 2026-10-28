@@ -27,6 +27,7 @@ from agentgit._generated.models import (
     Proposal,
     PutObjectResult,
     Repo,
+    Run,
     SearchMatch,
     TreeEntry,
 )
@@ -424,6 +425,16 @@ class AgentGitClient:
     @overload
     def paginate(
         self,
+        op_id: Literal["agent.list_runs"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[Run]: ...
+    @overload
+    def paginate(
+        self,
         op_id: Literal["issue.list"],
         /,
         *,
@@ -742,6 +753,16 @@ class AsyncAgentGitClient:
         )
         return _negotiated(hello)
 
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["agent.list_runs"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[Run]: ...
     @overload
     def paginate(
         self,

@@ -591,7 +591,8 @@ fn proposal_pages_are_keyset_pages_with_sql_filters_even_when_created_at_ties() 
     }
     assert_eq!(walk(ProposalFilter { stream: Some("main"), ..Default::default() }, 2), ["prop_e", "prop_c", "prop_a"]);
     assert_eq!(walk(ProposalFilter { author: Some("user:y"), ..Default::default() }, 1), ["prop_d", "prop_c"]);
-    let both = ProposalFilter { stream: Some("dev"), author: Some("user:x"), state: Some("open") };
+    let both =
+        ProposalFilter { stream: Some("dev"), author: Some("user:x"), state: Some("open"), ..Default::default() };
     assert_eq!(walk(both, 3), ["prop_b"]);
     m.write(|tx| tx.proposal_set_state("prop_d", "closed", None)).unwrap();
     assert_eq!(walk(ProposalFilter { state: Some("closed"), ..Default::default() }, 3), ["prop_d"]);
@@ -645,7 +646,7 @@ fn every_proposal_page_is_read_in_index_order_without_sorting() {
         ProposalFilter::default(),
         ProposalFilter { state: Some("open"), ..Default::default() },
         ProposalFilter { stream: Some("main"), ..Default::default() },
-        ProposalFilter { state: Some("open"), stream: Some("main"), author: None },
+        ProposalFilter { state: Some("open"), stream: Some("main"), author: None, ..Default::default() },
     ];
     for filter in &filters {
         for after in [None, Some((5, "prop_z"))] {
@@ -707,4 +708,54 @@ fn meta_keys_are_found_by_prefix_and_value_order_and_deleted() {
     m.write(|tx| tx.meta_delete("absent")).unwrap();
     assert_eq!(below("~", 10), ["idemt:b", "idemt:c"]);
     assert_eq!(m.read(|tx| tx.meta_get("idem:a")).unwrap().as_deref(), Some("x"));
+}
+
+#[test]
+fn task_history_filters_before_limits_and_pages_tied_timestamps() {
+    let m = meta();
+    let (head, change) = cs(vec![], "history");
+    m.write(|tx| {
+        tx.register_changeset(&head, &change)?;
+        tx.create_stream(&StreamName::new("main").unwrap(), "user:t")?;
+        tx.agent_register("history-bot", "agent:history-bot", &"ab".repeat(32), "agent")?;
+        tx.task_create("task-history", "History", "", &[], "user:t")?;
+        tx.task_create("other-task", "Other", "", &[], "user:t")?;
+        for n in 0..110 {
+            let task = if n < 3 { "task-history" } else { "other-task" };
+            let id = format!("history-{n:03}");
+            tx.run_start(&id, "history-bot", Some(task))?;
+            if n != 1 {
+                tx.run_finish(&id, "completed", None)?;
+            }
+            tx.proposal_create(&NewProposal {
+                id: &id,
+                stream: "main",
+                head: &head,
+                title: &id,
+                description: "",
+                author: "user:t",
+                task_id: Some(task),
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let first = m.read(|tx| tx.runs_page(None, Some("task-history"), false, None, 2)).unwrap();
+    assert_eq!(first.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(), ["history-002", "history-001"]);
+    let last = first.last().unwrap();
+    let second = m
+        .read(|tx| {
+            tx.runs_page(None, Some("task-history"), false, Some((last.started_at.as_millis(), &last.run_id)), 2)
+        })
+        .unwrap();
+    assert_eq!(second.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(), ["history-000"]);
+    let active = m.read(|tx| tx.runs_page(Some("history-bot"), Some("task-history"), true, None, 1)).unwrap();
+    assert_eq!(active[0].run_id, "history-001");
+    assert!(m.read(|tx| tx.runs_page(Some("other-bot"), Some("task-history"), false, None, 2)).unwrap().is_empty());
+    let filter = ProposalFilter { task_id: Some("task-history"), ..Default::default() };
+    let page = m.read(|tx| tx.proposals_page(&filter, None, 2)).unwrap();
+    assert_eq!(page.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["history-002", "history-001"]);
+    let last = page.last().unwrap();
+    let page = m.read(|tx| tx.proposals_page(&filter, Some((last.created_at.as_millis(), &last.id)), 2)).unwrap();
+    assert_eq!(page.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["history-000"]);
 }

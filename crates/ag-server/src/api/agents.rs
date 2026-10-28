@@ -427,12 +427,21 @@ impl App {
     /// Lists runs (newest first).
     pub async fn list_runs(&self, call: &Call, req: v1::ListRunsRequest) -> ApiResult<v1::ListRunsResponse> {
         let limit = if req.limit == 0 { 100 } else { req.limit.min(1000) } as usize;
+        let after = super::decode_keyset("run", &req.page_token)?;
         self.with_repo(call, require(&req.repo, "repo")?, Cap::AgentRead, None, move |repo, _| {
             let agent = (!req.agent.is_empty()).then_some(req.agent.as_str());
-            let runs = repo
-                .meta()
-                .read(|tx| if req.active_only { tx.runs_running(agent, limit) } else { tx.runs(agent, limit) })?;
-            Ok(v1::ListRunsResponse { runs: runs.iter().map(convert::run).collect() })
+            let task = (!req.task_id.is_empty()).then_some(req.task_id.as_str());
+            let after = after.as_ref().map(|(at, id)| (*at, id.as_str()));
+            let mut runs = repo.meta().read(|tx| tx.runs_page(agent, task, req.active_only, after, limit + 1))?;
+            let next_page_token = if runs.len() > limit {
+                runs.truncate(limit);
+                runs.last()
+                    .map(|run| super::encode_keyset("run", run.started_at.as_millis(), &run.run_id))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            Ok(v1::ListRunsResponse { runs: runs.iter().map(convert::run).collect(), next_page_token })
         })
         .await
     }

@@ -3115,6 +3115,11 @@ export interface components {
             state: string;
             /** @default  */
             stream: string;
+            /**
+             * @description Match the linked task before paging. Empty matches all tasks.
+             * @default
+             */
+            task_id: string;
         };
         ListProposalsResponse: {
             /** @default  */
@@ -3185,9 +3190,18 @@ export interface components {
              */
             limit: number;
             /** @default  */
+            page_token: string;
+            /** @default  */
             repo: string;
+            /**
+             * @description Match the linked task before paging. Empty matches all tasks.
+             * @default
+             */
+            task_id: string;
         };
         ListRunsResponse: {
+            /** @default  */
+            next_page_token: string;
             /** @default [] */
             runs: components["schemas"]["Run"][];
         };
@@ -6837,6 +6851,7 @@ export interface operations {
                 page_token?: string;
                 state?: string;
                 stream?: string;
+                task_id?: string;
             };
             header?: never;
             path: {
@@ -7482,6 +7497,8 @@ export interface operations {
                 active_only?: boolean;
                 agent?: string;
                 limit?: number;
+                page_token?: string;
+                task_id?: string;
             };
             header?: never;
             path: {

@@ -10,11 +10,11 @@ All original 142 matrix rows remain in scope; the added search, scheduling and r
 | P1 code search | Find literal content at a revision, continue a bounded scan and open the pinned matching line. | Merged in PR78; HTTP, gRPC, real-browser qualification and hosted checks passed. Exclusions are explicit; indexed/global/regex search remains open. |
 | P1 multi-file editing | Edit, add, rename and delete several files in one browser change request; preview the exact combined diff, preserve base/modes and recover the batch. No CLI preparation counts. | Basic editor merged in PR75 and verified in two browser profiles; broader role, large-batch and device qualification remains. |
 | P1 review conversations | Durable line threads, resolution, suggestions and requested reviewers tied to an inspected head; stale approval remains invalid. | Open; single review comments are not a substitute. |
-| P1 task navigation | Permanent task pages, prerequisite/dependant links and confirmed task completion/cancellation over real APIs. | Implemented and locally verified in Chromium and phone viewport; issue-to-task handoff now creates and links work atomically; full agent execution and browser-managed executor configuration remain open. |
-| P1 user issues | Repository-scoped issues, durable discussion, close/reopen, optimistic edits and task links. | Implemented on the working branch; focused HTTP lifecycle and real Chromium browser scenario passed. PostgreSQL persistence/reopen is qualified; broader qualification remains. Labels, milestones, attachments, boards and provider issue import remain open. |
+| P1 task navigation | Permanent task pages, prerequisite/dependant links and confirmed task completion/cancellation over real APIs. | Implemented and locally verified in Chromium and phone viewport; issue-to-task handoff now creates and links work atomically; browser executor configuration and final saved output are implemented; live-model and independent-pilot qualification remain open. |
+| P1 user issues | Repository-scoped issues, durable discussion, close/reopen, optimistic edits and task links. | Implemented on main; focused HTTP lifecycle and real Chromium browser scenario passed. PostgreSQL persistence/reopen is qualified; broader qualification remains. Labels, milestones, attachments, boards and provider issue import remain open. |
 | P1 identity and tracker | Organization/member/invitation lifecycle and user issues connected to orchestrator tasks, with role checks and history. | Open; see individual matrix rows. |
-| P1 execution control | Operators pause/resume new task runs with durable state, a reason and server-side enforcement; existing runs keep their lifecycle. | Implemented on execution-control branch. Browser and real command scheduler qualification passed; external model and browser executor installation remain open. |
-| P1 run inspection | Durable run pages with current status, summary, task and exact-session change links. | Implemented and locally qualified; real stdout storage and browser executor setup remain open. |
+| P1 execution control | Operators pause/resume new task runs with durable state, a reason and server-side enforcement; existing runs keep their lifecycle. | Implemented on main. Browser and real command scheduler qualification passed; external-model qualification and host installation remain separate. |
+| P1 run inspection | Durable run pages with current status, summary, task and exact-session change links. | Implemented and locally qualified; final stdout/stderr storage and browser executor setup are implemented; live streaming remains open. |
 | P2 execution | Configure a real executor from UI, run a DAG, retain logs/artifacts, cancel and safely retry with bounded resources. | Open; scripted stand-ins do not qualify this stage. |
 | P2 administration and portability | Browser setup/diagnostics, verified restore, hosted-data migration, release/registry/webhook lifecycle. | Open; assess each subsystem separately. |
 | External qualification | Real MCP host, clean macOS, physical device, human screen reader, independent pilots, comparable pinned-competitor benchmark. | Open issues #50, #51, #52, #53 and #55; unavailable equipment/participants are not replaced by simulation. |
@@ -23,9 +23,9 @@ Next product priority: finish the browser path from a human request to bounded a
 
 Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`, 2026-10-28. The published beta.2 release is available, but does not imply that these stages are complete.
 
-Queued assignment: implemented on `feature/task-assignment`. Task creation and issue handoff can reserve a registered agent atomically. Creator/operator edits use expected-owner comparison and cannot change running work. Dispatch respects the reserved executor; browser executor setup remains open.
+Queued assignment: implemented on main. Task creation and issue handoff can reserve a registered agent atomically. Creator/operator edits use expected-owner comparison and cannot change running work. Dispatch respects the reserved executor; browser executor setup is implemented.
 
-Executor connectivity: development implementation distinguishes registered keys from recent operator-reported executors, prepares configured identities before their first task and displays last capacity. Browser provisioning, command health checks and durable execution logs remain open.
+Executor connectivity: development implementation distinguishes registered keys from recent operator-reported executors, prepares configured identities before their first task and displays last capacity. Browser provisioning and saved final output are implemented; continuous command health checks remain open.
 
 Browser executor setup: implemented exact-repository role/token preparation,
 separate configuration and private credential downloads, native launch and a
@@ -36,3 +36,14 @@ its candidate checks, review and integration outcome.
 Saved run output: opt-in final stdout/stderr tails with bounded storage, known-secret
 redaction, download and deletion tombstones. Live streaming and exhaustive secret
 detection are not claimed.
+
+Task history: task-filtered proposal/run listing and run continuation tokens now
+back the browser page. Older task results stay reachable after unrelated repository
+activity; explicit load-more and live-refresh retention are locally qualified.
+Executor installation is included in the beta.4 candidate archives. The next
+workflow gap remains rich review conversations and safe failed-run recovery, not
+additional repository-wide test infrastructure.
+
+Retry-budget recovery now follows complete task-scoped history and refuses
+truncated legacy history. This prevents unrelated agent work from granting extra
+attempts after restart. Included in the beta.4 candidate before publication.

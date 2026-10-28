@@ -1182,6 +1182,7 @@ class ListProposalsRequest:
     repo: str = field(default="")
     state: str = field(default="")
     stream: str = field(default="")
+    task_id: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1252,12 +1253,15 @@ class ListRunsRequest:
     active_only: bool = field(default=False)
     agent: str = field(default="")
     limit: int = field(default=0)
+    page_token: str = field(default="")
     repo: str = field(default="")
+    task_id: str = field(default="")
 
 
 @dataclass(kw_only=True)
 class ListRunsResponse:
     """The `ListRunsResponse` message."""
+    next_page_token: str = field(default="")
     runs: list[Run] = field(default_factory=list)
 
 

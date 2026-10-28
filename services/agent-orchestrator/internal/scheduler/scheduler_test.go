@@ -476,6 +476,37 @@ func TestATaskWhoseBudgetWasSpentBeforeTheRestartIsCancelledNotRetried(t *testin
 	}
 }
 
+// Unrelated work must not erase a task's spent budget from the recovery window.
+func TestBusyAgentHistoryDoesNotResetATasksSpentBudget(t *testing.T) {
+	ex := command(t, "bot", `exit 1`)
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Attempts = 2; r.Schedule.Backoff = time.Second }, nil, ex)
+	task := h.addTask("one try used before other work", nil)
+	h.reconcile()
+	h.waitIdle()
+	h.eventually("retry recorded", func() bool { return len(h.sched.Status().Retrying) == 1 })
+	ctx := context.Background()
+	for i := 0; i < 205; i++ {
+		run, err := h.orch.StartRun(ctx, repo, ex.Agent, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.orch.CompleteRun(ctx, repo, run.RunID, "completed", "unrelated work"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	strict := h.restart(func(r *config.Repo) { r.Schedule.Attempts = 1 }, ex)
+	h.clk.Advance(time.Hour)
+	if err := strict.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.state(task); got != agwp.TaskCancelled {
+		t.Fatalf("spent task budget was lost behind unrelated runs: state = %s", got)
+	}
+	if len(h.mgr.Active()) != 0 {
+		t.Fatal("exhausted task started another process")
+	}
+}
+
 func TestTempFailDoesNotSpendTheAttemptBudget(t *testing.T) {
 	counter := filepath.Join(t.TempDir(), "n")
 	script := fmt.Sprintf(`n=$(cat %[1]s 2>/dev/null || echo 0); n=$((n+1)); echo $n > %[1]s; if [ $n -lt 3 ]; then exit 75; fi; exit 0`, counter)

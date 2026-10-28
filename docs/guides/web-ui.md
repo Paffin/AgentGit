@@ -526,3 +526,12 @@ At most 32 KiB per stream are saved. This is not a live log stream or a replacem
 for signed checks. Known credentials and private key encodings are removed by the
 orchestrator, but it cannot identify every possible secret. Enable capture only
 when the output is suitable for the repository's readers.
+
+### Follow a task through its history
+
+On a task page, **Change requests** and **Agent sessions** show records linked to
+that task. Use **Load older change requests** or **Load older sessions** to continue
+past the first 50 records. Background refresh keeps the pages you expanded. Open a
+change request for its exact candidate checks and review; open a session for its
+summary and saved output. These histories require server feature `tasks.history`;
+older servers display a labelled subset of the repository history.

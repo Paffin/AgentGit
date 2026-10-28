@@ -62,8 +62,13 @@ impl App {
         self.with_repo(call, require(&req.repo, "repo")?, Cap::ProposalRead, None, move |repo, _| {
             let some = |s: &str| (!s.is_empty()).then_some(s.to_string());
             let (state, stream, author) = (some(&req.state), some(&req.stream), some(&req.author));
-            let filter =
-                ProposalFilter { state: state.as_deref(), stream: stream.as_deref(), author: author.as_deref() };
+            let task_id = some(&req.task_id);
+            let filter = ProposalFilter {
+                state: state.as_deref(),
+                stream: stream.as_deref(),
+                author: author.as_deref(),
+                task_id: task_id.as_deref(),
+            };
             let after = after.as_ref().map(|(at, id)| (*at, id.as_str()));
             // One more than a page, to learn whether there is a next one.
             let mut rows = repo.meta().read(|tx| tx.proposals_page(&filter, after, size + 1))?;

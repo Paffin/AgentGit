@@ -328,7 +328,7 @@ export const OPERATIONS = {
     name: 'listRuns',
     summary: 'List runs',
     pathParams: ['owner', 'rname'],
-    queryParams: ['active_only', 'agent', 'limit'],
+    queryParams: ['active_only', 'agent', 'limit', 'page_token', 'task_id'],
     body: 'none',
     response: 'json',
     retry: 'read',
@@ -1078,7 +1078,7 @@ export const OPERATIONS = {
     name: 'list',
     summary: 'List proposals',
     pathParams: ['owner', 'rname'],
-    queryParams: ['author', 'page_size', 'page_token', 'state', 'stream'],
+    queryParams: ['author', 'page_size', 'page_token', 'state', 'stream', 'task_id'],
     body: 'none',
     response: 'json',
     retry: 'read',
@@ -1677,6 +1677,7 @@ export type OperationId = keyof typeof OPERATIONS;
 
 /** Operations whose response carries `next_page_token`, and the array property holding the items. */
 export const PAGINATED = {
+  'agent.list_runs': 'runs',
   'history.ancestors': 'changeset_ids',
   'history.log': 'changesets',
   'issue.activity': 'activity',

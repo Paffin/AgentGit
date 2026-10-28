@@ -328,7 +328,7 @@ OPERATIONS: dict[str, OperationInfo] = {
         name="list_runs",
         summary="List runs",
         path_params=('owner', 'rname'),
-        query_params=('active_only', 'agent', 'limit'),
+        query_params=('active_only', 'agent', 'limit', 'page_token', 'task_id'),
         body="none",
         response="json",
         retry="read",
@@ -1078,7 +1078,7 @@ OPERATIONS: dict[str, OperationInfo] = {
         name="list",
         summary="List proposals",
         path_params=('owner', 'rname'),
-        query_params=('author', 'page_size', 'page_token', 'state', 'stream'),
+        query_params=('author', 'page_size', 'page_token', 'state', 'stream', 'task_id'),
         body="none",
         response="json",
         retry="read",
@@ -1675,6 +1675,7 @@ OPERATIONS: dict[str, OperationInfo] = {
 
 # Operations whose response carries `next_page_token`, and the list property holding the items.
 PAGINATED: dict[str, str] = {
+    "agent.list_runs": "runs",
     "history.ancestors": "changeset_ids",
     "history.log": "changesets",
     "issue.activity": "activity",

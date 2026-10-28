@@ -36,8 +36,14 @@ const last = computed(() =>
 )
 const slice = computed(() => props.items.slice(first.value, last.value))
 
+// Coalesce events and position rows outside scroll dispatch, preserving asynchronous panning.
+let scrollFrame: number | undefined
 function onScroll() {
-  scrollTop.value = scroller.value?.scrollTop ?? 0
+  if (scrollFrame !== undefined) return
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = undefined
+    scrollTop.value = scroller.value?.scrollTop ?? 0
+  })
 }
 
 let ro: ResizeObserver | undefined
@@ -52,7 +58,10 @@ onMounted(() => {
     ro.observe(el)
   }
 })
-onBeforeUnmount(() => ro?.disconnect())
+onBeforeUnmount(() => {
+  ro?.disconnect()
+  if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame)
+})
 
 watch(
   () => props.items.length,
@@ -91,7 +100,7 @@ defineExpose({
         role="listitem"
         :aria-setsize="items.length"
         :aria-posinset="first + i + 1"
-        :style="{ top: `${(first + i) * rowHeight}px`, height: `${rowHeight}px` }"
+        :style="{ transform: `translateY(${(first + i) * rowHeight}px)`, height: `${rowHeight}px` }"
       >
         <slot :item="item" :index="first + i" />
       </div>
@@ -110,6 +119,7 @@ defineExpose({
 }
 .row {
   position: absolute;
+  top: 0;
   left: 0;
   right: 0;
   overflow: hidden;

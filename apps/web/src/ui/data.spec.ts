@@ -176,9 +176,12 @@ describe('VirtualList', () => {
     expect(scroller.attributes('aria-label')).toBe('Events')
     ;(scroller.element as HTMLElement).scrollTop = 40 * 1000
     await scroller.trigger('scroll')
+    ;(scroller.element as HTMLElement).scrollTop = 40 * 1001
+    await scroller.trigger('scroll')
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await nextTick()
     const after = w.findAll('[role="listitem"]')
-    expect(after[0]!.text()).toMatch(/row 99\d/)
+    expect(after[0]!.text()).toBe('row 999')
     expect(after.length).toBeLessThan(30)
     w.unmount()
   })

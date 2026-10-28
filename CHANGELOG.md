@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Improved
+
+- MCP task and review workflows now read complete line feedback, preserve the version inspected before resolving, and distinguish a published proposal from a completed task outcome. Instructions respect disabled discussion writes.
+
 ## [0.3.0-beta.5] - 2026-10-28
 
 **Upgrade:** repository metadata moves to schema 6. Back up before upgrading; restoring the pre-upgrade backup is required to return to an older binary. Line-discussion revisions are retained by GC and checked by `ag verify`.

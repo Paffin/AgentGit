@@ -31,8 +31,16 @@ export function useResource<T>(
   const settled = ref(false)
   let controller: AbortController | null = null
   let serial = 0
+  let disposed = false
+
+  function recordError(mine: number, cause: unknown) {
+    if (mine !== serial) return
+    if (isApiError(cause) && cause.isCancelled) return
+    error.value = cause
+  }
 
   async function reload() {
+    if (disposed) return
     controller?.abort()
     if (options.enabled && !options.enabled()) {
       serial++
@@ -49,9 +57,7 @@ export function useResource<T>(
       data.value = value
       error.value = null
     } catch (e) {
-      if (mine !== serial) return
-      if (isApiError(e) && e.isCancelled) return
-      error.value = e
+      recordError(mine, e)
     } finally {
       if (mine === serial) {
         loading.value = false
@@ -70,6 +76,7 @@ export function useResource<T>(
   }
   if (options.immediate !== false) void reload()
   onBeforeUnmount(() => {
+    disposed = true
     serial++
     controller?.abort()
   })

@@ -2,6 +2,61 @@ import { test, expect } from './fixtures.ts'
 import { commitFiles, freshRepo, integrate, openProposal } from './support/world.ts'
 import { expectAccessible } from './support/ui.ts'
 
+test('change request filters survive detail navigation without stealing editing focus', async ({
+  page,
+  cast,
+}) => {
+  const { repo } = await freshRepo(cast, 'proposal-filters')
+  const author = cast.as('alice')
+  const change = await commitFiles(
+    author,
+    repo,
+    { 'filter-proof.txt': 'A change to review\n' },
+    'Filter context',
+  )
+  const proposal = await openProposal(author, repo, {
+    head: change.head,
+    title: 'Preserve review filters',
+  })
+  await author.ok_(
+    author.post(`/v1/repos/${repo}/proposals/${proposal.id}/close`, {}),
+    'close filter fixture',
+  )
+  await page.goto(`/repos/${repo}/proposals`)
+  await page.getByRole('radio', { name: 'Closed', exact: true }).check()
+  const authorFilter = page.getByRole('textbox', { name: 'Author', exact: true })
+  await authorFilter.fill('user:alice')
+  await expect.poll(() => new URL(page.url()).searchParams.get('author')).toBe('user:alice')
+  await expect(authorFilter).toBeFocused()
+  await expect(page).toHaveTitle(`Proposals · ${repo} · AgentGit`)
+  const search = page.getByRole('searchbox', { name: 'Search loaded change requests', exact: true })
+  await search.fill('Preserve')
+  await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Preserve')
+  await expect(search).toBeFocused()
+  const filteredUrl = page.url()
+  const scroll = await page.evaluate(() => window.scrollY)
+  await page.evaluate(() => {
+    window.location.hash = 'filter-context'
+  })
+  await expect(page).toHaveURL(`${filteredUrl}#filter-context`)
+  await expect(search).toBeFocused()
+  expect(await page.evaluate(() => window.scrollY)).toBe(scroll)
+  await page.goBack()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(search).toBeFocused()
+  const row = page.getByRole('link', { name: 'Preserve review filters', exact: true })
+  await row.click()
+  await expect(page).toHaveURL(new RegExp(`/proposals/${proposal.id}$`))
+  await expect(page.locator('main')).toBeFocused()
+  await page.goBack()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(page.getByRole('radio', { name: 'Closed', exact: true })).toBeChecked()
+  await expect(authorFilter).toHaveValue('user:alice')
+  await expect(search).toHaveValue('Preserve')
+  await expect(row).toBeVisible()
+  await expect(page).toHaveTitle(`Proposals · ${repo} · AgentGit`)
+})
+
 test('editing a symbolic link preserves its file type', async ({ page, cast }) => {
   const { repo, head } = await freshRepo(cast, 'link-edit')
   const api = cast.as('dana')
@@ -242,4 +297,50 @@ test('uploads binary and text files with an explicit replacement review', async 
   })
   expect(response.ok()).toBe(true)
   expect(await response.body()).toEqual(Buffer.from([0, 255, 12, 88]))
+})
+
+test('large line numbers remain readable while the diff scrolls with the keyboard', async ({
+  page,
+  cast,
+}) => {
+  const { repo } = await freshRepo(cast, 'diff-line-numbers')
+  const author = cast.as('dana')
+  const lines = Array.from({ length: 10_000 }, (_, i) => `Entry ${i + 1}`)
+  const before = await commitFiles(
+    author,
+    repo,
+    { 'large.txt': lines.join('\n') + '\n' },
+    'Large source',
+  )
+  lines[9_999] = `Changed entry ${'long code '.repeat(40)}`
+  const after = await commitFiles(
+    author,
+    repo,
+    { 'large.txt': lines.join('\n') + '\n' },
+    'Change last line',
+    { fromRev: before.head },
+  )
+  await page.goto(`/repos/${repo}/compare?from=${before.head}&to=${after.head}`)
+  const file = page.locator('section.file', { has: page.getByText('large.txt', { exact: true }) })
+  await expect(file.locator('.no').filter({ hasText: '10000' }).first()).toBeVisible()
+  const fits = await file.locator('.no').evaluateAll((cells) =>
+    cells.every((cell) => {
+      if (!cell.textContent?.trim()) return true
+      const range = document.createRange()
+      range.selectNodeContents(cell)
+      const rect = cell.getBoundingClientRect()
+      const style = getComputedStyle(cell)
+      return (
+        range.getBoundingClientRect().width <=
+        rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + 1
+      )
+    }),
+  )
+  expect(fits).toBe(true)
+  const region = file.locator('.diff')
+  await expect(region).toHaveAttribute('tabindex', '0')
+  await region.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

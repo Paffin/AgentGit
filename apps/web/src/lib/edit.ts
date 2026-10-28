@@ -1,8 +1,9 @@
-// Editing files from the browser, over the server's virtual workspaces (a private working copy of a branch kept on
+// Editing files from the browser, over the server's virtual workspaces (an isolated working copy of a branch kept on
 // the server): open one, apply the edit as one version, then open a change request from it. Nothing here is
 // special to the web: it is the same calls any client without a file system makes (docs/protocol/agwp-v1.md,
 // "Objects and publication").
 import type { Api } from '@/api/endpoints'
+import type { RequestOptions } from '@/api/client'
 import type { FileChange, Proposal } from '@/api/types'
 
 /** UTF-8 text as the base64 the protocol carries file contents in. */
@@ -47,7 +48,7 @@ export function pathProblem(path: string): string | null {
   return null
 }
 
-/** A workspace name nobody else is using: the workspace is private and short-lived. */
+/** A workspace name nobody else is using: the workspace is isolated and short-lived. */
 export function workspaceName(random: (n: number) => Uint8Array = randomBytes): string {
   return `web-${[...random(5)].map((b) => b.toString(16).padStart(2, '0')).join('')}`
 }
@@ -68,6 +69,7 @@ export interface ProposeInput {
   changes: FileChange[]
   title: string
   description?: string
+  request?: Pick<RequestOptions, 'token' | 'quietUnauthenticated' | 'signal'>
 }
 
 /**
@@ -75,32 +77,53 @@ export interface ProposeInput {
  * change request keeps the version). Returns the new change request. A failure after the draft exists removes it.
  */
 export async function proposeChange(api: Api, input: ProposeInput): Promise<Proposal> {
+  const request = input.request ?? {}
+  request.signal?.throwIfAborted()
   const name = workspaceName()
-  const ws = await api.workspaces.create(input.repo, {
-    name,
-    stream: input.stream,
-    from_rev: input.fromRev,
-  })
+  const ws = await api.workspaces.create(
+    input.repo,
+    {
+      name,
+      stream: input.stream,
+      from_rev: input.fromRev,
+    },
+    request,
+  )
   try {
+    request.signal?.throwIfAborted()
     if (input.expectedBase !== undefined && ws.base !== input.expectedBase) {
       throw new Error(
         'The branch changed before this edit could start. Reload it and try again; your text is still here.',
       )
     }
-    const done = await api.workspaces.modify(input.repo, name, {
-      changes: input.changes,
-      message: input.title,
-      expected_head: ws.head,
-    })
-    return await api.proposals.create(input.repo, {
-      stream: input.stream,
-      head: done.head,
-      title: input.title,
-      description: input.description,
-    })
+    const done = await api.workspaces.modify(
+      input.repo,
+      name,
+      {
+        changes: input.changes,
+        message: input.title,
+        expected_head: ws.head,
+      },
+      request,
+    )
+    request.signal?.throwIfAborted()
+    return await api.proposals.create(
+      input.repo,
+      {
+        stream: input.stream,
+        head: done.head,
+        title: input.title,
+        description: input.description,
+      },
+      request,
+    )
   } finally {
     try {
-      await api.workspaces.remove(input.repo, name)
+      await api.workspaces.remove(input.repo, name, {
+        token: request.token,
+        quietUnauthenticated: request.quietUnauthenticated,
+        timeoutMs: 5000,
+      })
     } catch {
       // A leftover draft is harmless and visible to its owner; the change request is what matters.
     }

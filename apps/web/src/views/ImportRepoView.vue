@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { describeError } from '@/api/errors'
+import { describeError, isApiError } from '@/api/errors'
 import { randomHex } from '@/api/client'
 import {
   bundleCommands,
   finishMigration,
   migrationWarnings,
+  parseGitRemote,
   prepareMigration,
   readMigration,
 } from '@/api/migration'
@@ -16,10 +17,12 @@ import { useAuth } from '@/stores/auth'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Card from '@/ui/Card.vue'
+import CopyButton from '@/ui/CopyButton.vue'
 import TextField from '@/ui/TextField.vue'
 
 usePageTitle(() => 'Import a repository')
 const auth = useAuth()
+const canImport = computed(() => auth.status === 'ready' && auth.isAdminAnywhere && !!auth.identity)
 const source = ref('')
 const name = ref('')
 const file = ref<File | null>(null)
@@ -27,56 +30,116 @@ const key = ref(randomHex())
 const plan = ref<MigrationPlan | null>(null)
 const busy = ref(false)
 const error = ref('')
-const copied = ref(false)
+const needsSignIn = ref(false)
+const mayRequest = computed(() => canImport.value && !needsSignIn.value)
 const accept = ref(false)
 const RESUME_KEY = 'agentgit.migration'
-function remember(id: string | null) {
+const resumeId = ref<string | null>(null)
+const storageError = ref('')
+let context = 0
+let owner = ''
+const resumeKey = (identity: string) => `${RESUME_KEY}:${encodeURIComponent(identity)}`
+function storageFailed() {
+  storageError.value =
+    'This browser could not save or read the import reference. Keep this page open and save the report before leaving.'
+}
+function recall(identity: string): string | null {
   try {
-    if (id) sessionStorage.setItem(RESUME_KEY, id)
-    else sessionStorage.removeItem(RESUME_KEY)
+    const saved = sessionStorage.getItem(resumeKey(identity))
+    // An empty scoped value means this account explicitly started over; do not revive a legacy id.
+    return saved === null ? sessionStorage.getItem(RESUME_KEY) : saved || null
   } catch {
-    /* session storage may be disabled */
+    storageFailed()
+    return null
   }
 }
-onMounted(async () => {
-  let id: string | null
+/** Late operations may save their owner’s id without changing the new account’s warnings. */
+function remember(id: string | null, identity = auth.identity, reportError = true) {
+  if (!identity) return
   try {
-    id = sessionStorage.getItem(RESUME_KEY)
+    sessionStorage.setItem(resumeKey(identity), id ?? '')
+    if (id && sessionStorage.getItem(RESUME_KEY) === id) sessionStorage.removeItem(RESUME_KEY)
   } catch {
-    return
+    if (reportError) storageFailed()
   }
-  if (!id) return
+}
+function recordError(cause: unknown, prefix = '') {
+  needsSignIn.value = isApiError(cause) && cause.isUnauthenticated
+  error.value = prefix + describeError(cause)
+}
+
+async function resumePrevious() {
+  if (!resumeId.value || busy.value || !mayRequest.value) return
+  const mine = context
+  const identity = auth.identity
+  const token = auth.token
+  const id = resumeId.value
   busy.value = true
+  error.value = ''
   try {
-    plan.value = await readMigration(id)
+    const saved = await readMigration(id, { token })
+    // A successful server read proves ownership before a legacy reference is claimed.
+    remember(saved.id, identity, mine === context)
+    if (mine !== context) return
+    plan.value = saved
   } catch (e) {
-    error.value = `Could not resume the previous import: ${describeError(e)}`
-    remember(null)
+    if (mine === context) recordError(e, 'Could not resume the previous import: ')
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
+}
+watch(
+  [() => auth.identity, canImport],
+  ([identity, allowed]) => {
+    context++
+    busy.value = false
+    plan.value = null
+    resumeId.value = null
+    error.value = ''
+    needsSignIn.value = false
+    storageError.value = ''
+    accept.value = false
+    if (owner !== identity) {
+      source.value = ''
+      name.value = ''
+      file.value = null
+      key.value = randomHex()
+    }
+    owner = identity
+    if (!identity || !allowed) return
+    resumeId.value = recall(identity)
+    if (resumeId.value) void resumePrevious()
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  context++
 })
 const suggestedName = computed(() => {
   if (!commands.value) return ''
-  const path = new URL(source.value).pathname
-    .replace(/\.git$/, '')
+  const path = parseGitRemote(source.value.trim())
+    .path.replace(/\.git$/, '')
     .split('/')
     .filter(Boolean)
     .slice(-2)
-  return path.length === 2
-    ? path
-        .map((part) =>
-          part
-            .toLowerCase()
-            .replace(/[^a-z0-9._-]/g, '-')
-            .replace(/^[^a-z0-9]+/, ''),
-        )
-        .join('/')
-    : ''
+  const candidate =
+    path.length === 2
+      ? path
+          .map((part) =>
+            part
+              .toLowerCase()
+              .replace(/[^a-z0-9._-]/g, '-')
+              .replace(/^[^a-z0-9]+/, ''),
+          )
+          .join('/')
+      : ''
+  return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(candidate) ? candidate : ''
 })
 function startAnother() {
+  if (busy.value) return
+  resumeId.value = null
   error.value = ''
-  copied.value = false
+  storageError.value = ''
   remember(null)
   plan.value = null
   accept.value = false
@@ -114,37 +177,38 @@ function selectFile(event: Event) {
   } else file.value = next
   key.value = randomHex()
 }
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(commands.value)
-    copied.value = true
-  } catch {
-    error.value = 'Clipboard access is unavailable. Select and copy the commands below.'
-  }
-}
 async function prepare() {
-  if (!file.value || !validName.value) return
+  if (busy.value || !file.value || !validName.value || !mayRequest.value) return
+  const mine = context
+  const identity = auth.identity
+  const token = auth.token
   busy.value = true
   error.value = ''
   try {
-    plan.value = await prepareMigration(name.value.trim(), file.value, key.value)
-    remember(plan.value.id)
+    const saved = await prepareMigration(name.value.trim(), file.value, key.value, { token })
+    remember(saved.id, identity, mine === context)
+    if (mine !== context) return
+    plan.value = saved
+    resumeId.value = saved.id
   } catch (e) {
-    error.value = describeError(e)
+    if (mine === context) recordError(e)
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 async function publish() {
-  if (!plan.value) return
+  if (busy.value || !plan.value || !mayRequest.value) return
+  const mine = context
+  const token = auth.token
   busy.value = true
   error.value = ''
   try {
-    plan.value = await finishMigration(plan.value.id, accept.value)
+    const saved = await finishMigration(plan.value.id, accept.value, { token })
+    if (mine === context) plan.value = saved
   } catch (e) {
-    error.value = describeError(e)
+    if (mine === context) recordError(e)
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 function downloadReport() {
@@ -169,7 +233,7 @@ function downloadReport() {
         becomes available to your team.
       </p>
     </header>
-    <Alert v-if="!auth.isAdminAnywhere" title="An administrator needs to run the import" tone="warn"
+    <Alert v-if="!canImport" title="An administrator needs to run the import" tone="warn"
       >Ask an administrator to import the repository or grant you the admin role.</Alert
     >
     <template v-else>
@@ -179,7 +243,30 @@ function downloadReport() {
         <li :aria-current="imported ? 'step' : undefined">3. Start working</li>
       </ol>
       <Alert v-if="error" tone="bad" title="Import needs attention" live="alert">{{ error }}</Alert>
-      <template v-if="!plan">
+      <Alert v-if="needsSignIn" tone="warn" title="Sign in again to continue">
+        <p>Sign in again before retrying. Any saved import reference is kept.</p>
+        <Button :to="{ path: '/signin', query: { next: '/import' } }">Sign in again</Button>
+      </Alert>
+      <Alert v-if="storageError" tone="warn" title="Import recovery is unavailable">{{
+        storageError
+      }}</Alert>
+      <Card v-if="!plan && resumeId" title="Resume previous import">
+        <div class="stack">
+          <p v-if="busy" role="status">Opening your previous import…</p>
+          <p v-else>Retry opening the saved import, or start a separate import.</p>
+          <div class="actions">
+            <Button v-if="!needsSignIn" :loading="busy" :disabled="busy" @click="resumePrevious"
+              >Retry previous import</Button
+            >
+            <Button :disabled="busy" @click="startAnother">Start new import</Button>
+          </div>
+          <p class="muted">
+            Starting new clears this browser’s reference for your account. It does not delete the
+            staged import.
+          </p>
+        </div>
+      </Card>
+      <template v-else-if="!plan">
         <Card
           title="Your source stays yours"
           subtitle="The commands below read your repository. They do not change or delete anything on GitHub or GitLab."
@@ -191,12 +278,11 @@ function downloadReport() {
               placeholder="https://github.com/team/project.git"
               :error="sourceError || undefined"
               hint="Private repositories work with your existing local Git sign-in. Never paste a token here."
-              @update:model-value="copied = false"
             />
             <template v-if="commands">
               <div class="command-heading">
                 <strong>Run in Bash or Git Bash in an empty folder</strong
-                ><Button size="sm" @click="copy">{{ copied ? 'Copied' : 'Copy commands' }}</Button>
+                ><CopyButton :text="commands" label="Copy commands" with-label />
               </div>
               <pre
                 tabindex="0"
@@ -245,7 +331,7 @@ function downloadReport() {
                 type="submit"
                 variant="primary"
                 :loading="busy"
-                :disabled="!validName || !file"
+                :disabled="!validName || !file || needsSignIn"
                 >{{ busy ? 'Uploading and checking history…' : 'Check the import' }}</Button
               >
             </div>
@@ -342,7 +428,7 @@ function downloadReport() {
                 v-if="!imported"
                 variant="primary"
                 :loading="busy"
-                :disabled="warnings.length > 0 && !accept"
+                :disabled="(warnings.length > 0 && !accept) || needsSignIn"
                 @click="publish"
                 >Publish repository</Button
               ><Button v-else variant="primary" :to="destination">Open repository</Button>

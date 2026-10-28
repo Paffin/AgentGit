@@ -1,8 +1,10 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Changeset, DiffResponse } from '@/api/types'
 import HistoryView from './HistoryView.vue'
+
+enableAutoUnmount(afterEach)
 
 const mocks = vi.hoisted(() => ({ changeset: vi.fn(), diff: vi.fn(), log: vi.fn() }))
 vi.mock('@/api/instance', () => ({
@@ -59,6 +61,59 @@ beforeEach(() => {
 })
 
 describe('changeset detail navigation', () => {
+  it.each([
+    '/repos/acme/demo/history?cs=second',
+    '/repos/other/repository/history?cs=second',
+    '/repos/acme/demo/history',
+  ])('cancels pending metadata when navigating to %s', async (destination) => {
+    let signal: AbortSignal | undefined
+    let finish!: (value: Changeset) => void
+    mocks.changeset.mockImplementationOnce((_repo, _id, _ops, options) => {
+      signal = options?.signal
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const { w, router } = await show()
+    expect(signal).toBeInstanceOf(AbortSignal)
+    await router.push(destination)
+    await flushPromises()
+    expect(signal!.aborted).toBe(true)
+    finish(changeset('obsolete'))
+    await flushPromises()
+    expect(w.text()).not.toContain('Changeset obsolete')
+    if (destination.includes('second')) expect(w.text()).toContain('Changeset second')
+  })
+
+  it.each([
+    '/repos/acme/demo/history?cs=second',
+    '/repos/other/repository/history?cs=second',
+    '/repos/acme/demo/history',
+  ])('cancels pending diff when navigating to %s', async (destination) => {
+    let signal: AbortSignal | undefined
+    let finish!: (value: DiffResponse) => void
+    mocks.diff.mockImplementationOnce((_repo, _query, options) => {
+      signal = options?.signal
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const { w, router } = await show()
+    await w.get('button.link').trigger('click')
+    expect(signal).toBeInstanceOf(AbortSignal)
+    await router.push(destination)
+    await flushPromises()
+    expect(signal!.aborted).toBe(true)
+    finish(diff('obsolete.ts'))
+    await flushPromises()
+    expect(w.text()).not.toContain('obsolete.ts')
+    if (destination.includes('second')) {
+      await w.get('button.link').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('second.ts')
+    }
+  })
+
   it('does not label the previous diff as the newly selected changeset', async () => {
     const { w, router } = await show()
     await w.get('button.link').trigger('click')
@@ -108,7 +163,9 @@ describe('changeset detail navigation', () => {
     await flushPromises()
     expect(w.text()).not.toContain('first diff failed')
     expect(w.text()).toContain('Show the diff')
-    expect(mocks.changeset).toHaveBeenLastCalledWith('other/repository', 'first', true)
+    expect(mocks.changeset).toHaveBeenLastCalledWith('other/repository', 'first', true, {
+      signal: expect.any(AbortSignal),
+    })
     w.unmount()
   })
 

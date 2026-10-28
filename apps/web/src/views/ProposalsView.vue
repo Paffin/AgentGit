@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import type { Proposal } from '@/api/types'
 import { useRepoName } from '@/composables/useRepoName'
@@ -23,18 +23,48 @@ import TextField from '@/ui/TextField.vue'
 import type { Column } from '@/ui/types'
 
 const { repo } = useRepoName()
+const route = useRoute()
+const router = useRouter()
 usePageTitle(() => `Proposals · ${repo.value}`)
 
-type StateFilter = 'open' | 'integrated' | 'closed' | 'all'
-const state = ref<StateFilter>('open')
-const author = ref('')
-const query = ref('')
+const statusOptions = [
+  { value: 'open', label: 'Open' },
+  { value: 'integrated', label: 'Landed' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'all', label: 'All' },
+] as const
+type StateFilter = (typeof statusOptions)[number]['value']
+const readState = (value: unknown): StateFilter =>
+  statusOptions.find((option) => option.value === value)?.value ?? 'open'
+const readText = (value: unknown): string => (typeof value === 'string' ? value : '')
+const state = ref(readState(route.query.state))
+const author = ref(readText(route.query.author))
+const query = ref(readText(route.query.q))
+function syncFilters() {
+  state.value = readState(route.query.state)
+  author.value = readText(route.query.author)
+  query.value = readText(route.query.q)
+}
+watch([() => route.query.state, () => route.query.author, () => route.query.q], syncFilters)
+function updateFilters(values: Partial<{ state: StateFilter; author: string; q: string }>) {
+  state.value = values.state ?? state.value
+  author.value = values.author ?? author.value
+  query.value = values.q ?? query.value
+  void router.replace({
+    query: {
+      ...route.query,
+      state: state.value === 'open' ? undefined : state.value,
+      author: author.value || undefined,
+      q: query.value || undefined,
+    },
+  })
+}
 const auth = useAuth()
 const items = ref<Proposal[]>([])
 const next = ref('')
 const loading = ref(true)
 const more = ref(false)
-const error = ref<unknown>(null)
+const error = ref<{ cause: unknown; append: boolean } | null>(null)
 let serial = 0
 
 const columns: Column[] = [
@@ -50,11 +80,23 @@ const columns: Column[] = [
   { key: 'updated_at_ms', label: 'Updated', width: '7rem', align: 'end' },
 ]
 
-async function load(append = false) {
+function startLoad(append: boolean): number | null {
+  if (append && (loading.value || more.value || !next.value)) return null
   const mine = ++serial
-  if (append) more.value = true
-  else loading.value = true
+  loading.value = !append
+  more.value = append
   error.value = null
+  return mine
+}
+
+function applyPage(page: { items: Proposal[]; nextPageToken: string }, append: boolean) {
+  items.value = append ? [...items.value, ...page.items] : page.items
+  next.value = page.nextPageToken
+}
+
+async function load(append = false) {
+  const mine = startLoad(append)
+  if (mine === null) return
   try {
     const page = await api.proposals.list(repo.value, {
       state: state.value === 'all' ? undefined : state.value,
@@ -63,11 +105,10 @@ async function load(append = false) {
       page_token: append ? next.value : undefined,
     })
     if (mine !== serial) return
-    items.value = append ? [...items.value, ...page.items] : page.items
-    next.value = page.nextPageToken
+    applyPage(page, append)
   } catch (e) {
     if (mine !== serial) return
-    error.value = e
+    error.value = { cause: e, append }
   } finally {
     if (mine === serial) {
       loading.value = false
@@ -78,6 +119,12 @@ async function load(append = false) {
 
 let timer: ReturnType<typeof setTimeout> | undefined
 watch([state, author, repo], () => {
+  serial++
+  items.value = []
+  next.value = ''
+  more.value = false
+  loading.value = true
+  error.value = null
   clearTimeout(timer)
   timer = setTimeout(() => void load(), 200)
 })
@@ -90,12 +137,6 @@ void load()
 const stateWord = (s: string) => (s === 'integrated' ? 'landed' : s)
 const TONE = { open: 'info', integrated: 'ok', closed: 'neutral' } as const
 const tone = (s: string) => (s in TONE ? TONE[s as keyof typeof TONE] : 'neutral')
-const statusOptions = [
-  { value: 'open', label: 'Open' },
-  { value: 'integrated', label: 'Landed' },
-  { value: 'closed', label: 'Closed' },
-  { value: 'all', label: 'All' },
-] as const
 const rows = computed(() => {
   const words = query.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
   return items.value.filter((p) => {
@@ -129,28 +170,40 @@ const rows = computed(() => {
       </div>
     </div>
     <div class="tools">
-      <Segmented v-model="state" legend="State" :options="statusOptions" />
+      <Segmented
+        :model-value="state"
+        legend="State"
+        :options="statusOptions"
+        @update:model-value="updateFilters({ state: $event })"
+      />
       <TextField
-        v-model="author"
+        :model-value="author"
         label="Author"
         placeholder="e.g. agent:refactor-bot"
         hint="Exact identity or principal."
         class="author"
         mono
+        @update:model-value="updateFilters({ author: $event })"
       />
     </div>
     <TextField
-      v-model="query"
+      :model-value="query"
       label="Search loaded change requests"
       type="search"
       placeholder="Title, author, branch or ID"
       :hint="
         next ? 'Search covers the loaded page. Load more to include older changes.' : undefined
       "
+      @update:model-value="updateFilters({ q: $event })"
       ><template #prefix><Icon name="search" :size="16" /></template
     ></TextField>
     <Card flush>
-      <ErrorState v-if="error" what="change requests" :error="error" @retry="load()" />
+      <ErrorState
+        v-if="error && !error.append"
+        what="change requests"
+        :error="error.cause"
+        @retry="load()"
+      />
       <template v-else>
         <DataTable
           :columns="columns"
@@ -189,6 +242,13 @@ const rows = computed(() => {
             />
           </template>
         </DataTable>
+        <ErrorState
+          v-if="error?.append"
+          what="more change requests"
+          :error="error.cause"
+          :retryable="false"
+          compact
+        />
         <LoadMore
           :has-more="!!next"
           :loading="more"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
@@ -40,6 +40,24 @@ const description = ref('')
 const preset = ref<PresetId>('team')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
+const canCreate = computed(() => auth.status === 'ready' && auth.isAdminAnywhere)
+let context = 0
+let owner = auth.identity
+watch([() => auth.identity, canCreate], ([identity]) => {
+  context++
+  busy.value = false
+  error.value = null
+  if (owner !== identity) {
+    name.value = ''
+    description.value = ''
+    preset.value = 'team'
+    step.value = 'name'
+  }
+  owner = identity
+})
+onBeforeUnmount(() => {
+  context++
+})
 
 const NAME = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/
 const nameProblem = computed(() => {
@@ -53,6 +71,9 @@ const nameProblem = computed(() => {
 const canNext = computed(() => name.value.trim() !== '' && !nameProblem.value)
 const chosen = computed(() => PRESETS.find((p) => p.id === preset.value) ?? PRESETS[0]!)
 const meaning = computed(() => describePolicy(applyPreset(preset.value)))
+const canSubmit = computed(
+  () => canCreate.value && canNext.value && !error.value?.isUnauthenticated,
+)
 
 function next() {
   if (step.value === 'name' && canNext.value) step.value = 'rules'
@@ -63,39 +84,60 @@ function back() {
   else if (step.value === 'rules') step.value = 'name'
 }
 
+function captureCreation() {
+  return {
+    context,
+    input: { name: name.value.trim(), description: description.value.trim() },
+    policy: stringifyDoc(applyPreset(preset.value)),
+    policyName: chosen.value.name,
+    options: { token: auth.token, quietUnauthenticated: true },
+  }
+}
+
+async function saveRules(
+  repo: { name: string; default_stream: string },
+  request: ReturnType<typeof captureCreation>,
+) {
+  try {
+    await api.admin.setPolicy(repo.name, repo.default_stream, request.policy, request.options)
+    if (request.context !== context) return
+    toasts.ok('Repository created', `${repo.name}, with the “${request.policyName}” rules.`)
+  } catch (e) {
+    if (request.context !== context) return
+    toasts.warn(
+      'Repository created, but the rules were not saved',
+      `${repo.name}: ${describeError(e)} Set them under Settings.`,
+    )
+  }
+}
+
+function reportFailure(cause: unknown, mine: number, createdName: string) {
+  if (mine !== context) return
+  error.value =
+    cause instanceof ApiError
+      ? cause
+      : new ApiError({ status: 0, code: 'internal', message: describeError(cause) })
+  if (!createdName) step.value = 'name'
+}
+
 async function create() {
+  if (busy.value || !canSubmit.value) return
+  const request = captureCreation()
   busy.value = true
   error.value = null
   let repoName = ''
   try {
-    const repo = await api.repos.create({
-      name: name.value.trim(),
-      description: description.value.trim(),
-    })
+    const repo = await api.repos.create(request.input, request.options)
     repoName = repo.name
-    try {
-      await api.admin.setPolicy(
-        repo.name,
-        repo.default_stream,
-        stringifyDoc(applyPreset(preset.value)),
-      )
-      toasts.ok('Repository created', `${repo.name}, with the “${chosen.value.name}” rules.`)
-    } catch (e) {
-      toasts.warn(
-        'Repository created, but the rules were not saved',
-        `${describeError(e)} Set them under Settings.`,
-      )
-    }
+    if (request.context !== context) return
+    await saveRules(repo, request)
+    if (request.context !== context) return
     const [owner = '', rname = ''] = repo.name.split('/')
     await router.push({ name: 'board', params: { owner, name: rname }, query: { welcome: '1' } })
   } catch (e) {
-    error.value =
-      e instanceof ApiError
-        ? e
-        : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
-    if (!repoName) step.value = 'name'
+    reportFailure(e, request.context, repoName)
   } finally {
-    busy.value = false
+    if (request.context === context) busy.value = false
   }
 }
 </script>
@@ -112,7 +154,7 @@ async function create() {
       </p>
     </div>
 
-    <Card v-if="!auth.isAdminAnywhere" flush>
+    <Card v-if="!canCreate" flush>
       <EmptyState
         icon="lock"
         title="Starting a repository needs the admin role"
@@ -125,6 +167,11 @@ async function create() {
     <template v-else>
       <Alert v-if="error" tone="bad" live="alert" title="Could not create the repository">
         {{ error.message }}
+        <Button
+          v-if="error.isUnauthenticated"
+          :to="{ path: '/signin', query: { next: '/repos/new' } }"
+          >Sign in again</Button
+        >
       </Alert>
       <ol class="steps" aria-label="Progress" data-testid="new-repo-steps">
         <li
@@ -227,6 +274,7 @@ async function create() {
               variant="primary"
               icon="check"
               :loading="busy"
+              :disabled="!canSubmit"
               data-testid="create-repo"
               @click="create"
               >Create repository</Button

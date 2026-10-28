@@ -24,6 +24,16 @@ Pin **GitLab Community Edition 18.4.0**, source tag `gitlabhq/gitlabhq:v18.4.0`,
 
 ## Open evidence and integration work
 
-Open issues #50–#55 (excluding absent #54) concern real MCP-host, independent pilot, clean macOS installer, screen-reader and real-device qualification; they remain open. Ten open PRs were inventoried, including #47 and dependency updates; none is considered resolved merely by existing. Hosted migration still omits issues/discussions/permissions/releases/CI settings and external LFS payloads. Older roadmap and comparison text includes already-fixed claims (file rename/delete, Home's fixed 30-repository limit, release status); reconcile documents as each capability is qualified.
+On 2026-10-28 all pages of the open queues were read: five issues (#50, #51, #52, #53, #55) and no open PRs. The issues concern a real MCP host, independent pilots, clean macOS installation, screen-reader and physical-device qualification; they remain open. The prior ten-PR inventory is historical: those changes were resolved through the checked main integration, not by discarding the issues. Hosted migration still omits issues/discussions/permissions/releases/CI settings and external LFS payloads. Older roadmap and comparison text includes already-fixed claims (file rename/delete, Home's fixed 30-repository limit, release status); reconcile documents as each capability is qualified.
 
 No production deployment, external messaging, registry publication or secret publication is part of this stage. The user subsequently requested one additional agent for Web UI. That agent handled file-finder keyboard navigation; the primary agent owned test throughput, CI, integration and verification.
+
+## Resumed qualification — 2026-10-28
+
+Baseline main is `549555c82219c6465e59b4d16a3d5a9d3bea47f9`; its working tree was clean. `v0.3.0-beta.2` is published with ten assets and its release workflow completed successfully. This does not close the external qualification issues. The saved UI work is being integrated on `goal/platform-qualification`; it is not yet part of the published release.
+
+The first resumed slice is P0 editor request ownership: preserve the initiating credential through workspace creation, modification, publication and cleanup; stop unstarted follow-ups after cancellation; reject duplicate submits; keep the tab draft and ignore stale navigation/notifications. The fresh-server browser path still creates the repository and its content through the UI. A delayed *real* write response checks pending controls; isolated tests cover cancellation and late responses. Neither is evidence of a real-agent end-to-end lifecycle.
+
+Before measuring: acceptance is one submitted workspace change, unchanged title/description while pending, no late publication after cancellation, no navigation after leaving, and recovered draft text after sign-in. Functional success is a gate; timing is recorded only as a local sample, not comparative evidence.
+
+Remaining P0 boundary: virtual workspace writes are owner/admin guarded, but read/list routes are repository-readable. They are isolated work areas, not a confidentiality boundary. Do not put confidential account-backed drafts there without a separately reviewed authorization design. Next capability stage remains multi-file editing and review threads; existing multi-file *upload* is not multi-file editing.

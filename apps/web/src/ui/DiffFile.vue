@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useScrollRegion } from '@/composables/useScrollRegion'
 import { lineCount, parseUnifiedDiff } from '@/lib/unidiff'
 import type { FileDiff } from '@/api/types'
@@ -19,9 +19,21 @@ const props = withDefaults(
 
 const LARGE = 600
 const parsed = computed(() => parseUnifiedDiff(props.file.patch))
+// Both gutters share the widest rendered number, including a digit boundary inside a hunk.
+const numberWidth = computed(() => {
+  let largest = 0
+  for (const hunk of parsed.value.hunks) {
+    for (const line of hunk.lines) largest = Math.max(largest, line.oldNo ?? 0, line.newNo ?? 0)
+  }
+  return `${Math.max(3, String(largest).length)}ch`
+})
 const total = computed(() => lineCount(parsed.value))
 const forced = computed(() => total.value > LARGE)
 const open = ref(!props.collapsed && !forced.value)
+// Reset before rendering a replacement patch; identical refreshes keep the reader's choice.
+watch([() => props.file.path, () => props.file.patch], () => {
+  open.value = !props.collapsed && !forced.value
+})
 const bodyId = useId()
 // A long line scrolls the diff sideways, inside its own box; the keyboard can reach it then.
 const { setEl: diffRef, attrs: diffAttrs } = useScrollRegion(() => `Changes to ${props.file.path}`)
@@ -55,7 +67,14 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
         </template>
       </span>
     </header>
-    <div v-if="open" :id="bodyId" :ref="diffRef" class="diff" v-bind="diffAttrs">
+    <div
+      v-if="open"
+      :id="bodyId"
+      :ref="diffRef"
+      class="diff"
+      :style="{ '--number-width': numberWidth }"
+      v-bind="diffAttrs"
+    >
       <p v-if="file.binary" class="note">Binary file: its contents are not shown.</p>
       <p v-else-if="parsed.hunks.length === 0" class="note">No textual changes.</p>
       <template v-else>
@@ -165,7 +184,7 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
 }
 .no {
   flex: none;
-  width: 4.2ch;
+  width: calc(var(--number-width) + 12px);
   padding: 0 6px;
   text-align: right;
   color: var(--text-3);

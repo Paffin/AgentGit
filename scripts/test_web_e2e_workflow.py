@@ -2,6 +2,9 @@
 import json
 from pathlib import Path
 import re
+import os
+import subprocess
+import tempfile
 import unittest
 
 import yaml
@@ -25,6 +28,37 @@ class BrowserPipeline(unittest.TestCase):
         self.assertIsNotNone(match, 'browser runtime needs a version and immutable digest')
         package = json.loads((ROOT / 'apps/web/package.json').read_text())
         self.assertEqual(match.group(1), package['devDependencies']['@playwright/test'])
+
+    def test_identity_browser_runs_in_the_same_pinned_runtime(self):
+        job = self.jobs['identity-provider']
+        self.assertEqual(job['env']['PLAYWRIGHT_IMAGE'], self.browser['container']['image'])
+        commands = '\n'.join(step.get('run', '') for step in job['steps'])
+        self.assertNotIn('playwright install', commands)
+        execution = next(step['run'] for step in job['steps'] if 'keycloak.spec.ts' in step.get('run', ''))
+        with tempfile.TemporaryDirectory(prefix='browser runtime ') as directory:
+            root = Path(directory)
+            docker = root / 'docker'
+            docker.write_text('#!/usr/bin/env python3\nimport json, os, sys\n'
+                              'open(os.environ["CAPTURE"], "w").write(json.dumps(sys.argv[1:]))\n')
+            docker.chmod(0o755)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                       GITHUB_WORKSPACE=str(root / 'source tree'), RUNNER_TEMP=str(root / 'evidence'),
+                       PLAYWRIGHT_IMAGE=job['env']['PLAYWRIGHT_IMAGE'], CAPTURE=str(root / 'args.json'),
+                       AG_E2E_KEYCLOAK='http://localhost:8180')
+            subprocess.run(['bash', '-euc', execution], env=env, check=True)
+            args = json.loads((root / 'args.json').read_text())
+        self.assertEqual(args[:4], ['run', '--rm', '--network=host', '--ipc=host'])
+        self.assertIn(env['GITHUB_WORKSPACE'] + ':/work', args)
+        self.assertIn(env['RUNNER_TEMP'] + ':/evidence', args)
+        self.assertIn('AG_SKIP_REPORT=/evidence/skips.jsonl', args)
+        self.assertIn('AG_SERVER_BIN=/work/target/debug/ag-server', args)
+        self.assertIn('AG_CLI_BIN=/work/target/debug/ag', args)
+        self.assertIn('AG_E2E_UI=embedded', args)
+        self.assertIn('AG_E2E_KEYCLOAK=http://localhost:8180', args)
+        self.assertIn('AG_REQUIRE_COMPONENTS=keycloak', args)
+        self.assertIn('CI=true', args)
+        self.assertEqual(args[-7:], [env['PLAYWRIGHT_IMAGE'], 'npx', 'playwright', 'test',
+                                    '--project=chromium', '--no-deps', 'keycloak.spec.ts'])
 
     def test_all_browser_projects_run_once_without_filtering_scenarios(self):
         projects = [row['project'] for row in self.browser['strategy']['matrix']['include']]

@@ -96,7 +96,52 @@ test('an empty server user creates content through UI and recovers edits after r
       'Draft survives reload — Unicode ✓\n',
     )
     await page.screenshot({ path: testInfo.outputPath('recovered-draft.png'), fullPage: true })
-    await propose(page, 'Recovered edit')
+    // Delay delivery of a real write response, without replacing its backend result.
+    let releaseWrite!: () => void
+    let writeReady!: () => void
+    let writeDelivered!: () => void
+    const held = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    const ready = new Promise<void>((resolve) => {
+      writeReady = resolve
+    })
+    const delivered = new Promise<void>((resolve) => {
+      writeDelivered = resolve
+    })
+    let writes = 0
+    await page.route('**/v1/repos/**/workspaces/*/changes', async (route) => {
+      writes++
+      try {
+        const response = await route.fetch()
+        writeReady()
+        await held
+        await route.fulfill({ response })
+      } finally {
+        writeDelivered()
+      }
+    })
+    try {
+      await page.getByTestId('propose-change').click()
+      const dialog = page.getByRole('dialog', { name: 'Propose this change' })
+      await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Recovered edit')
+      await page.getByTestId('propose-submit').click()
+      await ready
+      await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toBeDisabled()
+      await expect(dialog.getByRole('textbox', { name: 'Description (optional)' })).toBeDisabled()
+      await expect(page.getByTestId('propose-submit')).toBeDisabled()
+      expect(writes).toBe(1)
+      await page.screenshot({
+        path: testInfo.outputPath('pending-recovered-edit.png'),
+        fullPage: true,
+      })
+      releaseWrite()
+      await expect(page.getByTestId('proposal-title')).toHaveText('Recovered edit')
+    } finally {
+      releaseWrite()
+      await delivered
+      await page.unroute('**/v1/repos/**/workspaces/*/changes')
+    }
     await land(page)
     await openReadme(page)
     await expect(page.getByTestId('file-viewer')).toContainText('Draft survives reload — Unicode ✓')

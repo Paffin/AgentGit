@@ -33,10 +33,11 @@ async function reauthenticate() {
   }
 }
 
-// After a navigation, tell assistive tech where we are and move focus to the new content. The page's
+// After a page navigation, announce it and focus the new content. Query/hash changes retain focus. The page's
 // first load keeps focus where the browser put it, so the first Tab reaches the "Skip to content" link.
 router.afterEach(async (to, from) => {
   await nextTick()
+  if (to.path === from.path) return
   announcement.value = document.title
   if (from === START_LOCATION || to.hash) return
   main.value?.focus({ preventScroll: true })

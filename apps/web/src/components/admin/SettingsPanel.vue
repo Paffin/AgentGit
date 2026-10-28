@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Quota, Repo } from '@/api/types'
@@ -52,32 +52,53 @@ const FIELDS: { key: keyof Quota; label: string; hint: string }[] = [
 
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
+let context = 0
+watch(
+  () => props.repo,
+  () => {
+    context++
+    busy.value = false
+    error.value = null
+  },
+)
+onBeforeUnmount(() => {
+  context++
+})
+function readQuota(): Partial<Quota> {
+  const quota: Partial<Quota> = {}
+  for (const f of FIELDS) {
+    const n = Number(q.value[f.key])
+    if (!Number.isInteger(n) || n < 0)
+      throw new ApiError({
+        status: 0,
+        code: 'invalid_argument',
+        message: `${f.label} must be a whole number, 0 or more.`,
+      })
+    quota[f.key] = n
+  }
+  return quota
+}
 async function save() {
+  if (busy.value) return
+  const mine = context
+  const repository = props.repo
   busy.value = true
   error.value = null
   try {
-    const quota: Partial<Quota> = {}
-    for (const f of FIELDS) {
-      const n = Number(q.value[f.key])
-      if (!Number.isInteger(n) || n < 0)
-        throw new ApiError({
-          status: 0,
-          code: 'invalid_argument',
-          message: `${f.label} must be a whole number, 0 or more.`,
-        })
-      quota[f.key] = n
-    }
-    await api.repos.configure(props.repo, { description: description.value, quota })
+    const quota = readQuota()
+    await api.repos.configure(repository, { description: description.value, quota })
+    if (mine !== context) return
     toasts.ok('Settings saved')
     await info.reload()
-    board.refreshAll()
+    if (mine === context) board.refreshAll()
   } catch (e) {
+    if (mine !== context) return
     error.value =
       e instanceof ApiError
         ? e
         : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
   } finally {
-    busy.value = false
+    if (mine === context) busy.value = false
   }
 }
 
@@ -116,13 +137,14 @@ function kv(r: Repo): KvItem[] {
         subtitle="Limits are enforced by the server: a write over the quota is refused with quota_exceeded."
       >
         <form class="form" @submit.prevent="save">
-          <TextArea v-model="description" label="Description" :rows="2" />
+          <TextArea v-model="description" label="Description" :rows="2" :disabled="busy" />
           <div class="grid">
             <TextField
               v-for="f in FIELDS"
               :key="f.key"
               v-model="q[f.key]"
               :label="f.label"
+              :disabled="busy"
               type="number"
               :min="0"
               :hint="

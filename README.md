@@ -28,7 +28,7 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).
 
-The current source also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These source changes are prepared for beta.2 and tracked in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
+The beta also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These changes are included in beta.2 and documented in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
 
 ## See it work
 
@@ -71,11 +71,11 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-The public beta is [`v0.3.0-beta.1`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.1). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+The public beta is [`v0.3.0-beta.2`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.2). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker` and `ag-mcp` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.1
-docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.1
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.2
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.2
 ```
 
 `--version` is needed while only pre-releases exist. For an existing rc.2 installation, see the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
@@ -104,7 +104,7 @@ ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, 
 ```
 
 `ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
-(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in the `v0.3.0-beta.1` candidate. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in the `v0.3.0-beta.2` candidate. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
 start on rc.2 in a few more lines.
 
 ### As a server
@@ -287,7 +287,7 @@ not been run in production by anyone but its authors, and there has been no exte
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
   per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
   job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Only prereleases are available; the current beta is `v0.3.0-beta.1`. No stable release, and no
+- Only prereleases are available; the current beta is `v0.3.0-beta.2`. No stable release, and no
   crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
   ([releasing](docs/operations/releasing.md)). Metadata schema 3 is not readable by older builds: upgrade replicas new
   build first.

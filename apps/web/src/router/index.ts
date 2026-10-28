@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
 import type { RouteRecordRaw, Router } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { ApiError } from '@/api/errors'
@@ -173,7 +173,8 @@ export function createAppRouter(history = createWebHistory()): Router {
     return true
   })
 
-  router.afterEach((to) => {
+  router.afterEach((to, from) => {
+    if (from !== START_LOCATION && to.path === from.path) return
     const base = typeof to.meta.title === 'string' ? to.meta.title : 'AgentGit'
     document.title = `${base} · AgentGit`
   })

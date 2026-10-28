@@ -7,6 +7,34 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Fixed
+
+- File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.
+
+- Diff line-number columns expand for large files, preventing old/new numbers from overlapping each other or the code. Keyboard scrolling remains available on narrow screens.
+
+- Role revocation preserves its confirmation after a failure and ignores late results after leaving the original context. Retries retain the initiating session.
+
+- Role grants retain the submitted binding and initiating session while pending. Late results cannot affect a different repository or account; failures preserve the form for retry.
+
+- Repository search survives opening a result, browser Back and page reload; bookmarked filters keep searching the loaded list without extra requests.
+
+- Git import instructions accept the copied SSH addresses from GitHub and nested GitLab groups, with shell-safe commands and editable destination suggestions.
+
+- History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.
+- Obsolete blame and changeset requests are cancelled when their view closes. Large diff expansion follows the selected patch, and comparison labels explain the default first-parent base.
+- Uploads can retry a failed branch lookup without losing selected files. Pending branch creation, settings saves and integration attempts keep their submitted values; settings and integration results stay attached to their original target.
+- Staged Git imports recover after temporary failures, keep separate references for each account and preserve request ownership across retries. Starting a new import clears only the local reference.
+- Import instructions use the shared clipboard fallback; changing the source URL no longer leaves a misleading copied confirmation.
+- Repository setup keeps its selected rules and initiating session. Leaving the wizard stops unsent follow-up work and late redirects; a failed rule update clearly reports that the repository was still created.
+- Change-request filters are preserved in the URL for bookmarks and returning from a request. Updating a filter keeps keyboard focus in the current field.
+- Browser tab titles retain the current repository when filters or anchors change, while navigation to another page still updates the title.
+- Long tab strips retain readable labels, and keyboard selection brings the whole tab into view without shifting the page vertically.
+
+### Changed
+
+- The real Keycloak browser job reuses the pinned Playwright runtime, avoiding repeated system-package downloads while retaining real-provider, embedded-server and reviewed-skip checks.
+
 ## [0.3.0-beta.2] — 2026-10-27
 
 ### Added

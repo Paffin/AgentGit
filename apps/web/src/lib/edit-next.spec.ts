@@ -105,11 +105,13 @@ describe('proposeChange', () => {
     expect(raw.workspaces.create).toHaveBeenCalledWith(
       'acme/app',
       expect.objectContaining({ stream: 'main', from_rev: 'main' }),
+      {},
     )
     expect(raw.workspaces.modify).toHaveBeenCalledWith(
       'acme/app',
       expect.stringMatching(/^web-/),
       expect.objectContaining({ expected_head: 'h0', message: 'Say hi' }),
+      {},
     )
   })
 

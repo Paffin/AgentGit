@@ -48,6 +48,8 @@ import type {
 } from './types'
 
 type Opts = Pick<RequestOptions, 'signal' | 'timeoutMs' | 'runId' | 'idempotencyKey'>
+// Creation spans two requests; keep both tied to the initiating session.
+type SessionOpts = Opts & Pick<RequestOptions, 'token' | 'quietUnauthenticated'>
 
 export function createApi(c: ApiClient) {
   const r = repoPath
@@ -79,8 +81,10 @@ export function createApi(c: ApiClient) {
         return { items: res.repos ?? [], nextPageToken: res.next_page_token ?? '' }
       },
       get: (repo: string, o?: Opts) => c.get<Repo>(r(repo), undefined, o),
-      create: (body: { name: string; description?: string; default_stream?: string }, o?: Opts) =>
-        c.post<Repo>('/v1/repos', body, o),
+      create: (
+        body: { name: string; description?: string; default_stream?: string },
+        o?: SessionOpts,
+      ) => c.post<Repo>('/v1/repos', body, o),
       configure: (repo: string, body: { description?: string; quota?: Partial<Quota> }, o?: Opts) =>
         c.patch<Repo>(r(repo), body, o),
     },
@@ -227,7 +231,7 @@ export function createApi(c: ApiClient) {
           description?: string
           task_id?: string
         },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Proposal>(r(repo, '/proposals'), body, o),
     },
 
@@ -236,7 +240,7 @@ export function createApi(c: ApiClient) {
       create: (
         repo: string,
         body: { name: string; stream?: string; from_rev?: string },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, '/workspaces'), body, o),
       get: (repo: string, name: string, o?: Opts) =>
         c.get<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}`), undefined, o),
@@ -245,7 +249,7 @@ export function createApi(c: ApiClient) {
         repo: string,
         name: string,
         body: { changes: FileChange[]; message?: string; expected_head?: string },
-        o?: Opts,
+        o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}/changes`), body, o),
       /** Brings the stream head in. Conflicts change nothing until every one has a resolution. */
       sync: (repo: string, name: string, resolutions: FileChange[] = [], o?: Opts) =>
@@ -254,7 +258,7 @@ export function createApi(c: ApiClient) {
           resolutions.length ? { resolutions } : {},
           o,
         ),
-      remove: (repo: string, name: string, o?: Opts) =>
+      remove: (repo: string, name: string, o?: SessionOpts) =>
         c.del<Record<string, never>>(
           r(repo, `/workspaces/${encodeURIComponent(name)}`),
           undefined,
@@ -369,7 +373,7 @@ export function createApi(c: ApiClient) {
     admin: {
       policy: (repo: string, stream: string, o?: Opts) =>
         c.get<PolicyVersion>(r(repo, '/policy'), { stream }, o),
-      setPolicy: (repo: string, stream: string, document: string, o?: Opts) =>
+      setPolicy: (repo: string, stream: string, document: string, o?: SessionOpts) =>
         c.put<PolicyVersion>(r(repo, '/policy'), { stream, document }, o),
       policyHistory: async (repo: string, stream: string, o?: Opts) =>
         (await c.get<{ versions: PolicyVersion[] }>(r(repo, '/policy/history'), { stream }, o))
@@ -397,9 +401,9 @@ export function createApi(c: ApiClient) {
         c.post<FsckResponse>(r(repo, '/fsck'), {}, { timeoutMs: 120_000, ...o }),
       roles: async (q: { subject?: string; repo?: string } = {}, o?: Opts) =>
         (await c.get<{ bindings: RoleBinding[] }>('/v1/roles', q, o)).bindings ?? [],
-      grantRole: (body: { subject: string; repo: string; role: string }, o?: Opts) =>
+      grantRole: (body: { subject: string; repo: string; role: string }, o?: SessionOpts) =>
         c.post<RoleBinding>('/v1/roles', body, o),
-      revokeRole: (q: { subject: string; repo: string; role: string }, o?: Opts) =>
+      revokeRole: (q: { subject: string; repo: string; role: string }, o?: SessionOpts) =>
         c.del<Record<string, never>>('/v1/roles', q, o),
       credentials: async (q: { subject?: string; include_revoked?: boolean } = {}, o?: Opts) =>
         (await c.get<{ credentials: Credential[] }>('/v1/credentials', q, o)).credentials ?? [],

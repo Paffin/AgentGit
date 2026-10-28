@@ -190,6 +190,8 @@ attestation (who signed, for which tree, under which policy version, in which en
 what the agent said about itself (rationale, inputs, parameters), always as untrusted text, with whether the signature
 verified; *Timeline* is the history of the proposal.
 
+Diff line-number columns fit the largest number in the displayed patch, including when a hunk crosses a digit boundary. Long lines scroll inside the diff; focus that region and use the arrow keys to read across.
+
 **Review drafts.** Closing the review dialog to inspect the diff keeps the comment and decision on this page. A reload still clears them. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your
@@ -212,7 +214,7 @@ the blockers), conflict (with the paths) or refused by policy.
 - **Files** browses the tree at any revision, with file sizes, and shows files as text. A **Blame** switch shows, for each
   line, the changeset, author and time that last changed it (renames are followed; lines whose origin is further back
   than the server looked are marked *older than shown*). If a server does not offer blame, the page says so.
-- **Compare** shows the diff between any two revisions (`main~3` and `main`, two changeset ids, ...).
+- **Compare** shows the diff between any two revisions (`main~3` and `main`, two changeset ids, ...). With **From** empty, it shows the changes introduced by **To**, compared with its first parent. Set both revisions to use **Swap**.
 
 In **Files**, choose **Find file** or press **t** to search paths throughout the repository. Arrow Down and Arrow Up move between the search field and matching files; Home and End jump to the first and last result. Enter opens the focused file. Escape closes the finder and returns focus to its opener. The results remain normal links, including Ctrl/Cmd-click to open another tab.
 
@@ -253,7 +255,7 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
   suggestion, settings that can never be satisfied), the server's own refusal shown verbatim if it still rejects the
   document, and a **version history with a diff between any two versions**. Saving creates a new version. Attestations made
   under an older version stop counting, on purpose, and the UI says so.
-- **Roles** and **Credentials.** Grant and revoke roles. Mint tokens for yourself, or, as an administrator, for an
+- **Roles** and **Credentials.** Grant and revoke roles. While a role grant is pending, its fields are locked; failures keep the binding for correction and retry. Failed revocations also keep their confirmation available for retry. A rejected session offers sign-in. Mint tokens for yourself, or, as an administrator, for an
   agent or service, optionally limited to repositories, streams or operations. A new token is **shown exactly once**: in full, selected and with
   a copy button (and a button to hide it), and gone from the page when you close the dialog. The server keeps only a hash, so it cannot show it again.
 - **Settings and quota**, **GC and fsck** (garbage collection always starts as a *dry run*; the real run is only offered
@@ -266,6 +268,7 @@ it back, a visible focus ring everywhere, and screen-reader announcements for ro
 indicator. State is never colour alone: states have icons and words, diffs have `+`/`−`. The UI follows your system's
 colour scheme and `prefers-reduced-motion`. Below 820 px wide (or on a touch screen) every control is at least 44 px and
 the header, tab strips and tables adapt: tables that do not fit scroll sideways as a labelled region the keyboard can reach.
+Long tab strips scroll inside their own row. Home and End select the first and last enabled tab and bring it fully into view.
 
 ## First run, version check, ended sessions
 
@@ -325,14 +328,25 @@ choice means in sentences, create. The rules are stored with the repository. The
 **Getting started** checklist (repository created, rules chosen, work started, a change request open, first change
 landed) that ticks itself and offers the button for the next step.
 
+Leaving the wizard does not delete a repository that was already created, and a late response does not bring you back. If the repository is created but its rules cannot be saved, a warning names it; finish choosing the rules under **Settings**.
+
 ![Choosing the rules of a new repository](../assets/ui-new-repo.png)
+
+### Import from GitHub or GitLab
+
+Choose **Import from GitHub / GitLab** on Home or Repositories to upload a full Git bundle. **Check the import** stages it for review; only **Publish repository** makes the destination available. See the [Git migration guide](migrate-from-git.md) for what transfers and what needs a separate migration.
+
+Reopening the import page resumes the saved import for your account. After a temporary error, **Retry previous import** opens the same staged result; an expired credential offers **Sign in again**. **Start new import** clears only this account's local reference, without deleting the staged import on the server. Recovery references are kept in this tab, separately by account; switching accounts hides the previous report. If browser storage is unavailable, keep the page open and save the report before leaving.
 
 ## Edit a file and propose a change
 
 With a writing role, a file on a branch has an **Edit** button and a directory has **New file**. **Propose change**
 asks for a title and description and opens a change request; nothing lands until it is reviewed and landed like any other.
 This uses the server's virtual workspaces: a draft is opened on the branch (from exactly what was on screen), the edit is
-applied as one version, the change request is opened from it, and the server workspace is removed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
+applied as one version, the change request is opened from it, and the server workspace is removed. While sending, the editor locks the submitted title and description. Requests and retries retain the initiating credential; leaving or changing account stops unsent follow-up steps and ignores late results. Cancellation does not undo a server operation that already completed; the local draft remains available if completion was not confirmed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
+If the upload cannot read the branch, **Retry branch** keeps your selected files, destination, title and description.
+
+A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed confidential drafts require a separate authorization boundary.
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
@@ -377,7 +391,7 @@ AgentGit words. This table is generated from `apps/web/src/lib/glossary.ts` (a t
 | policy | Rules | Who may land changes to a branch, and which checks and approvals are needed first. |
 | changeset | Version | One saved state of the files. |
 | run | Agent session | One working session of an agent on a task. |
-| workspace | Draft | A private working copy of a branch, where edits collect before they are proposed. |
+| workspace | Draft | An isolated working copy of a branch, where edits collect before they are proposed. |
 | quiet (stale heartbeat) | Silent | The agent has not reported in for a while. It may be stuck; this is a hint, not a verdict. |
 
 ## Not in the UI
@@ -398,6 +412,11 @@ notice remains visible. An incomplete summary is never evidence that no work nee
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.
 
+The Repositories list keeps its search in the URL. Open a repository and use browser **Back** to return to the same filtered list, or bookmark the search. Search covers only loaded repositories; use **Load more** to include the rest.
+
+The change-request list keeps **State**, **Author** and **Search loaded change requests** in its URL. After opening a request, browser **Back** restores those filters. Bookmark or copy the list URL to reuse them. Typing a filter keeps focus in the field; the text search still covers only the loaded results.
+The browser tab keeps the repository name while filters or anchors change, so several open repositories remain distinguishable.
+
 
 ### Keeping context in history and copied text
 
@@ -405,6 +424,7 @@ History filters follow the URL: Back and Forward restore the revision and path. 
 
 Copy buttons keep keyboard focus when the browser falls back to legacy clipboard support. If copying fails, the temporary field is removed and the button reports the failure instead of retaining an earlier success message.
 
-A failed next-page request keeps files already loaded in the directory. Use **Load more** to retry that page; changing the folder or revision clears the old listing immediately, so its links cannot point into the new folder.
+A failed next-page request keeps the loaded directory, history or change-request rows. Use **Load more** to retry that page; changing the repository, revision or server-side filter clears the old listing immediately, so its links cannot point into the new context. Large patches start collapsed when you change the comparison; refreshing the same patch preserves your manual expansion.
 
 Review controls pause while the decision is being sent. The decision and comment are fixed when you submit; switching to another change request cannot redirect a pending send to that request. Responses from an earlier page do not clear the current draft.
+Branch creation, settings saves and landing also pause their editable controls while a request is pending. Failed attempts retain their values for correction and retry. Settings and landing results stay attached to the repository or change request that submitted them.

@@ -5,7 +5,7 @@ Start with a full copy and keep the source available until your team has verifie
 ## In the browser
 
 1. Open **Repositories → Import from GitHub / GitLab** as an administrator.
-2. Paste the repository's HTTPS URL to get the two local commands below. Your existing Git credential manager authenticates private repositories; do not paste tokens into the page.
+2. Paste the repository's HTTPS or SSH address to get the two local commands below. Your existing Git credential manager authenticates private repositories; do not paste tokens into the page.
 3. Run the commands in an empty directory, then upload `repository.bundle` and choose a new `owner/name`.
 4. Review the branch/tag mapping and any content limitations. Save the JSON report.
 5. Select **Publish repository**, then open it. No repository is visible to other users before publication.
@@ -15,7 +15,7 @@ git clone --mirror -- https://github.com/your-team/your-project.git agentgit-sou
 git -C agentgit-source.git bundle create ../repository.bundle --all
 ```
 
-The same commands work with GitLab and self-hosted Git servers; replace the URL. For SSH, use the SSH URL with your local Git tooling and upload the resulting bundle. A full mirror includes branches and tags that an ordinary clone may keep only as remote-tracking refs. Shallow and incremental bundles are not complete migration inputs.
+The same commands work with GitLab and self-hosted Git servers; replace the URL. Copied SSH addresses such as `git@github.com:team/project.git` and `git@gitlab.com:group/subgroup/project.git` work directly in the import form, as do `ssh://` URLs with explicit ports. For nested GitLab groups, the suggested AgentGit name uses the final group and repository; you can edit it before importing. A full mirror includes branches and tags that an ordinary clone may keep only as remote-tracking refs. Shallow and incremental bundles are not complete migration inputs.
 
 Browser imports currently support one server with SQLite and filesystem objects. The server needs Git on its `PATH`; the official Docker images include it. Keep staging and hosted repositories on the same filesystem for atomic publication. If you use a reverse proxy, allow 128 MiB request bodies and five-minute requests. Bundles are limited to 128 MiB; histories to 100,000 commits. One import is processed at a time and at most eight unpublished imports are retained. Unpublished staging is eligible for cleanup after 24 hours. Retry with the same browser action after a network interruption; publication is idempotent.
 

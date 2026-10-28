@@ -49,6 +49,23 @@ test('a browser-created change can be reviewed file by file and resumed', async 
       size.width,
     )
     await page.screenshot({ path: info.outputPath('review-workbench.png'), fullPage: true })
+    await page.getByTestId('act-review').click()
+    const dialog = page.getByRole('dialog', { name: 'Write a review' })
+    await dialog.getByRole('radio', { name: 'Comment', exact: true }).check()
+    const comment = 'Checked both files, including the second document.'
+    await dialog.getByRole('textbox', { name: 'Comment', exact: true }).fill(comment)
+    await dialog.getByRole('button', { name: 'Keep draft and close', exact: true }).click()
+    await page.reload()
+    await page.getByTestId('act-review').click()
+    await expect(dialog.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue(comment)
+    await expect(dialog.getByRole('radio', { name: 'Comment', exact: true })).toBeChecked()
+    await dialog.getByRole('button', { name: 'Submit review', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    await page.getByRole('tab', { name: /Reviews/ }).click()
+    await expect(page.getByTestId('reviews-tab')).toContainText(comment)
+    await page.reload()
+    await page.getByTestId('act-review').click()
+    await expect(dialog.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue('')
   } finally {
     await page.close()
     await server.stop()

@@ -3,6 +3,7 @@ import { computed, ref, useId, watch } from 'vue'
 import { useScrollRegion } from '@/composables/useScrollRegion'
 import { lineCount, parseUnifiedDiff } from '@/lib/unidiff'
 import type { FileDiff } from '@/api/types'
+import type { DiffLine } from '@/lib/diffDiscussion'
 import Badge from './Badge.vue'
 import Button from './Button.vue'
 import Icon from './Icon.vue'
@@ -13,10 +14,12 @@ const props = withDefaults(
     /** Start collapsed. Huge diffs always start collapsed. */
     collapsed?: boolean
     anchor?: string
+    discussLines?: boolean
   }>(),
-  { collapsed: false, anchor: undefined },
+  { collapsed: false, anchor: undefined, discussLines: false },
 )
 
+const emit = defineEmits<{ discuss: [line: DiffLine] }>()
 const LARGE = 600
 const parsed = computed(() => parseUnifiedDiff(props.file.patch))
 // Both gutters share the widest rendered number, including a digit boundary inside a hunk.
@@ -85,8 +88,28 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
             <span v-if="h.section" class="sec">{{ h.section }}</span>
           </div>
           <div v-for="(l, li) in h.lines" :key="li" class="row mono" :class="`k-${l.kind}`">
-            <span class="no" aria-hidden="true">{{ l.oldNo ?? '' }}</span>
-            <span class="no" aria-hidden="true">{{ l.newNo ?? '' }}</span>
+            <template v-for="side in ['old', 'new'] as const" :key="side">
+              <button
+                v-if="discussLines && (side === 'old' ? l.oldNo : l.newNo) != null"
+                type="button"
+                class="no line-action"
+                :aria-label="`Discuss ${side} line ${side === 'old' ? l.oldNo : l.newNo} of ${file.path}`"
+                title="Quote this line in the discussion"
+                @click="
+                  emit('discuss', {
+                    path: file.path,
+                    side,
+                    line: (side === 'old' ? l.oldNo : l.newNo)!,
+                    text: l.text,
+                  })
+                "
+              >
+                {{ side === 'old' ? l.oldNo : l.newNo }}
+              </button>
+              <span v-else class="no" aria-hidden="true">{{
+                side === 'old' ? l.oldNo : l.newNo
+              }}</span>
+            </template>
             <span class="sg" aria-hidden="true">{{ sigil[l.kind] }}</span>
             <span v-if="l.kind === 'add'" class="sr-only">added: </span>
             <span v-else-if="l.kind === 'del'" class="sr-only">removed: </span>
@@ -192,6 +215,18 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
   user-select: none;
   background: var(--surface-2);
 }
+.line-action {
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.line-action:hover,
+.line-action:focus-visible {
+  text-decoration: underline;
+  color: var(--accent);
+  outline-offset: -2px;
+}
 .sg {
   flex: none;
   width: 2.2ch;
@@ -209,7 +244,19 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
   background: var(--diff-add-gutter);
   color: var(--diff-add-text);
 }
-.k-add .sg {
+.k-add .line-action {
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.line-action:hover,
+.line-action:focus-visible {
+  text-decoration: underline;
+  color: var(--accent);
+  outline-offset: -2px;
+}
+.sg {
   color: var(--diff-add-text);
 }
 .k-del {
@@ -219,7 +266,19 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
   background: var(--diff-del-gutter);
   color: var(--diff-del-text);
 }
-.k-del .sg {
+.k-del .line-action {
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.line-action:hover,
+.line-action:focus-visible {
+  text-decoration: underline;
+  color: var(--accent);
+  outline-offset: -2px;
+}
+.sg {
   color: var(--diff-del-text);
 }
 .k-meta {

@@ -74,3 +74,53 @@ test('an author discusses an inspected change without review privileges and reta
     page.getByText('Closing this approach after discussion.', { exact: true }),
   ).toBeVisible()
 })
+
+test('quotes a diff line into the existing discussion draft with its exact revision', async ({
+  page,
+  cast,
+  openAs,
+}, info) => {
+  const { repo } = await freshRepo(cast, 'quote-line')
+  const alice = cast.as('alice')
+  const change = await commitFiles(
+    alice,
+    repo,
+    { 'message.txt': 'keep this branch\n' },
+    'Candidate to discuss',
+  )
+  const proposal = await openProposal(alice, repo, {
+    head: change.head,
+    title: 'Discuss a precise line',
+  })
+  const url = `/repos/${repo}/proposals/${proposal.id}`
+  await page.goto(url)
+  await page.getByRole('button', { name: 'Discuss…', exact: true }).click()
+  const text = page.getByRole('textbox', { name: 'Add to the discussion', exact: true })
+  await text.fill('My question about this implementation:')
+  await page.getByRole('tab', { name: /^Files changed/ }).click()
+  await page.getByRole('button', { name: 'Discuss new line 1 of message.txt', exact: true }).click()
+  await expect(text).toBeFocused()
+  await expect(text).toHaveValue(
+    new RegExp(
+      `^My question about this implementation:[\\s\\S]*message.txt — new line 1[\\s\\S]*${change.head}[\\s\\S]*> keep this branch`,
+    ),
+  )
+  await page.screenshot({ path: info.outputPath('quoted-line.png'), fullPage: true })
+  await page.reload()
+  await expect(text).toHaveValue(/My question about this implementation:/)
+  await page.getByRole('button', { name: 'Add comment', exact: true }).click()
+  await expect(text).toHaveValue('')
+  const stored = await alice.ok_(
+    alice.get(`/v1/repos/${repo}/proposals/${proposal.id}`),
+    'read quoted comment',
+  )
+  expect(stored.reviews).toHaveLength(1)
+  expect(stored.reviews[0].body).toContain(`Comparison head: ${change.head}`)
+  expect(stored.reviews[0].body).toContain('> keep this branch')
+  const reader = await openAs('erin')
+  await reader.goto(url)
+  await expect(
+    reader.getByRole('button', { name: 'Discuss new line 1 of message.txt', exact: true }),
+  ).toHaveCount(0)
+  await reader.close()
+})

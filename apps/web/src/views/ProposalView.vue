@@ -16,6 +16,7 @@ import ValidationTab from '@/components/proposal/ValidationTab.vue'
 import { useProposalData } from '@/composables/useProposalData'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useRepoName } from '@/composables/useRepoName'
+import type { LineQuote } from '@/lib/diffDiscussion'
 import { nextStep } from '@/lib/nextstep'
 import { fixesForBlocker, fixesForConflict } from '@/lib/fixes'
 import type { FixId } from '@/lib/fixes'
@@ -62,6 +63,18 @@ const tab = computed<TabId>({
     void router.replace({ query: { ...route.query, tab: value === 'changes' ? undefined : value } })
   },
 })
+const lineQuote = ref<LineQuote | null>(null)
+watch(
+  [repo, idRef, () => auth.token],
+  () => {
+    lineQuote.value = null
+  },
+  { flush: 'sync' },
+)
+function discussLine(quote: LineQuote) {
+  lineQuote.value = quote
+  tab.value = 'reviews'
+}
 const tabs = computed<TabItem<TabId>[]>(() => [
   {
     id: 'changes',
@@ -472,6 +485,11 @@ function changed() {
           <ChangesTab
             :diff="data.diff.data.value"
             :review-scope="JSON.stringify([auth.identity, repo, proposal.id])"
+            :can-discuss="
+              auth.can(repo, 'commentProposal') &&
+              !!auth.capabilities?.features.includes('proposals.comments')
+            "
+            @discuss="discussLine"
             :loading="data.diff.loading.value"
             :error="data.diff.error.value"
             @retry="data.diff.reload()"
@@ -487,7 +505,12 @@ function changed() {
             @review="reviewing = true"
           >
             <template #comment
-              ><ProposalComment :repo="repo" :proposal="proposal" @done="changed"
+              ><ProposalComment
+                :repo="repo"
+                :proposal="proposal"
+                :quote="lineQuote"
+                @quoted="lineQuote = null"
+                @done="changed"
             /></template>
           </ReviewsTab>
         </template>

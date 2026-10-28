@@ -259,3 +259,14 @@ Choose the agent and prerequisites explicitly. Cancel leaves the repository
 unchanged; **Create task** creates independent work and preserves the source task
 and its run history. Configured executors may pick up the new task once created.
 The source links are description text, not a structured retry relationship.
+
+## 12. Discussing a specific changed line (development)
+
+On a proposal's **Files changed** tab, select a line number to quote that line in
+**Reviews**. The draft records the file, old/new side, line number and exact
+revision; an old-side quote names the comparison's base. Existing draft text is
+preserved. Add your question and select **Add comment** to post it.
+
+Quotes are plain-text discussion context. They do not create a resolvable line
+thread, follow a line across revisions or approve the change. If the proposal
+head changes, inspect the new changes before acknowledging and posting the draft.

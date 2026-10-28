@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Quote an added or removed diff line directly into proposal discussion. Quotes include the file, side, line number and exact compared revision, preserve existing draft text and require explicit posting.
+
 - Failed-run pages distinguish active source tasks from finished ones. Finished tasks can seed an explicit follow-up with source links, failure summary and file scope; agent assignment and prerequisites start independently. Unrelated run/task sources are rejected before prefilling.
 
 - Run pages show the exact session’s change requests directly, with state, target stream, continuation pages and links into diff/checks/review. Results from other runs of the same agent stay separate.

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { FileDiff } from '@/api/types'
+import type { DiffLine } from '@/lib/diffDiscussion'
 import { plural } from '@/lib/format'
 import DiffFile from './DiffFile.vue'
 import EmptyState from './EmptyState.vue'
@@ -15,15 +16,18 @@ const props = withDefaults(
     emptyTitle?: string
     emptyDescription?: string
     anchorPrefix?: string
+    discussLines?: boolean
   }>(),
   {
     truncated: false,
+    discussLines: false,
     anchorPrefix: 'diff',
     emptyTitle: 'No differences',
     emptyDescription: 'The two revisions have the same files.',
   },
 )
 
+defineEmits<{ discuss: [line: DiffLine] }>()
 const totals = computed(() => ({
   additions: props.files.reduce((n, f) => n + f.additions, 0),
   deletions: props.files.reduce((n, f) => n + f.deletions, 0),
@@ -51,7 +55,14 @@ const totals = computed(() => ({
         <span class="minus">−{{ totals.deletions }}</span>
       </p>
       <div class="files">
-        <DiffFile v-for="(f, i) in files" :key="f.path" :file="f" :anchor="`${anchorPrefix}-${i}`">
+        <DiffFile
+          v-for="(f, i) in files"
+          :key="f.path"
+          :file="f"
+          :anchor="`${anchorPrefix}-${i}`"
+          :discuss-lines="discussLines"
+          @discuss="$emit('discuss', $event)"
+        >
           <template #actions><slot name="file-actions" :file="f" /></template>
         </DiffFile>
       </div>

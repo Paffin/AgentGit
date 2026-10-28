@@ -73,3 +73,17 @@ describe('diff line number width', () => {
     w.unmount()
   })
 })
+
+describe('line discussion context', () => {
+  it('keeps old and new line numbers distinct when quoting a replacement', async () => {
+    const patch = { ...file(1), patch: '@@ -8,1 +12,1 @@\n-old value\n+new value\n' }
+    const w = mount(DiffFile, { props: { file: patch, discussLines: true } })
+    await w.get('button[aria-label="Discuss old line 8 of README.md"]').trigger('click')
+    await w.get('button[aria-label="Discuss new line 12 of README.md"]').trigger('click')
+    expect(w.emitted('discuss')).toEqual([
+      [{ path: 'README.md', side: 'old', line: 8, text: 'old value' }],
+      [{ path: 'README.md', side: 'new', line: 12, text: 'new value' }],
+    ])
+    w.unmount()
+  })
+})

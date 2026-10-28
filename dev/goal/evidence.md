@@ -405,3 +405,10 @@ closure. TypeScript and Python operation tours cover the new generated API (112
 operations). The browser review summary now ignores comments when finding the
 latest approval/request-changes decision, matching the server's policy logic.
 Nested threads, line anchors and resolution remain open work.
+
+## Beta.5 release contracts and roadmap reconciliation (2026-10-28)
+
+- Starting head `c7b860ef311e0121cd502abe1315cae43df36baf`. Beta.5 was not published: exact-head checks found missing CLI discussion JSON shapes, stale deployment image defaults, a Python assertion lint error and Windows upload connection reset. No release gate was bypassed.
+- Recorded all five native discussion command responses against the real server and generated their CLI reference. All three local/remote JSON contract tests pass; no existing keys were removed or retyped.
+- Deployment checks pass with kustomize, promtool and Docker Compose present. Four real-server Git migration scenarios pass on Linux with HTTP 100-continue for upload authentication; hosted Windows confirmation remains required.
+- Updated English/Russian READMEs without changing published-beta.4 install links. Reconciled the original line-discussion matrix row and stale review gaps with the implemented thread slice; inventory is 155 rows. Suggestions, requested reviewers and external-device/host/pilot checks remain open.

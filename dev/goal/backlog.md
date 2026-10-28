@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows bring the inventory to 150 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations bring the inventory to 155 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |

@@ -26,7 +26,8 @@ import sys
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BINARIES = ["ag", "ag-server", "ag-worker", "ag-mcp", "orchestrator"]
+RUST_BINARIES = ["ag", "ag-server", "ag-worker", "ag-mcp"]
+BINARIES = [*RUST_BINARIES, "orchestrator"]
 DOCS = ["LICENSE", "NOTICE", "README.md", "THIRD_PARTY_LICENSES.md"]
 
 

@@ -38,6 +38,12 @@ class Api:
 
 
 class ReleaseRequest(unittest.TestCase):
+    def test_native_archive_binary_does_not_imply_a_separate_rust_sbom(self):
+        assets = required_assets('0.3.0-beta.4')
+        self.assertEqual(len(assets), 10)
+        self.assertNotIn('agentgit-0.3.0-beta.4-orchestrator.cdx.json', assets)
+        self.assertIn('agentgit-0.3.0-beta.4-ag-mcp.cdx.json', assets)
+
     def test_every_required_workflow_runs_for_a_release_changelog_change(self):
         from request_release import REQUIRED as workflows
         root = Path(__file__).resolve().parent.parent
@@ -119,8 +125,9 @@ class ReleaseRequest(unittest.TestCase):
     def test_tag_for_another_commit_is_never_moved(self):
         api = Api()
         api.values[BASE + '/git/ref/tags/v0.3.0-beta.2'] = {'object': {'type': 'commit', 'sha': 'b' * 40}}
-        with self.assertRaisesRegex(RuntimeError, 'another commit'):
-            request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: None)
+        result = request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: self.fail('pinned version must not wait'))
+        self.assertIn('already pinned to bbbbbbbbbbbb', result)
+        self.assertIn('bump the version', result)
         self.assertEqual(api.writes, [])
 
     def test_annotated_tag_is_resolved_before_retrying(self):

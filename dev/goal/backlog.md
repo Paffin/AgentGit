@@ -47,3 +47,5 @@ additional repository-wide test infrastructure.
 Retry-budget recovery now follows complete task-scoped history and refuses
 truncated legacy history. This prevents unrelated agent work from granting extra
 attempts after restart. Included in the beta.4 candidate before publication.
+
+Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming and rich review threads remain open.

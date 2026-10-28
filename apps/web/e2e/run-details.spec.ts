@@ -22,7 +22,7 @@ test('a permanent run page follows completion and keeps its changes separate fro
     'First run output',
     { runId: first.runId },
   )
-  await openProposal(first.api, repo, {
+  const proposal = await openProposal(first.api, repo, {
     head: one.head,
     title: 'Parser validation from this run',
     taskId: task.id,
@@ -62,7 +62,20 @@ test('a permanent run page follows completion and keeps its changes separate fro
   await expect(
     page.getByText('Validation command exited with status 2.', { exact: true }),
   ).toBeVisible()
+  const results = page.getByRole('region', { name: 'Changes from this session' })
+  await expect(
+    results.getByRole('link', { name: 'Parser validation from this run', exact: true }),
+  ).toBeVisible()
+  await expect(
+    results.getByRole('link', { name: 'Unrelated change from another run', exact: true }),
+  ).toHaveCount(0)
   await page.screenshot({ path: info.outputPath('run-detail.png'), fullPage: true })
+  await results.getByRole('link', { name: 'Parser validation from this run', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/proposals/${proposal.id}$`))
+  await expect(
+    page.getByRole('heading', { name: 'Parser validation from this run', exact: true }),
+  ).toBeVisible()
+  await page.goto(url)
   await page.getByRole('link', { name: "View this run's change requests", exact: true }).click()
   await expect(
     page.getByRole('link', { name: 'Parser validation from this run', exact: true }),

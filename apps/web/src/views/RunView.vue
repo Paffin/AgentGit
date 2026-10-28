@@ -7,6 +7,7 @@ import { useAuth } from '@/stores/auth'
 import { usePrefs } from '@/stores/prefs'
 import { useRepoName } from '@/composables/useRepoName'
 import { useResource } from '@/composables/useResource'
+import { usePagedResource } from '@/composables/usePagedResource'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useLiveReload } from '@/composables/useLiveReload'
 import { useServerNow } from '@/composables/useNow'
@@ -49,6 +50,16 @@ const leases = useResource(
     api.agents.leases(repo.value, true, { signal, token: auth.token, quietUnauthenticated: true }),
   { watch: [...scope, () => run.data.value?.identity], enabled: () => !!run.data.value },
 )
+const changes = usePagedResource(
+  (cursor, signal) =>
+    api.proposals.list(
+      repo.value,
+      { author: run.data.value?.identity || '', page_size: 50, page_token: cursor },
+      { signal },
+    ),
+  [...scope, () => run.data.value?.identity],
+  () => !!run.data.value?.identity,
+)
 const reservations = computed(() =>
   (leases.data.value || []).filter((lease) => lease.holder === run.data.value?.identity),
 )
@@ -73,7 +84,7 @@ const changesLink = computed(() => ({
 }))
 usePageTitle(() => `${run.data.value?.agent || 'Agent'} run · ${props.id} · ${repo.value}`)
 async function refresh() {
-  await Promise.all([run.reload(), task.reload(), leases.reload()])
+  await Promise.all([run.reload(), task.reload(), leases.reload(), changes.reload()])
 }
 useLiveReload(['run', 'task', 'lease', 'proposal'], refresh)
 const heartbeatPoll = setInterval(() => {
@@ -153,6 +164,39 @@ onBeforeUnmount(() => clearInterval(heartbeatPoll))
           {{ run.data.value.summary || 'The agent has not provided a summary.' }}
         </p>
       </section>
+      <section aria-labelledby="changes-heading">
+        <h2 id="changes-heading">Changes from this session</h2>
+        <p class="muted">
+          Changes submitted by this exact session, including open, closed and integrated requests.
+          Open a change request to inspect its diff, checks and review before integration.
+        </p>
+        <ErrorState
+          v-if="changes.error.value"
+          compact
+          what="this session's change requests"
+          :error="changes.error.value"
+          @retry="changes.reload()"
+        />
+        <ul v-if="changes.data.value.length" class="change-list">
+          <li v-for="change in changes.data.value" :key="change.id">
+            <RouterLink :to="{ name: 'proposal', params: { ...routeParams, id: change.id } }">{{
+              change.title
+            }}</RouterLink>
+            <Badge size="sm" :tone="change.state === 'integrated' ? 'ok' : 'neutral'">{{
+              change.state
+            }}</Badge>
+            <span class="muted">→ {{ change.stream }}</span>
+          </li>
+        </ul>
+        <p v-else-if="changes.loading.value" role="status">Loading change requests…</p>
+        <p v-else-if="!changes.error.value" class="muted">
+          This session has not submitted any change requests.
+        </p>
+        <Button v-if="changes.next.value" :loading="changes.loading.value" @click="changes.more">
+          Load older change requests
+        </Button>
+        <RouterLink :to="changesLink">View this run's change requests</RouterLink>
+      </section>
       <RunOutput :repo="repo" :run-id="id" />
       <section aria-labelledby="task-heading">
         <h2 id="task-heading">Assigned task</h2>
@@ -171,13 +215,6 @@ onBeforeUnmount(() => clearInterval(heartbeatPoll))
             Connected orchestrators stop managed sessions after they observe task cancellation.
           </p>
         </template>
-      </section>
-      <section aria-labelledby="changes-heading">
-        <h2 id="changes-heading">Changes from this session</h2>
-        <RouterLink :to="changesLink">View this run's change requests</RouterLink>
-        <p class="muted">
-          Filtered by this exact session identity, including open, closed and integrated requests.
-        </p>
       </section>
       <section aria-labelledby="reservations-heading">
         <h2 id="reservations-heading">Current file reservations</h2>
@@ -241,6 +278,21 @@ dd {
 section {
   border-top: 1px solid var(--border);
   padding-top: var(--s-4);
+}
+.change-list {
+  list-style: none;
+  padding: 0;
+}
+.change-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  overflow-wrap: anywhere;
+}
+.change-list a {
+  min-width: 0;
 }
 .summary {
   white-space: pre-wrap;

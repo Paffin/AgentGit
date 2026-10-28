@@ -46,8 +46,8 @@ export interface ExecutorSetup {
 export function executorSetupProblem(input: ExecutorSetup): string | null {
   const serverProblem = serverAddressProblem(input.origin)
   if (serverProblem) return serverProblem
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/.test(input.agent))
-    return 'Use 1–48 letters, digits, dots, dashes or underscores for the agent name.'
+  if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(input.agent))
+    return 'Use 1–48 lowercase letters, digits, dashes or underscores for the agent name.'
   if (!input.command.trim() || input.command.includes('\0'))
     return 'Enter the executable installed on the executor host.'
   const argsProblem = argumentsProblem(input.arguments)

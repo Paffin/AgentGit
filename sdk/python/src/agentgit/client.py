@@ -25,6 +25,7 @@ from agentgit._generated.models import (
     Proposal,
     PutObjectResult,
     Repo,
+    SearchMatch,
     TreeEntry,
 )
 from agentgit._generated.namespaces import (
@@ -474,6 +475,16 @@ class AgentGitClient:
         max_items: int | None = ...,
         **params: Any,
     ) -> Iterator[DirEntry]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["tree.search"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> Iterator[SearchMatch]: ...
     def paginate(
         self,
         op_id: str,
@@ -763,6 +774,16 @@ class AsyncAgentGitClient:
         max_items: int | None = ...,
         **params: Any,
     ) -> AsyncIterator[DirEntry]: ...
+    @overload
+    def paginate(
+        self,
+        op_id: Literal["tree.search"],
+        /,
+        *,
+        options: CallOptions | None = ...,
+        max_items: int | None = ...,
+        **params: Any,
+    ) -> AsyncIterator[SearchMatch]: ...
     def paginate(
         self,
         op_id: str,

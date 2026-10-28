@@ -20,7 +20,14 @@ const page = (name: string, nextPageToken = '') => ({
 async function show() {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/repos/:owner/:name/files', component: FilesView }],
+    routes: [
+      { path: '/repos/:owner/:name/files', component: FilesView },
+      {
+        path: '/repos/:owner/:name/search',
+        name: 'code-search',
+        component: { template: '<div />' },
+      },
+    ],
   })
   await router.push('/repos/acme/demo/files?rev=main&path=old')
   const w = mount(FilesView, {

@@ -21,6 +21,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Update the workspace and fuzz Markdown parser lockfiles to pulldown-cmark 0.13.5, addressing RUSTSEC-2026-0414 in development tooling.
+
 - File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.
 
 - Diff line-number columns expand for large files, preventing old/new numbers from overlapping each other or the code. Keyboard scrolling remains available on narrow screens.

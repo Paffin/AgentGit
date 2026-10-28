@@ -207,6 +207,9 @@ describe('the tour', () => {
     const anc = await alice.history.ancestors({ repo, want: [head], have: [seedHead] });
     expect(anc.changeset_ids).toEqual([head]);
 
+    expect(
+      (await alice.tree.search({ repo, rev: 'main', query: 'c', path_prefix: 'b' })).matches.map((m) => m.path),
+    ).toEqual(['b/c.txt']);
     expect((await alice.tree.get({ repo, rev: 'main' })).total_entries).toBe(4);
     expect((await alice.tree.list({ repo, rev: 'main', path: 'b' })).entries.map((e) => e.name)).toEqual(['c.txt']);
     expect((await alice.tree.resolve({ repo, rev: 'main', path: 'a.txt' })).kind).toBe('file');

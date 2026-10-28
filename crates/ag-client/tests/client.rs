@@ -292,6 +292,10 @@ impl ObjectService for Fake {
 
 #[tonic::async_trait]
 impl TreeService for Fake {
+    async fn search(&self, _: Request<v1::SearchTreeRequest>) -> Result<Response<v1::SearchTreeResponse>, Status> {
+        Err(Status::unimplemented("search is outside this transport fixture"))
+    }
+
     async fn resolve_path(
         &self,
         _: Request<v1::ResolvePathRequest>,

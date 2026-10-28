@@ -209,6 +209,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/agents/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Enable or disable new runs for an agent */
+        patch: operations["agent.set_state"];
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/attestations": {
         parameters: {
             query?: never;
@@ -4585,6 +4602,19 @@ export interface components {
             /** @default  */
             tree_id: string;
         };
+        /** @description Controls admission of new runs. Existing runs, keys and role bindings are preserved. */
+        SetAgentStateRequest: {
+            /** @default false */
+            disabled: boolean;
+            /** @default false */
+            expected_disabled: boolean;
+            /** @default  */
+            idempotency_key: string;
+            /** @default  */
+            name: string;
+            /** @default  */
+            repo: string;
+        };
         SetPolicyRequest: {
             /** @default  */
             document: string;
@@ -5454,6 +5484,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutorPresence"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "agent.set_state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAgentStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
                 };
             };
             /** @description Error */

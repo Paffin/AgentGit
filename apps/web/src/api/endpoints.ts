@@ -448,6 +448,18 @@ export function createApi(c: ApiClient) {
 
       list: async (repo: string, o?: SessionOpts) =>
         (await c.get<{ agents: Agent[] }>(r(repo, '/agents'), undefined, o)).agents ?? [],
+      setState: (
+        repo: string,
+        name: string,
+        disabled: boolean,
+        expectedDisabled: boolean,
+        o?: SessionOpts,
+      ) =>
+        c.patch<Agent>(
+          r(repo, `/agents/${encodeURIComponent(name)}`),
+          { disabled, expected_disabled: expectedDisabled },
+          o,
+        ),
       register: (
         repo: string,
         body: { name: string; public_key: string; role?: string },

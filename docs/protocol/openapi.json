@@ -5078,6 +5078,32 @@
         },
         "type": "object"
       },
+      "SetAgentStateRequest": {
+        "description": "Controls admission of new runs. Existing runs, keys and role bindings are preserved.",
+        "properties": {
+          "disabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expected_disabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetPolicyRequest": {
         "properties": {
           "document": {
@@ -6497,6 +6523,77 @@
           }
         },
         "summary": "Report expiring executor connectivity",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/agents/{name}": {
+      "patch": {
+        "operationId": "agent.set_state",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Enable or disable new runs for an agent",
         "tags": [
           "Agent"
         ]

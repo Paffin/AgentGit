@@ -1180,6 +1180,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        patch,
+        "patch",
+        "/v1/repos/{owner}/{rname}/agents/{name}",
+        "agent.set_state",
+        "Agent",
+        "Enable or disable new runs for an agent",
+        v1::SetAgentStateRequest,
+        v1::Agent,
+        set_agent_state
+    );
+    route!(
+        r,
+        meta,
         get,
         "get",
         "/v1/repos/{owner}/{rname}/agents",

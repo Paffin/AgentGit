@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations bring the inventory to 155 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission bring the inventory to 156 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |
@@ -57,3 +57,5 @@ Line discussion entry: proposal diff gutters can quote a specific old/new line i
 Line-thread persistence: SQLite and PostgreSQL share schema 6. Exact source revisions remain GC roots, clients cannot forge stored line text, replies advance the resolution version, and concurrent resolution is rejected. Upgrade/rollback from published beta.4 and API/SDK/browser qualification are recorded with ADR-0025.
 
 Release readiness after `c7b860ef311e0121cd502abe1315cae43df36baf`: beta.5 is not published. Complete native discussion JSON contracts, synchronized deployment image defaults and Windows upload qualification before tagging. Web thread filtering and role-aware MCP feedback are implemented. Keep README installation instructions on the last published version until artifact verification.
+
+Per-agent run admission: operators can disable or re-enable new runs through Web UI, HTTP/gRPC and SDKs. Native CLI shares the transaction implementation. Existing runs, credentials and history are preserved; cancellation and credential revocation are separate operations. See ADR-0026.

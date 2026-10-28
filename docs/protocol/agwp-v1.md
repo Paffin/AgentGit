@@ -284,3 +284,17 @@ Both list operations use `page_size` (maximum 100) and `page_token`. Threads use
 creation-time keyset ordering; replies use increasing IDs. Tokens are scoped to
 the repository and owning proposal/thread. Thread resolution does not by itself
 approve a proposal or introduce an integration policy requirement.
+
+## Per-agent run admission (development)
+
+`agents.state` advertises `PATCH /v1/repos/{owner}/{rname}/agents/{name}`
+(`agent.set_state`, gRPC `AgentService.SetState`). It requires `agent.operate`.
+Send `disabled` and the observed `expected_disabled`; a mismatch returns
+`failed_precondition`. `Idempotency-Key` (or `idempotency_key`) replays the
+original response within the repository's idempotency retention period. The
+state comparison, audit record and `agent.state` event commit together.
+
+The existing `disabled` flag controls admission of new runs, checked in their
+creation transaction. Existing sessions and their credentials remain valid;
+this operation is not an emergency credential-revocation or process-kill API.
+See [ADR-0026](../adr/0026-agent-run-admission.md).

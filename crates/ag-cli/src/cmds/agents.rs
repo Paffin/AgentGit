@@ -197,19 +197,11 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
             })?;
         }
         AgentCmd::Disable { name } => {
-            meta.write(|tx| {
-                tx.agent_set_disabled(name, true)?;
-                tx.audit_append(ctx.me.as_str(), "agent.disable", name, &json!({}))?;
-                Ok(())
-            })?;
+            registry::set_disabled(meta, name, true, None, ctx.me.as_str())?;
             ctx.done(&json!({"disabled": name}), || format!("Disabled {name}"))?;
         }
         AgentCmd::Enable { name } => {
-            meta.write(|tx| {
-                tx.agent_set_disabled(name, false)?;
-                tx.audit_append(ctx.me.as_str(), "agent.enable", name, &json!({}))?;
-                Ok(())
-            })?;
+            registry::set_disabled(meta, name, false, None, ctx.me.as_str())?;
             ctx.done(&json!({"enabled": name}), || format!("Enabled {name}"))?;
         }
     }

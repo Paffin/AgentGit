@@ -53,7 +53,9 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
-    /// Expiring operator reports distinguish connected executors from registered keys.
+    /// Operators can enable or disable new runs for individual registered agents.
+    pub const AGENT_STATE: &str = "agents.state";
+    /// Expiring executor reports.
     pub const EXECUTOR_PRESENCE: &str = "agents.executor_presence";
     /// Explicit queued task assignment.
     pub const TASK_ASSIGNMENT: &str = "tasks.assignment";
@@ -97,6 +99,7 @@ pub mod features {
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,
+        AGENT_STATE,
     ];
 }
 

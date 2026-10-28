@@ -204,6 +204,7 @@ __all__ = [
     "SearchMatch",
     "SearchTreeRequest",
     "SearchTreeResponse",
+    "SetAgentStateRequest",
     "SetPolicyRequest",
     "SetTaskSchedulingRequest",
     "StartRunRequest",
@@ -2025,6 +2026,16 @@ class SearchTreeResponse:
     skipped_binary: int = field(default=0)
     skipped_large: int = field(default=0)
     tree_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SetAgentStateRequest:
+    """Controls admission of new runs. Existing runs, keys and role bindings are preserved."""
+    disabled: bool = field(default=False)
+    expected_disabled: bool = field(default=False)
+    idempotency_key: str = field(default="")
+    name: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)

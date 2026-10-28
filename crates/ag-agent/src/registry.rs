@@ -135,6 +135,41 @@ pub struct Run {
     pub identity: Identity,
 }
 
+/// Changes admission of new runs without terminating existing sessions.
+pub fn set_disabled(
+    meta: &Meta,
+    name: &str,
+    disabled: bool,
+    expected: Option<bool>,
+    actor: &str,
+) -> Result<AgentRow, AgentError> {
+    meta.write(|tx| set_disabled_in(tx, name, disabled, expected, actor)).map_err(|e| match e {
+        MetaError::Invalid(message) => AgentError::Conflict(message),
+        other => AgentError::Meta(other),
+    })
+}
+
+/// Transactional state change shared by API idempotency and the native CLI.
+pub fn set_disabled_in(
+    tx: &Tx<'_>,
+    name: &str,
+    disabled: bool,
+    expected: Option<bool>,
+    actor: &str,
+) -> Result<AgentRow, MetaError> {
+    let mut row = tx.agent(name)?.ok_or_else(|| MetaError::NotFound(format!("agent '{name}'")))?;
+    if expected.is_some_and(|value| value != row.disabled) {
+        return Err(MetaError::Invalid("agent state changed; refresh before trying again".into()));
+    }
+    if row.disabled != disabled {
+        tx.agent_set_disabled(name, disabled)?;
+        tx.audit_append(actor, if disabled { "agent.disable" } else { "agent.enable" }, name, &json!({}))?;
+        tx.outbox_push("agent.state", &json!({"agent": name, "disabled": disabled}))?;
+        row.disabled = disabled;
+    }
+    Ok(row)
+}
+
 /// Starts a run of an agent, optionally bound to a task (which must be ready).
 pub fn start_run(meta: &Meta, agent: &str, task_id: Option<&str>) -> Result<Run, AgentError> {
     start_run_with(meta, agent, task_id, |_, _| Ok(())).map(|(run, ())| run)
@@ -150,44 +185,49 @@ pub fn start_run_with<R>(
     also: impl Fn(&Tx<'_>, &Run) -> Result<R, MetaError>,
 ) -> Result<(Run, R), AgentError> {
     let run_id = random_id("run")?;
-    let agent_row = meta.read(|tx| tx.agent(agent))?.ok_or_else(|| AgentError::NotFound(format!("agent '{agent}'")))?;
-    if agent_row.disabled {
-        return Err(AgentError::Conflict(format!("agent '{agent}' is disabled")));
+    meta.write(|tx| {
+        let agent_row = admitted_agent(tx, agent)?;
+        let identity = Identity::new(format!("{}#{}", agent_row.identity, run_id))
+            .map_err(|e| MetaError::Invalid(e.to_string()))?;
+        let run = Run { run_id: run_id.clone(), agent: agent.to_string(), identity };
+        claim_run_task(tx, task_id, &agent_row.identity)?;
+        tx.run_start(&run.run_id, agent, task_id)?;
+        tx.audit_append(run.identity.as_str(), "run.start", &run.run_id, &json!({"task": task_id}))?;
+        let extra = also(tx, &run)?;
+        Ok((run, extra))
+    })
+    // A task that cannot be claimed (owned by somebody else, blocked, finished, or already being worked on) is a
+    // conflict with the state of things, not a malformed request.
+    .map_err(run_state_error)
+}
+
+fn run_state_error(error: MetaError) -> AgentError {
+    match error {
+        MetaError::Invalid(message) => AgentError::Conflict(message),
+        MetaError::NotFound(message) => AgentError::NotFound(message),
+        other => AgentError::Meta(other),
     }
-    let identity =
-        Identity::new(format!("{}#{}", agent_row.identity, run_id)).map_err(|e| AgentError::Invalid(e.to_string()))?;
-    let run = Run { run_id, agent: agent.to_string(), identity };
-    let extra = meta
-        .write(|tx| {
-            if let Some(t) = task_id {
-                if crate::scheduling::in_tx(tx)?.paused {
-                    return Err(MetaError::Invalid("new task runs are paused by a repository operator".into()));
-                }
-                // Somebody else's task, a finished one, one that waits for others: refused here, as ever.
-                crate::tasks::claim_in_tx(tx, t, &agent_row.identity)?;
-                // And a task is worked on by one run at a time: a second run of the same agent (same owner, so the
-                // claim above allows it) would be a second pair of hands on the same files. It starts once the first
-                // run has ended - finished by its agent, or reaped by an operator after it went silent. (The error
-                // rolls the claim back with everything else.)
-                if let Some(active) = tx.runs_running_for_task(t)?.first() {
-                    return Err(MetaError::Invalid(format!(
-                        "task '{t}' is already being worked on by run '{}'",
-                        active.run_id
-                    )));
-                }
-            }
-            tx.run_start(&run.run_id, agent, task_id)?;
-            tx.audit_append(run.identity.as_str(), "run.start", &run.run_id, &json!({"task": task_id}))?;
-            also(tx, &run)
-        })
-        // A task that cannot be claimed (owned by somebody else, blocked, finished, or already being worked on) is a
-        // conflict with the state of things, not a malformed request.
-        .map_err(|e| match e {
-            MetaError::Invalid(m) => AgentError::Conflict(m),
-            MetaError::NotFound(m) => AgentError::NotFound(m),
-            other => AgentError::Meta(other),
-        })?;
-    Ok((run, extra))
+}
+
+fn admitted_agent(tx: &Tx<'_>, agent: &str) -> Result<AgentRow, MetaError> {
+    let row = tx.agent(agent)?.ok_or_else(|| MetaError::NotFound(format!("agent '{agent}'")))?;
+    if row.disabled {
+        return Err(MetaError::Invalid(format!("agent '{agent}' is disabled")));
+    }
+    Ok(row)
+}
+
+fn claim_run_task(tx: &Tx<'_>, task_id: Option<&str>, identity: &str) -> Result<(), MetaError> {
+    let Some(task) = task_id else { return Ok(()) };
+    if crate::scheduling::in_tx(tx)?.paused {
+        return Err(MetaError::Invalid("new task runs are paused by a repository operator".into()));
+    }
+    crate::tasks::claim_in_tx(tx, task, identity)?;
+    // A task is worked on by one run at a time, even when both runs have the same agent.
+    if let Some(active) = tx.runs_running_for_task(task)?.first() {
+        return Err(MetaError::Invalid(format!("task '{task}' is already being worked on by run '{}'", active.run_id)));
+    }
+    Ok(())
 }
 
 /// Records a heartbeat.

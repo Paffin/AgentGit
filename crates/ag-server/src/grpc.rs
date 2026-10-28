@@ -460,6 +460,9 @@ impl IntegrationService for Grpc {
 
 #[tonic::async_trait]
 impl AgentService for Grpc {
+    async fn set_state(&self, request: Request<v1::SetAgentStateRequest>) -> Result<Response<v1::Agent>, Status> {
+        unary!(self, request, "agent.set_state", set_agent_state)
+    }
     async fn register(&self, request: Request<v1::RegisterAgentRequest>) -> Result<Response<v1::Agent>, Status> {
         unary!(self, request, "agent.register", register_agent)
     }

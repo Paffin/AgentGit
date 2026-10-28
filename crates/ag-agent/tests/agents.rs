@@ -683,3 +683,17 @@ fn executor_reports_survive_reopen_and_expire_without_renewal() {
     assert!(reopened.read(|tx| Ok(tx.now().as_millis() >= stored.expires_at_ms)).unwrap());
     assert!(ag_agent::executor::report(&e.meta, "bot", "command", 2, 3, 30, "service:orchestrator").is_err());
 }
+
+#[test]
+fn disabling_an_agent_is_guarded_and_keeps_existing_runs() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "bot", "agent", "user:admin").unwrap();
+    let run = registry::start_run(&e.meta, "bot", None).unwrap();
+    registry::set_disabled(&e.meta, "bot", true, Some(false), "user:admin").unwrap();
+    assert!(registry::start_run(&e.meta, "bot", None).is_err());
+    assert_eq!(e.meta.read(|tx| tx.run(&run.run_id)).unwrap().unwrap().status, "running");
+    assert!(registry::set_disabled(&e.meta, "bot", false, Some(false), "user:admin").is_err());
+    assert!(e.meta.read(|tx| tx.agent("bot")).unwrap().unwrap().disabled);
+    registry::set_disabled(&e.meta, "bot", false, Some(true), "user:admin").unwrap();
+    registry::start_run(&e.meta, "bot", None).unwrap();
+}

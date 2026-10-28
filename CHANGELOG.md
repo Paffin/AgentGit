@@ -21,6 +21,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Concurrent first requests on a replica publish independent temporary repository configurations atomically, preventing truncated JSON and missing-file errors when a shared repository is first opened.
+
 - Virtualized code and event lists batch scroll updates per frame, preserving keyboard scrolling and avoiding Firefox scroll-linked positioning warnings.
 
 - Code search clears results when the session changes, pins requests to the initiating credential, preserves literal query spaces and emphasizes matching text.

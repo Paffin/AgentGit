@@ -71,6 +71,22 @@ fn missing_local_data(name: &str) -> ApiError {
     .with_retry_after(1000)
 }
 
+fn publish_local_config(ag: &Path, text: &str) -> ApiResult<()> {
+    std::fs::create_dir_all(ag).map_err(ApiError::internal)?;
+    // Each request owns its temporary file: a shared PID name lets another thread truncate a
+    // file already renamed to the marker. Readers must see a complete configuration or none.
+    use std::io::Write;
+    let tmp = ag.join(format!("config.{}.tmp", ag_crypto::random_id("write").map_err(ApiError::internal)?));
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(ApiError::internal)?;
+    let written = file.write_all(text.as_bytes()).and_then(|()| file.sync_all());
+    drop(file);
+    let published = written.and_then(|()| ag_storage::fsutil::rename_replace(&tmp, &ag.join("config.json")));
+    if published.is_err() {
+        let _ = ag_storage::fsutil::remove_file(&tmp);
+    }
+    published.map_err(ApiError::internal)
+}
+
 /// Validates `owner/name` (exactly two segments) and returns the pieces.
 pub fn parse_repo_name(name: &str) -> ApiResult<(&str, &str)> {
     let invalid = || {
@@ -328,6 +344,14 @@ impl RepoManager {
         if marker.is_file() {
             return Ok(());
         }
+        let text = self.shared_config_text(row)?;
+        let ag = dir.join(".ag");
+        publish_local_config(&ag, &text)?;
+        tracing::info!(repo = %row.name, "opened a repository created by another replica");
+        Ok(())
+    }
+
+    fn shared_config_text(&self, row: &RepoRow) -> ApiResult<String> {
         let text = if row.config_json.is_empty() {
             // Registered before the registry kept configurations: rebuild what `create` would have written.
             let template = self.storage.as_ref().ok_or_else(|| missing_local_data(&row.name))?;
@@ -348,15 +372,7 @@ impl RepoManager {
         if !shared {
             return Err(missing_local_data(&row.name));
         }
-        let ag = dir.join(".ag");
-        std::fs::create_dir_all(&ag).map_err(ApiError::internal)?;
-        // Write-then-rename: a concurrent request on this replica sees the whole file or none.
-        let tmp = ag.join(format!("config.json.{}.tmp", std::process::id()));
-        std::fs::write(&tmp, text.as_bytes())
-            .and_then(|()| std::fs::rename(&tmp, &marker))
-            .map_err(ApiError::internal)?;
-        tracing::info!(repo = %row.name, "opened a repository created by another replica");
-        Ok(())
+        Ok(text)
     }
 
     /// Returns the pool for `name`, opening the repository on first use.
@@ -484,6 +500,55 @@ mod tests {
             _ => unreachable!(),
         }
         assert_eq!(derive_storage(&StorageConfig::default(), "acme/web"), StorageConfig::default());
+    }
+
+    #[test]
+    fn concurrent_first_reads_publish_only_complete_local_markers() {
+        let dir = tempfile::tempdir().unwrap();
+        let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let control = Arc::new(Control::open_in_memory(clock.clone()).unwrap());
+        let mgr = RepoManager::new(dir.path(), control, clock, 2, 1, None, Default::default());
+        for round in 0..4 {
+            let name = format!("acme/shared-{round}");
+            let config_json = serde_json::json!({
+                "format": 1, "namespace": name, "default_stream": "main",
+                "storage": {
+                    "meta": {"kind": "postgres", "url_env": "UNUSED_DATABASE", "schema": "test"},
+                    "objects": {"kind": "s3", "endpoint": "http://127.0.0.1:9",
+                        "region": "test", "bucket": "unused", "prefix": "x".repeat(65536)}
+                }
+            })
+            .to_string();
+            let row = RepoRow {
+                name: name.clone(),
+                namespace: name,
+                default_stream: "main".into(),
+                description: String::new(),
+                created_at_ms: 0,
+                created_by: "user:test".into(),
+                quota: Default::default(),
+                object_bytes: 0,
+                config_json,
+            };
+            let gate = std::sync::Barrier::new(16);
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..16)
+                    .map(|_| {
+                        scope.spawn(|| {
+                            gate.wait();
+                            mgr.ensure_local_marker(&row).expect("concurrent marker publication");
+                            let actual = std::fs::read_to_string(mgr.dir(&row.name).join(".ag/config.json")).unwrap();
+                            assert_eq!(actual, row.config_json, "a reader must see the entire configuration");
+                        })
+                    })
+                    .collect();
+                for worker in workers {
+                    worker.join().unwrap();
+                }
+            });
+            let entries = std::fs::read_dir(mgr.dir(&row.name).join(".ag")).unwrap().count();
+            assert_eq!(entries, 1, "temporary files are removed after publication");
+        }
     }
 
     #[test]

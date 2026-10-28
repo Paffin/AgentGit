@@ -21,7 +21,7 @@ All original 142 matrix rows remain in scope; the added search, scheduling and r
 
 Next product priority: finish the browser path from a human request to bounded agent execution, then inspect the exact candidate checks, review and integration result. The issue tracker is the intake and traceability layer, not the defining product. Provider migration supports adoption of this workflow. Do not substitute issue-tracker breadth or CI maintenance for agent-native execution controls.
 
-Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`, 2026-10-28. The published beta.2 release is available, but does not imply that these stages are complete.
+Baseline for this resumed work: main `549555c82219c6465e59b4d16a3d5a9d3bea47f9`, 2026-10-28. The published beta.4 release is available, but does not imply that these stages are complete.
 
 Queued assignment: implemented on main. Task creation and issue handoff can reserve a registered agent atomically. Creator/operator edits use expected-owner comparison and cannot change running work. Dispatch respects the reserved executor; browser executor setup is implemented.
 
@@ -55,3 +55,5 @@ Failed-run follow-up: the browser distinguishes active tasks (inspect existing e
 Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. General comments keep that contextual quote path; development servers now additionally provide durable line threads with replies and versioned resolution (schema 6). Suggestions and reviewer assignment remain open.
 
 Line-thread persistence: SQLite and PostgreSQL share schema 6. Exact source revisions remain GC roots, clients cannot forge stored line text, replies advance the resolution version, and concurrent resolution is rejected. Upgrade/rollback from published beta.4 and API/SDK/browser qualification are recorded with ADR-0025.
+
+Release readiness after `c7b860ef311e0121cd502abe1315cae43df36baf`: beta.5 is not published. Complete native discussion JSON contracts, synchronized deployment image defaults and Windows upload qualification before tagging. Web thread filtering and role-aware MCP feedback are implemented. Keep README installation instructions on the last published version until artifact verification.

@@ -37,7 +37,9 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     a.write("README.md", "# demo\n");
     as_user("user:alice", &alice, &["snapshot", "-m", "first"]).ok();
     let p1 = r.rec("push", &as_user("user:alice", &alice, &["--json", "push", "-t", "first"]).ok());
+    let head = p1["proposal"]["head"].as_str().unwrap().to_string();
     let p1 = p1["proposal"]["id"].as_str().unwrap().to_string();
+    record_discussions(&mut r, &a, &alice, &p1, &head);
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
     r.rec("remote proposal", &as_user("user:alice", &alice, &["--json", "remote", "proposal", &p1]).ok());
     r.rec("remote prepare", &as_user("user:carol", &carol, &["--json", "remote", "prepare", &p1]).code_is(3));
@@ -103,4 +105,38 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     );
 
     check_golden("json-shapes-remote.json", &r.shapes, &[]);
+}
+
+fn record_discussions(r: &mut Recorder, a: &Ag, token: &str, proposal: &str, head: &str) {
+    let run = |args: &[&str]| a.run_env("user:alice", args, &[("AG_TOKEN", token)]);
+    let thread = r.rec(
+        "remote discussion start",
+        &run(&[
+            "--json",
+            "remote",
+            "discussion",
+            "start",
+            proposal,
+            "--head",
+            head,
+            "--path",
+            "README.md",
+            "--line",
+            "1",
+            "-m",
+            "Explain this heading",
+        ])
+        .ok(),
+    );
+    let id = thread["id"].as_str().unwrap();
+    r.rec("remote discussion list", &run(&["--json", "remote", "discussion", "list", proposal]).ok());
+    r.rec(
+        "remote discussion reply",
+        &run(&["--json", "remote", "discussion", "reply", proposal, id, "-m", "This identifies the project"]).ok(),
+    );
+    r.rec("remote discussion replies", &run(&["--json", "remote", "discussion", "replies", proposal, id]).ok());
+    r.rec(
+        "remote discussion resolve",
+        &run(&["--json", "remote", "discussion", "resolve", proposal, id, "--expected-version", "2"]).ok(),
+    );
 }

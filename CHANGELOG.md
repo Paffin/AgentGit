@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.5] - 2026-10-28
+
+**Upgrade:** repository metadata moves to schema 6. Back up before upgrading; restoring the pre-upgrade backup is required to return to an older binary. Line-discussion revisions are retained by GC and checked by `ag verify`.
+
 ### Fixed
 
 - Filtering changed files or hiding viewed files preserves each file’s original diff anchor, so navigation links do not change their target when the visible list shrinks.
@@ -590,10 +594,12 @@ Local mode trusts the local user; no sandbox for `ag validate run`; flat tree ma
 detection; no network server. See [ROADMAP.md](ROADMAP.md) and
 [docs/architecture/security.md](docs/architecture/security.md).
 
-[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.4...HEAD
+[Unreleased]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.5...HEAD
 [0.3.0-beta.3]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.3
 [0.3.0-beta.2]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.2
 [0.2.0-rc.1]: https://github.com/Paffin/AgentGit/releases/tag/v0.2.0-rc.1
 [0.1.0]: https://github.com/Paffin/AgentGit/releases/tag/v0.1.0
 
 [0.3.0-beta.4]: https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4
+
+[0.3.0-beta.5]: https://github.com/Paffin/AgentGit/compare/v0.3.0-beta.4...v0.3.0-beta.5

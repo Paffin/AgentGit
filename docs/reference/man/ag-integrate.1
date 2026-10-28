@@ -1,10 +1,10 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH ag-integrate 1  "integrate 0.3.0-beta.2" 
+.TH ag-integrate 1  "integrate 0.3.0-beta.3"
 .SH NAME
 ag\-integrate \- Integrate a proposal into its stream
 .SH SYNOPSIS
-\fBag integrate\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-key\fR] [\fB\-\-as\fR] [\fB\-\-fencing\-token\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIPROPOSAL\fR> 
+\fBag integrate\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-key\fR] [\fB\-\-as\fR] [\fB\-\-fencing\-token\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIPROPOSAL\fR>
 .SH DESCRIPTION
 Integrate a proposal into its stream
 .SH OPTIONS
@@ -48,4 +48,4 @@ The stream is untouched unless the exit code is 0. Examples:
   ag integrate prop_8f3a1c \-\-fencing\-token 7      present the token of your exclusive lease
   ag \-\-json integrate prop_8f3a1c                 stable blocker codes for scripts and agents
 .SH VERSION
-v0.3.0\-beta.2
+v0.3.0\-beta.3

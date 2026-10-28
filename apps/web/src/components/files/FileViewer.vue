@@ -24,6 +24,7 @@ const props = defineProps<{
   /** The person may edit here: they hold a writing role and `rev` is a branch (so a change request has a target). */
   canEdit?: boolean
   executable?: boolean
+  focusLine?: number
 }>()
 /** Editing the text in place; leaving the file ends it. */
 const editing = ref(false)
@@ -225,7 +226,13 @@ onBeforeUnmount(() => {
         :rev="file.data.value!.revision"
         :path="path"
       />
-      <CodeBlock v-else :code="content.text" :label="`Contents of ${path}`" max-height="70vh" />
+      <CodeBlock
+        v-else
+        :code="content.text"
+        :focus-line="focusLine"
+        :label="`Contents of ${path}`"
+        max-height="70vh"
+      />
     </template>
   </div>
 </template>

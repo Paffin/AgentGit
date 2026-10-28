@@ -462,6 +462,40 @@ message GetTreeResponse {
   uint64 total_entries = 4;
 }
 
+// Literal line search in an immutable tree. Binary and >1 MiB files are skipped and counted.
+message SearchTreeRequest {
+  string repo = 1;
+  string rev = 2;
+  // Non-empty UTF-8 literal, at most 256 bytes, without newlines. No regex or execution.
+  string query = 3;
+  bool case_sensitive = 4;
+  // Optional file/directory prefix. Not a glob.
+  string path_prefix = 5;
+  // Matches per page: default 50, maximum 100.
+  uint32 page_size = 6;
+  // Bound to repository, tree, query, case mode and prefix. Reuse the returned rev.
+  string page_token = 7;
+}
+
+message SearchMatch {
+  string path = 1;
+  uint32 line = 2;
+  // Bounded UTF-8 excerpt around the first match; ellipses mark shortened lines.
+  string text = 3;
+}
+
+message SearchTreeResponse {
+  string rev = 1;
+  string tree_id = 2;
+  repeated SearchMatch matches = 3;
+  // May be present even with no matches: each request scans at most 1000 files / 16 MiB.
+  string next_page_token = 4;
+  uint32 files_scanned = 5;
+  uint32 skipped_binary = 6;
+  uint32 skipped_large = 7;
+  uint64 scanned_bytes = 8;
+}
+
 message DiffRequest {
   string repo = 1;
   string from = 2;
@@ -1608,6 +1642,7 @@ service TreeService {
   rpc ResolvePath(ResolvePathRequest) returns (ResolvePathResponse);
   rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
   rpc GetTree(GetTreeRequest) returns (GetTreeResponse);
+  rpc Search(SearchTreeRequest) returns (SearchTreeResponse);
   rpc Diff(DiffRequest) returns (DiffResponse);
   rpc GetFile(GetFileRequest) returns (stream ObjectChunk);
 }

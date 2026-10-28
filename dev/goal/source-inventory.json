@@ -1,8 +1,8 @@
 [
   {
     "path": "README.md",
-    "sha256": "3d00214bb41b43f2aed6a46ed3ef5589b02045e815250ca97bded0ba3a3a4dab",
-    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
+    "sha256": "d7172c0374156fc8753d6a2135007dc50681aad6627322db4ab421c38579e722",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   },
   {
     "path": "ROADMAP.md",
@@ -11,8 +11,8 @@
   },
   {
     "path": "CHANGELOG.md",
-    "sha256": "6733aa926b0c39abb237a027e38580e1aa1bf36aaf1045e1b43ab3e5ef61ffa7",
-    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
+    "sha256": "4366760ff4e10f13b9e457326266f3d828694ff225c6ce6299e115b25dcc4884",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   },
   {
     "path": "docs/README.md",
@@ -81,8 +81,8 @@
   },
   {
     "path": "docs/protocol/agwp-v1.md",
-    "sha256": "34a354d67a710afb68cee660181bcf10ac7ce3eed4b0893aa2e6b3d1370f6a64",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "8644b80c29525c38c9505af7d60935298d704410b3b55742256d748dbdb46906",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   },
   {
     "path": "docs/protocol/README.md",
@@ -186,8 +186,8 @@
   },
   {
     "path": "docs/guides/web-ui.md",
-    "sha256": "10932401549d7a35d976e6bbd642b00a1a4c602352ebd482e1013fef02140a19",
-    "review": "2026-10-28 scoped update after review/task integration; unreleased features and bounded related-work history distinguished from published beta.2"
+    "sha256": "9efe2b82e07668dbfad192254053fdf36d4e620bce784f0c0946b3c64562de63",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   },
   {
     "path": "docs/guides/remote.md",
@@ -236,8 +236,8 @@
   },
   {
     "path": "docs/guides/sdks.md",
-    "sha256": "9f3390f3db64da76057e802d8644e7b9e2972d88723ff4c33d8ee7eeee2a0985",
-    "review": "inventory only; detailed review not claimed"
+    "sha256": "4db6ef5a93547d463e18d2a106b7add833420c18171a5d8a5a99f681124778d3",
+    "review": "2026-10-28 scoped search SDK continuation contract: reuse the resolved immutable revision"
   },
   {
     "path": "docs/operations/troubleshooting.md",
@@ -376,8 +376,8 @@
   },
   {
     "path": "docs/architecture/adr-traceability.md",
-    "sha256": "45dddfab4a09dde6cdd9c11cd5fd704993ea2cad5b7316cbde61a7ff7e3bfc80",
-    "review": "2026-10-28 scoped review: published beta2, editor/CI behavior and explicit qualification limits; no complete historical-claim audit"
+    "sha256": "fed743b8469b5cc27ad1711b28ca82d5ea4d20910682227afe3cf4ab6169cf2f",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   },
   {
     "path": "docs/architecture/security.md",
@@ -548,5 +548,15 @@
     "path": "dev/goal/coverage.csv",
     "sha256": "bd019d94cb4b1333e811bbddc44da97c1fb94cd204009bad23dc41c96ca398ce",
     "review": "2026-10-28 updated qualification scope; matrix gaps retained"
+  },
+  {
+    "path": "README.ru.md",
+    "sha256": "ce5eff357d7d6efcba8956c23da5daf9897354cb5249c19b4a8525a6bb6299be",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
+  },
+  {
+    "path": "docs/adr/0015-bounded-revision-code-search.md",
+    "sha256": "2996ca525042b9d249cb2cedb656721d767037f6e453e1cc923ab693ecd686a6",
+    "review": "2026-10-28 scoped combined task and bounded code-search review; existing unqualified areas remain explicit"
   }
 ]

@@ -101,6 +101,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'History' },
       },
       {
+        path: 'search',
+        name: 'code-search',
+        component: () => import('@/views/CodeSearchView.vue'),
+        meta: { title: 'Search code' },
+      },
+      {
         path: 'files',
         name: 'files',
         component: () => import('@/views/FilesView.vue'),

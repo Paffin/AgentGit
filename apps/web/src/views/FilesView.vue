@@ -173,6 +173,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
     <div class="head">
       <div>
         <h1>Files</h1>
+        <RouterLink
+          :to="{ name: 'code-search', params: route.params, query: { rev: rev || undefined } }"
+          >Search code</RouterLink
+        >
         <p class="muted">
           Files at <code class="mono">{{ rev || '…' }}</code
           >.
@@ -298,6 +302,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
           :repo="repo"
           :rev="rev"
           :path="path"
+          :focus-line="
+            Number.isSafeInteger(Number(route.query.line)) && Number(route.query.line) > 0
+              ? Number(route.query.line)
+              : undefined
+          "
           :can-edit="canEdit"
           :executable="where.data.value?.entry?.executable === true"
         />

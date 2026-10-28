@@ -468,6 +468,12 @@ provenance vectors that [`sdk/testdata/gen_signing_vectors.py`](../../sdk/testda
 only `json` and OpenSSL (both SDKs reproduce the signatures bit for bit), and by a live server that accepts a valid
 record and refuses a tampered one.
 
+## Content search at one revision
+
+Both generated HTTP SDKs expose `tree.search`. Start with a branch or changeset in `rev` and a literal `query`; optional `path_prefix` and `case_sensitive` refine it. For each continuation, reuse the first response's resolved `rev`, the same search inputs and the returned `next_page_token`. A generic pagination helper should be started with an already-resolved immutable revision. A changed branch or query is rejected instead of mixing snapshots.
+
+A page can have no matches and still contain a continuation token because scanning is bounded. Read the `skipped_binary` and `skipped_large` counters before treating the result as exhaustive. See the [protocol contract](../protocol/agwp-v1.md#literal-content-search) for the exact limits.
+
 ## Regenerating the types
 
 The messages come from `docs/protocol/openapi.json`, which `ag-server` serves at `/openapi.json` and a Rust test keeps in

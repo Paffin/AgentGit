@@ -174,6 +174,9 @@ from agentgit._generated.models import (
     RunQueueRequest,
     RunQueueResponse,
     RunSpec,
+    SearchMatch,
+    SearchTreeRequest,
+    SearchTreeResponse,
     SetPolicyRequest,
     StartRunRequest,
     Stream,
@@ -1424,6 +1427,21 @@ class TreeApi:
     ) -> ResolvePathResponse:
         """What exists at a path (`GET /v1/repos/{owner}/{rname}/tree/resolve`, operation `tree.resolve`)."""
         return self._c._call("tree.resolve", {"repo": repo, "path": path, "rev": rev}, options, ResolvePathResponse)
+
+    def search(
+        self,
+        *,
+        repo: str,
+        case_sensitive: bool | None = None,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        path_prefix: str | None = None,
+        query: str | None = None,
+        rev: str | None = None,
+        options: CallOptions | None = None,
+    ) -> SearchTreeResponse:
+        """Literal content search at a revision, with bounded resumable scanning (`GET /v1/repos/{owner}/{rname}/search`, operation `tree.search`)."""
+        return self._c._call("tree.search", {"repo": repo, "case_sensitive": case_sensitive, "page_size": page_size, "page_token": page_token, "path_prefix": path_prefix, "query": query, "rev": rev}, options, SearchTreeResponse)
 
 
 
@@ -2729,6 +2747,21 @@ class AsyncTreeApi:
     ) -> ResolvePathResponse:
         """What exists at a path (`GET /v1/repos/{owner}/{rname}/tree/resolve`, operation `tree.resolve`)."""
         return await self._c._call("tree.resolve", {"repo": repo, "path": path, "rev": rev}, options, ResolvePathResponse)
+
+    async def search(
+        self,
+        *,
+        repo: str,
+        case_sensitive: bool | None = None,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        path_prefix: str | None = None,
+        query: str | None = None,
+        rev: str | None = None,
+        options: CallOptions | None = None,
+    ) -> SearchTreeResponse:
+        """Literal content search at a revision, with bounded resumable scanning (`GET /v1/repos/{owner}/{rname}/search`, operation `tree.search`)."""
+        return await self._c._call("tree.search", {"repo": repo, "case_sensitive": case_sensitive, "page_size": page_size, "page_token": page_token, "path_prefix": path_prefix, "query": query, "rev": rev}, options, SearchTreeResponse)
 
 
 

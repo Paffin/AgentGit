@@ -11,6 +11,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Permanent task pages connect prerequisites, dependant tasks, agent sessions and change requests. Add prerequisites from the browser and confirm completion/cancellation with their consequences explained. Coordination tabs survive reloads.
 
+- Server-side literal code search over HTTP and gRPC, with revision-bound continuation, folder filters, UTF-8-safe snippets and explicit binary/large-file exclusions. Web results open the searched revision at the matching line; generated TypeScript and Python SDKs expose the operation.
+
 - A multi-file browser editor stages text edits, additions, renames and deletions in one change request, with a shared preview and account/repository/branch-scoped tab recovery.
 
 - Review drafts preserve comments, decisions and inspected heads across page reloads in the same tab, separately per account and proposal. Review submission retains its initiating credential and offers reauthentication after expiry.

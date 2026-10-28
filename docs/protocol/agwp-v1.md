@@ -227,3 +227,9 @@ that is not a number (`after_seq=abc`, a bad `Last-Event-ID`) is `invalid_argume
 ### Review head precondition
 
 Servers advertising `proposals.review_head` accept `expected_head` on review requests. A nonempty value is an exact changeset ID. The server compares it with the proposal head in the same metadata write transaction as the review and audit insertion; a mismatch returns `failed_precondition` (HTTP 412) and creates neither. An empty value preserves legacy behavior. Negotiate the capability before relying on the precondition: older servers may ignore an unknown JSON or protobuf field. This does not add idempotency to reviews. See [ADR-0014](../adr/0014-review-head-precondition.md).
+
+### Literal content search
+
+Servers advertising `tree.search` support `TreeService.Search` and HTTP `GET /v1/repos/{owner}/{rname}/search` under `tree.read` authorization. Parameters: `rev`, `query`, optional `case_sensitive`, file/directory `path_prefix`, `page_size` (default 50, maximum 100), and `page_token`.
+
+Responses include the resolved `rev`, `tree_id`, matching `path`/1-based `line`/bounded `text`, `next_page_token`, and per-page `files_scanned`, `scanned_bytes`, `skipped_binary`, `skipped_large`. Continue with the returned immutable `rev` and unchanged search inputs. A continuation token is invalid for a different repository, tree, query, case mode or prefix. A token can be returned even if the page contains no matches, because each request scans at most 1000 files and 16 MiB. Invalid UTF-8/NUL-containing files and files over 1 MiB are skipped. See [ADR 0015](../adr/0015-bounded-revision-code-search.md).

@@ -51,6 +51,9 @@ pub mod features {
     /// Operators can finish tasks and reap stale runs (`agent.operate`, `ReapRuns`).
     pub const AGENTS_OPERATE: &str = "agents.operate";
 
+    /// Bounded literal content search with tree-bound continuation tokens.
+    pub const TREE_SEARCH: &str = "tree.search";
+
     /// Review submission can atomically require the exact head inspected by the caller.
     pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
 
@@ -66,6 +69,7 @@ pub mod features {
         AUTH_DELEGATION,
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
+        TREE_SEARCH,
     ];
 }
 

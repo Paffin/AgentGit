@@ -109,3 +109,8 @@ NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (
 ## ADR-0014 — reviewed-head precondition
 
 `Repository::review_at_head` compares the optional inspected head inside the metadata write transaction. `a_review_cannot_approve_a_head_the_reviewer_did_not_see` exercises the HTTP refusal and successful current-head review. The Web UI preserves unfinished text and negotiates `proposals.review_head`; legacy callers omitting the field retain current-head behavior.
+
+
+## ADR 0015 — revision-bound content search
+
+The new read-only `tree.search` operation uses the existing `TreeRead` authorization, immutable tree and blob interfaces. Focused HTTP checks cover bounded continuation, skipped content, cursor mismatch and repository isolation; `code-search.spec.ts` exercises UI-created content, pagination and line navigation. See [ADR 0015](../adr/0015-bounded-revision-code-search.md). No index-latency or complete binary/large-file search claim is made.

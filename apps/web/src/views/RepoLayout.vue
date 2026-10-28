@@ -36,7 +36,7 @@ interface Tab {
 }
 // Navigation by job, not by object: where things stand, the work to review, the agents and their tasks, the code,
 // and the settings. Routes are unchanged, so bookmarks and links keep working.
-const CODE_ROUTES = ['files', 'history', 'streams', 'compare', 'change-editor']
+const CODE_ROUTES = ['files', 'history', 'streams', 'compare', 'change-editor', 'code-search']
 const base = computed(
   () => `/repos/${encodeURIComponent(props.owner)}/${encodeURIComponent(props.name)}`,
 )
@@ -59,6 +59,7 @@ const tabs = computed<Tab[]>(() => {
 })
 const codeLinks = computed(() => [
   { to: `${base.value}/files`, label: 'Files' },
+  { to: `${base.value}/search`, label: 'Search code' },
   { to: `${base.value}/history`, label: 'History' },
   { to: `${base.value}/streams`, label: termLabel('stream', true), tip: termTip('stream') },
   { to: `${base.value}/compare`, label: 'Compare' },

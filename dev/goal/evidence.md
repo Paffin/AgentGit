@@ -175,3 +175,19 @@ No real agent run was created, and owner-negative/cycle-rejection browser paths 
 
 
 After merging PR76's reviewed state into this candidate, all four real-browser task/review scenarios passed together (Chromium and phone, 17.2s) and 56 targeted role/transport/review checks passed. The final task screenshot after reload has no transient notifications and was visually reviewed. Both original review features and the new task workflow are retained.
+
+
+## 2026-10-28 — bounded server-side content search
+
+Baseline `f3b7c52f1b1a5d863b81b22dcef6d463944f01f1`. Added `tree.search` as a shared HTTP/gRPC operation using existing TreeRead authorization and immutable tree/blob reads. No commands are executed and symbolic links are not followed. Queries are literal, cursor bindings include repository/tree/query/case/prefix, per-request file/byte limits bound the scan, and binary/invalid-UTF8/>1MiB exclusions are explicit. OpenAPI and both generated SDKs expose the operation. The browser preserves search inputs, continues at the returned immutable revision and opens/highlights the matching line, including virtualized content.
+
+Local verification: 3 real HTTP tests passed (0.42s), including a gRPC call, repository isolation (404 masking), unauthenticated access, invalid queries/cursors, exclusions, match pagination, no-match continuation after the 1000-file budget, and a moved branch with successful continuation at the pinned old revision. Two Rust helper tests cover Unicode excerpts and cursor validation; a long valid quoted path tests cursor capacity. The initial HTTP expectation of 403 was corrected to the server's existing 404 repository-hiding contract. This was a test expectation correction, not weakened authorization.
+
+The real-browser path creates its repository and four uploaded files entirely through UI, lands them, finds 61 matching lines over multiple pages, reports excluded content, opens line 2000 in a virtualized file and confirms it is in the viewport, returns to search, changes case/prefix filters and reloads. Chromium and phone viewport passed 2/2 in14.5s; axe had no serious/critical findings. Earlier browser runs identified a missing Code submenu link (fixed) and a test comparing a virtual row's text without accounting for its separate line-number gutter (changed to assert the code text and viewport independently). Browser artifacts are outside source under `/workspace/agentgit-quality/code-search-virtual-results`.
+
+Crapper reduced the initial scanner from CC39 to functions no higher than CC9; no numerical coverage/CRAP claim is made. Dryer found no candidates at similarity0.8. Two selected Mutator sites (cursor-binding equality and file-count boundary) were killed; other mutation sites were not run. Final touched-code Clippy passed with warnings denied; an earlier attempt ran out of working disk during a Docker VFS copy and was interrupted, then rerun after cache cleanup. Web type/build,15 existing code-rendering checks, SDK type/generation checks passed. Physical devices, indexed-search performance, regex and excluded-file search are not qualified.
+
+
+After integrating the task-pages main commit `49156f9f9eb9129cc9ce8850802a43f34f543cd9`, the combined search/task browser scenarios passed 4/4 in18.8s on the newly built real server. Search includes a verified visible jump to line2000; the OpenAPI document matches the running server's generated schema. Task, review and search changes are all retained.
+
+Final integration validation also passed 48 focused code-rendering, role and transport checks. Rust formatting and touched server/test Clippy passed with warnings denied. All original goal rows remain present; `tree.search` is an added API row, not a replacement for broader search goals.

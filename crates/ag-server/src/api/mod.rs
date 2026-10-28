@@ -22,6 +22,7 @@ mod jobs;
 mod objects;
 mod proposals;
 mod repository;
+mod search;
 mod session;
 mod streams;
 mod tree;

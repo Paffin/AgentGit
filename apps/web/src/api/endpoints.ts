@@ -11,6 +11,7 @@ import type {
   Changeset,
   Credential,
   DiffResponse,
+  SearchTreeResponse,
   DirEntry,
   FsckResponse,
   GcResponse,
@@ -137,6 +138,18 @@ export function createApi(c: ApiClient) {
         (await c.get<{ bases: string[] }>(r(repo, '/history/merge-base'), { a, b }, o)).bases ?? [],
     },
     tree: {
+      search: (
+        repo: string,
+        q: {
+          rev: string
+          query: string
+          case_sensitive?: boolean
+          path_prefix?: string
+          page_size?: number
+          page_token?: string
+        },
+        o?: SessionOpts,
+      ) => c.get<SearchTreeResponse>(r(repo, '/search'), q, o),
       manifest: async (
         repo: string,
         q: { rev: string; page_size?: number; page_token?: string },

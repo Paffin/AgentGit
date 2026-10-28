@@ -4208,6 +4208,115 @@
         },
         "type": "object"
       },
+      "SearchMatch": {
+        "properties": {
+          "line": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "Bounded UTF-8 excerpt around the first match; ellipses mark shortened lines.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchTreeRequest": {
+        "description": "Literal line search in an immutable tree. Binary and >1 MiB files are skipped and counted.",
+        "properties": {
+          "case_sensitive": {
+            "default": false,
+            "type": "boolean"
+          },
+          "page_size": {
+            "default": 0,
+            "description": "Matches per page: default 50, maximum 100.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_token": {
+            "default": "",
+            "description": "Bound to repository, tree, query, case mode and prefix. Reuse the returned rev.",
+            "type": "string"
+          },
+          "path_prefix": {
+            "default": "",
+            "description": "Optional file/directory prefix. Not a glob.",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "description": "Non-empty UTF-8 literal, at most 256 bytes, without newlines. No regex or execution.",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "rev": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchTreeResponse": {
+        "properties": {
+          "files_scanned": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "matches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchMatch"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "default": "",
+            "description": "May be present even with no matches: each request scans at most 1000 files / 16 MiB.",
+            "type": "string"
+          },
+          "rev": {
+            "default": "",
+            "type": "string"
+          },
+          "scanned_bytes": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped_binary": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped_large": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tree_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetPolicyRequest": {
         "properties": {
           "document": {
@@ -4688,7 +4797,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.1.0"
+    "version": "0.3.0-beta.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9384,6 +9493,117 @@
         "summary": "Run heartbeat",
         "tags": [
           "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/search": {
+      "get": {
+        "operationId": "tree.search",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "case_sensitive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Matches per page: default 50, maximum 100.",
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Bound to repository, tree, query, case mode and prefix. Reuse the returned rev.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path_prefix",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Optional file/directory prefix. Not a glob.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Non-empty UTF-8 literal, at most 256 bytes, without newlines. No regex or execution.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rev",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchTreeResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Literal content search at a revision, with bounded resumable scanning",
+        "tags": [
+          "Tree"
         ]
       }
     },

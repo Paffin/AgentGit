@@ -264,6 +264,13 @@ impl HistoryService for Grpc {
 
 #[tonic::async_trait]
 impl TreeService for Grpc {
+    async fn search(
+        &self,
+        request: Request<v1::SearchTreeRequest>,
+    ) -> Result<Response<v1::SearchTreeResponse>, Status> {
+        unary!(self, request, "tree.search", search_tree)
+    }
+
     async fn resolve_path(
         &self,
         request: Request<v1::ResolvePathRequest>,

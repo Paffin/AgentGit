@@ -22,3 +22,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0012](0012-job-claim-fencing.md) | A fencing token for job claims (an optional request field, no schema change) |
 | [0013](0013-directory-renames.md) | Directory renames in the tree merge (`ag-merge/3`); copy detection for blame and show |
 | [0014](0014-review-head-precondition.md) | Optional expected-head precondition for atomically recording reviews |
+| [0015](0015-bounded-revision-code-search.md) | Bounded literal code search tied to an immutable revision |

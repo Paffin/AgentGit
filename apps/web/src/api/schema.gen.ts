@@ -1022,6 +1022,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/search': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Literal content search at a revision, with bounded resumable scanning */
+    get: operations['tree.search']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/streams': {
     parameters: {
       query?: never
@@ -3809,6 +3826,83 @@ export interface components {
        * @default 0
        */
       timeout_secs: number
+    }
+    SearchMatch: {
+      /**
+       * Format: int32
+       * @default 0
+       */
+      line: number
+      /** @default  */
+      path: string
+      /**
+       * @description Bounded UTF-8 excerpt around the first match; ellipses mark shortened lines.
+       * @default
+       */
+      text: string
+    }
+    /** @description Literal line search in an immutable tree. Binary and >1 MiB files are skipped and counted. */
+    SearchTreeRequest: {
+      /** @default false */
+      case_sensitive: boolean
+      /**
+       * Format: int32
+       * @description Matches per page: default 50, maximum 100.
+       * @default 0
+       */
+      page_size: number
+      /**
+       * @description Bound to repository, tree, query, case mode and prefix. Reuse the returned rev.
+       * @default
+       */
+      page_token: string
+      /**
+       * @description Optional file/directory prefix. Not a glob.
+       * @default
+       */
+      path_prefix: string
+      /**
+       * @description Non-empty UTF-8 literal, at most 256 bytes, without newlines. No regex or execution.
+       * @default
+       */
+      query: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      rev: string
+    }
+    SearchTreeResponse: {
+      /**
+       * Format: int32
+       * @default 0
+       */
+      files_scanned: number
+      /** @default [] */
+      matches: components['schemas']['SearchMatch'][]
+      /**
+       * @description May be present even with no matches: each request scans at most 1000 files / 16 MiB.
+       * @default
+       */
+      next_page_token: string
+      /** @default  */
+      rev: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      scanned_bytes: number
+      /**
+       * Format: int32
+       * @default 0
+       */
+      skipped_binary: number
+      /**
+       * Format: int32
+       * @default 0
+       */
+      skipped_large: number
+      /** @default  */
+      tree_id: string
     }
     SetPolicyRequest: {
       /** @default  */
@@ -6789,6 +6883,47 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HeartbeatResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'tree.search': {
+    parameters: {
+      query?: {
+        case_sensitive?: boolean
+        page_size?: number
+        page_token?: string
+        path_prefix?: string
+        query?: string
+        rev?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SearchTreeResponse']
         }
       }
       /** @description Error */

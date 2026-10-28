@@ -1355,6 +1355,21 @@ export const OPERATIONS = {
     idempotencyKey: false,
     public: false,
   },
+  'tree.search': {
+    id: 'tree.search',
+    http: 'GET',
+    route: '/v1/repos/{owner}/{rname}/search',
+    namespace: 'tree',
+    name: 'search',
+    summary: 'Literal content search at a revision, with bounded resumable scanning',
+    pathParams: ['owner', 'rname'],
+    queryParams: ['case_sensitive', 'page_size', 'page_token', 'path_prefix', 'query', 'rev'],
+    body: 'none',
+    response: 'json',
+    retry: 'read',
+    idempotencyKey: false,
+    public: false,
+  },
   'workspace.create': {
     id: 'workspace.create',
     http: 'POST',
@@ -1459,6 +1474,7 @@ export const PAGINATED = {
   'repo.list': 'repos',
   'tree.get': 'entries',
   'tree.list': 'entries',
+  'tree.search': 'matches',
 } as const;
 
 export type PaginatedOperationId = keyof typeof PAGINATED;

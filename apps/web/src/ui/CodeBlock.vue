@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { splitLines } from '@/lib/text'
 import CopyButton from './CopyButton.vue'
 import VirtualList from './VirtualList.vue'
@@ -9,13 +9,18 @@ const props = withDefaults(
     code: string
     label: string
     lineNumbers?: boolean
+    focusLine?: number
     maxHeight?: string
     copyable?: boolean
     /** Wrap long lines instead of scrolling sideways (small snippets only). */
     wrap?: boolean
   }>(),
-  { lineNumbers: true, maxHeight: '480px', copyable: true, wrap: false },
+  { focusLine: undefined, lineNumbers: true, maxHeight: '480px', copyable: true, wrap: false },
 )
+
+const block = ref<HTMLElement | null>(null)
+const plain = ref<HTMLElement | null>(null)
+const list = ref<{ scrollToIndex: (index: number) => void } | null>(null)
 
 const VIRTUALIZE_ABOVE = 1500
 const ROW = 20
@@ -23,13 +28,29 @@ const ROW = 20
 const lines = computed(() => splitLines(props.code))
 const virtual = computed(() => lines.value.length > VIRTUALIZE_ABOVE)
 const gutter = computed(() => `${String(lines.value.length).length + 1}ch`)
+watch(
+  [() => props.focusLine, () => props.code],
+  async () => {
+    if (!props.focusLine || props.focusLine < 1) return
+    await nextTick()
+    if (virtual.value) {
+      list.value?.scrollToIndex(props.focusLine - 1)
+      block.value?.scrollIntoView({ block: 'start' })
+    } else
+      plain.value
+        ?.querySelector(`[data-line="${props.focusLine}"]`)
+        ?.scrollIntoView({ block: 'center' })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <div class="code" :style="{ '--gutter': gutter }">
+  <div ref="block" class="code" :style="{ '--gutter': gutter }">
     <div v-if="copyable" class="tools"><CopyButton :text="code" label="Copy contents" /></div>
     <VirtualList
       v-if="virtual"
+      ref="list"
       :items="lines"
       :row-height="ROW"
       :item-key="(_l: string, i: number) => i"
@@ -37,7 +58,7 @@ const gutter = computed(() => `${String(lines.value.length).length + 1}ch`)
       :label="label"
     >
       <template #default="{ item, index }">
-        <div class="vline">
+        <div class="vline" :class="{ target: focusLine === index + 1 }" :data-line="index + 1">
           <span v-if="lineNumbers" class="ln" aria-hidden="true">{{ index + 1 }}</span>
           <span class="txt">{{ item }}</span>
         </div>
@@ -45,16 +66,21 @@ const gutter = computed(() => `${String(lines.value.length).length + 1}ch`)
     </VirtualList>
     <pre
       v-else
+      ref="plain"
       class="pre"
       :class="{ wrap }"
       :style="{ maxHeight }"
       tabindex="0"
       :aria-label="label"
-    ><code><span v-for="(l, i) in lines" :key="i" class="line" :class="{ numbered: lineNumbers }">{{ l }}</span></code></pre>
+    ><code><span v-for="(l, i) in lines" :key="i" class="line" :data-line="i + 1" :class="{ numbered: lineNumbers, target: focusLine === i + 1 }">{{ l }}</span></code></pre>
   </div>
 </template>
 
 <style scoped>
+.target {
+  background: var(--info-soft);
+  outline: 1px solid var(--info-line);
+}
 .code {
   position: relative;
   background: var(--code-bg);

@@ -216,6 +216,9 @@ def test_history_trees_streams_and_objects(tour: dict[str, AgentGitClient]) -> N
     assert alice.history.merge_base(repo=REPO, a="main", b=Seed.head).bases == [Seed.head]
     assert alice.history.ancestors(repo=REPO, want=[head], have=[Seed.head]).changeset_ids == [head]
 
+    assert [m.path for m in alice.tree.search(repo=REPO, rev="main", query="c", path_prefix="b").matches] == [
+        "b/c.txt"
+    ]
     assert alice.tree.get(repo=REPO, rev="main").total_entries == 4
     assert [e.name for e in alice.tree.list(repo=REPO, rev="main", path="b").entries] == ["c.txt"]
     assert alice.tree.resolve(repo=REPO, rev="main", path="a.txt").kind == "file"

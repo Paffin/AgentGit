@@ -135,6 +135,7 @@ export const NAMESPACE_METHODS = {
     get: 'tree.get',
     list: 'tree.list',
     resolve: 'tree.resolve',
+    search: 'tree.search',
   },
   workspaces: {
     create: 'workspace.create',
@@ -367,6 +368,8 @@ export interface Api {
     list(request: Req<'tree.list'>, options?: CallOptions): Promise<Res<'tree.list'>>;
     /** What exists at a path (`GET /v1/repos/{owner}/{rname}/tree/resolve`, operation `tree.resolve`) */
     resolve(request: Req<'tree.resolve'>, options?: CallOptions): Promise<Res<'tree.resolve'>>;
+    /** Literal content search at a revision, with bounded resumable scanning (`GET /v1/repos/{owner}/{rname}/search`, operation `tree.search`) */
+    search(request: Req<'tree.search'>, options?: CallOptions): Promise<Res<'tree.search'>>;
   };
   readonly workspaces: {
     /** Create a virtual workspace (`POST /v1/repos/{owner}/{rname}/workspaces`, operation `workspace.create`) */

@@ -679,6 +679,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/search",
+        "tree.search",
+        "Tree",
+        "Literal content search at a revision, with bounded resumable scanning",
+        v1::SearchTreeRequest,
+        v1::SearchTreeResponse,
+        search_tree
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/diff",

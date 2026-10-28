@@ -174,6 +174,9 @@ __all__ = [
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SearchMatch",
+    "SearchTreeRequest",
+    "SearchTreeResponse",
     "SetPolicyRequest",
     "StartRunRequest",
     "Stream",
@@ -1693,6 +1696,39 @@ class RunSpec:
     memory_mb: int = field(default=0)
     network: bool = field(default=False)
     timeout_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class SearchMatch:
+    """The `SearchMatch` message."""
+    line: int = field(default=0)
+    path: str = field(default="")
+    text: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SearchTreeRequest:
+    """Literal line search in an immutable tree. Binary and >1 MiB files are skipped and counted."""
+    case_sensitive: bool = field(default=False)
+    page_size: int = field(default=0)
+    page_token: str = field(default="")
+    path_prefix: str = field(default="")
+    query: str = field(default="")
+    repo: str = field(default="")
+    rev: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SearchTreeResponse:
+    """The `SearchTreeResponse` message."""
+    files_scanned: int = field(default=0)
+    matches: list[SearchMatch] = field(default_factory=list)
+    next_page_token: str = field(default="")
+    rev: str = field(default="")
+    scanned_bytes: int = field(default=0)
+    skipped_binary: int = field(default=0)
+    skipped_large: int = field(default=0)
+    tree_id: str = field(default="")
 
 
 @dataclass(kw_only=True)

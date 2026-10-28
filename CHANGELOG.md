@@ -11,6 +11,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Permanent task pages connect prerequisites, dependant tasks, agent sessions and change requests. Add prerequisites from the browser and confirm completion/cancellation with their consequences explained. Coordination tabs survive reloads.
 
+- Server-side literal code search over HTTP and gRPC, with revision-bound continuation, folder filters, UTF-8-safe snippets and explicit binary/large-file exclusions. Web results open the searched revision at the matching line; generated TypeScript and Python SDKs expose the operation.
+
 - A multi-file browser editor stages text edits, additions, renames and deletions in one change request, with a shared preview and account/repository/branch-scoped tab recovery.
 
 - Review drafts preserve comments, decisions and inspected heads across page reloads in the same tab, separately per account and proposal. Review submission retains its initiating credential and offers reauthentication after expiry.
@@ -18,6 +20,14 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Change-request diffs support path filtering, viewed-file marks and hiding reviewed files. Tab-local progress is scoped to the account and exact comparison; it never counts as approval. Server truncation warnings remain visible while filtering.
 
 ### Fixed
+
+- Concurrent first requests on a replica publish independent temporary repository configurations atomically, preventing truncated JSON and missing-file errors when a shared repository is first opened.
+
+- Virtualized code and event lists batch scroll updates per frame, preserving keyboard scrolling and avoiding Firefox scroll-linked positioning warnings.
+
+- Code search clears results when the session changes, pins requests to the initiating credential, preserves literal query spaces and emphasizes matching text.
+
+- Update the workspace and fuzz Markdown parser lockfiles to pulldown-cmark 0.13.5, addressing RUSTSEC-2026-0414 in development tooling.
 
 - File editing keeps submission steps and retries attached to the initiating session, blocks duplicate sends and preserves drafts after cancellation or stale responses.
 

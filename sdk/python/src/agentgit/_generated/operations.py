@@ -1355,6 +1355,21 @@ OPERATIONS: dict[str, OperationInfo] = {
         idempotency_key=False,
         public=False,
     ),
+    "tree.search": OperationInfo(
+        id="tree.search",
+        http="GET",
+        route="/v1/repos/{owner}/{rname}/search",
+        namespace="tree",
+        name="search",
+        summary="Literal content search at a revision, with bounded resumable scanning",
+        path_params=('owner', 'rname'),
+        query_params=('case_sensitive', 'page_size', 'page_token', 'path_prefix', 'query', 'rev'),
+        body="none",
+        response="json",
+        retry="read",
+        idempotency_key=False,
+        public=False,
+    ),
     "workspace.create": OperationInfo(
         id="workspace.create",
         http="POST",
@@ -1457,6 +1472,7 @@ PAGINATED: dict[str, str] = {
     "repo.list": "repos",
     "tree.get": "entries",
     "tree.list": "entries",
+    "tree.search": "matches",
 }
 
 # namespace -> method -> operation id
@@ -1590,6 +1606,7 @@ NAMESPACE_METHODS: dict[str, dict[str, str]] = {
         "get": "tree.get",
         "list": "tree.list",
         "resolve": "tree.resolve",
+        "search": "tree.search",
     },
     "workspaces": {
         "create": "workspace.create",

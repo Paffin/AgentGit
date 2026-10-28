@@ -51,7 +51,7 @@ endpoint and no decision of its own about what may land.
    string is scrubbed of anything shaped like a token, and of the configured token itself. A token file is
    re-read after a `401`, so an operator can rotate an expired credential without restarting the agent session.
 6. **A second, explicit allow-list inside `ag-mcp`.** Tools belong to groups: `read`, `workspace`, `propose`,
-   `coordinate`, `review`, `integrate`. The default is `read,workspace,propose,coordinate`. `review` must be
+   `coordinate`, `discuss`, `review`, `integrate`. The default is `read,workspace,propose,coordinate,discuss`. The `discuss` group adds line feedback without approval or integration tools. `review` must be
    named. `integrate` can only be switched on with the separate flag `--enable-integrate` (it is refused through `--allow`), and then logs a warning at startup
    and on every call. There is no `admin` group: policy, roles and credentials are not reachable through MCP,
    and `--allow admin` is rejected with that explanation. Tools outside the allow-list are not listed; calling

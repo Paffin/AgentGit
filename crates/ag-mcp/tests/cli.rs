@@ -61,7 +61,7 @@ fn check_reports_the_identity_the_scope_and_what_would_be_offered() {
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("identity  agent:coder"), "{out}");
     assert!(out.contains(REPO), "the scope names the repository: {out}");
-    assert!(out.contains("groups    read,workspace,propose,coordinate"), "{out}");
+    assert!(out.contains("groups    read,workspace,propose,coordinate,discuss"), "{out}");
     assert!(out.contains("expires   in "), "{out}");
     assert!(!out.contains(&tok) && !err.contains(&tok), "the credential is never printed");
 }

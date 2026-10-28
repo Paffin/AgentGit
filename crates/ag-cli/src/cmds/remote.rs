@@ -704,6 +704,11 @@ pub enum RemoteCmd {
         #[arg(short, long, default_value = "")]
         message: String,
     },
+    /// Read and participate in revision-bound line discussions.
+    Discussion {
+        #[command(subcommand)]
+        cmd: crate::cmds::discussions::DiscussionCmd,
+    },
     /// Integrate a proposal into its stream.
     Integrate {
         /// Proposal id.
@@ -1093,6 +1098,11 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 };
                 let rv = record_remote_review(&c, &repo, id, decision, message).await?;
                 print_done(cli, &rv, || format!("Recorded '{}' on head {}.", rv.decision, &rv.head[..12]))?;
+            }
+            RemoteCmd::Discussion { cmd } => {
+                let (value, message) = crate::cmds::discussions::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() { print_done(cli, &value, || message)?; }
+                else { print(cli, &value, || message)?; }
             }
             RemoteCmd::Integrate { id, fencing_tokens } => {
                 let res = c

@@ -274,3 +274,24 @@ new line, and resolving them does not grant approval. Use **Use general discussi
 instead** to quote the line in the ordinary comment composer. Servers with only
 `proposals.comments` keep this quote-only behavior. See
 [the schema 6 upgrade and rollback guidance](../adr/0025-line-review-threads.md).
+
+## 13. Line feedback through the CLI (development)
+
+`ag remote discussion list PROPOSAL` returns line threads and their versions.
+`ag remote discussion replies PROPOSAL THREAD` reads replies. Both return a
+continuation token when more data exists; repeat with `--page-token TOKEN`.
+Use `--json` for structured results. Capture the thread version before reading
+its replies; if resolution is stale, read both again before retrying.
+
+```sh
+ag remote discussion start PROPOSAL --head INSPECTED_HEAD --path src/parser.rs --line 12 -m "Explain the fallback"
+ag remote discussion reply PROPOSAL THREAD -m "The fallback preserves the previous behavior."
+ag remote discussion resolve PROPOSAL THREAD --expected-version 2
+ag remote discussion resolve PROPOSAL THREAD --expected-version 3 --reopen
+```
+
+Old-side anchors also require `--side old --base BASE_CHANGESET`. A changed head
+rejects thread creation; new replies invalidate the version used for resolution.
+Network retries reuse idempotency keys. No command in this group grants approval
+or integrates code. The matching [MCP tools](mcp.md#line-feedback-from-people-and-agents-development)
+let an executor read and respond to the same feedback.

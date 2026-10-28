@@ -1,8 +1,9 @@
 # Roadmap
 
 AgentGit follows [ADR-0001](docs/adr/0001-final-architecture.md): correctness first, narrow before wide.
-This list is ordered by dependency, not by date, and it only lists what is **not** built. What exists is
-described in the [architecture traceability](docs/architecture/adr-traceability.md).
+The next-work list is ordered by dependency, not by date. Delivery status separates shipped
+capabilities from development; implementation evidence lives in the
+[architecture traceability](docs/architecture/adr-traceability.md).
 
 ## 0.1 — shipped (alpha)
 
@@ -71,40 +72,73 @@ The next release is scoped around one reliable workflow, not every deployment op
 [beta programme](docs/community/beta.md) defines the supported target, measurable acceptance gates and pilot process.
 Track work in the [beta milestone](https://github.com/Paffin/AgentGit/milestone/1).
 
+## Delivery status
+
+Keep published capabilities separate from development code. A changelog entry or a tag alone
+is not proof that a downloadable archive has passed release verification.
+
+| Baseline | Available work | Compatibility |
+|---|---|---|
+| Published `v0.3.0-beta.4` | Git migration with reconciliation, code search, multi-file editing, issues → tasks → assigned executor → run → change request, saved output, task/run history | Metadata schema 5; [release](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4) |
+| `v0.3.0-beta.5` release candidate | Revision-bound review threads, replies and resolution across Web UI/CLI/MCP; thread filters and review-context handoff | Metadata schema 6; [release workflow](https://github.com/Paffin/AgentGit/actions/runs/40738103603) |
+| Development `main` after beta.5's tagged commit | Per-agent new-run admission controls and durable source links for follow-up tasks across API, clients and executor | Metadata schema 7; [admission controls](docs/adr/0026-agent-run-admission.md), [task sources](docs/adr/0027-task-source-links.md) |
+
+Back up before opening existing repositories with a newer schema. Rollback means restoring
+that pre-upgrade backup, not running an older binary against the upgraded database.
+The [traceability record](docs/architecture/adr-traceability.md) holds implementation evidence;
+the [beta programme](docs/community/beta.md) holds the remaining qualification gates.
+
 ## Next
 
-Only what is not done. The order comes from the first outside validation
-([report](dev/feedback/validation-2026-10-21.md), 2026-10-21): the engine works, the product was hard to pick up. The
-Web UI for a first-time user, the five-minute start (`ag-server dev`, `ag login`, presets, `ag explain`) and the test
-gate that stops a test from passing by not running are built and on `main` (see the [changelog](CHANGELOG.md)); what
-they left open is listed first.
+The product direction stays the same: people give bounded work to agents, inspect the exact
+result, understand policy decisions and land a verified change. Migration must let an existing
+team reach that workflow without losing its history or silently discarding hosting metadata.
+Work in the following order; keep each deliverable usable across the relevant clients.
 
-1. **Finish the first-time-user work.**
-   The browser supports multi-file text editing, add/rename/delete and reviewed uploads in one change request. Account-backed drafts and non-text conflict resolution remain open. Revision-bound line discussions and replies are implemented in development; suggestions, requested reviewers and policy-required resolution remain next.
-   Home has filters and glossary hints, but is polled every 15 s, not live; the rules form leaves
-   protected-path approvers and check timing in the raw JSON; no screen-reader pass; the `ag-server dev` sign-in link is not one-time (needs an exchange
-   endpoint); the Docker one-liner is not verified (no Docker daemon yet) and `dev`, `login` and `explain` are missing
-   from the `v0.2.0-rc.2` archives until the next tag.
-2. **Orchestration that works out of the box.** The orchestrator in the release archives and as an image, a ready
-   template "task, agent, proposal" with a real model executor verified live. ("Give this task to an agent" exists in the
-   Web UI.)
-3. **Finish the release.** Verify what rc.2 left unverified (archive attestations, macOS and aarch64 archives outside CI,
-   the Homebrew formula); qualify the new `ag-mcp` SBOM and add a Windows archive; cut a stable tag (until then `install.sh` needs
-   `--version`) that carries `ag-server dev`; publish the 21 `agentgit-<x>` crates and the SDKs. Only the owner can push
-   tags and publish.
-4. **Prove what is only argued.** The `ha` and Prometheus Operator overlays and the images on a real cluster (ingress,
-   storage class); mixed builds during a rolling upgrade (metadata schema 3 needs the new build first); a PostgreSQL
-   failover; the periodic reaper with real replicas on PostgreSQL and S3; load on PostgreSQL, S3, TLS and several
-   replicas, and the tree cache on the disk backend; resolve surviving policy mutations and retain nightly fuzz, mutation and performance evidence; a second OIDC provider (Entra, Okta, Auth0); a screen-reader and a real-phone pass.
-5. **Test-gate leftovers.** The root-only halves of the sandbox tests (`n/a:host-privilege`) run in no CI job; the four
-   scripts that read TOML need Python 3.11 and are not in the 3.9 job; a bare `if !cond { return }` in a new Rust test is
-   not caught by the scan.
-6. **Server follow-ups.** A server option that requires the job-claim fencing token; the resolved client address in the
-   hash-chained audit entries; `Arc<Tree>` in the tree cache; a per-stream in-process queue so same-stream writers take
-   turns instead of retrying; merge notes on the AGWP wire (and so in the Web UI); copy search over the server and MCP.
-7. **Scale and isolation, when needed.** Hierarchical Merkle trees, packed objects, incremental GC marking, streaming
-   blobs (triggers in [ADR-0006](docs/adr/0006-flat-trees-measured.md)); microVM isolation (Firecracker, gVisor, Kata)
-   for hostile multi-tenant use; a sandbox on macOS and Windows; worker pools and labels; per-job log storage.
+1. **Complete the current delivery.** Verify beta.5's published archives, checksums and provenance,
+   exercise upgrade from the published binary, then update installation instructions and the
+   release baseline above. Admission controls and task sources are already merged; they need
+   their own subsequent release and schema-7 upgrade notice, not a replacement beta.5 tag.
+2. **Finish the daily task and review workflow.** Add safe refinement of queued task instructions
+   and scope; keep historical runs and source links intact. Then add review suggestions,
+   requested reviewers and policy-required thread resolution. Preserve drafts, exact-head
+   checks and explicit confirmation when a user changes executable work or a review decision.
+   Account-backed drafts and non-text conflict resolution remain open. Home currently polls
+   visible-page attention data; live updates should preserve its complete-snapshot behaviour.
+3. **Make GitHub/GitLab cutover complete.** Code history, branch/tag mapping, the original bundle
+   and reconciliation already move through Web UI and CLI. Next design and implement resumable
+   hosting-metadata migration: issues and comments first, then pull/merge-request references,
+   releases and identity/permission mapping. Preview unsupported data and require deliberate
+   choices before publication. LFS payloads and CI configurations need separate transfer/setup;
+   source YAML alone is not a working validation pipeline. Keep Git export and rollback visible
+   in the [migration guide](docs/guides/migrate-from-git.md).
+4. **Qualify the real first-use experience.** Native archives already include the orchestrator;
+   browser setup prepares scoped executor access. Record an end-to-end run in a real MCP host
+   ([#50](https://github.com/Paffin/AgentGit/issues/50)), clean macOS published-archive installation
+   ([#52](https://github.com/Paffin/AgentGit/issues/52)), a screen-reader session
+   ([#53](https://github.com/Paffin/AgentGit/issues/53)) and a physical-phone session
+   ([#55](https://github.com/Paffin/AgentGit/issues/55)). Recruit and learn from five external pilots
+   ([#51](https://github.com/Paffin/AgentGit/issues/51)); automated browser runs do not substitute
+   for these reports. Keep the dev sign-in exchange and advanced policy-form controls on the
+   onboarding backlog.
+5. **Finish distribution and widen support deliberately.** Verify Homebrew installation, add
+   a Windows release archive, publish crates and SDKs when registry ownership/trusted publishing
+   is configured, and qualify installation outside CI. A stable tag follows the
+   [beta exit evidence](docs/community/beta.md#release-gates), not a count of shipped features.
+6. **Qualify deployment and server follow-ups.** Compose and kind deployment already run in CI.
+   Remaining evidence includes production-like ingress/storage, HA and Prometheus Operator
+   overlays, PostgreSQL failover, mixed-build upgrades, replica reaping and load on PostgreSQL,
+   S3 and TLS. Server work includes required job fencing, client addresses in audit entries,
+   tree-cache sharing, same-stream writer scheduling and merge notes on the wire. Literal
+   content search is shipped; copy detection and MCP search remain separate work.
+7. **Scale and isolation when measurements justify them.** Hierarchical Merkle trees, packed
+   objects, incremental GC and streaming blobs follow the triggers in
+   [ADR-0006](docs/adr/0006-flat-trees-measured.md). VM-level isolation, native macOS/Windows
+   sandboxes, worker pools/labels and per-job logs remain outside the initial beta commitment.
+
+Keep checks proportional to each change: prove the affected user workflow, preserve policy
+and recovery guarantees, and maintain the existing gates. Broader fuzzing, mutation and
+performance qualification belong to their scheduled tracks, not every product iteration.
 
 ## Ideas we are deliberately not doing
 

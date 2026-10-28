@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs AgentGit (`ag`, `ag-server`, `ag-worker`, `ag-mcp`) from a GitHub release.
+# Installs AgentGit (`ag`, `ag-server`, `ag-worker`, `ag-mcp`, `orchestrator`) from a GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh
 #   sh install.sh --version 0.2.0 --prefix /opt/agentgit
@@ -126,6 +126,12 @@ case "$version" in
 esac
 case "$version" in *[!0-9A-Za-z.+-]*) die "'$version' contains unexpected characters" ;; esac
 
+# Releases before beta.4 did not ship the native executor.
+case "$version" in
+  0.0.*|0.1.*|0.2.*|0.3.0-beta.[123]) ;;
+  *) BINARIES="$BINARIES orchestrator" ;;
+esac
+
 name="agentgit-$version-$target"
 archive="$name.tar.gz"
 [ -n "$base_url" ] || base_url="https://github.com/$REPO/releases/download/v$version"
@@ -181,6 +187,11 @@ fi
 # ---- install ---------------------------------------------------------------------------------------------------
 tar -xzf "$tmp/$archive" -C "$tmp" || die "could not unpack $archive"
 [ -d "$tmp/$name" ] || die "the archive does not contain the expected directory $name/"
+# Rehearsal archives can include the executor even when named with an older version.
+case " $BINARIES " in
+  *" orchestrator "*) ;;
+  *) if [ -f "$tmp/$name/orchestrator" ]; then BINARIES="$BINARIES orchestrator"; fi ;;
+esac
 # Validate the whole distribution before touching an existing installation.
 for b in $BINARIES; do
   [ -f "$tmp/$name/$b" ] || die "the archive is missing $b. Nothing was installed."
@@ -197,7 +208,7 @@ done
 [ -n "$installed" ] || die "the archive contains none of: $BINARIES"
 docdir="$prefix/share/doc/agentgit"
 if mkdir -p "$docdir" 2>/dev/null; then
-  for f in LICENSE NOTICE README.md; do [ -f "$tmp/$name/$f" ] && cp "$tmp/$name/$f" "$docdir/$f"; done
+  for f in LICENSE NOTICE README.md THIRD_PARTY_LICENSES.md; do [ -f "$tmp/$name/$f" ] && cp "$tmp/$name/$f" "$docdir/$f"; done
 fi
 
 say "installed:$installed"

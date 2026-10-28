@@ -19,8 +19,13 @@ run, and `services/agent-orchestrator/examples/worked-example.sh` reproduces it.
 - A running `ag-server` that speaks AGWP v1 and has the execution-plane routes (this repository's), reachable
   over https (plain http is accepted only for loopback unless you say otherwise).
 - Administrator access to the server, to create identities and mint credentials once.
-- Go 1.24 to build the service (`go build -o orchestrator ./cmd/orchestrator` in `services/agent-orchestrator`),
-  or the Dockerfile there (see [Docker](#9-docker)).
+- The `orchestrator` executable. Starting with beta.4, it is included in the Linux/macOS release archives and installed by `scripts/install.sh`; Go is not needed to run it. For a source build, use Go 1.24 or newer (`go build -o orchestrator ./cmd/orchestrator` in `services/agent-orchestrator`), or the Dockerfile there (see [Docker](#9-docker)).
+
+### Connect from the Web UI
+
+For a task-only executor, open **Agents → Registered agents → Connect executor** in your repository. Enter an agent command available on the executor machine, download the configuration and separate token file, then run the displayed `orchestrator check` and `orchestrator run` commands. Keep the token file private. The page confirms connection when that executor reports back. Agent command installation and any model credentials remain your responsibility.
+
+The manual configuration below also enables the optional reviewer and advisor services.
 
 ## 2. Identities and roles
 

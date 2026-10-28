@@ -42,7 +42,7 @@ MATCHERS = [
             + "$"
         ),
     )
-    for op in OPERATIONS.values()
+    for op in sorted(OPERATIONS.values(), key=lambda op: op.route.count("{"))
 ]
 
 

@@ -9,6 +9,7 @@ import { useRepoName } from '@/composables/useRepoName'
 import { useResource } from '@/composables/useResource'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useLiveReload } from '@/composables/useLiveReload'
+import { useAssignableAgents } from '@/composables/useAssignableAgents'
 import { useIssueDraft } from '@/composables/useIssueDraft'
 import { useAuth } from '@/stores/auth'
 import { samePrincipal } from '@/lib/identity'
@@ -46,13 +47,18 @@ const editing = ref(false),
   message = ref(''),
   confirmState = ref(false)
 const taskDialog = ref(false)
+const taskAssignee = ref('')
+const assignment = useAssignableAgents(
+  () => repo.value,
+  () => taskDialog.value,
+)
 const taskSourceVersion = ref(0)
 const taskTitle = ref(''),
   taskDescription = ref(''),
   taskScope = ref('')
 let taskRequestId = randomHex()
 watch(
-  [taskTitle, taskDescription, taskScope],
+  [taskTitle, taskDescription, taskScope, taskAssignee],
   () => {
     taskRequestId = randomHex()
   },
@@ -197,6 +203,7 @@ function prepareTask() {
   taskTitle.value = row.title
   taskDescription.value = row.body
   taskScope.value = ''
+  taskAssignee.value = ''
   taskDialog.value = true
   error.value = ''
 }
@@ -227,6 +234,7 @@ async function createAgentTask() {
         scope: paths,
         source_issue: row.number,
         expected_issue_version: taskSourceVersion.value,
+        assignee: assignment.supported.value ? taskAssignee.value : undefined,
       },
       {
         token: auth.token,
@@ -388,6 +396,21 @@ useLiveReload(['issue'], refresh)
           A configured orchestrator can pick up this task automatically. Creating it does not mean
           the work has been executed or approved.
         </p>
+        <SelectField
+          v-if="assignment.supported.value"
+          v-model="taskAssignee"
+          label="Assigned agent"
+          :options="assignment.options.value"
+          :disabled="busy || assignment.agents.loading.value"
+          hint="The assignment is saved together with the task. Automatic routing uses the configured rules."
+        />
+        <ErrorState
+          v-if="assignment.agents.error.value"
+          compact
+          what="available agents"
+          :error="assignment.agents.error.value"
+          @retry="assignment.agents.reload()"
+        />
         <TextField v-model="taskTitle" label="Task title" required :disabled="busy" />
         <TextArea
           v-model="taskDescription"

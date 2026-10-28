@@ -647,3 +647,13 @@ func (c *Client) SetTaskScheduling(ctx context.Context, repo string, paused bool
 	}
 	return &out, nil
 }
+
+// AssignTask selects a registered agent while a task is still queued.
+func (c *Client) AssignTask(ctx context.Context, repo, id, agent, expectedOwner string) (*Task, error) {
+	var out Task
+	body := map[string]any{"agent": agent, "expected_owner": expectedOwner}
+	if err := c.repoCall(ctx, "task.assign", http.MethodPut, repo, "/tasks/"+url.PathEscape(id)+"/assignee", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

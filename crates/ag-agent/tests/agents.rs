@@ -649,3 +649,23 @@ fn scheduling_pause_persists_and_blocks_only_new_task_runs() {
     ag_agent::scheduling::set(&e.meta, false, "", 1, "user:operator").unwrap();
     assert!(registry::start_run(&e.meta, "bot", Some(&waiting_task.id)).is_ok());
 }
+
+#[test]
+fn queued_assignment_blocks_other_agents_and_cannot_change_a_running_task() {
+    let e = env();
+    for agent in ["first", "chosen"] {
+        registry::register_agent(&e.meta, &e.keys, agent, "agent", "user:admin").unwrap();
+    }
+    let t = tasks::create_task(&e.meta, "Choose a worker", "", &[], "user:alice").unwrap();
+    let assigned = tasks::assign_task(&e.meta, &t.id, "chosen", "", "user:alice", false).unwrap();
+    assert_eq!(assigned.owner.as_deref(), Some("agent:chosen"));
+    assert_eq!(assigned.state, "open");
+    assert!(tasks::assign_task(&e.meta, &t.id, "first", "", "user:alice", false).is_err());
+    assert!(registry::start_run(&e.meta, "first", Some(&t.id)).is_err());
+    let unassigned = tasks::assign_task(&e.meta, &t.id, "", "agent:chosen", "user:alice", false).unwrap();
+    assert_eq!(unassigned.owner, None);
+    tasks::assign_task(&e.meta, &t.id, "chosen", "", "user:alice", false).unwrap();
+    let run = registry::start_run(&e.meta, "chosen", Some(&t.id)).unwrap();
+    assert!(tasks::assign_task(&e.meta, &t.id, "first", "agent:chosen", "user:admin", true).is_err());
+    assert_eq!(e.meta.read(|tx| tx.run(&run.run_id)).unwrap().unwrap().task_id.as_deref(), Some(t.id.as_str()));
+}

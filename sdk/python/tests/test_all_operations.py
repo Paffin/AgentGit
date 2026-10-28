@@ -264,7 +264,8 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     key = generate_agent_key()
     bot.agents.register(repo=REPO, name="tour-bot", public_key=key.public_key_hex)
     assert "tour-bot" in [a.name for a in alice.agents.list(repo=REPO).agents]
-    task = alice.tasks.create(repo=REPO, title="tour task", scope=["src/**"])
+    task = alice.tasks.create(repo=REPO, title="tour task", scope=["src/**"], assignee="tour-bot")
+    alice.tasks.assign(repo=REPO, id=task.id, agent="tour-bot", expected_owner="agent:tour-bot")
     dep = alice.tasks.create(repo=REPO, title="depends")
     alice.tasks.depend(repo=REPO, task=dep.id, depends_on=task.id)
     assert len(alice.tasks.list(repo=REPO).tasks) == 2

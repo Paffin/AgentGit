@@ -1,6 +1,6 @@
 # ADR 0018: permanent pages for agent runs
 
-Status: implemented; browser qualification in progress.
+Status: implemented; focused HTTP, Chromium and phone qualification passed on the development branch.
 
 ## Decision
 

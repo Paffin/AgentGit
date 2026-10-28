@@ -391,6 +391,18 @@ impl Tx<'_> {
         Ok(())
     }
 
+    /// Sets a queued task's assignee; `None` restores automatic routing.
+    pub fn task_set_owner(&self, id: &str, owner: Option<&str>) -> Result<(), MetaError> {
+        let n = self.conn.execute(
+            "UPDATE tasks SET owner=?1, updated_at=?2 WHERE id=?3",
+            &params![owner, self.now().as_millis(), id],
+        )?;
+        if n == 0 {
+            return Err(MetaError::NotFound(format!("task '{id}'")));
+        }
+        Ok(())
+    }
+
     /// Adds a dependency edge `task -> depends_on` (cycle checking is the caller's job).
     pub fn task_dep_add(&self, task: &str, depends_on: &str) -> Result<(), MetaError> {
         self.conn.execute(

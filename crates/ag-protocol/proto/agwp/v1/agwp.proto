@@ -1078,6 +1078,17 @@ message CreateTaskRequest {
   // Optional source issue. Creation and linking commit atomically.
   uint64 source_issue = 7;
   uint64 expected_issue_version = 8;
+  // Optional initial agent assignment, saved before the task becomes visible.
+  string assignee = 9;
+}
+
+message AssignTaskRequest {
+  string repo = 1;
+  string id = 2;
+  // Registered agent name; empty restores automatic routing.
+  string agent = 3;
+  // Owner inspected by the caller; empty means unassigned.
+  string expected_owner = 4;
 }
 
 message GetTaskRequest {
@@ -1716,6 +1727,7 @@ service AgentService {
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc ReapRuns(ReapRunsRequest) returns (ReapRunsResponse);
   rpc CreateTask(CreateTaskRequest) returns (Task);
+  rpc AssignTask(AssignTaskRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc AddDependency(AddDependencyRequest) returns (Task);

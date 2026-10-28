@@ -1258,6 +1258,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/tasks/{id}/assignee",
+        "task.assign",
+        "Agent",
+        "Assign queued work to a registered agent",
+        v1::AssignTaskRequest,
+        v1::Task,
+        assign_task
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/tasks/{task}/dependencies",

@@ -13,6 +13,7 @@ from agentgit._generated.models import (
     Agent,
     AncestorsRequest,
     AncestorsResponse,
+    AssignTaskRequest,
     Attestation,
     AuditEntry,
     AuthConfig,
@@ -1409,10 +1410,23 @@ class TasksApi:
     def __init__(self, caller: SyncCaller) -> None:
         self._c = caller
 
+    def assign(
+        self,
+        *,
+        repo: str,
+        id: str,
+        agent: str | None = None,
+        expected_owner: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Assign queued work to a registered agent (`PUT /v1/repos/{owner}/{rname}/tasks/{id}/assignee`, operation `task.assign`)."""
+        return self._c._call("task.assign", {"repo": repo, "id": id, "agent": agent, "expected_owner": expected_owner}, options, Task)
+
     def create(
         self,
         *,
         repo: str,
+        assignee: str | None = None,
         depends_on: Sequence[str] | None = None,
         description: str | None = None,
         expected_issue_version: int | None = None,
@@ -1423,7 +1437,7 @@ class TasksApi:
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
+        return self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
 
     def depend(
         self,
@@ -2847,10 +2861,23 @@ class AsyncTasksApi:
     def __init__(self, caller: AsyncCaller) -> None:
         self._c = caller
 
+    async def assign(
+        self,
+        *,
+        repo: str,
+        id: str,
+        agent: str | None = None,
+        expected_owner: str | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Assign queued work to a registered agent (`PUT /v1/repos/{owner}/{rname}/tasks/{id}/assignee`, operation `task.assign`)."""
+        return await self._c._call("task.assign", {"repo": repo, "id": id, "agent": agent, "expected_owner": expected_owner}, options, Task)
+
     async def create(
         self,
         *,
         repo: str,
+        assignee: str | None = None,
         depends_on: Sequence[str] | None = None,
         description: str | None = None,
         expected_issue_version: int | None = None,
@@ -2861,7 +2888,7 @@ class AsyncTasksApi:
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return await self._c._call("task.create", {"repo": repo, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
+        return await self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "title": title}, options, Task)
 
     async def depend(
         self,

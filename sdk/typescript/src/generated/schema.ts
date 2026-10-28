@@ -1228,6 +1228,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/tasks/{id}/assignee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign queued work to a registered agent */
+        put: operations["task.assign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/tasks/{id}/finish": {
         parameters: {
             query?: never;
@@ -1520,6 +1537,22 @@ export interface components {
             changeset_ids: string[];
             /** @default  */
             next_page_token: string;
+        };
+        AssignTaskRequest: {
+            /**
+             * @description Registered agent name; empty restores automatic routing.
+             * @default
+             */
+            agent: string;
+            /**
+             * @description Owner inspected by the caller; empty means unassigned.
+             * @default
+             */
+            expected_owner: string;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
         };
         Attestation: {
             /** @default  */
@@ -1951,6 +1984,11 @@ export interface components {
             repo: string;
         };
         CreateTaskRequest: {
+            /**
+             * @description Optional initial agent assignment, saved before the task becomes visible.
+             * @default
+             */
+            assignee: string;
             /** @default [] */
             depends_on: string[];
             /** @default  */
@@ -7843,6 +7881,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignTaskRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

@@ -736,3 +736,19 @@ func TestOperatorPauseDefersWorkUntilResumed(t *testing.T) {
 	h.eventually("resumed work to finish", func() bool { return h.state(task) == agwp.TaskDone })
 	h.waitIdle()
 }
+
+func TestQueuedAssignmentOverridesTheDefaultExecutor(t *testing.T) {
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Default = "first" }, nil,
+		command(t, "first", "sleep 0.05"), command(t, "chosen", "sleep 0.05"))
+	id := h.addTask("Explicit worker", []string{"src/**"})
+	if _, err := h.w.Orch.AssignTask(context.Background(), repo, id, "chosen", ""); err != nil {
+		t.Fatal(err)
+	}
+	h.reconcile()
+	h.eventually("chosen executor to finish", func() bool { return h.state(id) == agwp.TaskDone })
+	h.waitIdle()
+	runs := h.runs()
+	if len(runs) != 1 || runs[0].Agent != "chosen" {
+		t.Fatalf("assignment ignored: %+v", runs)
+	}
+}

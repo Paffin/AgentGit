@@ -178,6 +178,29 @@
         },
         "type": "object"
       },
+      "AssignTaskRequest": {
+        "properties": {
+          "agent": {
+            "default": "",
+            "description": "Registered agent name; empty restores automatic routing.",
+            "type": "string"
+          },
+          "expected_owner": {
+            "default": "",
+            "description": "Owner inspected by the caller; empty means unassigned.",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Attestation": {
         "properties": {
           "check": {
@@ -874,6 +897,11 @@
       },
       "CreateTaskRequest": {
         "properties": {
+          "assignee": {
+            "default": "",
+            "description": "Optional initial agent assignment, saved before the task becomes visible.",
+            "type": "string"
+          },
           "depends_on": {
             "default": [],
             "items": {
@@ -11026,6 +11054,77 @@
           }
         },
         "summary": "One task",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/tasks/{id}/assignee": {
+      "put": {
+        "operationId": "task.assign",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Assign queued work to a registered agent",
         "tags": [
           "Agent"
         ]

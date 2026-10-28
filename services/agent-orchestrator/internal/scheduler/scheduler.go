@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -442,12 +443,12 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	return true
 }
 
-// executorFor chooses the executor for a candidate; an adopted task must go
-// to the executor whose agent owns it.
+// executorFor respects an explicit assignment before considering routing rules.
+// An agent this process does not supervise is left to its own orchestrator.
 func (s *Scheduler) executorFor(t agwp.Task) (config.Executor, bool) {
-	if t.State == agwp.TaskInProgress && t.Owner != "" {
-		if len(t.Owner) > 6 {
-			if e, ok := s.agents[t.Owner[6:]]; ok {
+	if t.Owner != "" {
+		if name, ok := strings.CutPrefix(t.Owner, "agent:"); ok {
+			if e, ok := s.agents[name]; ok {
 				return e, true
 			}
 		}

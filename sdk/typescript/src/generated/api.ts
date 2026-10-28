@@ -132,6 +132,7 @@ export const NAMESPACE_METHODS = {
     reflog: 'stream.reflog',
   },
   tasks: {
+    assign: 'task.assign',
     create: 'task.create',
     depend: 'task.depend',
     finish: 'task.finish',
@@ -373,6 +374,8 @@ export interface Api {
     reflog(request: Req<'stream.reflog'>, options?: CallOptions): Promise<Res<'stream.reflog'>>;
   };
   readonly tasks: {
+    /** Assign queued work to a registered agent (`PUT /v1/repos/{owner}/{rname}/tasks/{id}/assignee`, operation `task.assign`) */
+    assign(request: Req<'task.assign'>, options?: CallOptions): Promise<Res<'task.assign'>>;
     /** Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`) */
     create(request: Req<'task.create'>, options?: CallOptions): Promise<Res<'task.create'>>;
     /** Add a task dependency (`POST /v1/repos/{owner}/{rname}/tasks/{task}/dependencies`, operation `task.depend`) */

@@ -369,7 +369,7 @@ export function createApi(c: ApiClient) {
 
     // ---- agents ---------------------------------------------------------------------------------
     agents: {
-      list: async (repo: string, o?: Opts) =>
+      list: async (repo: string, o?: SessionOpts) =>
         (await c.get<{ agents: Agent[] }>(r(repo, '/agents'), undefined, o)).agents ?? [],
       register: (
         repo: string,
@@ -392,6 +392,18 @@ export function createApi(c: ApiClient) {
       ) => c.json<TaskScheduling>(r(repo, '/tasks/scheduling'), { ...o, method: 'PUT', body }),
       tasks: async (repo: string, q: { state?: string; ready_only?: boolean } = {}, o?: Opts) =>
         (await c.get<{ tasks: Task[] }>(r(repo, '/tasks'), q, o)).tasks ?? [],
+      assignTask: (
+        repo: string,
+        id: string,
+        agent: string,
+        expectedOwner: string,
+        o?: SessionOpts,
+      ) =>
+        c.put<Task>(
+          r(repo, `/tasks/${encodeURIComponent(id)}/assignee`),
+          { agent, expected_owner: expectedOwner },
+          o,
+        ),
       task: (repo: string, id: string, o?: SessionOpts) =>
         c.get<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), undefined, o),
       addDependency: (repo: string, id: string, dependency: string, o?: SessionOpts) =>
@@ -409,6 +421,7 @@ export function createApi(c: ApiClient) {
           depends_on?: string[]
           source_issue?: number
           expected_issue_version?: number
+          assignee?: string
         },
         o?: SessionOpts,
       ) => c.post<Task>(r(repo, '/tasks'), body, o),

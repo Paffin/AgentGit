@@ -26,3 +26,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0016](0016-repository-issues.md) | Durable repository issues and atomic handoff to scoped agent tasks |
 | [0017](0017-task-execution-gate.md) | Persisted operator gate for new task-bound runs, enforced by the agent engine |
 | [0018](0018-permanent-run-pages.md) | Exact historical run lookup and permanent browser pages tied to session identity |
+| [0019](0019-queued-task-assignment.md) | Atomic queued-agent reservation and assignment-aware dispatch |

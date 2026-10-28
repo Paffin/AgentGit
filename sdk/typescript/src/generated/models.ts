@@ -12,6 +12,7 @@ export type AddIssueCommentRequest = S['AddIssueCommentRequest'];
 export type Agent = S['Agent'];
 export type AncestorsRequest = S['AncestorsRequest'];
 export type AncestorsResponse = S['AncestorsResponse'];
+export type AssignTaskRequest = S['AssignTaskRequest'];
 export type Attestation = S['Attestation'];
 export type AuditEntry = S['AuditEntry'];
 export type AuthConfig = S['AuthConfig'];

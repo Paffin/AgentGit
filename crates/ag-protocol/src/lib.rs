@@ -53,6 +53,8 @@ pub mod features {
 
     /// Bounded literal content search with tree-bound continuation tokens.
     pub const TREE_SEARCH: &str = "tree.search";
+    /// Creators and operators can assign queued tasks to registered agents.
+    pub const TASK_ASSIGNMENT: &str = "tasks.assignment";
     /// Exact lookup of a current or historical agent run.
     pub const RUN_LOOKUP: &str = "agents.run_lookup";
     /// Operators can pause and resume new task-bound agent runs.
@@ -79,6 +81,7 @@ pub mod features {
         ISSUES,
         TASK_SCHEDULING,
         RUN_LOOKUP,
+        TASK_ASSIGNMENT,
     ];
 }
 

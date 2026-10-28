@@ -13,6 +13,7 @@ __all__ = [
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
+    "AssignTaskRequest",
     "Attestation",
     "AuditEntry",
     "AuthConfig",
@@ -279,6 +280,15 @@ class AncestorsResponse:
 
 
 @dataclass(kw_only=True)
+class AssignTaskRequest:
+    """The `AssignTaskRequest` message."""
+    agent: str = field(default="")
+    expected_owner: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class Attestation:
     """The `Attestation` message."""
     check: str = field(default="")
@@ -507,6 +517,7 @@ class CreateStreamRequest:
 @dataclass(kw_only=True)
 class CreateTaskRequest:
     """The `CreateTaskRequest` message."""
+    assignee: str = field(default="")
     depends_on: list[str] = field(default_factory=list)
     description: str = field(default="")
     expected_issue_version: int = field(default=0)

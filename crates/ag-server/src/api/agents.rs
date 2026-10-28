@@ -424,6 +424,10 @@ impl App {
             if req.source_issue != 0 {
                 request.push_str(&format!("\0issue:{}:{}", req.source_issue, req.expected_issue_version));
             }
+            if !req.assignee.is_empty() {
+                ag_agent::registry::validate_name(&req.assignee)?;
+                request.push_str(&format!("\0assignee:{}", req.assignee));
+            }
             keyed(repo, idem, "task.create", &req.idempotency_key, &request, |claim| {
                 // The task, its dependencies and the idempotency record are one transaction.
                 let (_, response) = create_task_with(
@@ -441,13 +445,41 @@ impl App {
                             req.expected_issue_version,
                             &t.id,
                         )?;
-                        let response = task_view_in(tx, t)?;
+                        let response = if req.assignee.is_empty() {
+                            task_view_in(tx, t)?
+                        } else {
+                            let assigned =
+                                ag_agent::tasks::assign_in_tx(tx, &t.id, &req.assignee, "", actor.as_str(), false)?;
+                            task_view_in(tx, &assigned)?
+                        };
                         claim.record(tx, &response)?;
                         Ok(response)
                     },
                 )?;
                 Ok(response)
             })
+        })
+        .await
+    }
+
+    /// Assigns queued work without changing a running task's ownership.
+    pub async fn assign_task(&self, call: &Call, req: v1::AssignTaskRequest) -> ApiResult<v1::Task> {
+        let operator = self.authorize(call, &req.repo, Cap::AgentOperate, None).await.is_ok();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
+            let existing =
+                repo.meta().read(|tx| tx.task(&req.id))?.ok_or_else(|| ApiError::not_found("task not found"))?;
+            if !operator && !super::owns(&existing.created_by, actor) {
+                return Err(ApiError::denied("only the task creator or an operator can assign it"));
+            }
+            let task = ag_agent::tasks::assign_task(
+                repo.meta(),
+                &req.id,
+                &req.agent,
+                &req.expected_owner,
+                actor.as_str(),
+                operator,
+            )?;
+            task_view(repo, &task)
         })
         .await
     }

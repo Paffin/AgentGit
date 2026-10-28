@@ -27,10 +27,12 @@ interface Hit {
 }
 const hits: Hit[] = [];
 
-const matchers = [...(Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][])].sort((a, b) => a.route.split("{").length - b.route.split("{").length).map((op) => ({
-  op,
-  re: new RegExp('^' + op.route.replace(/\{\*[^}]+\}/g, '.+').replace(/\{[^}]+\}/g, '[^/]+') + '$'),
-}));
+const matchers = [...(Object.values(OPERATIONS) as readonly (typeof OPERATIONS)[OperationId][])]
+  .sort((a, b) => a.route.split('{').length - b.route.split('{').length)
+  .map((op) => ({
+    op,
+    re: new RegExp('^' + op.route.replace(/\{\*[^}]+\}/g, '.+').replace(/\{[^}]+\}/g, '[^/]+') + '$'),
+  }));
 
 const recording: typeof fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -262,7 +264,8 @@ describe('the tour', () => {
     const key = generateAgentKey();
     await bot.agents.register({ repo, name: 'tour-bot', public_key: key.publicKeyHex });
     expect((await alice.agents.list({ repo })).agents.map((a) => a.name)).toContain('tour-bot');
-    const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'] });
+    const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'], assignee: 'tour-bot' });
+    await alice.tasks.assign({ repo, id: task.id, agent: 'tour-bot', expected_owner: 'agent:tour-bot' });
     const dep = await alice.tasks.create({ repo, title: 'depends' });
     await alice.tasks.depend({ repo, task: dep.id, depends_on: task.id });
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);

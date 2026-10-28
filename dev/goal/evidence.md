@@ -257,3 +257,28 @@ checks passed. These fixtures do not establish an external coding-model pilot or
 stdout log service. The repository's existing role-boundary invariant also found the
 new issue.manage permission missing from NEVER_DELEGATED; fixed and separately verified
 in the parent issue PR before merge.
+
+## Queued agent assignment — task-assignment branch, 2026-10-28
+
+Task creation and issue handoff can reserve an enabled registered agent in the
+same transaction. The task creator/operator can change a queued reservation with
+an expected-owner check or restore automatic routing. The existing atomic claim
+rejects another agent; active work cannot be reassigned.
+
+Engine and HTTP cases passed competing claims, stale edits, non-creator rejection,
+running-task rejection, unassignment and rollback of an invalid issue-linked
+creation. The real Go command executor ran the explicitly selected agent instead
+of the default executor. Chromium and phone workflows both passed creation,
+reassignment, reload and launch enforcement (2 cases, 7.6 s). Web build/types and
+TypeScript/Python operation tours passed (12/13 cases). The operation recorder
+now matches static routes before variable routes, avoiding misattributing
+`tasks/scheduling` to `tasks/{id}`. Migration verification compares with the schema
+registry rather than the obsolete hard-coded version 3.
+
+Evidence artifacts are in `/workspace/agentgit-quality/assignment-*`. No live
+external coding-model pilot or browser executor installation is claimed.
+
+Crapper complexity inspection split assignment validation and agent resolution into
+separate units; no coverage-derived CRAP score is claimed. Dryer found no duplicate
+candidates in the focused units. Mutator discovery was inspected; no mutation kill
+rate is claimed for this slice.

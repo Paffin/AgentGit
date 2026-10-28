@@ -487,3 +487,9 @@ For a task-bound run, open its task to inspect dependencies and available cancel
 actions. Connected orchestrators stop their managed process after seeing cancellation;
 manually launched external processes may need to be stopped separately. Agent summaries
 are not complete stdout logs. This page requires `agents.run_lookup` on the server.
+
+### Choose the agent before execution (development)
+
+In **New task**, or when handing an issue to an agent, choose an **Assigned agent**. The reservation is saved atomically with the task. **Automatic routing** leaves the choice to the configured orchestrator. Registration alone does not install or start an executor.
+
+On a queued task's page, its creator or an operator can use **Choose agent…** to change the reservation or restore automatic routing. A stale assignment is rejected; reopen the dialog after reviewing the current task. Once a run starts, the assignment cannot be changed. Open the linked run to follow that execution and then inspect its change requests for review and integration.

@@ -544,3 +544,11 @@ prerequisites. Nothing is created until you submit the form. The new task has it
 own history and retry budget; the source task keeps its state, owner and history.
 Use this for follow-up work or a deliberate new attempt after inspecting a failed
 run. It does not reopen or resume the source task.
+
+### Browse older agent sessions
+
+In **Agents & work → Agent sessions → History**, choose **Load more sessions** to
+continue through repository history. The control disappears when there are no
+more records. Active sessions can also be paged. Servers supporting `tasks.history`
+use continuation tokens; older servers retain their 1,000-session retrieval limit
+and show a notice when it is reached. Switching account clears the previous list.

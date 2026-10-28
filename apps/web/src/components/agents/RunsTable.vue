@@ -5,6 +5,7 @@ import { api } from '@/api/instance'
 import type { Run } from '@/api/types'
 import { useLiveReload } from '@/composables/useLiveReload'
 import { useResource } from '@/composables/useResource'
+import { usePagedResource } from '@/composables/usePagedResource'
 import { useServerNow } from '@/composables/useNow'
 import { formatDuration, shortId } from '@/lib/format'
 import { runHealth } from '@/lib/runs'
@@ -28,19 +29,52 @@ const prefs = usePrefs()
 const now = useServerNow()
 
 const scope = ref<'active' | 'all'>('active')
+const supportsPaging = computed(() => !!auth.capabilities?.features.includes('tasks.history'))
 const limit = ref(100)
-watch(
-  () => props.repo,
-  () => (limit.value = 100),
+const identityScope = [() => props.repo, () => auth.token, scope, supportsPaging]
+watch(identityScope, () => (limit.value = 100))
+const pages = usePagedResource(
+  (cursor, signal) =>
+    api.agents.runPage(
+      props.repo,
+      {
+        active_only: scope.value === 'active',
+        limit: 100,
+        page_token: cursor,
+      },
+      { signal, token: auth.token },
+    ),
+  identityScope,
+  () => supportsPaging.value,
 )
-
-const runs = useResource<Run[]>(
-  () => api.agents.runs(props.repo, { active_only: scope.value === 'active', limit: limit.value }),
-  { watch: [() => props.repo, scope, limit] },
+const legacy = useResource<Run[]>(
+  (signal) =>
+    api.agents.runs(
+      props.repo,
+      { active_only: scope.value === 'active', limit: limit.value },
+      { signal, token: auth.token },
+    ),
+  { watch: [...identityScope, limit], enabled: () => !supportsPaging.value },
 )
-useLiveReload(['run', 'task'], () => runs.reload())
-// Heartbeats are not events: keep ages honest.
-const timer = setInterval(() => void runs.reload(), 10_000)
+const rows = computed(() => (supportsPaging.value ? pages.data.value : (legacy.data.value ?? [])))
+const error = computed(() => (supportsPaging.value ? pages.error.value : legacy.error.value))
+const loading = computed(() => (supportsPaging.value ? pages.loading.value : legacy.loading.value))
+const settled = computed(() => (supportsPaging.value ? pages.settled.value : legacy.settled.value))
+const hasMore = computed(() =>
+  supportsPaging.value
+    ? !!pages.next.value
+    : rows.value.length >= limit.value && limit.value < 1000,
+)
+const reload = () => (supportsPaging.value ? pages.reload() : legacy.reload())
+function more() {
+  if (supportsPaging.value) void pages.more()
+  else limit.value = Math.min(1000, limit.value + 100)
+}
+useLiveReload(['run', 'task'], reload)
+// Heartbeats are not events. Hidden tabs do not need background requests.
+const timer = setInterval(() => {
+  if (!document.hidden) void reload()
+}, 10_000)
 onBeforeUnmount(() => clearInterval(timer))
 
 const columns: Column[] = [
@@ -58,7 +92,6 @@ const TONE: Record<string, 'ok' | 'info' | 'warn' | 'bad' | 'neutral'> = {
   stale: 'warn',
   abandoned: 'warn',
 }
-const rows = computed(() => runs.data.value ?? [])
 const taskTitle = (r: Run) =>
   r.task_id ? (board.taskById.get(r.task_id)?.title ?? shortId(r.task_id, 12)) : ''
 const health = (r: Run) => runHealth(r, now.value, prefs.staleAfterMs)
@@ -77,19 +110,14 @@ const options = [
         Live board).
       </p>
     </div>
-    <ErrorState
-      v-if="runs.error.value && !runs.data.value"
-      what="agent sessions"
-      :error="runs.error.value"
-      @retry="runs.reload()"
-    />
+    <ErrorState v-if="error" what="agent sessions" :error="error" @retry="reload" />
     <DataTable
-      v-else
+      v-if="!error || rows.length"
       :columns="columns"
       :rows="rows"
       :row-key="(r: Run) => r.run_id"
       caption="Agent runs"
-      :loading="!runs.settled.value"
+      :loading="!settled"
     >
       <template #cell-identity="{ row }">
         <RouterLink
@@ -153,9 +181,12 @@ const options = [
         />
       </template>
     </DataTable>
-    <div v-if="scope === 'all' && rows.length >= limit" class="more">
-      <Button size="sm" @click="limit += 100">Show 100 more</Button>
+    <div v-if="hasMore" class="more">
+      <Button size="sm" :loading="loading" @click="more">Load more sessions</Button>
     </div>
+    <p v-if="!supportsPaging && rows.length >= 1000" class="faint">
+      This server returns at most 1,000 sessions. Update the server to browse older history.
+    </p>
   </div>
 </template>
 

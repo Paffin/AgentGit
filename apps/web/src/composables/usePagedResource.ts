@@ -7,10 +7,12 @@ import { isApiError } from '@/api/errors'
 export function usePagedResource<T>(
   fetchPage: (cursor: string, signal: AbortSignal) => Promise<Page<T>>,
   scope: WatchSource[],
+  enabled: () => boolean = () => true,
 ) {
   const data = shallowRef<T[]>([])
   const next = ref('')
   const loading = ref(false)
+  const settled = ref(false)
   const error = shallowRef<unknown>(null)
   let controller: AbortController | undefined
   let generation = 0
@@ -21,6 +23,10 @@ export function usePagedResource<T>(
     if (disposed || (append && (loading.value || !next.value))) return
     controller?.abort()
     const mine = ++generation
+    if (!enabled()) {
+      loading.value = false
+      return
+    }
     controller = new AbortController()
     loading.value = true
     error.value = null
@@ -41,7 +47,10 @@ export function usePagedResource<T>(
     } catch (cause) {
       if (mine === generation && !(isApiError(cause) && cause.isCancelled)) error.value = cause
     } finally {
-      if (mine === generation) loading.value = false
+      if (mine === generation) {
+        loading.value = false
+        settled.value = true
+      }
     }
   }
   const reload = () => load(false)
@@ -51,6 +60,8 @@ export function usePagedResource<T>(
     () => {
       data.value = []
       next.value = ''
+      error.value = null
+      settled.value = false
       depth = 1
       void reload()
     },
@@ -61,5 +72,5 @@ export function usePagedResource<T>(
     generation++
     controller?.abort()
   })
-  return { data, next, loading, error, reload, more }
+  return { data, next, loading, settled, error, reload, more }
 }

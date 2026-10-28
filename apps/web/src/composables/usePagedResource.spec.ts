@@ -10,12 +10,13 @@ enableAutoUnmount(afterEach)
 function host(
   load: (cursor: string, signal: AbortSignal) => Promise<Page<string>>,
   scope: WatchSource[],
+  enabled: () => boolean = () => true,
 ) {
   let list!: ReturnType<typeof usePagedResource<string>>
   const component = mount(
     defineComponent({
       setup() {
-        list = usePagedResource(load, scope)
+        list = usePagedResource(load, scope, enabled)
         return () => h('div')
       },
     }),
@@ -63,4 +64,26 @@ it('drops account-scoped history synchronously and refuses late pages or work af
   const calls = load.mock.calls.length
   await list.reload()
   expect(load).toHaveBeenCalledTimes(calls)
+})
+
+it('does not fetch while disabled and discards a page after disabling', async () => {
+  const enabled = ref(false)
+  let finish!: (page: Page<string>) => void
+  let signal!: AbortSignal
+  const load = vi.fn((_cursor: string, request: AbortSignal) => {
+    signal = request
+    return new Promise<Page<string>>((resolve) => {
+      finish = resolve
+    })
+  })
+  const { list } = host(load, [enabled], () => enabled.value)
+  expect(load).not.toHaveBeenCalled()
+  enabled.value = true
+  expect(load).toHaveBeenCalledTimes(1)
+  enabled.value = false
+  expect(signal.aborted).toBe(true)
+  finish({ items: ['obsolete'], nextPageToken: '' })
+  await flushPromises()
+  expect(list.data.value).toEqual([])
+  expect(list.loading.value).toBe(false)
 })

@@ -970,6 +970,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         meta,
         post,
         "post",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/comments",
+        "proposal.comment",
+        "Proposal",
+        "Add an idempotent discussion comment at the inspected head",
+        v1::CommentProposalRequest,
+        v1::Review,
+        comment_proposal
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
         "/v1/repos/{owner}/{rname}/proposals/{id}/close",
         "proposal.close",
         "Proposal",

@@ -386,7 +386,22 @@ binary. The native orchestrator in the archive reports beta.4. These checks do n
 qualify physical devices, an external model or an independent human pilot.
 
 The release workflow's native builds and archive smokes passed on all four
-platforms. Its final macOS installer job was still queued when this entry was
-written; publication and Linux provenance verification are complete. Newer main
+platforms. The final macOS installer job initially failed to acquire a hosted
+runner; rerunning that job succeeded and the full release workflow completed.
+Publication and Linux provenance verification are complete. Newer main
 features, including task-context reuse and repository-wide history paging, are
 not part of this immutable tag.
+
+## Proposal discussion after beta.4
+
+The `proposal.comment` HTTP/gRPC operation gives writers, reviewers and integrators
+discussion rights without approval rights. Focused HTTP qualification checks
+idempotent replay, rejection of changed-key payloads, stale-head rejection, size
+bounds, read-only denial and discussion after closure. No schema migration.
+
+The Chromium flow verifies author draft recovery after reload, explicit handling
+of a changed head, correct stored author/head, read-only viewing and posting after
+closure. TypeScript and Python operation tours cover the new generated API (112
+operations). The browser review summary now ignores comments when finding the
+latest approval/request-changes decision, matching the server's policy logic.
+Nested threads, line anchors and resolution remain open work.

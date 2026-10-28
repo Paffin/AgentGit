@@ -868,6 +868,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/proposals/{id}/comments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Add an idempotent discussion comment at the inspected head */
+    post: operations['proposal.comment']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/proposals/{id}/reviews': {
     parameters: {
       query?: never
@@ -1849,6 +1866,22 @@ export interface components {
        * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
        * @default
        */
+      idempotency_key: string
+      /** @default  */
+      repo: string
+    }
+    /** @description A discussion entry, never an approval or a request-changes vote. */
+    CommentProposalRequest: {
+      /** @default  */
+      body: string
+      /**
+       * @description Required exact proposal head inspected by the author.
+       * @default
+       */
+      expected_head: string
+      /** @default  */
+      id: string
+      /** @default  */
       idempotency_key: string
       /** @default  */
       repo: string
@@ -7001,6 +7034,45 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'proposal.comment': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CommentProposalRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Review']
         }
       }
       /** @description Error */

@@ -31,6 +31,7 @@ export interface ReviewSummary {
 export function summarizeReviews(reviews: readonly Review[], head: string): ReviewSummary {
   const latest = new Map<string, Review>()
   for (const r of [...reviews].sort((a, b) => a.id - b.id)) {
+    if (r.decision !== 'approve' && r.decision !== 'request_changes') continue
     latest.set(parseIdentity(r.reviewer).principal, r)
   }
   const current: Review[] = []

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import BlockerList from '@/components/BlockerList.vue'
 import StateStrip from '@/components/StateStrip.vue'
@@ -10,6 +10,7 @@ import IntegrateDialog from '@/components/proposal/IntegrateDialog.vue'
 import ProvenanceTab from '@/components/proposal/ProvenanceTab.vue'
 import ReviewDialog from '@/components/proposal/ReviewDialog.vue'
 import ReviewsTab from '@/components/proposal/ReviewsTab.vue'
+import ProposalComment from '@/components/proposal/ProposalComment.vue'
 import TimelineTab from '@/components/proposal/TimelineTab.vue'
 import ValidationTab from '@/components/proposal/ValidationTab.vue'
 import { useProposalData } from '@/composables/useProposalData'
@@ -42,6 +43,8 @@ const props = defineProps<{ id: string }>()
 const { repo } = useRepoName()
 const idRef = computed(() => props.id)
 const auth = useAuth()
+const route = useRoute(),
+  router = useRouter()
 const board = useBoard()
 const toasts = useToasts()
 
@@ -50,7 +53,15 @@ const { proposal, states } = data
 usePageTitle(() => (proposal.value ? `${proposal.value.title} · ${repo.value}` : 'Proposal'))
 
 type TabId = 'changes' | 'reviews' | 'validation' | 'provenance' | 'timeline'
-const tab = ref<TabId>('changes')
+const tab = computed<TabId>({
+  get: () =>
+    ['changes', 'reviews', 'validation', 'provenance', 'timeline'].includes(String(route.query.tab))
+      ? (route.query.tab as TabId)
+      : 'changes',
+  set: (value) => {
+    void router.replace({ query: { ...route.query, tab: value === 'changes' ? undefined : value } })
+  },
+})
 const tabs = computed<TabItem<TabId>[]>(() => [
   {
     id: 'changes',
@@ -231,7 +242,6 @@ function doFix(id: FixId) {
 }
 
 // A link such as `…/proposals/prop_…?do=review` (from the home page) opens what it names, once, when allowed.
-const route = useRoute()
 const resolving = ref(false)
 let didDo = ''
 function runDo() {
@@ -416,6 +426,14 @@ function changed() {
             >Review…</Button
           >
           <Button
+            v-if="
+              can('commentProposal') && auth.capabilities?.features.includes('proposals.comments')
+            "
+            icon="comment"
+            @click="tab = 'reviews'"
+            >Discuss…</Button
+          >
+          <Button
             icon="play"
             :loading="busy === 'validate'"
             :disabled="!can('requestValidation')"
@@ -467,7 +485,11 @@ function changed() {
             :can-review="can('review')"
             :review-reason="requirementText('review')"
             @review="reviewing = true"
-          />
+          >
+            <template #comment
+              ><ProposalComment :repo="repo" :proposal="proposal" @done="changed"
+            /></template>
+          </ReviewsTab>
         </template>
         <template #validation>
           <ValidationTab

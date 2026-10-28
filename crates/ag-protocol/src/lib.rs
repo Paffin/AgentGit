@@ -61,6 +61,8 @@ pub mod features {
     pub const RUN_OUTPUT: &str = "agents.run_output";
     /// Task-filtered proposal and run history with run continuation tokens.
     pub const TASK_HISTORY: &str = "tasks.history";
+    /// Authors and collaborators can discuss proposals without approval rights.
+    pub const PROPOSAL_COMMENTS: &str = "proposals.comments";
     /// Exact run lookup.
     pub const RUN_LOOKUP: &str = "agents.run_lookup";
     /// Operators can pause and resume new task-bound agent runs.
@@ -87,6 +89,7 @@ pub mod features {
         ISSUES,
         TASK_SCHEDULING,
         RUN_LOOKUP,
+        PROPOSAL_COMMENTS,
         TASK_HISTORY,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,

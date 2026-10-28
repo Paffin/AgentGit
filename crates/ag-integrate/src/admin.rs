@@ -499,8 +499,5 @@ fn store_review(
         &proposal.id,
         &json!({"decision": decision, "head": proposal.head}),
     )?;
-    tx.reviews(&proposal.id)?
-        .into_iter()
-        .find(|review| review.id == id)
-        .ok_or_else(|| MetaError::Corrupt("review vanished".into()))
+    tx.review(id)?.ok_or_else(|| MetaError::Corrupt("review vanished".into()))
 }

@@ -27,6 +27,7 @@ __all__ = [
     "ClaimJobRequest",
     "ClaimJobResponse",
     "CloseProposalRequest",
+    "CommentProposalRequest",
     "CompareAndSwapRequest",
     "CompleteJobRequest",
     "CompleteRunRequest",
@@ -423,6 +424,16 @@ class ClaimJobResponse:
 @dataclass(kw_only=True)
 class CloseProposalRequest:
     """The `CloseProposalRequest` message."""
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class CommentProposalRequest:
+    """A discussion entry, never an approval or a request-changes vote."""
+    body: str = field(default="")
+    expected_head: str = field(default="")
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")

@@ -256,13 +256,14 @@ describe('review summaries', () => {
         review(3, 'user:carol', 'approve', 'old-head'),
         review(4, 'agent:rev#run_1', 'approve'),
         review(5, 'agent:rev#run_2', 'comment'),
+        review(6, 'user:bob', 'comment'),
       ],
       'h1',
     )
-    expect(s.approvals).toHaveLength(0)
+    expect(s.approvals.map((r) => r.reviewer)).toEqual(['agent:rev#run_1'])
     expect(s.changesRequested.map((r) => r.reviewer)).toEqual(['user:bob'])
     expect(s.staleApprovals.map((r) => r.reviewer)).toEqual(['user:carol'])
-    // a new run of the same agent supersedes its earlier review
+    // A later discussion comment does not revoke a review decision.
     expect(s.current.filter((r) => r.reviewer.startsWith('agent:rev'))).toHaveLength(1)
   })
 })

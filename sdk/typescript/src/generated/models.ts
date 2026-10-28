@@ -26,6 +26,7 @@ export type Changeset = S['Changeset'];
 export type ClaimJobRequest = S['ClaimJobRequest'];
 export type ClaimJobResponse = S['ClaimJobResponse'];
 export type CloseProposalRequest = S['CloseProposalRequest'];
+export type CommentProposalRequest = S['CommentProposalRequest'];
 export type CompareAndSwapRequest = S['CompareAndSwapRequest'];
 export type CompleteJobRequest = S['CompleteJobRequest'];
 export type CompleteRunRequest = S['CompleteRunRequest'];

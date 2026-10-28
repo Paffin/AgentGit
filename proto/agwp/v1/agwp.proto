@@ -761,6 +761,16 @@ message ReviewProposalRequest {
   string expected_head = 6;
 }
 
+// A discussion entry, never an approval or a request-changes vote.
+message CommentProposalRequest {
+  string repo = 1;
+  string id = 2;
+  string body = 3;
+  // Required exact proposal head inspected by the author.
+  string expected_head = 4;
+  string idempotency_key = 5;
+}
+
 message CloseProposalRequest {
   string repo = 1;
   string id = 2;
@@ -1724,6 +1734,7 @@ service ProposalService {
   rpc List(ListProposalsRequest) returns (ListProposalsResponse);
   rpc Update(UpdateProposalRequest) returns (Proposal);
   rpc Review(ReviewProposalRequest) returns (Review);
+  rpc Comment(CommentProposalRequest) returns (Review);
   rpc Close(CloseProposalRequest) returns (Proposal);
 }
 

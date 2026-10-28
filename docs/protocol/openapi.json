@@ -638,6 +638,33 @@
         },
         "type": "object"
       },
+      "CommentProposalRequest": {
+        "description": "A discussion entry, never an approval or a request-changes vote.",
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_head": {
+            "default": "",
+            "description": "Required exact proposal head inspected by the author.",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CompareAndSwapRequest": {
         "properties": {
           "expected_head": {
@@ -9446,6 +9473,77 @@
           }
         },
         "summary": "Close without integrating",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/comments": {
+      "post": {
+        "operationId": "proposal.comment",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add an idempotent discussion comment at the inspected head",
         "tags": [
           "Proposal"
         ]

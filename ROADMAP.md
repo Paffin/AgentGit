@@ -97,7 +97,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
 
 1. **Deliver the next development slice.** Beta.7 is published with metadata schema 8.
    Its Linux archive installation and first reviewed change have been exercised end to end.
-   The next release must include the development review workflow and its schema-10 upgrade
+   The next release must include the development review workflow and its schema-11 upgrade
    notice with backup/rollback guidance; existing beta tags remain immutable.
 2. **Finish the daily task and review workflow.** Queued-task refinement now preserves
    historical instructions and source links. Proposal updates now have an atomic inspected-head
@@ -106,7 +106,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
    rechecks the proposal head and open state. Single-line, range and batched suggestions support explicit author preview and application across files in one revision. Requested reviewers route work across Web UI, CLI, MCP and SDKs without changing approval policy. Optional policy-required line-discussion resolution is now implemented
    across core, API, CLI explanations and Web UI. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
-   Binary, oversized, file-type and rename/delete conflicts now support exact version choices; renamed content previews retain their per-side source paths. Private account-backed review-decision drafts now restore across browsers, with explicit save and version checks; account-backed file edits and general comment drafts remain open. Bounded file/directory conflicts now support whole-source choices with complete candidate previews; multi-target rename conflicts and larger structural cases remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and
+   Binary, oversized, file-type and rename/delete conflicts now support exact version choices; renamed content previews retain their per-side source paths. Private account-backed review-decision drafts now restore across browsers, with explicit save and version checks; general proposal comments now have separate private drafts with the same explicit save and version checks; account-backed file edits remain open. Bounded file/directory conflicts now support whole-source choices with complete candidate previews; multi-target rename conflicts and larger structural cases remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and
    polling for the aggregate view. A cross-repository event feed remains future work.
 3. **Make GitHub/GitLab cutover complete.** Code history, branch/tag mapping, the original bundle
    and reconciliation already move through Web UI and CLI. Next design and implement resumable

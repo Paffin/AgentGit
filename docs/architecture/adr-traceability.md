@@ -139,4 +139,8 @@ The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI
 
 ## ADR-0040 — structural sync safety
 
-[ADR-0040](../adr/0040-structural-sync-resolutions.md) retains the full structural candidate for explicit virtual-sync resolutions. Tests preserve independent incoming additions, edits and deletions for both orientations and choices, reject invalid trees before workspace movement, and keep exact blob/type/mode metadata. Local structural sync and snapshots of legacy structural pending merges fail closed; `--force` does not bypass this protection. A complete browser structural chooser remains an open product task.
+[ADR-0040](../adr/0040-structural-sync-resolutions.md) retains the full structural candidate for explicit virtual-sync resolutions. Tests preserve independent incoming additions, edits and deletions for both orientations and choices, reject invalid trees before workspace movement, and keep exact blob/type/mode metadata. Local structural sync and snapshots of legacy structural pending merges fail closed; `--force` does not bypass this protection. The bounded browser chooser uses complete candidate scopes from ADR-0041; larger and multi-target rename cases remain open.
+
+## ADR-0042 — private proposal comment drafts
+
+[ADR-0042](../adr/0042-private-comment-drafts.md) separates general-comment notes from review decisions. Core and storage tests cover exact actor ownership, independent slots, transactional versions, tombstones and the schema10-to11 upgrade. HTTP/gRPC tests cover permissions, closed proposals and private response handling. CLI and SDK tests exercise the same get/save/clear contract. Web component and browser scenarios cover explicit save, cross-device restore, conflicting versions and cleanup after posting. See the continuous checkpoint for validation status on the current unmerged head.

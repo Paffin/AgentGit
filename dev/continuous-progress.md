@@ -38,7 +38,7 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 | D1 | P0 DONE | Reconcile unmerged batch with current main; retain new prepared-release/CI design | clean rebase, no lost Windows/install changes; static CI/skip/docs gates pass |
 | D2 | P0 IN PROGRESS | Push working branch, open draft PR, inspect mandatory CI; **never merge** | exact head checks, fix actual failures; native Windows ZIP/install/PS5.1 evidence |
 | R1 | P0 DONE | Fix structural sync losing independent incoming add/edit/delete when file/directory merge falls back to ours | retain raw conflicting candidate, apply explicit choices before tree validation; both orientations/no partial workspace mutation |
-| R2 | P1 OPEN | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
+| R2 | P1 DONE | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
 | R3 | P1 OPEN | Account-backed file-edit drafts | immutable base, byte/mode preservation, conflicts keep local work; no automatic publication |
 | R4 | P1 PARTIAL | Bounded file/directory Web choices; multi-target rename and larger structural cases remain open | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
 | R5 | P1 OPEN | Cross-repository work feed | pagination/scopes, full initial snapshot and reconnect behavior |
@@ -101,3 +101,17 @@ CLI follow-up is implementing actual virtual-workspace list/show/create/sync/del
 Web849 tests and12 browser cases passed. CLI virtual-workspace lifecycle now implemented (five explicit commands), with pinned resolution files, capability guards, duplicate/ambiguous JSON rejection, complete/incomplete scope output and no automatic proposal mutation. Final lifecycle/unit/clippy and159 generated reference files checked. SDK179/204 and MCP3 passed for the same scope contract. Independent reviews found no blockers. Next push will include these commits in the existing draft PR only; no merge/tag/release is authorized.
 
 Windows run40962143088 is still on earlier93bc477 and currently in Test; do not count it as latest-head proof. A subsequent native run on the final pushed head is required. Full Web matrix will be dispatched on that final head; local desktop/phone tests are not a substitute for all browser/identity-provider gates. Add OS/build metadata to the next Windows log for exact qualification evidence.
+
+### R2 active: general proposal comment drafts
+
+Pushed head `52ad4cc6f8ed67380fc1dd18801dcce127975e8d`. Full Web run40965163166 queued. Native Windows40962143088 completed with failure in PS5.1 installer tests: Get-FileHash unavailable; investigate inherited module environment, do not claim native qualification.
+
+R2 in progress in parallel: backend schema11 independent comment_drafts table; CLI explicit comment-draft get/save/clear; SDK/MCP same API; Web explicit account-save and restore choice for general ProposalComment only. Contract:16KiB UTF-8, full actor ownership, closed allowed, versioned CAS/tombstones/identical retries, no public events, no-store. Thread replies/file edits remain open. Root owns Web API adapter and ADR0042. No merge or release.
+
+Windows follow-up fix committed/pushed as `c33bc9e`: native PowerShell step now starts from its own shell with Get-FileHash preflight. Native run40965818005 in progress; full Web40965163166 queued. R2 backend build hit full disk; reclaimed13GiB inactive Rust incremental cache and resumed with CARGO_INCREMENTAL=0.
+
+R2 backend green:253 tests (integrate37+4+4, server100+1+1, storage106), schema11 preserves existing review drafts/tombstones through reopen and backup. Fresh OpenAPI and Web types regenerated. Web867 unit tests passed after removing concurrency load; worker-overlay mutation counts discarded as invalid after a control test, direct mutation verification replacing them. CLI cargo slot active, SDK generation and browser checks next.
+
+Next R3 design discovered (not implemented): existing virtual workspaces are readable to repository readers and their blobs enter normal history, so do not use them as private draft storage. Small first slice: existing single-file edits only; owner-private versioned draft keyed by stream/original path with immutable base and original blob/type/mode, bounded private content bytes and title/description, explicit save, private list for recovery after current-file deletion, base retention until clear. Public propose remains existing explicit operation followed by captured-version cleanup. Existing FileEditor does not preserve BOM/CRLF like batch editor: establish real-byte regression before implementation. New-file/batch/rename/delete remain later.
+
+R2 delivered in commits36f99cd (API/schema11),acbdb9f (SDK/MCP),4304dc8 (CLI),d1f19a3 (Web). Backend253, Web867+8browser, SDK182/208, CLI2+1 passed. MCP new integration tests not run; static implementation and generated clients complete. User explicitly requested stopping excess tests/checks and continuing feature development; do not run further broad/mutation loops. R3 implementation now active in parallel core/CLI/SDK-MCP/Web with only basic compilation.

@@ -514,11 +514,13 @@
       "workspace": "string"
     },
     "task edit#remote": {
+      "attempts_started": "number",
       "created_at_ms": "number",
       "created_by": "string",
       "depends_on": [],
       "description": "string",
       "id": "string",
+      "max_attempts": "number",
       "owner": "string",
       "ready": "bool",
       "scope": [],

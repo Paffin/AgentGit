@@ -556,6 +556,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/issues/import/apply': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Apply the inspected import manifest digest */
+    post: operations['issue.import_apply']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/repos/{owner}/{rname}/issues/import/preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Preview normalized hosting issues and comments */
+    post: operations['issue.import_preview']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/issues/{number}': {
     parameters: {
       query?: never
@@ -1820,6 +1854,16 @@ export interface components {
       changeset_ids: string[]
       /** @default  */
       next_page_token: string
+    }
+    ApplyIssueImportRequest: {
+      /** @default false */
+      allow_unsupported: boolean
+      /** @default  */
+      expected_digest: string
+      /** @default  */
+      manifest_json: string
+      /** @default  */
+      repo: string
     }
     AssignTaskRequest: {
       /**
@@ -3137,6 +3181,15 @@ export interface components {
        */
       server_time_ms: number
     }
+    ImportedIssueMapping: {
+      /**
+       * Format: int64
+       * @default 0
+       */
+      number: number
+      /** @default  */
+      source_id: string
+    }
     IntegrateRequest: {
       /**
        * @description Fencing tokens of exclusive leases the author holds.
@@ -3266,6 +3319,48 @@ export interface components {
       issue_number: number
       /** @default  */
       kind: string
+    }
+    IssueImportPreview: {
+      /**
+       * Format: int32
+       * @default 0
+       */
+      comments: number
+      /** @default [] */
+      conflicts: string[]
+      /**
+       * Format: int32
+       * @default 0
+       */
+      create_count: number
+      /** @default  */
+      digest: string
+      /**
+       * Format: int32
+       * @default 0
+       */
+      issues: number
+      /**
+       * Format: int32
+       * @default 0
+       */
+      skip_count: number
+      /** @default [] */
+      warnings: string[]
+    }
+    IssueImportResult: {
+      /**
+       * Format: int32
+       * @default 0
+       */
+      created: number
+      /** @default [] */
+      mappings: components['schemas']['ImportedIssueMapping'][]
+      /**
+       * Format: int32
+       * @default 0
+       */
+      skipped: number
     }
     Job: {
       /**
@@ -4067,6 +4162,12 @@ export interface components {
       idempotency_key: string
       /** @default  */
       proposal: string
+      /** @default  */
+      repo: string
+    }
+    PreviewIssueImportRequest: {
+      /** @default  */
+      manifest_json: string
       /** @default  */
       repo: string
     }
@@ -6918,6 +7019,82 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Issue']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.import_apply': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ApplyIssueImportRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['IssueImportResult']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'issue.import_preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PreviewIssueImportRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['IssueImportPreview']
         }
       }
       /** @description Error */

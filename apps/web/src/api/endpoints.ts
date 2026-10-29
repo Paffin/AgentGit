@@ -7,6 +7,8 @@ import type {
   Agent,
   Issue,
   IssueActivity,
+  IssueImportPreview,
+  IssueImportResult,
   AuditEntry,
   AuthConfig,
   Capabilities,
@@ -222,6 +224,13 @@ export function createApi(c: ApiClient) {
     },
 
     issues: {
+      previewImport: (repo: string, body: { manifest_json: string }, options?: SessionOpts) =>
+        c.post<IssueImportPreview>(r(repo, '/issues/import/preview'), body, options),
+      applyImport: (
+        repo: string,
+        body: { manifest_json: string; expected_digest: string; allow_unsupported: boolean },
+        options?: SessionOpts,
+      ) => c.post<IssueImportResult>(r(repo, '/issues/import/apply'), body, options),
       list: (
         repo: string,
         q: { state?: string; query?: string; page_size?: number; page_token?: string } = {},

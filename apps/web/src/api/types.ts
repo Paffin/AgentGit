@@ -66,6 +66,8 @@ export type Run = S['Run']
 export type RunOutput = S['RunOutput']
 export type Issue = S['Issue']
 export type IssueActivity = S['IssueActivity']
+export type IssueImportPreview = S['IssueImportPreview']
+export type IssueImportResult = S['IssueImportResult']
 // Lineage fields are absent on servers predating tasks.lineage.
 export type Task = Omit<S['Task'], 'source_task' | 'source_run'> &
   Partial<Pick<S['Task'], 'source_task' | 'source_run'>>

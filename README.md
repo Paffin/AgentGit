@@ -117,8 +117,8 @@ There is no stable release or published crates.io, npm or PyPI package yet. Nati
 macOS on x86_64 and ARM64; the worker sandbox is Linux-only. Windows builds are tested in CI, but a native Windows
 release archive is not yet shipped.
 
-**Back up before upgrading.** Beta.7 uses metadata schema **8**. The unreleased development code uses schema **11**,
-adding requested reviewers and private account-backed review and comment drafts. Opening a repository with a development build
+**Back up before upgrading.** Beta.7 uses metadata schema **8**. The unreleased development code uses schema **12**,
+adding requested reviewers and private account-backed review, comment and single-file drafts. Opening a repository with a development build
 can upgrade it; returning to an older binary requires restoring the pre-upgrade backup. See
 [backup and recovery](docs/operations/durability.md) and [release notes](CHANGELOG.md).
 

@@ -144,3 +144,7 @@ The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI
 ## ADR-0042 — private proposal comment drafts
 
 [ADR-0042](../adr/0042-private-comment-drafts.md) separates general-comment notes from review decisions. Core and storage tests cover exact actor ownership, independent slots, transactional versions, tombstones and the schema10-to11 upgrade. HTTP/gRPC tests cover permissions, closed proposals and private response handling. CLI and SDK tests exercise the same get/save/clear contract. Web component and browser scenarios cover explicit save, cross-device restore, conflicting versions and cleanup after posting. See the continuous checkpoint for validation status on the current unmerged head.
+
+## ADR-0043 — private single-file drafts
+
+[ADR-0043](../adr/0043-private-file-drafts.md) stores replacement bytes privately and retains the original revision as a GC root. Web, CLI, SDK and MCP implement explicit save/restore/clear; Web also lists saved paths. Existing-file scope only. Basic builds/type checks passed; extended test matrices were not run for this slice.

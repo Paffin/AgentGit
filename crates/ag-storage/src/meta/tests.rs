@@ -928,5 +928,11 @@ fn schema_eight_review_requests_migrate_and_persist_without_changing_backup() {
     assert_eq!(reopened.read(|tx| tx.proposal("prop_old")).unwrap().unwrap().title, "Keep old review");
     let untouched = rusqlite::Connection::open(&backup).unwrap();
     assert_eq!(untouched.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 8);
-    assert_eq!(untouched.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='proposal_reviewers'", [], |row| row.get::<_, i64>(0)).unwrap(), 0);
+    assert_eq!(
+        untouched
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='proposal_reviewers'", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
 }

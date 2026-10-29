@@ -67,8 +67,12 @@ impl App {
             let requested_reviewer = if req.requested_reviewer.is_empty() {
                 None
             } else {
-                Some(ag_types::Identity::new(&req.requested_reviewer)
-                    .map_err(|e| ApiError::invalid(e.to_string()))?.principal().to_string())
+                Some(
+                    ag_types::Identity::new(&req.requested_reviewer)
+                        .map_err(|e| ApiError::invalid(e.to_string()))?
+                        .principal()
+                        .to_string(),
+                )
             };
             let filter = ProposalFilter {
                 state: state.as_deref(),

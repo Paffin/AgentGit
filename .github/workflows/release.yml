@@ -556,6 +556,7 @@ jobs:
     env:
       VERSION: ${{ needs.verify.outputs.version }}
       CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
+      PUBLISHED: ${{ needs.verify.outputs.publish }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -565,12 +566,19 @@ jobs:
         with:
           name: release-dist
           path: dist
-      - name: Install from the assembled release, verifying checksum and attestation
+      - name: Install the version-pinned release, verifying checksum and attestation
         run: |
           set -euo pipefail
           prefix="$RUNNER_TEMP/prefix"
-          # A https://github.com/.../releases/download URL does not exist for a rehearsal; a file:// URL has the same layout.
-          sh scripts/install.sh --version "$VERSION" --prefix "$prefix" --base-url "file://$PWD/dist" --require-attestation
+          # Real releases exercise the public download path on a fresh runner. Rehearsals use the same layout locally.
+          base_url="file://$PWD/dist"
+          if [ "$PUBLISHED" = true ]; then
+            base_url="https://github.com/Paffin/AgentGit/releases/download/v$VERSION"
+          fi
+          uname -a
+          if [ "${RUNNER_OS}" = macOS ]; then sw_vers; fi
+          echo "Installing AgentGit $VERSION from $base_url"
+          sh scripts/install.sh --version "$VERSION" --prefix "$prefix" --base-url "$base_url" --require-attestation
           "$prefix/bin/ag" --version
           "$prefix/bin/ag-server" --version
           "$prefix/bin/ag-worker" --version

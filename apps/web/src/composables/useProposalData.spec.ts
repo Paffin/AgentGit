@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Proposal } from '@/api/types'
+import { defineComponent, h, ref } from 'vue'
+import { flushPromises, mount } from '@vue/test-utils'
 
 const api = vi.hoisted(() => ({
   history: { mergeBase: vi.fn(), changeset: vi.fn() },
   streams: { reflog: vi.fn(), head: vi.fn() },
+  proposals: { get: vi.fn() },
+  integration: { prepare: vi.fn(), attestations: vi.fn() },
+  agents: { provenance: vi.fn(), leases: vi.fn() },
+  tree: { diff: vi.fn() },
 }))
 vi.mock('@/api/instance', () => ({ api }))
 
-import { diffBase } from './useProposalData'
+vi.mock('@/stores/live', () => ({ useLive: () => ({ subscribe: () => () => {} }) }))
+
+import { diffBase, useProposalData } from './useProposalData'
 
 const proposal = (over: Partial<Proposal> = {}): Proposal => ({
   id: 'prop_1',
@@ -61,4 +69,36 @@ describe('diffBase', () => {
     await expect(diffBase('r', landed)).rejects.toThrow('403')
     expect(api.history.changeset).toHaveBeenCalledTimes(1)
   })
+})
+
+it('stops an in-flight diff when navigation removes its repository', async () => {
+  vi.resetAllMocks()
+  let release!: (value: { head: string }) => void
+  api.streams.head.mockReturnValue(
+    new Promise((resolve) => {
+      release = resolve
+    }),
+  )
+  api.proposals.get.mockResolvedValue({ proposal: proposal(), reviews: [] })
+  api.integration.prepare.mockResolvedValue(null)
+  api.agents.provenance.mockResolvedValue([])
+  api.agents.leases.mockResolvedValue([])
+  api.history.mergeBase.mockResolvedValue(['base'])
+  api.tree.diff.mockResolvedValue({ files: [], truncated: false })
+  const repo = ref('acme/project')
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        useProposalData(repo, ref('prop_1'))
+        return () => h('div')
+      },
+    }),
+  )
+  await flushPromises()
+  expect(api.streams.head).toHaveBeenCalled()
+  wrapper.unmount()
+  repo.value = '/'
+  release({ head: 'stream-head' })
+  await flushPromises()
+  expect(api.tree.diff).not.toHaveBeenCalled()
 })

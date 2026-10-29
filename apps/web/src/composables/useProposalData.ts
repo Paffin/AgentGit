@@ -59,9 +59,14 @@ const RELEVANT = [
 export function useProposalData(repo: Ref<string>, id: Ref<string>) {
   const live = useLive()
 
-  const detail = useResource<ProposalDetail>(() => api.proposals.get(repo.value, id.value), {
-    watch: [repo, id],
-  })
+  const detail = useResource<ProposalDetail>(
+    (signal) => api.proposals.get(repo.value, id.value, { signal }),
+    {
+      watch: [repo, id],
+      enabled: () =>
+        !!id.value && repo.value.split('/').length === 2 && repo.value.split('/').every(Boolean),
+    },
+  )
   const proposal = computed(() => detail.data.value?.proposal)
   const reviews = computed(() => detail.data.value?.reviews ?? [])
 
@@ -91,15 +96,21 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
   )
 
   const diff = useResource<DiffResponse & { base: string; head: string }>(
-    async () => {
+    async (signal) => {
       const p = proposal.value
+      const repository = repo.value
       if (!p) return { files: [], truncated: false, base: '', head: '' }
-      const base = await diffBase(repo.value, p)
-      const res = await api.tree.diff(repo.value, {
-        from: base,
-        to: p.integrated_as || p.head,
-        context: 3,
-      })
+      const base = await diffBase(repository, p)
+      signal.throwIfAborted()
+      const res = await api.tree.diff(
+        repository,
+        {
+          from: base,
+          to: p.integrated_as || p.head,
+          context: 3,
+        },
+        { signal },
+      )
       return { ...res, base, head: p.integrated_as || p.head }
     },
     { immediate: false },

@@ -936,3 +936,49 @@ fn schema_eight_review_requests_migrate_and_persist_without_changing_backup() {
         0
     );
 }
+
+#[test]
+fn schema_nine_private_drafts_migrate_persist_and_clear_without_rewinding_versions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("meta.db");
+    let backup = dir.path().join("before.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 9) {
+            conn.execute_batch(migration.sql).unwrap();
+        }
+        conn.execute("INSERT INTO meta(key,value) VALUES('schema','9')", []).unwrap();
+        conn.execute("INSERT INTO proposals(id,stream,head,title,description,author,state,created_at,updated_at) VALUES('prop_old','main',?1,'Keep existing','description','user:author','open',1,1)", ["0".repeat(64)]).unwrap();
+        conn.execute("INSERT INTO proposal_reviewers(proposal,reviewer) VALUES('prop_old','user:bob')", []).unwrap();
+        conn.pragma_update(None, "user_version", 9).unwrap();
+    }
+    std::fs::copy(&path, &backup).unwrap();
+    let head: ChangesetId = "0".repeat(64).parse().unwrap();
+    {
+        let upgraded = Meta::open(&path).unwrap();
+        assert!(upgraded.read(|tx| tx.review_draft("prop_old", "user:bob")).unwrap().is_none());
+        upgraded
+            .write(|tx| tx.replace_review_draft("prop_old", "user:bob", Some(&head), "comment", "Private notes", 1))
+            .unwrap();
+    }
+    {
+        let reopened = Meta::open(&path).unwrap();
+        let draft = reopened.read(|tx| tx.review_draft("prop_old", "user:bob")).unwrap().unwrap();
+        assert_eq!(draft.body, "Private notes");
+        assert_eq!(draft.version, 1);
+        assert_eq!(reopened.read(|tx| tx.proposal_reviewers("prop_old")).unwrap(), ["user:bob"]);
+        reopened.write(|tx| tx.replace_review_draft("prop_old", "user:bob", None, "", "", 2)).unwrap();
+    }
+    let reopened = Meta::open(&path).unwrap();
+    let cleared = reopened.read(|tx| tx.review_draft("prop_old", "user:bob")).unwrap().unwrap();
+    assert_eq!(cleared.version, 2);
+    assert!(cleared.head.is_none() && cleared.body.is_empty());
+    let untouched = rusqlite::Connection::open(&backup).unwrap();
+    assert_eq!(untouched.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 9);
+    assert_eq!(
+        untouched
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='review_drafts'", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+}

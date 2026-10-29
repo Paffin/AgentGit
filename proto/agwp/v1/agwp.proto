@@ -766,6 +766,34 @@ message UpdateProposalRequest {
   string expected_head = 5;
 }
 
+// Private, unsubmitted review notes for the current acting identity only.
+message ReviewDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string head = 3;
+  string decision = 4;
+  string body = 5;
+  int64 updated_at_ms = 6;
+}
+message GetReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+}
+message SaveReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+  string head = 3;
+  string decision = 4;
+  string body = 5;
+  // Zero means no prior draft; all saves compare this version atomically.
+  uint64 expected_version = 6;
+}
+message ClearReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+  uint64 expected_version = 3;
+}
+
 // Replaces review routing after comparing the complete inspected set.
 message SetRequestedReviewersRequest {
   string repo = 1;
@@ -1821,6 +1849,9 @@ service ProposalService {
   rpc Get(GetProposalRequest) returns (ProposalDetail);
   rpc List(ListProposalsRequest) returns (ListProposalsResponse);
   rpc Update(UpdateProposalRequest) returns (Proposal);
+  rpc GetDraft(GetReviewDraftRequest) returns (ReviewDraft);
+  rpc SaveDraft(SaveReviewDraftRequest) returns (ReviewDraft);
+  rpc ClearDraft(ClearReviewDraftRequest) returns (ReviewDraft);
   rpc SetReviewers(SetRequestedReviewersRequest) returns (RequestedReviewers);
   rpc Review(ReviewProposalRequest) returns (Review);
   rpc Comment(CommentProposalRequest) returns (Review);

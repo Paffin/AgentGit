@@ -23,6 +23,7 @@ mod jobs;
 mod objects;
 mod proposals;
 mod repository;
+mod review_drafts;
 mod review_threads;
 mod run_output;
 mod search;

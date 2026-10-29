@@ -645,6 +645,25 @@
         },
         "type": "object"
       },
+      "ClearReviewDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CloseProposalRequest": {
         "properties": {
           "id": {
@@ -1861,6 +1880,19 @@
       },
       "GetRepoRequest": {
         "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetReviewDraftRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
           "repo": {
             "default": "",
             "type": "string"
@@ -4659,6 +4691,39 @@
         },
         "type": "object"
       },
+      "ReviewDraft": {
+        "description": "Private, unsubmitted review notes for the current acting identity only.",
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "decision": {
+            "default": "",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "ReviewLineAnchor": {
         "description": "A line location is immutable; text is filled from the repository by the server.",
         "properties": {
@@ -5017,6 +5082,38 @@
             "format": "int32",
             "minimum": 0,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SaveReviewDraftRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "decision": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "description": "Zero means no prior draft; all saves compare this version atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -10170,6 +10267,206 @@
           }
         },
         "summary": "Add an idempotent discussion comment at the inspected head",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft": {
+      "delete": {
+        "operationId": "proposal.clear_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear the inspected private review draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "get": {
+        "operationId": "proposal.get_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read your private review draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "put": {
+        "operationId": "proposal.save_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveReviewDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save your private review draft",
         "tags": [
           "Proposal"
         ]

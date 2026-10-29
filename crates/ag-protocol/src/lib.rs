@@ -97,6 +97,9 @@ pub mod features {
     /// Virtual sync compares the branch revision inspected by a resolving client.
     pub const WORKSPACES_SYNC_PRECONDITION: &str = "workspaces.sync_precondition";
 
+    /// Private versioned review drafts for the current acting identity.
+    pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -112,6 +115,7 @@ pub mod features {
         PROPOSALS_REVIEW_HEAD,
         PROPOSALS_UPDATE_HEAD,
         PROPOSALS_REVIEW_REQUESTS,
+        PROPOSALS_REVIEW_DRAFTS,
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,

@@ -36,6 +36,7 @@ mod prepare;
 mod publish;
 mod queue;
 mod repo;
+mod review_drafts;
 mod review_requests;
 mod storage;
 mod types;
@@ -58,6 +59,7 @@ pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
 pub use layout::{InitOptions, Layout, RepoConfig};
 pub use prepare::{Preparation, PrepareContext, ValidationState};
 pub use publish::PublishResult;
+pub use review_drafts::{MAX_REVIEW_DRAFT_BYTES, ReviewDraftInput};
 
 /// Lifecycle state of an operation (re-exported from the metadata store).
 pub use ag_storage::meta::IntentState as PublishState;

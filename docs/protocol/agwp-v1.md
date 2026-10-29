@@ -386,3 +386,22 @@ the request field, so silently falling back would lose the preview's protection.
 A resolution may reference an existing `blob_id` together with `file_type` and
 `executable`, or delete a path. Keeping a binary or symlink version therefore preserves
 its original bytes and metadata. New text remains an ordinary inline file change.
+
+
+### Private review drafts (development)
+
+Negotiate `proposals.review_drafts`. `GET`, `PUT` and `DELETE` on
+`/v1/repos/{owner}/{repo}/proposals/{id}/review-draft` access only the current full acting
+identity's draft, under the proposal's stream and review permission. There is no owner
+parameter. Private responses use `Cache-Control: no-store` and do not add public review,
+audit-body or repository-event entries.
+
+Save sends `head`, `decision`, `body` (at most 64 KiB UTF-8) and `expected_version`.
+Clear sends `expected_version` as a query parameter. Reads of an absent draft return
+`present=false, version=0`. Clearing content retains an incremented tombstone version;
+late saves using an earlier version fail with HTTP 412 / gRPC FailedPrecondition.
+Identical desired state is an idempotent no-op. A draft may reference an earlier revision,
+but it never pins history or bypasses the actual review's inspected-head check.
+
+Schema 10 stores this private metadata. Back up before upgrading; saved review drafts
+can appear in administrative backups even though they are not in shared proposal APIs.

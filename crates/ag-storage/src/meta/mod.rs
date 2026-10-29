@@ -46,6 +46,7 @@ mod derived;
 mod intents;
 mod outbox;
 mod records;
+mod review_drafts;
 mod streams;
 
 use std::fmt::Display;
@@ -73,6 +74,7 @@ pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_sc
 pub use records::{
     AttestationRow, NewProposal, PinRow, PolicyRow, ProposalFilter, ProposalRow, ReviewRow, WorkspaceRow,
 };
+pub use review_drafts::ReviewDraftRow;
 pub use review_threads::{ReviewThreadAnchorRow, ReviewThreadRow, ThreadCommentRow};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 

@@ -374,6 +374,24 @@ impl ProposalService for Grpc {
     async fn update(&self, request: Request<v1::UpdateProposalRequest>) -> Result<Response<v1::Proposal>, Status> {
         unary!(self, request, "proposal.update", update_proposal)
     }
+    async fn get_draft(
+        &self,
+        request: Request<v1::GetReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.get_draft", get_review_draft)
+    }
+    async fn save_draft(
+        &self,
+        request: Request<v1::SaveReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.save_draft", save_review_draft)
+    }
+    async fn clear_draft(
+        &self,
+        request: Request<v1::ClearReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.clear_draft", clear_review_draft)
+    }
     async fn set_reviewers(
         &self,
         request: Request<v1::SetRequestedReviewersRequest>,

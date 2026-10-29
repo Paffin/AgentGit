@@ -247,7 +247,11 @@ where
         app.dispatch(ing, op, move |call| f(a, call, req)).await
     }
     .await;
-    finish(result, &request_id)
+    let mut response = finish(result, &request_id);
+    if matches!(op, "proposal.get_draft" | "proposal.save_draft" | "proposal.clear_draft") {
+        response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    }
+    response
 }
 
 fn finish<T: Serialize>(result: ApiResult<T>, request_id: &str) -> Response {
@@ -951,6 +955,45 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::UpdateProposalRequest,
         v1::Proposal,
         update_proposal
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft",
+        "proposal.get_draft",
+        "Proposal",
+        "Read your private review draft",
+        v1::GetReviewDraftRequest,
+        v1::ReviewDraft,
+        get_review_draft
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft",
+        "proposal.save_draft",
+        "Proposal",
+        "Save your private review draft",
+        v1::SaveReviewDraftRequest,
+        v1::ReviewDraft,
+        save_review_draft
+    );
+    route!(
+        r,
+        meta,
+        delete,
+        "delete",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft",
+        "proposal.clear_draft",
+        "Proposal",
+        "Clear the inspected private review draft",
+        v1::ClearReviewDraftRequest,
+        v1::ReviewDraft,
+        clear_review_draft
     );
     route!(
         r,

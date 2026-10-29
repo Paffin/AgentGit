@@ -11,11 +11,11 @@ agents. We take integrity and isolation bugs seriously.
 | `0.3.0-beta.7` | Current patch release; use its binaries after the Release workflow completes. |
 | `0.3.0-beta.6` and earlier prereleases | Upgrade to the current patch release for the fixes to stream scopes, workspace concurrency and retention. |
 
-AgentGit is **beta** software. The current development repository metadata schema is **9**;
+AgentGit is **beta** software. The current development repository metadata schema is **10**;
 `ChangesetV1`, tree manifest v1 and repository configuration format 1 remain unchanged.
 The server control database is migrated independently; use the same server version across replicas.
-The published beta.6/beta.7 format is schema 8. Development schema 9 adds requested reviewers;
-back up before opening a schema-8 repository with this build. Beta.7 introduces no
+The published beta.6/beta.7 format is schema 8. Development schema 9 adds requested reviewers and schema 10 adds private review drafts;
+back up before opening a schema-8 or schema-9 repository with this build. Beta.7 introduces no
 storage migration relative to beta.6. Returning to beta.5 or older
 requires the pre-upgrade backup, not opening the upgraded database with an older binary.
 See [compatibility](docs/architecture/compatibility.md) and [releasing](docs/operations/releasing.md).

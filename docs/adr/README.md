@@ -50,3 +50,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0036 — Requested reviewers](0036-requested-reviewers.md)
 
 - [0037 — Pinned workspace sync](0037-pinned-workspace-sync.md)
+
+- [0038 — Private review drafts](0038-private-review-drafts.md)

@@ -45,6 +45,7 @@ concurrency:
 
 jobs:
   checks:
+    timeout-minutes: 15
     name: lint, types, unit tests, build
     runs-on: ubuntu-latest
     defaults:

@@ -104,6 +104,8 @@ class PipelinePolicy(unittest.TestCase):
         self.assertIn('--lib --bins', commands)
         self.assertNotIn('cargo test --workspace --locked', commands)
         self.assertIn("--test '*'", commands)
+        self.assertIn('kernel.apparmor_restrict_unprivileged_userns=0', commands)
+        self.assertIn('namespace-sandbox', jobs['rust']['env']['AG_REQUIRE_COMPONENTS'])
 
     def test_linux_full_tests_are_already_the_coverage_run(self):
         self.assertEqual(workflow('full-ci')['jobs']['test']['strategy']['matrix']['os'], ['macos-latest'])

@@ -40,6 +40,7 @@ jobs:
         run: python3 scripts/cancel_stale_ci.py
 
   changes:
+    timeout-minutes: 3
     permissions:
       contents: read
       actions: read
@@ -61,6 +62,7 @@ jobs:
         run: python3 scripts/ci_changes.py
 
   tooling:
+    timeout-minutes: 5
     name: workflow and release contracts
     needs: changes
     if: needs.changes.outputs.tooling == 'true'
@@ -90,6 +92,7 @@ jobs:
     timeout-minutes: 25
     env:
       AG_SKIP_REPORT: /tmp/fast-rust-skips.jsonl
+      AG_REQUIRE_COMPONENTS: namespace-sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,9 +105,13 @@ jobs:
         with:
           shared-key: linux-debug
           cache-workspace-crates: true
+          cache-on-failure: true
       - name: Formatting and code lint
         if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --all --check && cargo clippy --workspace --lib --bins --locked -- -D warnings
+      - name: Enable unprivileged namespace tests
+        if: needs.changes.outputs.rust == 'true'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Unit tests and core storage contracts
         if: needs.changes.outputs.rust == 'true'
         run: |
@@ -205,6 +212,7 @@ jobs:
       - run: python3 scripts/check_skips.py --job ci/orchestrator --report /tmp/fast-go-skips.jsonl
 
   complete:
+    timeout-minutes: 2
     name: CI
     if: always()
     needs: [changes, tooling, rust, sdk, go]

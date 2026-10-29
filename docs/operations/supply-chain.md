@@ -94,7 +94,7 @@ ecosystem the repository has a manifest for: `cargo` (the workspace and `fuzz/`)
 pull request, major updates one by one. `scripts/check_dependabot.py` (run by the Security workflow) fails when a
 manifest is not covered by an entry of its ecosystem, or an entry names a directory that does not exist. A
 Dependabot pull request is a proposal: the
-Security, CI and CodeQL runs on it are the evidence, a maintainer merges.
+fast CI and dependency audits are immediate evidence; full CodeQL and qualification run before publication. A maintainer merges.
 
 Two deliberate gaps: `docs/requirements.txt` is hash-locked by `uv pip compile` and refreshed by hand (a `pip`
 update would rewrite versions without their hashes), and the toolchain pins in workflows (`toolchain: 1.89.0`,

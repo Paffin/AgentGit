@@ -25,6 +25,7 @@ env:
 
 jobs:
   verify:
+    timeout-minutes: 5
     name: Candidate version and source
     runs-on: ubuntu-latest
     outputs:
@@ -59,6 +60,7 @@ jobs:
     secrets: inherit
 
   scripts:
+    timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: release tooling tests
     needs: verify
@@ -70,6 +72,7 @@ jobs:
       - run: python3 scripts/test_release_scripts.py
 
   binaries:
+    timeout-minutes: 45
     if: needs.verify.outputs.needed == 'true'
     name: binaries (${{ matrix.target }})
     needs: verify
@@ -171,6 +174,7 @@ jobs:
           retention-days: 14
 
   sbom:
+    timeout-minutes: 15
     if: needs.verify.outputs.needed == 'true'
     name: CycloneDX SBOMs
     needs: verify
@@ -199,6 +203,7 @@ jobs:
           retention-days: 14
 
   image:
+    timeout-minutes: 45
     if: needs.verify.outputs.needed == 'true'
     name: image (${{ matrix.arch }})
     needs: verify
@@ -289,6 +294,7 @@ jobs:
           retention-days: 3
 
   manifest:
+    timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: multi-arch manifest
     needs: [verify, image]
@@ -364,6 +370,7 @@ jobs:
           retention-days: 14
 
   release:
+    timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: assemble and attest the candidate
     needs: [verify, qualify, scripts, binaries, sbom, manifest]
@@ -433,6 +440,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   install:
+    timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: install.sh (${{ matrix.os }})
     needs: [verify, release]

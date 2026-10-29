@@ -67,6 +67,7 @@ jobs:
     uses: ./.github/workflows/oci-runtimes.yml
 
   complete:
+    timeout-minutes: 2
     name: Qualified commit
     if: always()
     needs: [core, web, security, codeql, containers, docs, packaging, coverage, windows, fuzz, performance, oci]

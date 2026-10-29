@@ -188,6 +188,7 @@ jobs:
           comment-summary-in-pr: never
 
   sbom:
+    needs: [cargo-deny, npm-audit, pip-audit, govulncheck, hygiene]
     if: inputs.full
     name: SBOMs build (scripts/sbom.sh)
     runs-on: ubuntu-latest

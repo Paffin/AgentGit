@@ -21,11 +21,13 @@ jobs:
     secrets: inherit
 
   web:
+    needs: codeql
     uses: ./.github/workflows/web.yml
     with:
       full: true
 
   security:
+    needs: codeql
     uses: ./.github/workflows/security.yml
     with:
       full: true
@@ -38,9 +40,11 @@ jobs:
       security-events: write
 
   containers:
+    needs: [core, web, security]
     uses: ./.github/workflows/containers.yml
 
   docs:
+    needs: [core, web, security]
     uses: ./.github/workflows/docs.yml
     with:
       full: true
@@ -50,21 +54,27 @@ jobs:
       id-token: write
 
   packaging:
+    needs: [core, web, security]
     uses: ./.github/workflows/packaging.yml
 
   coverage:
+    needs: [core, web, security]
     uses: ./.github/workflows/quality.yml
 
   windows:
+    needs: [core, web, security]
     uses: ./.github/workflows/windows.yml
 
   fuzz:
+    needs: [core, web, security]
     uses: ./.github/workflows/fuzz.yml
 
   performance:
+    needs: [core, web, security]
     uses: ./.github/workflows/perf.yml
 
   oci:
+    needs: [core, web, security]
     uses: ./.github/workflows/oci-runtimes.yml
 
   complete:

@@ -885,6 +885,25 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read your private comment draft */
+    get: operations['proposal.get_comment_draft']
+    /** Save your private comment draft */
+    put: operations['proposal.save_comment_draft']
+    post?: never
+    /** Clear the inspected private comment draft */
+    delete: operations['proposal.clear_comment_draft']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/proposals/{id}/comments': {
     parameters: {
       query?: never
@@ -1995,6 +2014,17 @@ export interface components {
       /** @default null */
       job: components['schemas']['Job'] | null
     }
+    ClearCommentDraftRequest: {
+      /**
+       * Format: int64
+       * @default 0
+       */
+      expected_version: number
+      /** @default  */
+      id: string
+      /** @default  */
+      repo: string
+    }
     ClearReviewDraftRequest: {
       /**
        * Format: int64
@@ -2016,6 +2046,25 @@ export interface components {
       idempotency_key: string
       /** @default  */
       repo: string
+    }
+    /** @description Private, unsubmitted general discussion notes for the current acting identity. */
+    CommentDraft: {
+      /** @default  */
+      body: string
+      /** @default  */
+      head: string
+      /** @default false */
+      present: boolean
+      /**
+       * Format: int64
+       * @default 0
+       */
+      updated_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      version: number
     }
     /** @description A discussion entry, never an approval or a request-changes vote. */
     CommentProposalRequest: {
@@ -2153,7 +2202,8 @@ export interface components {
        */
       complete: boolean
       /**
-       * @description Ordered candidate entries, including the root. At most 100 paths per root and 1000 in one response.
+       * @description Ordered candidate entries; a complete scope includes the root.
+       *     At most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.
        * @default []
        */
       paths: string[]
@@ -2763,6 +2813,12 @@ export interface components {
        * @default
        */
       rev: string
+    }
+    GetCommentDraftRequest: {
+      /** @default  */
+      id: string
+      /** @default  */
+      repo: string
     }
     GetIssueRequest: {
       /**
@@ -4666,6 +4722,22 @@ export interface components {
        * @default 0
        */
       timeout_secs: number
+    }
+    SaveCommentDraftRequest: {
+      /** @default  */
+      body: string
+      /**
+       * Format: int64
+       * @description Zero means no prior draft; all saves compare this version atomically.
+       * @default 0
+       */
+      expected_version: number
+      /** @default  */
+      head: string
+      /** @default  */
+      id: string
+      /** @default  */
+      repo: string
     }
     SaveReviewDraftRequest: {
       /** @default  */
@@ -7581,6 +7653,117 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'proposal.get_comment_draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CommentDraft']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'proposal.save_comment_draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveCommentDraftRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CommentDraft']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'proposal.clear_comment_draft': {
+    parameters: {
+      query?: {
+        expected_version?: number
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CommentDraft']
         }
       }
       /** @description Error */

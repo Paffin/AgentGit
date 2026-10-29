@@ -219,3 +219,45 @@ it('sends the clear-draft version in a DELETE query, including zero', async () =
   expect(options?.method).toBe('DELETE')
   expect(options?.body).toBeUndefined()
 })
+
+it('keeps account comment drafts distinct from reviews and sends private text only in the body', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () => new Response('{}', { headers: { 'content-type': 'application/json' } }),
+    )
+  const client = new ApiClient({ getToken: () => 'current-session', fetch: request })
+  const proposals = createApi(client).proposals
+  await proposals.commentDraft('acme/repo', 'p/one', { token: 'captured-session' })
+  await proposals.saveCommentDraft(
+    'acme/repo',
+    'p/one',
+    { head: 'inspected', body: 'unsubmitted notes', expected_version: 7 },
+    { token: 'captured-session' },
+  )
+  expect(request.mock.calls).toHaveLength(2)
+  for (const [url, options] of request.mock.calls) {
+    expect(String(url)).toContain('/proposals/p%2Fone/comment-draft')
+    expect(String(url)).not.toContain('unsubmitted')
+    expect(new Headers(options?.headers).get('authorization')).toBe('Bearer captured-session')
+  }
+  const [, saved] = request.mock.calls[1]!
+  expect(saved?.method).toBe('PUT')
+  expect(JSON.parse(String(saved?.body))).toEqual({
+    head: 'inspected',
+    body: 'unsubmitted notes',
+    expected_version: 7,
+  })
+})
+
+it('clears a private comment draft using its inspected version query', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.clearCommentDraft('acme/repo', 'p/one', 0)
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/comment-draft?expected_version=0')
+  expect(options?.method).toBe('DELETE')
+  expect(options?.body).toBeUndefined()
+})

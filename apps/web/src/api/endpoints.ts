@@ -34,6 +34,7 @@ import type {
   Req,
   Review,
   ReviewDraft,
+  CommentDraft,
   ReviewThread,
   ThreadComment,
   RoleBinding,
@@ -294,6 +295,34 @@ export function createApi(c: ApiClient) {
       ) =>
         c.del<ReviewDraft>(
           r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`),
+          { expected_version: expectedVersion },
+          options,
+        ),
+      commentDraft: (repo: string, id: string, options?: SessionOpts) =>
+        c.get<CommentDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`),
+          undefined,
+          options,
+        ),
+      saveCommentDraft: (
+        repo: string,
+        id: string,
+        body: { head: string; body: string; expected_version: number },
+        options?: SessionOpts,
+      ) =>
+        c.json<CommentDraft>(r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`), {
+          ...options,
+          method: 'PUT',
+          body,
+        }),
+      clearCommentDraft: (
+        repo: string,
+        id: string,
+        expectedVersion: number,
+        options?: SessionOpts,
+      ) =>
+        c.del<CommentDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`),
           { expected_version: expectedVersion },
           options,
         ),

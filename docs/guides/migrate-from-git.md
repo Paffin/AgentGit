@@ -46,6 +46,38 @@ The [TypeScript SDK](../../sdk/typescript/README.md#migrate-a-git-repository) an
 administrator credential, keep the returned ID, review the report and then commit.
 The clients reuse the upload's idempotency key across automatic retries.
 
+## Issues and comments in the development build
+
+The unreleased development build can import an existing repository's GitHub or GitLab
+issues and comments. First export a local manifest; provider credentials stay on your
+machine (`GITHUB_TOKEN` or `GITLAB_TOKEN`) and are not sent to AgentGit:
+
+```sh
+ag git export-issues --provider github --source your-team/your-project --output issues.json
+# Or: --provider gitlab --source group/project --host https://gitlab.example.com
+ag remote import-issues --file issues.json
+```
+
+The second command previews the import and returns a digest. Review the counts,
+unsupported metadata and conflicts, then explicitly apply that exact manifest:
+
+```sh
+ag remote import-issues --file issues.json --apply --expected-digest DIGEST --allow-unsupported
+```
+
+In Web, open **Issues → Import**, select the same JSON file, preview it and confirm.
+Omit `--allow-unsupported` when the preview has no warnings. A manifest is limited to
+4 MiB,100 issues and1000 comments; an oversized export fails without truncating data.
+The original file remains your portable source snapshot.
+
+Each issue, its comments and source mapping commit together. Repeating the same
+manifest skips previously completed imports; changed source content is reported as
+a conflict, never silently written over local work. Original state, timestamps,
+authors and URLs are retained as provenance; the authenticated importer remains the
+local actor. This is an initial import, not ongoing synchronization. Labels,
+assignments, milestones, reactions and other unsupported metadata appear as warnings.
+Pull/merge requests, releases, permissions and CI setup remain separate work.
+
 ## What moves, and what needs separate work
 
 | Source data | Result |
@@ -57,7 +89,8 @@ The clients reuse the upload's idempotency key across automatic retries.
 | Mapping and content limitations | `.ag/import/report.json`; browser also downloads the complete receipt |
 | Git LFS pointers | Pointer files only; transfer and retain external LFS storage separately |
 | Submodules or unsupported file paths | Explicitly reported omissions requiring acknowledgement |
-| Issues, pull/merge requests, comments, releases and permissions | Keep/export from the original host; not imported by this beta |
+| Issues and comments | Development-only manifest import above; retain the original host/export when using the published beta |
+| Pull/merge requests, releases and permissions | Keep/export from the original host; not imported yet |
 | GitHub Actions / GitLab CI | YAML files move as source; configure AgentGit validators and trusted signing keys separately |
 
 The original bundle is included by `ag backup`. Preserve it: AgentGit IDs differ from Git IDs, and recreating Git history is not a substitute for preserving original signatures. Hosting account permissions are not mapped automatically; assign and check AgentGit roles before inviting the team.

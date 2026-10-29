@@ -22,6 +22,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - The release pipeline prepares a native Windows x64 ZIP with the CLI, server and MCP, plus a per-user PowerShell installer that verifies checksums. Native install-and-first-use smoke is required before publishing; the first Windows archive is not yet released.
 
+- Development builds can export GitHub/GitLab issues and comments to a portable manifest, preview it in Web or CLI, and resume an explicit import without duplicates. Source provenance is retained and unsupported metadata is reported. Schema13 requires a pre-upgrade backup.
 - Home receives live updates across up to thirty loaded repositories through one resumable event feed. CLI, SDKs and MCP expose bounded multi-repository replay with per-repository cursors.
 - Existing-file edits can be saved privately to an account and resumed through Web, CLI, SDK and MCP. Original revision and file metadata are retained; publication stays explicit. Development schema 12 requires a pre-upgrade backup.
 - General proposal comments gain separate private account drafts across Web, CLI, SDK and MCP, with explicit save and version-checked cleanup. Development schema 11 preserves existing review drafts; back up before upgrading.

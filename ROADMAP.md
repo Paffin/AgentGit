@@ -97,7 +97,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
 
 1. **Deliver the next development slice.** Beta.7 is published with metadata schema 8.
    Its Linux archive installation and first reviewed change have been exercised end to end.
-   The next release must include the development review workflow and its schema-12 upgrade
+   The next release must include the development review workflow and its schema-13 upgrade
    notice with backup/rollback guidance; existing beta tags remain immutable.
 2. **Finish the daily task and review workflow.** Queued-task refinement now preserves
    historical instructions and source links. Proposal updates now have an atomic inspected-head
@@ -108,9 +108,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
    checks and explicit confirmation when a user changes executable work or a review decision.
    Binary, oversized, file-type and rename/delete conflicts now support exact version choices; renamed content previews retain their per-side source paths. Private account-backed review-decision drafts now restore across browsers, with explicit save and version checks; general proposal comments now have separate private drafts with the same explicit save and version checks; single-file edits now support explicit account save and restore, including discovery after a file disappears from the current branch. Account-backed batch and new-file drafts remain open. Bounded file/directory conflicts now support whole-source choices with complete candidate previews; multi-target rename conflicts and larger structural cases remain open. The development Home page retains complete snapshots and uses one resumable live feed for up to thirty loaded repositories. Larger aggregate views keep bounded polling for the remaining repositories; CLI and SDKs share the scoped cross-repository cursor contract.
 3. **Make GitHub/GitLab cutover complete.** Code history, branch/tag mapping, the original bundle
-   and reconciliation already move through Web UI and CLI. Next design and implement resumable
-   hosting-metadata migration: issues and comments first, then pull/merge-request references,
-   releases and identity/permission mapping. Preview unsupported data and require deliberate
+   and reconciliation already move through Web UI and CLI. Development builds now export GitHub/GitLab issues and comments into bounded manifests and import them with preview, durable source mappings and resume without duplicates. Next extend beyond bounded initial snapshots to larger cutovers, pull/merge-request references, releases and identity/permission mapping. Preview unsupported data and require deliberate
    choices before publication. LFS payloads and CI configurations need separate transfer/setup;
    source YAML alone is not a working validation pipeline. Keep Git export and rollback visible
    in the [migration guide](docs/guides/migrate-from-git.md).

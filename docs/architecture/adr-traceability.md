@@ -152,3 +152,7 @@ The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI
 ## ADR-0044 — cross-repository event feed
 
 [ADR-0044](../adr/0044-cross-repository-events.md) reuses repository audit logs with a bounded, scoped cursor vector. Home, CLI and SDKs consume one stream; MCP provides bounded replay. A focused real-server check covers two-repository pagination/resume, denied scope and SSE cursor restoration. Basic builds are used for the client changes, without another broad test matrix.
+
+## ADR-0045 — hosting issues and comments
+
+[ADR-0045](../adr/0045-hosting-issue-import.md) binds explicit apply to a validated manifest digest and stores durable source mappings atomically with each issue/comments. A small real-server scenario covers preview, acknowledgement, import, retry and changed-source rejection. The CLI exporter, Web and SDK/MCP clients received basic builds/types only; live provider export qualification remains separate.

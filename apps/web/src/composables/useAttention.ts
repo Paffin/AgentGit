@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
 import { api } from '@/api/instance'
 import type { Preparation, Proposal, Repo, Review } from '@/api/types'
 import { attentionForRepo } from '@/lib/attention'
@@ -138,6 +138,7 @@ async function readSnapshot(
   const results = await mapLimit(read, 3, (r) => repositorySummary(r, access, stale, now))
   return {
     repos,
+    loadedRepos: read.map((repo) => repo.name),
     ...combine(results),
     skipped: repository ? 0 : Math.max(0, repos.length - read.length),
   }
@@ -169,11 +170,11 @@ function attentionRefreshQueue(reload: () => Promise<void>, busy: () => boolean)
   }
 }
 
-function cachedCatalogue(reuse: boolean, repository: string, repos: Repo[]) {
-  return reuse && repository && repos.length ? repos : undefined
+function cachedCatalogue(reuse: boolean, repos: Repo[]) {
+  return reuse && repos.length ? repos : undefined
 }
 
-/** Live invalidation for the selected repository, bounded polling otherwise; only complete snapshots commit. */
+/** Live invalidation for the loaded repository scope; only complete snapshots commit. */
 export function useAttention(repository: Ref<string> = ref('')) {
   const auth = useAuth()
   const repos = shallowRef<Repo[]>([])
@@ -185,13 +186,14 @@ export function useAttention(repository: Ref<string> = ref('')) {
   const skipped = ref(0)
   const unreadable = ref(0)
   const limit = ref(MAX_REPOS)
+  const loadedRepositories = ref<string[]>([])
   let serial = 0
   let timer: ReturnType<typeof setInterval> | undefined
   const refreshQueue = attentionRefreshQueue(
     () => load(true),
     () => loading.value,
   )
-  const liveStatus = useAttentionFeed(repository, refreshQueue.request)
+  const liveStatus = useAttentionFeed(repository, refreshQueue.request, loadedRepositories)
 
   async function load(reuseCatalogue = false) {
     refreshQueue.begin()
@@ -200,10 +202,11 @@ export function useAttention(repository: Ref<string> = ref('')) {
     loading.value = true
     try {
       if (stale()) return
-      const cached = cachedCatalogue(reuseCatalogue, repository.value, repos.value)
+      const cached = cachedCatalogue(reuseCatalogue, repos.value)
       const snapshot = await readSnapshot(auth, stale, repository.value, limit.value, cached)
       if (stale() || !snapshot) return
       repos.value = snapshot.repos
+      loadedRepositories.value = snapshot.loadedRepos
       items.value = snapshot.items
       unreadable.value = snapshot.unreadable
       skipped.value = snapshot.skipped
@@ -231,6 +234,7 @@ export function useAttention(repository: Ref<string> = ref('')) {
     () => {
       serial++
       repos.value = []
+      loadedRepositories.value = []
       items.value = []
       lastUpdated.value = 0
       unreadable.value = 0
@@ -259,6 +263,7 @@ export function useAttention(repository: Ref<string> = ref('')) {
     settled,
     lastUpdated,
     liveStatus,
+    liveLimited: computed(() => !repository.value && loadedRepositories.value.length > MAX_REPOS),
     error,
     skipped,
     unreadable,

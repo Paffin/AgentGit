@@ -1,12 +1,24 @@
-import { onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { client } from '@/api/instance'
 import { openEventFeed, type EventFeed, type FeedStatus } from '@/api/sse'
 import { useAuth } from '@/stores/auth'
 
-/** One visible, selected repository gets a live feed; the aggregate view keeps bounded polling. */
-export function useAttentionFeed(repository: Ref<string>, refresh: () => void) {
+/** One visible feed for the selected repository or bounded aggregate snapshot. */
+export function useAttentionFeed(
+  repository: Ref<string>,
+  refresh: () => void,
+  loadedRepositories: Ref<string[]> = ref([]),
+) {
   const auth = useAuth()
   const status = ref<FeedStatus>('idle')
+  const aggregateScope = computed(() => [...new Set(loadedRepositories.value.slice(0, 30))].sort())
+  const scopeKey = computed(
+    () =>
+      repository.value ||
+      (auth.capabilities?.features.includes('events.multi_repo') && aggregateScope.value.length
+        ? JSON.stringify(aggregateScope.value)
+        : ''),
+  )
   const visible = ref(document.visibilityState === 'visible')
   let feed: EventFeed | undefined
   let generation = 0
@@ -20,12 +32,12 @@ export function useAttentionFeed(repository: Ref<string>, refresh: () => void) {
   }
   function reconcile() {
     stop()
-    if (!mounted || !visible.value || !repository.value || !auth.isAuthenticated) return
+    if (!mounted || !visible.value || !scopeKey.value || !auth.isAuthenticated) return
     const mine = generation
     status.value = 'connecting'
     feed = openEventFeed({
       client,
-      repo: repository.value,
+      ...(repository.value ? { repo: repository.value } : { repos: aggregateScope.value }),
       session: { token: auth.token, quietUnauthenticated: true },
       onEvent: () => {
         if (mine === generation) refresh()
@@ -41,7 +53,7 @@ export function useAttentionFeed(repository: Ref<string>, refresh: () => void) {
   function visibilityChanged() {
     visible.value = document.visibilityState === 'visible'
   }
-  watch([repository, () => auth.token, () => auth.isAuthenticated, visible], reconcile, {
+  watch([scopeKey, () => auth.token, () => auth.isAuthenticated, visible], reconcile, {
     flush: 'sync',
   })
   onMounted(() => {

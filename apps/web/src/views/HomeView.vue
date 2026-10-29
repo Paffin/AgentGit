@@ -33,6 +33,7 @@ const {
   settled,
   lastUpdated,
   liveStatus,
+  liveLimited,
   error,
   skipped,
   unreadable,
@@ -151,19 +152,21 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
         >
       </div>
       <p v-if="lastUpdated" class="refresh-note">
-        <LiveIndicator v-if="repository" :status="liveStatus" />
+        <LiveIndicator v-if="!liveLimited" :status="liveStatus" />
         Last refreshed {{ formatTime(lastUpdated) }}.
-        <template v-if="liveStatus === 'live'"
-          >Live updates for {{ repository }}; a check every 15 seconds keeps the summary
-          current.</template
-        >
-        <template v-else-if="repository"
-          >Live updates {{ liveStatus === 'connecting' ? 'are connecting' : 'are unavailable' }}.
-          Checks every 15 seconds while visible.</template
-        >
-        <template v-else
-          >Checks every 15 seconds while visible. Select a repository for live updates.</template
-        >
+        <template v-if="liveStatus === 'live' && !liveLimited">
+          Live updates{{ repository ? ` for ${repository}` : ' across loaded repositories' }}.
+        </template>
+        <template v-else-if="liveStatus === 'live' && liveLimited">
+          Live updates cover 30 repositories; the remaining loaded work refreshes every 15 seconds.
+        </template>
+        <template v-else>
+          {{
+            liveStatus === 'connecting'
+              ? 'Connecting live updates.'
+              : 'Checks every 15 seconds while visible.'
+          }}
+        </template>
       </p>
       <Alert
         v-if="incomplete"

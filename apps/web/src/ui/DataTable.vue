@@ -136,8 +136,7 @@ tbody tr:last-child {
   border-bottom: none;
 }
 thead tr {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 1;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -146,14 +145,14 @@ th {
   padding: var(--s-2) 0;
   text-align: start;
   font-size: var(--fs-xs);
-  font-weight: 620;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text-3);
 }
 td {
   min-width: 0;
-  padding: var(--s-3) 0;
+  padding: var(--s-4) 0;
   overflow-wrap: anywhere;
 }
 .dense td {

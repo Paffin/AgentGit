@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures.ts'
 import { defaultUi, startServer } from './support/server.ts'
-import { suffix } from './support/world.ts'
+import { freshRepo, suffix } from './support/world.ts'
 
 async function land(page: Page) {
   await page.getByTestId('act-integrate').click()
@@ -100,3 +100,35 @@ test('creates, recovers and edits several files in one change request through th
     await server.stop()
   }
 })
+
+for (const editText of [false, true]) {
+  test(`preserves UTF-8 BOM and CRLF when renaming${editText ? ' and editing' : ''}`, async ({
+    page,
+    cast,
+  }) => {
+    const original = '\ufefffirst\r\nsecond\r\n'
+    const { repo } = await freshRepo(cast, 'encoding', { 'before.txt': original })
+    await page.goto(`/repos/${repo}/edit`)
+    await openFile(page, 'before.txt')
+    await page.getByLabel('File path', { exact: true }).fill('after.txt')
+    if (editText) await page.getByLabel('Contents', { exact: true }).fill('changed\nsecond\n')
+    await publish(page, 'Keep the file format')
+    const proposalId = new URL(page.url()).pathname.split('/').pop()!
+    const api = cast.as('dana')
+    const proposal = await api.ok_(
+      api.get(`/v1/repos/${repo}/proposals/${proposalId}`),
+      'read proposal',
+    )
+    const response = await fetch(
+      `${cast.baseURL}/v1/repos/${repo}/files/after.txt?rev=${proposal.proposal.head}`,
+      {
+        headers: { authorization: `Bearer ${cast.token('dana')}` },
+      },
+    )
+    expect(response.status).toBe(200)
+    const expected = editText ? '\ufeffchanged\r\nsecond\r\n' : original
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(
+      Array.from(new TextEncoder().encode(expected)),
+    )
+  })
+}

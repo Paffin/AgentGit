@@ -90,11 +90,11 @@ const describedBy = computed(
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
   min-width: 0;
 }
 label {
-  font-weight: 580;
+  font-weight: 600;
   font-size: var(--fs-sm);
 }
 .req {
@@ -108,7 +108,7 @@ label {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   padding: 0 var(--s-2);
-  min-height: max(34px, var(--touch-min));
+  min-height: max(40px, var(--touch-min));
 }
 .control:focus-within {
   outline: 2px solid var(--focus);
@@ -123,13 +123,14 @@ input {
   min-width: 0;
   border: none;
   background: transparent;
-  padding: 6px 2px;
+  padding: var(--s-1) 0;
   outline: none;
 }
 input::placeholder {
   color: var(--text-3);
 }
 input:disabled {
+  cursor: not-allowed;
   opacity: 0.6;
 }
 .mono {

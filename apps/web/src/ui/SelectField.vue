@@ -39,15 +39,15 @@ const id = useId()
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
   min-width: 0;
 }
 label {
-  font-weight: 580;
+  font-weight: 600;
   font-size: var(--fs-sm);
 }
 select {
-  min-height: max(34px, var(--touch-min));
+  min-height: max(40px, var(--touch-min));
   padding: 0 var(--s-2);
   background: var(--surface);
   border: 1px solid var(--border-strong);

@@ -275,14 +275,28 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
             :data-testid="`attention-${g.kind}`"
           >
             <header class="group-head">
-              <h2 :id="`group-${g.kind}`">
-                {{ ATTENTION_TITLE[g.kind] }} <span class="count">{{ g.items.length }}</span>
-              </h2>
+              <div class="group-title">
+                <h2 :id="`group-${g.kind}`">{{ ATTENTION_TITLE[g.kind] }}</h2>
+                <span class="count">{{ g.items.length }}</span>
+              </div>
               <p>{{ ATTENTION_HELP[g.kind] }}</p>
             </header>
             <ul class="list" role="list">
               <li v-for="i in g.items" :key="i.key" class="row" data-testid="attention-item">
-                <span class="status-dot" :class="`status-${g.kind}`" aria-hidden="true" />
+                <Icon
+                  :name="
+                    g.kind === 'ready'
+                      ? 'check'
+                      : g.kind === 'review'
+                        ? 'proposal'
+                        : g.kind === 'quiet'
+                          ? 'clock'
+                          : 'alert'
+                  "
+                  :size="18"
+                  class="status-icon"
+                  :class="`status-${g.kind}`"
+                />
                 <div class="item-main">
                   <RouterLink :to="itemLink(i)" class="title">{{ i.title }}</RouterLink>
                   <p class="reason">
@@ -317,70 +331,66 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
 
 <style scoped>
 .page {
-  --rail-width: 220px;
-  --rail-gap: 4rem;
   display: flex;
   flex-direction: column;
   gap: var(--s-5);
-  max-width: none;
   margin: 0 auto;
 }
 .head {
-  margin-left: calc(var(--rail-width) + var(--rail-gap));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-4);
-  flex-wrap: wrap;
-  padding: var(--s-3) 0;
-}
-h1 {
-  font-size: 2rem;
-  letter-spacing: -0.035em;
-  margin-bottom: var(--s-2);
-}
-.toolbar {
-  margin-left: calc(var(--rail-width) + var(--rail-gap));
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(160px, 280px) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: var(--s-3);
 }
-.toolbar :deep(input),
-.toolbar :deep(select),
-.toolbar :deep(.btn) {
-  min-height: max(40px, var(--touch-min));
+.head h1 {
+  text-wrap: balance;
+  margin-bottom: var(--s-2);
+}
+.head .muted {
+  font-size: var(--fs-md);
+}
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) auto;
+  gap: var(--s-3);
+  align-items: end;
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--border);
 }
 .workspace {
   display: grid;
-  grid-template-columns: var(--rail-width) minmax(0, 1fr);
-  gap: var(--rail-gap);
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
 }
 .rail {
   min-width: 0;
+  position: sticky;
+  top: calc(var(--header-h) + var(--s-5));
 }
 .filters {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--s-1);
 }
 .filters button {
   display: flex;
   justify-content: space-between;
-  gap: var(--s-2);
   align-items: center;
+  gap: var(--s-2);
   width: 100%;
-  min-height: 42px;
-  padding: 10px 12px;
-  background: transparent;
+  min-height: 44px;
+  padding: var(--s-3);
   border: 0;
   border-radius: var(--r-sm);
+  background: transparent;
   color: var(--text-2);
   text-align: left;
   font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 .filters button:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
   color: var(--text);
 }
 .filters .selected {
@@ -392,7 +402,7 @@ h1 {
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
   font-size: var(--fs-sm);
-  font-weight: 450;
+  font-weight: 400;
 }
 .selected .count {
   color: inherit;
@@ -401,14 +411,14 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  padding: var(--s-5) 12px;
-  margin-top: var(--s-5);
+  padding: var(--s-5) var(--s-3);
+  margin-top: var(--s-4);
   border-top: 1px solid var(--border);
 }
 .repo-nav h2 {
-  color: var(--text-3);
-  font-size: var(--fs-xs);
-  font-weight: 550;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 .repo-link {
   overflow-wrap: anywhere;
@@ -419,28 +429,45 @@ h1 {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .work {
   min-width: 0;
+  background: var(--surface);
+  padding: var(--s-5);
+  border-radius: var(--r-md);
 }
 .summary {
-  color: var(--text-3);
-  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
   margin-bottom: var(--s-5);
 }
 .group {
   margin-bottom: var(--s-6);
 }
+.group:last-child {
+  margin-bottom: 0;
+}
 .group-head {
   padding-bottom: var(--s-3);
 }
 .group-head h2 {
-  font-size: var(--fs-xl);
+  text-wrap: balance;
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  margin-bottom: 5px;
+  font-size: var(--fs-xl);
+  margin-bottom: var(--s-2);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.group-head .count {
+  color: inherit;
 }
 .group-head p {
   color: var(--text-3);
@@ -455,28 +482,25 @@ h1 {
   display: flex;
   align-items: center;
   gap: var(--s-4);
-  padding: 18px 0;
+  padding: var(--s-4) 0;
   border-top: 1px solid var(--border);
 }
 .row:last-child {
   border-bottom: 1px solid var(--border);
 }
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-3);
+.status-icon {
+  color: var(--text-3);
   flex: none;
 }
 .status-failed {
-  background: var(--bad);
+  color: var(--bad);
 }
 .status-blocked,
 .status-quiet {
-  background: var(--warn);
+  color: var(--warn);
 }
 .status-ready {
-  background: var(--ok);
+  color: var(--ok);
 }
 .item-main {
   min-width: 0;
@@ -491,7 +515,7 @@ h1 {
 .reason {
   color: var(--text-2);
   font-size: var(--fs-sm);
-  margin-top: 4px;
+  margin-top: var(--s-1);
   overflow-wrap: anywhere;
 }
 .meta {
@@ -512,60 +536,80 @@ h1 {
   min-width: 0;
   overflow-wrap: anywhere;
   display: inline-flex;
-  gap: 5px;
+  gap: var(--s-1);
   align-items: center;
 }
 .refresh-note {
-  margin-left: calc(var(--rail-width) + var(--rail-gap));
-  overflow-wrap: anywhere;
   font-size: var(--fs-xs);
   color: var(--text-3);
-  padding-top: var(--s-2);
+  overflow-wrap: anywhere;
 }
 .loading {
   display: grid;
   gap: var(--s-4);
 }
-@media (max-width: 820px) {
-  .head,
-  .toolbar,
-  .refresh-note {
-    margin-left: 0;
+@media (max-width: 960px) {
+  .head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .head > div {
+    grid-column: 1 / -1;
+  }
+  .head > .btn {
+    justify-self: start;
   }
   .workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-4);
+  }
+  .rail {
+    position: static;
   }
   .filters {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .filters button {
+    white-space: normal;
   }
   .repo-nav {
     display: none;
   }
+}
+@media (max-width: 600px) {
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .head > div {
+    width: 100%;
+  }
   .toolbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .toolbar > :first-child {
     grid-column: 1 / -1;
   }
-}
-@media (max-width: 480px) {
-  h1 {
-    font-size: 1.65rem;
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .work {
+    padding: var(--s-4);
   }
   .row {
     flex-wrap: wrap;
     gap: var(--s-3);
   }
   .item-main {
-    flex-basis: calc(100% - 24px);
+    flex-basis: calc(100% - 40px);
   }
-  .row > :last-child {
-    margin-left: 20px;
+  .row > .btn {
+    margin-left: var(--s-6);
   }
-  .head {
-    align-items: flex-start;
+  .meta {
+    font-size: var(--fs-sm);
+    gap: var(--s-3);
   }
 }
 </style>

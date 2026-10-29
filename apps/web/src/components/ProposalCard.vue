@@ -131,8 +131,8 @@ const reviews = computed(() =>
   font-size: var(--fs-xs);
   font-weight: 620;
   color: var(--bad);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 .conflicts ul {
   list-style: none;
@@ -143,7 +143,7 @@ const reviews = computed(() =>
 .ready {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   color: var(--ok);
   font-size: var(--fs-sm);
   font-weight: 560;

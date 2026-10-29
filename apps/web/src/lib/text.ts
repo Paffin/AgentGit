@@ -15,8 +15,16 @@ export function looksBinary(bytes: Uint8Array): boolean {
 }
 
 export function decodeUtf8(bytes: Uint8Array): string {
-  // Keep the BOM in editable text so a rename or edit round-trips the original encoding.
   return new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
+}
+
+/** Restore encoding markers and uniform CRLFs that a textarea can normalize away. */
+export function preserveTextFormat(original: string, edited: string): string {
+  let text = edited
+  if (original.startsWith('\uFEFF') && !text.startsWith('\uFEFF')) text = '\uFEFF' + text
+  if (original.includes('\r\n') && !/(^|[^\r])\n/.test(original))
+    text = text.replace(/\r?\n/g, '\r\n')
+  return text
 }
 
 export function splitLines(text: string): string[] {

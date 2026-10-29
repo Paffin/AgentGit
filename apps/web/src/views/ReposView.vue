@@ -15,6 +15,7 @@ import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import TextField from '@/ui/TextField.vue'
 import LoadMore from '@/ui/LoadMore.vue'
+import Icon from '@/ui/Icon.vue'
 import type { Column } from '@/ui/types'
 
 const auth = useAuth()
@@ -133,7 +134,7 @@ const split = (name: string) => {
         class="search"
         @update:model-value="updateSearch"
       >
-        <template #prefix><span class="mag" aria-hidden="true">⌕</span></template>
+        <template #prefix><Icon name="search" :size="16" /></template>
       </TextField>
       <span v-if="!loading" class="faint count" aria-live="polite">{{
         plural(visible.length, 'repository', 'repositories')
@@ -145,7 +146,7 @@ const split = (name: string) => {
       rest.</Alert
     >
 
-    <Card flush>
+    <Card flush class="repository-list">
       <ErrorState v-if="error" what="repositories" :error="error" @retry="load(all.length > 0)" />
       <DataTable
         v-if="!error || all.length > 0"
@@ -215,9 +216,9 @@ const split = (name: string) => {
   gap: var(--s-4);
 }
 .head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: var(--s-4);
   flex-wrap: wrap;
 }
@@ -251,5 +252,54 @@ const split = (name: string) => {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+
+.head p {
+  margin-top: var(--s-2);
+  font-size: var(--fs-md);
+}
+.tools {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--border);
+}
+.repository-list {
+  border: 0;
+  box-shadow: none;
+  border-radius: var(--r-md);
+}
+.repository-list :deep(th) {
+  padding-top: var(--s-3);
+  padding-bottom: var(--s-3);
+}
+.repo-link {
+  font-size: var(--fs-lg);
+}
+@media (max-width: 960px) {
+  .head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .head > div {
+    grid-column: 1 / -1;
+  }
+  .head > .btn {
+    justify-self: start;
+  }
+}
+@media (max-width: 600px) {
+  .tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search {
+    width: 100%;
+    max-width: none;
+  }
+  .head {
+    display: flex;
+    align-items: flex-start;
+  }
+  .head > div {
+    width: 100%;
+  }
 }
 </style>

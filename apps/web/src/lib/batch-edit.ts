@@ -1,5 +1,6 @@
 import type { FileChange } from '@/api/types'
 import { deleteFile, pathProblem, putFile } from './edit'
+import { preserveTextFormat } from './text'
 
 export interface DraftFile {
   id: string
@@ -43,14 +44,15 @@ export function batchChanges(files: DraftFile[]): FileChange[] {
     if (paths.has(file.path)) throw new Error('Two files cannot use the same path.')
     paths.add(file.path)
     if (fileStatus(file) === 'Unchanged') continue
-    bytes += new TextEncoder().encode(file.text).length
+    const text = preserveTextFormat(file.original, file.text)
+    bytes += new TextEncoder().encode(text).length
     if (bytes > BATCH_BYTES)
       throw new Error('The changed contents exceed 4 MiB. Split this change into smaller parts.')
     if (file.originalPath && file.path !== file.originalPath) deleted.add(file.originalPath)
     puts.push(
       putFile(
         file.path,
-        file.text,
+        text,
         file.executable,
         file.fileType === 'symlink' ? 'symlink' : undefined,
       ),

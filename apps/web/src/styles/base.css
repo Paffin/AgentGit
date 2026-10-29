@@ -1,3 +1,7 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * nav: existing top navigation and repository tabs · signature: actionable work queue
+ * states: loading, empty, error, full · modes: light+dark · axes: light/grotesk-sans/cool · posture: restrained · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V3 · weakest: V, retained the familiar shell and changed the work hierarchy. */
 *,
 *::before,
 *::after {
@@ -9,18 +13,22 @@ html {
   text-size-adjust: 100%;
   /* Reserve the scrollbar's width so content never jumps sideways when a page grows taller. */
   scrollbar-gutter: stable;
+  overflow-x: clip;
+  scroll-padding-top: calc(var(--header-h) + var(--s-4));
 }
 
 body {
+  overflow-x: clip;
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-lg);
   line-height: var(--lh);
   font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  min-height: 100dvh;
+  caret-color: var(--accent);
 }
 
 h1,
@@ -42,26 +50,49 @@ ol[role='list'] {
   padding: 0;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  min-width: 0;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  font-synthesis: none;
+}
+p {
+  text-wrap: pretty;
+}
+button:active:not(:disabled):not([aria-disabled='true']) {
+  filter: brightness(0.97);
+}
+a:active {
+  text-decoration: underline;
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
 h1 {
   font-size: var(--fs-2xl);
   line-height: var(--lh-tight);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 h2 {
   font-size: var(--fs-xl);
   line-height: var(--lh-tight);
-  font-weight: 640;
+  font-weight: 600;
   letter-spacing: -0.005em;
 }
 h3 {
   font-size: var(--fs-lg);
   line-height: var(--lh-tight);
-  font-weight: 620;
+  font-weight: 600;
 }
 h4 {
-  font-size: var(--fs-md);
-  font-weight: 620;
+  font-size: var(--fs-lg);
+  font-weight: 600;
 }
 
 a {

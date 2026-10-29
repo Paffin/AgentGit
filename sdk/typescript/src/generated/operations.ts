@@ -161,7 +161,7 @@ export const OPERATIONS = {
     route: '/v1/repos/{owner}/{rname}/policy/history',
     namespace: 'admin',
     name: 'policyHistory',
-    summary: "All versions of a stream's policy",
+    summary: 'All versions of a stream\'s policy',
     pathParams: ['owner', 'rname'],
     queryParams: ['stream'],
     body: 'none',
@@ -1001,8 +1001,7 @@ export const OPERATIONS = {
     route: '/v1/repos/{owner}/{rname}/objects/{object_id}',
     namespace: 'objects',
     name: 'put',
-    summary:
-      'Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored}',
+    summary: 'Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored}',
     pathParams: ['owner', 'rname', 'object_id'],
     queryParams: [],
     body: 'bytes',
@@ -1362,8 +1361,7 @@ export const OPERATIONS = {
     route: '/v1/auth/config',
     namespace: 'session',
     name: 'authConfig',
-    summary:
-      'How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed)',
+    summary: 'How a browser can sign in: the identity providers the Web UI redirects to, or `token` (no credentials needed)',
     pathParams: [],
     queryParams: [],
     body: 'none',

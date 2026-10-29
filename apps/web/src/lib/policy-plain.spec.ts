@@ -55,6 +55,56 @@ describe('presets', () => {
 })
 
 describe('form <-> document', () => {
+  it('keeps protected approvers when a path changes and edits check timing without replacing the runner', () => {
+    const base = {
+      protected_paths: [{ glob: 'src/old/**', min_approvals: 2, approvers: ['user:security-*'] }],
+      required_validations: [
+        {
+          check: 'tests',
+          issuers: ['service:ci'],
+          max_age_secs: 600,
+          run: { argv: ['cargo', 'test'], timeout_secs: 300, memory_mb: 2048, network: false },
+        },
+      ],
+    }
+    const form = formFromDoc(base)
+    form.protectedPaths[0]!.glob = 'src/new/**'
+    expect(docFromForm(form, base).protected_paths).toEqual([
+      { glob: 'src/new/**', min_approvals: 2, approvers: ['user:security-*'] },
+    ])
+    form.checkTiming[0]!.maxAgeSecs = '900'
+    form.checkTiming[0]!.timeoutSecs = '120'
+    expect(
+      describeChange(base, docFromForm(form, base))
+        .map((effect) => effect.text)
+        .join(' '),
+    ).toContain('maximum result age 900s, command timeout 120s')
+    expect(docFromForm(form, base).required_validations).toEqual([
+      {
+        ...base.required_validations[0],
+        max_age_secs: 900,
+        run: { ...base.required_validations[0]!.run, timeout_secs: 120 },
+      },
+    ])
+  })
+
+  it('clears timing limits without creating a command for external checks', () => {
+    const base = {
+      required_validations: [
+        { check: 'local', max_age_secs: 60, run: { argv: ['true'], timeout_secs: 30 } },
+        { check: 'external', max_age_secs: 120 },
+      ],
+    }
+    const form = formFromDoc(base)
+    form.checkTiming[0]!.maxAgeSecs = ''
+    form.checkTiming[0]!.timeoutSecs = ''
+    expect(form.checkTiming[1]!.timeoutSecs).toBeNull()
+    expect(docFromForm(form, base).required_validations).toEqual([
+      { check: 'local', run: { argv: ['true'] } },
+      base.required_validations[1],
+    ])
+  })
+
   it('round-trips a preset and keeps fields the form does not show', () => {
     const base = {
       ...applyPreset('agents'),

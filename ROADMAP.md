@@ -121,8 +121,8 @@ Work in the following order; keep each deliverable usable across the relevant cl
    ([#53](https://github.com/Paffin/AgentGit/issues/53)) and a physical-phone session
    ([#55](https://github.com/Paffin/AgentGit/issues/55)). Recruit and learn from five external pilots
    ([#51](https://github.com/Paffin/AgentGit/issues/51)); automated browser runs do not substitute
-   for these reports. Keep the dev sign-in exchange and advanced policy-form controls on the
-   onboarding backlog.
+   for these reports. The development rules form now edits protected-path approvers and check timing while preserving
+   runner settings. Keep the dev sign-in exchange and remaining advanced controls on the onboarding backlog.
 5. **Finish distribution and widen support deliberately.** Verify Homebrew installation, add
    a Windows release archive, publish crates and SDKs when registry ownership/trusted publishing
    is configured, and qualify installation outside CI. A stable tag follows the

@@ -260,11 +260,13 @@ Visible only where you hold the `admin` role; anyone else sees what the page nee
   asks for more of ("Landing now needs 2 approvals (was 1)", "Agents may now land changes by themselves when…"). The
   form edits the same JSON the server stores; the raw document stays under **Advanced**, with checks while you type
   (JSON errors, unknown fields with a suggestion, settings that can never be satisfied), and the server's own refusal
-  is shown verbatim if it still rejects the document. Required checks are shown but added under Advanced (they need a
-  trusted runner). The older text: an editor for the stream's policy with checks while you type (JSON errors, unknown fields with a
-  suggestion, settings that can never be satisfied), the server's own refusal shown verbatim if it still rejects the
-  document, and a **version history with a diff between any two versions**. Saving creates a new version. Attestations made
-  under an older version stop counting, on purpose, and the UI says so.
+  is shown verbatim if it still rejects the document. Each protected path has its own approver-pattern
+  field; leaving it empty inherits the branch's default approver rules and grants no repository access.
+  Existing required checks expose maximum result age and command timeout in seconds. Empty age means
+  no age limit; empty timeout uses the policy default of 600 seconds. External-only checks have no
+  command timeout. Other runner settings are preserved. Add checks and trusted runners under
+  **Advanced**. A **version history with a diff between any two versions** records changes. Saving
+  creates a new version; attestations under an older version stop counting, and the UI says so.
 - **Roles** and **Credentials.** Grant and revoke roles. While a role grant is pending, its fields are locked; failures keep the binding for correction and retry. Failed revocations also keep their confirmation available for retry. A rejected session offers sign-in. Mint tokens for yourself, or, as an administrator, for an
   agent or service, optionally limited to repositories, streams or operations. A new token is **shown exactly once**: in full, selected and with
   a copy button (and a button to hide it), and gone from the page when you close the dialog. The server keeps only a hash, so it cannot show it again.

@@ -83,6 +83,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
 
   msrv:
+    needs: lint
     timeout-minutes: 25
     name: MSRV (1.89)
     runs-on: ubuntu-latest
@@ -102,6 +103,7 @@ jobs:
       - run: cargo check --workspace --all-targets
 
   docs-and-demo:
+    needs: shells
     timeout-minutes: 25
     name: generated docs + demo
     runs-on: ubuntu-latest
@@ -205,6 +207,7 @@ jobs:
         run: python3 scripts/check_skips.py --job ci/backends-ha --report "$RUNNER_TEMP/skips-ha.jsonl"
 
   deploy:
+    needs: msrv
     timeout-minutes: 20
     name: deployment files
     runs-on: ubuntu-latest
@@ -317,7 +320,7 @@ jobs:
   # `sdk` job above runs the full checks on one interpreter; here only the test suites run on the others.
   sdk-runtimes:
     timeout-minutes: 20
-    needs: tools
+    needs: [tools, sdk]
     name: client SDK tests (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     env:
@@ -368,7 +371,7 @@ jobs:
 
   orchestrator:
     timeout-minutes: 30
-    needs: tools
+    needs: [tools, sdk-runtimes]
     name: agent orchestrator (Go)
     runs-on: ubuntu-latest
     env:
@@ -434,6 +437,7 @@ jobs:
   # The completion scripts must parse in the shells they are for. A missing shell fails the run (AG_REQUIRE_COMPONENTS=shell)
   # instead of being skipped; PowerShell is on the runner image, zsh and fish are installed here.
   shells:
+    needs: deploy
     timeout-minutes: 20
     name: shell completions (bash, zsh, fish, PowerShell)
     runs-on: ubuntu-latest
@@ -464,7 +468,7 @@ jobs:
   # and the AG_LLM_MODEL variable; forks and pull requests from forks have neither, so the step is skipped).
   mcp:
     timeout-minutes: 20
-    needs: tools
+    needs: [tools, orchestrator]
     name: MCP server with an agent (scripted; live model opt-in)
     runs-on: ubuntu-latest
     env:
@@ -495,6 +499,7 @@ jobs:
   # `str | None` annotations broke scripts/e2e_smoke.py there). The interpreter comes from uv (already pinned
   # above); the scripts that read TOML (tomllib, 3.11+) are tested by the jobs that need them.
   scripts-py39:
+    needs: lint
     timeout-minutes: 10
     name: lightweight scripts on Python 3.9
     runs-on: ubuntu-latest

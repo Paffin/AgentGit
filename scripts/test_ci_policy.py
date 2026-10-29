@@ -141,10 +141,21 @@ class PipelinePolicy(unittest.TestCase):
     def test_shared_tools_are_built_once_for_sdk_runtime_matrix(self):
         jobs = workflow('full-ci')['jobs']
         for name in ('sdk', 'sdk-runtimes', 'orchestrator', 'mcp'):
-            self.assertEqual(jobs[name]['needs'], 'tools')
+            self.assertIn('tools', [jobs[name]['needs']] if isinstance(jobs[name]['needs'], str) else jobs[name]['needs'])
             commands = '\n'.join(s.get('run', '') for s in jobs[name]['steps'])
             self.assertNotIn('cargo build', commands)
             self.assertIn('sha256sum --check', commands)
+
+    def test_background_qualification_leaves_runner_headroom(self):
+        jobs = workflow('qualification')['jobs']
+        for name in ('web', 'security'):
+            self.assertEqual(jobs[name]['needs'], 'codeql')
+        for name in ('containers', 'docs', 'packaging', 'coverage', 'windows', 'fuzz', 'performance', 'oci'):
+            self.assertEqual(jobs[name]['needs'], ['core', 'web', 'security'])
+        core = workflow('full-ci')['jobs']
+        self.assertEqual(core['sdk-runtimes']['needs'], ['tools', 'sdk'])
+        self.assertEqual(core['orchestrator']['needs'], ['tools', 'sdk-runtimes'])
+        self.assertEqual(core['sdk-runtimes']['strategy']['max-parallel'], 2)
 
     def test_browser_matrix_is_preserved_but_explicit(self):
         jobs = workflow('web')['jobs']

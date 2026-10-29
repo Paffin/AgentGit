@@ -35,6 +35,8 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
 
   if (operation === 'task-dependency')
     return api.agents.addDependency('acme/new', 'task-one', 'task-two', options)
+  if (operation === 'task-attempt-limit')
+    return api.agents.setTaskAttemptLimit('acme/new', 'task-one', 3, 2, options)
   if (operation === 'task-finish')
     return api.agents.finishTask('acme/new', 'task-one', 'done', options)
   if (operation === 'proposal-create')
@@ -63,6 +65,7 @@ describe('repository setup request ownership', () => {
 
     'task-dependency',
     'task-finish',
+    'task-attempt-limit',
   ])('keeps the initial session during a %s retry', async (operation) => {
     let token = 'initial-session'
     const credentials: (string | null)[] = []
@@ -101,6 +104,7 @@ describe('repository setup request ownership', () => {
 
     'task-dependency',
     'task-finish',
+    'task-attempt-limit',
   ])('does not reject a new session when an old %s request receives 401', async (operation) => {
     const rejected = vi.fn()
     const client = new ApiClient({
@@ -129,4 +133,16 @@ it('sends the inspected proposal head with a replacement', async () => {
   })
   await createApi(client).proposals.update('acme/repo', 'proposal', 'next', 'inspected')
   expect(sent).toEqual({ new_head: 'next', expected_head: 'inspected' })
+})
+
+it('patches an attempt limit with its inspected value and an encoded task id', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).agents.setTaskAttemptLimit('acme/repo', 'task/one', 0, 2)
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/v1/repos/acme/repo/tasks/task%2Fone/attempt-limit')
+  expect(options?.method).toBe('PATCH')
+  expect(JSON.parse(String(options?.body))).toEqual({ max_attempts: 0, expected_max_attempts: 2 })
 })

@@ -50,6 +50,13 @@ instructions, dependencies and all run records. After execution starts, an opera
 the limit. Zero retains the legacy server behavior and the orchestrator's repository retry policy.
 An explicit limit includes temporary failures too. Lowering it does not stop an active run.
 
+In the Web UI, open a task and choose **Change attempt limit…** in **Attempts**.
+The creator can change it before the first run; afterwards an operator is required.
+Enter the total permitted attempts (including those already started), or `0` for no
+task-local limit, and confirm. This does not stop a running attempt or reopen a finished
+task. If another edit wins, the dialog keeps your draft: close and reopen it to inspect
+the current limit before retrying.
+
 This requires metadata schema 8 and a server advertising `tasks.attempt_limits`. Back up before
 upgrade; older binaries need the pre-upgrade backup. See [ADR 0033](../adr/0033-task-attempt-limits.md).
 

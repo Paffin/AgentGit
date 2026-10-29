@@ -21,6 +21,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Preserve UTF-8 BOM bytes when editing or renaming files in the browser (#123).
 - Include old/new Git modes and explicit per-file truncation in API/Web diffs; bound both diff input and generated patch bytes (#127, #128).
 - Align security support, release and schema documentation with the current beta and check these statements for drift (#126).
+### Added
+
+- Task details show admitted attempts and let the creator change the attempt limit before execution, or an operator afterwards. Confirmation preserves the inspected limit; conflicting edits retain the draft. Existing task instructions and run history stay unchanged.
 
 ## [0.3.0-beta.6] - 2026-10-29
 

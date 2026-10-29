@@ -33,6 +33,7 @@ import type {
   Repo,
   Req,
   Review,
+  ReviewDraft,
   ReviewThread,
   ThreadComment,
   RoleBinding,
@@ -268,6 +269,34 @@ export function createApi(c: ApiClient) {
       },
       get: (repo: string, id: string, o?: Opts) =>
         c.get<ProposalDetail>(r(repo, `/proposals/${encodeURIComponent(id)}`), undefined, o),
+      reviewDraft: (repo: string, id: string, options?: SessionOpts) =>
+        c.get<ReviewDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`),
+          undefined,
+          options,
+        ),
+      saveReviewDraft: (
+        repo: string,
+        id: string,
+        body: { head: string; decision: string; body: string; expected_version: number },
+        options?: SessionOpts,
+      ) =>
+        c.json<ReviewDraft>(r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`), {
+          ...options,
+          method: 'PUT',
+          body,
+        }),
+      clearReviewDraft: (
+        repo: string,
+        id: string,
+        expectedVersion: number,
+        options?: SessionOpts,
+      ) =>
+        c.del<ReviewDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`),
+          { expected_version: expectedVersion },
+          options,
+        ),
       setReviewers: (
         repo: string,
         id: string,

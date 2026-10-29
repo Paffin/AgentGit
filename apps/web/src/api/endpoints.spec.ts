@@ -183,3 +183,39 @@ it('pins virtual sync to the inspected branch while retaining the initiating ses
   expect(JSON.parse(String(options?.body))).toEqual({ expected_stream_head: 'inspected' })
   expect(new Headers(options?.headers).get('authorization')).toBe('Bearer original-session')
 })
+
+it('keeps private draft content in the save body and captures the initiating session', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'new-session', fetch: request })
+  await createApi(client).proposals.saveReviewDraft(
+    'acme/repo',
+    'p/one',
+    { head: 'seen', decision: 'comment', body: 'private', expected_version: 0 },
+    { token: 'original', quietUnauthenticated: true },
+  )
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/review-draft')
+  expect(String(url)).not.toContain('private')
+  expect(options?.method).toBe('PUT')
+  expect(new Headers(options?.headers).get('authorization')).toBe('Bearer original')
+  expect(JSON.parse(String(options?.body))).toEqual({
+    head: 'seen',
+    decision: 'comment',
+    body: 'private',
+    expected_version: 0,
+  })
+})
+
+it('sends the clear-draft version in a DELETE query, including zero', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.clearReviewDraft('acme/repo', 'p/one', 0)
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/review-draft?expected_version=0')
+  expect(options?.method).toBe('DELETE')
+  expect(options?.body).toBeUndefined()
+})

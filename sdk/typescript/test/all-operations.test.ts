@@ -270,6 +270,22 @@ describe('the tour', () => {
     const m4 = await alice.workspaces.modify({ repo, name: 'w3', changes: [putFile('f.txt', 'f\n')] });
     const p3 = await alice.proposals.create({ repo, stream: 'main', head: m4.head, title: 'third' });
     expect((await alice.proposals.close({ repo, id: p3.id })).state).toBe('closed');
+    expect((await bob.proposals.getCommentDraft({ repo, id: p3.id })).present).toBe(false);
+    const commentDraft = await bob.proposals.saveCommentDraft({
+      repo,
+      id: p3.id,
+      head: p3.head,
+      body: 'Private follow-up',
+      expected_version: 0,
+    });
+    expect(commentDraft.version).toBe(1);
+    expect((await admin.proposals.getCommentDraft({ repo, id: p3.id })).present).toBe(false);
+    expect((await bob.proposals.getDraft({ repo, id: p3.id })).present).toBe(false);
+    await expect(
+      bob.proposals.saveCommentDraft({ repo, id: p3.id, head: p3.head, body: 'Stale follow-up', expected_version: 0 }),
+    ).rejects.toMatchObject({ status: 412 });
+    expect((await bob.proposals.clearCommentDraft({ repo, id: p3.id, expected_version: 1 })).version).toBe(2);
+
     await alice.workspaces.delete({ repo, name: 'w3' });
   });
 

@@ -120,34 +120,43 @@ fn proposal_set_reviewers(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput,
     ))
 }
 
-fn review_draft(ctx: &CallCtx<'_>, args: &Value, method: &str) -> Result<ToolOutput, ToolError> {
+fn private_draft(ctx: &CallCtx<'_>, args: &Value, method: &str, kind: &str) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let run = ctx.run_id(args)?;
-    if !ctx.api.supports("proposals.review_drafts", &ctx.opts(run))? {
-        return Err(ToolError::local("server_update_required", "This server does not support private review drafts.")
-            .hint("Update the server before saving or reading account drafts."));
+    if !ctx.api.supports(&format!("proposals.{kind}_drafts"), &ctx.opts(run))? {
+        return Err(ToolError::local(
+            "server_update_required",
+            "This server does not support this private draft type.",
+        )
+        .hint("Update the server before saving or reading account drafts."));
     }
     let id = str_arg(args, "proposal_id").unwrap_or_default();
-    let path = format!("{}/proposals/{}/review-draft", repo_path(&repo), enc(id));
+    let path = format!("{}/proposals/{}/{kind}-draft", repo_path(&repo), enc(id));
     let value = if method == "GET" {
         ctx.api.get(&path, &[], &ctx.opts(run))?
     } else {
-        write_review_draft(ctx, args, &path, run, method)?
+        write_private_draft(ctx, args, &path, run, method, kind)?
     };
-    let summary = if value.get("present").and_then(Value::as_bool).unwrap_or(false) {
-        "Your private review draft is saved. No review was posted."
-    } else {
-        "No private review draft is saved. No review was posted."
-    };
-    Ok(ToolOutput::new(summary, json!({"draft":value})).block("/draft/body", "review.draft", vec![]))
+    Ok(private_draft_output(value, kind))
 }
 
-fn write_review_draft(
+fn private_draft_output(value: Value, kind: &str) -> ToolOutput {
+    let summary = if value.get("present").and_then(Value::as_bool).unwrap_or(false) {
+        "Your private draft is saved. Nothing was posted."
+    } else {
+        "No private draft is saved. Nothing was posted."
+    };
+    let block = if kind == "comment" { "comment.draft" } else { "review.draft" };
+    ToolOutput::new(summary, json!({"draft":value})).block("/draft/body", block, vec![])
+}
+
+fn write_private_draft(
     ctx: &CallCtx<'_>,
     args: &Value,
     path: &str,
     run: Option<&str>,
     method: &str,
+    kind: &str,
 ) -> Result<Value, ToolError> {
     let version =
         u64_arg(args, "expected_version").ok_or_else(|| ToolError::invalid("expected_version is required"))?;
@@ -155,22 +164,25 @@ fn write_review_draft(
         return Ok(ctx.api.send("DELETE", &format!("{path}?expected_version={version}"), None, &ctx.opts(run))?);
     }
     let text = str_arg(args, "body").unwrap_or_default();
-    if text.len() > 64 * 1024 {
-        return Err(ToolError::invalid("draft body exceeds 64 KiB"));
+    let limit = if kind == "comment" { 16 * 1024 } else { 64 * 1024 };
+    if text.len() > limit {
+        return Err(ToolError::invalid(format!("draft body exceeds {limit} UTF-8 bytes")));
     }
-    let body = json!({"expected_version":version,"head":str_arg(args, "head").unwrap_or_default(),
-        "decision":str_arg(args, "decision").unwrap_or_default(),"body":text});
+    let mut body = json!({"expected_version":version,"head":str_arg(args, "head").unwrap_or_default(),"body":text});
+    if kind == "review" {
+        body["decision"] = json!(str_arg(args, "decision").unwrap_or_default());
+    }
     Ok(ctx.api.send("PUT", path, Some(&body), &ctx.opts(run))?)
 }
 
 fn review_draft_get(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
-    review_draft(ctx, args, "GET")
+    private_draft(ctx, args, "GET", "review")
 }
 fn review_draft_save(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
-    review_draft(ctx, args, "PUT")
+    private_draft(ctx, args, "PUT", "review")
 }
 fn review_draft_clear(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
-    review_draft(ctx, args, "DELETE")
+    private_draft(ctx, args, "DELETE", "review")
 }
 
 fn proposal_close(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
@@ -187,6 +199,16 @@ fn proposal_close(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolErr
         format!("Proposal {} closed without integrating.", crate::sanitize::attr_value(id)),
         json!({"proposal": proposal_brief(&p)}),
     ))
+}
+
+fn comment_draft_get(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
+    private_draft(ctx, args, "GET", "comment")
+}
+fn comment_draft_save(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
+    private_draft(ctx, args, "PUT", "comment")
+}
+fn comment_draft_clear(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
+    private_draft(ctx, args, "DELETE", "comment")
 }
 
 fn request_validation(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
@@ -511,6 +533,57 @@ pub fn tools() -> Vec<ToolDef> {
             ),
             output(vec![("draft", o_obj())], &["draft"]),
             review_draft_clear,
+        ),
+        def(
+            "comment_draft_get",
+            Group::Review,
+            "Read your private comment draft",
+            "Reads only the calling account's saved draft for this proposal. This is not a posted comment and does not expose another account's notes.",
+            Ann::READ,
+            input(vec![p_repo(), ("proposal_id", t_str("Proposal id or unique prefix.")), p_run()], &["proposal_id"]),
+            output(vec![("draft", o_obj())], &["draft"]),
+            comment_draft_get,
+        ),
+        def(
+            "comment_draft_save",
+            Group::Review,
+            "Save your private comment draft",
+            "Saves a private general comment draft against the inspected draft version. Does not post a comment or notify anyone. Works on closed proposals too. A stale version preserves the other edit.",
+            Ann::SET,
+            input(
+                vec![
+                    p_repo(),
+                    ("proposal_id", t_str("Proposal id or unique prefix.")),
+                    (
+                        "expected_version",
+                        t_int("Version returned by comment_draft_get; 0 only when no draft exists.", 0, i64::MAX),
+                    ),
+                    ("head", t_str("Exact proposal head the draft refers to.")),
+                    ("body", t_str_max("Private notes, up to 16 KiB of UTF-8.", 16384)),
+                    p_run(),
+                ],
+                &["proposal_id", "expected_version", "head", "body"],
+            ),
+            output(vec![("draft", o_obj())], &["draft"]),
+            comment_draft_save,
+        ),
+        def(
+            "comment_draft_clear",
+            Group::Review,
+            "Clear your private comment draft",
+            "Clears only your saved draft after comparing its inspected version. Newer text is retained on conflict; already cleared drafts are safe to retry.",
+            Ann::DESTROY,
+            input(
+                vec![
+                    p_repo(),
+                    ("proposal_id", t_str("Proposal id or unique prefix.")),
+                    ("expected_version", t_int("Version returned by comment_draft_get.", 0, i64::MAX)),
+                    p_run(),
+                ],
+                &["proposal_id", "expected_version"],
+            ),
+            output(vec![("draft", o_obj())], &["draft"]),
+            comment_draft_clear,
         ),
         def(
             "review",

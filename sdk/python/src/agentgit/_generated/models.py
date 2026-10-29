@@ -27,8 +27,10 @@ __all__ = [
     "Changeset",
     "ClaimJobRequest",
     "ClaimJobResponse",
+    "ClearCommentDraftRequest",
     "ClearReviewDraftRequest",
     "CloseProposalRequest",
+    "CommentDraft",
     "CommentProposalRequest",
     "CompareAndSwapRequest",
     "CompleteJobRequest",
@@ -69,6 +71,7 @@ __all__ = [
     "GcResponse",
     "GetCandidateRequest",
     "GetChangesetRequest",
+    "GetCommentDraftRequest",
     "GetIssueRequest",
     "GetJobRequest",
     "GetOperationRequest",
@@ -206,6 +209,7 @@ __all__ = [
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SaveCommentDraftRequest",
     "SaveReviewDraftRequest",
     "SaveRunOutputRequest",
     "SearchMatch",
@@ -454,6 +458,14 @@ class ClaimJobResponse:
 
 
 @dataclass(kw_only=True)
+class ClearCommentDraftRequest:
+    """The `ClearCommentDraftRequest` message."""
+    expected_version: int = field(default=0)
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class ClearReviewDraftRequest:
     """The `ClearReviewDraftRequest` message."""
     expected_version: int = field(default=0)
@@ -467,6 +479,16 @@ class CloseProposalRequest:
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class CommentDraft:
+    """Private, unsubmitted general discussion notes for the current acting identity."""
+    body: str = field(default="")
+    head: str = field(default="")
+    present: bool = field(default=False)
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -862,6 +884,13 @@ class GetChangesetRequest:
     include_ops: bool = field(default=False)
     repo: str = field(default="")
     rev: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetCommentDraftRequest:
+    """The `GetCommentDraftRequest` message."""
+    id: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -2055,6 +2084,16 @@ class RunSpec:
     memory_mb: int = field(default=0)
     network: bool = field(default=False)
     timeout_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class SaveCommentDraftRequest:
+    """The `SaveCommentDraftRequest` message."""
+    body: str = field(default="")
+    expected_version: int = field(default=0)
+    head: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)

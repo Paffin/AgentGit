@@ -506,6 +506,12 @@ count as approval or notify reviewers. Clearing removes the content and retains 
 so stale saves cannot recreate it. Retrying an identical save/clear is safe; reread before
 changing a conflicting draft rather than automatically overwriting it.
 
+Private general-comment drafts use `client.proposals` methods `getCommentDraft`, `saveCommentDraft` and `clearCommentDraft`
+with the same inspected-version and retry rules. Negotiate `proposals.comment_drafts`
+first. These drafts contain `head` and `body` (up to 16 KiB of UTF-8), remain separate
+from review-decision drafts, and can be saved on closed proposals. Saving or clearing
+a draft never posts a comment; post explicitly after inspecting the current proposal head.
+
 Servers advertising `workspaces.conflict_origins` may include `conflict.origin` with
 `base`, `ours`, and `theirs` source paths when a rename moved the file. During workspace
 sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;

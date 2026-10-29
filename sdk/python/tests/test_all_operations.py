@@ -254,6 +254,20 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     m4 = alice.workspaces.modify(repo=REPO, name="w3", changes=[put_file("f.txt", "f\n")])
     p3 = alice.proposals.create(repo=REPO, stream="main", head=m4.head, title="third")
     assert alice.proposals.close(repo=REPO, id=p3.id).state == "closed"
+    assert not bob.proposals.get_comment_draft(repo=REPO, id=p3.id).present
+    comment_draft = bob.proposals.save_comment_draft(
+        repo=REPO, id=p3.id, head=p3.head, body="Private follow-up", expected_version=0
+    )
+    assert comment_draft.version == 1
+    assert not admin.proposals.get_comment_draft(repo=REPO, id=p3.id).present
+    assert not bob.proposals.get_draft(repo=REPO, id=p3.id).present
+    with pytest.raises(FailedPreconditionError) as stale_comment:
+        bob.proposals.save_comment_draft(
+            repo=REPO, id=p3.id, head=p3.head, body="Stale follow-up", expected_version=0
+        )
+    assert stale_comment.value.status == 412
+    assert bob.proposals.clear_comment_draft(repo=REPO, id=p3.id, expected_version=1).version == 2
+
     alice.workspaces.delete(repo=REPO, name="w3")
 
 

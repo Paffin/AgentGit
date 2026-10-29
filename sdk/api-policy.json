@@ -54,7 +54,9 @@
       "migration.commit",
       "proposal.set_reviewers",
       "proposal.save_draft",
-      "proposal.clear_draft"
+      "proposal.clear_draft",
+      "proposal.save_comment_draft",
+      "proposal.clear_comment_draft"
     ],
     "naturalWhenFieldPresent": {
       "workspace.modify": "expected_head",

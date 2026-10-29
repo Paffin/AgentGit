@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from agentgit import AgentGitClient, AsyncAgentGitClient
 
@@ -15,7 +16,8 @@ DRAFT = {
 }
 
 
-def test_private_drafts_send_owner_free_guarded_requests() -> None:
+@pytest.mark.parametrize("kind", ["review", "comment"])
+def test_private_drafts_send_owner_free_guarded_requests(kind: str) -> None:
     requests: list[httpx.Request] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
@@ -25,29 +27,34 @@ def test_private_drafts_send_owner_free_guarded_requests() -> None:
     with AgentGitClient(
         "http://draft.test", "reviewer", http_client=httpx.Client(transport=httpx.MockTransport(respond))
     ) as client:
-        client.proposals.get_draft(repo="team/app", id="proposal")
-        client.proposals.save_draft(
+        getattr(client.proposals, "get_draft" if kind == "review" else "get_comment_draft")(
+            repo="team/app", id="proposal"
+        )
+        getattr(client.proposals, "save_draft" if kind == "review" else "save_comment_draft")(
             repo="team/app",
             id="proposal",
             expected_version=0,
             head="reviewed",
-            decision="comment",
+            **({"decision": "comment"} if kind == "review" else {}),
             body="Private notes",
         )
-        client.proposals.clear_draft(repo="team/app", id="proposal", expected_version=1)
+        getattr(client.proposals, "clear_draft" if kind == "review" else "clear_comment_draft")(
+            repo="team/app", id="proposal", expected_version=1
+        )
     assert [request.method for request in requests] == ["GET", "PUT", "DELETE"]
-    assert all(request.url.path.endswith("/proposals/proposal/review-draft") for request in requests)
+    assert all(request.url.path.endswith(f"/proposals/proposal/{kind}-draft") for request in requests)
     assert json.loads(requests[1].content) == {
         "expected_version": 0,
         "head": "reviewed",
-        "decision": "comment",
+        **({"decision": "comment"} if kind == "review" else {}),
         "body": "Private notes",
     }
     assert requests[2].content == b""
     assert requests[2].url.params["expected_version"] == "1"
 
 
-def test_lost_draft_save_retries_exactly_the_same_payload() -> None:
+@pytest.mark.parametrize("kind", ["review", "comment"])
+def test_lost_draft_save_retries_exactly_the_same_payload(kind: str) -> None:
     bodies: list[bytes] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
@@ -62,12 +69,12 @@ def test_lost_draft_save_retries_exactly_the_same_payload() -> None:
         http_client=httpx.Client(transport=httpx.MockTransport(respond)),
         sleep=lambda _: None,
     ) as client:
-        result = client.proposals.save_draft(
+        result = getattr(client.proposals, "save_draft" if kind == "review" else "save_comment_draft")(
             repo="team/app",
             id="proposal",
             expected_version=0,
             head="reviewed",
-            decision="comment",
+            **({"decision": "comment"} if kind == "review" else {}),
             body="Private notes",
         )
     assert result.body == "Private notes"
@@ -75,7 +82,8 @@ def test_lost_draft_save_retries_exactly_the_same_payload() -> None:
     assert bodies[0] == bodies[1]
 
 
-def test_clear_retries_the_same_query_version_even_when_zero() -> None:
+@pytest.mark.parametrize("kind", ["review", "comment"])
+def test_clear_retries_the_same_query_version_even_when_zero(kind: str) -> None:
     urls: list[str] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
@@ -93,7 +101,9 @@ def test_clear_retries_the_same_query_version_even_when_zero() -> None:
         http_client=httpx.Client(transport=httpx.MockTransport(respond)),
         sleep=lambda _: None,
     ) as client:
-        result = client.proposals.clear_draft(repo="team/app", id="proposal", expected_version=0)
+        result = getattr(client.proposals, "clear_draft" if kind == "review" else "clear_comment_draft")(
+            repo="team/app", id="proposal", expected_version=0
+        )
     assert not result.present
     assert result.version == 2
     assert urls[0] == urls[1]
@@ -101,7 +111,8 @@ def test_clear_retries_the_same_query_version_even_when_zero() -> None:
     assert httpx.URL(urls[0]).params["expected_version"] == "0"
 
 
-def test_async_draft_save_uses_the_same_guard_and_retry_contract() -> None:
+@pytest.mark.parametrize("kind", ["review", "comment"])
+def test_async_draft_save_uses_the_same_guard_and_retry_contract(kind: str) -> None:
     async def scenario() -> None:
         bodies: list[bytes] = []
 
@@ -120,12 +131,14 @@ def test_async_draft_save_uses_the_same_guard_and_retry_contract() -> None:
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
             sleep=no_sleep,
         ) as client:
-            result = await client.proposals.save_draft(
+            result = await getattr(
+                client.proposals, "save_draft" if kind == "review" else "save_comment_draft"
+            )(
                 repo="team/app",
                 id="proposal",
                 expected_version=0,
                 head="reviewed",
-                decision="comment",
+                **({"decision": "comment"} if kind == "review" else {}),
                 body="Private notes",
             )
         assert result.body == "Private notes"

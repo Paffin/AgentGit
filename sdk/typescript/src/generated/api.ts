@@ -97,14 +97,17 @@ export const NAMESPACE_METHODS = {
     get: 'operations.get',
   },
   proposals: {
+    clearCommentDraft: 'proposal.clear_comment_draft',
     clearDraft: 'proposal.clear_draft',
     close: 'proposal.close',
     comment: 'proposal.comment',
     create: 'proposal.create',
     get: 'proposal.get',
+    getCommentDraft: 'proposal.get_comment_draft',
     getDraft: 'proposal.get_draft',
     list: 'proposal.list',
     review: 'proposal.review',
+    saveCommentDraft: 'proposal.save_comment_draft',
     saveDraft: 'proposal.save_draft',
     setReviewers: 'proposal.set_reviewers',
     threadComments: 'proposal.thread_comments',
@@ -335,6 +338,8 @@ export interface Api {
     get(request: Req<'operations.get'>, options?: CallOptions): Promise<Res<'operations.get'>>;
   };
   readonly proposals: {
+    /** Clear the inspected private comment draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.clear_comment_draft`) */
+    clearCommentDraft(request: Req<'proposal.clear_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.clear_comment_draft'>>;
     /** Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`) */
     clearDraft(request: Req<'proposal.clear_draft'>, options?: CallOptions): Promise<Res<'proposal.clear_draft'>>;
     /** Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`) */
@@ -345,12 +350,16 @@ export interface Api {
     create(request: Req<'proposal.create'>, options?: CallOptions): Promise<Res<'proposal.create'>>;
     /** One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`) */
     get(request: Req<'proposal.get'>, options?: CallOptions): Promise<Res<'proposal.get'>>;
+    /** Read your private comment draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.get_comment_draft`) */
+    getCommentDraft(request: Req<'proposal.get_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.get_comment_draft'>>;
     /** Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`) */
     getDraft(request: Req<'proposal.get_draft'>, options?: CallOptions): Promise<Res<'proposal.get_draft'>>;
     /** List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`) */
     list(request: Req<'proposal.list'>, options?: CallOptions): Promise<Res<'proposal.list'>>;
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
+    /** Save your private comment draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.save_comment_draft`) */
+    saveCommentDraft(request: Req<'proposal.save_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.save_comment_draft'>>;
     /** Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`) */
     saveDraft(request: Req<'proposal.save_draft'>, options?: CallOptions): Promise<Res<'proposal.save_draft'>>;
     /** Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`) */

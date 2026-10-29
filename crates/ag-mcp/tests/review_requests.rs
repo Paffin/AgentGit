@@ -95,5 +95,12 @@ fn older_servers_refuse_review_request_writes_and_filters_before_using_them() {
     m.refused("review_draft_get", json!({"proposal_id":"prop_test"}), "server_update_required");
     m.refused("review_draft_save", json!({"proposal_id":"prop_test","expected_version":0,"head":"0".repeat(64),"decision":"comment","body":"private"}), "server_update_required");
     m.refused("review_draft_clear", json!({"proposal_id":"prop_test","expected_version":0}), "server_update_required");
+    m.refused("comment_draft_get", json!({"proposal_id":"prop_test"}), "server_update_required");
+    m.refused(
+        "comment_draft_save",
+        json!({"proposal_id":"prop_test","expected_version":0,"head":"0".repeat(64),"body":"private"}),
+        "server_update_required",
+    );
+    m.refused("comment_draft_clear", json!({"proposal_id":"prop_test","expected_version":0}), "server_update_required");
     response.join().unwrap();
 }

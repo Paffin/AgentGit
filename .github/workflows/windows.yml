@@ -74,9 +74,13 @@ jobs:
       - name: Windows archive and installer regression tests
         run: python scripts/test_windows_release.py
       - name: Installer tests on Windows PowerShell 5.1
-        shell: pwsh
+        # Start Python from Windows PowerShell too: inheriting pwsh's PSModulePath
+        # prevents the nested 5.1 process from loading its own utility module.
+        shell: powershell
         run: |
           $env:AG_TEST_PWSH = (Get-Command powershell.exe).Source
+          & $env:AG_TEST_PWSH -NoProfile -Command '$PSVersionTable; Get-Command Get-FileHash -ErrorAction Stop | Format-List Name, Source'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/test_windows_release.py
       - name: Package, install and run the native Windows client
         shell: pwsh

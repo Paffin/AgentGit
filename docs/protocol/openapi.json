@@ -882,6 +882,18 @@
           "path": {
             "default": "",
             "type": "string"
+          },
+          "resolution_scope": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConflictResolutionScope",
+                "description": "Optional bounded scope for file_directory in fresh virtual sync previews.\nMissing or incomplete metadata cannot drive a whole-subtree choice.\nDoes not include paths that exist only in source trees, or indicate a selected side."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object"
@@ -900,6 +912,25 @@
           "theirs": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ConflictResolutionScope": {
+        "description": "Exact candidate paths at or beneath one file/directory conflict root.",
+        "properties": {
+          "complete": {
+            "default": false,
+            "description": "False if any candidate was omitted; clients must not offer automatic subtree choices then.",
+            "type": "boolean"
+          },
+          "paths": {
+            "default": [],
+            "description": "Ordered candidate entries, including the root. At most 100 paths per root and 1000 in one response.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"

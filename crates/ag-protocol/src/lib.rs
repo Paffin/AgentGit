@@ -103,6 +103,9 @@ pub mod features {
     /// Structural virtual sync resolves the complete merged candidate, preserving independent changes.
     pub const WORKSPACES_STRUCTURAL_RESOLUTION: &str = "workspaces.structural_resolution";
 
+    /// Bounded complete candidate paths for explicit file/directory resolution.
+    pub const WORKSPACES_STRUCTURAL_PREVIEW: &str = "workspaces.structural_preview";
+
     /// Private versioned review drafts for the current acting identity.
     pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
 
@@ -113,6 +116,7 @@ pub mod features {
         WORKSPACES_SYNC_PRECONDITION,
         WORKSPACES_CONFLICT_ORIGINS,
         WORKSPACES_STRUCTURAL_RESOLUTION,
+        WORKSPACES_STRUCTURAL_PREVIEW,
         EXECUTION_JOBS,
         OBJECTS_CHUNKED,
         AUTH_OIDC,

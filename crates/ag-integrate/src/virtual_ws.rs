@@ -263,7 +263,18 @@ impl Repository {
 
         let mut result = merged.tree.clone();
         if !merged.is_clean() {
-            let infos: Vec<ConflictInfo> = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
+            let mut scopes = merged.structural_resolution_scopes();
+            let infos: Vec<ConflictInfo> = merged
+                .conflicts
+                .iter()
+                .map(|conflict| {
+                    let mut info = ConflictInfo::from_conflict(conflict);
+                    if matches!(conflict.kind, ag_merge::ConflictKind::FileDirectory { .. }) {
+                        info.resolution_scope = scopes.remove(conflict.path.as_str()).map(Into::into);
+                    }
+                    info
+                })
+                .collect();
             let mut wanted: BTreeMap<RepoPath, Option<ag_tree::Entry>> = BTreeMap::new();
             for r in resolutions {
                 wanted.insert(r.path().clone(), self.change_to_target(r)?);

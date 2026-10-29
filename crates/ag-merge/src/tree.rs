@@ -306,6 +306,12 @@ impl TreeMerge {
         self.conflicts.is_empty()
     }
 
+    /// Describes every candidate path beneath each file/directory conflict, subject to fixed bounds.
+    /// A scope that is incomplete must not be used for automatic whole-subtree replacement.
+    pub fn structural_resolution_scopes(&self) -> BTreeMap<&str, crate::ResolutionScope> {
+        crate::scopes::collect_scopes(&self.conflicts, self.unresolved_entries.as_ref())
+    }
+
     /// Applies explicit resolved path states before validating the resulting tree.
     ///
     /// Unlike the best-effort [`Self::tree`], this preserves the clean parts of a merge

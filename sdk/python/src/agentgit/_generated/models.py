@@ -36,6 +36,7 @@ __all__ = [
     "ConfigureRepoRequest",
     "Conflict",
     "ConflictOrigin",
+    "ConflictResolutionScope",
     "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
@@ -529,6 +530,7 @@ class Conflict:
     message: str = field(default="")
     origin: ConflictOrigin | None = field(default=None)
     path: str = field(default="")
+    resolution_scope: ConflictResolutionScope | None = field(default=None)
 
 
 @dataclass(kw_only=True)
@@ -537,6 +539,13 @@ class ConflictOrigin:
     base: str = field(default="")
     ours: str = field(default="")
     theirs: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ConflictResolutionScope:
+    """Exact candidate paths at or beneath one file/directory conflict root."""
+    complete: bool = field(default=False)
+    paths: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)

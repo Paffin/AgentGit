@@ -247,6 +247,10 @@ pub fn conflict(c: &ag_integrate::ConflictInfo) -> v1::Conflict {
         path: c.path.clone(),
         kind: c.kind.clone(),
         message: c.message.clone(),
+        resolution_scope: c
+            .resolution_scope
+            .as_ref()
+            .map(|scope| v1::ConflictResolutionScope { paths: scope.paths.clone(), complete: scope.complete }),
         origin: c.origin.as_ref().map(|o| v1::ConflictOrigin {
             base: o.base.clone(),
             ours: o.ours.clone(),

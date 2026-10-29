@@ -551,3 +551,8 @@ Servers advertising `workspaces.conflict_origins` may include `conflict.origin` 
 sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;
 resolve at `conflict.path`. Without origin metadata, both sides use `conflict.path`.
 For proposal preparation and integration, ours is the target stream and theirs is the proposal.
+
+With `workspaces.structural_preview`, fresh workspace sync conflicts may include
+`resolution_scope.paths` for a file/directory conflict. The scope is bounded; only
+`complete: true` identifies a complete set. An absent scope or `complete: false`
+must not authorize deleting unlisted paths or treating the listed paths as exhaustive.

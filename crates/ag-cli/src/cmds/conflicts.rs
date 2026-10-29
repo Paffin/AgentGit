@@ -47,6 +47,7 @@ mod tests {
                 ours: "result.txt".into(),
                 theirs: "other.txt".into(),
             }),
+            ..Default::default()
         };
         assert_eq!(
             wire(&conflict),

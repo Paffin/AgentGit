@@ -426,3 +426,15 @@ file can retain the directory. The final tree must be valid and satisfy the exis
 Incomplete choices fail without changing the workspace. Combine this capability with
 `workspaces.sync_precondition` when sending choices from an inspected preview. Older servers
 can lose clean incoming edits in structural cases and must not be used for this flow.
+
+### Structural preview scope
+
+Negotiate `workspaces.structural_preview` before using a file/directory conflict's optional
+`resolution_scope`. `paths` lists candidate paths at or beneath that conflict's root;
+`complete: true` guarantees the root and every candidate descendant are present. The server
+limits this to 100 paths per conflict and 1,000 across the response. A scope can be empty and
+incomplete; absence or `complete: false` cannot authorize a whole-subtree choice. Source paths
+alone do not cover synthetic destinations introduced by directory-rename propagation.
+
+Scopes are fresh virtual-sync metadata, not stored historical proof. Preserve the existing
+`stream_head` precondition when submitting explicit puts/deletes to the complete candidate.

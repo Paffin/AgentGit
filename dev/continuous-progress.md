@@ -8,7 +8,7 @@ Status: **CONTINUE**. Rebased on current main; draft PR preparation and P0 struc
 - Original base: `2ad73082106615c5ce1ac0831b9444eb3955b20f` (beta.7).
 - Audited current remote main on 2026-10-29: `8a0019424b37bd9ef42739389a0e7a1f7945c660`.
 - Local implementation tip before this checkpoint: `ed58caeb2ff4ed10874b80a151c45187be6fe56c`.
-- User says **do not merge yet**; accumulate a larger batch. Do not merge, force-push, publish a release or replace tags. Draft PR and CI qualification are the next delivery step.
+- User reiterated on 2026-10-29: **work only in a separate branch; merge all into the next release only when explicitly told**. Do not merge, force-push, publish a release or replace tags. Draft PR and CI qualification are the next delivery step.
 - Use ub-mode and the existing Hallmark/Web design direction. Keep CLI, SDK and Web behavior aligned; avoid speculative frameworks.
 - On resume: read this file, inspect worktree, fetch main, inspect open PR/CI, retain unmerged changes, continue a runnable backlog item.
 
@@ -75,3 +75,17 @@ Rebase on `8a00194` completed without losing application changes. Retained main'
 ## Next available product slice
 
 R4: bounded whole-file/directory choices in Web. Dependency P0 is repaired. A server-supplied complete candidate path list is necessary: input-tree union can miss synthetic paths from directory renames. Do not infer rename mappings in the browser. Bound metadata and browser work; refuse incomplete previews, preserve exact blobs/types/modes and independent changes, require pinned revision/capability guards. Keep multi-target rename/rename separate until explicitly supported.
+
+### Update after P0 repair
+
+Pushed `a58b8805344085cec15807de40457bea14d95c89` to PR136: complete structural candidate resolution, local fail-closed sync, and legacy pending snapshot guard (force cannot bypass). Merge/integrate239 passed,3 existing ignored, clippy and independent review passed. Latest fast CI run40962581592; Docs40962581342 succeeded. Previous fast CI on93bc477 was cancelled by the newer push, not treated as a code failure. Windows40962143088 still builds the earlier93bc477 head; it cannot qualify the later head until a follow-up native run.
+
+Next R4 implementation contract under review: fresh structural sync conflicts get optional bounded `resolution_scope` with candidate paths and a completeness bit. This covers synthetic directory-rename destinations that are absent from both source trees. Web must refuse incomplete scopes and older servers, group nested conflicts under minimal roots, preserve selected blob/type/mode and explicitly remove other affected paths. File/path/request budgets and branch/proposal/session guards are mandatory. No new account-draft schema is needed for this slice.
+
+### Explicit merge/release hold reaffirmed
+
+Verified PR136 remains Draft, OPEN, mergedAt=null; main does not contain working commits93bc477/a58b880/944730d. Continue development/CI on the separate branch. Do not merge or publish any release until the user directly instructs it; the generic continuous objective never overrides this hold.
+
+### Structural preview dependency validated
+
+Core/API `resolution_scope` implemented: max100 paths per conflict/max1000 per response, complete flag, synthetic rename destinations, exact prefix boundaries and legacy compatibility. Current source passed243 merge/integrate tests (3 existing ignored), HTTP/gRPC scope checks, Clippy, seven selected mutations and independent review. SDK179/204 + MCP3 and CLI31+3 shape checks passed. Web whole-root chooser is now being implemented with a shared request/path budget. Fast CI on a58b880 succeeded (Linux, tooling, SDK, Go); its Web/Docs/Security checks succeeded. Native Windows93bc477 compiled and is running tests, not yet qualified.

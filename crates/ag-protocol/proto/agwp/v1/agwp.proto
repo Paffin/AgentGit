@@ -887,6 +887,15 @@ message ConflictOrigin {
   string theirs = 3;
 }
 
+// Exact candidate paths at or beneath one file/directory conflict root.
+message ConflictResolutionScope {
+  // Ordered candidate entries; a complete scope includes the root.
+  // At most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.
+  repeated string paths = 1;
+  // False if any candidate was omitted; clients must not offer automatic subtree choices then.
+  bool complete = 2;
+}
+
 message Conflict {
   string path = 1;
   // A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
@@ -903,6 +912,10 @@ message Conflict {
   // For proposal preparation/integration, ours is the stream and theirs is the proposal.
   // The resolution is still written to Conflict.path, not to these source paths.
   ConflictOrigin origin = 4;
+  // Optional bounded scope for file_directory in fresh virtual sync previews.
+  // Missing or incomplete metadata cannot drive a whole-subtree choice.
+  // Does not include paths that exist only in source trees, or indicate a selected side.
+  ConflictResolutionScope resolution_scope = 5;
 }
 
 message Blocker {

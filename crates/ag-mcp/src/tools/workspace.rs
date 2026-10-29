@@ -616,6 +616,19 @@ mod tests {
     }
 
     #[test]
+    fn sync_preserves_incomplete_structural_preview() {
+        let conflict = json!({"path":"docs","kind":"file_directory","message":"",
+            "resolution_scope":{"paths":["docs","docs/guide.md"],"complete":false}});
+        let legacy = json!({"path":"old","kind":"file_directory","message":""});
+        let out = sync_output(
+            "work",
+            &json!({"status":"conflicted","stream_head":"known",
+            "conflicts":[conflict.clone(),legacy.clone()]}),
+        );
+        assert_eq!(out.data["conflicts"], json!([conflict, legacy]));
+    }
+
+    #[test]
     fn sync_guidance_never_treats_an_absent_target_as_a_safe_pin() {
         let legacy = sync_output("work", &json!({"status":"conflicted","conflicts":[]}));
         let advice = legacy.notes.join(" ");

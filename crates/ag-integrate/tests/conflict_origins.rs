@@ -21,3 +21,20 @@ fn conflict_conversion_preserves_all_three_source_paths_and_reads_legacy_outcome
     assert_eq!(legacy.describe(), "content");
     assert!(serde_json::to_value(legacy).unwrap().get("origin").is_none_or(|v| v.is_null()));
 }
+
+#[test]
+fn ordinary_and_legacy_conflicts_keep_their_existing_serialized_shape() {
+    let old = json!({"path":"file","kind":"content","message":"overlap"});
+    let decoded: ConflictInfo = serde_json::from_value(old.clone()).unwrap();
+    assert!(decoded.resolution_scope.is_none());
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), old);
+    let fresh = ConflictInfo::from_conflict(&Conflict {
+        path: RepoPath::new("file").unwrap(),
+        kind: ConflictKind::Content { regions: 1 },
+        origin: None,
+    });
+    assert_eq!(
+        serde_json::to_value(fresh).unwrap(),
+        json!({"path":"file","kind":"content","message":"content conflict (1 region(s))"})
+    );
+}

@@ -14,6 +14,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Fresh structural sync previews include bounded candidate path scopes and an explicit completeness flag. Clients can account for synthetic rename destinations without guessing or treating a truncated preview as complete.
+
 - The release pipeline prepares a native Windows x64 ZIP with the CLI, server and MCP, plus a per-user PowerShell installer that verifies checksums. Native install-and-first-use smoke is required before publishing; the first Windows archive is not yet released.
 
 - Reviewers can explicitly save a private review draft to their account and resume on another device through Web UI, CLI, MCP or SDKs. Local drafts remain available, conflicting drafts require a choice, and versioned saves/clears never overwrite newer notes or submit a review. Development schema 10 requires a pre-upgrade backup.

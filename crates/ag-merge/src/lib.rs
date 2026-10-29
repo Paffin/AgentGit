@@ -49,10 +49,12 @@
 
 mod dirrename;
 mod rename;
+mod scopes;
 mod text;
 mod tree;
 
 pub use dirrename::{MAX_AMBIGUOUS_CANDIDATES, MAX_DIRECTORY_PAIRS};
+pub use scopes::{MAX_RESOLUTION_PATHS_TOTAL, MAX_RESOLUTION_SCOPE_PATHS, ResolutionScope};
 
 pub use rename::{
     MAX_COPY_SOURCES, MAX_SIMILARITY_CANDIDATES, MAX_SIMILARITY_FILE_SIZE, MAX_SIMILARITY_WORK, MIN_COPY_SIMILARITY,

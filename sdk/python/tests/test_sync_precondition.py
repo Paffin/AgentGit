@@ -127,3 +127,33 @@ def test_sync_preserves_renamed_conflict_sources_and_legacy_conflicts() -> None:
     assert result.conflicts[0].origin.ours == "renamed.txt"
     assert result.conflicts[0].origin.theirs == "original.txt"
     assert result.conflicts[1].origin is None
+
+
+def test_sync_preserves_incomplete_structural_preview_and_absent_scope() -> None:
+    def respond(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "conflicted",
+                "head": "workspace",
+                "stream_head": "stream",
+                "conflicts": [
+                    {
+                        "path": "docs",
+                        "kind": "file_directory",
+                        "message": "",
+                        "resolution_scope": {"paths": ["docs", "docs/guide.md"], "complete": False},
+                    },
+                    {"path": "old", "kind": "file_directory", "message": ""},
+                ],
+            },
+        )
+
+    with AgentGitClient(
+        "http://sync.test", "test", http_client=httpx.Client(transport=httpx.MockTransport(respond))
+    ) as client:
+        result = client.workspaces.sync(repo="team/app", name="work")
+    assert result.conflicts[0].resolution_scope is not None
+    assert result.conflicts[0].resolution_scope.paths == ["docs", "docs/guide.md"]
+    assert result.conflicts[0].resolution_scope.complete is False
+    assert result.conflicts[1].resolution_scope is None

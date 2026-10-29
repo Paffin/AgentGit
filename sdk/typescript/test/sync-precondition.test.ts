@@ -92,3 +92,22 @@ it('preserves distinct source paths for a renamed conflict and accepts legacy co
   expect(result.conflicts[0]?.origin).toEqual(conflict.origin);
   expect(result.conflicts[1]?.origin).toBeUndefined();
 });
+
+it('preserves incomplete structural previews and leaves absent scopes absent', async () => {
+  const conflict: Conflict = {
+    path: 'docs',
+    kind: 'file_directory',
+    message: '',
+    resolution_scope: { paths: ['docs', 'docs/guide.md'], complete: false },
+  };
+  const legacy: Conflict = { path: 'old', kind: 'file_directory', message: '' };
+  const client = new AgentGitClient({
+    baseUrl: 'http://sync.test',
+    token: 'test',
+    fetch: async () =>
+      Response.json({ status: 'conflicted', head: 'workspace', stream_head: 'stream', conflicts: [conflict, legacy] }),
+  });
+  const result = await client.workspaces.sync({ repo: 'team/app', name: 'work' });
+  expect(result.conflicts[0]?.resolution_scope).toEqual({ paths: ['docs', 'docs/guide.md'], complete: false });
+  expect(result.conflicts[1]?.resolution_scope).toBeUndefined();
+});

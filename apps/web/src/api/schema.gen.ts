@@ -2134,6 +2134,7 @@ export interface components {
       origin?: components['schemas']['ConflictOrigin'] | null
       /** @default  */
       path: string
+      resolution_scope?: components['schemas']['ConflictResolutionScope'] | null
     }
     /** @description Exact paths at the three revisions when source locations differ after a rename. */
     ConflictOrigin: {
@@ -2143,6 +2144,19 @@ export interface components {
       ours: string
       /** @default  */
       theirs: string
+    }
+    /** @description Exact candidate paths at or beneath one file/directory conflict root. */
+    ConflictResolutionScope: {
+      /**
+       * @description False if any candidate was omitted; clients must not offer automatic subtree choices then.
+       * @default false
+       */
+      complete: boolean
+      /**
+       * @description Ordered candidate entries, including the root. At most 100 paths per root and 1000 in one response.
+       * @default []
+       */
+      paths: string[]
     }
     CreateIssueRequest: {
       /** @default  */

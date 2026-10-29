@@ -247,6 +247,7 @@ function withOpenObjects(doc) {
     ['ProposalDetail', 'requested_reviewers'],
     ['SyncWorkspaceResponse', 'stream_head'],
     ['Conflict', 'origin'],
+    ['Conflict', 'resolution_scope'],
   ]) {
     const schema = copy.components.schemas[schemaName];
     const property = schema?.properties?.[field];

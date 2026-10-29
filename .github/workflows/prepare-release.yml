@@ -47,17 +47,22 @@ jobs:
           FORCE: ${{ inputs.force }}
         run: python3 scripts/prepare_release.py
 
-  qualify:
+  checks:
     needs: verify
     if: needs.verify.outputs.needed == 'true'
-    uses: ./.github/workflows/qualification.yml
+    name: Reuse the existing commit checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: read
-      security-events: write
-      pages: write
-      id-token: write
-    secrets: inherit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release_ci.py
 
   scripts:
     timeout-minutes: 10
@@ -77,7 +82,7 @@ jobs:
     name: binaries (${{ matrix.target }})
     needs: verify
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -418,7 +423,7 @@ jobs:
     timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: assemble and attest the candidate
-    needs: [verify, qualify, scripts, binaries, windows-binaries, sbom, manifest]
+    needs: [verify, checks, scripts, binaries, windows-binaries, sbom, manifest]
     runs-on: ubuntu-latest
     env:
       PUBLISH: ${{ needs.verify.outputs.publish }}
@@ -491,7 +496,7 @@ jobs:
     name: install.sh (${{ matrix.os }})
     needs: [verify, release]
     strategy:
-      max-parallel: 2
+      max-parallel: 3
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest]

@@ -7,7 +7,7 @@ import urllib.error
 
 import yaml
 
-from request_release import GitHub, TARGETS, checks_pending, main, request_release, required_assets, wait_checks, workflow_runs
+from request_release import GitHub, TARGETS, checks_pending, main, request_release, required_assets, is_published, wait_checks, workflow_runs
 
 
 REPO = 'acme/project'
@@ -40,6 +40,35 @@ class ReleaseRequest(unittest.TestCase):
         self.assertEqual(len(assets), 10)
         self.assertNotIn('agentgit-0.3.0-beta.4-orchestrator.cdx.json', assets)
         self.assertIn('agentgit-0.3.0-beta.4-ag-mcp.cdx.json', assets)
+
+    def test_windows_archive_requirement_preserves_historical_releases(self):
+        for version in ('0.2.0-rc.2', '0.2.9', '0.3.0-1', '0.3.0-alpha.10', '0.3.0-beta.7', '0.3.0-beta.7+build.10'):
+            with self.subTest(version=version):
+                self.assertFalse(any(name.endswith('.zip') for name in required_assets(version)))
+                release = {'draft': False, 'assets': [dict(name=name, state='uploaded', size=1)
+                                                     for name in required_assets(version)]}
+                self.assertTrue(is_published(release, version))
+        for version in ('0.3.0-beta.8', '0.3.0-beta.10', '0.3.0-beta.rc', '0.3.0-rc.1', '0.3.0', '0.3.1', '1.0.0+build.7'):
+            with self.subTest(version=version):
+                self.assertIn(f'agentgit-{version}-x86_64-pc-windows-msvc.zip', required_assets(version))
+
+    def test_missing_future_windows_archive_is_repaired(self):
+        version = '0.3.0-beta.8'
+        zip_name = f'agentgit-{version}-x86_64-pc-windows-msvc.zip'
+        api = Api()
+        assets = [dict(name=name, state='uploaded', size=1)
+                  for name in required_assets(version) if name != zip_name]
+        release = {'draft': False, 'assets': assets}
+        api.values[BASE + '/releases/tags/v' + version] = release
+        self.assertFalse(is_published(release, version))
+        seen = []
+        result = request_release(api, REPO, SHA, version, lambda _api, _base, sha: seen.append(sha))
+        self.assertEqual(result, 'requested v' + version)
+        self.assertEqual(seen, [SHA])
+        self.assertEqual(api.writes[-1], (BASE + '/actions/workflows/release.yml/dispatches',
+                                         {'ref': 'v' + version, 'inputs': {'version': version, 'publish': 'true'}}))
+        release['assets'].append(dict(name=zip_name, state='uploaded', size=1))
+        self.assertTrue(is_published(release, version))
 
     def test_qualification_includes_all_expensive_suites(self):
         root = Path(__file__).resolve().parent.parent

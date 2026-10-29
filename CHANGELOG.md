@@ -28,6 +28,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Release completeness checks require the Windows ZIP for versions newer than beta.7, so an interrupted future upload is repaired instead of being mistaken for a complete release. Historical POSIX-only releases remain recognized.
+
 - Structural workspace sync preserves independent incoming additions, edits and deletions while applying explicit file/directory resolutions. Incomplete choices fail without moving the workspace; local structural sync and legacy pending snapshots refuse unsafe fallback commits.
 
 - Renamed conflict previews now read each version at its exact source path instead of mistaking a relocated file for deletion. CLI, SDK and MCP retain this metadata; the browser also supports explicit rename/delete choices and requires capable servers.

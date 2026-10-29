@@ -6,9 +6,6 @@ on:
     branches: [main]
     paths:
       - "Cargo.toml"
-      - "CHANGELOG.md"
-      - "scripts/request_release.py"
-      - ".github/workflows/request-release.yml"
   workflow_dispatch:
     inputs:
       ready_only:
@@ -20,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: request-release-main
-  cancel-in-progress: true
+  group: request-release-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   request:
@@ -35,8 +32,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - name: Wait for the exact main commit, tag it, and request the existing release pipeline
+      - name: Check whether this push changed the release version
+        id: intent
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: python3 scripts/release_intent.py
+      - name: Prepare the pinned candidate, then publish without blocking main
+        if: steps.intent.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.sha }}

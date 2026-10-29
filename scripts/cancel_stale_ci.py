@@ -8,7 +8,7 @@ import urllib.error
 from request_release import GitHub
 
 CANCELLABLE = frozenset('.github/workflows/' + name + '.yml' for name in (
-    'qualification', 'prepare-release', 'full-ci', 'codeql', 'containers', 'fuzz',
+    'qualification', 'full-ci', 'codeql', 'containers', 'fuzz',
     'oci-runtimes', 'packaging', 'perf', 'quality', 'security', 'windows',
 ))
 

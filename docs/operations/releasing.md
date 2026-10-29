@@ -21,7 +21,7 @@ Use `-f force=true` to rehearse preparation of an already published version. Thi
 gh workflow run request-release.yml --ref main -f ready_only=true
 ```
 
-The request creates the immutable version tag only after validating a successful preparation for that exact commit. [Release](../../.github/workflows/release.yml) downloads that run's immutable artifact, verifies its complete file list, checksums, source/version/run binding and attestations, and promotes the recorded container digests. It uploads the same files to GitHub and verifies installation from the public release URL on Linux x86_64, Linux arm64 and macOS arm64.
+The request first pins the selected main commit to `ci/release/vX.Y.Z`. This internal candidate branch is never moved by the scripts. The public immutable version tag is created only after successful preparation of that exact source. [Release](../../.github/workflows/release.yml) downloads that run's immutable artifact, verifies its complete file list, checksums, source/version/run binding and attestations, and promotes the recorded container digests. It uploads the same files to GitHub and verifies installation from the public release URL on Linux x86_64, Linux arm64 and macOS arm64.
 
 The publication job has a **3-minute** execution limit and its parallel installation jobs have **2-minute** limits. The target is under five minutes for publication of a **ready** candidate. Runner queue time and cold preparation are separate; a missing candidate or failed check is an error, never an excuse to build silently during publication. A timeout is a failed release run, not a successful five-minute release.
 
@@ -37,10 +37,10 @@ This downloads and verifies the prepared candidate but does not move public imag
 
 1. Update the workspace, npm and Python versions and lock files; set deployment defaults, regenerate CLI/protocol documentation and dependency notices.
 2. Add a nonempty, dated version section in `CHANGELOG.md` and merge the reviewed candidate to `main`.
-3. The automatic Request release workflow starts or reuses preparation in the background, then publishes when ready. Ordinary commits continue through fast, component-specific CI. If main moves before the tag is made, the old request stops.
+3. The automatic Request release workflow starts or reuses preparation in the background, then publishes when ready. Ordinary commits continue through fast, component-specific CI. Development on main can continue: candidate preparation and publication keep their selected commit. A dependency-only Cargo edit does not request a release; an actual version change or explicit manual request does.
 4. Observe preparation and publication separately. Only a complete Release run, including public-install checks, is a verified release.
 
-A manually requested `ready_only=true` publication never waits for preparation. Published versions are skipped and existing tags are never moved. An expired artifact must be prepared again. Retry a failed publication on its existing tag using the same prepared source commit.
+A manually requested `ready_only=true` publication never waits for preparation and uses the already pinned candidate for that version. Published versions are skipped and existing tags are never moved. An expired artifact must be prepared again. Retry a failed publication on its existing tag using the same prepared source commit.
 
 ## Verifying what you downloaded
 

@@ -55,12 +55,13 @@ class ReleaseRequest(unittest.TestCase):
         api = Api()
         seen = []
         def wait(client, base, sha):
-            self.assertEqual(client.writes, [])
+            self.assertEqual(client.writes, [(BASE + '/git/refs', {'ref': 'refs/heads/ci/release/v0.3.0-beta.2', 'sha': SHA})])
             seen.append(sha)
         result = request_release(api, REPO, SHA, '0.3.0-beta.2', wait)
         self.assertEqual(seen, [SHA])
         self.assertEqual(result, 'requested v0.3.0-beta.2')
         self.assertEqual(api.writes, [
+            (BASE + '/git/refs', {'ref': 'refs/heads/ci/release/v0.3.0-beta.2', 'sha': SHA}),
             (BASE + '/git/refs', {'ref': 'refs/tags/v0.3.0-beta.2', 'sha': SHA}),
             (BASE + '/actions/workflows/release.yml/dispatches',
              {'ref': 'v0.3.0-beta.2', 'inputs': {'version': '0.3.0-beta.2', 'publish': 'true'}}),
@@ -90,20 +91,22 @@ class ReleaseRequest(unittest.TestCase):
                 api.values[BASE + '/releases/tags/v0.3.0-beta.2'] = {'draft': False, 'assets': assets}
                 api.values[BASE + '/git/ref/tags/v0.3.0-beta.2'] = {'object': {'type': 'commit', 'sha': SHA}}
                 self.assertEqual(request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: None), 'requested v0.3.0-beta.2')
-                self.assertEqual(len(api.writes), 1)
+                self.assertEqual(len(api.writes), 2)
 
-    def test_a_superseded_main_commit_cannot_tag(self):
+    def test_non_main_commit_cannot_start_preparation(self):
         api = Api()
         api.values[BASE + '/git/ref/heads/main'] = {'object': {'sha': 'b' * 40}}
-        self.assertEqual(request_release(api, REPO, SHA, '0.3.0-beta.2'), 'main moved; no release requested')
+        api.values[BASE + '/compare/' + SHA + '...main'] = {'status': 'diverged'}
+        with self.assertRaisesRegex(RuntimeError, 'does not belong'):
+            request_release(api, REPO, SHA, '0.3.0-beta.2')
         self.assertEqual(api.writes, [])
 
-    def test_main_moving_while_checks_run_cannot_tag(self):
+    def test_main_can_advance_while_pinned_candidate_is_checked(self):
         api = Api()
         def wait(client, *_):
             client.values[BASE + '/git/ref/heads/main'] = {'object': {'sha': 'b' * 40}}
-        self.assertEqual(request_release(api, REPO, SHA, '0.3.0-beta.2', wait), 'main moved; no release requested')
-        self.assertEqual(api.writes, [])
+        self.assertEqual(request_release(api, REPO, SHA, '0.3.0-beta.2', wait), 'requested v0.3.0-beta.2')
+        self.assertEqual(api.writes[-2][1], {'ref': 'refs/tags/v0.3.0-beta.2', 'sha': SHA})
 
     def test_failed_checks_cannot_write(self):
         api = Api()
@@ -111,14 +114,14 @@ class ReleaseRequest(unittest.TestCase):
             raise RuntimeError('Security failed')
         with self.assertRaisesRegex(RuntimeError, 'Security failed'):
             request_release(api, REPO, SHA, '0.3.0-beta.2', wait)
-        self.assertEqual(api.writes, [])
+        self.assertTrue(all(body.get('ref', '').startswith('refs/heads/ci/release/') for _, body in api.writes))
 
     def test_existing_exact_tag_can_retry_dispatch_without_retagging(self):
         api = Api()
         api.values[BASE + '/git/ref/tags/v0.3.0-beta.2'] = {'object': {'type': 'commit', 'sha': SHA}}
         request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: None)
-        self.assertEqual(len(api.writes), 1)
-        self.assertTrue(api.writes[0][0].endswith('/dispatches'))
+        self.assertEqual(len(api.writes), 2)
+        self.assertTrue(api.writes[-1][0].endswith('/dispatches'))
 
     def test_tag_for_another_commit_is_never_moved(self):
         api = Api()
@@ -133,7 +136,7 @@ class ReleaseRequest(unittest.TestCase):
         api.values[BASE + '/git/ref/tags/v0.3.0-beta.2'] = {'object': {'type': 'tag', 'sha': 'c' * 40}}
         api.values[BASE + '/git/tags/' + 'c' * 40] = {'object': {'type': 'commit', 'sha': SHA}}
         request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: None)
-        self.assertEqual(len(api.writes), 1)
+        self.assertEqual(len(api.writes), 2)
 
     def test_missing_and_pending_qualification_are_not_success(self):
         self.assertEqual(checks_pending([]), ['Prepared release candidate'])

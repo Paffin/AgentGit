@@ -48,7 +48,7 @@ def candidate_run(runs, sha=None):
     matches = [run for run in runs
                if run.get('path') == PREPARE_WORKFLOW
                and run.get('event') in ('workflow_dispatch', 'schedule')
-               and run.get('head_branch') == 'main'
+               and (run.get('head_branch') == 'main' or re.fullmatch(r'ci/release/v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?', run.get('head_branch') or ''))
                and (sha is None or run.get('head_sha') == sha)]
     return max(matches, key=lambda run: run['id'], default=None)
 
@@ -80,12 +80,12 @@ def is_current(api, base, sha):
     return api.get(base + '/git/ref/heads/main')['object']['sha'] == sha
 
 
-def wait_checks(api, base, sha, *, timeout=5400, sleep=time.sleep, clock=time.monotonic):
+def wait_checks(api, base, sha, *, ref='main', timeout=5400, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + timeout
     runs = workflow_runs(api, base, sha)
     if candidate_run(runs, sha) is None:
-        api.post(base + '/actions/workflows/prepare-release.yml/dispatches', {'ref': 'main', 'inputs': {'force': 'false'}})
-    while is_current(api, base, sha):
+        api.post(base + '/actions/workflows/prepare-release.yml/dispatches', {'ref': ref, 'inputs': {'force': 'false'}})
+    while True:
         if not checks_pending(workflow_runs(api, base, sha), sha):
             resolve_candidate(api, base.removeprefix('/repos/'), sha)
             return
@@ -158,6 +158,27 @@ def is_published(release, version):
     return required_assets(version).issubset(uploaded)
 
 
+def pin_candidate(api, base, version, sha):
+    name = 'ci/release/v' + version
+    existing = api.optional(base + '/git/ref/heads/' + name)
+    if existing is not None:
+        return name, tag_commit(api, base, existing)
+    if not is_current(api, base, sha):
+        comparison = api.get(base + '/compare/' + sha + '...main')
+        if comparison.get('status') not in ('ahead', 'identical'):
+            raise RuntimeError('candidate commit does not belong to main')
+    try:
+        api.post(base + '/git/refs', {'ref': 'refs/heads/' + name, 'sha': sha})
+    except urllib.error.HTTPError as error:
+        if error.code != 422:
+            raise
+        existing = api.optional(base + '/git/ref/heads/' + name)
+        if existing is None:
+            raise
+        return name, tag_commit(api, base, existing)
+    return name, sha
+
+
 def request_release(api, repo, sha, version, wait=None, *, ready_only=False):
     validate_request(repo, sha, version)
     base, tag = '/repos/' + repo, 'v' + version
@@ -169,14 +190,17 @@ def request_release(api, repo, sha, version, wait=None, *, ready_only=False):
         pinned = tag_commit(api, base, ref)
         if pinned != sha:
             return f'{tag} already pinned to {pinned[:12]}; bump the version to release another commit'
-    if not is_current(api, base, sha):
-        return 'main moved; no release requested'
+    candidate_ref = api.optional(base + '/git/ref/heads/ci/release/v' + version)
+    if candidate_ref is not None:
+        sha = tag_commit(api, base, candidate_ref)
     if ready_only:
         resolve_candidate(api, repo, sha)
     else:
-        (wait or wait_checks)(api, base, sha)
-    if not is_current(api, base, sha):
-        return 'main moved; no release requested'
+        branch, sha = pin_candidate(api, base, version, sha)
+        if wait is not None:
+            wait(api, base, sha)
+        else:
+            wait_checks(api, base, sha, ref=branch)
     ensure_tag(api, base, tag, sha)
     api.post(base + '/actions/workflows/release.yml/dispatches', {
         'ref': tag, 'inputs': {'version': version, 'publish': 'true'},

@@ -6,7 +6,7 @@ Normal PRs and main commits use path-aware fast CI: Linux Rust unit/core-storage
 
 The full matrix runs through `qualification.yml` on demand, nightly, and during release preparation: macOS, Windows, Linux coverage (which also executes the full Linux suite), PostgreSQL/S3/HA, all SDK runtimes, CLI examples, all browser engines/viewports, CodeQL, fuzzing, OCI runtimes, packaging and performance checks. SDK/runtime jobs share one verified server/CLI/MCP build. Coverage supplies Linux full-suite correctness, so it is not also run as a separate identical Linux test job.
 
-Stale branch runs are cancelled. Release publication promotes prepared, attested bytes and does not add a third full Rust run. See [Releasing](../operations/releasing.md) for the ready-candidate contract and publication time budget.
+Stale validation runs are cancelled. Explicitly pinned release candidates use separate refs and continue while main advances. Release publication promotes prepared, attested bytes and does not add a third full Rust run. See [Releasing](../operations/releasing.md) for the ready-candidate contract and publication time budget.
 
 
 What the tests of AgentGit are, which of them run where, how much of the code they reach, how many wrong

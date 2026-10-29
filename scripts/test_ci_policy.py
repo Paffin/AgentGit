@@ -57,6 +57,32 @@ class ChangeSelection(unittest.TestCase):
             self.assertIsNone(last_successful_base(api, 'org/repo', 'ci.yml'))
         self.assertIsNone(last_successful_base(api, 'org/repo', 'untrusted.yml'))
 
+    def test_only_version_changes_or_manual_requests_prepare_a_release(self):
+        from release_intent import changed_version
+        old = os.getcwd()
+        with tempfile.TemporaryDirectory() as directory:
+            os.chdir(directory)
+            try:
+                def git(*args):
+                    return subprocess.check_output(['git', *args], stderr=subprocess.DEVNULL).decode().strip()
+                git('init', '-q')
+                git('config', 'user.email', 'ci@example.invalid')
+                git('config', 'user.name', 'CI test')
+                path = Path('Cargo.toml')
+                path.write_text('[workspace.package]\nversion = "1.0.0"\n')
+                git('add', '.')
+                git('commit', '-qm', 'base')
+                base = git('rev-parse', 'HEAD')
+                path.write_text(path.read_text() + '# dependency edit\n')
+                git('commit', '-qam', 'dependency')
+                self.assertFalse(changed_version('push', base))
+                path.write_text(path.read_text().replace('1.0.0', '1.0.1'))
+                git('commit', '-qam', 'version')
+                self.assertTrue(changed_version('push', base))
+                self.assertTrue(changed_version('workflow_dispatch', base))
+            finally:
+                os.chdir(old)
+
     def test_deleted_and_renamed_files_are_both_classified(self):
         old = os.getcwd()
         with tempfile.TemporaryDirectory() as directory:

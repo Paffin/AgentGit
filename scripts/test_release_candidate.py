@@ -79,7 +79,7 @@ class StaleRuns(unittest.TestCase):
         from cancel_stale_ci import cancel_obsolete
         api = Api()
         def run(number, **kwargs):
-            return dict(id=number, path='.github/workflows/prepare-release.yml',
+            return dict(id=number, path='.github/workflows/full-ci.yml',
                         head_branch='main', head_sha='b' * 40, status='in_progress', **kwargs)
         rows = [run(1), dict(run(2), head_sha=SHA), dict(run(3), head_branch='feature'),
                 dict(run(4), path='.github/workflows/release.yml'), dict(run(5), status='completed')]
@@ -116,6 +116,16 @@ class CandidateAPI(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'No ready candidate'):
             request_release(api, REPO, SHA, VERSION, ready_only=True)
         self.assertEqual(api.writes, [])
+
+    def test_pinned_candidate_is_ready_while_main_keeps_advancing(self):
+        api = self.api(dict(name='release-dist', expired=False, size_in_bytes=5))
+        key = BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page=1'
+        api.values[key]['workflow_runs'][0]['head_branch'] = 'ci/release/v1.2.3'
+        api.values[BASE + '/git/ref/heads/ci/release/v1.2.3'] = {'object': {'type': 'commit', 'sha': SHA}}
+        api.values[BASE + '/git/ref/heads/main'] = {'object': {'sha': 'b' * 40}}
+        request_release(api, REPO, 'b' * 40, VERSION, ready_only=True)
+        self.assertEqual(api.writes[0][1]['sha'], SHA)
+        self.assertEqual(api.writes[1][1]['ref'], 'v1.2.3')
 
     def test_artifact_pagination_is_checked(self):
         api = self.api()

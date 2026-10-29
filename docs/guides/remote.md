@@ -129,3 +129,45 @@ It reads the server's current preparation without requesting validation jobs or 
 Use `ag --json remote explain PROPOSAL` in scripts: exit 0 means ready, 3 means a requirement is missing,
 and 4 means refused, conflicted or already closed. The result includes the candidate tree and policy version.
 An explanation is a snapshot; integration always checks the current policy and candidate again.
+
+## Server-side workspaces
+
+Use `ag remote workspace` for an isolated workspace on the server, without a local checkout:
+
+```bash
+ag remote workspace list
+ag remote workspace create review-fix --stream main --from <proposal-head>
+ag remote workspace show review-fix
+ag --json remote workspace sync review-fix
+```
+
+A conflicting sync exits with code 4 and leaves the workspace unchanged. Its JSON includes the
+workspace `head`, the exact `stream_head` inspected, and every conflict. For file/directory conflicts,
+`resolution_scope.paths` lists the candidate paths and `resolution_scope.complete` says whether that
+list is complete. An incomplete list is not permission to discard the omitted files. Read both versions
+and choose every change explicitly; the CLI does not select a side, generate deletions, or update a proposal.
+
+Save your choices as a JSON array of `FileChange` objects. `content` is standard base64 (including an
+explicit empty string for an empty file); alternatively use `blob_id` to preserve existing binary data.
+Carry over `file_type` and `executable` when choosing an existing version. A deletion has only `path`
+and `op`:
+
+```json
+[
+  {"path": "clash", "op": "put", "content": "ZmlsZQ==", "file_type": "regular", "executable": false},
+  {"path": "clash/a", "op": "delete"},
+  {"path": "clash/b", "op": "delete"}
+]
+```
+
+Apply that file against the `stream_head` from the sync you inspected:
+
+```bash
+ag --json remote workspace sync review-fix --resolutions choices.json --expected-stream-head <stream-head>
+ag remote workspace delete review-fix
+```
+
+`--resolutions` requires `--expected-stream-head`. The CLI refuses application unless the server
+advertises both guarded sync and structural resolution support. A changed stream head rejects the
+operation; inspect a fresh sync result before deciding again. Deleting a workspace removes that
+server-side workspace, not its proposal or the stream.

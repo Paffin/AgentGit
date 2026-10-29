@@ -19,6 +19,7 @@ pub mod review_drafts;
 pub mod reviewers;
 pub mod shell;
 pub mod topics;
+pub mod virtual_workspaces;
 
 use crate::ctx::Ctx;
 

@@ -507,6 +507,44 @@
         "streams": []
       }
     },
+    "remote workspace create": {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    },
+    "remote workspace delete": {},
+    "remote workspace list": {
+      "workspaces": [
+        {
+          "base": "string",
+          "created_at_ms": "number",
+          "head": "string",
+          "name": "string",
+          "owner": "string",
+          "stream": "string",
+          "updated_at_ms": "number"
+        }
+      ]
+    },
+    "remote workspace show": {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    },
+    "remote workspace sync": {
+      "conflicts": [],
+      "head": "string",
+      "status": "string",
+      "stream_head": "string"
+    },
     "status#remote": {
       "base": "string",
       "changes": [],

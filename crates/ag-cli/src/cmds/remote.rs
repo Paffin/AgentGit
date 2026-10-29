@@ -841,6 +841,11 @@ pub enum RemoteCmd {
         #[command(subcommand)]
         cmd: crate::cmds::discussions::DiscussionCmd,
     },
+    /// Inspect and explicitly sync server-side workspaces without a checkout.
+    Workspace {
+        #[command(subcommand)]
+        cmd: crate::cmds::virtual_workspaces::WorkspaceCmd,
+    },
     /// Integrate a proposal into its stream.
     Integrate {
         /// Proposal id.
@@ -1256,6 +1261,12 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 let (value, message) = crate::cmds::discussions::run(&c, &repo, cmd).await?;
                 if cmd.changes_state() { print_done(cli, &value, || message)?; }
                 else { print(cli, &value, || message)?; }
+            }
+            RemoteCmd::Workspace { cmd } => {
+                let (value, message, conflicted) = crate::cmds::virtual_workspaces::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() && !conflicted { print_done(cli, &value, || message)?; }
+                else { print(cli, &value, || message)?; }
+                if conflicted { return Ok(exit::REFUSED); }
             }
             RemoteCmd::Integrate { id, fencing_tokens } => {
                 let res = c

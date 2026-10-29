@@ -95,3 +95,9 @@ Core/API `resolution_scope` implemented: max100 paths per conflict/max1000 per r
 Whole-source file/directory UI completed:849 Web unit tests,12 desktop/phone browser cases (8 structural,4 nontext), types/build/lint passed.43 helper mutations and3 targeted Vue mutations caught. Independent review found no blocker. The real browser test caught `tree.list` kind `file` versus `TreeEntry.file_type` `regular`; normalization and a real-kind regression fixed it before commit. Scope/root containment, shared100-request budget,100-source-path/root and1000-dialog-path bounds are enforced. Renamed multi-target conflicts and over-budget structural cases remain open.
 
 CLI follow-up is implementing actual virtual-workspace list/show/create/sync/delete commands (not merely schema tests), using the same pinned-resolution API and complete/incomplete scope output. Lifecycle tests pass; duplicate-path parity and final CLI checks underway. No merge/release permitted.
+
+### Coordinated CLI/Web/SDK slice complete locally
+
+Web849 tests and12 browser cases passed. CLI virtual-workspace lifecycle now implemented (five explicit commands), with pinned resolution files, capability guards, duplicate/ambiguous JSON rejection, complete/incomplete scope output and no automatic proposal mutation. Final lifecycle/unit/clippy and159 generated reference files checked. SDK179/204 and MCP3 passed for the same scope contract. Independent reviews found no blockers. Next push will include these commits in the existing draft PR only; no merge/tag/release is authorized.
+
+Windows run40962143088 is still on earlier93bc477 and currently in Test; do not count it as latest-head proof. A subsequent native run on the final pushed head is required. Full Web matrix will be dispatched on that final head; local desktop/phone tests are not a substitute for all browser/identity-provider gates. Add OS/build metadata to the next Windows log for exact qualification evidence.

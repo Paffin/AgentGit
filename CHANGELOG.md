@@ -14,6 +14,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- `ag remote workspace list/show/create/sync/delete` exposes the virtual workspace workflow from the CLI. Explicit resolution files require a pinned stream head and capable server; JSON output retains complete/incomplete structural scopes without choosing paths automatically.
+
 - Browser file/directory conflicts support explicit whole-file or whole-folder choices with bounded complete previews, exact blob/type/mode preservation, visible removed paths and pinned revision checks. Independent clean changes survive; incomplete previews remain blocked.
 
 - Fresh structural sync previews include bounded candidate path scopes and an explicit completeness flag. Clients can account for synthetic rename destinations without guessing or treating a truncated preview as complete.

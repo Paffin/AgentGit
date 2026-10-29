@@ -1913,6 +1913,69 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag remote workspace create
+
+```json
+{
+  "base": "string",
+  "created_at_ms": "number",
+  "head": "string",
+  "name": "string",
+  "owner": "string",
+  "stream": "string",
+  "updated_at_ms": "number"
+}
+```
+
+### ag remote workspace delete
+
+```json
+{}
+```
+
+### ag remote workspace list
+
+```json
+{
+  "workspaces": [
+    {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    }
+  ]
+}
+```
+
+### ag remote workspace show
+
+```json
+{
+  "base": "string",
+  "created_at_ms": "number",
+  "head": "string",
+  "name": "string",
+  "owner": "string",
+  "stream": "string",
+  "updated_at_ms": "number"
+}
+```
+
+### ag remote workspace sync
+
+```json
+{
+  "conflicts": [],
+  "head": "string",
+  "status": "string",
+  "stream_head": "string"
+}
+```
+
 ## ag show
 
 ### ag show

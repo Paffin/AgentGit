@@ -42,6 +42,7 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     let p1 = p1["proposal"]["id"].as_str().unwrap().to_string();
     record_discussions(&mut r, &a, &alice, &p1, &head);
     record_review_drafts(&mut r, &a, &bob, &p1, &head);
+    record_virtual_workspace(&mut r, &a, &alice, &head);
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
     r.rec(
         "remote reviewers",
@@ -208,4 +209,16 @@ fn record_review_drafts(r: &mut Recorder, a: &Ag, token: &str, proposal: &str, h
         "remote review-draft clear",
         &run(&["--json", "remote", "review-draft", "clear", proposal, "--expected-version", "1"]).ok(),
     );
+}
+
+fn record_virtual_workspace(r: &mut Recorder, a: &Ag, token: &str, head: &str) {
+    let run = |args: &[&str]| a.run_env("user:alice", args, &[("AG_TOKEN", token)]);
+    r.rec(
+        "remote workspace create",
+        &run(&["--json", "remote", "workspace", "create", "scratch", "--stream", "main", "--from", head]).ok(),
+    );
+    r.rec("remote workspace list", &run(&["--json", "remote", "workspace", "list"]).ok());
+    r.rec("remote workspace show", &run(&["--json", "remote", "workspace", "show", "scratch"]).ok());
+    r.rec("remote workspace sync", &run(&["--json", "remote", "workspace", "sync", "scratch"]).ok());
+    r.rec("remote workspace delete", &run(&["--json", "remote", "workspace", "delete", "scratch"]).ok());
 }

@@ -31,8 +31,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-workspace-crates: true
-      - name: Show the toolchain and Git
+      - name: Show the operating system, toolchain and Git
         run: |
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
           rustc -Vv
           git --version
           git config --show-origin --get-all core.autocrlf

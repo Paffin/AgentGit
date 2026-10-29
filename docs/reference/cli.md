@@ -139,6 +139,12 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote discussion start`](#ag-remote-discussion-start)
 - [`ag remote discussion reply`](#ag-remote-discussion-reply)
 - [`ag remote discussion resolve`](#ag-remote-discussion-resolve)
+- [`ag remote workspace`](#ag-remote-workspace)
+- [`ag remote workspace list`](#ag-remote-workspace-list)
+- [`ag remote workspace show`](#ag-remote-workspace-show)
+- [`ag remote workspace create`](#ag-remote-workspace-create)
+- [`ag remote workspace sync`](#ag-remote-workspace-sync)
+- [`ag remote workspace delete`](#ag-remote-workspace-delete)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
 - [`ag remote streams`](#ag-remote-streams)
@@ -2514,6 +2520,7 @@ Commands:
   review-draft  Save or restore your private account review notes without submitting them
   review        Review a proposal's current head
   discussion    Read and participate in revision-bound line discussions
+  workspace     Inspect and explicitly sync server-side workspaces without a checkout
   integrate     Integrate a proposal into its stream
   close         Close a proposal without integrating it
   streams       List streams
@@ -3040,6 +3047,154 @@ Options:
           Print help
   -V, --version
           Print version
+```
+
+## ag remote workspace
+
+```text
+Inspect and explicitly sync server-side workspaces without a checkout
+
+Usage: ag remote workspace [OPTIONS] <COMMAND>
+
+Commands:
+  list    List server-side workspaces
+  show    Show a server-side workspace
+  create  Create an isolated workspace, optionally at an existing revision
+  sync    Merge the stream into a workspace; conflicts leave it unchanged
+  delete  Delete the named server-side workspace
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace list
+
+```text
+List server-side workspaces
+
+Usage: ag remote workspace list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace show
+
+```text
+Show a server-side workspace
+
+Usage: ag remote workspace show [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace create
+
+```text
+Create an isolated workspace, optionally at an existing revision
+
+Usage: ag remote workspace create [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  New workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream to follow [default: main]
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --from <REVISION>  Starting revision instead of the stream head
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace sync
+
+```text
+Merge the stream into a workspace; conflicts leave it unchanged
+
+Usage: ag remote workspace sync [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --resolutions <PATH>
+          Explicit FileChange JSON array; content is base64, or use an existing blob_id
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --expected-stream-head <CHANGESET>
+          Exact nonempty stream head inspected in the preceding sync result
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote workspace delete
+
+```text
+Delete the named server-side workspace
+
+Usage: ag remote workspace delete [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag remote integrate

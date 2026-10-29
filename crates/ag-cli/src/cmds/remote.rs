@@ -819,6 +819,11 @@ pub enum RemoteCmd {
         #[command(subcommand)]
         cmd: crate::cmds::review_drafts::ReviewDraftCmd,
     },
+    /// Save or restore a private general comment without posting it.
+    CommentDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::comment_drafts::CommentDraftCmd,
+    },
     /// Review a proposal's current head.
     Review {
         /// Proposal id.
@@ -1245,6 +1250,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     print_done(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
                 } else {
                     print(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
+                }
+            }
+            RemoteCmd::CommentDraft { cmd } => {
+                let result = crate::cmds::comment_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::comment_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::comment_drafts::describe(&result))?;
                 }
             }
             RemoteCmd::Review { id, approve, request_changes, comment, message } => {

@@ -91,6 +91,24 @@ or notify reviewers. Only the current account can read its draft through the API
 administrators and backups can still contain these notes. Files use UTF-8 and retain line
 breaks, with a 64 KiB limit. `--json` returns the draft and its version for scripts.
 
+## Private comment drafts
+
+On development servers advertising `proposals.comment_drafts`, writers can save a general
+proposal comment privately before posting it. These notes are separate from review-decision
+drafts. Read the draft first and use its returned version for every save or clear.
+
+```sh
+ag remote comment-draft get prop_…
+ag remote comment-draft save prop_… --head CHANGESET_ID --body-file notes.md --expected-version 0
+ag remote comment-draft clear prop_… --expected-version 1
+```
+
+The versions above are examples; use the values returned by your preceding command. The head
+records the revision you inspected. Saving never posts a comment or sends a notification.
+Drafts remain available on closed proposals and only the current account can read them through
+the API; server administrators and backups can still contain them. UTF-8 files retain their
+line breaks and are limited to 16 KiB. `--json` includes the version, including after clearing.
+
 ## Offline
 
 Nothing about a local repository needs the server:

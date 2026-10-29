@@ -132,6 +132,10 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote review-draft get`](#ag-remote-review-draft-get)
 - [`ag remote review-draft save`](#ag-remote-review-draft-save)
 - [`ag remote review-draft clear`](#ag-remote-review-draft-clear)
+- [`ag remote comment-draft`](#ag-remote-comment-draft)
+- [`ag remote comment-draft get`](#ag-remote-comment-draft-get)
+- [`ag remote comment-draft save`](#ag-remote-comment-draft-save)
+- [`ag remote comment-draft clear`](#ag-remote-comment-draft-clear)
 - [`ag remote review`](#ag-remote-review)
 - [`ag remote discussion`](#ag-remote-discussion)
 - [`ag remote discussion list`](#ag-remote-discussion-list)
@@ -2508,27 +2512,28 @@ Manage remotes and work with proposals, events and policy on a server
 Usage: ag remote [OPTIONS] <COMMAND>
 
 Commands:
-  add           Add a remote
-  list          List remotes
-  remove        Forget a remote
-  whoami        Show who the server thinks you are
-  proposals     List proposals on the server
-  proposal      Show a proposal with its reviews
-  prepare       What would integrating do now, and what is missing?
-  explain       Explain why a server proposal cannot land, with the next commands. Changes nothing
-  reviewers     Inspect, add or remove requested reviewers (no approval or access change)
-  review-draft  Save or restore your private account review notes without submitting them
-  review        Review a proposal's current head
-  discussion    Read and participate in revision-bound line discussions
-  workspace     Inspect and explicitly sync server-side workspaces without a checkout
-  integrate     Integrate a proposal into its stream
-  close         Close a proposal without integrating it
-  streams       List streams
-  events        Show the events of the repository (replay), or follow them live
-  policy        Show or set a stream's policy
-  log           Show history of a revision on the server
-  blame         Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
-  cat           Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+  add            Add a remote
+  list           List remotes
+  remove         Forget a remote
+  whoami         Show who the server thinks you are
+  proposals      List proposals on the server
+  proposal       Show a proposal with its reviews
+  prepare        What would integrating do now, and what is missing?
+  explain        Explain why a server proposal cannot land, with the next commands. Changes nothing
+  reviewers      Inspect, add or remove requested reviewers (no approval or access change)
+  review-draft   Save or restore your private account review notes without submitting them
+  comment-draft  Save or restore a private general comment without posting it
+  review         Review a proposal's current head
+  discussion     Read and participate in revision-bound line discussions
+  workspace      Inspect and explicitly sync server-side workspaces without a checkout
+  integrate      Integrate a proposal into its stream
+  close          Close a proposal without integrating it
+  streams        List streams
+  events         Show the events of the repository (replay), or follow them live
+  policy         Show or set a stream's policy
+  log            Show history of a revision on the server
+  blame          Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
+  cat            Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
 
 Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
@@ -2835,6 +2840,124 @@ Options:
 Clear only the private draft version you inspected
 
 Usage: ag remote review-draft clear [OPTIONS] --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; zero means no draft has existed
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote comment-draft
+
+```text
+Save or restore a private general comment without posting it
+
+Usage: ag remote comment-draft [OPTIONS] <COMMAND>
+
+Commands:
+  get    Read your private draft and its version, including a cleared version
+  save   Save private notes; does not post a comment or advance the inspected head
+  clear  Clear only the private draft version you inspected
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote comment-draft get
+
+```text
+Read your private draft and its version, including a cleared version
+
+Usage: ag remote comment-draft get [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote comment-draft save
+
+```text
+Save private notes; does not post a comment or advance the inspected head
+
+Usage: ag remote comment-draft save [OPTIONS] --head <HEAD> --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --head <HEAD>
+          Exact proposal head you inspected
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+  -m, --message <MESSAGE>
+          Private comment notes [default: ""]
+      --body-file <PATH>
+          Read UTF-8 notes from this file, preserving line breaks (at most 16 KiB)
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; use zero only after observing no draft
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote comment-draft clear
+
+```text
+Clear only the private draft version you inspected
+
+Usage: ag remote comment-draft clear [OPTIONS] --expected-version <EXPECTED_VERSION> <ID>
 
 Arguments:
   <ID>  Proposal id or unique prefix

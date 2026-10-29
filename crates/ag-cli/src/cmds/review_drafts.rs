@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use ag_client::{Client, ClientError};
 use ag_protocol::v1;
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use clap::{Args, Subcommand};
 
 /// Read or explicitly replace the signed-in account's review draft.
@@ -56,21 +56,16 @@ impl ReviewDraftCmd {
 }
 
 fn body(args: &SaveArgs) -> Result<String> {
-    let text = match &args.body_file {
-        Some(path) => std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?,
-        None => args.message.clone(),
-    };
-    if text.len() > ag_integrate::MAX_REVIEW_DRAFT_BYTES {
-        bail!("review draft exceeds 64 KiB");
-    }
-    Ok(text)
+    super::private_draft_body(
+        &args.message,
+        args.body_file.as_deref(),
+        ag_integrate::MAX_REVIEW_DRAFT_BYTES,
+        "review draft exceeds 64 KiB",
+    )
 }
 
 async fn require_support(client: &Client) -> Result<()> {
-    if !client.negotiate().await?.features.iter().any(|f| f == ag_protocol::features::PROPOSALS_REVIEW_DRAFTS) {
-        bail!("this server does not support private review drafts; update it before using this command");
-    }
-    Ok(())
+    super::require_private_draft_support(client, ag_protocol::features::PROPOSALS_REVIEW_DRAFTS, "review").await
 }
 
 /// Run against the authenticated account, without an owner selector or automatic submission.

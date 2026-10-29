@@ -86,7 +86,7 @@ class PipelinePolicy(unittest.TestCase):
         jobs = workflow('ci')['jobs']
         self.assertIn('ci_changes.py', jobs['changes']['steps'][-1]['run'])
         self.assertEqual(jobs['complete']['if'], 'always()')
-        self.assertEqual(set(jobs['complete']['needs']), set(jobs) - {'complete'})
+        self.assertEqual(set(jobs['complete']['needs']), set(jobs) - {'complete', 'superseded'})
         self.assertEqual(jobs['rust']['runs-on'], 'ubuntu-24.04')
         commands = '\n'.join(step.get('run', '') for step in jobs['rust']['steps'])
         self.assertIn('--lib --bins', commands)

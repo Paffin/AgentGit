@@ -21,6 +21,24 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
+  superseded:
+    name: release stale runner capacity
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cancel old validation and candidate builds (never Release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/cancel_stale_ci.py
+
   changes:
     runs-on: ubuntu-24.04
     outputs:
@@ -78,7 +96,6 @@ jobs:
         with:
           shared-key: linux-debug
           cache-workspace-crates: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Formatting and code lint
         if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --all --check && cargo clippy --workspace --lib --bins --locked -- -D warnings

@@ -74,6 +74,21 @@ class CandidateFiles(unittest.TestCase):
             create(self.root, SHA, VERSION, 7)
 
 
+class StaleRuns(unittest.TestCase):
+    def test_only_old_main_validation_is_cancelled(self):
+        from cancel_stale_ci import cancel_obsolete
+        api = Api()
+        def run(number, **kwargs):
+            return dict(id=number, path='.github/workflows/prepare-release.yml',
+                        head_branch='main', head_sha='b' * 40, status='in_progress', **kwargs)
+        rows = [run(1), dict(run(2), head_sha=SHA), dict(run(3), head_branch='feature'),
+                dict(run(4), path='.github/workflows/release.yml'), dict(run(5), status='completed')]
+        for status in ('queued', 'in_progress', 'pending'):
+            api.values[BASE + '/actions/runs?branch=main&status=' + status + '&per_page=100&page=1'] = {'workflow_runs': rows}
+        self.assertEqual(cancel_obsolete(api, REPO, SHA), [1])
+        self.assertEqual(api.writes, [(BASE + '/actions/runs/1/cancel', {})])
+
+
 class CandidateAPI(unittest.TestCase):
     def api(self, artifact=None):
         api = Api()

@@ -92,6 +92,13 @@ class BrowserPipeline(unittest.TestCase):
         self.assertEqual(execution[0]['env']['AG_E2E_UI'], 'embedded')
         self.assertTrue(any('check_skips.py' in step.get('run', '') for step in self.browser['steps']))
 
+    def test_executor_setup_uses_the_shared_native_orchestrator(self):
+        build = '\n'.join(step.get('run', '') for step in self.jobs['server-build']['steps'])
+        self.assertIn('go build -o ../../target/debug/orchestrator ./cmd/orchestrator', build)
+        self.assertIn('sha256sum ag-server ag orchestrator', build)
+        execution = next(step for step in self.browser['steps'] if 'playwright test' in step.get('run', ''))
+        self.assertEqual(execution['env']['AG_ORCH_BIN'], '${{ github.workspace }}/target/debug/orchestrator')
+
 
 if __name__ == '__main__':
     unittest.main()

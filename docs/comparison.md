@@ -140,7 +140,7 @@ check to the candidate *tree*; the mechanisms differ.
 - *Audit.* GitLab's audit events can be streamed to external destinations (an Ultimate feature on self-managed). The page we
   read describes no tamper-evidence or signing. AgentGit's audit entries are written in the same transaction as the change
   and form a hash chain that `ag audit` verifies ([security model](architecture/security.md);
-  `audit_chain_detects_tampering`). That detects edits; AgentGit does not stream events anywhere.
+  `audit_chain_detects_tampering`). Its authorized SSE feed supports replay of audit-backed events; forwarding to external audit destinations requires an external consumer.
 - *Self-managed.* GitLab can be run on your own infrastructure, and so can AgentGit; the difference is scope. GitLab
   self-managed is a large platform with many services. AgentGit's server is one binary over SQLite or PostgreSQL, and local
   mode needs no server at all ([deployment](operations/deployment.md)).

@@ -76,3 +76,20 @@ func TestScrub(t *testing.T) {
 		t.Fatal("empty secret must be ignored")
 	}
 }
+
+func TestPendingSuffixLength(t *testing.T) {
+	for _, tc := range []struct {
+		text, value string
+		want        int
+	}{
+		{"working\nparen", "parent-value", 5}, {"parent-value", "parent-value", 0},
+		{"public", "parent-value", 0}, {"x", "", 0}, {"abcab", "abcabc", 5},
+		{"progress λ", "λ-secret", len("λ")},
+		{"", "secret", 0}, {"text", "x", 0},
+		{strings.Repeat("a", 10000) + "c", strings.Repeat("a", 10000) + "b", 0},
+	} {
+		if got := PendingSuffixLength(tc.text, tc.value); got != tc.want {
+			t.Errorf("pending suffix length = %d, want %d", got, tc.want)
+		}
+	}
+}

@@ -187,3 +187,17 @@ func TestStoreRejectsBadNames(t *testing.T) {
 		t.Fatal("an empty directory must be refused")
 	}
 }
+
+func TestPendingPrivateKeyPrefixIsWithheld(t *testing.T) {
+	seed, _ := hex.DecodeString(rfcSeed)
+	key, err := FromSeed(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := key.PendingSuffixLength("diagnostic\n" + rfcSeed[:24]); got != 24 {
+		t.Fatalf("pending private seed prefix length = %d", got)
+	}
+	if got := key.PendingSuffixLength("ordinary output\n"); got != 0 {
+		t.Fatalf("ordinary output withheld: %d", got)
+	}
+}

@@ -949,3 +949,55 @@ func TestOptedInOutputIsSavedWithKnownSecretsRemoved(t *testing.T) {
 		t.Fatal("saved output contains the private signing key")
 	}
 }
+
+func TestLiveOutputAppearsBeforeCompletionWithoutPublishingSplitSecrets(t *testing.T) {
+	e := newEnv(t)
+	first := filepath.Join(t.TempDir(), "continue")
+	finish := first + ".finish"
+	t.Cleanup(func() { _ = os.WriteFile(first, nil, 0o600); _ = os.WriteFile(finish, nil, 0o600) })
+	script := fmt.Sprintf("printf 'working\nparen'; while [ ! -f '%s' ]; do sleep 0.01; done; printf 't-value\nfinished\n'; while [ ! -f '%s' ]; do sleep 0.01; done", first, finish)
+	ex := commandExec(t, "live-output-bot", script, func(c *config.Executor) {
+		c.PublishOutput = true
+		c.OutputInterval = 25 * time.Millisecond
+		c.Pass = append(c.Pass, "LEAKY")
+	})
+	info, err := e.mgr.Start(context.Background(), e.request(e.task("watch progress"), ex, Keep))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(want string) *agwp.RunOutput {
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			out, err := e.orch.GetRunOutput(context.Background(), repo, info.RunID)
+			if err == nil && out.Available && strings.Contains(out.Stdout, want) {
+				return out
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("live output never contained %q before completion", want)
+		return nil
+	}
+	initial := read("working")
+	if strings.Contains(initial.Stdout, "paren") {
+		t.Fatalf("partial secret escaped: %q", initial.Stdout)
+	}
+	if err := os.WriteFile(first, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	later := read("finished")
+	if later.Sequence <= initial.Sequence || strings.Contains(later.Stdout, "parent-value") || !strings.Contains(later.Stdout, "[redacted]") {
+		t.Fatalf("unexpected output: %+v", later)
+	}
+	if len(e.mgr.Active()) != 1 {
+		t.Fatal("output appeared only after execution ended")
+	}
+	if err := os.WriteFile(finish, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.wait(5 * time.Second)
+	e.idle()
+	final, err := e.orch.GetRunOutput(context.Background(), repo, info.RunID)
+	if err != nil || !strings.Contains(final.Stdout, "finished") || strings.Contains(final.Stdout, "parent-value") {
+		t.Fatalf("final output=%+v err=%v", final, err)
+	}
+}

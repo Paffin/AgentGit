@@ -50,6 +50,8 @@ executors:
     command: ["/opt/orchestrator/docs-bot"]
     pass_env: [PATH]
     heartbeat: 5s
+    # Explicit opt-in: publish_output: true
+    # Optional live progress: output_interval: 2s (0s keeps final-only capture)
 
   # Any program. It gets AG_SERVER, AG_TOKEN, AG_RUN, AG_REPO, AG_TASK, AG_KEY_FILE, ... in its environment.
   - name: shell-bot

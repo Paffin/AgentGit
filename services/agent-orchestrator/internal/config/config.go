@@ -214,21 +214,23 @@ type Index struct {
 // Executor describes one way of running an agent.
 type Executor struct {
 	// PublishOutput opts in to saving a bounded redacted tail on the AgentGit server.
-	PublishOutput bool              `yaml:"publish_output"`
-	Name          string            `yaml:"name"`
-	Type          string            `yaml:"type"` // command
-	Agent         string            `yaml:"agent"`
-	Slots         int               `yaml:"slots"`
-	Timeout       time.Duration     `yaml:"timeout"`
-	Grace         time.Duration     `yaml:"grace"`
-	Beat          time.Duration     `yaml:"heartbeat"`
-	Cred          time.Duration     `yaml:"credential_ttl"`
-	Ops           []string          `yaml:"operations"`
-	Command       []string          `yaml:"command"`
-	Dir           string            `yaml:"dir"`
-	Env           map[string]string `yaml:"env"`
-	Pass          []string          `yaml:"pass_env"`
-	Output        int               `yaml:"output_bytes"`
+	PublishOutput bool `yaml:"publish_output"`
+	// OutputInterval optionally publishes live snapshots; zero keeps final-only capture.
+	OutputInterval time.Duration     `yaml:"output_interval"`
+	Name           string            `yaml:"name"`
+	Type           string            `yaml:"type"` // command
+	Agent          string            `yaml:"agent"`
+	Slots          int               `yaml:"slots"`
+	Timeout        time.Duration     `yaml:"timeout"`
+	Grace          time.Duration     `yaml:"grace"`
+	Beat           time.Duration     `yaml:"heartbeat"`
+	Cred           time.Duration     `yaml:"credential_ttl"`
+	Ops            []string          `yaml:"operations"`
+	Command        []string          `yaml:"command"`
+	Dir            string            `yaml:"dir"`
+	Env            map[string]string `yaml:"env"`
+	Pass           []string          `yaml:"pass_env"`
+	Output         int               `yaml:"output_bytes"`
 }
 
 // Default operations granted to an agent credential (capabilities of the
@@ -576,6 +578,9 @@ func (c *Config) validate(getenv func(string) string, needCredentials bool) erro
 		}
 		if e.Grace < 0 || e.Beat < time.Second {
 			add(p+".grace/heartbeat", "grace must be >= 0 and heartbeat >= 1s")
+		}
+		if e.OutputInterval != 0 && (!e.PublishOutput || e.OutputInterval < time.Second || e.OutputInterval > time.Minute) {
+			add(p+".output_interval", "requires publish_output and must be between 1s and 1m, or 0 for final-only capture")
 		}
 		if e.Output < 1024 {
 			add(p+".output_bytes", "must be at least 1024")

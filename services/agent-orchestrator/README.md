@@ -488,9 +488,13 @@ for the repository-scoped setup wizard.
 ### Opt-in saved output (development)
 
 An executor's `publish_output: true` saves the last 32 KiB of stdout and stderr to
-AgentGit when a session ends. The default remains false. The session credential,
+AgentGit when a session ends. The default remains false. With capture enabled, set
+`output_interval: 2s` to publish progress while the command is running; 1s–1m is
+accepted and `0s` keeps final-only capture. Only changed snapshots are sent, and the
+output worker cannot delay heartbeat supervision. The session credential,
 private signing-key hex encodings and known inherited/configured environment
-values are scrubbed before upload. This is best-effort redaction, not a guarantee
+values are scrubbed before upload. Interim snapshots withhold an incomplete trailing
+prefix of a known credential until the following bytes resolve it. This is best-effort redaction, not a guarantee
 that arbitrary output is safe to share; repository readers can inspect the result.
 
 The server must advertise `agents.run_output`. Operators can delete saved text;

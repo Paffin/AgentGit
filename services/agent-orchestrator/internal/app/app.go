@@ -314,7 +314,10 @@ func (a *App) subscribe() {
 			}
 		})
 	}
-	route("scheduler", []string{"task", "run", "lease", "proposal", "stream.integrate"}, func(rt *repoRuntime, _ agwp.Event) {
+	route("scheduler", []string{"task", "run", "lease", "proposal", "stream.integrate"}, func(rt *repoRuntime, ev agwp.Event) {
+		if events.Match([]string{"run.output"}, ev.Topic) {
+			return
+		}
 		if rt.scheduler != nil {
 			rt.scheduler.Kick()
 		}

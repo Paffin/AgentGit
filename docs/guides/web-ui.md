@@ -525,13 +525,14 @@ external prerequisites. See the [orchestrator guide](orchestrator.md#connect-fro
 ### Saved executor output (development)
 
 In **Connect an executor**, **Save diagnostic output in AgentGit** is off by default.
-When enabled, the executor saves a bounded stdout/stderr tail at session end. Open
-its run page to switch streams, download text or delete the saved output. Deletion
+When enabled, the executor saves a bounded stdout/stderr tail at session end. The
+unreleased **Show output while the agent is running** option also updates it during
+execution. Open its run page to switch streams, download text or delete the saved output. Deletion
 preserves the run outcome and audit trail and blocks later uploads for that run.
 Only an operator may save or delete output; repository readers may view it.
 
-At most 32 KiB per stream are saved. This is not a live log stream or a replacement
-for signed checks. Known credentials and private key encodings are removed by the
+At most 32 KiB per stream are saved. Live updates replace this bounded snapshot;
+full log archives remain future work. Signed checks remain the validation evidence. Known credentials and private key encodings are removed by the
 orchestrator, but it cannot identify every possible secret. Enable capture only
 when the output is suitable for the repository's readers.
 

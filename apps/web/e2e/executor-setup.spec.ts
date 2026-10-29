@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, chmod, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, chmod, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, execFile } from 'node:child_process'
@@ -8,13 +8,17 @@ import { test, expect } from './fixtures.ts'
 import { freshRepo } from './support/world.ts'
 import { Api } from './support/http.ts'
 
-test('executor setup downloads scoped access separately and can revoke it', async ({
+test('executor setup streams live output through the native runtime and can revoke access', async ({
   page,
   cast,
+  openAs,
 }, info) => {
   const { repo } = await freshRepo(cast, 'executor-setup')
   const directory = await mkdtemp(join(tmpdir(), 'agentgit-executor-setup-'))
   let process: ReturnType<typeof spawn> | undefined
+  const progress = join(directory, 'show-progress')
+  const release = join(directory, 'finish-execution')
+  const script = `echo executor-output; while [ ! -f "${progress}" ]; do sleep 0.05; done; echo executor-progress; while [ ! -f "${release}" ]; do sleep 0.05; done; echo executor-done`
   try {
     await page.goto(`/repos/${repo}/agents?tab=agents`)
     await page.getByRole('button', { name: 'Connect an executor…', exact: true }).click()
@@ -23,8 +27,9 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     await dialog.getByLabel('Executable on the executor host', { exact: true }).fill('/bin/sh')
     await dialog
       .getByLabel('Arguments (JSON array)', { exact: true })
-      .fill('["-c", "echo executor-output; exit 0"]')
+      .fill(JSON.stringify(['-c', script]))
     await dialog.getByLabel('Save diagnostic output in AgentGit', { exact: true }).check()
+    await dialog.getByLabel('Show output while the agent is running', { exact: true }).check()
     await dialog.getByRole('button', { name: 'Prepare access for 24 hours', exact: true }).click()
     await expect(dialog.getByText('Waiting for the executor', { exact: true })).toBeVisible()
     const download = async (label: string, filename: string) => {
@@ -41,8 +46,9 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     expect(configText.includes(token)).toBe(false)
     const config = JSON.parse(configText)
     expect(config.repos[0].name).toBe(repo)
-    expect(config.executors[0].command).toEqual(['/bin/sh', '-c', 'echo executor-output; exit 0'])
+    expect(config.executors[0].command).toEqual(['/bin/sh', '-c', script])
     expect(config.executors[0].publish_output).toBe(true)
+    expect(config.executors[0].output_interval).toBe('2s')
     const executor = new Api(cast.baseURL, token)
     const identity = await executor.ok_(executor.get('/v1/whoami'), 'executor identity')
     expect(identity.identity).toMatch(/^service:exec-setup-bot-[a-f0-9]{16}$/)
@@ -53,7 +59,6 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     if (binary) {
       config.state_dir = join(directory, 'state')
       config.listen = '127.0.0.1:0'
-      const { writeFile } = await import('node:fs/promises')
       await writeFile(join(directory, 'config.json'), JSON.stringify(config))
       await execFileAsync(binary, [
         'check',
@@ -77,6 +82,45 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
         }),
         'assigned task',
       )
+      let runId = ''
+      await expect
+        .poll(
+          async () => {
+            const rows = await cast
+              .as('admin')
+              .ok_(cast.as('admin').get(`/v1/repos/${repo}/runs`), 'started runs')
+            runId =
+              rows.runs.find((run: { task_id: string }) => run.task_id === task.id)?.run_id || ''
+            return runId
+          },
+          { timeout: 15000 },
+        )
+        .not.toBe('')
+      const observer = await openAs('dana')
+      try {
+        await observer.goto(`/repos/${repo}/runs/${runId}`)
+        await expect(
+          observer.getByLabel('Captured standard output', { exact: true }),
+        ).toContainText('executor-output', { timeout: 10000 })
+        await writeFile(progress, 'next')
+        await expect(
+          observer.getByLabel('Captured standard output', { exact: true }),
+        ).toContainText('executor-progress', { timeout: 10000 })
+        const running = await cast
+          .as('admin')
+          .ok_(cast.as('admin').get(`/v1/repos/${repo}/runs/${runId}`), 'still running')
+        expect(running.status).toBe('running')
+        await observer.screenshot({
+          path: info.outputPath('live-native-output.png'),
+          fullPage: true,
+        })
+        await writeFile(release, 'finish')
+        await expect(
+          observer.getByLabel('Captured standard output', { exact: true }),
+        ).toContainText('executor-done', { timeout: 10000 })
+      } finally {
+        await observer.close()
+      }
       await expect
         .poll(
           async () => {
@@ -111,6 +155,8 @@ test('executor setup downloads scoped access separately and can revoke it', asyn
     ).toBeVisible()
     expect((await executor.get('/v1/whoami')).status).toBe(401)
   } finally {
+    await writeFile(progress, 'next').catch(() => {})
+    await writeFile(release, 'finish').catch(() => {})
     process?.kill('SIGTERM')
     if (process && process.exitCode === null)
       await new Promise((resolve) => process!.once('exit', resolve))

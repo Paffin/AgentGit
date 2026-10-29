@@ -30,6 +30,8 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Development (`main`):** operators can disable or re-enable new runs for an individual agent from the browser or `ag agent disable NAME --remote origin` (`enable` to restore admission). Existing sessions, keys and history are retained. This is not included in the beta.5 archives; see [ADR-0026](docs/adr/0026-agent-run-admission.md).
 
+**Unreleased execution progress:** the executor setup wizard can enable bounded output updates while an agent runs. Heartbeats remain independent, known incomplete credential prefixes are withheld, and deleting output prevents later uploads. [Live output](docs/guides/orchestrator.md#live-executor-output-unreleased).
+
 **Unreleased CLI:** inspect remote run history with task/active filters and read or delete captured output using `ag agent runs --remote` and `ag agent output RUN --remote`. [Execution inspection](docs/guides/agents.md#14-inspect-execution-history-and-output-from-the-cli-unreleased).
 
 **Development core:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. Concurrent operator policy changes are protected from stale automatic cancellation, and late results cannot finish a newer task attempt. [Execution limits](docs/adr/0033-task-attempt-limits.md).

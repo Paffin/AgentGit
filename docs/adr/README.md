@@ -46,3 +46,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0034 — Task completion policy precondition](0034-task-finish-policy-precondition.md)
 
 - [0035 — Task completion execution generation](0035-task-completion-generation.md)
+
+- [0036 — Live execution output snapshots](0036-live-execution-output.md)

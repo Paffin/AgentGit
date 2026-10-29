@@ -676,3 +676,27 @@ checks passed; generated help, man pages and shell completions include the new c
 New helpers have cyclomatic complexity at most 7. Crapper/Dryer/Mutator scans are static
 inspection, not a mutation-kill or coverage claim. This feature branch is separate from the
 frozen beta.6 release candidate. Capture remains opt-in and final-snapshot only.
+
+## Unreleased live execution output
+
+The output producer now has an explicit `output_interval` option, validated from 1s to 1m
+and requiring `publish_output`. Zero retains final-only capture. A single producer publishes
+changed bounded snapshots without delaying heartbeat supervision and joins before final
+capture. Known unfinished credential suffixes are withheld in interim snapshots; prefix
+matching uses linear failure links. Existing audit-backed events deliver updates, so no
+additional metadata schema, endpoint or outbox is introduced.
+
+Required-server tests (`AG_REQUIRE_COMPONENTS=ag-server-binary`) exercised a real command
+writing a secret across separate writes, output arriving before completion, complete-secret
+redaction and interval validation. The session cases passed in 0.518s and under Go's race
+detector in 1.513s. No skipped server case is counted. New functions have cyclomatic
+complexity at most 9; Dryer found no duplicate candidates and mutation scanning was inventory,
+not a claimed mutation score.
+
+The complete browser path passed on Chromium and phone in 18.2s against the unchanged core
+server: configure capture/live mode → download separate private credentials → native
+orchestrator starts the exact profile → assign a task → a real shell writes output → observe
+a second snapshot while the run is still running → finish → see final output → revoke access.
+The shared browser pipeline now builds that native orchestrator once, verifies its checksum
+with the server and CLI, and passes it to all browser jobs. Seven pipeline contract checks
+passed. Full archival logs and unknown/encoded-secret detection remain outside this slice.

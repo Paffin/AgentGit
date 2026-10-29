@@ -529,3 +529,15 @@ started runs; restarts cannot grant a fresh budget. When exhausted, it leaves th
 progress and reports `attempt_limit`. Extend it with `ag task attempts TASK --remote origin
 --max NEW --expected OLD`. Explicit limits count temporary failures as well. Zero keeps the
 existing `schedule.attempts` behavior. See [task retry controls](agents.md#bound-retries-without-losing-the-task-development).
+
+### Live executor output (unreleased)
+
+Enable **Save diagnostic output** and **Show output while the agent is running** in the
+executor connection dialog. The downloaded profile sets `publish_output: true` and
+`output_interval: 2s`. In a hand-written profile, choose 1s–1m; zero keeps final-only capture.
+The permanent run page follows output notifications without waiting for completion. Its
+refresh control and `ag agent output RUN --remote` read the same latest snapshot.
+
+Only the latest bounded tails are retained. Capture is off by default, repository readers
+can see captured text, and unknown secrets may still appear. Deleting output blocks later
+uploads for the run. See [ADR0036](../adr/0036-live-execution-output.md).

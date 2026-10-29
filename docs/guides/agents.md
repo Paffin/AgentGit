@@ -342,4 +342,5 @@ and audit history remain. JSON reports `available: false` when nothing was captu
 a stream with no saved output fails instead of putting an explanatory message into a log pipe.
 Text mode escapes terminal control characters; JSON retains the exact stored text. `--json`
 and `--stream` are alternative output modes. Capture still requires operator opt-in, stores
-bounded final tails, and is not live log streaming.
+bounded tails. An executor with `output_interval` enabled updates that snapshot while running;
+the CLI reads the latest snapshot rather than following an unbounded log.

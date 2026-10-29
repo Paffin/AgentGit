@@ -123,3 +123,10 @@ the wire contract, stale generation rejection and current-generation completion.
 server/shell-executor scheduler scenarios cover restart, operator policy changes during work
 and a late first session while a second run owns the task. Capability tests refuse an older
 server before sending a conditional completion.
+
+## ADR0036 — live execution output
+
+The real session test `TestLiveOutputAppearsBeforeCompletionWithoutPublishingSplitSecrets`
+checks independent snapshot production and split-secret withholding. The browser executor
+setup scenario starts the exported profile with the native binary and observes output before
+completion. Configuration and prefix matcher tests cover interval bounds and repetitive input.

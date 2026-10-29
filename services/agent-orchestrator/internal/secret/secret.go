@@ -70,3 +70,45 @@ func Scrub(text string, secrets ...Secret) string {
 	}
 	return text
 }
+
+// PendingSuffixLength finds an unfinished known value at the end of a live snapshot.
+// Call after removing complete secrets. The caller withholds these bytes until more output arrives.
+func PendingSuffixLength(text, value string) int {
+	if value == "" || strings.HasSuffix(text, value) {
+		return 0
+	}
+	limit := min(len(text), len(value)-1)
+	if limit == 0 {
+		return 0
+	}
+	pattern := value[:limit]
+	prefix := prefixLengths(pattern)
+	matched := 0
+	for i := len(text) - limit; i < len(text); i++ {
+		if matched == len(pattern) {
+			matched = prefix[matched-1]
+		}
+		for matched > 0 && pattern[matched] != text[i] {
+			matched = prefix[matched-1]
+		}
+		if pattern[matched] == text[i] {
+			matched++
+		}
+	}
+	return matched
+}
+
+// Prefix failure links keep matching linear even for long, repetitive secrets.
+func prefixLengths(pattern string) []int {
+	prefix := make([]int, len(pattern))
+	for i, matched := 1, 0; i < len(pattern); i++ {
+		for matched > 0 && pattern[i] != pattern[matched] {
+			matched = prefix[matched-1]
+		}
+		if pattern[i] == pattern[matched] {
+			matched++
+		}
+		prefix[i] = matched
+	}
+	return prefix
+}

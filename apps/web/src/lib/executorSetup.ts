@@ -42,6 +42,7 @@ export interface ExecutorSetup {
   environment: string
   slots: number
   captureOutput?: boolean
+  streamOutput?: boolean
 }
 
 export function executorSetupProblem(input: ExecutorSetup): string | null {
@@ -85,6 +86,7 @@ export function executorConfiguration(input: ExecutorSetup): string {
             agent: input.agent,
             type: 'command',
             ...(input.captureOutput ? { publish_output: true } : {}),
+            ...(input.captureOutput && input.streamOutput ? { output_interval: '2s' } : {}),
             slots: input.slots,
             command: [input.command.trim(), ...JSON.parse(input.arguments)],
             pass_env: [...new Set(['PATH', ...environmentNames(input.environment)])],

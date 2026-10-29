@@ -351,3 +351,19 @@ func TestTheSimulatedExecutorIsGone(t *testing.T) {
 		t.Fatalf("the scripted settings of a command executor were accepted: %v", err)
 	}
 }
+
+func TestLiveOutputIntervalRequiresExplicitCaptureAndBounds(t *testing.T) {
+	for _, tc := range []struct {
+		settings string
+		valid    bool
+	}{
+		{"", true}, {"    publish_output: true\n    output_interval: 2s\n", true},
+		{"    output_interval: 2s\n", false}, {"    publish_output: true\n    output_interval: 500ms\n", false},
+		{"    publish_output: true\n    output_interval: 2m\n", false},
+	} {
+		_, err := parse(t, minimal+tc.settings, goodEnv)
+		if (err == nil) != tc.valid {
+			t.Fatalf("settings=%q valid=%v error=%v", tc.settings, tc.valid, err)
+		}
+	}
+}

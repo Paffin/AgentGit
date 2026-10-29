@@ -34,6 +34,11 @@ type Session struct {
 
 	workDir, taskFile, resultFile, keyFile string
 	stdout, stderr                         *tail
+	// The live output worker owns these until it joins before final publication.
+	outputSequence      uint64
+	outputLast          *agwp.RunOutput
+	outputDisabled      bool
+	outputFailureLogged bool
 
 	execCtx    context.Context
 	cancelExec context.CancelFunc
@@ -162,6 +167,8 @@ func (s *Session) supervise(root context.Context) {
 		}
 	}()
 
+	stopOutput := s.startOutputUpdates(root)
+	defer stopOutput()
 	beat := clk.NewTicker(ex.Beat)
 	defer beat.Stop()
 	timeout := clk.NewTimer(ex.Timeout)
@@ -178,6 +185,7 @@ loop:
 			s.stop(OutcomeTimeout, fmt.Sprintf("time limit of %s exceeded", ex.Timeout))
 		}
 	}
+	stopOutput()
 	s.finish(exit)
 }
 

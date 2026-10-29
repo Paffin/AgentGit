@@ -163,3 +163,5 @@ Task completion is also bound to its observed execution generation. A late execu
 The beta.6 candidate includes the merged core concurrency protections, task execution policy and generation fencing, review suggestions and policy controls. Published beta.5 → schema-8 backup/upgrade/rollback verification passed; final publication still follows exact-commit release gates.
 
 Unreleased CLI execution inspection is implemented on `feature/cli-run-output`: remote task-filtered run history with complete paging, local/remote captured output and explicit output deletion. It is not included in the frozen beta.6 candidate.
+
+Unreleased bounded live execution output is implemented on `feature/live-run-output`, with explicit 1s–1m capture intervals, independent heartbeat supervision, partial-secret handling and a real native browser scenario. It remains separate from the beta.6 candidate.

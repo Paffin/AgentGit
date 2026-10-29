@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/agwp"
+	"github.com/Paffin/AgentGit/services/agent-orchestrator/internal/secret"
 )
 
 var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
@@ -203,4 +204,9 @@ func (s *Store) Ensure(name string) (*Key, error) {
 func (k *Key) Scrub(text string) string {
 	text = strings.ReplaceAll(text, hex.EncodeToString(k.priv), "[redacted]")
 	return strings.ReplaceAll(text, hex.EncodeToString(k.priv.Seed()), "[redacted]")
+}
+
+// PendingSuffixLength withholds an unfinished private-key encoding in live output.
+func (k *Key) PendingSuffixLength(text string) int {
+	return max(secret.PendingSuffixLength(text, hex.EncodeToString(k.priv)), secret.PendingSuffixLength(text, hex.EncodeToString(k.priv.Seed())))
 }

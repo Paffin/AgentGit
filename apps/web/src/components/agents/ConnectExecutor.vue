@@ -29,6 +29,7 @@ const open = ref(false),
   error = ref(''),
   issued = ref(false)
 const captureOutput = ref(false)
+const streamOutput = ref(false)
 const serverUrl = ref(window.location.origin)
 const agent = ref('my-agent'),
   command = ref(''),
@@ -54,6 +55,7 @@ const settings = computed(() => ({
   environment: environment.value,
   slots: Number(slots.value),
   captureOutput: captureOutput.value,
+  streamOutput: streamOutput.value,
 }))
 const problem = computed(() => executorSetupProblem(settings.value))
 const agents = useResource((signal) => api.agents.list(props.repo, { signal, token: auth.token }), {
@@ -79,6 +81,7 @@ watch(
     token.value = ''
     credentialId.value = ''
     captureOutput.value = false
+    streamOutput.value = false
     issued.value = false
     open.value = false
     busy.value = false
@@ -223,9 +226,17 @@ async function revoke() {
           v-model="captureOutput"
           label="Save diagnostic output in AgentGit"
         />
+        <Checkbox
+          v-if="captureOutput"
+          v-model="streamOutput"
+          label="Show output while the agent is running"
+        />
         <p v-if="captureOutput" class="faint">
-          Saves the last 32 KiB of stdout and stderr when the run ends. Known credentials are
-          redacted, but output may contain other private data. Repository readers can view it.
+          Saves the last 32 KiB of stdout and stderr{{
+            streamOutput ? ' every two seconds and' : ''
+          }}
+          when the run ends. Known credentials are redacted, but output may contain other private
+          data. Repository readers can view it.
         </p>
       </fieldset>
       <dl v-else class="summary">

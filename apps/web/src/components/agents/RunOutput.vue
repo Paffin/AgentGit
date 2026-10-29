@@ -76,7 +76,7 @@ async function remove() {
     <p v-else-if="!output.settled.value" role="status">Loading output…</p>
     <p v-else-if="!output.data.value?.available" class="muted">
       No output saved. An operator must enable output capture for the executor; an opted-in executor
-      saves a bounded tail when the session ends.
+      saves a bounded tail when the session ends, or periodically when live output is enabled.
     </p>
     <template v-else>
       <p class="muted">

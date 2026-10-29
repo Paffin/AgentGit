@@ -174,6 +174,7 @@ const stream = computed({
   color: var(--text-2);
 }
 .s.one-line {
+  flex-wrap: nowrap;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

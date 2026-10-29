@@ -41,6 +41,12 @@ const bodyId = useId()
 // A long line scrolls the diff sideways, inside its own box; the keyboard can reach it then.
 const { setEl: diffRef, attrs: diffAttrs } = useScrollRegion(() => `Changes to ${props.file.path}`)
 
+const modeNames: Record<string, string> = {
+  '100644': 'Regular file',
+  '100755': 'Executable file',
+  '120000': 'Symbolic link',
+}
+const modeLabel = (mode?: string) => modeNames[mode || ''] || mode || 'Absent'
 const statusTone = computed(() =>
   props.file.status === 'added' ? 'ok' : props.file.status === 'deleted' ? 'bad' : 'neutral',
 )
@@ -79,7 +85,16 @@ const sigil = { add: '+', del: '−', ctx: ' ', meta: '\\' } as const
       :style="{ '--number-width': numberWidth }"
       v-bind="diffAttrs"
     >
-      <p v-if="file.binary" class="note">Binary file: its contents are not shown.</p>
+      <p v-if="file.old_mode !== file.new_mode && (file.old_mode || file.new_mode)" class="note">
+        {{ modeLabel(file.old_mode) }} → {{ modeLabel(file.new_mode) }}
+        <span class="mono"
+          >({{ file.old_mode || 'absent' }} → {{ file.new_mode || 'absent' }})</span
+        >
+      </p>
+      <p v-if="file.truncated" class="note">
+        Text diff omitted because it exceeds the size limit. Inspect the full file before reviewing.
+      </p>
+      <p v-else-if="file.binary" class="note">Binary file: its contents are not shown.</p>
       <p v-else-if="parsed.hunks.length === 0" class="note">No textual changes.</p>
       <template v-else>
         <div v-for="(h, hi) in parsed.hunks" :key="hi" class="hunk">

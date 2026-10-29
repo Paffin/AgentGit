@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 edition = "2024"
 rust-version = "1.89"
 license = "Apache-2.0"
@@ -16,24 +16,24 @@ readme = "README.md"
 
 [workspace.dependencies]
 # internal crates
-ag-types = { package = "agentgit-types", path = "crates/ag-types", version = "0.3.0-beta.6" }
-ag-crypto = { package = "agentgit-crypto", path = "crates/ag-crypto", version = "0.3.0-beta.6" }
-ag-object = { package = "agentgit-object", path = "crates/ag-object", version = "0.3.0-beta.6" }
-ag-changeset = { package = "agentgit-changeset", path = "crates/ag-changeset", version = "0.3.0-beta.6" }
-ag-diff = { package = "agentgit-diff", path = "crates/ag-diff", version = "0.3.0-beta.6" }
-ag-tree = { package = "agentgit-tree", path = "crates/ag-tree", version = "0.3.0-beta.6" }
-ag-dag = { package = "agentgit-dag", path = "crates/ag-dag", version = "0.3.0-beta.6" }
-ag-merge = { package = "agentgit-merge", path = "crates/ag-merge", version = "0.3.0-beta.6" }
-ag-storage = { package = "agentgit-storage", path = "crates/ag-storage", version = "0.3.0-beta.6", default-features = false }
-ag-policy = { package = "agentgit-policy", path = "crates/ag-policy", version = "0.3.0-beta.6" }
-ag-agent = { package = "agentgit-agent", path = "crates/ag-agent", version = "0.3.0-beta.6" }
-ag-integrate = { package = "agentgit-integrate", path = "crates/ag-integrate", version = "0.3.0-beta.6" }
-ag-git = { package = "agentgit-git", path = "crates/ag-git", version = "0.3.0-beta.6" }
-ag-protocol = { package = "agentgit-protocol", path = "crates/ag-protocol", version = "0.3.0-beta.6" }
-ag-client = { package = "agentgit-client", path = "crates/ag-client", version = "0.3.0-beta.6" }
-ag-server = { package = "agentgit-server", path = "crates/ag-server", version = "0.3.0-beta.6" }
-ag-ui-assets = { package = "agentgit-ui-assets", path = "crates/ag-ui-assets", version = "0.3.0-beta.6" }
-ag-sandbox = { package = "agentgit-sandbox", path = "crates/ag-sandbox", version = "0.3.0-beta.6" }
+ag-types = { package = "agentgit-types", path = "crates/ag-types", version = "0.3.0-beta.7" }
+ag-crypto = { package = "agentgit-crypto", path = "crates/ag-crypto", version = "0.3.0-beta.7" }
+ag-object = { package = "agentgit-object", path = "crates/ag-object", version = "0.3.0-beta.7" }
+ag-changeset = { package = "agentgit-changeset", path = "crates/ag-changeset", version = "0.3.0-beta.7" }
+ag-diff = { package = "agentgit-diff", path = "crates/ag-diff", version = "0.3.0-beta.7" }
+ag-tree = { package = "agentgit-tree", path = "crates/ag-tree", version = "0.3.0-beta.7" }
+ag-dag = { package = "agentgit-dag", path = "crates/ag-dag", version = "0.3.0-beta.7" }
+ag-merge = { package = "agentgit-merge", path = "crates/ag-merge", version = "0.3.0-beta.7" }
+ag-storage = { package = "agentgit-storage", path = "crates/ag-storage", version = "0.3.0-beta.7", default-features = false }
+ag-policy = { package = "agentgit-policy", path = "crates/ag-policy", version = "0.3.0-beta.7" }
+ag-agent = { package = "agentgit-agent", path = "crates/ag-agent", version = "0.3.0-beta.7" }
+ag-integrate = { package = "agentgit-integrate", path = "crates/ag-integrate", version = "0.3.0-beta.7" }
+ag-git = { package = "agentgit-git", path = "crates/ag-git", version = "0.3.0-beta.7" }
+ag-protocol = { package = "agentgit-protocol", path = "crates/ag-protocol", version = "0.3.0-beta.7" }
+ag-client = { package = "agentgit-client", path = "crates/ag-client", version = "0.3.0-beta.7" }
+ag-server = { package = "agentgit-server", path = "crates/ag-server", version = "0.3.0-beta.7" }
+ag-ui-assets = { package = "agentgit-ui-assets", path = "crates/ag-ui-assets", version = "0.3.0-beta.7" }
+ag-sandbox = { package = "agentgit-sandbox", path = "crates/ag-sandbox", version = "0.3.0-beta.7" }
 # test support, never published (a path-only dev-dependency is dropped from a published manifest)
 ag-testkit = { package = "agentgit-testkit", path = "crates/ag-testkit" }
 
@@ -49,7 +49,7 @@ hex = "0.4"
 libc = "0.2"
 proptest = "1"
 getrandom = "0.4"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 postgres = "0.19"
 rustls = { version = "0.23", default-features = false, features = ["ring", "aws_lc_rs", "std", "tls12"] }
 tokio-postgres-rustls = { version = "0.14", default-features = false, features = ["ring"] }

@@ -19,8 +19,10 @@ export type DirEntry = S['DirEntry']
 export type BlameLine = S['BlameLine']
 export type BlameResponse = S['BlameResponse']
 export type TreeEntry = S['TreeEntry']
-export type FileDiff = S['FileDiff']
-export type DiffResponse = S['DiffResponse']
+// Older servers omit the additive mode/truncation metadata introduced in beta.7.
+export type FileDiff = Omit<S['FileDiff'], 'old_mode' | 'new_mode' | 'truncated'> &
+  Partial<Pick<S['FileDiff'], 'old_mode' | 'new_mode' | 'truncated'>>
+export type DiffResponse = Omit<S['DiffResponse'], 'files'> & { files: FileDiff[] }
 export type SearchTreeResponse = S['SearchTreeResponse']
 export type SearchMatch = S['SearchMatch']
 export type Proposal = S['Proposal']

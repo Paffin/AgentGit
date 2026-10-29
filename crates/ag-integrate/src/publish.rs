@@ -233,7 +233,8 @@ impl Repository {
                 );
             }
         }
-        self.meta.write(|tx| {
+        self.meta.write_with_error(|tx| -> Result<()> {
+            self.validate_retention_root(tx, &head)?;
             for (id, _) in &closure.order {
                 tx.intent_add_object(&intent.operation_id, &id.object_id())?;
             }

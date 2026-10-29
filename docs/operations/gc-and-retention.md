@@ -41,8 +41,11 @@ follows parents and the blobs each changeset references.
   is a file lock (this host only). Do not run several hosts against one prefix with `file` or `in_process` locks.
   See [PostgreSQL and S3](postgres-and-s3.md#the-object-lock).
 - **Backups hold GC off** while objects are copied.
-- GC is safe to run while other `ag` processes work; it only contends on the store lock for individual
-  deletes.
+- GC holds the repository metadata writer transaction from its root snapshot through deletion and index cleanup.
+  Other metadata writers wait until that pass finishes; reads on independent database connections can continue.
+  Creating a pin, proposal or workspace root validates newly retained history in its committing transaction.
+  A root created first is retained; a request for already swept history is rejected instead of acknowledged.
+  Schedule large passes off-peak, especially with remote object storage.
 - On S3, "older than the grace period" is the server's `LastModified` (one-second resolution on Amazon S3), and a
   re-`put` refreshes it with a server-side copy. Grace periods are hours, so clock differences between machines and
   the service do not matter in practice. Never put a lifecycle *expiration* rule on the prefix: deletion belongs

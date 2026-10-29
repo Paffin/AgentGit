@@ -39,8 +39,8 @@ fn changes(list: &[v1::FileChange]) -> ApiResult<Vec<VirtualChange>> {
 }
 
 /// Workspaces are private to their owner unless the caller administers the repository.
-fn check_owner(repo: &ag_integrate::Repository, name: &str, actor: &ag_types::Identity, admin: bool) -> ApiResult<()> {
-    let ws = repo.workspace_row(name)?;
+fn check_owner(ws: &ag_storage::meta::WorkspaceRow, actor: &ag_types::Identity, admin: bool) -> ApiResult<()> {
+    let name = &ws.name;
     if admin || super::owns(&ws.owner, actor) {
         Ok(())
     } else {
@@ -59,8 +59,8 @@ impl App {
         let (name, from_rev) = (require(&req.name, "name")?.to_string(), req.from_rev.clone());
         let scope = stream.to_string();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::WorkspaceWrite, Some(&scope), move |repo, actor| {
-            let at = if from_rev.is_empty() { None } else { Some(repo.resolve_rev(&from_rev)?) };
-            let row = repo.workspace_create_at(&name, &stream, actor, at.as_ref()).map_err(|e| match e {
+            let from = if from_rev.is_empty() { None } else { Some(repo.resolve_rev(&from_rev)?) };
+            let row = repo.workspace_create_at(&name, &stream, actor, from.as_ref()).map_err(|e| match e {
                 ag_integrate::Error::Meta(ag_storage::meta::MetaError::AlreadyExists(m)) => {
                     ApiError::new(ag_protocol::ErrorCode::AlreadyExists, m)
                 }
@@ -100,9 +100,9 @@ impl App {
         let message = if req.message.is_empty() { "Update workspace".to_string() } else { req.message.clone() };
         let admin = self.is_repo_admin(call, &repo_name).await;
         let name = req.name.clone();
-        self.with_repo_mut(call, &repo_name, Cap::WorkspaceWrite, None, move |repo, actor| {
-            check_owner(repo, &name, actor, admin)?;
-            let row = repo.workspace_modify(&name, &list, &message, actor, expected.as_ref())?;
+        self.with_workspace_mut(call, &repo_name, Cap::WorkspaceWrite, name.clone(), move |repo, actor, observed| {
+            check_owner(observed, actor, admin)?;
+            let row = repo.workspace_modify_checked(observed, &list, &message, actor, expected.as_ref())?;
             Ok(convert::workspace(&row))
         })
         .await
@@ -118,9 +118,9 @@ impl App {
         let resolutions = changes(&req.resolutions)?;
         let admin = self.is_repo_admin(call, &repo_name).await;
         let name = req.name.clone();
-        self.with_repo_mut(call, &repo_name, Cap::WorkspaceWrite, None, move |repo, actor| {
-            check_owner(repo, &name, actor, admin)?;
-            let outcome = repo.workspace_sync_virtual(&name, actor, &resolutions)?;
+        self.with_workspace_mut(call, &repo_name, Cap::WorkspaceWrite, name.clone(), move |repo, actor, observed| {
+            check_owner(observed, actor, admin)?;
+            let outcome = repo.workspace_sync_virtual_checked(observed, actor, &resolutions)?;
             let head = repo.workspace_row(&name)?.head.map(|h| h.to_string()).unwrap_or_default();
             Ok(match outcome {
                 SyncOutcome::UpToDate => {
@@ -147,9 +147,9 @@ impl App {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let admin = self.is_repo_admin(call, &repo_name).await;
         let name = req.name.clone();
-        self.with_repo_mut(call, &repo_name, Cap::WorkspaceWrite, None, move |repo, actor| {
-            check_owner(repo, &name, actor, admin)?;
-            repo.workspace_remove(&name, actor)?;
+        self.with_workspace_mut(call, &repo_name, Cap::WorkspaceWrite, name.clone(), move |repo, actor, observed| {
+            check_owner(observed, actor, admin)?;
+            repo.workspace_remove_checked(observed, actor)?;
             Ok(v1::Empty {})
         })
         .await

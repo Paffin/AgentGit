@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +44,20 @@ GENERATED = {"docs/reference/cli.md", "docs/reference/help-topics.md", "docs/ref
 REQUIRE_AG = "--require-ag" in sys.argv or bool(os.environ.get("CI"))
 
 errors: list[str] = []
+
+# The support contract is current documentation, unlike historical changelog entries.
+version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+schema_source = (ROOT / "crates/ag-storage/src/meta/migrate.rs").read_text()
+schema = re.search(r"pub const SCHEMA_VERSION: i64 = (\d+)", schema_source).group(1)
+for document in ("README.md", "README.ru.md", "SECURITY.md"):
+    text = (ROOT / document).read_text()
+    if version not in text:
+        errors.append(f"{document}: current release {version} is missing")
+    if document == "SECURITY.md":
+        if f"metadata schema is **{schema}**" not in text:
+            errors.append(f"{document}: current metadata schema {schema} is missing")
+        if "**alpha**" in text or "no release has been published" in text:
+            errors.append(f"{document}: obsolete pre-release support statement")
 
 
 def rel(p: Path) -> str:

@@ -1511,6 +1511,15 @@
             "minimum": 0,
             "type": "integer"
           },
+          "new_mode": {
+            "default": "",
+            "type": "string"
+          },
+          "old_mode": {
+            "default": "",
+            "description": "Git modes: 100644, 100755, 120000; empty when that side is absent.",
+            "type": "string"
+          },
           "patch": {
             "default": "",
             "description": "Unified diff text (empty for binary files).",
@@ -1524,6 +1533,11 @@
             "default": "",
             "description": "\"added\", \"modified\", \"deleted\".",
             "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "description": "Patch omitted due to the bounded diff budget; metadata still describes the change.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -5857,7 +5871,7 @@
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "title": "AgentGit AGWP HTTP/JSON API",
-    "version": "0.3.0-beta.6"
+    "version": "0.3.0-beta.7"
   },
   "openapi": "3.1.0",
   "paths": {

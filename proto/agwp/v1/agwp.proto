@@ -515,6 +515,11 @@ message FileDiff {
   uint32 deletions = 5;
   // Unified diff text (empty for binary files).
   string patch = 6;
+  // Git modes: 100644, 100755, 120000; empty when that side is absent.
+  string old_mode = 7;
+  string new_mode = 8;
+  // Patch omitted due to the bounded diff budget; metadata still describes the change.
+  bool truncated = 9;
 }
 
 message DiffResponse {

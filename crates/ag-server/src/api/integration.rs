@@ -105,7 +105,7 @@ impl App {
         proposal: &str,
     ) -> ApiResult<(Preparation, Vec<v1::Job>)> {
         let (name, p) = (repo.to_string(), proposal.to_string());
-        self.with_repo(call, repo, Cap::IntegratePrepare, None, move |r, actor| {
+        self.with_proposal(call, repo, Cap::IntegratePrepare, p.clone(), move |r, actor| {
             let (prep, rows) = r.prepare_with(&p, actor, &[], super::jobs::validation_jobs_in)?;
             Ok((prep, rows.iter().map(|j| super::jobs::job_to_wire(&name, j)).collect()))
         })
@@ -177,9 +177,13 @@ impl App {
 
     /// Appends a proposal to its stream's integration queue.
     pub async fn enqueue(&self, call: &Call, req: v1::EnqueueRequest) -> ApiResult<v1::QueueEntry> {
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::QueueWrite, None, move |repo, actor| {
-            Ok(convert::queue_entry(&repo.enqueue(&req.proposal, actor)?))
-        })
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::QueueWrite,
+            req.proposal.clone(),
+            move |repo, actor| Ok(convert::queue_entry(&repo.enqueue(&req.proposal, actor)?)),
+        )
         .await
     }
 

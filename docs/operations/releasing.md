@@ -280,6 +280,11 @@ Manual publication accepts a version with or without its leading `v`, but valida
 Python CI uses `uv sync --locked`; package checks run `uv lock --check` before building. A version bump must therefore include the normalized project version in `sdk/python/uv.lock`, the public Python `__version__`, regenerated CLI reference and third-party licence list. Deployment defaults track the candidate workspace version; verify image availability before using them. Update published installation links only after the new release assets are verified.
 
 
+## Published archive installation checks
+
+From beta.7, a publishing run installs the version-pinned archive from its public GitHub release URL on fresh Linux and macOS runners, verifies its checksum and attestation, records the OS and binary versions, and runs the remote first-change smoke workflow. Rehearsals install the assembled local archive. This supplies repeatable CI installation evidence; it does not test an interactive macOS download quarantine or Homebrew.
+
+
 ## Beta.5 publication evidence {#beta5-publication-evidence}
 
 `v0.3.0-beta.5` was published on 2026-10-28 from

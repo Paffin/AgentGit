@@ -7,15 +7,24 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.7] - 2026-10-29
+
+**Upgrade:** metadata schema 8 and control schema are unchanged from beta.6. Back up before upgrading. Returning to beta.5 or older requires the pre-upgrade backup.
+
 ### Fixed
 
-- Proposal reviews, comments, updates and closes enforce the credential’s target-stream scope over HTTP and gRPC. A token restricted to another stream cannot mutate the proposal.
+- Enforce credential stream restrictions for proposal reviews, discussions, workspace mutations, validation scheduling and queue admission, including requests that name a proposal or workspace instead of a stream (#124).
+- Serialize garbage collection with metadata root changes and validate newly retained history before committing it. Pins, publication and workspace roots cannot acknowledge objects swept by a concurrent collector; backups use the same lock order (#130).
+- Compare workspace head/base in the committing transaction and preserve the winner of concurrent modifications and syncs (#129).
+- Reject a close that loses a race with proposal integration, preserving its integrated terminal state (#131).
+- Create a workspace at its requested starting revision atomically; invalid revisions leave no workspace behind (#125).
+- Preserve UTF-8 BOM bytes and uniform CRLF line endings when editing or renaming files in the browser, including textarea normalization (#123).
+- Include old/new Git modes and explicit per-file truncation in API/Web diffs; bound both diff input and generated patch bytes (#127, #128).
+- Align security support, release and schema documentation with the current beta and check these statements for drift (#126).
 
-- Concurrent workspace modifications, snapshots, resets and syncs now reject a changed base/head inside their final metadata transaction. Closing a proposal cannot overwrite a completed integration or record a second successful close.
+### Improved
 
-- Workspace creation validates its requested starting revision before committing its name, initial base/head and audit event. A rejected create request can be corrected and retried without cleanup.
-
-- Browser file edits and renames preserve UTF-8 BOM and uniform CRLF line endings, including textarea normalization. Rename-only changes retain the original file bytes.
+- Published release checks install from the public, version-pinned download URL on clean Linux and macOS runners, verify checksum and provenance, and exercise the installed binaries end to end.
 
 ### Added
 

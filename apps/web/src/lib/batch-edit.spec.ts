@@ -14,6 +14,16 @@ const file = (over: Partial<DraftFile> = {}): DraftFile => ({
   ...over,
 })
 describe('multi-file edits', () => {
+  it.each([false, true])('preserves a BOM and CRLF when renaming (edited: %s)', (edited) => {
+    const original = decodeUtf8(new TextEncoder().encode('\uFEFFfirst\r\nsecond\r\n'))
+    const text = edited ? original.replace('second', 'changed') : original
+    const changes = batchChanges([file({ path: 'renamed.txt', original, text })])
+    const put = changes.find((change) => change.op === 'put')!
+    const bytes = Uint8Array.from(atob(put.content!), (c) => c.charCodeAt(0))
+    expect(Array.from(bytes)).toEqual(Array.from(new TextEncoder().encode(text)))
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf])
+    expect(text).toContain('\r\n')
+  })
   it('applies renames, edits and deletions as a single batch without losing modes', () => {
     const changes = batchChanges([
       file({ path: 'moved.txt', executable: true }),

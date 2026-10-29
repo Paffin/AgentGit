@@ -47,7 +47,7 @@ ag backup /backups/project-with-keys --include-keys   # keys are NOT copied unle
 
 How it stays consistent while others write:
 
-1. the database is copied first with `VACUUM INTO` (a transactionally consistent snapshot);
+1. the database is copied first with SQLite’s backup API (a transactionally consistent snapshot under the metadata writer lock);
 2. then the objects are copied. Objects are immutable and always written *before* the metadata row that
    references them, so everything the snapshot references already exists; the copy may include a few newer,
    unreferenced objects (garbage, collected later);

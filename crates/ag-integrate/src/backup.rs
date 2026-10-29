@@ -3,7 +3,7 @@
 //! The metadata database and the object store cannot be snapshotted together,
 //! so the order matters:
 //!
-//! 1. **database first** (`VACUUM INTO`, a transactionally consistent copy);
+//! 1. **database first** (SQLite’s backup API, a transactionally consistent copy);
 //! 2. **objects second**.
 //!
 //! Objects are immutable and always written *before* the metadata row that
@@ -85,9 +85,8 @@ impl Repository {
         fs::create_dir_all(&ag)?;
 
         // Hold off garbage collection while objects are copied.
-        let _gc_held_off = self.objects.block_gc()?;
-
-        self.meta.backup_to(&ag.join("meta.db"))?;
+        let _gc_held_off =
+            self.meta.backup_to_with_guard(&ag.join("meta.db"), || self.objects.block_gc().map_err(Error::from))?;
         let (mut objects, mut bytes) = (0usize, 0u64);
         let local_files = matches!(self.config.storage().objects, ObjectsConfig::Fs);
         if local_files {

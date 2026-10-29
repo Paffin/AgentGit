@@ -663,6 +663,72 @@ impl App {
         out
     }
 
+    /// Runs a proposal operation after enforcing the credential's target-stream scope.
+    pub(crate) async fn with_proposal<T, F>(&self, call: &Call, name: &str, cap: Cap, id: String, f: F) -> ApiResult<T>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Repository, &Identity) -> ApiResult<T> + Send + 'static,
+    {
+        let scope = call.principal.scope.clone();
+        self.with_repo(call, name, cap, None, move |repo, actor| {
+            let stream = repo.find_proposal(&id)?.stream;
+            if !scope.permits(None, cap, Some(&stream)) {
+                return Err(ApiError::denied(format!(
+                    "credential does not permit {} on stream '{stream}'",
+                    cap.as_str()
+                )));
+            }
+            f(repo, actor)
+        })
+        .await
+    }
+
+    /// The mutating counterpart of [`Self::with_proposal`].
+    pub(crate) async fn with_proposal_mut<T, F>(
+        &self,
+        call: &Call,
+        name: &str,
+        cap: Cap,
+        id: String,
+        f: F,
+    ) -> ApiResult<T>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Repository, &Identity) -> ApiResult<T> + Send + 'static,
+    {
+        let result = self.with_proposal(call, name, cap, id, f).await;
+        self.notify(name);
+        result
+    }
+
+    /// Enforces the stored workspace's target stream, including operations without a stream argument.
+    pub(crate) async fn with_workspace_mut<T, F>(
+        &self,
+        call: &Call,
+        name: &str,
+        cap: Cap,
+        workspace: String,
+        f: F,
+    ) -> ApiResult<T>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Repository, &Identity, &ag_storage::meta::WorkspaceRow) -> ApiResult<T> + Send + 'static,
+    {
+        let scope = call.principal.scope.clone();
+        self.with_repo_mut(call, name, cap, None, move |repo, actor| {
+            let row = repo.workspace_row(&workspace)?;
+            let stream = &row.stream;
+            if !scope.permits(None, cap, Some(stream)) {
+                return Err(ApiError::denied(format!(
+                    "credential does not permit {} on stream '{stream}'",
+                    cap.as_str()
+                )));
+            }
+            f(repo, actor, &row)
+        })
+        .await
+    }
+
     // ---- events -----------------------------------------------------------------------
 
     /// Tells long-lived streams (event subscriptions) and job long-polls to end.

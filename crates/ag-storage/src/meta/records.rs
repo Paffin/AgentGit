@@ -563,6 +563,37 @@ impl Tx<'_> {
         Ok(())
     }
 
+    /// Updates only the workspace version the caller inspected, returning its committed row.
+    pub fn workspace_compare_and_swap(
+        &self,
+        expected: &WorkspaceRow,
+        base: Option<&ChangesetId>,
+        head: Option<&ChangesetId>,
+    ) -> Result<WorkspaceRow, MetaError> {
+        self.workspace_check(expected)?;
+        self.workspace_update(&expected.name, base, head)?;
+        self.workspace(&expected.name)?.ok_or_else(|| MetaError::Corrupt("workspace vanished".into()))
+    }
+
+    /// Checks that the workspace still has the inspected head, base and owner.
+    pub fn workspace_check(&self, expected: &WorkspaceRow) -> Result<WorkspaceRow, MetaError> {
+        let current = self
+            .workspace(&expected.name)?
+            .ok_or_else(|| MetaError::NotFound(format!("workspace '{}'", expected.name)))?;
+        if current.head != expected.head
+            || current.base != expected.base
+            || current.owner != expected.owner
+            || current.stream != expected.stream
+            || current.created_at != expected.created_at
+        {
+            return Err(MetaError::Invalid(format!(
+                "workspace '{}' changed concurrently; reload its head",
+                expected.name
+            )));
+        }
+        Ok(current)
+    }
+
     /// Deletes a workspace.
     pub fn workspace_delete(&self, name: &str) -> Result<bool, MetaError> {
         Ok(self.conn.execute("DELETE FROM workspaces WHERE name = ?1", &params![name])? > 0)

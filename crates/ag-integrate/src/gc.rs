@@ -16,6 +16,7 @@
 use std::collections::{BTreeSet, HashSet};
 
 use ag_changeset::ChangesetSource;
+use ag_storage::{StoreHistory, meta::Tx};
 use ag_types::{ChangesetId, ObjectId, Timestamp};
 use serde::Serialize;
 use serde_json::json;
@@ -68,13 +69,17 @@ pub struct GcReport {
 impl Repository {
     /// Collects unreachable objects. See the module documentation for the safety rules.
     pub fn gc(&self, opts: &GcOptions, actor: &str) -> Result<GcReport> {
-        let now = self.clock().now();
+        self.meta.write_with_error(|tx| self.gc_in_tx(tx, opts, actor))
+    }
+
+    fn gc_in_tx(&self, tx: &Tx<'_>, opts: &GcOptions, actor: &str) -> Result<GcReport> {
+        let now = tx.now();
         let grace_cutoff = Timestamp::from_millis(now.as_millis() - opts.grace_ms);
         let reflog_since = Timestamp::from_millis(now.as_millis() - opts.reflog_retention_ms);
 
         // 1. Roots.
-        let mut roots: Vec<ChangesetId> = self.meta.read(|tx| tx.live_roots())?;
-        roots.extend(self.meta.read(|tx| tx.reflog_heads_since(reflog_since))?);
+        let mut roots: Vec<ChangesetId> = tx.live_roots()?;
+        roots.extend(tx.reflog_heads_since(reflog_since)?);
         roots.sort();
         roots.dedup();
 
@@ -82,13 +87,14 @@ impl Repository {
         let mut reachable: BTreeSet<ObjectId> = BTreeSet::new();
         let mut seen: HashSet<ChangesetId> = HashSet::new();
         let mut stack = roots;
+        let history = StoreHistory::new(self.objects.clone(), self.limits.clone());
         let mut changesets = 0usize;
         let mut blobs = 0usize;
         while let Some(id) = stack.pop() {
             if !seen.insert(id) {
                 continue;
             }
-            let cs = self.history.changeset(&id).map_err(|e| {
+            let cs = history.changeset(&id).map_err(|e| {
                 Error::Invalid(format!("garbage collection aborted: reachable changeset {id} is unreadable: {e}"))
             })?;
             reachable.insert(id.object_id());
@@ -110,8 +116,7 @@ impl Repository {
         }
 
         // 3. Sweep.
-        let staged: HashSet<ObjectId> =
-            self.meta.read(|tx| tx.protected_intent_objects(grace_cutoff))?.into_iter().collect();
+        let staged: HashSet<ObjectId> = tx.protected_intent_objects(grace_cutoff)?.into_iter().collect();
         let mut report = GcReport {
             reachable_changesets: changesets,
             reachable_blobs: blobs,
@@ -143,7 +148,7 @@ impl Repository {
 
         // 4. Forget index rows of deleted changesets (children before parents).
         if !opts.dry_run {
-            self.meta.write(|tx| {
+            {
                 let mut doomed: Vec<(u64, ChangesetId)> = Vec::new();
                 for id in &deleted_changesets {
                     if let Some(g) = tx.generation(id)? {
@@ -155,8 +160,7 @@ impl Repository {
                 tx.delete_changesets(&ids)?;
                 tx.prune_orphan_trees()?;
                 tx.audit_append(actor, "gc.run", "store", &json!({"deleted": report.deleted.len(), "bytes": report.bytes, "reachable_changesets": changesets}))?;
-                Ok(())
-            })?;
+            }
             // A removed changeset must not still be answered from memory.
             if !deleted_changesets.is_empty()
                 && let Some(trees) = &self.trees
@@ -165,5 +169,35 @@ impl Repository {
             }
         }
         Ok(report)
+    }
+}
+
+impl Repository {
+    /// Validate new retention roots while holding the metadata writer transaction.
+    /// Existing roots are stable until that transaction ends, so only new history needs walking.
+    pub(crate) fn validate_retention_root(&self, tx: &Tx<'_>, head: &ChangesetId) -> Result<()> {
+        let protected: HashSet<_> = tx.live_roots()?.into_iter().collect();
+        let mut seen = HashSet::new();
+        let mut blobs = HashSet::new();
+        let mut pending = vec![*head];
+        // The normal history reader caches decoded objects, including objects a prior GC removed.
+        let history = StoreHistory::new(self.objects.clone(), self.limits.clone());
+        while let Some(id) = pending.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            let cs = history.changeset(&id).map_err(|e| Error::Invalid(format!("retention root {head}: {e}")))?;
+            for blob in cs.blobs() {
+                if blobs.insert(blob) {
+                    self.blob(&blob)?;
+                }
+            }
+            for parent in &cs.parents {
+                if !protected.contains(parent) {
+                    pending.push(*parent);
+                }
+            }
+        }
+        Ok(())
     }
 }

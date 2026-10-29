@@ -123,6 +123,13 @@ fn append_thread(
     claim: &super::Claim,
 ) -> Result<Option<v1::ReviewThread>, MetaError> {
     let current = tx.proposal(proposal)?.ok_or_else(|| MetaError::NotFound("proposal".into()))?;
+    let base_ready = match p.base {
+        Some(base) => tx.is_ready(&base)?,
+        None => true,
+    };
+    if !tx.is_ready(&p.expected)? || !base_ready {
+        return Err(MetaError::Invalid("review source revision is no longer published".into()));
+    }
     if current.head != p.expected {
         return Ok(None);
     }
@@ -185,9 +192,9 @@ fn may_resolve(manage: bool, thread_author: &str, proposal_author: &str, actor: 
     }
     Err(ApiError::denied("only the thread author, proposal author, reviewer or integrator may resolve it"))
 }
-async fn reviewer_or_integrator(app: &App, call: &Call, repo: &str) -> bool {
-    app.authorize(call, repo, Cap::ProposalReview, None).await.is_ok()
-        || app.authorize(call, repo, Cap::IntegrateRun, None).await.is_ok()
+async fn reviewer_or_integrator(app: &App, call: &Call, repo: &str, proposal: &str) -> bool {
+    app.with_proposal(call, repo, Cap::ProposalReview, proposal.to_string(), |_, _| Ok(())).await.is_ok()
+        || app.with_proposal(call, repo, Cap::IntegrateRun, proposal.to_string(), |_, _| Ok(())).await.is_ok()
 }
 fn cursor_scope(repo: &str, id: &str, kind: &str) -> String {
     use sha2::Digest;
@@ -228,7 +235,7 @@ impl App {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let prepared = prepare_thread(req)?;
         let idem = self.idem();
-        self.with_repo_mut(call, &repo_name, Cap::ProposalComment, None, move |repo, actor| {
+        self.with_proposal_mut(call, &repo_name, Cap::ProposalComment, prepared.req.id.clone(), move |repo, actor| {
             let proposal = repo.find_proposal(&prepared.req.id)?;
             if let Some(base) = prepared.base {
                 require_published(repo, &base)?;
@@ -287,7 +294,7 @@ impl App {
         body(&req.body)?;
         let repo_name = require(&req.repo, "repo")?.to_string();
         let idem = self.idem();
-        self.with_repo_mut(call, &repo_name, Cap::ProposalComment, None, move |repo, actor| {
+        self.with_proposal_mut(call, &repo_name, Cap::ProposalComment, req.id.clone(), move |repo, actor| {
             let proposal = repo.find_proposal(&req.id)?;
             let fingerprint = serde_json::to_string(&(actor.as_str(), &proposal.id, &req.thread_id, &req.body))
                 .map_err(ApiError::internal)?;
@@ -306,10 +313,10 @@ impl App {
         if req.expected_version == 0 || req.expected_version >= i64::MAX as u64 {
             return Err(ApiError::invalid("expected_version is required"));
         }
-        let manage = reviewer_or_integrator(self, call, &req.repo).await;
+        let manage = reviewer_or_integrator(self, call, &req.repo, &req.id).await;
         let repo_name = require(&req.repo, "repo")?.to_string();
         let idem = self.idem();
-        self.with_repo_mut(call, &repo_name, Cap::ProposalComment, None, move |repo, actor| {
+        self.with_proposal_mut(call, &repo_name, Cap::ProposalComment, req.id.clone(), move |repo, actor| {
             let proposal = repo.find_proposal(&req.id)?;
             let old = repo.meta().read(|tx| found(tx, &proposal.id, &req.thread_id))?;
             may_resolve(manage, &old.author, &proposal.author, actor)?;

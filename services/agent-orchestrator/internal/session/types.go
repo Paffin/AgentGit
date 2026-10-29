@@ -87,6 +87,9 @@ type Request struct {
 	// session's credential is revoked, so the verdict can be applied as the
 	// task's owner. nil means Keep.
 	Decide func(Result) Disposition
+	// Reconsider discards local scheduling assumptions after a rejected task transition.
+	// The next reconciliation reads the authoritative task policy and run history.
+	Reconsider func()
 }
 
 // LeaseInfo is a lease held by a session.

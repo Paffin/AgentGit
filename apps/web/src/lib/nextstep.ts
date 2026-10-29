@@ -29,6 +29,7 @@ export function nextStep(
       : 'Ask someone with the writer or integrator role to run the checks.'
   if (has('missing_provenance'))
     return 'The agent has to attach its signed record of where this came from.'
+  if (has('unresolved_threads')) return 'Read and resolve the open line discussions in Reviews.'
   const need = blockers.find((b) => b.code === 'insufficient_approvals')
   if (need || has('changes_requested')) {
     const d = (need?.detail ?? {}) as { have?: number; required?: number }

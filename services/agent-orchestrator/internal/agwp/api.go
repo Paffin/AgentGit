@@ -170,11 +170,34 @@ func (c *Client) GetTask(ctx context.Context, repo, id string) (*Task, error) {
 	return &out, nil
 }
 
+// SetTaskAttemptLimit updates execution policy without replacing instructions or history.
+func (c *Client) SetTaskAttemptLimit(ctx context.Context, repo, id string, max, expected uint32) (*Task, error) {
+	var out Task
+	body := map[string]any{"max_attempts": max, "expected_max_attempts": expected}
+	if err := c.repoCall(ctx, "task.set_attempt_limit", http.MethodPatch, repo, "/tasks/"+url.PathEscape(id)+"/attempt-limit", nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // FinishTask marks a task done or cancelled. The server only lets the task's
 // owner (or anyone, for an unowned task) do this.
 func (c *Client) FinishTask(ctx context.Context, repo, id, state string) (*Task, error) {
+	return c.finishTask(ctx, repo, id, state, nil)
+}
+
+// FinishTaskAtAttemptLimit rejects a decision based on an obsolete retry policy.
+func (c *Client) FinishTaskAtAttemptLimit(ctx context.Context, repo, id, state string, expected uint32) (*Task, error) {
+	return c.finishTask(ctx, repo, id, state, &expected)
+}
+
+func (c *Client) finishTask(ctx context.Context, repo, id, state string, expected *uint32) (*Task, error) {
 	var out Task
-	if err := c.repoCall(ctx, "task.finish", http.MethodPost, repo, "/tasks/"+url.PathEscape(id)+"/finish", nil, map[string]string{"state": state}, &out); err != nil {
+	body := map[string]any{"state": state}
+	if expected != nil {
+		body["expected_max_attempts"] = *expected
+	}
+	if err := c.repoCall(ctx, "task.finish", http.MethodPost, repo, "/tasks/"+url.PathEscape(id)+"/finish", nil, body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

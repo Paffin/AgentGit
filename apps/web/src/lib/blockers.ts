@@ -73,6 +73,17 @@ export function explainBlocker(b: Blocker): Explained {
         hint: 'An eligible reviewer other than the author must approve the latest version. Approvals of an older version no longer count.',
       }
     }
+    case 'unresolved_threads': {
+      const count = num(d.count)
+      return {
+        ...base,
+        title:
+          count === 1
+            ? '1 open line discussion must be resolved'
+            : `${count ?? 'Some'} open line discussions must be resolved`,
+        hint: 'Open Reviews, read all replies and resolve the discussions. Discussions on earlier revisions count too.',
+      }
+    }
     case 'changes_requested':
       return {
         ...base,

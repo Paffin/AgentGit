@@ -547,3 +547,57 @@ lint and 98-file documentation checks passed. Helper complexity is at most 7; du
 inspection including the existing workspace editor found no candidates. Mutation discovery
 is inventory only, not a claimed mutation-kill score. CRLF-delimited CLI comment bodies and
 trailing newline after the suggestion fence are accepted by the parser.
+## Proposal snapshot at the integration commit boundary
+
+A failpoint reproduction held integration after candidate computation, then updated the proposal.
+The old code integrated the obsolete candidate and marked the newer proposal integrated. The
+transaction now compares the stream and proposal head/open state before writing. A mismatch
+re-enters the existing loop, which aborts work for a changed or closed proposal. The same guard
+protects the already-integrated path. No schema or wire changes; see ADR 0031.
+
+The 31 engine tests passed on SQLite (0.47s), including four controlled races: update/close
+against ordinary/already-integrated completion. Six proposal-related cases passed on required
+PostgreSQL (0.76s). Each new race verifies the stream is unchanged, the concurrent proposal
+state survives and the old integration is aborted. Existing retry/recovery tests remain intact.
+The compatibility guide's obsolete schema-5/no-published-release statements were reconciled
+with development schema 7 and the already recorded beta.5 archive/upgrade evidence.
+
+## Optional required resolution of line discussions
+
+`require_resolved_threads` defaults to false and is omitted from serialized default policies.
+With the rule enabled, the pure policy evaluator emits `unresolved_threads` from a count read
+inside the committing metadata transaction. Earlier-head discussions count. Preparation and
+already-integrated completion share the rule. A reopened discussion before commit blocks the
+operation. Approval and general comments remain independent; permissions are unchanged.
+
+The Web rule toggle requires `policy.resolved_threads`; blocker explanations lead to Reviews.
+CLI explanations list existing remote discussion commands. ADR 0032 records rollout: upgrade
+all replicas before enabling, since old binaries reject unknown policy fields. No schema change.
+
+Evidence: 36 integrate-library and 54 policy-library tests passed; 31 engine and 16 policy
+integration tests passed; the three focused cases passed on required PostgreSQL in 0.41s.
+Two real HTTP discussion tests passed in 0.20s. The 63 focused Web tests passed, and desktop /
+phone Chromium ran administrator rule save/reload, reviewer approval, blocked landing, explicit
+resolution and successful landing in 12.2s. The initial browser test omitted the separate approval
+required by the policy editor's starter; the completed scenario obtains it through the review UI.
+The policy_eval fuzz target compiles with generated counts and an invariant that unresolved
+required discussions cannot be allowed. Its dictionary/seed generator were updated; this is not
+a new fuzz campaign or mutation score. The fuzz lockfile's own workspace versions were aligned
+from beta.5 to beta.6; no third-party dependency version changed.
+
+## Retry policy changes during execution
+
+A real shell executor reproduced a stale automatic cancellation after the operator changed
+an active task from an unset limit to one allowed attempt. `task.finish` now supports optional
+`expected_max_attempts` and compares it in the state/audit write transaction. Automatic session
+and recovered-budget cancellation carry the observed value. On a rejected transition the
+scheduler discards local assumptions and reconstructs them from server state and history.
+
+Verification: the real-server scenario now retains the task, extends its limit and completes
+it with its second run. Four focused scheduler scenarios passed in 1.19s, including unchanged
+legacy cancellation and restart exhaustion. Core rejection preserves both task state and audit
+history (0.01s); HTTP stale cancellation returned 412 (0.14s). SDK tours passed (12 TypeScript,
+13 Python) with the new completion precondition. The previous failure is recorded in
+`/workspace/agentgit-quality/task-policy-finish-red.log`; follow-up logs share that prefix.
+No schema migration; ADR0034 describes the additive protocol field. Static Crapper/Dryer/
+Mutator scans were run; these are not coverage or mutation-kill measurements.

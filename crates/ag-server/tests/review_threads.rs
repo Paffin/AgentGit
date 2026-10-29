@@ -115,3 +115,55 @@ async fn line_threads_keep_their_revision_and_serialize_resolution() {
     assert!(detail.json["reviews"].as_array().unwrap().is_empty(), "discussion must not create approval decisions");
     server.stop().await;
 }
+
+#[tokio::test]
+async fn required_discussions_block_prepare_and_integration_until_resolved() {
+    let server = TestServer::start().await;
+    let admin = server.admin();
+    let repo = "acme/required-discussions";
+    let base = format!("/v1/repos/{repo}");
+    assert_eq!(admin.post("/v1/repos", json!({"name":repo})).await.status, 200);
+    let policy = admin
+        .call(
+            "PUT",
+            &format!("{base}/policy"),
+            Some(json!({
+                "stream":"main", "document": "{\"require_resolved_threads\":true}"
+            })),
+            &[],
+        )
+        .await;
+    assert_eq!(policy.status, 200, "{}", policy.json);
+    let (head, objects) =
+        Client::new(repo).commit(vec![], "user:admin", "change", &[("file.txt", b"first\n")], 1_700_000_000_000);
+    upload(&admin, repo, &objects).await;
+    let proposal = admin
+        .post(
+            &format!("{base}/proposals"),
+            json!({"stream":"main", "head":head.to_string(), "title":"Resolve before landing"}),
+        )
+        .await;
+    assert_eq!(proposal.status, 200, "{}", proposal.json);
+    let path = format!("{base}/proposals/{}", proposal.json["id"].as_str().unwrap());
+    let thread = admin.post(&format!("{path}/threads"), json!({"body":"Explain this", "expected_head":head.to_string(), "anchor":{"head":head.to_string(),"path":"file.txt","side":"new","line":1}})).await;
+    assert_eq!(thread.status, 200, "{}", thread.json);
+    let prepared = admin.post(&format!("{path}/prepare"), json!({})).await;
+    assert_eq!(prepared.status, 200, "{}", prepared.json);
+    assert_eq!(prepared.json["blockers"][0]["code"], "unresolved_threads");
+    let blocked = admin.post(&format!("{path}/integrate"), json!({})).await;
+    assert_eq!(blocked.status, 200, "{}", blocked.json);
+    assert_eq!(blocked.json["outcome"]["blockers"][0]["code"], "unresolved_threads");
+    let resolved = admin
+        .call(
+            "PATCH",
+            &format!("{path}/threads/{}", thread.json["id"].as_str().unwrap()),
+            Some(json!({"resolved":true,"expected_version":1})),
+            &[],
+        )
+        .await;
+    assert_eq!(resolved.status, 200, "{}", resolved.json);
+    let integrated = admin.post(&format!("{path}/integrate"), json!({})).await;
+    assert_eq!(integrated.status, 200, "{}", integrated.json);
+    assert_eq!(integrated.json["outcome"]["status"], "integrated");
+    server.stop().await;
+}

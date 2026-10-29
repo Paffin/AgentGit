@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useAuth } from '@/stores/auth'
 import {
   PRESETS,
   applyPreset,
@@ -32,6 +33,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:text': [text: string] }>()
 
+const auth = useAuth()
+const threadPolicySupported = computed(() =>
+  auth.capabilities?.features.includes('policy.resolved_threads'),
+)
 const doc = computed(() => parseDoc(props.text))
 const base = computed(() => parseDoc(props.baseline) ?? {})
 const form = computed(() => (doc.value ? formFromDoc(doc.value) : null))
@@ -136,6 +141,14 @@ function removeProtected(i: number) {
           :model-value="form.forbidSelfApproval"
           label="Authors may not approve their own change"
           @update:model-value="(v) => set({ forbidSelfApproval: v })"
+        />
+        <Checkbox
+          v-if="threadPolicySupported || form.requireResolvedThreads"
+          :model-value="form.requireResolvedThreads"
+          :disabled="!threadPolicySupported"
+          label="Require resolved line discussions"
+          hint="Every line discussion must be resolved, including earlier revisions. Approvals remain a separate requirement."
+          @update:model-value="(v) => set({ requireResolvedThreads: v })"
         />
         <Checkbox
           :model-value="form.requireProvenance"

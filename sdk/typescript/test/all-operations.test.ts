@@ -323,6 +323,10 @@ describe('the tour', () => {
     });
     expect(refined.title).toBe('Refined tour task');
     expect((await alice.tasks.get({ repo, id: task.id })).description).toBe('A concrete result');
+    expect(
+      (await alice.tasks.setAttemptLimit({ repo, id: task.id, max_attempts: 2, expected_max_attempts: 0 }))
+        .max_attempts,
+    ).toBe(2);
     const dep = await alice.tasks.create({ repo, title: 'depends' });
     await alice.tasks.depend({ repo, task: dep.id, depends_on: task.id });
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);
@@ -355,7 +359,7 @@ describe('the tour', () => {
     const entry = await runner.provenance.submit({ repo, record, signature: signProvenance(record, key.privateKey) });
     expect(entry.verified).toBe(true);
     expect((await alice.provenance.list({ repo, changeset: head })).entries).toHaveLength(1);
-    await runner.tasks.finish({ repo, id: task.id, state: 'done' });
+    await runner.tasks.finish({ repo, id: task.id, state: 'done', expected_max_attempts: 2 });
     await runner.agents.complete({ repo, run_id: run.run_id, status: 'completed' });
     expect((await alice.tasks.get({ repo, id: dep.id })).ready).toBe(true);
     const followUp = await alice.tasks.create({ repo, title: 'Separate follow-up', source_task: task.id });

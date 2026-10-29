@@ -665,3 +665,12 @@ available through `ag task edit TASK --title "Clear expected result"` (local), o
 `--remote origin` for a configured server. `--description` replaces the description;
 repeat `--scope` to replace path patterns, or use `--clear-scope`. Omitted fields are preserved.
 See [ADR-0028](../adr/0028-task-instruction-refinement.md).
+
+
+### Required discussion resolution (development)
+
+The branch rules form can require every line discussion to be resolved before landing.
+**Read and resolve discussions** opens Reviews from the blocker; discussions on earlier heads
+still count. Open **Replies and actions**, read the replies, then resolve at the version shown.
+A concurrent reply/reopening is checked again by the server at integration. Approval remains a
+separate decision. Upgrade all replicas before enabling this rule.

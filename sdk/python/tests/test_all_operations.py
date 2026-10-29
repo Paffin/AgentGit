@@ -154,7 +154,9 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     p1 = alice.proposals.create(repo=REPO, stream="main", head=m1.head, title="seed")
     assert len(alice.proposals.list(repo=REPO).proposals) == 1
     m2 = alice.workspaces.modify(repo=REPO, name="w1", message="more", changes=[put_file("d.txt", "d\n")])
-    assert alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head, expected_head=m1.head).head == m2.head
+    assert (
+        alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head, expected_head=m1.head).head == m2.head
+    )
     assert alice.proposals.get(repo=REPO, id=p1.id).proposal.head == m2.head
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
     assert (
@@ -309,6 +311,12 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     )
     assert refined.title == "Refined tour task"
     assert alice.tasks.get(repo=REPO, id=task.id).description == "A concrete result"
+    assert (
+        alice.tasks.set_attempt_limit(
+            repo=REPO, id=task.id, max_attempts=2, expected_max_attempts=0
+        ).max_attempts
+        == 2
+    )
     dep = alice.tasks.create(repo=REPO, title="depends")
     alice.tasks.depend(repo=REPO, task=dep.id, depends_on=task.id)
     assert len(alice.tasks.list(repo=REPO).tasks) == 2
@@ -343,7 +351,7 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     )
     assert entry.verified
     assert len(alice.provenance.list(repo=REPO, changeset=head).entries) == 1
-    runner.tasks.finish(repo=REPO, id=task.id, state="done")
+    runner.tasks.finish(repo=REPO, id=task.id, state="done", expected_max_attempts=2)
     runner.agents.complete(repo=REPO, run_id=run.run_id, status="completed")
     assert alice.tasks.get(repo=REPO, id=dep.id).ready
     follow_up = alice.tasks.create(repo=REPO, title="Separate follow-up", source_task=task.id)

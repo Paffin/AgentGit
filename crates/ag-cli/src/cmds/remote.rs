@@ -285,6 +285,36 @@ pub(crate) fn set_agent_state(ctx: &Ctx, remote: &str, agent: &str, disabled: bo
 }
 
 /// Refines a remote task using the same full-content precondition as the browser.
+pub(crate) fn task_attempts(ctx: &Ctx, remote: &str, id: &str, update: Option<(u32, u32)>) -> Result<v1::Task> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        if !client.negotiate().await?.features.iter().any(|f| f == ag_protocol::features::TASK_ATTEMPT_LIMITS) {
+            bail!("this server does not support task attempt limits; update it before using this command");
+        }
+        if let Some((max_attempts, expected_max_attempts)) = update {
+            let request = v1::SetTaskAttemptLimitRequest {
+                repo: config.repo,
+                id: id.into(),
+                max_attempts,
+                expected_max_attempts,
+                idempotency_key: ag_crypto::random_id("task-attempts")?,
+            };
+            Ok(client
+                .retrying(|| async { client.agents().set_task_attempt_limit(client.req(request.clone())).await })
+                .await?
+                .into_inner())
+        } else {
+            Ok(client
+                .agents()
+                .get_task(client.req(v1::GetTaskRequest { repo: config.repo, id: id.into() }))
+                .await
+                .map_err(ClientError::from)?
+                .into_inner())
+        }
+    })
+}
+
 pub(crate) fn update_task(ctx: &Ctx, remote: &str, id: &str, changes: &super::agents::TaskEdit) -> Result<v1::Task> {
     let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
     rt()?.block_on(async {

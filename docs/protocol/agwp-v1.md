@@ -255,6 +255,16 @@ writing anything. An idempotency key records the response atomically with the
 comment. Comments use review records with `decision=comment`, remain available
 after closure and do not supersede approval or request-changes decisions.
 
+### Required line-discussion resolution (development)
+
+`policy.resolved_threads` advertises support for the optional policy field
+`require_resolved_threads`. When true, preparation and integration report
+`unresolved_threads` with `detail.count` until every line discussion is resolved,
+including earlier-head anchors. The count is read inside the integration transaction;
+no new endpoint or permission is introduced. General comments and approvals are separate.
+The default is false. Upgrade all replicas before enabling the field; older servers reject it.
+See [ADR 0032](../adr/0032-required-discussion-resolution.md).
+
 ### Proposal head preconditions (development)
 
 Servers advertising `proposals.update_head` accept optional `expected_head` on

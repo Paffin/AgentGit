@@ -11,13 +11,21 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Reviewers can propose a replacement for a new-side line. Authors preview and apply it as a new proposal revision, preserving executable mode, Unicode and line endings. The operation requires inspected-head protection; earlier suggestions remain readable and are never applied automatically.
 
+- Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
+
+- Optional stream policy `require_resolved_threads` blocks integration until every line discussion is resolved, including earlier revisions. Core preparation and commit share the rule; Web UI exposes the setting and remediation, and CLI explanations include resolution commands. Upgrade every replica before enabling it.
+
 ### Fixed
+
+- Automatic task cancellation now compares the observed attempt policy in the server transaction. Changing a limit during execution cannot be overwritten by a stale cancellation decision.
+
+- Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.
 
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.
 
 ## [0.3.0-beta.6] - 2026-10-28
 
-**Upgrade:** metadata schema 7 adds persistent task-source links. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
+**Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
 
 ### Improved
 

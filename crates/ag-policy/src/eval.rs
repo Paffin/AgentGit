@@ -50,6 +50,8 @@ pub struct Facts<'a> {
     pub approvals: &'a [ApprovalFact],
     /// Whether signed provenance is attached to the proposal head.
     pub has_provenance: bool,
+    /// Unresolved discussions across all revisions of this proposal.
+    pub unresolved_threads: u64,
     /// Current time.
     pub now: Timestamp,
 }
@@ -94,6 +96,11 @@ pub enum Unmet {
         /// The reviewer.
         reviewer: String,
     },
+    /// A stream requires every line discussion to be resolved.
+    UnresolvedThreads {
+        /// Number of unresolved discussions across all proposal revisions.
+        count: u64,
+    },
     /// Agent-authored change without signed provenance.
     MissingProvenance,
     /// The integration changes more files than the policy allows.
@@ -108,13 +115,14 @@ pub enum Unmet {
 impl Unmet {
     /// Every code [`Unmet::code`] can return. A test keeps this list in step with the variants, and the
     /// explanations of `ag explain` are tested against it, so a new requirement cannot go unexplained.
-    pub const CODES: [&'static str; 8] = [
+    pub const CODES: [&'static str; 9] = [
         "actor_not_allowed",
         "author_not_allowed",
         "failed_validation",
         "missing_validation",
         "insufficient_approvals",
         "changes_requested",
+        "unresolved_threads",
         "missing_provenance",
         "too_many_changed_files",
     ];
@@ -131,6 +139,7 @@ impl Unmet {
             Unmet::MissingValidation { .. } => "missing_validation",
             Unmet::InsufficientApprovals { .. } => "insufficient_approvals",
             Unmet::ChangesRequested { .. } => "changes_requested",
+            Unmet::UnresolvedThreads { .. } => "unresolved_threads",
             Unmet::MissingProvenance => "missing_provenance",
             Unmet::TooManyChangedFiles { .. } => "too_many_changed_files",
         }
@@ -163,6 +172,7 @@ impl std::fmt::Display for Unmet {
                 write!(f, "approvals ({scope}): {have} of {required} required")
             }
             Unmet::ChangesRequested { reviewer } => write!(f, "{reviewer} requested changes"),
+            Unmet::UnresolvedThreads { count } => write!(f, "{count} unresolved line discussion(s) must be resolved"),
             Unmet::MissingProvenance => f.write_str("agent-authored change has no signed provenance"),
             Unmet::TooManyChangedFiles { changed, max } => {
                 write!(f, "{changed} files changed, policy allows at most {max}")
@@ -271,6 +281,12 @@ pub fn evaluate(policy: &Policy, facts: &Facts<'_>) -> Evaluation {
         } else {
             unmet.push(Unmet::MissingValidation { check: v.check.clone() });
         }
+    }
+
+    if let Some(requirement) = policy.thread_resolution_requirement(facts.unresolved_threads) {
+        unmet.push(requirement);
+    } else if policy.require_resolved_threads {
+        satisfied.push("all line discussions are resolved".into());
     }
 
     // --- approvals ---------------------------------------------------------
@@ -392,3 +408,10 @@ fn passes(policy: &Policy, v: &RequiredValidation, a: &Attestation, facts: &Fact
 #[cfg(test)]
 #[path = "eval_tests.rs"]
 mod tests;
+
+impl Policy {
+    /// The shared discussion gate, including no-op completion of already integrated proposals.
+    pub fn thread_resolution_requirement(&self, count: u64) -> Option<Unmet> {
+        if self.require_resolved_threads && count > 0 { Some(Unmet::UnresolvedThreads { count }) } else { None }
+    }
+}

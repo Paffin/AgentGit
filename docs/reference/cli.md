@@ -85,6 +85,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag task`](#ag-task)
 - [`ag task create`](#ag-task-create)
 - [`ag task edit`](#ag-task-edit)
+- [`ag task attempts`](#ag-task-attempts)
 - [`ag task list`](#ag-task-list)
 - [`ag task depend`](#ag-task-depend)
 - [`ag task ready`](#ag-task-ready)
@@ -1678,13 +1679,14 @@ Tasks and their dependencies
 Usage: ag task [OPTIONS] <COMMAND>
 
 Commands:
-  create  Create a task
-  edit    Refine instructions before a task's first run; concurrent edits are refused
-  list    List tasks
-  depend  Declare that TASK cannot start until ON is done
-  ready   Open tasks whose dependencies are all done
-  done    Mark a task done
-  cancel  Cancel a task
+  create    Create a task
+  edit      Refine instructions before a task's first run; concurrent edits are refused
+  attempts  Inspect or change a task's durable execution-attempt limit
+  list      List tasks
+  depend    Declare that TASK cannot start until ON is done
+  ready     Open tasks whose dependencies are all done
+  done      Mark a task done
+  cancel    Cancel a task
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -1708,18 +1710,19 @@ Arguments:
   <TITLE>  Title
 
 Options:
-  -C, --repo <DIR>                 Operate on the repository at this path (default: discovered from the current directory)
-  -d, --description <DESCRIPTION>  Description [default: ""]
-      --as <IDENTITY>              Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --scope <SCOPE>              Path glob the task is expected to touch (repeatable)
-      --json                       Machine-readable JSON output
-      --source-task <SOURCE_TASK>  Original task for an independent follow-up
-      --color <WHEN>               Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-      --source-run <SOURCE_RUN>    Failed or abandoned run of --source-task
-  -q, --quiet                      Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help                       Print help
-  -V, --version                    Print version
+  -C, --repo <DIR>                   Operate on the repository at this path (default: discovered from the current directory)
+  -d, --description <DESCRIPTION>    Description [default: ""]
+      --as <IDENTITY>                Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --scope <SCOPE>                Path glob the task is expected to touch (repeatable)
+      --json                         Machine-readable JSON output
+      --source-task <SOURCE_TASK>    Original task for an independent follow-up
+      --color <WHEN>                 Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --source-run <SOURCE_RUN>      Failed or abandoned run of --source-task
+      --max-attempts <MAX_ATTEMPTS>  Total runs permitted (0 leaves the server limit unset) [default: 0]
+  -q, --quiet                        Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                      Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
 
 ## ag task edit
@@ -1746,6 +1749,30 @@ Options:
   -v, --verbose                    Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help                       Print help
   -V, --version                    Print version
+```
+
+## ag task attempts
+
+```text
+Inspect or change a task's durable execution-attempt limit
+
+Usage: ag task attempts [OPTIONS] <TASK>
+
+Arguments:
+  <TASK>  Task identifier
+
+Options:
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --max <MAX>            New maximum total runs; zero leaves the server limit unset
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --expected <EXPECTED>  Limit you inspected; refuses a concurrent policy change
+      --json                 Machine-readable JSON output
+      --remote [<NAME>]      Use a configured server instead of the local repository
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag task list

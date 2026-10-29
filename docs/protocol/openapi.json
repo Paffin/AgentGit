@@ -1022,6 +1022,13 @@
             "default": "",
             "type": "string"
           },
+          "max_attempts": {
+            "default": 0,
+            "description": "Optional task-local run limit (0 keeps legacy behavior; maximum 10000).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "repo": {
             "default": "",
             "type": "string"
@@ -1552,6 +1559,16 @@
       "FinishTaskRequest": {
         "description": "Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit\nlog as an operator's, with the owner it overrode.",
         "properties": {
+          "expected_max_attempts": {
+            "default": null,
+            "description": "Optional execution-policy precondition, checked atomically with the state change.\nExplicit zero matches an unset limit; omission preserves ordinary manual completion.",
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "id": {
             "default": "",
             "type": "string"
@@ -5136,6 +5153,36 @@
         },
         "type": "object"
       },
+      "SetTaskAttemptLimitRequest": {
+        "description": "Execution policy is independent of immutable task instructions and run history.",
+        "properties": {
+          "expected_max_attempts": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "default": "",
+            "type": "string"
+          },
+          "max_attempts": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetTaskSchedulingRequest": {
         "properties": {
           "expected_version": {
@@ -5322,6 +5369,13 @@
       },
       "Task": {
         "properties": {
+          "attempts_started": {
+            "default": 0,
+            "description": "All task-bound runs, including failed, abandoned and currently active runs.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "created_at_ms": {
             "default": 0,
             "format": "int64",
@@ -5346,13 +5400,20 @@
             "default": "",
             "type": "string"
           },
+          "max_attempts": {
+            "default": 0,
+            "description": "Zero leaves the server-side attempt limit unset.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "owner": {
             "default": "",
             "type": "string"
           },
           "ready": {
             "default": false,
-            "description": "True when every dependency is done.",
+            "description": "True when dependencies are done and the configured attempt limit has room.",
             "type": "boolean"
           },
           "scope": {
@@ -12634,6 +12695,77 @@
           }
         },
         "summary": "Assign queued work to a registered agent",
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit": {
+      "patch": {
+        "operationId": "task.set_attempt_limit",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTaskAttemptLimitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set a task-local attempt limit",
         "tags": [
           "Agent"
         ]

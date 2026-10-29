@@ -1,7 +1,7 @@
 # Ordered platform backlog
 
 Reference: [objective](../../doc/goal.md), [full matrix](coverage.csv), [evidence](evidence.md).
-All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission/source links plus task refinement bring the inventory to 158 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
+All original 142 matrix rows remain in scope; the added search, scheduling and run-inspection rows plus five line-discussion operations and per-agent admission/source links plus task refinement and durable task-attempt policy bring the inventory to 159 rows. This ordering is a sequence of verifiable slices, not a reduced definition of readiness.
 
 | Stage | Outcome and acceptance | Current state |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ attempts after restart. Included in the beta.4 candidate before publication.
 
 Run result navigation: permanent run pages now list exact-session change requests directly, including state, target stream and continuation pages. Opening a result leads to its diff/check/review workbench; live log streaming, suggestions and reviewer assignment remain open.
 
-Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured follow-up source links are now implemented with schema 7; explicit retry policy controls remain open.
+Failed-run follow-up: the browser distinguishes active tasks (inspect existing execution first) from terminal tasks. Explicit follow-up creation preserves source task/run links and failure context in its editable description and copies file scope. It starts independent assignment, prerequisites and retry history. This is contextual task creation, not reopening the source or changing its retry budget; structured follow-up source links are now implemented with schema 7; durable retry policy is merged in PR116: server-enforced attempt limits, CLI/API extension and restart recovery. Browser editing of the limit remains open.
 
 Line discussion entry: proposal diff gutters can quote a specific old/new line into the existing discussion draft, preserving file, line side and exact revision/head. General comments keep that contextual quote path; development servers now additionally provide durable line threads with replies and versioned resolution (schema 6). Suggestions and reviewer assignment remain open.
 
@@ -93,3 +93,9 @@ Regular UTF-8 files up to 1 MiB retain executable mode, BOM and line endings. Em
 deletes the selected line; multiple replacement lines are supported. Old suggestions stay
 readable. Range anchors, batching, server-native metadata and a dedicated CLI apply command
 remain open. Requested reviewers and policy-required resolution remain independent work.
+Required line-discussion resolution is implemented as an optional policy gate, including
+older anchors, no-op completion and a reopen/commit race. Web configuration/remediation and
+CLI explanations use the same server rule. The active priority remains agent-native execution and deterministic integration; reviewer assignment remains open.
+Core integration: PR112 (atomic expected-head proposal updates) and PR114 (revalidate proposal and stream at final integration commit) are merged. PR115 (policy-required thread resolution) is also merged. PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.
+
+Retry policy changes during an active run now reject stale automatic cancellation atomically; the scheduler rereads durable history before resuming. See ADR0034 and the evidence journal.

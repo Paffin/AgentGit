@@ -17,6 +17,8 @@ const task = (id: string, over: Partial<Task> = {}): Task => ({
   updated_at_ms: n,
   depends_on: [],
   ready: true,
+  max_attempts: 0,
+  attempts_started: 0,
   ...over,
 })
 

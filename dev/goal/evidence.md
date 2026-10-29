@@ -479,7 +479,7 @@ The SDK gate separately required formatting the new operation-tour call. No gate
 or lowered; a new exact-commit release request is needed after the correction.
 
 
-## Live Home updates (development after beta.6 candidate)
+## Live Home updates in the next beta.6 candidate
 
 A selected repository uses one dedicated event stream; the all-repository view keeps bounded
 15-second polling. No stream is opened for every repository. Hidden tabs, account changes,
@@ -490,3 +490,6 @@ refreshes still reload it. Twelve focused tests cover lifecycle, backpressure, s
 and immediate account-data clearing. Real-server browser checks create and close a proposal
 and observe Home within five seconds, before its polling interval. This is not a global event
 feed or a physical-device/screen-reader qualification.
+
+The previous candidate's PostgreSQL-only schema-5 fixture also retained the schema-7 task-source columns while pretending to be schema 5. It now removes those columns before reopening and checks the current destination version, preserving the original stream assertion. This corrects the fixture, not the production migration.
+Home filters also survive reload and browser Back in bookmarkable URLs.

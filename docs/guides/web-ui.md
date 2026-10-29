@@ -423,7 +423,7 @@ AgentGit words. This table is generated from `apps/web/src/lib/glossary.ts` (a t
 
 Home shows work that needs attention across the repositories you can read. Search by words in a change title,
 reason, author or repository; every search word must match. Choose a repository or a category to narrow the list.
-Category counts follow the search and repository selection. **Clear filters** returns to all loaded work.
+Category counts follow the search and repository selection. Home stores the search, repository and category in the URL: bookmark the queue or open a change request and return with Back without rebuilding the filters. **Clear filters** removes those three filters together and returns to all loaded work.
 
 The summary shows its last successful refresh time. In development, selecting a repository also enables live
 updates; all-repository summaries and disconnected feeds retain the 15-second visible-tab fallback. Event bursts

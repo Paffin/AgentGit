@@ -197,6 +197,19 @@ Diff line-number columns fit the largest number in the displayed patch, includin
 
 **Review drafts.** Closing the review dialog or reloading the page keeps the comment, decision and inspected head in this browser tab, separately for each account, repository and change request. The draft is removed only after the server accepts the review. Storage failures are shown; in that case copy the comment before leaving. Closing the browser tab still removes this local draft. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
+
+**Account review drafts (development).** On supported servers, **Save draft and close** stores
+this review's text, decision and inspected revision privately for your current account.
+Opening the same review on another device restores it when that tab has no draft. If both
+places have different drafts, choose **Use account draft** or **Keep this tab draft** explicitly.
+Typing alone does not upload changes. The limit is 64 KiB of UTF-8 notes.
+
+A save refused because another device changed the draft keeps your text. A successful review
+clears only the matching saved version; newer notes remain intact. Stored notes do not count
+as reviews or approvals and are not shown in the shared proposal or audit. They are part of
+repository backups, which administrators can access. Servers without this capability retain
+the local-only behavior. File-edit and general-comment drafts remain local to the browser.
+
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your
 roles allow it; the buttons that are off are explained in words under the row ("Land: requires the integrator role"),
 not only in a tooltip. A **Next:** line picks the one thing to do first (a conflict before checks, checks before approvals).
@@ -370,7 +383,7 @@ This uses the server's virtual workspaces: a draft is opened on the branch (from
 applied as one version, the change request is opened from it, and the server workspace is removed. While sending, the editor locks the submitted title and description. Requests and retries retain the initiating credential; leaving or changing account stops unsent follow-up steps and ignores late results. Cancellation does not undo a server operation that already completed; the local draft remains available if completion was not confirmed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
 If the upload cannot read the branch, **Retry branch** keeps your selected files, destination, title and description.
 
-A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed confidential drafts require a separate authorization boundary.
+A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed file drafts remain future work; the private review-draft endpoint is a separate authorization boundary.
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing

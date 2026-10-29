@@ -14,6 +14,7 @@ pub mod overview;
 pub mod policy;
 pub mod remote;
 pub mod repo;
+pub mod review_drafts;
 pub mod reviewers;
 pub mod shell;
 pub mod topics;

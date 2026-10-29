@@ -41,6 +41,7 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     let head = p1["proposal"]["head"].as_str().unwrap().to_string();
     let p1 = p1["proposal"]["id"].as_str().unwrap().to_string();
     record_discussions(&mut r, &a, &alice, &p1, &head);
+    record_review_drafts(&mut r, &a, &bob, &p1, &head);
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
     r.rec(
         "remote reviewers",
@@ -178,4 +179,33 @@ fn record_remote_agents(srv: &Server, a: &Ag, token: &str, recorder: &mut Record
         0
     );
     assert!(!repo.meta().read(|tx| tx.agent("cli-bot")).unwrap().unwrap().disabled);
+}
+
+fn record_review_drafts(r: &mut Recorder, a: &Ag, token: &str, proposal: &str, head: &str) {
+    let run = |args: &[&str]| a.run_env("user:bob", args, &[("AG_TOKEN", token)]);
+    r.rec("remote review-draft get", &run(&["--json", "remote", "review-draft", "get", proposal]).ok());
+    r.rec(
+        "remote review-draft save",
+        &run(&[
+            "--json",
+            "remote",
+            "review-draft",
+            "save",
+            proposal,
+            "--head",
+            head,
+            "--decision",
+            "approve",
+            "-m",
+            "Private notes",
+            "--expected-version",
+            "0",
+        ])
+        .ok(),
+    );
+    r.rec("remote review-draft get", &run(&["--json", "remote", "review-draft", "get", proposal]).ok());
+    r.rec(
+        "remote review-draft clear",
+        &run(&["--json", "remote", "review-draft", "clear", proposal, "--expected-version", "1"]).ok(),
+    );
 }

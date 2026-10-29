@@ -1826,6 +1826,45 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag remote review-draft clear
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote review-draft get
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote review-draft save
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
 ### ag remote reviewers
 
 ```json

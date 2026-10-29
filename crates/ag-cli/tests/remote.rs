@@ -548,3 +548,138 @@ fn remote_requested_reviewers_route_work_without_granting_review_rights() {
     .unwrap();
     assert_eq!(removed["reviewers"], serde_json::json!([]));
 }
+
+#[test]
+fn remote_private_review_drafts_require_inspected_versions_and_do_not_publish() {
+    let srv = Server::start();
+    let repo = "acme/review-drafts";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let alice = srv.user("user:alice", repo, Role::Writer);
+    let bob = srv.user("user:bob", repo, Role::Reviewer);
+    let carol = srv.user("user:carol", repo, Role::Reviewer);
+    let dir = tempfile::tempdir().unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["init", "--namespace", repo]));
+    ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["remote", "add", "origin", &format!("{}/{repo}", srv.url), "--token-env", "AG_TOKEN"],
+    ));
+    fs::write(dir.path().join("file.txt"), "Review this\n").unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["snapshot", "-m", "Draft target"]));
+    let proposal = proposal_id(&ok(ag(dir.path(), "user:alice", &alice, &["push", "-t", "Draft target"])));
+    let detail: Value =
+        serde_json::from_str(&ok(ag(dir.path(), "user:bob", &bob, &["--json", "remote", "proposal", &proposal])))
+            .unwrap();
+    let head = detail["proposal"]["head"].as_str().unwrap();
+    let empty: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &["--json", "remote", "review-draft", "clear", &proposal, "--expected-version", "0"],
+    )))
+    .unwrap();
+    assert_eq!(empty["version"], 0);
+    assert_eq!(empty["present"], false);
+    fs::write(dir.path().join("notes.md"), "Private notes\nwith a second line").unwrap();
+    let save = [
+        "--json",
+        "remote",
+        "review-draft",
+        "save",
+        &proposal,
+        "--head",
+        head,
+        "--decision",
+        "request_changes",
+        "--body-file",
+        "notes.md",
+        "--expected-version",
+        "0",
+    ];
+    let saved: Value = serde_json::from_str(&ok(ag(dir.path(), "user:bob", &bob, &save))).unwrap();
+    assert_eq!(saved["version"], 1);
+    assert_eq!(saved["body"], "Private notes\nwith a second line");
+    let retry: Value = serde_json::from_str(&ok(ag(dir.path(), "user:bob", &bob, &save))).unwrap();
+    assert_eq!(retry["version"], 1);
+    let own: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &["--json", "remote", "review-draft", "get", &proposal],
+    )))
+    .unwrap();
+    assert_eq!(own, saved);
+    assert!(!ag(dir.path(), "user:alice", &alice, &["remote", "review-draft", "get", &proposal]).status.success());
+    let other: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:carol",
+        &carol,
+        &["--json", "remote", "review-draft", "get", &proposal],
+    )))
+    .unwrap();
+    assert_eq!(other["present"], false);
+    let stale = ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &[
+            "remote",
+            "review-draft",
+            "save",
+            &proposal,
+            "--head",
+            head,
+            "--decision",
+            "comment",
+            "-m",
+            "New notes",
+            "--expected-version",
+            "0",
+        ],
+    );
+    assert!(!stale.status.success());
+    let missing_version = ag(dir.path(), "user:bob", &bob, &["remote", "review-draft", "clear", &proposal]);
+    assert_eq!(missing_version.status.code(), Some(2));
+    let cleared: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &["--json", "remote", "review-draft", "clear", &proposal, "--expected-version", "1"],
+    )))
+    .unwrap();
+    assert_eq!(cleared["version"], 2);
+    assert_eq!(cleared["present"], false);
+    assert!(!ag(dir.path(), "user:bob", &bob, &save).status.success());
+    let replacement: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &[
+            "--json",
+            "remote",
+            "review-draft",
+            "save",
+            &proposal,
+            "--head",
+            head,
+            "--decision",
+            "comment",
+            "-m",
+            "New notes",
+            "--expected-version",
+            "2",
+        ],
+    )))
+    .unwrap();
+    assert_eq!(replacement["version"], 3);
+    assert_eq!(replacement["body"], "New notes");
+    assert_eq!(replacement["decision"], "comment");
+    let after: Value =
+        serde_json::from_str(&ok(ag(dir.path(), "user:alice", &alice, &["--json", "remote", "proposal", &proposal])))
+            .unwrap();
+    assert!(after["reviews"].as_array().unwrap().is_empty());
+}

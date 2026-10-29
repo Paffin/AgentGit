@@ -450,6 +450,30 @@
       "reviewer": "string",
       "timestamp_ms": "number"
     },
+    "remote review-draft clear": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote review-draft get": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote review-draft save": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
     "remote reviewers": {
       "reviewers": [
         "string"

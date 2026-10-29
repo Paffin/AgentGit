@@ -810,6 +810,11 @@ pub enum RemoteCmd {
     },
     /// Inspect, add or remove requested reviewers (no approval or access change).
     Reviewers(crate::cmds::reviewers::ReviewersArgs),
+    /// Save or restore your private account review notes without submitting them.
+    ReviewDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::review_drafts::ReviewDraftCmd,
+    },
     /// Review a proposal's current head.
     Review {
         /// Proposal id.
@@ -1227,6 +1232,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     print_done(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
                 } else {
                     print(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
+                }
+            }
+            RemoteCmd::ReviewDraft { cmd } => {
+                let result = crate::cmds::review_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
                 }
             }
             RemoteCmd::Review { id, approve, request_changes, comment, message } => {

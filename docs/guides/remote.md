@@ -72,6 +72,25 @@ ag pull                                  # the merged result comes back
 - `ag remote remove NAME` deletes the stored credential first; if it cannot, the remote is kept and the error
   names the file.
 
+## Private review drafts
+
+On development servers advertising `proposals.review_drafts`, save review notes to your
+account and resume them in the browser or SDK. Read the draft first, then pass its exact
+version when saving or clearing it. A missing draft starts at version zero; a cleared draft
+keeps its later version. Another device's edit produces a conflict instead of losing notes.
+
+```sh
+ag remote review-draft get prop_…
+ag remote review-draft save prop_… --head CHANGESET_ID --decision comment --body-file notes.md --expected-version 0
+ag remote review-draft clear prop_… --expected-version 1
+```
+
+Use the version actually returned by your preceding command, not the example values above.
+The head records the revision you inspected. Saving does not submit a review, grant approval,
+or notify reviewers. Only the current account can read its draft through the API; server
+administrators and backups can still contain these notes. Files use UTF-8 and retain line
+breaks, with a 64 KiB limit. `--json` returns the draft and its version for scripts.
+
 ## Offline
 
 Nothing about a local repository needs the server:

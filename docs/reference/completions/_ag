@@ -2491,6 +2491,108 @@ never\:"Never colour"))' \
 ':id -- Proposal id or unique prefix:_default' \
 && ret=0
 ;;
+(review-draft)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__remote__subcmd__review-draft_commands" \
+"*::: :->review-draft" \
+&& ret=0
+
+    case $state in
+    (review-draft)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-remote-review-draft-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id or unique prefix:_default' \
+&& ret=0
+;;
+(save)
+_arguments "${_arguments_options[@]}" : \
+'--head=[Exact proposal head you inspected]:HEAD:_default' \
+'--decision=[Intended review decision; saving does not submit it]:DECISION:(approve request_changes comment)' \
+'(--body-file)-m+[Private review notes]:MESSAGE:_default' \
+'(--body-file)--message=[Private review notes]:MESSAGE:_default' \
+'--body-file=[Read UTF-8 notes from this file, preserving line breaks (at most 64 KiB)]:PATH:_files' \
+'--expected-version=[Version returned by get; use zero only after observing no draft]:EXPECTED_VERSION:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id or unique prefix:_default' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" : \
+'--expected-version=[Version returned by get; zero means no draft has existed]:EXPECTED_VERSION:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id or unique prefix:_default' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (review)
 _arguments "${_arguments_options[@]}" : \
 '-m+[Review text]:MESSAGE:_default' \
@@ -3802,6 +3904,7 @@ _ag__subcmd__remote_commands() {
 'prepare:What would integrating do now, and what is missing?' \
 'explain:Explain why a server proposal cannot land, with the next commands. Changes nothing' \
 'reviewers:Inspect, add or remove requested reviewers (no approval or access change)' \
+'review-draft:Save or restore your private account review notes without submitting them' \
 'review:Review a proposal'\''s current head' \
 'discussion:Read and participate in revision-bound line discussions' \
 'integrate:Integrate a proposal into its stream' \
@@ -3925,6 +4028,30 @@ _ag__subcmd__remote__subcmd__remove_commands() {
 _ag__subcmd__remote__subcmd__review_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote review commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__review-draft_commands] )) ||
+_ag__subcmd__remote__subcmd__review-draft_commands() {
+    local commands; commands=(
+'get:Read your private draft and its version, including a cleared version' \
+'save:Save private notes; does not submit a review or advance the inspected head' \
+'clear:Clear only the private draft version you inspected' \
+    )
+    _describe -t commands 'ag remote review-draft commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__review-draft__subcmd__clear_commands] )) ||
+_ag__subcmd__remote__subcmd__review-draft__subcmd__clear_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote review-draft clear commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__review-draft__subcmd__get_commands] )) ||
+_ag__subcmd__remote__subcmd__review-draft__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote review-draft get commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__review-draft__subcmd__save_commands] )) ||
+_ag__subcmd__remote__subcmd__review-draft__subcmd__save_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote review-draft save commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__reviewers_commands] )) ||
 _ag__subcmd__remote__subcmd__reviewers_commands() {

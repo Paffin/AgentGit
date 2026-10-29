@@ -14,6 +14,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Reviewers can explicitly save a private review draft to their account and resume on another device through Web UI, CLI, MCP or SDKs. Local drafts remain available, conflicting drafts require a choice, and versioned saves/clears never overwrite newer notes or submit a review. Development schema 10 requires a pre-upgrade backup.
+
 - Browser conflict resolution can keep either exact binary, oversized or file-type version while preserving blob bytes, executable mode and symlink type. Virtual sync pins the inspected branch through its final transaction and reports its exact target to SDK/MCP clients.
 
 - Authors can request specific reviewers with an inspected-list update across the API and clients. Requests survive new revisions, never grant access or count as approval, and can be filtered before proposal pagination. Development metadata schema 9 requires a pre-upgrade backup.

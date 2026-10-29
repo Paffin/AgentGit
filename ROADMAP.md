@@ -103,7 +103,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
    historical instructions and source links. Proposal updates now have an atomic inspected-head
    precondition as the prerequisite for safe review edits. Workspace mutations now compare the
    observed base/head in their final transaction, and proposal closing preserves terminal states. The final integration transaction also
-   rechecks the proposal head and open state. Single-line and batched suggestions support explicit author preview and application across files in one revision. Next add range suggestions and requested reviewers. Optional policy-required line-discussion resolution is now implemented
+   rechecks the proposal head and open state. Single-line, range and batched suggestions support explicit author preview and application across files in one revision. Next add requested reviewers. Optional policy-required line-discussion resolution is now implemented
    across core, API, CLI explanations and Web UI. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
    Account-backed drafts and non-text conflict resolution remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and

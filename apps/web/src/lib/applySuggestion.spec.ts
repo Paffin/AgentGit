@@ -290,3 +290,33 @@ describe('suggestion limits and ordering', () => {
     )
   })
 })
+
+describe('range suggestion previews', () => {
+  it('previews one range against the anchored revision', async () => {
+    const { api, raw } = fixture()
+    raw.tree.file.mockResolvedValue({
+      bytes: new TextEncoder().encode('\uFEFFold\r\nsecond\r\nlast\r\n'),
+      truncated: false,
+    })
+    const preview = await previewSuggestion(api, 'team/repo', anchor, 'new', context, 2)
+    expect(preview.after).toBe('\uFEFFnew\r\nlast\r\n')
+  })
+
+  it('rejects overlapping ranges before reading or modifying any file', async () => {
+    const { api, raw } = fixture()
+    await expect(
+      previewSuggestions(
+        api,
+        'team/repo',
+        'seen',
+        [
+          { anchor, replacement: 'new', lines: 2 },
+          { anchor: { ...anchor, line: 2, text: 'second' }, replacement: 'other' },
+        ],
+        context,
+      ),
+    ).rejects.toThrow(/overlap/)
+    expect(raw.tree.file).not.toHaveBeenCalled()
+    expect(raw.workspaces.create).not.toHaveBeenCalled()
+  })
+})

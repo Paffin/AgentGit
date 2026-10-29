@@ -14,6 +14,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Review suggestions can replace up to 100 consecutive original lines. Range drafts survive reload, previews show the source file, and batches reject overlapping ranges before publication. Existing one-line suggestions keep their original format.
+
 - Authors can preview and apply selected review suggestions across files as one proposal revision. Exact source lines, executable mode, BOM and line endings are preserved; conflicting selections are refused and discussions remain open.
 
 ## [0.3.0-beta.7] - 2026-10-29

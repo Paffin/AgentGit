@@ -211,3 +211,68 @@ test('the author previews and applies selected suggestions across files in one r
   await reviewer.close()
   await author.close()
 })
+
+test('a reviewer selects a range and the author confirms the exact prepared file', async ({
+  cast,
+  openAs,
+}, info) => {
+  const { repo } = await freshRepo(cast, 'range-suggestions')
+  const alice = cast.as('alice')
+  const original = '\uFEFFfirst\r\nold one\r\nold two\r\nlast\r\n'
+  const initial = await commitFiles(alice, repo, { 'code.txt': original }, 'Range source')
+  const proposal = await openProposal(alice, repo, { head: initial.head, title: 'Review a block' })
+  const url = `/repos/${repo}/proposals/${proposal.id}`
+  const reviewer = await openAs('bob')
+  await reviewer.goto(url)
+  await reviewer
+    .getByRole('button', { name: 'Discuss new line 2 of code.txt', exact: true })
+    .click()
+  await reviewer.getByRole('button', { name: 'Suggest a replacement', exact: true }).click()
+  await reviewer.getByRole('spinbutton', { name: 'Lines to replace', exact: true }).fill('101')
+  await expect(
+    reviewer.getByRole('button', { name: 'Start discussion', exact: true }),
+  ).toBeDisabled()
+  await reviewer.getByRole('spinbutton', { name: 'Lines to replace', exact: true }).fill('2')
+  await reviewer
+    .getByRole('textbox', { name: 'Replacement code', exact: true })
+    .fill('new one\nnew two\nextra')
+  await reviewer.reload()
+  await expect(
+    reviewer.getByRole('spinbutton', { name: 'Lines to replace', exact: true }),
+  ).toHaveValue('2')
+  await expect(
+    reviewer.getByRole('textbox', { name: 'Replacement code', exact: true }),
+  ).toHaveValue('new one\nnew two\nextra')
+  await reviewer.getByRole('button', { name: 'Start discussion', exact: true }).click()
+  await expect(reviewer.getByRole('region', { name: 'Suggested replacement' })).toBeVisible()
+  const author = await openAs('alice')
+  await author.goto(`${url}?tab=reviews`)
+  await author.getByRole('button', { name: 'Review and apply suggestion', exact: true }).click()
+  const dialog = author.getByRole('dialog', { name: 'Apply this suggestion?' })
+  await expect(dialog).toContainText('lines 2–3')
+  await expect(dialog).toContainText('old two')
+  await expect(dialog).toContainText('new two')
+  await author.screenshot({ path: info.outputPath('range-suggestion-preview.png'), fullPage: true })
+  const before = await alice.ok_(
+    alice.get(`/v1/repos/${repo}/proposals/${proposal.id}`),
+    'check before range confirmation',
+  )
+  expect(before.proposal.head).toBe(initial.head)
+  await dialog.getByRole('button', { name: 'Apply suggestion', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const after = await alice.ok_(
+    alice.get(`/v1/repos/${repo}/proposals/${proposal.id}`),
+    'read range revision',
+  )
+  expect(after.proposal.head).not.toBe(initial.head)
+  const response = await fetch(
+    `${alice.base}/v1/repos/${repo}/files/code.txt?rev=${after.proposal.head}`,
+    { headers: { Authorization: `Bearer ${alice.token}` } },
+  )
+  expect(response.status).toBe(200)
+  expect(Buffer.from(await response.arrayBuffer())).toEqual(
+    Buffer.from('\uFEFFfirst\r\nnew one\r\nnew two\r\nextra\r\nlast\r\n'),
+  )
+  await author.close()
+  await reviewer.close()
+})

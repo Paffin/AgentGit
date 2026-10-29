@@ -2,7 +2,7 @@ import type { Api } from '@/api/endpoints'
 import type { RequestOptions } from '@/api/client'
 import type { FileChange, ReviewLineAnchor } from '@/api/types'
 import { putFile, workspaceName } from './edit'
-import { replaceSuggestedLine } from './reviewSuggestion'
+import { replaceSuggestedRange, suggestionLineCount } from './reviewSuggestion'
 
 type Session = Pick<RequestOptions, 'token' | 'signal' | 'quietUnauthenticated'>
 export interface SuggestionPreview {
@@ -17,6 +17,7 @@ export async function previewSuggestion(
   anchor: ReviewLineAnchor,
   replacement: string,
   request: Session,
+  lines = 1,
 ): Promise<SuggestionPreview> {
   if (anchor.side !== 'new')
     throw new Error('Select a line in the proposed version to suggest a replacement.')
@@ -29,12 +30,13 @@ export async function previewSuggestion(
       'Suggestions apply to regular text files up to 1 MiB. Use the file editor for this file.',
     )
   const before = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes)
-  const after = replaceSuggestedLine(before, anchor.line, anchor.text, replacement)
+  const after = replaceSuggestedRange(before, anchor.line, anchor.text, replacement, lines)
   if (after === before) throw new Error('This suggestion does not change the file.')
   return { before, after, change: putFile(anchor.path, after, location.entry.executable) }
 }
 
 export interface SuggestionInput {
+  lines?: number
   anchor: ReviewLineAnchor
   replacement: string
 }
@@ -73,9 +75,13 @@ function groupSuggestions(
     const anchor = suggestion.anchor
     if (anchor.head !== head || anchor.side !== 'new')
       throw new Error('Every suggestion must belong to the current proposed revision.')
-    const key = JSON.stringify([anchor.path, anchor.line])
-    if (seen.has(key)) throw new Error('Choose only one suggestion for the same line.')
-    seen.add(key)
+    const lines = suggestionLineCount(suggestion.lines)
+    for (let offset = 0; offset < lines; offset++) {
+      const key = JSON.stringify([anchor.path, anchor.line + offset])
+      if (seen.has(key))
+        throw new Error('Choose only one suggestion for the same line or overlapping range.')
+      seen.add(key)
+    }
     const group = files.get(anchor.path) || []
     group.push(suggestion)
     files.set(anchor.path, group)
@@ -92,13 +98,21 @@ async function previewFileSuggestions(
 ): Promise<SuggestionPreview> {
   const group = [...suggestions].sort((a, b) => b.anchor.line - a.anchor.line)
   const first = group[0]!
-  const preview = await previewSuggestion(api, repo, first.anchor, first.replacement, request)
+  const preview = await previewSuggestion(
+    api,
+    repo,
+    first.anchor,
+    first.replacement,
+    request,
+    first.lines,
+  )
   for (const suggestion of group.slice(1))
-    preview.after = replaceSuggestedLine(
+    preview.after = replaceSuggestedRange(
       preview.after,
       suggestion.anchor.line,
       suggestion.anchor.text,
       suggestion.replacement,
+      suggestion.lines,
     )
   preview.change = putFile(first.anchor.path, preview.after, preview.change.executable)
   return preview

@@ -598,8 +598,9 @@ reply drafts.
 ### Suggest a code change (development)
 
 Select a new-side line number in **Files changed**, then **Suggest a replacement**. Explain
-why and enter replacement code; multiple replacement lines are allowed, and an empty field
-deletes the selected line. The draft survives reload in the same tab. Post it as a line discussion.
+why and enter replacement code. **Lines to replace** selects 1–100 original lines starting
+at that line; the count and replacement survive reload in the same tab. Multiple replacement
+lines are allowed, and an empty replacement deletes the selected range. The draft survives reload in the same tab. Post it as a line discussion.
 
 The change request's author can choose **Review and apply suggestion**, inspect the exact
 replacement and explicitly apply it. This creates a new revision, retaining executable mode
@@ -609,13 +610,14 @@ and copyable; they cannot overwrite newer work.
 
 To combine changes, expand **Apply several suggestions** in the discussions, select the
 suggestions and choose **Review selected suggestions**. Inspect the prepared files before
-confirming. Up to 100 suggestions across files become one revision; conflicting suggestions
-for the same line are refused. Only loaded discussions are included: use **Load more
+confirming. Up to 100 suggestions across files become one revision; overlapping suggestions
+for the same original lines are refused. Only loaded discussions are included: use **Load more
 discussions** to include older results. The total prepared content is limited to 4 MiB.
 
 Application requires a server with `proposals.update_head` and is limited to regular UTF-8
 files up to 1 MiB. Symlinks, binary files, old-side lines and changed source lines require the
-ordinary editor or CLI. This first version replaces one anchored line, not a selected range.
+ordinary editor or CLI. A range that extends past the file is refused. The preview shows the original file for
+multi-line replacements; confirm only after inspecting the entire selected range.
 
 
 ## Enable or disable new runs for one agent (development)

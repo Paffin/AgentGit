@@ -40,6 +40,7 @@ const candidates = computed(() =>
         version: thread.version,
         anchor: thread.anchor,
         replacement: suggestion.replacement,
+        lines: suggestion.lines,
       },
     ]
   }),
@@ -147,7 +148,7 @@ async function apply() {
       <li v-for="item in candidates" :key="item.id">
         <Checkbox
           :model-value="selected.includes(item.id)"
-          :label="`${item.anchor.path}, line ${item.anchor.line}`"
+          :label="`${item.anchor.path}, ${item.lines ? `lines ${item.anchor.line}–${item.anchor.line + item.lines - 1}` : `line ${item.anchor.line}`}`"
           :disabled="busy"
           @update:model-value="(value) => choose(item.id, value)"
         />

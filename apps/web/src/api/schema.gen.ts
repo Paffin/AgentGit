@@ -73,6 +73,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor */
+    get: operations['events.subscribe_many']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/events/replay': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history */
+    get: operations['events.replay_many']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/jobs/claim': {
     parameters: {
       query?: never
@@ -2574,6 +2608,13 @@ export interface components {
        */
       topic: string
     }
+    /** @description An opaque vector cursor; events from different repositories have no shared sequence. */
+    EventEnvelope: {
+      /** @default  */
+      cursor: string
+      /** @default null */
+      event: components['schemas']['Event'] | null
+    }
     ExecutorPresence: {
       /**
        * Format: int32
@@ -4379,6 +4420,32 @@ export interface components {
       /** @default  */
       role: string
     }
+    ReplayManyRequest: {
+      /** @default  */
+      cursor: string
+      /**
+       * @description With no cursor, deliberately replay all history instead of checkpointing now.
+       * @default false
+       */
+      from_start: boolean
+      /**
+       * Format: int32
+       * @default 0
+       */
+      limit: number
+      /** @default [] */
+      repos: string[]
+      /** @default [] */
+      topics: string[]
+    }
+    ReplayManyResponse: {
+      /** @default  */
+      cursor: string
+      /** @default [] */
+      events: components['schemas']['EventEnvelope'][]
+      /** @default false */
+      has_more: boolean
+    }
     ReplayRequest: {
       /**
        * Format: int64
@@ -5565,6 +5632,79 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RevokeCredentialResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'events.subscribe_many': {
+    parameters: {
+      query?: {
+        /** @description Required explicit comma-separated repository names (max30) */
+        repos?: string
+        /** @description Comma-separated audit topic prefixes */
+        topics?: string
+        /** @description Opaque cursor returned by replay or an earlier SSE envelope */
+        cursor?: string
+        /** @description Checkpoint keep-alive interval (default15000,minimum1000) */
+        heartbeat_ms?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'text/event-stream': string
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'events.replay_many': {
+    parameters: {
+      query?: {
+        cursor?: string
+        from_start?: boolean
+        limit?: number
+        repos?: string[]
+        topics?: string[]
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReplayManyResponse']
         }
       }
       /** @description Error */

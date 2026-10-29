@@ -22,6 +22,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - The release pipeline prepares a native Windows x64 ZIP with the CLI, server and MCP, plus a per-user PowerShell installer that verifies checksums. Native install-and-first-use smoke is required before publishing; the first Windows archive is not yet released.
 
+- Home receives live updates across up to thirty loaded repositories through one resumable event feed. CLI, SDKs and MCP expose bounded multi-repository replay with per-repository cursors.
 - Existing-file edits can be saved privately to an account and resumed through Web, CLI, SDK and MCP. Original revision and file metadata are retained; publication stays explicit. Development schema 12 requires a pre-upgrade backup.
 - General proposal comments gain separate private account drafts across Web, CLI, SDK and MCP, with explicit save and version-checked cleanup. Development schema 11 preserves existing review drafts; back up before upgrading.
 - Reviewers can explicitly save a private review draft to their account and resume on another device through Web UI, CLI, MCP or SDKs. Local drafts remain available, conflicting drafts require a choice, and versioned saves/clears never overwrite newer notes or submit a review. Development schema 10 requires a pre-upgrade backup.

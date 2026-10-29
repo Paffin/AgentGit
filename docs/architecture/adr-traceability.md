@@ -148,3 +148,7 @@ The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI
 ## ADR-0043 — private single-file drafts
 
 [ADR-0043](../adr/0043-private-file-drafts.md) stores replacement bytes privately and retains the original revision as a GC root. Web, CLI, SDK and MCP implement explicit save/restore/clear; Web also lists saved paths. Existing-file scope only. Basic builds/type checks passed; extended test matrices were not run for this slice.
+
+## ADR-0044 — cross-repository event feed
+
+[ADR-0044](../adr/0044-cross-repository-events.md) reuses repository audit logs with a bounded, scoped cursor vector. Home, CLI and SDKs consume one stream; MCP provides bounded replay. A focused real-server check covers two-repository pagination/resume, denied scope and SSE cursor restoration. Basic builds are used for the client changes, without another broad test matrix.

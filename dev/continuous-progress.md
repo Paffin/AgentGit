@@ -1,13 +1,13 @@
 # Continuous AgentGit progress
 
-Status: **CONTINUE**. Rebased on current main; draft PR preparation and P0 structural-sync repair underway. Completing a slice does not complete the platform roadmap.
+Status: **CONTINUE**. R2 comment drafts and R3 existing-file drafts shipped to the work branch; R5 cross-repository live feed is in progress. Completing a slice does not complete the platform roadmap.
 
 ## Recovery and authorization
 
 - Working branch: `codex/roadmap-review-workflows`.
 - Original base: `2ad73082106615c5ce1ac0831b9444eb3955b20f` (beta.7).
-- Audited current remote main on 2026-10-29: `8a0019424b37bd9ef42739389a0e7a1f7945c660`.
-- Local implementation tip before this checkpoint: `ed58caeb2ff4ed10874b80a151c45187be6fe56c`.
+- Audited remote main on 2026-10-29: `f823813` (#137 board counter wrapping and #138 prepared-release CI reuse). Merged into the work branch as `8293e69`; retained required Windows artifacts.
+- Last pushed implementation tip: `350cb8c`; working branch now includes main reconciliation `8293e69`. Draft PR136 stays open and unmerged.
 - User reiterated on 2026-10-29: **work only in a separate branch; merge all into the next release only when explicitly told**. Do not merge, force-push, publish a release or replace tags. Draft PR and CI qualification are the next delivery step.
 - Use ub-mode and the existing Hallmark/Web design direction. Keep CLI, SDK and Web behavior aligned; avoid speculative frameworks.
 - On resume: read this file, inspect worktree, fetch main, inspect open PR/CI, retain unmerged changes, continue a runnable backlog item.
@@ -41,7 +41,7 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 | R2 | P1 DONE | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
 | R3 | P1 PARTIAL | Existing single-file drafts delivered; batch/new-file drafts remain | immutable base, byte/mode preservation, conflicts keep local work; no automatic publication |
 | R4 | P1 PARTIAL | Bounded file/directory Web choices; multi-target rename and larger structural cases remain open | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
-| R5 | P1 OPEN | Cross-repository work feed | pagination/scopes, full initial snapshot and reconnect behavior |
+| R5 | P1 DONE | Cross-repository work feed | pagination/scopes, full initial snapshot and reconnect behavior |
 | M1 | P1 OPEN | Resumable hosting metadata import: issues/comments first | preview, mapping/idempotency/checkpoint, retry without duplication; PR/releases/identity later |
 | Q1 | P1 BLOCKED external | #50 real MCP host | actual named host/version + full bounded task workflow and denied scope; scripted protocol is not enough |
 | Q2 | P1 BLOCKED external | #51 five pilots and retention/case studies | external participants and permission; no invented users; requires recruitment authorization/contact |
@@ -54,10 +54,10 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 
 ## Immediate next actions
 
-1. Preserve pre-rebase branch; rebase local batch onto `origin/main`, resolve CI/release conflicts using newest architecture.
-2. Run skip-source gate (new Windows tests currently use `unittest.skipUnless`, inspect against repository helper policy), workflow/release/docs compatibility and focused changed-code checks.
-3. Open draft PR for whole batch and await/repair CI while implementing the next independent R1 slice.
-4. Update this checkpoint with new SHAs, PR, CI URLs, failures and next item. Keep release gates open until evidence really exists.
+1. Finish R5: one bounded cross-repository event connection, explicit repository scopes, opaque per-repository cursors and safe replay; wire Home, CLI, SDK and MCP in parallel.
+2. Use basic builds and one focused real workflow when needed. The user explicitly stopped broad test/mutation loops; prioritize implementation.
+3. Commit/push coherent work to the existing draft PR only. Never merge or release without the user's direct instruction.
+4. Continue remaining daily workflow and migration backlog; update this checkpoint before yielding.
 
 ## Reconciliation checkpoint
 
@@ -121,3 +121,13 @@ R3 implementation landed locally across backend/API/CLI/SDK-MCP/Web. User explic
 R3 commits:cd8f0db backend/schema12,950d935 Web,16f7dd2 SDK/MCP. Basic server/Web builds and CLI/MCP checks passed; SDK types passed. No R3 test matrices or mutation runs per explicit user request. CLI binary/docs generation completing. Continue product work with lightweight verification; do not return to broad quality-tool loops. Main/release hold unchanged.
 
 R3 delivery complete for existing single-file edits: CLI86aaa18 and generated168 reference files; all clients compile/build. Commit ordered with backendcd8f0db, Web950d935, SDK/MCP16f7dd2. This is a functional roadmap slice, not overall roadmap completion. Future work: batch/new-file account drafts, cross-repository feed and migration backlog; retain user priority on implementation and only lightweight necessary verification. No merge/tag/release authorized.
+
+### R5 started after current-main reconciliation
+
+Merged upstream f823813 into work branch as8293e69, resolved prepare-release dependency to keep both cached checks and Windows artifacts. Native Windows40965818005 still in Test. Full Web40965163166 on old52ad4cc has failed browser jobs but overall still running; logs unavailable until completion, do not rerun wholesale.
+
+R5 contract: EventService.ReplayMany/SubscribeMany, /v1/events/replay and /v1/events; events.multi_repo capability, explicit max30 repos; opaque per-repo cursor bound to normalized scope/topics. Empty cursor captures now; from_start supports deliberate historical replay. Envelope{cursor,event?}; checkpoints/heartbeats contain no Event. Replay bounded1000 events and4096 examined audit rows. Home reuses full snapshots plus refresh after connection/reconnection; only first30 loaded repos live, rest continue bounded polling. Basic builds only; no new test matrices.
+
+Next M1 chosen: normalized bounded issues/comments manifest import into an existing repository, plus thin GitHub/GitLab CLI exporters. Existing Git migration remains unchanged. Preview validates/counts/losses/conflicts and returns digest; explicit apply matches digest. Durable per-source issue mapping+content hash makes retries/resume skip exact matches and reject changed source. Importer remains the authenticated actor; original author/time/URL preserved as external provenance, not identity grants. Per-issue transactions include comments and mapping atomically. Keep provider tokens in CLI/export process, never send to server. Start after R5 committed.
+
+R5 delivered: backendcb69c05, Web00ded3d, CLI1cf3e74, SDK/MCPf574229. Basic builds/types passed and one small two-repository replay/resume/denied-scope/SSE smoke passed. No broad test or mutation runs. M1 issues/comments import is now active across core, Web, CLI import/provider exporters and SDK/MCP. Contract uses source manifest, explicit preview+digest apply, durable mapping and create-only conflicts.

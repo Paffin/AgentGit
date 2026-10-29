@@ -99,3 +99,5 @@ CLI explanations use the same server rule. The active priority remains agent-nat
 Core integration: PR112 (atomic expected-head proposal updates) and PR114 (revalidate proposal and stream at final integration commit) are merged. PR115 (policy-required thread resolution) is also merged. PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.
 
 Retry policy changes during an active run now reject stale automatic cancellation atomically; the scheduler rereads durable history before resuming. See ADR0034 and the evidence journal.
+
+Execution completion now carries a durable generation precondition across core, API and orchestrator (ADR0035). A late result cannot finish a newer attempt; matching manual completion remains available.

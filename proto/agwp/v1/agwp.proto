@@ -1227,6 +1227,8 @@ message FinishTaskRequest {
   // Optional execution-policy precondition, checked atomically with the state change.
   // Explicit zero matches an unset limit; omission preserves ordinary manual completion.
   optional uint32 expected_max_attempts = 5;
+  // Reject a stale completion when another run was admitted after this task snapshot.
+  optional uint64 expected_attempts_started = 6;
 }
 
 message Lease {

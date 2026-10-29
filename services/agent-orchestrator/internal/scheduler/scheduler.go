@@ -47,8 +47,7 @@ type Sessions interface {
 	FreeSlots(c config.Executor) int
 	Cancel(runID, reason string) bool
 	Has(runID string) bool
-	FinishTask(ctx context.Context, repo, taskID, state string) error
-	CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error
+	FinishTaskAtSnapshot(ctx context.Context, repo string, task agwp.Task, state string) error
 }
 
 // PathSource tells which files each open proposal changes (satisfied by
@@ -465,7 +464,7 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	}
 	if spent >= s.o.Repo.Schedule.Attempts || temp >= maxTempFails {
 		s.log.Warn("giving up on the task: its attempt budget was spent before this process started", "task", t.ID, "attempts", spent, "temporary_failures", temp)
-		if err := s.o.Sessions.CancelTaskAtAttemptLimit(ctx, repo, t.ID, t.MaxAttempts); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+		if err := s.o.Sessions.FinishTaskAtSnapshot(ctx, repo, t, agwp.TaskCancelled); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
 			s.log.Warn("could not cancel the task", "task", t.ID, "err", err)
 		}
 		s.clearDeferred(t.ID)
@@ -762,8 +761,12 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 		default:
 			state = agwp.TaskCancelled
 		}
-		if err := s.o.Sessions.FinishTask(ctx, repo, id, state); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
-			s.log.Warn("could not finish the task", "task", id, "state", state, "err", err)
+		if err := s.o.Sessions.FinishTaskAtSnapshot(ctx, repo, t, state); err != nil {
+			if !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+				s.log.Warn("could not finish the task", "task", id, "state", state, "err", err)
+			} else {
+				s.forgetTask(id)
+			}
 			continue
 		}
 		s.log.Info("work landed or was closed; task finished", "task", id, "state", state)

@@ -114,3 +114,12 @@ NATS 🔜 (events use SSE and the audit log) · Docker Compose/Kubernetes 🟡 (
 ## ADR 0015 — revision-bound content search
 
 The new read-only `tree.search` operation uses the existing `TreeRead` authorization, immutable tree and blob interfaces. Focused HTTP checks cover bounded continuation, skipped content, cursor mismatch and repository isolation; `code-search.spec.ts` exercises UI-created content, pagination and line navigation. See [ADR 0015](../adr/0015-bounded-revision-code-search.md). No index-latency or complete binary/large-file search claim is made.
+
+## ADR0033–0035 — durable task execution and completion preconditions
+
+`crates/ag-agent/tests/agents.rs` covers durable attempt admission, rollback and preservation
+of state/audit after a stale policy update. `crates/ag-server/tests/task_attempts.rs` exercises
+the wire contract, stale generation rejection and current-generation completion. The real
+server/shell-executor scheduler scenarios cover restart, operator policy changes during work
+and a late first session while a second run owns the task. Capability tests refuse an older
+server before sending a conditional completion.

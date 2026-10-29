@@ -63,5 +63,23 @@ async fn attempts_are_counted_once_and_an_operator_can_extend_the_same_task() {
     assert_eq!(second.status, 200, "{}", second.json);
     assert_ne!(second.json["run_id"], started.json["run_id"]);
     assert_eq!(creator.get(&format!("{base}/tasks/{task}")).await.json["attempts_started"], 2);
+    let stale_run_finish = admin
+        .post(
+            &format!("{base}/tasks/{task}/finish"),
+            json!({"state":"cancelled", "expected_max_attempts":2, "expected_attempts_started":1}),
+        )
+        .await;
+    assert_eq!(stale_run_finish.status, 412, "{}", stale_run_finish.json);
+    assert_eq!(creator.get(&format!("{base}/tasks/{task}")).await.json["state"], "in_progress");
+    let second_run = second.json["run_id"].as_str().unwrap();
+    assert_eq!(
+        admin.post(&format!("{base}/runs/{second_run}/complete"), json!({"status":"completed"})).await.status,
+        200
+    );
+    let current_finish = admin
+        .post(&format!("{base}/tasks/{task}/finish"), json!({"state":"done", "expected_attempts_started":2}))
+        .await;
+    assert_eq!(current_finish.status, 200, "{}", current_finish.json);
+    assert_eq!(current_finish.json["state"], "done");
     server.stop().await;
 }

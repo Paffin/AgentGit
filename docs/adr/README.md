@@ -44,3 +44,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0033 — Task execution-attempt limits](0033-task-attempt-limits.md)
 
 - [0034 — Task completion policy precondition](0034-task-finish-policy-precondition.md)
+
+- [0035 — Task completion execution generation](0035-task-completion-generation.md)

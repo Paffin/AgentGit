@@ -17,6 +17,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Automatic task completion is fenced by the observed execution generation. A delayed result from an older run cannot complete or cancel a newer attempt of the same task.
+
 - Automatic task cancellation now compares the observed attempt policy in the server transaction. Changing a limit during execution cannot be overwritten by a stale cancellation decision.
 
 - Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.

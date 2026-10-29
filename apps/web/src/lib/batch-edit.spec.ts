@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { decodeUtf8 } from './text'
 import { batchChanges, restoreBatch, type DraftFile } from './batch-edit'
 import { decodeUtf8 } from './text'
 const file = (over: Partial<DraftFile> = {}): DraftFile => ({

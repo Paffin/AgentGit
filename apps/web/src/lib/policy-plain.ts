@@ -19,7 +19,14 @@ export interface Preset {
 }
 
 /** Fields that belong to the people running CI, not to a preset: a preset keeps whatever is already there. */
-const KEEP = ['trusted_issuers', 'required_validations', 'integrators', 'admins', 'allowed_authors']
+const KEEP = [
+  'trusted_issuers',
+  'required_validations',
+  'integrators',
+  'admins',
+  'allowed_authors',
+  'require_resolved_threads',
+]
 
 export const PRESETS: readonly Preset[] = [
   {
@@ -126,6 +133,7 @@ export interface PolicyForm {
   agentsMayLand: boolean
   agentPaths: string
   agentMaxFiles: number
+  requireResolvedThreads: boolean
   requireProvenance: boolean
   protectedPaths: { glob: string; minApprovals: number }[]
   maxChangedFiles: number
@@ -151,6 +159,7 @@ export function formFromDoc(doc: PolicyDoc): PolicyForm {
     agentsMayLand: au.auto_integrate === true,
     agentPaths: strs(au.allowed_paths).join(', '),
     agentMaxFiles: num(au.max_files),
+    requireResolvedThreads: doc.require_resolved_threads === true,
     requireProvenance: doc.require_provenance_for_agents === true,
     protectedPaths: (Array.isArray(doc.protected_paths) ? doc.protected_paths : []).map((p) => ({
       glob: String(obj(p).glob ?? ''),
@@ -185,6 +194,8 @@ export function docFromForm(form: PolicyForm, base: PolicyDoc = {}): PolicyDoc {
   } else {
     delete out.agent_autonomy
   }
+  if (form.requireResolvedThreads) out.require_resolved_threads = true
+  else delete out.require_resolved_threads
   if (form.requireProvenance) out.require_provenance_for_agents = true
   else delete out.require_provenance_for_agents
   const protectedPaths = form.protectedPaths
@@ -242,6 +253,8 @@ export function describePolicy(doc: PolicyDoc): string[] {
       `Agents may land a change by themselves if it touches only ${list(paths)} and at most ${num(au.max_files)} files.`,
     )
   else out.push('Agents cannot land changes by themselves.')
+  if (doc.require_resolved_threads === true)
+    out.push('Every line discussion must be resolved before landing, including earlier revisions.')
   if (doc.require_provenance_for_agents === true)
     out.push('An agent’s change must carry a signed record of where it came from.')
   const checks = (Array.isArray(doc.required_validations) ? doc.required_validations : [])
@@ -325,6 +338,14 @@ export function describeChange(before: PolicyDoc, after: PolicyDoc): Effect[] {
       text: `Agents may land by themselves only for ${list(strs(au1.allowed_paths))}, at most ${num(au1.max_files)} files (was ${list(strs(au0.allowed_paths))}, ${num(au0.max_files)}).`,
     })
 
+  if ((before.require_resolved_threads === true) !== (after.require_resolved_threads === true))
+    out.push({
+      kind: after.require_resolved_threads === true ? 'denies' : 'allows',
+      text:
+        after.require_resolved_threads === true
+          ? 'Open line discussions now block landing until resolved.'
+          : 'Open line discussions no longer block landing.',
+    })
   const pv0 = before.require_provenance_for_agents === true
   const pv1 = after.require_provenance_for_agents === true
   if (pv1 && !pv0)

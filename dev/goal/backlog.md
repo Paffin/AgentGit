@@ -86,4 +86,7 @@ precondition: preview the exact replacement, preserve file metadata, apply only 
 anchored head, and require fresh checks/reviews after changing the proposal. Suggestions and
 requested reviewers remain open; this prerequisite does not complete those workflows.
 
-Core integration priority: finish PR112 (atomic expected-head proposal updates), then PR114 (revalidate proposal and stream at final integration commit), then PR115 (policy-required thread resolution). PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.
+Required line-discussion resolution is implemented as an optional policy gate, including
+older anchors, no-op completion and a reopen/commit race. Web configuration/remediation and
+CLI explanations use the same server rule. The active priority remains agent-native execution and deterministic integration; reviewer assignment remains open.
+Core integration: PR112 (atomic expected-head proposal updates) and PR114 (revalidate proposal and stream at final integration commit) are merged. PR115 adds policy-required thread resolution. PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.

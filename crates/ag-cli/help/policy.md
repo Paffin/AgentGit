@@ -39,7 +39,7 @@ means validating again. Approvals are bound to the proposal head: pushing a new 
 
 `--json` output of `ag integrate` carries stable blocker codes: missing_validation, insufficient_approvals,
 changes_requested, missing_provenance, lease, failed_validation, actor_not_allowed, author_not_allowed,
-too_many_changed_files.
+too_many_changed_files, unresolved_threads.
 
 `ag explain [PROPOSAL]` puts every reason in words and lists the commands that fix it.
 

@@ -38,6 +38,10 @@ Development conflict resolution compares the inspected proposal head before upda
 
 Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
+Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
+
+Development stream rules can require every line discussion to be resolved before integration, including feedback on earlier revisions.
+
 ## Coming from GitHub or GitLab?
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).

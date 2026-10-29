@@ -103,7 +103,8 @@ Work in the following order; keep each deliverable usable across the relevant cl
    historical instructions and source links. Proposal updates now have an atomic inspected-head
    precondition as the prerequisite for safe review edits. The final integration transaction also
    rechecks the proposal head and open state. Next add review suggestions,
-   requested reviewers and policy-required thread resolution. Preserve drafts, exact-head
+   requested reviewers. Optional policy-required line-discussion resolution is now implemented
+   across core, API, CLI explanations and Web UI. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
    Account-backed drafts and non-text conflict resolution remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and
    polling for the aggregate view. A cross-repository event feed remains future work.

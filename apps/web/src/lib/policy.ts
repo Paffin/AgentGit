@@ -33,6 +33,10 @@ const RUN: Record<string, FieldSpec> = {
 }
 
 export const POLICY_SPEC: Record<string, FieldSpec> = {
+  require_resolved_threads: {
+    kind: 'bool',
+    note: 'all line discussions must be resolved before landing',
+  },
   integrators: { kind: 'strings', note: 'who may integrate; empty = any non-agent' },
   admins: { kind: 'strings', note: 'who may change the policy; empty = any user' },
   allowed_authors: { kind: 'strings', note: 'who may author proposals; empty = anyone' },

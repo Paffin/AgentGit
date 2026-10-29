@@ -44,6 +44,7 @@ pub const EXPLAINED_FIELDS: &[&str] = &[
     "protected_paths",
     "agent_autonomy",
     "require_provenance_for_agents",
+    "require_resolved_threads",
     "max_changed_files",
 ];
 
@@ -288,6 +289,12 @@ pub fn explain(p: &Policy) -> Vec<Statement> {
         say(Effect::Allows, "require_provenance_for_agents", "A change by an agent needs no provenance record.".into());
     }
 
+    if p.require_resolved_threads {
+        say(Effect::Requires, "require_resolved_threads", "Every line discussion, including earlier revisions, must be resolved before landing (`unresolved_threads`).".into());
+    } else {
+        say(Effect::Allows, "require_resolved_threads", "Open line discussions do not block landing.".into());
+    }
+
     // ---- limits ----
     if p.max_changed_files == 0 {
         say(
@@ -348,7 +355,7 @@ mod tests {
     #[test]
     fn every_field_of_the_document_is_explained() {
         // The fields the document really has (its serialized form lists them all) ...
-        let value = serde_json::to_value(Policy::default()).unwrap();
+        let value = serde_json::to_value(Policy { require_resolved_threads: true, ..Policy::default() }).unwrap();
         let fields: BTreeSet<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
         let declared: BTreeSet<&str> = EXPLAINED_FIELDS.iter().copied().collect();
         assert_eq!(fields, declared, "a field of Policy has no explanation (or an explanation names a removed field)");
@@ -372,6 +379,7 @@ mod tests {
             protected_paths: vec![ProtectedPath { glob: "x/**".into(), min_approvals: 1, approvers: vec![] }],
             agent_autonomy: AgentAutonomy { auto_integrate: true, allowed_paths: vec!["docs/**".into()], max_files: 3 },
             require_provenance_for_agents: true,
+            require_resolved_threads: true,
             max_changed_files: 9,
         };
         let spoken: BTreeSet<&str> = explain(&rich).iter().map(|s| s.field).collect();

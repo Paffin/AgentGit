@@ -177,6 +177,9 @@ pub struct Policy {
     pub agent_autonomy: AgentAutonomy,
     /// Whether agent-authored changes must carry signed provenance.
     pub require_provenance_for_agents: bool,
+    /// Whether every line discussion must be resolved before integration.
+    #[serde(skip_serializing_if = "is_false")]
+    pub require_resolved_threads: bool,
     /// Maximum number of files one integration may change (0 = unlimited).
     pub max_changed_files: u32,
 }
@@ -195,6 +198,7 @@ impl Default for Policy {
             protected_paths: Vec::new(),
             agent_autonomy: AgentAutonomy::default(),
             require_provenance_for_agents: false,
+            require_resolved_threads: false,
             max_changed_files: 0,
         }
     }
@@ -315,4 +319,8 @@ mod tests {
         let badglob = r#"{"protected_paths":[{"glob":"[","min_approvals":1}]}"#;
         assert!(matches!(Policy::parse(badglob), Err(PolicyError::Invalid(_))));
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }

@@ -83,6 +83,9 @@ pub mod features {
 
     /// Proposal head updates can require an inspected head atomically.
     pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
+
+    /// Stream policy can require all line discussions to be resolved before integration.
+    pub const POLICY_RESOLVED_THREADS: &str = "policy.resolved_threads";
     /// Durable task-local attempt limits and optimistic policy updates.
     pub const TASK_ATTEMPT_LIMITS: &str = "tasks.attempt_limits";
 
@@ -99,6 +102,7 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         PROPOSALS_UPDATE_HEAD,
+        POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,
         TASK_SCHEDULING,

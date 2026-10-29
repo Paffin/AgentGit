@@ -351,7 +351,9 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     )
     assert entry.verified
     assert len(alice.provenance.list(repo=REPO, changeset=head).entries) == 1
-    runner.tasks.finish(repo=REPO, id=task.id, state="done", expected_max_attempts=2)
+    runner.tasks.finish(
+        repo=REPO, id=task.id, state="done", expected_max_attempts=2, expected_attempts_started=1
+    )
     runner.agents.complete(repo=REPO, run_id=run.run_id, status="completed")
     assert alice.tasks.get(repo=REPO, id=dep.id).ready
     follow_up = alice.tasks.create(repo=REPO, title="Separate follow-up", source_task=task.id)

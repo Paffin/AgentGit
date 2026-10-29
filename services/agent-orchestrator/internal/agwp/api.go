@@ -186,16 +186,26 @@ func (c *Client) FinishTask(ctx context.Context, repo, id, state string) (*Task,
 	return c.finishTask(ctx, repo, id, state, nil)
 }
 
-// FinishTaskAtAttemptLimit rejects a decision based on an obsolete retry policy.
-func (c *Client) FinishTaskAtAttemptLimit(ctx context.Context, repo, id, state string, expected uint32) (*Task, error) {
-	return c.finishTask(ctx, repo, id, state, &expected)
+// FinishTaskAtSnapshot rejects a stale execution generation or cancellation policy.
+func (c *Client) FinishTaskAtSnapshot(ctx context.Context, repo string, task Task, state string) (*Task, error) {
+	caps, err := c.Negotiate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !caps.Has("tasks.finish_preconditions") {
+		return nil, fmt.Errorf("server lacks tasks.finish_preconditions; upgrade before automatic task completion")
+	}
+	return c.finishTask(ctx, repo, task.ID, state, &task)
 }
 
-func (c *Client) finishTask(ctx context.Context, repo, id, state string, expected *uint32) (*Task, error) {
+func (c *Client) finishTask(ctx context.Context, repo, id, state string, expected *Task) (*Task, error) {
 	var out Task
 	body := map[string]any{"state": state}
 	if expected != nil {
-		body["expected_max_attempts"] = *expected
+		body["expected_attempts_started"] = expected.AttemptsStarted
+		if state == TaskCancelled {
+			body["expected_max_attempts"] = expected.MaxAttempts
+		}
 	}
 	if err := c.repoCall(ctx, "task.finish", http.MethodPost, repo, "/tasks/"+url.PathEscape(id)+"/finish", nil, body, &out); err != nil {
 		return nil, err

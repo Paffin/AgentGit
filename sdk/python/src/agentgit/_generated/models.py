@@ -758,6 +758,7 @@ class FileOp:
 @dataclass(kw_only=True)
 class FinishTaskRequest:
     """Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit log as an operator's, with the owner it overrode."""
+    expected_attempts_started: int | None = field(default=None)
     expected_max_attempts: int | None = field(default=None)
     id: str = field(default="")
     idempotency_key: str = field(default="")

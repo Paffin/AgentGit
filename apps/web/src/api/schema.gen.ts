@@ -2542,6 +2542,12 @@ export interface components {
      */
     FinishTaskRequest: {
       /**
+       * Format: int64
+       * @description Reject a stale completion when another run was admitted after this task snapshot.
+       * @default null
+       */
+      expected_attempts_started: number | null
+      /**
        * Format: int32
        * @description Optional execution-policy precondition, checked atomically with the state change.
        *     Explicit zero matches an unset limit; omission preserves ordinary manual completion.

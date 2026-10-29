@@ -257,11 +257,7 @@ func (s *Session) finishTask(state string) {
 	for attempt := 0; attempt < 3; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		// By the orchestrator, as an operator: the run's own credential has just stopped working with the run.
-		if state == "cancelled" {
-			_, err = s.m.o.Orch.FinishTaskAtAttemptLimit(ctx, s.req.Repo, s.req.Task.ID, state, s.req.Task.MaxAttempts)
-		} else {
-			_, err = s.m.o.Orch.FinishTask(ctx, s.req.Repo, s.req.Task.ID, state)
-		}
+		_, err = s.m.o.Orch.FinishTaskAtSnapshot(ctx, s.req.Repo, s.req.Task, state)
 		cancel()
 		if err == nil {
 			return

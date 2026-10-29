@@ -89,6 +89,9 @@ pub mod features {
     /// Durable task-local attempt limits and optimistic policy updates.
     pub const TASK_ATTEMPT_LIMITS: &str = "tasks.attempt_limits";
 
+    /// Task completion compares both the execution generation and retry policy.
+    pub const TASK_FINISH_PRECONDITIONS: &str = "tasks.finish_preconditions";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -113,6 +116,7 @@ pub mod features {
         TASK_LINEAGE,
         TASK_EDIT,
         TASK_ATTEMPT_LIMITS,
+        TASK_FINISH_PRECONDITIONS,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

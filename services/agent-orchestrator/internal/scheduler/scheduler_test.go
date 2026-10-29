@@ -890,3 +890,35 @@ func TestChangingAttemptPolicyDuringRunDoesNotCancelTheTask(t *testing.T) {
 		t.Fatalf("unexpected attempts: %+v", h.task(task))
 	}
 }
+
+func TestOldSessionCannotCompleteANewerTaskAttempt(t *testing.T) {
+	release := filepath.Join(t.TempDir(), "release")
+	started := release + ".started"
+	ex := command(t, "stale-bot", fmt.Sprintf("touch '%[2]s'; while [ ! -f '%[1]s' ]; do sleep 0.01; done; exit 0", release, started))
+	ex.Beat = time.Hour
+	h := newHarness(t, nil, nil, ex)
+	task := h.addTask("Keep the newer attempt", nil)
+	h.reconcile()
+	h.eventually("executor started", func() bool { _, err := os.Stat(started); return err == nil })
+	first := h.runs()[0]
+	if _, err := h.w.Srv.Admin.CompleteRun(context.Background(), repo, first.RunID, "completed", "completed elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	newer, err := h.w.Srv.Admin.StartRun(context.Background(), repo, ex.Agent, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(release, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.waitIdle()
+	current := h.task(task)
+	if current.State != agwp.TaskInProgress || current.AttemptsStarted != 2 {
+		t.Fatalf("old session finished newer work: %+v", current)
+	}
+	for _, run := range h.runs() {
+		if run.RunID == newer.RunID && run.Status != "running" {
+			t.Fatalf("new run changed: %+v", run)
+		}
+	}
+}

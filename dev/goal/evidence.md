@@ -615,3 +615,21 @@ history (0.01s); HTTP stale cancellation returned 412 (0.14s). SDK tours passed 
 `/workspace/agentgit-quality/task-policy-finish-red.log`; follow-up logs share that prefix.
 No schema migration; ADR0034 describes the additive protocol field. Static Crapper/Dryer/
 Mutator scans were run; these are not coverage or mutation-kill measurements.
+
+## Completion is bound to the observed task execution
+
+ADR0035 adds `expected_attempts_started` to task completion. It is checked together with the
+optional expected attempt limit in the same state/audit transaction. Automatic session,
+recovered-budget and landed-proposal completion carry the observed generation. The
+orchestrator negotiates `tasks.finish_preconditions` and leaves a task unchanged if an old
+server would ignore the condition. Explicit manual completion remains compatible.
+
+Red: a real HTTP request carrying generation one cancelled a task already on its second
+run (200 instead of 412). Green: stale generation is rejected and matching completion succeeds
+(0.14s); previous policy/state/audit regression remains green. Five real-server/shell scheduler
+scenarios passed in 1.50s, including a delayed first executor after a second run was admitted,
+mid-run policy changes, restart and legacy cancellation. Protocol checks cover unsupported
+servers and preservation of explicit zero (0.008s). TypeScript/Python SDK tours passed
+(12/13 tests) using both conditions; Web types remain valid. Crapper/Dryer/Mutator scans are
+static inspection, not a measured mutation score. Logs: task-completion-fence-* in the
+implementation workspace.

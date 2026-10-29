@@ -1559,6 +1559,16 @@
       "FinishTaskRequest": {
         "description": "Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit\nlog as an operator's, with the owner it overrode.",
         "properties": {
+          "expected_attempts_started": {
+            "default": null,
+            "description": "Reject a stale completion when another run was admitted after this task snapshot.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "expected_max_attempts": {
             "default": null,
             "description": "Optional execution-policy precondition, checked atomically with the state change.\nExplicit zero matches an unset limit; omission preserves ordinary manual completion.",

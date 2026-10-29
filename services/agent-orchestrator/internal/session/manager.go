@@ -322,9 +322,9 @@ func (m *Manager) FinishTask(ctx context.Context, repo, taskID, state string) er
 	return err
 }
 
-// CancelTaskAtAttemptLimit preserves a task when its retry policy changed after scheduling.
-func (m *Manager) CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error {
-	_, err := m.o.Orch.FinishTaskAtAttemptLimit(ctx, repo, taskID, "cancelled", expected)
+// FinishTaskAtSnapshot prevents an earlier execution from finishing newer work.
+func (m *Manager) FinishTaskAtSnapshot(ctx context.Context, repo string, task agwp.Task, state string) error {
+	_, err := m.o.Orch.FinishTaskAtSnapshot(ctx, repo, task, state)
 	return err
 }
 

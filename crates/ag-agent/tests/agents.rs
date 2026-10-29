@@ -827,10 +827,25 @@ fn stale_retry_policy_cannot_cancel_a_task_or_append_a_finish_audit() {
     let task = tasks::create_task(&e.meta, "Preserve operator policy", "", &[], "user:creator").unwrap();
     e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 2, 0, "user:operator", true)).unwrap();
     let before = e.meta.read(|tx| tx.audit_list(None, 100)).unwrap().len();
-    let stale = tasks::finish_task_with_limit(&e.meta, &task.id, "cancelled", "user:operator", true, Some(0));
+    let stale = tasks::finish_task_checked(
+        &e.meta,
+        &task.id,
+        "cancelled",
+        "user:operator",
+        true,
+        tasks::TaskFinishPreconditions { max_attempts: Some(0), ..Default::default() },
+    );
     assert!(matches!(stale, Err(AgentError::Conflict(_))));
     assert_eq!(e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap().state, "open");
     assert_eq!(e.meta.read(|tx| tx.audit_list(None, 100)).unwrap().len(), before);
-    tasks::finish_task_with_limit(&e.meta, &task.id, "cancelled", "user:operator", true, Some(2)).unwrap();
+    tasks::finish_task_checked(
+        &e.meta,
+        &task.id,
+        "cancelled",
+        "user:operator",
+        true,
+        tasks::TaskFinishPreconditions { max_attempts: Some(2), ..Default::default() },
+    )
+    .unwrap();
     assert_eq!(e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap().state, "cancelled");
 }

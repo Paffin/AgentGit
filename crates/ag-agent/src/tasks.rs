@@ -257,18 +257,18 @@ pub(crate) fn claim_in_tx(tx: &Tx<'_>, task: &str, owner: &str) -> Result<(), Me
 /// (`agent:bot#run_…`) may only finish the task *that run* claimed - another run of the same agent has no say in
 /// it. Use [`finish_task_as_operator`] for an operator that overrides the owner.
 pub fn finish_task(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_with_limit(meta, task, state, actor, false, None)
+    finish_task_checked(meta, task, state, actor, false, TaskFinishPreconditions::default())
 }
 
 /// Like [`finish_task`] for an operator: the task is finished whoever owns it. The audit entry says that it was
 /// an operator's doing and whose task it overrode, so the log never shows an owner finishing what an operator
 /// finished for it.
 pub fn finish_task_as_operator(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_with_limit(meta, task, state, actor, true, None)
+    finish_task_checked(meta, task, state, actor, true, TaskFinishPreconditions::default())
 }
 
-/// Finishes only if the optional execution-policy precondition still matches.
-/// The check shares the task transition transaction; zero is a meaningful expected limit.
+/// Finishes with an optional retry-policy comparison. Prefer the full preconditions
+/// when completing work from a particular execution attempt.
 pub fn finish_task_with_limit(
     meta: &Meta,
     task: &str,
@@ -276,6 +276,46 @@ pub fn finish_task_with_limit(
     actor: &str,
     operator: bool,
     expected_max_attempts: Option<u32>,
+) -> Result<(), AgentError> {
+    finish_task_checked(
+        meta,
+        task,
+        state,
+        actor,
+        operator,
+        TaskFinishPreconditions { max_attempts: expected_max_attempts, attempts_started: None },
+    )
+}
+
+/// Observed execution state for a conditional task transition.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TaskFinishPreconditions {
+    /// Expected configured limit, including an explicitly unset limit of zero.
+    pub max_attempts: Option<u32>,
+    /// Expected durable count of admitted runs; a new run invalidates this snapshot.
+    pub attempts_started: Option<u64>,
+}
+
+impl TaskFinishPreconditions {
+    fn check(self, task: &TaskRow) -> Result<(), MetaError> {
+        if self.max_attempts.is_some_and(|expected| task.max_attempts != expected)
+            || self.attempts_started.is_some_and(|expected| task.attempts_started != expected)
+        {
+            return Err(MetaError::Invalid("task execution changed; reload before finishing".into()));
+        }
+        Ok(())
+    }
+}
+
+/// Finishes only if the observed execution generation and policy still match.
+/// Preconditions share the task transition transaction; zero remains meaningful.
+pub fn finish_task_checked(
+    meta: &Meta,
+    task: &str,
+    state: &str,
+    actor: &str,
+    operator: bool,
+    expected: TaskFinishPreconditions,
 ) -> Result<(), AgentError> {
     if !["done", "cancelled"].contains(&state) {
         return Err(AgentError::Invalid("state must be 'done' or 'cancelled'".into()));
@@ -286,9 +326,7 @@ pub fn finish_task_with_limit(
     };
     meta.write(|tx| {
         let t = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
-        if expected_max_attempts.is_some_and(|expected| t.max_attempts != expected) {
-            return Err(MetaError::Invalid("task attempt limit changed; reload before finishing".into()));
-        }
+        expected.check(&t)?;
         let mut details = json!({"state": state});
         match t.owner.as_ref() {
             Some(o) if operator => {

@@ -1479,6 +1479,10 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l repository -d 'Explicit repository on the same server; repeat for up to 30 repositories' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l cursor -d 'Resume the opaque cursor returned by the previous page' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l checkpoint -d 'Load a saved cursor, then atomically replace it after emitted events' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l limit -d 'Maximum events in the replay page (default: 100; maximum: 1000)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l after -d 'Replay events after this sequence number' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l topics -d 'Only these topics (prefix match), e.g. `stream,proposal`' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l remote -d 'Remote to use (default: origin)' -r
@@ -1487,6 +1491,7 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l from-start -d 'Deliberately include history; otherwise a new feed starts from now'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l follow -d 'Keep following new events'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

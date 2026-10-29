@@ -873,6 +873,8 @@ pub enum RemoteCmd {
     Streams,
     /// Show the events of the repository (replay), or follow them live.
     Events {
+        #[command(flatten)]
+        feed: crate::cmds::event_feed::FeedArgs,
         /// Replay events after this sequence number.
         #[arg(long, default_value_t = 0)]
         after: u64,
@@ -1374,8 +1376,10 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .join("\n")
                 })?;
             }
-            RemoteCmd::Events { after, topics, follow } => {
-                if *follow {
+            RemoteCmd::Events { after, topics, follow, feed } => {
+                if !feed.repos.is_empty() {
+                    crate::cmds::event_feed::run(&c, cli, feed, topics, *follow, *after).await?;
+                } else if *follow {
                     let mut stream = c
                         .events()
                         .subscribe(tonic::Request::new(v1::SubscribeRequest {

@@ -3202,6 +3202,10 @@ never\:"Never colour"))' \
 ;;
 (events)
 _arguments "${_arguments_options[@]}" : \
+'*--repository=[Explicit repository on the same server; repeat for up to 30 repositories]:OWNER/NAME:_default' \
+'(--from-start)--cursor=[Resume the opaque cursor returned by the previous page]:CURSOR:_default' \
+'--checkpoint=[Load a saved cursor, then atomically replace it after emitted events]:PATH:_files' \
+'--limit=[Maximum events in the replay page (default\: 100; maximum\: 1000)]:LIMIT:_default' \
 '--after=[Replay events after this sequence number]:AFTER:_default' \
 '*--topics=[Only these topics (prefix match), e.g. \`stream,proposal\`]:TOPICS:_default' \
 '--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
@@ -3211,6 +3215,7 @@ _arguments "${_arguments_options[@]}" : \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
+'(--cursor)--from-start[Deliberately include history; otherwise a new feed starts from now]' \
 '--follow[Keep following new events]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \

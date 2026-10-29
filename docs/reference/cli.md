@@ -3537,18 +3537,23 @@ Show the events of the repository (replay), or follow them live
 Usage: ag remote events [OPTIONS]
 
 Options:
-      --after <AFTER>    Replay events after this sequence number [default: 0]
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --topics <TOPICS>  Only these topics (prefix match), e.g. `stream,proposal`
-      --follow           Keep following new events
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>               Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>          Remote to use (default: origin)
+      --repository <OWNER/NAME>  Explicit repository on the same server; repeat for up to 30 repositories
+      --as <IDENTITY>            Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --cursor <CURSOR>          Resume the opaque cursor returned by the previous page
+      --checkpoint <PATH>        Load a saved cursor, then atomically replace it after emitted events
+      --json                     Machine-readable JSON output
+      --color <WHEN>             Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --from-start               Deliberately include history; otherwise a new feed starts from now
+      --limit <LIMIT>            Maximum events in the replay page (default: 100; maximum: 1000)
+  -q, --quiet                    Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --after <AFTER>            Replay events after this sequence number [default: 0]
+  -v, --verbose                  Explain what is happening on standard error: repository, identity, remote, timing
+      --topics <TOPICS>          Only these topics (prefix match), e.g. `stream,proposal`
+      --follow                   Keep following new events
+  -h, --help                     Print help
+  -V, --version                  Print version
 ```
 
 ## ag remote policy

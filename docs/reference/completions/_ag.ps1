@@ -2621,6 +2621,10 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;remote;events' {
+            [CompletionResult]::new('--repository', '--repository', [CompletionResultType]::ParameterName, 'Explicit repository on the same server; repeat for up to 30 repositories')
+            [CompletionResult]::new('--cursor', '--cursor', [CompletionResultType]::ParameterName, 'Resume the opaque cursor returned by the previous page')
+            [CompletionResult]::new('--checkpoint', '--checkpoint', [CompletionResultType]::ParameterName, 'Load a saved cursor, then atomically replace it after emitted events')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Maximum events in the replay page (default: 100; maximum: 1000)')
             [CompletionResult]::new('--after', '--after', [CompletionResultType]::ParameterName, 'Replay events after this sequence number')
             [CompletionResult]::new('--topics', '--topics', [CompletionResultType]::ParameterName, 'Only these topics (prefix match), e.g. `stream,proposal`')
             [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Remote to use (default: origin)')
@@ -2628,6 +2632,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
             [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--from-start', '--from-start', [CompletionResultType]::ParameterName, 'Deliberately include history; otherwise a new feed starts from now')
             [CompletionResult]::new('--follow', '--follow', [CompletionResultType]::ParameterName, 'Keep following new events')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')

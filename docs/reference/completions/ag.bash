@@ -4126,12 +4126,28 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote__subcmd__events)
-            opts="-C -q -v -h -V --after --topics --follow --remote --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --repository --cursor --checkpoint --from-start --limit --after --topics --follow --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --repository)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --cursor)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --checkpoint)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --limit)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --after)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

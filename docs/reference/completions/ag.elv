@@ -2481,6 +2481,10 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;remote;events'= {
+            cand --repository 'Explicit repository on the same server; repeat for up to 30 repositories'
+            cand --cursor 'Resume the opaque cursor returned by the previous page'
+            cand --checkpoint 'Load a saved cursor, then atomically replace it after emitted events'
+            cand --limit 'Maximum events in the replay page (default: 100; maximum: 1000)'
             cand --after 'Replay events after this sequence number'
             cand --topics 'Only these topics (prefix match), e.g. `stream,proposal`'
             cand --remote 'Remote to use (default: origin)'
@@ -2488,6 +2492,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'
             cand --color 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never'
+            cand --from-start 'Deliberately include history; otherwise a new feed starts from now'
             cand --follow 'Keep following new events'
             cand --json 'Machine-readable JSON output'
             cand -q 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

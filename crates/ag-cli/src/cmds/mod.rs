@@ -8,6 +8,7 @@ pub mod config;
 pub mod conflicts;
 pub mod discussions;
 pub mod doctor;
+pub mod event_feed;
 pub mod explain;
 pub mod file_drafts;
 pub mod flow;

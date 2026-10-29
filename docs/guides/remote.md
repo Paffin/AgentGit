@@ -130,6 +130,31 @@ The original file type and executable bit come from the immutable base. Each acc
 keep at most 20 active file drafts per repository. Drafts are private through the API;
 administrators and backups can still contain them.
 
+## Cross-repository event feed
+
+On development servers advertising `events.multi_repo`, use repeated `--repository` to
+follow an explicit set of up to 30 repositories on the configured server. The existing
+single-repository `remote events --after` command is unchanged; `--repo` still selects a
+local directory, so cross-repository feeds use the longer `--repository` option.
+
+```sh
+# Start from now and save the checkpoint; no historical flood.
+ag remote events --repository acme/api --repository acme/web --checkpoint feed.cursor
+# Resume that exact repository/topic scope and follow new events.
+ag --json remote events --repository acme/api --repository acme/web --checkpoint feed.cursor --follow
+# Explicit historical replay, one bounded page; repeat using the returned cursor.
+ag remote events --repository acme/api --repository acme/web --from-start --limit 100
+ag remote events --repository acme/api --repository acme/web --cursor OPAQUE_CURSOR --limit 100
+```
+
+Replay returns one page with its next cursor and `has_more`; the default page limit is 100,
+with a maximum of 1000. A cursor belongs to its repository/topic scope: do not reuse it for a
+different scope. Events retain repository-local ordering; there is no global sequence
+across repositories. Follow mode prints JSON envelopes one per line with `--json`. Heartbeats
+and checkpoints advance the checkpoint file without appearing as user actions. Checkpoints
+are replaced atomically after output is flushed; a failed output does not advance past the
+unwritten event. Resume with the same options after a disconnect.
+
 ## Offline
 
 Nothing about a local repository needs the server:

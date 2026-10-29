@@ -4,13 +4,10 @@
 .SH NAME
 ag\-remote\-events \- Show the events of the repository (replay), or follow them live
 .SH SYNOPSIS
-\fBag remote events\fR [\fB\-\-after\fR] [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-as\fR] [\fB\-\-topics\fR] [\fB\-\-follow\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
+\fBag remote events\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-repository\fR] [\fB\-\-as\fR] [\fB\-\-cursor\fR] [\fB\-\-checkpoint\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-\-from\-start\fR] [\fB\-\-limit\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-\-after\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-topics\fR] [\fB\-\-follow\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
 .SH DESCRIPTION
 Show the events of the repository (replay), or follow them live
 .SH OPTIONS
-.TP
-\fB\-\-after\fR \fI<AFTER>\fR [default: 0]
-Replay events after this sequence number
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
@@ -18,14 +15,17 @@ Operate on the repository at this path (default: discovered from the current dir
 \fB\-\-remote\fR \fI<REMOTE>\fR
 Remote to use (default: origin)
 .TP
+\fB\-\-repository\fR \fI<OWNER/NAME>\fR
+Explicit repository on the same server; repeat for up to 30 repositories
+.TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
 .TP
-\fB\-\-topics\fR \fI<TOPICS>\fR
-Only these topics (prefix match), e.g. `stream,proposal`
+\fB\-\-cursor\fR \fI<CURSOR>\fR
+Resume the opaque cursor returned by the previous page
 .TP
-\fB\-\-follow\fR
-Keep following new events
+\fB\-\-checkpoint\fR \fI<PATH>\fR
+Load a saved cursor, then atomically replace it after emitted events
 .TP
 \fB\-\-json\fR
 Machine\-readable JSON output
@@ -33,11 +33,26 @@ Machine\-readable JSON output
 \fB\-\-color\fR \fI<WHEN>\fR
 Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
 .TP
+\fB\-\-from\-start\fR
+Deliberately include history; otherwise a new feed starts from now
+.TP
+\fB\-\-limit\fR \fI<LIMIT>\fR
+Maximum events in the replay page (default: 100; maximum: 1000)
+.TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
 .TP
+\fB\-\-after\fR \fI<AFTER>\fR [default: 0]
+Replay events after this sequence number
+.TP
 \fB\-v\fR, \fB\-\-verbose\fR
 Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-\-topics\fR \fI<TOPICS>\fR
+Only these topics (prefix match), e.g. `stream,proposal`
+.TP
+\fB\-\-follow\fR
+Keep following new events
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

@@ -156,3 +156,5 @@ hashing, merge semantics or the publication protocol need an ADR ([CONTRIBUTING]
 ## Active core slice: durable task execution limits
 
 Merged in [PR #116](https://github.com/Paffin/AgentGit/pull/116): server-transactional attempt admission, operator extension with optimistic concurrency, CLI/HTTP/gRPC/SDK contracts, and orchestrator restart recovery. Metadata schema 8 preserves existing task/run history. Evidence: agent coordination, real-server executor recovery, HTTP permissions/idempotency, CLI and SQLite/PostgreSQL upgrade scenarios. Web UI displays exhaustion; editing the limit in the browser remains follow-up work.
+
+Automatic cancellation also carries an expected attempt policy. Concurrent operator changes survive stale session decisions, and reconciliation reloads durable history (ADR0034).

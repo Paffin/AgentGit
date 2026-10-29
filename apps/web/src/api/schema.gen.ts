@@ -2541,6 +2541,13 @@ export interface components {
      *     log as an operator's, with the owner it overrode.
      */
     FinishTaskRequest: {
+      /**
+       * Format: int32
+       * @description Optional execution-policy precondition, checked atomically with the state change.
+       *     Explicit zero matches an unset limit; omission preserves ordinary manual completion.
+       * @default null
+       */
+      expected_max_attempts: number | null
       /** @default  */
       id: string
       /**

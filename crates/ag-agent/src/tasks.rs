@@ -257,17 +257,26 @@ pub(crate) fn claim_in_tx(tx: &Tx<'_>, task: &str, owner: &str) -> Result<(), Me
 /// (`agent:bot#run_…`) may only finish the task *that run* claimed - another run of the same agent has no say in
 /// it. Use [`finish_task_as_operator`] for an operator that overrides the owner.
 pub fn finish_task(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_inner(meta, task, state, actor, false)
+    finish_task_with_limit(meta, task, state, actor, false, None)
 }
 
 /// Like [`finish_task`] for an operator: the task is finished whoever owns it. The audit entry says that it was
 /// an operator's doing and whose task it overrode, so the log never shows an owner finishing what an operator
 /// finished for it.
 pub fn finish_task_as_operator(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_inner(meta, task, state, actor, true)
+    finish_task_with_limit(meta, task, state, actor, true, None)
 }
 
-fn finish_task_inner(meta: &Meta, task: &str, state: &str, actor: &str, operator: bool) -> Result<(), AgentError> {
+/// Finishes only if the optional execution-policy precondition still matches.
+/// The check shares the task transition transaction; zero is a meaningful expected limit.
+pub fn finish_task_with_limit(
+    meta: &Meta,
+    task: &str,
+    state: &str,
+    actor: &str,
+    operator: bool,
+    expected_max_attempts: Option<u32>,
+) -> Result<(), AgentError> {
     if !["done", "cancelled"].contains(&state) {
         return Err(AgentError::Invalid("state must be 'done' or 'cancelled'".into()));
     }
@@ -277,6 +286,9 @@ fn finish_task_inner(meta: &Meta, task: &str, state: &str, actor: &str, operator
     };
     meta.write(|tx| {
         let t = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
+        if expected_max_attempts.is_some_and(|expected| t.max_attempts != expected) {
+            return Err(MetaError::Invalid("task attempt limit changed; reload before finishing".into()));
+        }
         let mut details = json!({"state": state});
         match t.owner.as_ref() {
             Some(o) if operator => {

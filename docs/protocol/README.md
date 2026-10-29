@@ -43,3 +43,5 @@ Clients: the `ag` CLI (`ag clone/fetch/pull/push/remote`) and the Rust crate `ag
 ## Task execution limits (development)
 
 Negotiate `tasks.attempt_limits` before relying on enforcement. `Task.max_attempts` is the total allowed admitted runs (0 means unset); `Task.attempts_started` is derived from durable run history. Creation accepts `max_attempts`. `PATCH /v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit` (`task.set_attempt_limit`, gRPC `SetTaskAttemptLimit`) requires `max_attempts`, `expected_max_attempts`, and an idempotency key. The creator can adjust the limit before the first run; subsequent changes require an operator. Exhausted tasks are not ready. A rejected start consumes no attempt, and an accepted start replay returns the original run.
+
+`task.finish` also accepts optional `expected_max_attempts`. The state transition compares this value atomically; a changed limit returns HTTP 412 without finishing the task. Explicit zero compares an unset policy. Omission retains manual completion semantics.

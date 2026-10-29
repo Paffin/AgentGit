@@ -257,13 +257,20 @@ func (s *Session) finishTask(state string) {
 	for attempt := 0; attempt < 3; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		// By the orchestrator, as an operator: the run's own credential has just stopped working with the run.
-		_, err = s.m.o.Orch.FinishTask(ctx, s.req.Repo, s.req.Task.ID, state)
+		if state == "cancelled" {
+			_, err = s.m.o.Orch.FinishTaskAtAttemptLimit(ctx, s.req.Repo, s.req.Task.ID, state, s.req.Task.MaxAttempts)
+		} else {
+			_, err = s.m.o.Orch.FinishTask(ctx, s.req.Repo, s.req.Task.ID, state)
+		}
 		cancel()
 		if err == nil {
 			return
 		}
 		if agwp.IsCode(err, agwp.CodeFailedPrecond) { // finished or owned by someone else in the meantime
-			s.m.o.Log.Info("task already finished or no longer ours", "task", s.req.Task.ID, "err", err)
+			s.m.o.Log.Info("task changed, already finished or no longer ours", "task", s.req.Task.ID, "err", err)
+			if s.req.Reconsider != nil {
+				s.req.Reconsider()
+			}
 			return
 		}
 		time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)

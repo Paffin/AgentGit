@@ -48,6 +48,7 @@ type Sessions interface {
 	Cancel(runID, reason string) bool
 	Has(runID string) bool
 	FinishTask(ctx context.Context, repo, taskID, state string) error
+	CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error
 }
 
 // PathSource tells which files each open proposal changes (satisfied by
@@ -464,7 +465,7 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	}
 	if spent >= s.o.Repo.Schedule.Attempts || temp >= maxTempFails {
 		s.log.Warn("giving up on the task: its attempt budget was spent before this process started", "task", t.ID, "attempts", spent, "temporary_failures", temp)
-		if err := s.o.Sessions.FinishTask(ctx, repo, t.ID, agwp.TaskCancelled); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+		if err := s.o.Sessions.CancelTaskAtAttemptLimit(ctx, repo, t.ID, t.MaxAttempts); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
 			s.log.Warn("could not cancel the task", "task", t.ID, "err", err)
 		}
 		s.clearDeferred(t.ID)
@@ -574,6 +575,7 @@ func (s *Scheduler) startSession(ctx context.Context, t agwp.Task, ex config.Exe
 	info, err := s.o.Sessions.Start(ctx, session.Request{
 		Repo: s.o.Repo.Name, Stream: s.o.Repo.Stream, Task: t, Executor: ex, Attempt: attempt,
 		Lease: sc.Lease, LeaseTTL: sc.LeaseTTL, Decide: s.decide,
+		Reconsider: func() { s.forgetTask(t.ID) },
 	})
 	if err != nil {
 		return nil, err
@@ -728,7 +730,7 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 	for id, a := range pending {
 		t, ok := byID[id]
 		if !ok || t.State == agwp.TaskDone || t.State == agwp.TaskCancelled {
-			s.forgetWaiting(id)
+			s.forgetTask(id)
 			continue
 		}
 		integrated, openNow := 0, 0
@@ -765,7 +767,7 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 			continue
 		}
 		s.log.Info("work landed or was closed; task finished", "task", id, "state", state)
-		s.forgetWaiting(id)
+		s.forgetTask(id)
 		// The caller's task list was read before this; record the new state in it so the
 		// finished task is not offered for adoption in this same pass.
 		for i := range tasks {
@@ -782,7 +784,7 @@ func (s *Scheduler) attemptsOf(id string) int {
 	return s.attempts[id]
 }
 
-func (s *Scheduler) forgetWaiting(id string) {
+func (s *Scheduler) forgetTask(id string) {
 	s.mu.Lock()
 	delete(s.awaiting, id)
 	delete(s.attempts, id)

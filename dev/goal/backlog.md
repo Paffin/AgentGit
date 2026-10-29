@@ -89,4 +89,6 @@ requested reviewers remain open; this prerequisite does not complete those workf
 Required line-discussion resolution is implemented as an optional policy gate, including
 older anchors, no-op completion and a reopen/commit race. Web configuration/remediation and
 CLI explanations use the same server rule. The active priority remains agent-native execution and deterministic integration; reviewer assignment remains open.
-Core integration: PR112 (atomic expected-head proposal updates) and PR114 (revalidate proposal and stream at final integration commit) are merged. PR115 adds policy-required thread resolution. PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.
+Core integration: PR112 (atomic expected-head proposal updates) and PR114 (revalidate proposal and stream at final integration commit) are merged. PR115 (policy-required thread resolution) is also merged. PR113 adds review suggestions on the same head-precondition contract. These remain distinct from a published release.
+
+Retry policy changes during an active run now reject stale automatic cancellation atomically; the scheduler rereads durable history before resuming. See ADR0034 and the evidence journal.

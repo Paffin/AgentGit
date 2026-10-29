@@ -820,3 +820,17 @@ fn a_rolled_back_run_does_not_consume_the_task_attempt_limit() {
     assert_eq!(unchanged.state, "open");
     assert!(registry::start_run(&e.meta, "retry-bot", Some(&task.id)).is_ok());
 }
+
+#[test]
+fn stale_retry_policy_cannot_cancel_a_task_or_append_a_finish_audit() {
+    let e = env();
+    let task = tasks::create_task(&e.meta, "Preserve operator policy", "", &[], "user:creator").unwrap();
+    e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 2, 0, "user:operator", true)).unwrap();
+    let before = e.meta.read(|tx| tx.audit_list(None, 100)).unwrap().len();
+    let stale = tasks::finish_task_with_limit(&e.meta, &task.id, "cancelled", "user:operator", true, Some(0));
+    assert!(matches!(stale, Err(AgentError::Conflict(_))));
+    assert_eq!(e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap().state, "open");
+    assert_eq!(e.meta.read(|tx| tx.audit_list(None, 100)).unwrap().len(), before);
+    tasks::finish_task_with_limit(&e.meta, &task.id, "cancelled", "user:operator", true, Some(2)).unwrap();
+    assert_eq!(e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap().state, "cancelled");
+}

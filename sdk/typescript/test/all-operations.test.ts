@@ -359,7 +359,7 @@ describe('the tour', () => {
     const entry = await runner.provenance.submit({ repo, record, signature: signProvenance(record, key.privateKey) });
     expect(entry.verified).toBe(true);
     expect((await alice.provenance.list({ repo, changeset: head })).entries).toHaveLength(1);
-    await runner.tasks.finish({ repo, id: task.id, state: 'done' });
+    await runner.tasks.finish({ repo, id: task.id, state: 'done', expected_max_attempts: 2 });
     await runner.agents.complete({ repo, run_id: run.run_id, status: 'completed' });
     expect((await alice.tasks.get({ repo, id: dep.id })).ready).toBe(true);
     const followUp = await alice.tasks.create({ repo, title: 'Separate follow-up', source_task: task.id });

@@ -168,6 +168,24 @@ class PipelinePolicy(unittest.TestCase):
         for job in ('binaries', 'image'):
             self.assertEqual(prepare[job]['needs'], 'verify')
 
+    def test_reusable_workflows_never_increase_inherited_permissions(self):
+        rank = {'none': 0, 'read': 1, 'write': 2}
+        def visit(name, ceiling=None, chain=()):
+            self.assertNotIn(name, chain, 'reusable workflow cycle')
+            doc = workflow(name)
+            defaults = doc.get('permissions', {})
+            for job_name, job in doc['jobs'].items():
+                requested = job.get('permissions', defaults)
+                if ceiling is not None:
+                    for scope, level in requested.items():
+                        self.assertLessEqual(rank[level], rank[ceiling.get(scope, 'none')],
+                                             f'{name}/{job_name} escalates {scope} through {chain}')
+                target = job.get('uses', '')
+                if target.startswith('./.github/workflows/'):
+                    visit(Path(target).stem, requested, chain + (name,))
+        visit('prepare-release')
+        visit('qualification')
+
     def test_preparation_cannot_publish_public_versions(self):
         doc = workflow('prepare-release')
         self.assertNotIn('push', doc.get('on', doc.get(True)))

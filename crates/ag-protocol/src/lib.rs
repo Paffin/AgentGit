@@ -115,9 +115,13 @@ pub mod features {
     /// Private existing-file edits with immutable original metadata.
     pub const FILES_DRAFTS: &str = "files.drafts";
 
+    /// A bounded event stream with independent cursors for explicit repositories.
+    pub const EVENTS_MULTI_REPO: &str = "events.multi_repo";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
+        EVENTS_MULTI_REPO,
         WORKSPACES_VIRTUAL,
         WORKSPACES_SYNC_PRECONDITION,
         WORKSPACES_CONFLICT_ORIGINS,

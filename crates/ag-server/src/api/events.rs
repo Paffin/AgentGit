@@ -36,7 +36,7 @@ pub struct EventBatch {
     pub scanned_seq: u64,
 }
 
-fn to_event(repo: &str, e: &AuditEntry) -> v1::Event {
+pub(super) fn to_event(repo: &str, e: &AuditEntry) -> v1::Event {
     let details: serde_json::Value = serde_json::from_str(&e.details).unwrap_or(serde_json::Value::Null);
     v1::Event {
         seq: e.seq,
@@ -47,7 +47,7 @@ fn to_event(repo: &str, e: &AuditEntry) -> v1::Event {
     }
 }
 
-fn matches_topics(topics: &[String], topic: &str) -> bool {
+pub(super) fn matches_topics(topics: &[String], topic: &str) -> bool {
     topics.is_empty() || topics.iter().any(|t| topic == t || topic.starts_with(&format!("{t}.")) || t == "*")
 }
 
@@ -212,7 +212,7 @@ impl App {
     }
 }
 
-struct GaugeGuard(App);
+pub(super) struct GaugeGuard(pub(super) App);
 
 impl Drop for GaugeGuard {
     fn drop(&mut self) {

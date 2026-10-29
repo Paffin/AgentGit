@@ -62,3 +62,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0042 — Private proposal comment drafts](0042-private-comment-drafts.md)
 
 - [0043 — Private single-file drafts](0043-private-file-drafts.md)
+
+- [0044 — Cross-repository events](0044-cross-repository-events.md)

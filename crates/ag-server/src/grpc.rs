@@ -636,6 +636,28 @@ impl AgentService for Grpc {
 
 #[tonic::async_trait]
 impl EventService for Grpc {
+    type SubscribeManyStream = BoxStream<v1::EventEnvelope>;
+    async fn subscribe_many(
+        &self,
+        request: Request<v1::SubscribeManyRequest>,
+    ) -> Result<Response<Self::SubscribeManyStream>, Status> {
+        let mut ing = ingress_of(&request);
+        ing.deadline_ms = Some(crate::app::NO_DEADLINE_MS);
+        let req = request.into_inner();
+        let app = self.app.clone();
+        let stream = app
+            .clone()
+            .dispatch(ing, "events.subscribe_many", move |call| async move { app.subscribe_many(call, req).await })
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Box::pin(stream.map(|item| item.map_err(status)))))
+    }
+    async fn replay_many(
+        &self,
+        request: Request<v1::ReplayManyRequest>,
+    ) -> Result<Response<v1::ReplayManyResponse>, Status> {
+        unary!(self, request, "events.replay_many", replay_many)
+    }
     type SubscribeStream = BoxStream<v1::Event>;
     async fn subscribe(
         &self,

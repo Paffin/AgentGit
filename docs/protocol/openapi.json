@@ -1520,6 +1520,28 @@
         },
         "type": "object"
       },
+      "EventEnvelope": {
+        "description": "An opaque vector cursor; events from different repositories have no shared sequence.",
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "event": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Event",
+                "description": "Absent for an initial checkpoint, filtered progress, or heartbeat."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ExecutorPresence": {
         "properties": {
           "available": {
@@ -4621,6 +4643,60 @@
         },
         "type": "object"
       },
+      "ReplayManyRequest": {
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "from_start": {
+            "default": false,
+            "description": "With no cursor, deliberately replay all history instead of checkpointing now.",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repos": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ReplayManyResponse": {
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "events": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EventEnvelope"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ReplayRequest": {
         "properties": {
           "after_seq": {
@@ -6601,6 +6677,162 @@
         "summary": "Revoke a credential",
         "tags": [
           "Admin"
+        ]
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "events.subscribe_many",
+        "parameters": [
+          {
+            "description": "Required explicit comma-separated repository names (max30)",
+            "in": "query",
+            "name": "repos",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated audit topic prefixes",
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque cursor returned by replay or an earlier SSE envelope",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checkpoint keep-alive interval (default15000,minimum1000)",
+            "in": "query",
+            "name": "heartbeat_ms",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/v1/events/replay": {
+      "get": {
+        "operationId": "events.replay_many",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_start",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "With no cursor, deliberately replay all history instead of checkpointing now.",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repos",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayManyResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history",
+        "tags": [
+          "Events"
         ]
       }
     },

@@ -115,6 +115,94 @@ impl EventsQuery {
     }
 }
 
+#[derive(Default, Deserialize)]
+struct ManyEventsQuery {
+    #[serde(default)]
+    repos: Vec<String>,
+    #[serde(default)]
+    topics: Vec<String>,
+    cursor: Option<String>,
+    limit: Option<u32>,
+    from_start: Option<bool>,
+    heartbeat_ms: Option<u32>,
+}
+impl ManyEventsQuery {
+    fn parse(query: Option<&str>) -> ApiResult<Self> {
+        let mut q: Self = serde_html_form::from_str(query.unwrap_or(""))
+            .map_err(|e| ApiError::invalid(format!("bad query string: {e}")))?;
+        q.repos = q.repos.iter().flat_map(|value| value.split(',').map(str::to_string)).collect();
+        q.topics = q.topics.iter().flat_map(|value| value.split(',').map(str::to_string)).collect();
+        Ok(q)
+    }
+}
+async fn replay_many_http(State(app): State<App>, headers: HeaderMap, request: Request) -> Response {
+    let ing = ingress_from_headers(&headers, remote_addr(&request));
+    let id = ing.request_id.clone();
+    let q = match ManyEventsQuery::parse(request.uri().query()) {
+        Ok(q) => q,
+        Err(e) => return e.with_request_id(&id).into_response(),
+    };
+    let req = v1::ReplayManyRequest {
+        repos: q.repos,
+        topics: q.topics,
+        cursor: q.cursor.unwrap_or_default(),
+        limit: q.limit.unwrap_or_default(),
+        from_start: q.from_start.unwrap_or_default(),
+    };
+    let a = app.clone();
+    let mut response = finish(
+        app.dispatch(ing, "events.replay_many", move |call| async move { a.replay_many(&call, req).await }).await,
+        &id,
+    );
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+async fn subscribe_many_http(State(app): State<App>, headers: HeaderMap, request: Request) -> Response {
+    let mut ing = ingress_from_headers(&headers, remote_addr(&request));
+    let id = ing.request_id.clone();
+    let q = match ManyEventsQuery::parse(request.uri().query()) {
+        Ok(q) => q,
+        Err(e) => return e.with_request_id(&id).into_response(),
+    };
+    let cursor = match headers.get("last-event-id") {
+        Some(value) => match value.to_str() {
+            Ok(value) => value.to_string(),
+            Err(_) => return ApiError::invalid("invalid Last-Event-ID").with_request_id(&id).into_response(),
+        },
+        None => q.cursor.unwrap_or_default(),
+    };
+    let req = v1::SubscribeManyRequest {
+        repos: q.repos,
+        topics: q.topics,
+        cursor,
+        heartbeat_ms: q.heartbeat_ms.unwrap_or_default(),
+    };
+    ing.deadline_ms = Some(crate::app::NO_DEADLINE_MS);
+    let a = app.clone();
+    match app.dispatch(ing, "events.subscribe_many", move |call| async move { a.subscribe_many(call, req).await }).await
+    {
+        Err(error) => error.with_request_id(&id).into_response(),
+        Ok(stream) => {
+            let sse = stream.map(|item| -> Result<SseEvent, Infallible> {
+                Ok(match item {
+                    Ok(envelope) => SseEvent::default()
+                        .id(envelope.cursor.clone())
+                        .event(envelope.event.as_ref().map(|event| event.topic.as_str()).unwrap_or("checkpoint"))
+                        .data(serde_json::to_string(&envelope).unwrap_or_else(|_| "{}".into())),
+                    Err(error) => SseEvent::default()
+                        .event("error")
+                        .data(serde_json::json!({"error":error.0.to_info()}).to_string()),
+                })
+            });
+            let mut response =
+                Sse::new(sse).keep_alive(KeepAlive::new().interval(Duration::from_secs(25))).into_response();
+            response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response.headers_mut().insert(HeaderName::from_static("x-accel-buffering"), HeaderValue::from_static("no"));
+            response
+        }
+    }
+}
+
 /// `Last-Event-ID`, if the client sent one. A value that is not a sequence number is rejected.
 fn last_event_id(headers: &HeaderMap) -> ApiResult<Option<u64>> {
     headers
@@ -1713,6 +1801,24 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::PredictResponse,
         predict
     );
+
+    meta.push(RouteMeta::json::<v1::ReplayManyRequest,v1::ReplayManyResponse>("get","/v1/events/replay","events.replay_many","Events","Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history"));
+    r = r.route("/v1/events/replay", get(replay_many_http));
+    meta.push(
+        RouteMeta::raw(
+            "get",
+            "/v1/events",
+            "events.subscribe_many",
+            "Events",
+            "Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor",
+        )
+        .query("repos", "string", "Required explicit comma-separated repository names (max30)")
+        .query("topics", "string", "Comma-separated audit topic prefixes")
+        .query("cursor", "string", "Opaque cursor returned by replay or an earlier SSE envelope")
+        .query("heartbeat_ms", "integer", "Checkpoint keep-alive interval (default15000,minimum1000)")
+        .response_body("text/event-stream"),
+    );
+    r = r.route("/v1/events", get(subscribe_many_http));
 
     // ---- events ---------------------------------------------------------------------------------------------
     meta.push(RouteMeta::json::<v1::ReplayRequest, v1::ReplayResponse>(

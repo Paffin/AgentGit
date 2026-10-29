@@ -1531,6 +1531,32 @@ message ReplayResponse {
   uint64 latest_seq = 2;
 }
 
+// An opaque vector cursor; events from different repositories have no shared sequence.
+message EventEnvelope {
+  string cursor = 1;
+  // Absent for an initial checkpoint, filtered progress, or heartbeat.
+  Event event = 2;
+}
+message ReplayManyRequest {
+  repeated string repos = 1;
+  repeated string topics = 2;
+  string cursor = 3;
+  uint32 limit = 4;
+  // With no cursor, deliberately replay all history instead of checkpointing now.
+  bool from_start = 5;
+}
+message ReplayManyResponse {
+  repeated EventEnvelope events = 1;
+  string cursor = 2;
+  bool has_more = 3;
+}
+message SubscribeManyRequest {
+  repeated string repos = 1;
+  repeated string topics = 2;
+  string cursor = 3;
+  uint32 heartbeat_ms = 4;
+}
+
 // ---------------------------------------------------------------------------
 // Administration
 // ---------------------------------------------------------------------------
@@ -2018,6 +2044,8 @@ service AgentService {
 service EventService {
   rpc Subscribe(SubscribeRequest) returns (stream Event);
   rpc Replay(ReplayRequest) returns (ReplayResponse);
+  rpc ReplayMany(ReplayManyRequest) returns (ReplayManyResponse);
+  rpc SubscribeMany(SubscribeManyRequest) returns (stream EventEnvelope);
 }
 
 service AdminService {

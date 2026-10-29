@@ -4,7 +4,9 @@ A release has two distinct stages. **Preparation** builds and qualifies a candid
 
 ## Prepare a candidate
 
-[Prepare release](../../.github/workflows/prepare-release.yml) runs the complete [Qualification](../../.github/workflows/qualification.yml) matrix alongside four native Linux/macOS builds and both container architectures. Native archives are unpacked and exercised, SBOMs and checksums are generated, and every file is attested. The installer then runs against the assembled archives on three fresh runners.
+[Prepare release](../../.github/workflows/prepare-release.yml) reuses successful CI and Security runs for the exact main commit, plus its Web UI check when that path-filtered workflow ran. It never starts those tests again. Four native Linux/macOS builds and both container architectures run in parallel. Native archives are unpacked and exercised, SBOMs and checksums are generated, and every file is attested. The installer then runs against the assembled archives on three fresh runners in parallel.
+
+The extended [Qualification](../../.github/workflows/qualification.yml) matrix runs nightly or on explicit request. Cross-browser, alternate backend/runtime, coverage, fuzz, CodeQL and packaging audits do not block preparation or publication. Release gates still require successful commit CI, native archive smoke tests, checksums, provenance and installer checks.
 
 Successful preparation retains `release-dist` for 14 days. `candidate.json` binds its version, source SHA and preparation run ID; `candidate-images.json` records immutable container manifest digests. The candidate image tags use the source commit, not a public version or `latest`.
 
@@ -236,7 +238,7 @@ runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab wi
 
 ## Release requests from main
 
-A reviewed version bump on main starts or reuses Prepare release for that exact commit. Preparation includes the full qualification matrix, native builds, provenance and installation tests. The request stops if main moves, and cannot create a tag after a failed preparation. Publication only consumes an immutable successful candidate; it does not repeat the full test suite or rebuild archives.
+A reviewed version bump on main starts or reuses Prepare release for that exact commit. Preparation reuses existing commit CI and runs native builds, provenance and installation tests. The selected commit is pinned while main can advance; a failed preparation cannot create a public tag. Publication only consumes an immutable successful candidate; it does not repeat tests or rebuild archives. The extended qualification matrix runs separately at night.
 
 Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.
 

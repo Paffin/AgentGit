@@ -1,6 +1,6 @@
 name: Qualification
 
-# One complete matrix per release candidate (or nightly), never per ordinary push.
+# Extended assurance runs nightly or on explicit request, never in the release critical path.
 on:
   workflow_call:
   workflow_dispatch:

@@ -16,9 +16,10 @@ FLAGS = ('rust', 'sdk', 'go', 'tooling', 'rust_deps', 'npm_deps', 'python_deps',
 def classify(paths):
     selected = dict.fromkeys(FLAGS, False)
     for path in paths:
-        if path.startswith('.github/'):
-            return dict.fromkeys(FLAGS, True)
         known = False
+        if path.startswith('.github/workflows/') or path == '.github/dependabot.yml':
+            selected['tooling'] = True
+            known = True
         if path.startswith(('crates/', 'proto/', 'migrations/', '.cargo/')) or path in ('Cargo.toml', 'Cargo.lock'):
             selected['rust'] = True
             known = True

@@ -30,7 +30,11 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Development (`main`):** operators can disable or re-enable new runs for an individual agent from the browser or `ag agent disable NAME --remote origin` (`enable` to restore admission). Existing sessions, keys and history are retained. This is not included in the beta.5 archives; see [ADR-0026](docs/adr/0026-agent-run-admission.md).
 
-**Development upgrade:** persistent follow-up task links require metadata schema 7. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
+**Development core:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. [Execution limits](docs/adr/0033-task-attempt-limits.md).
+
+**Development upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
+
+Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
 Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 

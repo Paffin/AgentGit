@@ -222,6 +222,13 @@ fn claim_run_task(tx: &Tx<'_>, task_id: Option<&str>, identity: &str) -> Result<
     if crate::scheduling::in_tx(tx)?.paused {
         return Err(MetaError::Invalid("new task runs are paused by a repository operator".into()));
     }
+    let row = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
+    if row.max_attempts > 0 && row.attempts_started >= u64::from(row.max_attempts) {
+        return Err(MetaError::Invalid(format!(
+            "task '{task}' has used all {} allowed attempts; increase its limit before starting another run",
+            row.max_attempts
+        )));
+    }
     crate::tasks::claim_in_tx(tx, task, identity)?;
     // A task is worked on by one run at a time, even when both runs have the same agent.
     if let Some(active) = tx.runs_running_for_task(task)?.first() {

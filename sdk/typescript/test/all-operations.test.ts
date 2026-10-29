@@ -323,6 +323,10 @@ describe('the tour', () => {
     });
     expect(refined.title).toBe('Refined tour task');
     expect((await alice.tasks.get({ repo, id: task.id })).description).toBe('A concrete result');
+    expect(
+      (await alice.tasks.setAttemptLimit({ repo, id: task.id, max_attempts: 2, expected_max_attempts: 0 }))
+        .max_attempts,
+    ).toBe(2);
     const dep = await alice.tasks.create({ repo, title: 'depends' });
     await alice.tasks.depend({ repo, task: dep.id, depends_on: task.id });
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);

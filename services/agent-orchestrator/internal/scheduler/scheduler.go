@@ -318,6 +318,10 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 		if !ok {
 			continue // not ours
 		}
+		if t.MaxAttempts > 0 && t.AttemptsStarted >= uint64(t.MaxAttempts) {
+			s.setDeferred(t, ReasonAttemptLimit, fmt.Sprintf("%d of %d attempts started; an operator can extend this task's limit", t.AttemptsStarted, t.MaxAttempts))
+			continue
+		}
 		if t.State == agwp.TaskInProgress {
 			// An adopted task: the previous process may have spent attempts on it.
 			if !s.recoverBudget(ctx, t, ex) {
@@ -446,6 +450,15 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	s.mu.Lock()
 	s.seeded[t.ID] = true
 	s.mu.Unlock()
+	if t.MaxAttempts > 0 {
+		s.mu.Lock()
+		s.attempts[t.ID] = int(t.AttemptsStarted)
+		if !last.IsZero() {
+			s.retryAt[t.ID] = last.Add(s.backoffFor(max(1, int(t.AttemptsStarted))))
+		}
+		s.mu.Unlock()
+		return true
+	}
 	if spent+temp == 0 {
 		return true
 	}
@@ -553,6 +566,9 @@ func (s *Scheduler) repoSessions() []session.Info {
 func (s *Scheduler) startSession(ctx context.Context, t agwp.Task, ex config.Executor) (*session.Info, error) {
 	s.mu.Lock()
 	attempt := s.attempts[t.ID] + 1
+	if t.MaxAttempts > 0 {
+		attempt = int(t.AttemptsStarted) + 1
+	}
 	s.mu.Unlock()
 	sc := s.o.Repo.Schedule
 	info, err := s.o.Sessions.Start(ctx, session.Request{
@@ -602,6 +618,10 @@ func (s *Scheduler) decide(res session.Result) session.Disposition {
 	if open > 0 {
 		s.log.Warn("the session failed after opening proposals; the task waits for them", "task", id, "proposals", props)
 		return waitForLanding()
+	}
+	if res.Task.MaxAttempts > 0 {
+		s.retryAt[id] = s.o.Clock.Now().Add(s.backoffFor(res.Attempt))
+		return session.Keep // exhaustion defers the task; extending its durable limit can resume it
 	}
 	if res.ExitCode == session.ExitTempFail && s.tempFails[id] < maxTempFails {
 		s.tempFails[id]++

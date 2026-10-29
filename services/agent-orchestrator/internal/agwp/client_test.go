@@ -349,6 +349,10 @@ func TestKeyedMutationsAreRepeatedWithTheSameKey(t *testing.T) {
 // repeated with the same key instead of being reported as an unknown outcome.
 func TestMutationsTheServerHonoursKeysForAreRepeated(t *testing.T) {
 	cases := map[string]func(c *Client) error{
+		"task.set_attempt_limit": func(c *Client) error {
+			_, err := c.SetTaskAttemptLimit(context.Background(), "acme/web", "task", 3, 2)
+			return err
+		},
 		"task.create": func(c *Client) error {
 			_, err := c.CreateTask(context.Background(), "acme/web", "t", "", nil, nil)
 			return err

@@ -33,6 +33,26 @@ ag agent start refactor-bot --task <id> # claims the task; fails if it is blocke
 ag task done <id>                       # only the owner can finish it
 ```
 
+### Bound retries without losing the task (development)
+
+```sh
+ag task create "Repair the build" --max-attempts 3
+ag task attempts <task-id>
+ag task attempts <task-id> --max 5 --expected 3
+# The same policy on a configured server:
+ag task attempts <task-id> --remote origin --max 5 --expected 3
+```
+
+The server counts every run admitted for the task, including failed, interrupted and currently
+running attempts. A replayed start counts once. The count survives orchestrator restart.
+An explicit limit keeps a failed task available for operator recovery; extending it preserves
+instructions, dependencies and all run records. After execution starts, an operator must change
+the limit. Zero retains the legacy server behavior and the orchestrator's repository retry policy.
+An explicit limit includes temporary failures too. Lowering it does not stop an active run.
+
+This requires metadata schema 8 and a server advertising `tasks.attempt_limits`. Back up before
+upgrade; older binaries need the pre-upgrade backup. See [ADR 0033](../adr/0033-task-attempt-limits.md).
+
 ## 3. Coordination: leases and fencing
 
 ```bash

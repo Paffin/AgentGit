@@ -285,9 +285,12 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
           task.data.value.state
         }}</Badge
         ><span v-if="active">{{
-          task.data.value.ready
-            ? 'All prerequisites are complete.'
-            : 'Waiting for unfinished prerequisites.'
+          task.data.value.max_attempts > 0 &&
+          task.data.value.attempts_started >= task.data.value.max_attempts
+            ? 'No further attempts available under the current limit.'
+            : task.data.value.ready
+              ? 'All prerequisites are complete.'
+              : 'Waiting for unfinished prerequisites.'
         }}</span
         ><span v-if="task.data.value.owner"
           >{{ task.data.value.state === 'open' ? 'Assigned to' : 'Owned by' }}

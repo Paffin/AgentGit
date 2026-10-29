@@ -294,7 +294,13 @@ const toggle = (id: string, on: boolean) => {
                 size="sm"
                 :tone="t.ready ? 'ok' : 'warn'"
                 :icon="t.ready ? 'check' : 'lock'"
-                >{{ t.ready ? 'ready' : `waiting for ${waitingFor(t).length}` }}</Badge
+                >{{
+                  t.max_attempts > 0 && t.attempts_started >= t.max_attempts
+                    ? 'attempt limit reached'
+                    : t.ready
+                      ? 'ready'
+                      : `waiting for ${waitingFor(t).length}`
+                }}</Badge
               >
               <Badge v-for="s in t.scope" :key="s" size="sm" mono>{{ s }}</Badge>
             </p>

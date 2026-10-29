@@ -2593,6 +2593,130 @@ never\:"Never colour"))' \
     ;;
 esac
 ;;
+(file-draft)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ag__subcmd__remote__subcmd__file-draft_commands" \
+"*::: :->file-draft" \
+&& ret=0
+
+    case $state in
+    (file-draft)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ag-remote-file-draft-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream containing the files]:STREAM:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream containing the file]:STREAM:_default' \
+'--path=[Repository-relative file path]:PATH:_default' \
+'--output=[Write saved bytes to this local file (replaces an existing file)]:PATH:_files' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(save)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream containing the file]:STREAM:_default' \
+'--path=[Repository-relative file path]:PATH:_default' \
+'--base=[Exact changeset containing the original file you inspected]:BASE:_default' \
+'--content-file=[Binary replacement file, at most 4 MiB]:PATH:_files' \
+'--expected-version=[Version returned by get; zero only if no draft has existed]:EXPECTED_VERSION:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" : \
+'--stream=[Stream containing the file]:STREAM:_default' \
+'--path=[Repository-relative file path]:PATH:_default' \
+'--expected-version=[Version returned by get, including a cleared version]:EXPECTED_VERSION:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (comment-draft)
 _arguments "${_arguments_options[@]}" : \
 '--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
@@ -4146,6 +4270,7 @@ _ag__subcmd__remote_commands() {
 'explain:Explain why a server proposal cannot land, with the next commands. Changes nothing' \
 'reviewers:Inspect, add or remove requested reviewers (no approval or access change)' \
 'review-draft:Save or restore your private account review notes without submitting them' \
+'file-draft:Save or restore private file edits without publishing a changeset' \
 'comment-draft:Save or restore a private general comment without posting it' \
 'review:Review a proposal'\''s current head' \
 'discussion:Read and participate in revision-bound line discussions' \
@@ -4250,6 +4375,36 @@ _ag__subcmd__remote__subcmd__events_commands() {
 _ag__subcmd__remote__subcmd__explain_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote explain commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__file-draft_commands] )) ||
+_ag__subcmd__remote__subcmd__file-draft_commands() {
+    local commands; commands=(
+'list:List your saved file drafts in a stream, without downloading their content' \
+'get:Read metadata; download exact replacement bytes only with --output' \
+'save:Save private replacement bytes for an existing file at an immutable revision' \
+'clear:Clear only the draft version you inspected' \
+    )
+    _describe -t commands 'ag remote file-draft commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__file-draft__subcmd__clear_commands] )) ||
+_ag__subcmd__remote__subcmd__file-draft__subcmd__clear_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote file-draft clear commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__file-draft__subcmd__get_commands] )) ||
+_ag__subcmd__remote__subcmd__file-draft__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote file-draft get commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__file-draft__subcmd__list_commands] )) ||
+_ag__subcmd__remote__subcmd__file-draft__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote file-draft list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__file-draft__subcmd__save_commands] )) ||
+_ag__subcmd__remote__subcmd__file-draft__subcmd__save_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote file-draft save commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__integrate_commands] )) ||
 _ag__subcmd__remote__subcmd__integrate_commands() {

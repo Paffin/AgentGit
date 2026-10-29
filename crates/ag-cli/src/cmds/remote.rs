@@ -819,6 +819,11 @@ pub enum RemoteCmd {
         #[command(subcommand)]
         cmd: crate::cmds::review_drafts::ReviewDraftCmd,
     },
+    /// Save or restore private file edits without publishing a changeset.
+    FileDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::file_drafts::FileDraftCmd,
+    },
     /// Save or restore a private general comment without posting it.
     CommentDraft {
         #[command(subcommand)]
@@ -1250,6 +1255,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     print_done(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
                 } else {
                     print(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
+                }
+            }
+            RemoteCmd::FileDraft { cmd } => {
+                let result = crate::cmds::file_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::file_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::file_drafts::describe(&result))?;
                 }
             }
             RemoteCmd::CommentDraft { cmd } => {

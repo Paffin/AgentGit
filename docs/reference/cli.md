@@ -132,6 +132,11 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote review-draft get`](#ag-remote-review-draft-get)
 - [`ag remote review-draft save`](#ag-remote-review-draft-save)
 - [`ag remote review-draft clear`](#ag-remote-review-draft-clear)
+- [`ag remote file-draft`](#ag-remote-file-draft)
+- [`ag remote file-draft list`](#ag-remote-file-draft-list)
+- [`ag remote file-draft get`](#ag-remote-file-draft-get)
+- [`ag remote file-draft save`](#ag-remote-file-draft-save)
+- [`ag remote file-draft clear`](#ag-remote-file-draft-clear)
 - [`ag remote comment-draft`](#ag-remote-comment-draft)
 - [`ag remote comment-draft get`](#ag-remote-comment-draft-get)
 - [`ag remote comment-draft save`](#ag-remote-comment-draft-save)
@@ -2522,6 +2527,7 @@ Commands:
   explain        Explain why a server proposal cannot land, with the next commands. Changes nothing
   reviewers      Inspect, add or remove requested reviewers (no approval or access change)
   review-draft   Save or restore your private account review notes without submitting them
+  file-draft     Save or restore private file edits without publishing a changeset
   comment-draft  Save or restore a private general comment without posting it
   review         Review a proposal's current head
   discussion     Read and participate in revision-bound line discussions
@@ -2853,6 +2859,145 @@ Options:
           Remote to use (default: origin)
       --as <IDENTITY>
           Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote file-draft
+
+```text
+Save or restore private file edits without publishing a changeset
+
+Usage: ag remote file-draft [OPTIONS] <COMMAND>
+
+Commands:
+  list   List your saved file drafts in a stream, without downloading their content
+  get    Read metadata; download exact replacement bytes only with --output
+  save   Save private replacement bytes for an existing file at an immutable revision
+  clear  Clear only the draft version you inspected
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft list
+
+```text
+List your saved file drafts in a stream, without downloading their content
+
+Usage: ag remote file-draft list [OPTIONS] --stream <STREAM>
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream containing the files
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft get
+
+```text
+Read metadata; download exact replacement bytes only with --output
+
+Usage: ag remote file-draft get [OPTIONS] --stream <STREAM> --path <PATH>
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream containing the file
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>      Repository-relative file path
+      --json             Machine-readable JSON output
+      --output <PATH>    Write saved bytes to this local file (replaces an existing file)
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft save
+
+```text
+Save private replacement bytes for an existing file at an immutable revision
+
+Usage: ag remote file-draft save [OPTIONS] --stream <STREAM> --path <PATH> --base <BASE> --content-file <PATH> --expected-version <EXPECTED_VERSION>
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --stream <STREAM>
+          Stream containing the file
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>
+          Repository-relative file path
+      --base <BASE>
+          Exact changeset containing the original file you inspected
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --content-file <PATH>
+          Binary replacement file, at most 4 MiB
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; zero only if no draft has existed
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote file-draft clear
+
+```text
+Clear only the draft version you inspected
+
+Usage: ag remote file-draft clear [OPTIONS] --stream <STREAM> --path <PATH> --expected-version <EXPECTED_VERSION>
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --stream <STREAM>
+          Stream containing the file
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>
+          Repository-relative file path
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get, including a cleared version
       --json
           Machine-readable JSON output
       --color <WHEN>

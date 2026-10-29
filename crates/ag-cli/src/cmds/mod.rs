@@ -9,6 +9,7 @@ pub mod conflicts;
 pub mod discussions;
 pub mod doctor;
 pub mod explain;
+pub mod file_drafts;
 pub mod flow;
 pub mod gitbridge;
 pub mod login;

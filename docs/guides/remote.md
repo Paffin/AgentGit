@@ -109,6 +109,27 @@ Drafts remain available on closed proposals and only the current account can rea
 the API; server administrators and backups can still contain them. UTF-8 files retain their
 line breaks and are limited to 16 KiB. `--json` includes the version, including after clearing.
 
+## Private file drafts
+
+Development servers advertising `files.drafts` can keep private replacement bytes for an
+existing file, bound to the exact base changeset you inspected. Saving a draft does not create
+a changeset, update a stream, or change a proposal.
+
+```sh
+ag remote file-draft list --stream main
+ag remote file-draft get --stream main --path src/config.json
+ag remote file-draft save --stream main --path src/config.json --base CHANGESET_ID --content-file edited.json --expected-version 0
+ag remote file-draft get --stream main --path src/config.json --output restored.json
+ag remote file-draft clear --stream main --path src/config.json --expected-version 1
+```
+
+Use the version returned by `get` for saves and clears, including the version of a cleared
+draft. Content files are binary-safe and limited to 4 MiB. Commands show metadata; bytes are
+written only when `get --output` is explicit, and that option replaces the named local file.
+The original file type and executable bit come from the immutable base. Each account can
+keep at most 20 active file drafts per repository. Drafts are private through the API;
+administrators and backups can still contain them.
+
 ## Offline
 
 Nothing about a local repository needs the server:

@@ -303,7 +303,7 @@ pub fn sync(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
                 conflicts.len()
             );
             for c in conflicts {
-                let _ = writeln!(s, "  {}  ({})", c.path, c.describe());
+                let _ = writeln!(s, "  {}  ({}){}", c.path, c.describe(), crate::cmds::conflicts::local_sources(c));
             }
             s
         }

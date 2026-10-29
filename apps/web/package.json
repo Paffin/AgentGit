@@ -18,7 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "gen:api": "openapi-typescript ../../docs/protocol/openapi.json -o src/api/schema.gen.ts && prettier --write src/api/schema.gen.ts",
+    "gen:api": "node scripts/generate-api.mjs src/api/schema.gen.ts && prettier --write src/api/schema.gen.ts",
     "check:api": "node scripts/check-api.mjs",
     "pretest:e2e": "npm run build",
     "demo:server": "npm run build && node e2e/demo.ts"

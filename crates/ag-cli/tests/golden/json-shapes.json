@@ -848,6 +848,11 @@
         {
           "kind": "string",
           "message": "string",
+          "origin": {
+            "base": "string",
+            "ours": "string",
+            "theirs": "string"
+          },
           "path": "string"
         }
       ],

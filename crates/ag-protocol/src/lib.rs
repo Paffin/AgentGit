@@ -97,6 +97,9 @@ pub mod features {
     /// Virtual sync compares the branch revision inspected by a resolving client.
     pub const WORKSPACES_SYNC_PRECONDITION: &str = "workspaces.sync_precondition";
 
+    /// Virtual sync conflicts retain exact per-side paths after renames.
+    pub const WORKSPACES_CONFLICT_ORIGINS: &str = "workspaces.conflict_origins";
+
     /// Private versioned review drafts for the current acting identity.
     pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
 
@@ -105,6 +108,7 @@ pub mod features {
         EVENTS_REPLAY,
         WORKSPACES_VIRTUAL,
         WORKSPACES_SYNC_PRECONDITION,
+        WORKSPACES_CONFLICT_ORIGINS,
         EXECUTION_JOBS,
         OBJECTS_CHUNKED,
         AUTH_OIDC,

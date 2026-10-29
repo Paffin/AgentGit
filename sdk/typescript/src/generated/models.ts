@@ -34,6 +34,7 @@ export type CompleteJobRequest = S['CompleteJobRequest'];
 export type CompleteRunRequest = S['CompleteRunRequest'];
 export type ConfigureRepoRequest = S['ConfigureRepoRequest'];
 export type Conflict = S['Conflict'];
+export type ConflictOrigin = S['ConflictOrigin'];
 export type CreateIssueRequest = S['CreateIssueRequest'];
 export type CreateProposalRequest = S['CreateProposalRequest'];
 export type CreateRepoRequest = S['CreateRepoRequest'];

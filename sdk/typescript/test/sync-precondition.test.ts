@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { AgentGitClient, type SyncWorkspaceResponse } from '../src/index.js';
+import { AgentGitClient, type Conflict, type SyncWorkspaceResponse } from '../src/index.js';
 
 it('sends the inspected stream head with a workspace resolution', async () => {
   let body: unknown;
@@ -72,4 +72,23 @@ it('retains explicit unsafe-retry opt-in for an unpinned sync', async () => {
     client.workspaces.sync({ repo: 'team/app', name: 'work' }, { retry: { retryUnsafe: true } }),
   ).resolves.toMatchObject({ head: 'done' });
   expect(calls).toBe(2);
+});
+
+it('preserves distinct source paths for a renamed conflict and accepts legacy conflicts', async () => {
+  const conflict: Conflict = {
+    path: 'renamed.txt',
+    kind: 'content',
+    message: 'both edited',
+    origin: { base: 'original.txt', ours: 'renamed.txt', theirs: 'original.txt' },
+  };
+  const legacy: Conflict = { path: 'same.txt', kind: 'content', message: '' };
+  const client = new AgentGitClient({
+    baseUrl: 'http://sync.test',
+    token: 'test',
+    fetch: async () =>
+      Response.json({ status: 'conflicted', head: 'workspace', stream_head: 'stream', conflicts: [conflict, legacy] }),
+  });
+  const result = await client.workspaces.sync({ repo: 'team/app', name: 'work' });
+  expect(result.conflicts[0]?.origin).toEqual(conflict.origin);
+  expect(result.conflicts[1]?.origin).toBeUndefined();
 });

@@ -70,7 +70,7 @@ pub use storage::{
     MAX_S3_LIST_PAGE, MAX_S3_REQUEST_TIMEOUT_SECS, MAX_S3_RETRIES, MetaConfig, ObjectLockKind, ObjectsConfig,
     StorageConfig,
 };
-pub use types::{Blocker, ConflictInfo, IntegrationResult, NoteInfo, Outcome, Strategy};
+pub use types::{Blocker, ConflictInfo, ConflictOriginInfo, IntegrationResult, NoteInfo, Outcome, Strategy};
 pub use virtual_ws::{VirtualChange, VirtualContent};
 pub use workspace::{Change, SyncOutcome};
 

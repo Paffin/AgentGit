@@ -40,7 +40,11 @@ const show = () =>
 beforeEach(() => {
   auth.token = 'original'
   auth.identity = 'user:alice'
-  auth.capabilities.features = ['proposals.update_head', 'workspaces.sync_precondition']
+  auth.capabilities.features = [
+    'proposals.update_head',
+    'workspaces.sync_precondition',
+    'workspaces.conflict_origins',
+  ]
   api.workspaces.create.mockReset().mockResolvedValue({ head: 'mine-head' })
   api.workspaces.sync
     .mockReset()
@@ -231,3 +235,129 @@ it('never removes an existing workspace when creation reports a name collision',
   expect(api.workspaces.sync).not.toHaveBeenCalled()
   expect(api.workspaces.remove).not.toHaveBeenCalled()
 })
+
+it('loads renamed content from each source path and writes the selected bytes at the output path', async () => {
+  api.workspaces.sync
+    .mockReset()
+    .mockResolvedValueOnce({
+      status: 'conflicted',
+      stream_head: 'branch-head',
+      conflicts: [
+        {
+          path: 'renamed.txt',
+          kind: 'content',
+          origin: { base: 'old.txt', ours: 'renamed.txt', theirs: 'old.txt' },
+        },
+      ],
+    })
+    .mockResolvedValue({ status: 'merged', head: 'merged-head' })
+  api.tree.resolve.mockImplementation(async (_repo, head, path) => ({
+    kind: 'regular',
+    entry: {
+      path,
+      blob_id: head === 'mine-head' ? 'mine-blob' : 'branch-blob',
+      file_type: 'regular',
+      executable: false,
+      size: 12,
+    },
+  }))
+  api.tree.file.mockImplementation(async (_repo, head) => ({
+    bytes: new TextEncoder().encode(
+      head === 'mine-head' ? 'my renamed edit' : 'branch original edit',
+    ),
+    truncated: false,
+  }))
+  const w = show()
+  await flushPromises()
+  expect(api.tree.resolve).toHaveBeenCalledWith(
+    'acme/app',
+    'branch-head',
+    'old.txt',
+    expect.anything(),
+  )
+  expect(w.text()).toContain('Source: old.txt')
+  expect(w.text()).toContain('branch original edit')
+  await w
+    .findAll('button')
+    .find((b) => b.text() === 'Keep the branch’s')!
+    .trigger('click')
+  await w.get('[data-testid=resolve-save]').trigger('click')
+  await flushPromises()
+  expect(api.workspaces.sync.mock.calls[1]![2]).toEqual([
+    {
+      path: 'renamed.txt',
+      op: 'put',
+      blob_id: 'branch-blob',
+      file_type: 'regular',
+      executable: false,
+    },
+  ])
+})
+
+it('refuses servers without source-path metadata before preparing a merge', async () => {
+  auth.capabilities.features = ['proposals.update_head', 'workspaces.sync_precondition']
+  const w = show()
+  await flushPromises()
+  expect(w.text()).toContain('Upgrade the server')
+  expect(api.workspaces.create).not.toHaveBeenCalled()
+})
+
+it.each(['mine', 'branch'])(
+  'handles rename/delete with the %s side missing at the output path',
+  async (missing) => {
+    api.workspaces.sync
+      .mockReset()
+      .mockResolvedValueOnce({
+        status: 'conflicted',
+        stream_head: 'branch-head',
+        conflicts: [{ path: 'renamed.txt', kind: 'rename_delete' }],
+      })
+      .mockResolvedValue({ status: 'merged', head: 'merged-head' })
+    api.tree.resolve.mockImplementation(async (_repo, head, path) =>
+      head === `${missing}-head`
+        ? { kind: 'missing', entry: null }
+        : {
+            kind: 'regular',
+            entry: { path, blob_id: 'kept-blob', file_type: 'regular', executable: true, size: 3 },
+          },
+    )
+    const w = show()
+    await flushPromises()
+    expect(w.text()).not.toContain('Not here')
+    expect(w.text()).toContain(
+      missing === 'mine' ? '(you deleted this file)' : '(the branch deleted this file)',
+    )
+    const keep = missing === 'mine' ? 'Keep the branch’s' : 'Keep mine'
+    await w
+      .findAll('button')
+      .find((b) => b.text() === keep)!
+      .trigger('click')
+    await w.get('[data-testid=resolve-save]').trigger('click')
+    await flushPromises()
+    expect(api.workspaces.sync.mock.calls[1]![2]).toEqual([
+      {
+        path: 'renamed.txt',
+        op: 'put',
+        blob_id: 'kept-blob',
+        file_type: 'regular',
+        executable: true,
+      },
+    ])
+  },
+)
+
+it.each(['rename_rename', 'file_directory'])(
+  'keeps %s structural conflicts blocked',
+  async (kind) => {
+    api.workspaces.sync.mockReset().mockResolvedValueOnce({
+      status: 'conflicted',
+      stream_head: 'branch-head',
+      conflicts: [{ path: 'renamed.txt', kind }],
+    })
+    const w = show()
+    await flushPromises()
+    expect(w.text()).toContain('resolve this structural conflict with the command line')
+    expect(api.tree.resolve).not.toHaveBeenCalled()
+    expect(w.get('[data-testid=resolve-save]').attributes('aria-disabled')).toBe('true')
+  },
+)

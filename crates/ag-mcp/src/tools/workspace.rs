@@ -394,7 +394,7 @@ fn sync_output(name: &str, value: &Value) -> ToolOutput {
     if status == "conflicted" {
         let pinned = value.get("stream_head").and_then(Value::as_str).is_some_and(|head| !head.is_empty());
         let advice = if pinned {
-            "Read both versions at the returned stream_head and your workspace revision. Decide every conflicting path, then repeat workspace_sync with expected_stream_head set to that inspected stream_head and resolutions for every conflict. Existing blob ids preserve binary content, file type and executable mode."
+            "Read both versions at the returned stream_head and your workspace revision. When a conflict has origin paths, read origin.ours at your workspace revision and origin.theirs at stream_head; otherwise use the conflict path. Decide every conflicting path, then repeat workspace_sync with expected_stream_head set to that inspected stream_head and resolutions for every conflict. Existing blob ids preserve binary content, file type and executable mode."
         } else {
             "This server did not identify a pinned branch revision. Upgrade it before applying an inspected resolution through MCP, or resolve through the local CLI. Do not treat the moving branch name as the reviewed revision."
         };
@@ -600,6 +600,21 @@ mod tests {
         }
         assert!(parse_resolutions(&[json!({"path":"a","content":""}), json!({"path":"a","op":"delete"})]).is_err());
     }
+    #[test]
+    fn sync_preserves_renamed_conflict_source_paths() {
+        let conflict = json!({"path":"renamed.txt","kind":"content","message":"both edited",
+            "origin":{"base":"original.txt","ours":"renamed.txt","theirs":"original.txt"}});
+        let legacy = json!({"path":"same.txt","kind":"content","message":""});
+        let out = sync_output(
+            "work",
+            &json!({"status":"conflicted","stream_head":"known",
+            "conflicts":[conflict.clone(),legacy.clone()]}),
+        );
+        assert_eq!(out.data["conflicts"], json!([conflict, legacy]));
+        assert!(out.notes.join(" ").contains("origin.ours"));
+        assert!(out.notes.join(" ").contains("origin.theirs"));
+    }
+
     #[test]
     fn sync_guidance_never_treats_an_absent_target_as_a_safe_pin() {
         let legacy = sync_output("work", &json!({"status":"conflicted","conflicts":[]}));

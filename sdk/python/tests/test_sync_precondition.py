@@ -96,3 +96,34 @@ def test_unpinned_sync_retains_explicit_unsafe_retry_opt_in() -> None:
         )
     assert result.head == "done"
     assert calls == 2
+
+
+def test_sync_preserves_renamed_conflict_sources_and_legacy_conflicts() -> None:
+    def respond(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "conflicted",
+                "head": "workspace",
+                "stream_head": "stream",
+                "conflicts": [
+                    {
+                        "path": "renamed.txt",
+                        "kind": "content",
+                        "message": "both edited",
+                        "origin": {"base": "original.txt", "ours": "renamed.txt", "theirs": "original.txt"},
+                    },
+                    {"path": "same.txt", "kind": "content", "message": ""},
+                ],
+            },
+        )
+
+    with AgentGitClient(
+        "http://sync.test", "test", http_client=httpx.Client(transport=httpx.MockTransport(respond))
+    ) as client:
+        result = client.workspaces.sync(repo="team/app", name="work")
+    assert result.conflicts[0].origin is not None
+    assert result.conflicts[0].origin.base == "original.txt"
+    assert result.conflicts[0].origin.ours == "renamed.txt"
+    assert result.conflicts[0].origin.theirs == "original.txt"
+    assert result.conflicts[1].origin is None

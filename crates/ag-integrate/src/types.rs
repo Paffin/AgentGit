@@ -16,6 +16,17 @@ pub enum Strategy {
     AlreadyIntegrated,
 }
 
+/// Source locations for a conflict whose versions moved to different paths.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConflictOriginInfo {
+    /// Path in the common merge base.
+    pub base: String,
+    /// Path in the first parent (workspace for sync, target stream for integration).
+    pub ours: String,
+    /// Path in the second parent (stream for sync, proposal for integration).
+    pub theirs: String,
+}
+
 /// One conflicting path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConflictInfo {
@@ -29,12 +40,24 @@ pub struct ConflictInfo {
     /// existed have none.
     #[serde(default)]
     pub message: String,
+    /// Exact per-version paths when a rename moved the source; absent for ordinary conflicts and legacy outcomes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<ConflictOriginInfo>,
 }
 
 impl ConflictInfo {
     /// The wire description of a merge conflict.
     pub fn from_conflict(c: &ag_merge::Conflict) -> Self {
-        ConflictInfo { path: c.path.to_string(), kind: c.kind.code().to_string(), message: c.kind.to_string() }
+        ConflictInfo {
+            path: c.path.to_string(),
+            kind: c.kind.code().to_string(),
+            message: c.kind.to_string(),
+            origin: c.origin.as_ref().map(|o| ConflictOriginInfo {
+                base: o.base.to_string(),
+                ours: o.ours.to_string(),
+                theirs: o.theirs.to_string(),
+            }),
+        }
     }
 
     /// What to show a person: the message, or the code for an outcome stored before messages existed.

@@ -683,3 +683,43 @@ fn remote_private_review_drafts_require_inspected_versions_and_do_not_publish() 
             .unwrap();
     assert!(after["reviews"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn remote_renamed_conflicts_expose_each_source_without_guessing() {
+    let srv = Server::start();
+    let repo = "acme/renamed-conflict";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let token = srv.user("user:alice", repo, Role::Admin);
+    let url = format!("{}/{repo}", srv.url);
+    let a = tempfile::tempdir().unwrap();
+    ok(ag(a.path(), "user:alice", &token, &["init", "--namespace", repo]));
+    ok(ag(a.path(), "user:alice", &token, &["remote", "add", "origin", &url, "--token-env", "AG_TOKEN"]));
+    fs::write(a.path().join("a.txt"), "1\n2\n3\n4\n5\n6\n7\n8\n").unwrap();
+    ok(ag(a.path(), "user:alice", &token, &["snapshot", "-m", "base"]));
+    let base = proposal_id(&ok(ag(a.path(), "user:alice", &token, &["push", "-t", "base"])));
+    ok(ag(a.path(), "user:alice", &token, &["remote", "integrate", &base]));
+    ok(ag(a.path(), "user:alice", &token, &["pull"]));
+    let b = tempfile::tempdir().unwrap();
+    let clone = b.path().join("clone");
+    ok(ag(b.path(), "user:alice", &token, &["clone", &url, clone.to_str().unwrap()]));
+    fs::write(clone.join("a.txt"), "1\n2\nPROPOSAL\n4\n5\n6\n7\n8\n").unwrap();
+    ok(ag(&clone, "user:alice", &token, &["snapshot", "-m", "proposal edit"]));
+    let proposal = proposal_id(&ok(ag(&clone, "user:alice", &token, &["push", "-t", "proposal edit"])));
+    fs::rename(a.path().join("a.txt"), a.path().join("b.txt")).unwrap();
+    fs::write(a.path().join("b.txt"), "1\n2\nSTREAM\n4\n5\n6\n7\n8\n").unwrap();
+    ok(ag(a.path(), "user:alice", &token, &["snapshot", "-m", "rename and edit"]));
+    let renamed = proposal_id(&ok(ag(a.path(), "user:alice", &token, &["push", "-t", "rename and edit"])));
+    ok(ag(a.path(), "user:alice", &token, &["remote", "integrate", &renamed]));
+    for command in ["prepare", "integrate", "explain"] {
+        let output = ag(a.path(), "user:alice", &token, &["remote", command, &proposal]);
+        assert_eq!(output.status.code(), Some(4), "{}", text(&output));
+        assert!(text(&output).contains("source paths: base=a.txt, ours=b.txt, theirs=a.txt"), "{}", text(&output));
+    }
+    let output = ag(a.path(), "user:alice", &token, &["--json", "remote", "prepare", &proposal]);
+    assert_eq!(output.status.code(), Some(4), "{}", text(&output));
+    let detail: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(detail["conflicts"][0]["origin"], serde_json::json!({"base":"a.txt", "ours":"b.txt", "theirs":"a.txt"}));
+}

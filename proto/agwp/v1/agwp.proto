@@ -880,6 +880,13 @@ message CloseProposalRequest {
 // Integration
 // ---------------------------------------------------------------------------
 
+// Exact paths at the three revisions when source locations differ after a rename.
+message ConflictOrigin {
+  string base = 1;
+  string ours = 2;
+  string theirs = 3;
+}
+
 message Conflict {
   string path = 1;
   // A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
@@ -891,6 +898,11 @@ message Conflict {
   // The conflict in words, with the details the code leaves out (e.g. "content conflict (2 region(s))").
   // Empty for outcomes stored before the field existed. Do not parse it.
   string message = 3;
+  // Absent for ordinary same-path conflicts or outcomes stored by older versions.
+  // For workspace sync, ours is the workspace and theirs is the returned stream_head.
+  // For proposal preparation/integration, ours is the stream and theirs is the proposal.
+  // The resolution is still written to Conflict.path, not to these source paths.
+  ConflictOrigin origin = 4;
 }
 
 message Blocker {

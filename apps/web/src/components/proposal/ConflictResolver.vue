@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
-import type { Conflict, Proposal } from '@/api/types'
+import type { Conflict, Proposal, SyncWorkspaceResponse } from '@/api/types'
 import { canResolveHere, workspaceName } from '@/lib/edit'
 import { conflictLabel } from '@/lib/conflict-label'
 import { formatBytes } from '@/lib/format'
@@ -79,6 +79,9 @@ function invalidate() {
   if (previous) void release(previous)
   phase.value = 'idle'
 }
+function sourcePath(conflict: Conflict, side: 'ours' | 'theirs') {
+  return conflict.origin?.[side] ?? conflict.path
+}
 async function prepareRow(a: Attempt, conflict: Conflict): Promise<Row> {
   const row: Row = {
     conflict,
@@ -95,8 +98,8 @@ async function prepareRow(a: Attempt, conflict: Conflict): Promise<Row> {
     return row
   }
   ;[row.mine, row.theirs] = await Promise.all([
-    loadConflictVersion(api, a.repo, a.head, conflict.path, request(a)),
-    loadConflictVersion(api, a.repo, a.branchHead, conflict.path, request(a)),
+    loadConflictVersion(api, a.repo, a.head, sourcePath(conflict, 'ours'), request(a)),
+    loadConflictVersion(api, a.repo, a.branchHead, sourcePath(conflict, 'theirs'), request(a)),
   ])
   row.editable = [row.mine, row.theirs].every(
     (v) => !v.entry || (v.entry.file_type === 'regular' && v.text !== null),
@@ -116,17 +119,32 @@ async function moveProposal(a: Attempt, head: string) {
   emit('update:modelValue', false)
   emit('done')
 }
+async function prepareMerge(a: Attempt, result: SyncWorkspaceResponse) {
+  if (result.status !== 'conflicted') {
+    await moveProposal(a, result.head)
+    return
+  }
+  a.branchHead = result.stream_head ?? ''
+  if (!a.branchHead)
+    throw new Error('The server did not identify the branch revision used for this conflict.')
+  const prepared = await Promise.all(result.conflicts.map((conflict) => prepareRow(a, conflict)))
+  if (!current(a)) return
+  rows.value = prepared
+  phase.value = 'ready'
+}
 async function open() {
   invalidate()
   error.value = null
   rows.value = []
   if (
-    !['proposals.update_head', 'workspaces.sync_precondition'].every((feature) =>
-      auth.capabilities?.features.includes(feature),
+    !['proposals.update_head', 'workspaces.sync_precondition', 'workspaces.conflict_origins'].every(
+      (feature) => auth.capabilities?.features.includes(feature),
     )
   ) {
     error.value = asError(
-      new Error('Upgrade the server to resolve conflicts with revision protection.'),
+      new Error(
+        'Upgrade the server to resolve conflicts with source paths and revision protection.',
+      ),
     )
     phase.value = 'error'
     return
@@ -160,17 +178,7 @@ async function open() {
       throw new Error('The workspace did not open at the inspected revision.')
     const result = await api.workspaces.sync(a.repo, a.workspace, [], request(a))
     if (!current(a)) return
-    if (result.status !== 'conflicted') {
-      await moveProposal(a, result.head)
-      return
-    }
-    a.branchHead = result.stream_head ?? ''
-    if (!a.branchHead)
-      throw new Error('The server did not identify the branch revision used for this conflict.')
-    const prepared = await Promise.all(result.conflicts.map((conflict) => prepareRow(a, conflict)))
-    if (!current(a)) return
-    rows.value = prepared
-    phase.value = 'ready'
+    await prepareMerge(a, result)
   } catch (e) {
     // An ambiguous create may have committed; an explicit collision belongs to somebody else.
     a.created ||= !(e instanceof ApiError && e.code === 'already_exists')
@@ -206,9 +214,12 @@ function summary(version: ConflictVersion): string {
   const entry = version.entry
   return `${entry.file_type === 'symlink' ? 'Symbolic link' : 'Regular file'} · ${formatBytes(entry.size)}${entry.executable ? ' · executable' : ''}`
 }
+function readyToSave(a: Attempt) {
+  return current(a) && phase.value === 'ready' && !unresolved.value && !headChanged.value
+}
 async function save() {
   const a = active
-  if (!a || !current(a) || phase.value !== 'ready' || unresolved.value || headChanged.value) return
+  if (!a || !readyToSave(a)) return
   phase.value = 'saving'
   error.value = null
   try {
@@ -279,6 +290,12 @@ onBeforeUnmount(invalidate)
           <div class="cols">
             <div>
               <h4>The branch’s version</h4>
+              <p
+                v-if="r.conflict.origin && r.conflict.origin.theirs !== r.conflict.path"
+                class="faint"
+              >
+                Source: <code>{{ r.conflict.origin.theirs }}</code>
+              </p>
               <p class="faint">{{ summary(r.theirs) }}</p>
               <pre
                 class="ver"
@@ -294,6 +311,12 @@ onBeforeUnmount(invalidate)
             </div>
             <div>
               <h4>Your version</h4>
+              <p
+                v-if="r.conflict.origin && r.conflict.origin.ours !== r.conflict.path"
+                class="faint"
+              >
+                Source: <code>{{ r.conflict.origin.ours }}</code>
+              </p>
               <p class="faint">{{ summary(r.mine) }}</p>
               <pre
                 class="ver"

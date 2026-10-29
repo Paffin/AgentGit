@@ -311,8 +311,18 @@ fn a_content_conflict_after_a_rename_gets_markers_in_the_new_file() {
     let pa = a.propose_as("user:alice", "rename and edit");
     a.ag(&["integrate", &pa]).ok();
 
+    let proposal = a.run_as("user:bob", &["--json", "propose", "-t", "bob edit", "@bob"]).ok().json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let preview = a.ag(&["preview", &proposal]).code_is(4).stdout();
+    assert!(preview.contains("source paths: base=a.txt, ours=b.txt, theirs=a.txt"), "{preview}");
+    let explanation = a.ag(&["explain", &proposal]).code_is(4).stdout();
+    assert!(explanation.contains("source paths: base=a.txt, ours=b.txt, theirs=a.txt"), "{explanation}");
+    let integration = a.ag(&["integrate", &proposal]).code_is(4).stdout();
+    assert!(integration.contains("source paths: base=a.txt, ours=b.txt, theirs=a.txt"), "{integration}");
     let r = a.run_as("user:bob", &["sync", "--workspace", "bob"]).code_is(4);
-    assert!(r.stdout().contains("b.txt"), "{}", r.stdout());
+    assert!(r.stdout().contains("source paths: base=a.txt, ours=a.txt, theirs=b.txt"), "{}", r.stdout());
     let marked = fs::read_to_string(bob.join("b.txt")).unwrap();
     assert!(marked.contains("<<<<<<< ours") && marked.contains("ALICE") && marked.contains("BOB"), "{marked}");
 }

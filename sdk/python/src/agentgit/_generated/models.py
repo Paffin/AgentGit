@@ -35,6 +35,7 @@ __all__ = [
     "CompleteRunRequest",
     "ConfigureRepoRequest",
     "Conflict",
+    "ConflictOrigin",
     "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
@@ -526,7 +527,16 @@ class Conflict:
     """The `Conflict` message."""
     kind: str = field(default="")
     message: str = field(default="")
+    origin: ConflictOrigin | None = field(default=None)
     path: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ConflictOrigin:
+    """Exact paths at the three revisions when source locations differ after a rename."""
+    base: str = field(default="")
+    ours: str = field(default="")
+    theirs: str = field(default="")
 
 
 @dataclass(kw_only=True)

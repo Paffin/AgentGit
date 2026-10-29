@@ -867,7 +867,37 @@
             "description": "The conflict in words, with the details the code leaves out (e.g. \"content conflict (2 region(s))\").\nEmpty for outcomes stored before the field existed. Do not parse it.",
             "type": "string"
           },
+          "origin": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConflictOrigin",
+                "description": "Absent for ordinary same-path conflicts or outcomes stored by older versions.\nFor workspace sync, ours is the workspace and theirs is the returned stream_head.\nFor proposal preparation/integration, ours is the stream and theirs is the proposal.\nThe resolution is still written to Conflict.path, not to these source paths."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "path": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ConflictOrigin": {
+        "description": "Exact paths at the three revisions when source locations differ after a rename.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "ours": {
+            "default": "",
+            "type": "string"
+          },
+          "theirs": {
             "default": "",
             "type": "string"
           }

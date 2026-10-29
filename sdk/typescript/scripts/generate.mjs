@@ -242,10 +242,11 @@ function withOpenObjects(doc) {
     target.$ref = ref;
   }
   // Decoded responses are not default-filled in TypeScript. Older servers omit this additive field;
-  // preserve the schema's optionality instead of letting its default [] make it required.
+  // preserve the schema's optionality instead of letting its default make it required.
   for (const [schemaName, field] of [
     ['ProposalDetail', 'requested_reviewers'],
     ['SyncWorkspaceResponse', 'stream_head'],
+    ['Conflict', 'origin'],
   ]) {
     const schema = copy.components.schemas[schemaName];
     const property = schema?.properties?.[field];

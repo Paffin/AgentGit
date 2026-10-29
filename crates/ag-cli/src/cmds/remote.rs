@@ -654,7 +654,11 @@ pub fn pull(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
         Some(SyncOutcome::FastForwarded { to }) => format!("Fast-forwarded the workspace to {}.", to.short()),
         Some(SyncOutcome::Merged { id }) => format!("Merged remote changes into the workspace ({}).", id.short()),
         Some(SyncOutcome::Conflicted { conflicts }) => {
-            format!("Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.", conflicts.len())
+            format!(
+                "Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.\n{}",
+                conflicts.len(),
+                conflicts.iter().map(crate::cmds::conflicts::local).collect::<Vec<_>>().join("\n")
+            )
         }
     };
     ctx.done(&serde_json::json!({"fetch": report, "workspace": outcome}), || text.clone())?;
@@ -1196,11 +1200,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 print(cli, &p, || {
                     let mut t = format!("strategy: {}\ncandidate tree: {}\n", p.strategy, p.candidate_tree);
                     for cf in &p.conflicts {
-                        t.push_str(&format!(
-                            "conflict: {} ({})\n",
-                            cf.path,
-                            if cf.message.is_empty() { &cf.kind } else { &cf.message }
-                        ));
+                        t.push_str(&format!("conflict: {}\n", crate::cmds::conflicts::wire(cf)));
                     }
                     if !p.problem.is_empty() {
                         t.push_str(&format!("problem: {}\n", p.problem));
@@ -1288,11 +1288,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         "Conflict:\n{}",
                         o.conflicts
                             .iter()
-                            .map(|c| format!(
-                                "  - {} ({})",
-                                c.path,
-                                if c.message.is_empty() { &c.kind } else { &c.message }
-                            ))
+                            .map(|c| format!("  - {}", crate::cmds::conflicts::wire(c)))
                             .collect::<Vec<_>>()
                             .join("\n")
                     ),

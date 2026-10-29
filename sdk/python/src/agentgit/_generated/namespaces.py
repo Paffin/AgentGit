@@ -35,6 +35,7 @@ from agentgit._generated.models import (
     CompleteRunRequest,
     ConfigureRepoRequest,
     Conflict,
+    ConflictOrigin,
     CreateIssueRequest,
     CreateProposalRequest,
     CreateRepoRequest,

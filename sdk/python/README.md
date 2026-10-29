@@ -545,3 +545,9 @@ clear it with that guard. A conflict preserves the newer draft. The authenticate
 owns the notes; there is no owner argument. Drafts never post reviews or count as approval.
 Clearing removes content but retains a version, preventing stale saves from recreating it.
 Identical retries are safe; reread and decide before changing a conflicting draft.
+
+Servers advertising `workspaces.conflict_origins` may include `conflict.origin` with
+`base`, `ours`, and `theirs` source paths when a rename moved the file. During workspace
+sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;
+resolve at `conflict.path`. Without origin metadata, both sides use `conflict.path`.
+For proposal preparation and integration, ours is the target stream and theirs is the proposal.

@@ -2141,8 +2141,18 @@ export interface components {
              * @default
              */
             message: string;
+            origin?: components["schemas"]["ConflictOrigin"] | null;
             /** @default  */
             path: string;
+        };
+        /** @description Exact paths at the three revisions when source locations differ after a rename. */
+        ConflictOrigin: {
+            /** @default  */
+            base: string;
+            /** @default  */
+            ours: string;
+            /** @default  */
+            theirs: string;
         };
         CreateIssueRequest: {
             /** @default  */

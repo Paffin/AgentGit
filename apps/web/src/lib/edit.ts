@@ -131,11 +131,18 @@ export async function proposeChange(api: Api, input: ProposeInput): Promise<Prop
 }
 
 export type ResolvableKind =
-  'content' | 'both_added' | 'delete_modify' | 'binary' | 'too_large' | 'type_change'
+  | 'content'
+  | 'both_added'
+  | 'delete_modify'
+  | 'rename_delete'
+  | 'binary'
+  | 'too_large'
+  | 'type_change'
 const RESOLVABLE = new Set<string>([
   'content',
   'both_added',
   'delete_modify',
+  'rename_delete',
   'binary',
   'too_large',
   'type_change',

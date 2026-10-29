@@ -56,6 +56,7 @@ describe('editing helpers', () => {
       'content',
       'both_added',
       'delete_modify',
+      'rename_delete',
       'binary',
       'too_large',
       'type_change',

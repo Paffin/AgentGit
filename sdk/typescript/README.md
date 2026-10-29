@@ -505,3 +505,9 @@ Drafts belong to the authenticated actor, not an owner parameter; they never pos
 count as approval or notify reviewers. Clearing removes the content and retains a version
 so stale saves cannot recreate it. Retrying an identical save/clear is safe; reread before
 changing a conflicting draft rather than automatically overwriting it.
+
+Servers advertising `workspaces.conflict_origins` may include `conflict.origin` with
+`base`, `ours`, and `theirs` source paths when a rename moved the file. During workspace
+sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;
+resolve at `conflict.path`. Without origin metadata, both sides use `conflict.path`.
+For proposal preparation and integration, ours is the target stream and theirs is the proposal.

@@ -405,3 +405,14 @@ but it never pins history or bypasses the actual review's inspected-head check.
 
 Schema 10 stores this private metadata. Back up before upgrading; saved review drafts
 can appear in administrative backups even though they are not in shared proposal APIs.
+
+### Conflict source paths after renames
+
+`Conflict.origin`, when present, contains the nonempty repository paths `base`, `ours` and
+`theirs` where the three versions live. `Conflict.path` remains the output path to resolve.
+For workspace sync, `ours` is the workspace and `theirs` is the returned `stream_head`;
+for proposal preparation/integration the labels mean target stream and proposal respectively.
+Read each version at its source path instead of treating a missing output path as a deletion.
+Ordinary same-path conflicts and legacy stored outcomes have no origin. Never parse paths
+from `message`. Development servers advertise `workspaces.conflict_origins` for fresh sync
+responses; browser resolution requires it together with the existing revision preconditions.

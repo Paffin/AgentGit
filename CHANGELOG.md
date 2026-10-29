@@ -26,6 +26,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Renamed conflict previews now read each version at its exact source path instead of mistaking a relocated file for deletion. CLI, SDK and MCP retain this metadata; the browser also supports explicit rename/delete choices and requires capable servers.
+
 - SDKs retry workspace sync automatically only when a nonempty inspected branch head guards the operation. Unguarded calls require explicit unsafe-retry opt-in.
 
 ### Changed

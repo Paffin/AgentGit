@@ -180,16 +180,17 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
         a.run_as("user:bob", &["proposal", "review", &p, "--approve"]).ok();
         a.ag(&["integrate", &p]).ok();
     };
-    land("docs.md", "d\n", "docs");
+    land("docs.md", "1\n2\n3\n4\n5\n6\n7\n8\n", "docs");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // fast-forward
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // up to date
     fs::write(ws.join("side.txt"), "s\n").unwrap();
     a.ag(&["snapshot", "-m", "side", "--workspace", "side"]).ok();
-    land("docs.md", "d2\n", "docs 2");
+    land("docs.md", "1\n2\nd2\n4\n5\n6\n7\n8\n", "docs 2");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // merged
-    fs::write(ws.join("docs.md"), "side's d\n").unwrap();
+    fs::write(ws.join("docs.md"), "1\n2\nside's d\n4\n5\n6\n7\n8\n").unwrap();
     a.ag(&["snapshot", "-m", "side docs", "--workspace", "side"]).ok();
-    land("docs.md", "d3\n", "docs 3");
+    fs::rename(a.root().join("docs.md"), a.root().join("renamed.md")).unwrap();
+    land("renamed.md", "1\n2\nd3\n4\n5\n6\n7\n8\n", "docs 3");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).code_is(4)); // conflicted
     r.rec("status", &a.ag(&["--json", "status", "--workspace", "side"]).ok()); // a workspace with a base and a pending merge
     r.rec("workspace remove", &a.ag(&["--json", "workspace", "remove", "side"]).ok());

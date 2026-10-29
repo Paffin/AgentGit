@@ -80,7 +80,12 @@ pub fn from_wire(
 ) -> Vec<Explanation> {
     let mut out: Vec<Explanation> = conflicts
         .iter()
-        .map(|c| ag_integrate::explain::explain_conflict_kind(&c.path, &c.kind, &c.message, proposal, Where::Remote))
+        .map(|c| {
+            let mut explanation =
+                ag_integrate::explain::explain_conflict_kind(&c.path, &c.kind, &c.message, proposal, Where::Remote);
+            explanation.why.push_str(&crate::cmds::conflicts::wire_sources(c));
+            explanation
+        })
         .collect();
     out.extend(blockers.iter().map(|b| {
         let detail = serde_json::from_str(&b.detail_json).unwrap_or(serde_json::Value::Null);
@@ -136,7 +141,9 @@ pub fn explain(ctx: &Ctx, a: &ExplainArgs) -> Result<u8> {
         ex.push(explain_invalid(problem, p, Where::Local));
     }
     for c in &prep.preview.conflicts {
-        ex.push(explain_conflict(c, p, Where::Local));
+        let mut explanation = explain_conflict(c, p, Where::Local);
+        explanation.why.push_str(&crate::cmds::conflicts::local_sources(c));
+        ex.push(explanation);
     }
     for b in &prep.blockers {
         ex.push(explain_blocked(b, p, Where::Local));

@@ -14,6 +14,7 @@ use crate::error::{ApiError, ApiResult};
 
 mod admin;
 mod agents;
+mod comment_drafts;
 mod convert;
 mod events;
 mod history;

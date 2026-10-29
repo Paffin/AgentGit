@@ -794,6 +794,32 @@ message ClearReviewDraftRequest {
   uint64 expected_version = 3;
 }
 
+// Private, unsubmitted general discussion notes for the current acting identity.
+message CommentDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string head = 3;
+  string body = 4;
+  int64 updated_at_ms = 5;
+}
+message GetCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+}
+message SaveCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+  string head = 3;
+  string body = 4;
+  // Zero means no prior draft; all saves compare this version atomically.
+  uint64 expected_version = 5;
+}
+message ClearCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+  uint64 expected_version = 3;
+}
+
 // Replaces review routing after comparing the complete inspected set.
 message SetRequestedReviewersRequest {
   string repo = 1;
@@ -1877,6 +1903,9 @@ service ProposalService {
   rpc GetDraft(GetReviewDraftRequest) returns (ReviewDraft);
   rpc SaveDraft(SaveReviewDraftRequest) returns (ReviewDraft);
   rpc ClearDraft(ClearReviewDraftRequest) returns (ReviewDraft);
+  rpc GetCommentDraft(GetCommentDraftRequest) returns (CommentDraft);
+  rpc SaveCommentDraft(SaveCommentDraftRequest) returns (CommentDraft);
+  rpc ClearCommentDraft(ClearCommentDraftRequest) returns (CommentDraft);
   rpc SetReviewers(SetRequestedReviewersRequest) returns (RequestedReviewers);
   rpc Review(ReviewProposalRequest) returns (Review);
   rpc Comment(CommentProposalRequest) returns (Review);

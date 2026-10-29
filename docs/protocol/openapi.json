@@ -645,6 +645,25 @@
         },
         "type": "object"
       },
+      "ClearCommentDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ClearReviewDraftRequest": {
         "properties": {
           "expected_version": {
@@ -678,6 +697,35 @@
           "repo": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommentDraft": {
+        "description": "Private, unsubmitted general discussion notes for the current acting identity.",
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -926,7 +974,7 @@
           },
           "paths": {
             "default": [],
-            "description": "Ordered candidate entries, including the root. At most 100 paths per root and 1000 in one response.",
+            "description": "Ordered candidate entries; a complete scope includes the root.\nAt most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.",
             "items": {
               "type": "string"
             },
@@ -1860,6 +1908,19 @@
           "rev": {
             "default": "",
             "description": "Revision expression: id, id prefix, stream, proposal id, with ~N / ^N suffixes.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetCommentDraftRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
             "type": "string"
           }
         },
@@ -5143,6 +5204,34 @@
             "format": "int32",
             "minimum": 0,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SaveCommentDraftRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "description": "Zero means no prior draft; all saves compare this version atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
           }
         },
         "type": "object"
@@ -10257,6 +10346,206 @@
           }
         },
         "summary": "Close without integrating",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft": {
+      "delete": {
+        "operationId": "proposal.clear_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear the inspected private comment draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "get": {
+        "operationId": "proposal.get_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read your private comment draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "put": {
+        "operationId": "proposal.save_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveCommentDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save your private comment draft",
         "tags": [
           "Proposal"
         ]

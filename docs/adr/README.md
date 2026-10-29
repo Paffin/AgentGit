@@ -58,3 +58,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0040 — Complete structural sync resolutions](0040-structural-sync-resolutions.md)
 
 - [0041 — Bounded structural conflict previews](0041-structural-conflict-previews.md)
+
+- [0042 — Private proposal comment drafts](0042-private-comment-drafts.md)

@@ -109,6 +109,9 @@ pub mod features {
     /// Private versioned review drafts for the current acting identity.
     pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
 
+    /// Private versioned general discussion drafts for the current acting identity.
+    pub const PROPOSALS_COMMENT_DRAFTS: &str = "proposals.comment_drafts";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -128,6 +131,7 @@ pub mod features {
         PROPOSALS_UPDATE_HEAD,
         PROPOSALS_REVIEW_REQUESTS,
         PROPOSALS_REVIEW_DRAFTS,
+        PROPOSALS_COMMENT_DRAFTS,
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,

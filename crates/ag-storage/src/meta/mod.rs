@@ -42,6 +42,7 @@ mod review_threads;
 
 mod agents;
 mod changesets;
+mod comment_drafts;
 mod derived;
 mod intents;
 mod outbox;
@@ -64,6 +65,7 @@ use db::{Conn, SqliteConn, params};
 
 pub use agents::{AgentRow, LeaseRow, ProvenanceRow, QueueRow, RunRow, TaskRow};
 pub use changesets::ChangesetInfo;
+pub use comment_drafts::CommentDraftRow;
 pub use db::{Dialect, Param, Row, Value};
 pub use intents::{IntentRow, IntentState, NewIntent};
 pub use issues::{IssueActivityRow, IssueFilter, IssueRow};

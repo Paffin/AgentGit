@@ -982,3 +982,56 @@ fn schema_nine_private_drafts_migrate_persist_and_clear_without_rewinding_versio
         0
     );
 }
+
+#[test]
+fn schema_ten_upgrade_preserves_review_drafts_and_adds_independent_comment_tombstones() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("meta.db");
+    let backup = dir.path().join("before.db");
+    let head: ChangesetId = "0".repeat(64).parse().unwrap();
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 10) {
+            conn.execute_batch(migration.sql).unwrap();
+        }
+        conn.execute("INSERT INTO meta(key,value) VALUES('schema','10')", []).unwrap();
+        conn.execute("INSERT INTO proposals(id,stream,head,title,description,author,state,created_at,updated_at) VALUES('prop_old','main',?1,'Keep existing','','user:author','closed',1,1)", [head.to_hex()]).unwrap();
+        conn.execute("INSERT INTO review_drafts(proposal,owner,version,head,decision,body,updated_at) VALUES('prop_old','user:alice',7,?1,'comment','Existing private review',1)", [head.to_hex()]).unwrap();
+        conn.execute("INSERT INTO review_drafts(proposal,owner,version,head,decision,body,updated_at) VALUES('prop_old','user:bob',9,NULL,'','',1)", []).unwrap();
+        conn.pragma_update(None, "user_version", 10).unwrap();
+    }
+    std::fs::copy(&path, &backup).unwrap();
+    {
+        let upgraded = Meta::open(&path).unwrap();
+        assert_eq!(
+            upgraded.read(|tx| tx.review_draft("prop_old", "user:alice")).unwrap().unwrap().body,
+            "Existing private review"
+        );
+        assert_eq!(upgraded.read(|tx| tx.review_draft("prop_old", "user:bob")).unwrap().unwrap().version, 9);
+        assert!(upgraded.read(|tx| tx.comment_draft("prop_old", "user:alice")).unwrap().is_none());
+        upgraded
+            .write(|tx| tx.replace_comment_draft("prop_old", "user:alice", Some(&head), "Independent note", 1))
+            .unwrap();
+    }
+    {
+        let reopened = Meta::open(&path).unwrap();
+        assert_eq!(
+            reopened.read(|tx| tx.comment_draft("prop_old", "user:alice")).unwrap().unwrap().body,
+            "Independent note"
+        );
+        reopened.write(|tx| tx.replace_comment_draft("prop_old", "user:alice", None, "", 2)).unwrap();
+        assert_eq!(reopened.read(|tx| tx.review_draft("prop_old", "user:alice")).unwrap().unwrap().version, 7);
+    }
+    let reopened = Meta::open(&path).unwrap();
+    let cleared = reopened.read(|tx| tx.comment_draft("prop_old", "user:alice")).unwrap().unwrap();
+    assert_eq!(cleared.version, 2);
+    assert!(cleared.head.is_none() && cleared.body.is_empty());
+    let untouched = rusqlite::Connection::open(&backup).unwrap();
+    assert_eq!(untouched.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 10);
+    assert_eq!(
+        untouched
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='comment_drafts'", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+}

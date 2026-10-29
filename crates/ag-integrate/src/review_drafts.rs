@@ -1,4 +1,5 @@
 //! Unsubmitted review notes. These neither publish a review nor retain history objects.
+use crate::draft_version::{next_version, require_version};
 use crate::{Error, Repository, Result};
 use ag_storage::meta::{ReviewDraftRow, Tx};
 use ag_types::{ChangesetId, Identity};
@@ -17,20 +18,6 @@ pub struct ReviewDraftInput<'a> {
     pub body: &'a str,
     /// Zero means the caller observed no persisted draft.
     pub expected_version: u64,
-}
-fn next_version(current: u64) -> Result<u64> {
-    current
-        .checked_add(1)
-        .filter(|value| *value <= i64::MAX as u64)
-        .ok_or_else(|| Error::Invalid("review draft version exhausted".into()))
-}
-fn require_version(current: u64, expected: u64) -> Result<()> {
-    if current != expected {
-        return Err(Error::Conflict(
-            "review draft changed on another device; keep your text and inspect the saved draft".into(),
-        ));
-    }
-    Ok(())
 }
 
 impl Repository {

@@ -34,7 +34,7 @@ impl Migration {
 }
 
 /// Schema version understood by this build.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
@@ -74,6 +74,11 @@ pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
         version: 10,
         name: "0010_review_drafts.sql",
         sql: include_str!("../../migrations/sqlite/0010_review_drafts.sql"),
+    },
+    Migration {
+        version: 11,
+        name: "0011_comment_drafts.sql",
+        sql: include_str!("../../migrations/sqlite/0011_comment_drafts.sql"),
     },
 ];
 
@@ -115,6 +120,11 @@ pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
         version: 10,
         name: "0010_review_drafts.sql",
         sql: include_str!("../../migrations/postgres/0010_review_drafts.sql"),
+    },
+    Migration {
+        version: 11,
+        name: "0011_comment_drafts.sql",
+        sql: include_str!("../../migrations/postgres/0011_comment_drafts.sql"),
     },
 ];
 

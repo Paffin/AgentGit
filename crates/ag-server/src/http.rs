@@ -248,7 +248,15 @@ where
     }
     .await;
     let mut response = finish(result, &request_id);
-    if matches!(op, "proposal.get_draft" | "proposal.save_draft" | "proposal.clear_draft") {
+    if matches!(
+        op,
+        "proposal.get_draft"
+            | "proposal.save_draft"
+            | "proposal.clear_draft"
+            | "proposal.get_comment_draft"
+            | "proposal.save_comment_draft"
+            | "proposal.clear_comment_draft"
+    ) {
         response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     }
     response
@@ -994,6 +1002,45 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::ClearReviewDraftRequest,
         v1::ReviewDraft,
         clear_review_draft
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft",
+        "proposal.get_comment_draft",
+        "Proposal",
+        "Read your private comment draft",
+        v1::GetCommentDraftRequest,
+        v1::CommentDraft,
+        get_comment_draft
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft",
+        "proposal.save_comment_draft",
+        "Proposal",
+        "Save your private comment draft",
+        v1::SaveCommentDraftRequest,
+        v1::CommentDraft,
+        save_comment_draft
+    );
+    route!(
+        r,
+        meta,
+        delete,
+        "delete",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft",
+        "proposal.clear_comment_draft",
+        "Proposal",
+        "Clear the inspected private comment draft",
+        v1::ClearCommentDraftRequest,
+        v1::CommentDraft,
+        clear_comment_draft
     );
     route!(
         r,

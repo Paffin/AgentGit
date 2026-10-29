@@ -154,7 +154,7 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     p1 = alice.proposals.create(repo=REPO, stream="main", head=m1.head, title="seed")
     assert len(alice.proposals.list(repo=REPO).proposals) == 1
     m2 = alice.workspaces.modify(repo=REPO, name="w1", message="more", changes=[put_file("d.txt", "d\n")])
-    assert alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head).head == m2.head
+    assert alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head, expected_head=m1.head).head == m2.head
     assert alice.proposals.get(repo=REPO, id=p1.id).proposal.head == m2.head
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
     assert (

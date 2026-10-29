@@ -283,20 +283,31 @@ impl Repository {
     /// Moves an open proposal to a new head. Earlier approvals stay attached
     /// to the head they reviewed and no longer count.
     pub fn update_proposal(&self, id: &str, new_head: &ChangesetId, actor: &Identity) -> Result<ProposalRow> {
+        self.update_proposal_at_head(id, new_head, actor, None)
+    }
+
+    /// Moves a proposal only while its head matches the caller's inspected revision.
+    pub fn update_proposal_at_head(
+        &self,
+        id: &str,
+        new_head: &ChangesetId,
+        actor: &Identity,
+        expected_head: Option<&ChangesetId>,
+    ) -> Result<ProposalRow> {
         let prop = self.find_proposal(id)?;
         let id = prop.id.as_str();
         if prop.author.split('#').next() != Some(actor.principal().as_str()) {
             return Err(Error::Conflict(format!("only the author ({}) may update proposal {id}", prop.author)));
         }
+        let expected = expected_head.copied().unwrap_or(prop.head);
+        if prop.head != expected {
+            return Err(Error::Conflict(format!("proposal head changed: expected {expected}, found {}", prop.head)));
+        }
         let published = self.publish(new_head, actor, None)?;
         if published.state != ag_storage::meta::IntentState::Published {
             return Err(Error::Invalid(format!("cannot publish {new_head}: {}", published.reason.unwrap_or_default())));
         }
-        Ok(self.meta.write(|tx| {
-            tx.proposal_set_head(id, new_head)?;
-            tx.audit_append(actor.as_str(), "proposal.update", id, &json!({"head": new_head}))?;
-            tx.proposal(id)?.ok_or_else(|| MetaError::Corrupt("proposal vanished".into()))
-        })?)
+        self.meta.write(|tx| replace_proposal_head(tx, id, new_head, actor, &expected))?
     }
 
     /// Closes an open proposal without integrating it (author or admin).
@@ -500,4 +511,24 @@ fn store_review(
         &json!({"decision": decision, "head": proposal.head}),
     )?;
     tx.review(id)?.ok_or_else(|| MetaError::Corrupt("review vanished".into()))
+}
+
+fn replace_proposal_head(
+    tx: &Tx<'_>,
+    id: &str,
+    new_head: &ChangesetId,
+    actor: &Identity,
+    expected: &ChangesetId,
+) -> std::result::Result<Result<ProposalRow>, MetaError> {
+    let current = tx.proposal(id)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{id}'")))?;
+    if current.head != *expected {
+        return Ok(Err(Error::Conflict(format!(
+            "proposal head changed: expected {expected}, found {}; inspect the updated changes before replacing the head",
+            current.head
+        ))));
+    }
+    tx.proposal_set_head(id, new_head)?;
+    tx.audit_append(actor.as_str(), "proposal.update", id, &json!({"head": new_head}))?;
+    let updated = tx.proposal(id)?.ok_or_else(|| MetaError::Corrupt("proposal vanished".into()))?;
+    Ok(Ok(updated))
 }

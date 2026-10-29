@@ -77,3 +77,11 @@ close external device, host or pilot qualification.
 Live Home: selected-repository invalidation now follows one event feed, with coalescing,
 visibility/session cleanup and complete-snapshot replacement. The aggregate view remains
 polled; a global authorized event feed is separate future server work.
+
+Proposal head preconditions: core/API/CLI/SDK now compare an optional inspected head in the
+metadata write transaction. The browser conflict resolver requires negotiated support, freezes
+its opening revision and retains/copies the resolution after a stale rejection. ADR-0029 records
+compatibility and publication limits. Next, structured review suggestions depend on this
+precondition: preview the exact replacement, preserve file metadata, apply only against the
+anchored head, and require fresh checks/reviews after changing the proposal. Suggestions and
+requested reviewers remain open; this prerequisite does not complete those workflows.

@@ -7,11 +7,13 @@ import { canResolveHere, deleteFile, putFile, workspaceName } from '@/lib/edit'
 import { conflictLabel } from '@/lib/conflict-label'
 import { decodeUtf8, looksBinary } from '@/lib/text'
 import { useToasts } from '@/stores/toasts'
+import { useAuth } from '@/stores/auth'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import Dialog from '@/ui/Dialog.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import TextArea from '@/ui/TextArea.vue'
+import CopyButton from '@/ui/CopyButton.vue'
 
 /**
  * Resolve the conflicts of your own change request in the browser. The branch has moved under the change; for
@@ -22,6 +24,7 @@ import TextArea from '@/ui/TextArea.vue'
 const props = defineProps<{ modelValue: boolean; repo: string; proposal: Proposal }>()
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; done: [] }>()
 const toasts = useToasts()
+const auth = useAuth()
 
 type Choice = 'mine' | 'theirs' | 'delete' | 'edit'
 interface Row {
@@ -38,6 +41,7 @@ const phase = ref<'idle' | 'loading' | 'ready' | 'saving' | 'error'>('idle')
 const rows = ref<Row[]>([])
 const error = ref<ApiError | null>(null)
 let draft = ''
+let inspectedHead = ''
 
 const asError = (e: unknown) =>
   e instanceof ApiError
@@ -55,6 +59,16 @@ async function read(rev: string, path: string): Promise<string | null | 'binary'
 }
 
 async function open() {
+  inspectedHead = props.proposal.head
+  if (!auth.capabilities?.features.includes('proposals.update_head')) {
+    error.value = new ApiError({
+      status: 0,
+      code: 'failed_precondition',
+      message: 'Upgrade the server to resolve conflicts with concurrent-update protection.',
+    })
+    phase.value = 'error'
+    return
+  }
   phase.value = 'loading'
   error.value = null
   rows.value = []
@@ -63,7 +77,7 @@ async function open() {
     await api.workspaces.create(props.repo, {
       name: draft,
       stream: props.proposal.stream,
-      from_rev: props.proposal.head,
+      from_rev: inspectedHead,
     })
     const res = await api.workspaces.sync(props.repo, draft)
     if (res.status !== 'conflicted') {
@@ -75,7 +89,7 @@ async function open() {
     rows.value = await Promise.all(
       res.conflicts.map(async (c): Promise<Row> => {
         const [mine, theirs] = await Promise.all([
-          read(props.proposal.head, c.path),
+          read(inspectedHead, c.path),
           read(theirsRev, c.path),
         ])
         const blocked = !canResolveHere(c.kind)
@@ -109,9 +123,19 @@ function pick(r: Row, choice: Choice) {
 }
 
 const unresolved = computed(() => rows.value.filter((r) => r.blocked).length)
+const headChanged = computed(
+  () =>
+    error.value?.code === 'failed_precondition' &&
+    error.value.message.includes('proposal head changed'),
+)
+const resolutionText = computed(() =>
+  rows.value
+    .map((r) => `${r.conflict.path}\n${r.choice === 'delete' ? '(delete file)' : r.text}`)
+    .join('\n\n'),
+)
 
 async function moveProposal(head: string) {
-  await api.proposals.update(props.repo, props.proposal.id, head)
+  await api.proposals.update(props.repo, props.proposal.id, head, inspectedHead)
   toasts.ok('Conflicts resolved', 'The change request now includes the latest branch.')
   emit('update:modelValue', false)
   emit('done')
@@ -244,7 +268,12 @@ onBeforeUnmount(() => void cleanup())
           />
         </template>
       </section>
-      <Alert v-if="error" tone="bad" live="alert" title="Not saved">{{ error.message }}</Alert>
+      <Alert v-if="headChanged" tone="warn" live="alert" title="The change request changed">
+        Your resolution has not replaced the newer changes. Copy your work, close this dialog, and
+        inspect the updated change request before resolving again.
+        <CopyButton :text="resolutionText" label="Copy resolution text" with-label />
+      </Alert>
+      <Alert v-else-if="error" tone="bad" live="alert" title="Not saved">{{ error.message }}</Alert>
     </div>
     <template #footer>
       <Button :disabled="phase === 'saving'" @click="emit('update:modelValue', false)"
@@ -253,7 +282,7 @@ onBeforeUnmount(() => void cleanup())
       <Button
         variant="primary"
         :loading="phase === 'saving'"
-        :disabled="phase !== 'ready' || unresolved > 0"
+        :disabled="phase !== 'ready' || unresolved > 0 || headChanged"
         data-testid="resolve-save"
         @click="save"
         >Save the resolution</Button

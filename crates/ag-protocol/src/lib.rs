@@ -81,6 +81,9 @@ pub mod features {
     /// Review submission can atomically require the exact head inspected by the caller.
     pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
 
+    /// Proposal head updates can require an inspected head atomically.
+    pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -93,6 +96,7 @@ pub mod features {
         AUTH_DELEGATION,
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
+        PROPOSALS_UPDATE_HEAD,
         TREE_SEARCH,
         ISSUES,
         TASK_SCHEDULING,

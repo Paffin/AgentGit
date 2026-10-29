@@ -37,3 +37,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 | [0027](0027-task-source-links.md) | Persistent, validated source links for independent follow-up tasks |
 
 - [0028 — Task instruction refinement](0028-task-instruction-refinement.md)
+- [0029 — Proposal head preconditions](0029-proposal-head-preconditions.md)

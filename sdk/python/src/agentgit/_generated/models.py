@@ -2197,6 +2197,7 @@ class UpdateIssueRequest:
 @dataclass(kw_only=True)
 class UpdateProposalRequest:
     """The `UpdateProposalRequest` message."""
+    expected_head: str = field(default="")
     id: str = field(default="")
     idempotency_key: str = field(default="")
     new_head: str = field(default="")

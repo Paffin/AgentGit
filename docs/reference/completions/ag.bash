@@ -2914,12 +2914,16 @@ _ag() {
             return 0
             ;;
         ag__subcmd__proposal__subcmd__update)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --expected-head --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --expected-head)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

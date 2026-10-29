@@ -4,13 +4,16 @@
 .SH NAME
 ag\-proposal\-update \- Point the proposal at a new head (earlier approvals stop counting)
 .SH SYNOPSIS
-\fBag proposal update\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIID\fR> [\fIREV\fR]
+\fBag proposal update\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-expected\-head\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIID\fR> [\fIREV\fR]
 .SH DESCRIPTION
 Point the proposal at a new head (earlier approvals stop counting)
 .SH OPTIONS
 .TP
 \fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
 Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-expected\-head\fR \fI<EXPECTED_HEAD>\fR
+Refuse the update if the proposal no longer has this inspected head
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY

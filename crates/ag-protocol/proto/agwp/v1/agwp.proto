@@ -747,6 +747,8 @@ message UpdateProposalRequest {
   string new_head = 3;
   // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
+  // Optional inspected head. If supplied, a concurrent change is refused atomically.
+  string expected_head = 5;
 }
 
 message ReviewProposalRequest {

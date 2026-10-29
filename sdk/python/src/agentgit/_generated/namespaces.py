@@ -1274,12 +1274,13 @@ class ProposalsApi:
         *,
         repo: str,
         id: str,
+        expected_head: str | None = None,
         idempotency_key: str | None = None,
         new_head: str | None = None,
         options: CallOptions | None = None,
     ) -> Proposal:
         """Move a proposal to a newer head (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.update`)."""
-        return self._c._call("proposal.update", {"repo": repo, "id": id, "idempotency_key": idempotency_key, "new_head": new_head}, options, Proposal)
+        return self._c._call("proposal.update", {"repo": repo, "id": id, "expected_head": expected_head, "idempotency_key": idempotency_key, "new_head": new_head}, options, Proposal)
 
 
 
@@ -2880,12 +2881,13 @@ class AsyncProposalsApi:
         *,
         repo: str,
         id: str,
+        expected_head: str | None = None,
         idempotency_key: str | None = None,
         new_head: str | None = None,
         options: CallOptions | None = None,
     ) -> Proposal:
         """Move a proposal to a newer head (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.update`)."""
-        return await self._c._call("proposal.update", {"repo": repo, "id": id, "idempotency_key": idempotency_key, "new_head": new_head}, options, Proposal)
+        return await self._c._call("proposal.update", {"repo": repo, "id": id, "expected_head": expected_head, "idempotency_key": idempotency_key, "new_head": new_head}, options, Proposal)
 
 
 

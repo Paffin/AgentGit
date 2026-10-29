@@ -385,3 +385,41 @@ fn setting_the_same_policy_again_is_a_no_op_that_keeps_the_attestations_valid() 
     assert_eq!(changed.version, first.version + 1);
     assert_eq!(audit(&f), 2);
 }
+
+#[test]
+fn updating_a_proposal_rejects_a_stale_inspected_head() {
+    let f = fx();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    let second = f.snap(Some(first), &[("a", "second")], "user:bob");
+    let stale_edit = f.snap(Some(first), &[("a", "stale edit")], "user:bob");
+    f.repo.update_proposal_at_head(&proposal, &second, &id("user:bob"), Some(&first)).unwrap();
+    let result = f.repo.update_proposal_at_head(&proposal, &stale_edit, &id("user:bob"), Some(&first));
+    assert!(matches!(result, Err(ag_integrate::Error::Conflict(_))), "stale update: {result:?}");
+    assert_eq!(f.repo.find_proposal(&proposal).unwrap().head, second);
+}
+
+#[test]
+fn concurrent_proposal_updates_have_one_winner() {
+    let f = fx();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    let heads = [f.snap(Some(first), &[("a", "left")], "user:bob"), f.snap(Some(first), &[("a", "right")], "user:bob")];
+    let barrier = std::sync::Barrier::new(2);
+    let results = std::thread::scope(|scope| {
+        let handles: Vec<_> = heads
+            .iter()
+            .map(|head| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    f.repo.update_proposal_at_head(&proposal, head, &id("user:bob"), Some(&first))
+                })
+            })
+            .collect();
+        handles.into_iter().map(|handle| handle.join().unwrap()).collect::<Vec<_>>()
+    });
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(results.iter().filter(|result| matches!(result, Err(ag_integrate::Error::Conflict(_)))).count(), 1);
+    let winner = results.into_iter().find_map(Result::ok).unwrap();
+    assert_eq!(f.repo.find_proposal(&proposal).unwrap().head, winner.head);
+}

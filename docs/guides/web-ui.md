@@ -403,11 +403,18 @@ conflict* (everyone else sees *Copy link to send to the author*). The resolver s
 yours, with *Keep the branch's*, *Keep mine*, *Delete the file* and a text box for the result. Saving applies the
 resolutions through the draft and moves the change request to the merged version. Binary files, oversized files and
 file-type changes can keep either exact version or delete the file: the original blob, type and executable mode are
-retained without converting bytes to text. Editing is available only for regular text versions. Conflicts requiring multiple output paths,
-including rename/rename and file/directory conflicts, remain command-line work. After a rename, each preview reads its original
+retained without converting bytes to text. Editing is available only for regular text versions.
+After a rename, each preview reads its original
 source path and displays it when it differs from the result path. Rename/delete conflicts allow
 an explicit choice between the relocated file and deletion. Servers must advertise
 `workspaces.conflict_origins`; older servers show upgrade guidance instead of ambiguous previews.
+
+For a file/directory collision, the author can choose a complete source file or folder. The dialog shows
+file counts and the exact candidate paths removed by that choice inside its details. Original blobs, symbolic
+links and executable modes are retained; unrelated clean changes survive. This requires
+`workspaces.structural_preview` and a complete server scope. The browser refuses incomplete previews,
+more than 100 source paths per root, more than 1,000 affected paths overall, or more than 100 tree requests.
+Other multi-target rename conflicts and larger cases remain command-line/API work.
 
 The resolver pins both the proposal revision and the target branch. If either changes before saving, the newer
 work is preserved and the dialog asks you to inspect it again. Failed reads never mean a deleted file. This flow

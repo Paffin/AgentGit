@@ -6,6 +6,14 @@ import type { Conflict, Proposal, SyncWorkspaceResponse } from '@/api/types'
 import { canResolveHere, workspaceName } from '@/lib/edit'
 import { conflictLabel } from '@/lib/conflict-label'
 import { formatBytes } from '@/lib/format'
+import {
+  structuralRoots,
+  within,
+  scopePaths,
+  loadStructuralSide,
+  structuralChanges,
+} from '@/lib/structuralResolution'
+import type { TreeEntry } from '@/api/types'
 import { loadConflictVersion, conflictChange } from '@/lib/conflictResolution'
 import type { ConflictChoice, ConflictVersion } from '@/lib/conflictResolution'
 import { useToasts } from '@/stores/toasts'
@@ -21,7 +29,13 @@ const props = defineProps<{ modelValue: boolean; repo: string; proposal: Proposa
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; done: [] }>()
 const toasts = useToasts()
 const auth = useAuth()
+interface Structural {
+  paths: string[]
+  mine: TreeEntry[]
+  theirs: TreeEntry[]
+}
 interface Row {
+  structural?: Structural
   conflict: Conflict
   mine: ConflictVersion
   theirs: ConflictVersion
@@ -39,6 +53,7 @@ interface Attempt {
   branchHead: string
   workspace: string
   token: string | null
+  structuralBudget: { remaining: number }
   controller: AbortController
   created: boolean
   released: boolean
@@ -93,6 +108,7 @@ async function prepareRow(a: Attempt, conflict: Conflict): Promise<Row> {
     editSource: 'mine',
     text: '',
   }
+  if (conflict.kind === 'file_directory') return prepareStructural(a, row)
   if (!canResolveHere(conflict.kind)) {
     row.blocked = `${conflictLabel(conflict)}: resolve this structural conflict with the command line.`
     return row
@@ -108,6 +124,93 @@ async function prepareRow(a: Attempt, conflict: Conflict): Promise<Row> {
   row.text = row[row.editSource].text ?? ''
   if (row.editable) row.choice = row.editSource
   return row
+}
+async function prepareStructural(a: Attempt, row: Row): Promise<Row> {
+  try {
+    if (!auth.capabilities?.features.includes('workspaces.structural_preview'))
+      throw new Error('Upgrade the server to choose a complete file or folder.')
+    const paths = scopePaths(row.conflict.path, row.conflict.resolution_scope)
+    const [mine, theirs] = await Promise.all([
+      loadStructuralSide(api, a.repo, a.head, row.conflict.path, request(a), a.structuralBudget),
+      loadStructuralSide(
+        api,
+        a.repo,
+        a.branchHead,
+        row.conflict.path,
+        request(a),
+        a.structuralBudget,
+      ),
+    ])
+    if (new Set([...mine, ...theirs].map((entry) => entry.path)).size > 100)
+      throw new Error('This folder is too large to resolve here. Use the command line.')
+    row.structural = { paths, mine, theirs }
+  } catch (cause) {
+    row.blocked = describeError(cause)
+  }
+  return row
+}
+function unsupportedChildren(conflicts: Conflict[], root: string) {
+  return conflicts.some(
+    (child) =>
+      within(root, child.path) && child.kind !== 'file_directory' && !canResolveHere(child.kind),
+  )
+}
+function scopeWithChildren(conflict: Conflict, conflicts: Conflict[]): Conflict {
+  try {
+    const paths = scopePaths(conflict.path, conflict.resolution_scope)
+    const covered = conflicts
+      .filter((child) => within(conflict.path, child.path))
+      .map((child) => child.path)
+    return {
+      ...conflict,
+      resolution_scope: { complete: true, paths: [...new Set([...paths, ...covered])] },
+    }
+  } catch {
+    return conflict
+  }
+}
+function mergeRows(conflicts: Conflict[]): Conflict[] {
+  const roots = structuralRoots(conflicts)
+  const total = conflicts.reduce(
+    (sum, conflict) => sum + (conflict.resolution_scope?.paths.length ?? 0),
+    0,
+  )
+  return conflicts
+    .filter(
+      (conflict) =>
+        !roots.some(
+          (root) =>
+            within(root, conflict.path) &&
+            (root !== conflict.path || conflict.kind !== 'file_directory'),
+        ),
+    )
+    .map((conflict) => {
+      if (!roots.includes(conflict.path)) return conflict
+      const unsupported = unsupportedChildren(conflicts, conflict.path)
+      if (total > 1000 || unsupported) return { ...conflict, resolution_scope: null }
+      return scopeWithChildren(conflict, conflicts)
+    })
+}
+function rowChanges(row: Row) {
+  if (row.structural) {
+    const selected = row.choice === 'mine' ? row.structural.mine : row.structural.theirs
+    const other = row.choice === 'mine' ? row.structural.theirs : row.structural.mine
+    return structuralChanges(row.structural.paths, selected, other)
+  }
+  return [
+    conflictChange(row.conflict.path, row.choice, row.mine, row.theirs, row.text, row.editSource),
+  ]
+}
+function fileCount(entries: TreeEntry[]) {
+  return String(entries.length) + (entries.length === 1 ? ' file' : ' files')
+}
+function structuralLabel(side: string, entries: TreeEntry[]) {
+  return entries.length ? `Keep ${side} (${fileCount(entries)})` : `Remove path (absent in ${side})`
+}
+function removedPaths(row: Row) {
+  if (!row.structural || !row.choice) return []
+  const selected = row.choice === 'mine' ? row.structural.mine : row.structural.theirs
+  return row.structural.paths.filter((path) => !selected.some((entry) => entry.path === path))
 }
 async function moveProposal(a: Attempt, head: string) {
   a.controller.signal.throwIfAborted()
@@ -127,8 +230,22 @@ async function prepareMerge(a: Attempt, result: SyncWorkspaceResponse) {
   a.branchHead = result.stream_head ?? ''
   if (!a.branchHead)
     throw new Error('The server did not identify the branch revision used for this conflict.')
-  const prepared = await Promise.all(result.conflicts.map((conflict) => prepareRow(a, conflict)))
+  const prepared = await Promise.all(
+    mergeRows(result.conflicts).map((conflict) => prepareRow(a, conflict)),
+  )
   if (!current(a)) return
+  const paths = new Set(
+    prepared.flatMap((row) =>
+      row.structural
+        ? [
+            ...row.structural.paths,
+            ...row.structural.mine.map((entry) => entry.path),
+            ...row.structural.theirs.map((entry) => entry.path),
+          ]
+        : [row.conflict.path],
+    ),
+  )
+  if (paths.size > 1000) throw new Error('Too many paths to resolve here. Use the command line.')
   rows.value = prepared
   phase.value = 'ready'
 }
@@ -157,6 +274,7 @@ async function open() {
     branchHead: '',
     workspace: workspaceName(),
     token: auth.token,
+    structuralBudget: { remaining: 100 },
     controller: new AbortController(),
     created: false,
     released: false,
@@ -223,9 +341,7 @@ async function save() {
   phase.value = 'saving'
   error.value = null
   try {
-    const resolutions = rows.value.map((row) =>
-      conflictChange(row.conflict.path, row.choice, row.mine, row.theirs, row.text, row.editSource),
-    )
+    const resolutions = rows.value.flatMap(rowChanges)
     const result = await api.workspaces.sync(a.repo, a.workspace, resolutions, {
       ...request(a),
       expectedStreamHead: a.branchHead,
@@ -286,6 +402,56 @@ onBeforeUnmount(invalidate)
           <span class="faint">{{ conflictLabel(r.conflict) }}</span>
         </h3>
         <Alert v-if="r.blocked" tone="warn" title="Not here">{{ r.blocked }}</Alert>
+        <template v-else-if="r.structural">
+          <p>
+            Choose one complete version of this path. Files from the other version will be removed.
+          </p>
+          <div class="pick" role="group" :aria-label="`Keep for ${r.conflict.path}`">
+            <Button
+              :variant="r.choice === 'mine' ? 'primary' : 'secondary'"
+              :aria-pressed="r.choice === 'mine'"
+              @click="r.choice = 'mine'"
+              >{{ structuralLabel('mine', r.structural.mine) }}</Button
+            >
+            <Button
+              :variant="r.choice === 'theirs' ? 'primary' : 'secondary'"
+              :aria-pressed="r.choice === 'theirs'"
+              @click="r.choice = 'theirs'"
+              >{{ structuralLabel('the branch’s', r.structural.theirs) }}</Button
+            >
+          </div>
+          <p v-if="r.choice" class="faint">
+            This choice removes {{ removedPaths(r).length }} other
+            {{ removedPaths(r).length === 1 ? 'path' : 'paths' }} from the merge result.
+          </p>
+          <details>
+            <summary>Files in each version</summary>
+            <template v-if="r.choice"
+              ><p><strong>Paths removed by this choice</strong></p>
+              <ul>
+                <li v-for="path in removedPaths(r)" :key="path">
+                  <code>{{ path }}</code>
+                </li>
+              </ul></template
+            >
+            <p><strong>Your version</strong></p>
+            <p v-if="!r.structural.mine.length">No file or folder at this path.</p>
+            <ul>
+              <li v-for="entry in r.structural.mine" :key="entry.path">
+                <code>{{ entry.path }}</code> · {{ entry.file_type
+                }}{{ entry.executable ? ' · executable' : '' }}
+              </li>
+            </ul>
+            <p><strong>The branch’s version</strong></p>
+            <p v-if="!r.structural.theirs.length">No file or folder at this path.</p>
+            <ul>
+              <li v-for="entry in r.structural.theirs" :key="entry.path">
+                <code>{{ entry.path }}</code> · {{ entry.file_type
+                }}{{ entry.executable ? ' · executable' : '' }}
+              </li>
+            </ul>
+          </details>
+        </template>
         <template v-else>
           <div class="cols">
             <div>

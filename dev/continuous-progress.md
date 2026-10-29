@@ -40,7 +40,7 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 | R1 | P0 DONE | Fix structural sync losing independent incoming add/edit/delete when file/directory merge falls back to ours | retain raw conflicting candidate, apply explicit choices before tree validation; both orientations/no partial workspace mutation |
 | R2 | P1 OPEN | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
 | R3 | P1 OPEN | Account-backed file-edit drafts | immutable base, byte/mode preservation, conflicts keep local work; no automatic publication |
-| R4 | P1 OPEN | Multi-path rename/file-directory resolution | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
+| R4 | P1 PARTIAL | Bounded file/directory Web choices; multi-target rename and larger structural cases remain open | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
 | R5 | P1 OPEN | Cross-repository work feed | pagination/scopes, full initial snapshot and reconnect behavior |
 | M1 | P1 OPEN | Resumable hosting metadata import: issues/comments first | preview, mapping/idempotency/checkpoint, retry without duplication; PR/releases/identity later |
 | Q1 | P1 BLOCKED external | #50 real MCP host | actual named host/version + full bounded task workflow and denied scope; scripted protocol is not enough |
@@ -89,3 +89,9 @@ Verified PR136 remains Draft, OPEN, mergedAt=null; main does not contain working
 ### Structural preview dependency validated
 
 Core/API `resolution_scope` implemented: max100 paths per conflict/max1000 per response, complete flag, synthetic rename destinations, exact prefix boundaries and legacy compatibility. Current source passed243 merge/integrate tests (3 existing ignored), HTTP/gRPC scope checks, Clippy, seven selected mutations and independent review. SDK179/204 + MCP3 and CLI31+3 shape checks passed. Web whole-root chooser is now being implemented with a shared request/path budget. Fast CI on a58b880 succeeded (Linux, tooling, SDK, Go); its Web/Docs/Security checks succeeded. Native Windows93bc477 compiled and is running tests, not yet qualified.
+
+### Web structural choice validated
+
+Whole-source file/directory UI completed:849 Web unit tests,12 desktop/phone browser cases (8 structural,4 nontext), types/build/lint passed.43 helper mutations and3 targeted Vue mutations caught. Independent review found no blocker. The real browser test caught `tree.list` kind `file` versus `TreeEntry.file_type` `regular`; normalization and a real-kind regression fixed it before commit. Scope/root containment, shared100-request budget,100-source-path/root and1000-dialog-path bounds are enforced. Renamed multi-target conflicts and over-budget structural cases remain open.
+
+CLI follow-up is implementing actual virtual-workspace list/show/create/sync/delete commands (not merely schema tests), using the same pinned-resolution API and complete/incomplete scope output. Lifecycle tests pass; duplicate-path parity and final CLI checks underway. No merge/release permitted.

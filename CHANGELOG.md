@@ -14,6 +14,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Browser file/directory conflicts support explicit whole-file or whole-folder choices with bounded complete previews, exact blob/type/mode preservation, visible removed paths and pinned revision checks. Independent clean changes survive; incomplete previews remain blocked.
+
 - Fresh structural sync previews include bounded candidate path scopes and an explicit completeness flag. Clients can account for synthetic rename destinations without guessing or treating a truncated preview as complete.
 
 - The release pipeline prepares a native Windows x64 ZIP with the CLI, server and MCP, plus a per-user PowerShell installer that verifies checksums. Native install-and-first-use smoke is required before publishing; the first Windows archive is not yet released.

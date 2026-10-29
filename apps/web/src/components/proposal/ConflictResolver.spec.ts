@@ -8,7 +8,7 @@ import ConflictResolver from './ConflictResolver.vue'
 enableAutoUnmount(afterEach)
 const api = vi.hoisted(() => ({
   workspaces: { create: vi.fn(), sync: vi.fn(), remove: vi.fn() },
-  tree: { resolve: vi.fn(), file: vi.fn() },
+  tree: { resolve: vi.fn(), file: vi.fn(), list: vi.fn() },
   proposals: { update: vi.fn() },
 }))
 vi.mock('@/api/instance', () => ({ api }))
@@ -356,8 +356,119 @@ it.each(['rename_rename', 'file_directory'])(
     })
     const w = show()
     await flushPromises()
-    expect(w.text()).toContain('resolve this structural conflict with the command line')
+    expect(w.text()).toContain('Not here')
     expect(api.tree.resolve).not.toHaveBeenCalled()
     expect(w.get('[data-testid=resolve-save]').attributes('aria-disabled')).toBe('true')
   },
 )
+
+it('groups nested structural conflicts and emits exact whole-folder puts and synthetic deletes', async () => {
+  auth.capabilities.features.push('workspaces.structural_preview')
+  api.workspaces.sync
+    .mockReset()
+    .mockResolvedValueOnce({
+      status: 'conflicted',
+      stream_head: 'branch-head',
+      conflicts: [
+        {
+          path: 'a',
+          kind: 'file_directory',
+          resolution_scope: { complete: true, paths: ['a', 'a/synthetic', 'a/run'] },
+        },
+        { path: 'a/run', kind: 'content' },
+      ],
+    })
+    .mockResolvedValue({ status: 'merged', head: 'merged-head' })
+  api.tree.resolve.mockImplementation(async (_repo, head, path) =>
+    head === 'mine-head'
+      ? {
+          kind: 'regular',
+          entry: { path, blob_id: 'file-blob', file_type: 'regular', executable: false, size: 3 },
+        }
+      : { kind: 'dir', entry: null },
+  )
+  api.tree.list = vi.fn().mockResolvedValue({
+    entries: [{ name: 'run', kind: 'file', blob_id: 'run-blob', executable: true, size: 3 }],
+    nextPageToken: '',
+  })
+  const w = show()
+  await flushPromises()
+  expect(w.findAll('section.row')).toHaveLength(1)
+  expect(w.get('[data-testid=resolve-save]').attributes('aria-disabled')).toBe('true')
+  await w
+    .findAll('button')
+    .find((b) => b.text() === 'Keep the branch’s (1 file)')!
+    .trigger('click')
+  expect(w.text()).toContain('a/synthetic')
+  await w.get('[data-testid=resolve-save]').trigger('click')
+  await flushPromises()
+  expect(api.workspaces.sync.mock.calls[1]![2]).toEqual([
+    { path: 'a', op: 'delete' },
+    { path: 'a/run', op: 'put', blob_id: 'run-blob', file_type: 'regular', executable: true },
+    { path: 'a/synthetic', op: 'delete' },
+  ])
+})
+it.each([
+  undefined,
+  { complete: false, paths: ['a'] },
+  { complete: true, paths: ['a', 'outside'] },
+  { complete: true, paths: ['a/child'] },
+])('blocks incomplete or invalid structural preview %j', async (scope) => {
+  auth.capabilities.features.push('workspaces.structural_preview')
+  api.workspaces.sync.mockReset().mockResolvedValue({
+    status: 'conflicted',
+    stream_head: 'branch-head',
+    conflicts: [{ path: 'a', kind: 'file_directory', resolution_scope: scope }],
+  })
+  const w = show()
+  await flushPromises()
+  expect(w.text()).toContain('Not here')
+  expect(w.get('[data-testid=resolve-save]').attributes('aria-disabled')).toBe('true')
+  expect(api.tree.resolve).not.toHaveBeenCalled()
+})
+
+it('requires structural capability even when a complete scope is present', async () => {
+  api.workspaces.sync.mockReset().mockResolvedValue({
+    status: 'conflicted',
+    stream_head: 'branch-head',
+    conflicts: [
+      { path: 'a', kind: 'file_directory', resolution_scope: { complete: true, paths: ['a'] } },
+    ],
+  })
+  const w = show()
+  await flushPromises()
+  expect(w.text()).toContain('Upgrade the server')
+  expect(api.tree.resolve).not.toHaveBeenCalled()
+})
+it('makes an absent source an explicit removal including synthetic candidate descendants', async () => {
+  auth.capabilities.features.push('workspaces.structural_preview')
+  api.workspaces.sync
+    .mockReset()
+    .mockResolvedValueOnce({
+      status: 'conflicted',
+      stream_head: 'branch-head',
+      conflicts: [
+        {
+          path: 'a',
+          kind: 'file_directory',
+          resolution_scope: { complete: true, paths: ['a', 'a/synthetic'] },
+        },
+      ],
+    })
+    .mockResolvedValue({ status: 'merged', head: 'merged-head' })
+  api.tree.resolve.mockResolvedValue({ kind: 'missing', entry: null })
+  const w = show()
+  await flushPromises()
+  await w
+    .findAll('button')
+    .find((b) => b.text() === 'Remove path (absent in mine)')!
+    .trigger('click')
+  expect(w.text()).toContain('No file or folder at this path')
+  expect(w.text()).toContain('a/synthetic')
+  await w.get('[data-testid=resolve-save]').trigger('click')
+  await flushPromises()
+  expect(api.workspaces.sync.mock.calls[1]![2]).toEqual([
+    { path: 'a', op: 'delete' },
+    { path: 'a/synthetic', op: 'delete' },
+  ])
+})

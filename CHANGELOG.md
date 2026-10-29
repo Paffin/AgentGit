@@ -32,6 +32,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Changed
 
+- Installation now prefers a stable release and explicitly falls back to a published prerelease when no stable exists. It prints a runnable local-demo command and safe PATH guidance; both READMEs and the getting-started guide lead with a verified install-to-first-change path.
+
 - The review workspace puts changed code first, keeps Review and Land in the header, and moves secondary actions and context into a quieter side panel. Phone layouts use a compact readiness strip and file navigation. All review, validation and permission states remain available.
 
 ## [0.3.0-beta.7] - 2026-10-29

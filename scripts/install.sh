@@ -10,9 +10,9 @@
 # check fails. Read it before piping it into a shell; it is short on purpose.
 #
 # Options:
-#   --version X.Y.Z   the release to install (default: the latest non-prerelease)
+#   --version X.Y.Z   pin a release (default: latest stable, or latest published prerelease if none)
 #   --prefix DIR      install under DIR (default: $AG_PREFIX, else ~/.local); binaries go to DIR/bin
-#   --dry-run         say what would happen, download and install nothing
+#   --dry-run         show the selected release, download no archive and install nothing
 #   --require-attestation   fail unless `gh attestation verify` ran and passed (needs `gh auth login`)
 #   --no-attestation  never run `gh attestation verify`
 #   --target TRIPLE   override platform detection (x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu,
@@ -114,10 +114,31 @@ sha256_of() {
 if [ "$version" = latest ]; then
   [ -z "$base_url" ] || die "--base-url needs an explicit --version"
   command -v curl >/dev/null 2>&1 || die "need curl to look up the latest release (or pass --version)"
-  final=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") ||
-    die "could not look up the latest release (pass --version X.Y.Z)"
-  version=${final##*/}
-  case "$version" in v[0-9]*) ;; *) die "no published release found at https://github.com/$REPO/releases (pass --version, or build from source)" ;; esac
+  lookup=$(curl -sSLI -o /dev/null -w '%{http_code} %{url_effective}' "https://github.com/$REPO/releases/latest") ||
+    die "could not reach GitHub to look up a release (pass --version X.Y.Z to skip discovery)"
+  status=${lookup%% *}
+  final=${lookup#* }
+  case "$status:$final" in
+    "200:https://github.com/$REPO/releases/tag/v"[0-9]*) version=${final##*/} ;;
+    "200:https://github.com/$REPO/releases" | "200:https://github.com/$REPO/releases/" | 404:*) version="" ;;
+    *) die "could not look up the stable release (HTTP $status; pass --version X.Y.Z to skip discovery)" ;;
+  esac
+  case "$version" in
+    v[0-9]*) ;;
+    *)
+      # The unauthenticated API lists published releases only. Keep the one-item response
+      # small and require draft=false as well; never install an unreleased candidate.
+      release=$(curl -fsSL --retry 3 "https://api.github.com/repos/$REPO/releases?per_page=1") ||
+        die "could not look up a published release (pass --version X.Y.Z)"
+      printf '%s\n' "$release" | grep -Eq '"draft"[[:space:]]*:[[:space:]]*false' ||
+        die "no published release found at https://github.com/$REPO/releases (pass --version, or build from source)"
+      version=$(printf '%s\n' "$release" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+      case "$version" in
+        v[0-9]*-*) say "Using published prerelease $version (no stable release found)." ;;
+        v[0-9]*) say "Using published release $version." ;;
+        *) die "no published release found at https://github.com/$REPO/releases (pass --version, or build from source)" ;;
+      esac ;;
+  esac
 fi
 version=${version#v}
 case "$version" in
@@ -147,7 +168,7 @@ say "AgentGit $version for $target"
 say "  from    $base_url/$archive"
 say "  into    $bindir ($BINARIES)"
 if [ "$dry_run" -eq 1 ]; then
-  say "dry run: nothing was downloaded or installed"
+  say "dry run: no archive was downloaded or installed"
   exit 0
 fi
 
@@ -213,7 +234,19 @@ fi
 
 say "installed:$installed"
 "$bindir/ag" --version 2>/dev/null || warn "installed, but '$bindir/ag --version' did not run on this machine"
+shell_quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 case ":${PATH:-}:" in
   *":$bindir:"*) ;;
-  *) say "note: $bindir is not on your PATH; add it, e.g.  export PATH=\"$bindir:\$PATH\"" ;;
+  *)
+    say "To use ag in this terminal:"
+    say "  export PATH=$(shell_quote "$bindir"):\"\$PATH\"" ;;
+esac
+case "$version" in
+  0.0.* | 0.1.* | 0.2.0-rc.[12])
+    say "This legacy release predates the local demo and saved login."
+    say "See https://github.com/$REPO/blob/main/docs/getting-started.md#on-020-rc2-until-the-next-release" ;;
+  *)
+    say "Try the local demo in your browser:"
+    say "  $(shell_quote "$bindir/ag-server") dev --open"
+    say "Already have a team server? Run ag login https://YOUR-SERVER to connect." ;;
 esac

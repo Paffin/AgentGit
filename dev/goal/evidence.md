@@ -520,3 +520,18 @@ The final two real-server Chromium scenarios (normal resolution and concurrent r
 passed in 8.9 seconds. The stale case checks the actionable warning, preserved text, disabled
 stale save, copy control and unchanged competing head. Only the expected HTTP 412 console line
 for this proposal route is allowed in that scenario; other console failures remain failures.
+
+## Proposal snapshot at the integration commit boundary
+
+A failpoint reproduction held integration after candidate computation, then updated the proposal.
+The old code integrated the obsolete candidate and marked the newer proposal integrated. The
+transaction now compares the stream and proposal head/open state before writing. A mismatch
+re-enters the existing loop, which aborts work for a changed or closed proposal. The same guard
+protects the already-integrated path. No schema or wire changes; see ADR 0031.
+
+The 31 engine tests passed on SQLite (0.47s), including four controlled races: update/close
+against ordinary/already-integrated completion. Six proposal-related cases passed on required
+PostgreSQL (0.76s). Each new race verifies the stream is unchanged, the concurrent proposal
+state survives and the old integration is aborted. Existing retry/recovery tests remain intact.
+The compatibility guide's obsolete schema-5/no-published-release statements were reconciled
+with development schema 7 and the already recorded beta.5 archive/upgrade evidence.

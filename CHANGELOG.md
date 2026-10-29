@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.
+
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.
 
 ## [0.3.0-beta.6] - 2026-10-28

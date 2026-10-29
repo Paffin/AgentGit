@@ -78,7 +78,7 @@ For a request the engine loops (at most 8 times):
      intent, so retries of one intent produce the same changeset.
    - conflicts → intent `Rejected` with the conflicting paths; the stream is never touched.
 3. **Commit in one transaction** (`BEGIN IMMEDIATE`):
-   1. re-read the stream; if `S` changed → write nothing, go to step 1 (**the candidate is recomputed**);
+   1. re-read both the stream and the proposal head/open state; if either differs from the candidate snapshot → write nothing and retry. A changed or closed proposal aborts the original operation; a moved stream causes candidate recomputation;
    2. read the facts: current policy and version, attestations for the candidate's *tree ID*, reviews, valid
       provenance, active exclusive leases;
    3. evaluate policy (pure function, [`ag-policy`](../guides/policy.md)) plus lease/fencing checks;
@@ -87,6 +87,10 @@ For a request the engine loops (at most 8 times):
       (which also appends the reflog row), mark the proposal integrated, mark the intent `Integrated`, append
       the audit entry and the `stream.updated` outbox event.
    5. COMMIT. Everything above happens or none of it does.
+
+The already-integrated path also compares the stream and proposal snapshot before marking the
+proposal integrated. It cannot mark a newer head or a concurrently closed proposal as integrated.
+See [ADR 0031](../adr/0031-integration-proposal-snapshot.md).
 
 Because policy is evaluated against facts read **inside** the committing transaction, there is no window in
 which an approval can be revoked, a policy tightened or an attestation superseded between "checked" and

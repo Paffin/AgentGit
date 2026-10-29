@@ -38,3 +38,4 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 
 - [0028 — Task instruction refinement](0028-task-instruction-refinement.md)
 - [0029 — Proposal head preconditions](0029-proposal-head-preconditions.md)
+- [0031 — Integration proposal snapshot](0031-integration-proposal-snapshot.md)

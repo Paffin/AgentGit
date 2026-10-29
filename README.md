@@ -19,7 +19,7 @@ AgentGit is a version control system for repositories that people, coding agents
 
 A change lands only when the repository's policy says it may, and the policy is checked in the same transaction that
 moves the branch, so nothing can change between "checked" and "merged". Test results are signed and tied to the exact
-tree they ran on. Every agent run has its own identity, and every decision ends up in an audit log you can verify.
+tree they ran on. The final transaction also rechecks the proposal head and open state. Every agent run has its own identity, and every decision ends up in an audit log you can verify.
 The core that stores, merges and recovers never calls a language model; anything smart sits on top and can only propose.
 
 This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.

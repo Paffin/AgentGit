@@ -489,6 +489,12 @@ describe('the tour', () => {
 
   it('events, audit and maintenance', async () => {
     expect((await alice.events.replay({ repo, after_seq: 0, limit: 5 })).events).toHaveLength(5);
+    const checkpoint = await alice.events.replayMany({ repos: [repo] });
+    expect(checkpoint.cursor).not.toBe('');
+    for await (const envelope of alice.events.subscribeMany({ repos: [repo], cursor: checkpoint.cursor })) {
+      expect(envelope.cursor).not.toBe('');
+      break;
+    }
     const got: string[] = [];
     for await (const ev of alice.events.subscribe({ repo, afterSeq: 0 })) {
       got.push(ev.topic);

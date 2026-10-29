@@ -552,6 +552,13 @@ first. These drafts contain `head` and `body` (up to 16 KiB of UTF-8), remain se
 from review-decision drafts, and can be saved on closed proposals. Saving or clearing
 a draft never posts a comment; post explicitly after inspecting the current proposal head.
 
+Cross-repository activity uses `client.events.replay_many` and `subscribe_many` after negotiating
+`events.multi_repo`. Pass 1–30 explicit repositories. An empty cursor checkpoints now;
+replay with `from_start` to read history. Keep the returned opaque cursor and the same
+repository/topic selection when resuming. Subscription envelopes also include checkpoints
+with no event; save their cursors too. Sequence numbers belong to individual repositories,
+so do not sort them as one global timeline.
+
 Private file edits use `client.drafts.get`, `save`, `clear` and `list` after negotiating
 `files.drafts`. Identify the draft by repository, stream and existing file path.
 Save the complete base64-encoded file content with its original `base` changeset and

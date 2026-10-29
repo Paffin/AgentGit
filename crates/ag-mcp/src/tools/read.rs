@@ -839,6 +839,44 @@ fn workspace_list(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolErr
     Ok(ToolOutput::new(format!("{} workspaces.", workspaces.len()), json!({"workspaces": workspaces})))
 }
 
+fn events_replay_many(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
+    let opts = ctx.opts(ctx.run_id(args)?);
+    if !ctx.api.supports("events.multi_repo", &opts)? {
+        return Err(ToolError::local(
+            "server_update_required",
+            "This server does not support a cross-repository event feed.",
+        ));
+    }
+    let mut repos = Vec::new();
+    for repo in args.get("repos").and_then(Value::as_array).into_iter().flatten() {
+        repos.push(ctx.repo(&json!({"repo":repo}))?);
+    }
+    repos.sort();
+    repos.dedup();
+    if repos.is_empty() || repos.len() > 30 {
+        return Err(ToolError::invalid("Choose between 1 and 30 repositories explicitly"));
+    }
+    let cursor = str_arg(args, "cursor").unwrap_or_default();
+    let from_start = args.get("from_start").and_then(Value::as_bool).unwrap_or(false);
+    if from_start && !cursor.is_empty() {
+        return Err(ToolError::invalid("Use cursor or from_start, not both"));
+    }
+    let topics: Vec<&str> =
+        args.get("topics").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    let query = vec![
+        ("repos", repos.join(",")),
+        ("topics", topics.join(",")),
+        ("cursor", cursor.to_string()),
+        ("from_start", from_start.to_string()),
+        ("limit", u64_arg(args, "limit").unwrap_or(100).min(1000).to_string()),
+    ];
+    let result = ctx.api.get("/v1/events/replay", &query, &opts)?;
+    Ok(ToolOutput::new(
+        "Event page from the selected repositories. Keep the opaque cursor to continue with the same repositories and topics.",
+        result,
+    ))
+}
+
 /// The tools of the read group.
 pub fn tools() -> Vec<ToolDef> {
     let rev_desc = "Revision: a stream name, a changeset id or unique prefix (6+ hex), a proposal id (prop_…), or @workspace-name; optionally with ~N (N-th ancestor). Defaults to the repository's default stream.";
@@ -847,6 +885,35 @@ pub fn tools() -> Vec<ToolDef> {
         vec![("limit", t_int("Page size.", 1, 100)), ("page_token", t_str("The next_page_token of the previous page."))]
     };
     vec![
+        def(
+            "events_replay_many",
+            Group::Read,
+            "Read a cross-repository event page",
+            "Reads events only from 1-30 explicitly selected, allowed repositories. Omit cursor to checkpoint now; use from_start for history. Resume with the returned cursor and the same repositories/topics. Events have repository-local sequence order, not a global chronological order.",
+            Ann::READ,
+            input(
+                vec![
+                    ("repos", t_arr("Explicit owner/name repositories.", t_str("Repository name."), 30)),
+                    (
+                        "topics",
+                        t_arr("Topic names or dotted prefixes; empty means all.", t_str_max("Topic filter.", 200), 50),
+                    ),
+                    ("cursor", t_str_max("Opaque cursor returned by the previous page.", 32768)),
+                    (
+                        "from_start",
+                        t_bool("Start at the beginning instead of checkpointing now; cannot be combined with cursor."),
+                    ),
+                    ("limit", t_int("Maximum events in this page; defaults to 100.", 1, 1000)),
+                    p_run(),
+                ],
+                &["repos"],
+            ),
+            output(
+                vec![("events", o_arr()), ("cursor", o_str()), ("has_more", o_bool())],
+                &["events", "cursor", "has_more"],
+            ),
+            events_replay_many,
+        ),
         def(
             "whoami",
             Group::Read,

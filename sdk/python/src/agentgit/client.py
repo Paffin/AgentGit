@@ -16,11 +16,12 @@ from agentgit._async import AsyncTransport
 from agentgit._codec import decode_as
 from agentgit._config import AsyncTokenSource, SyncTokenSource, TransportConfig
 from agentgit._core import DEFAULT_TIMEOUT_MS
-from agentgit._events import subscribe_async, subscribe_sync
+from agentgit._events import subscribe_async, subscribe_many_async, subscribe_many_sync, subscribe_sync
 from agentgit._generated.models import (
     Changeset,
     DirEntry,
     Event,
+    EventEnvelope,
     Issue,
     IssueActivity,
     NegotiateResponse,
@@ -378,6 +379,28 @@ class AgentGitClient:
             OPERATIONS["objects.put"], {"repo": repo, "object_id": object_id}, bytes(data), options
         )
         return decode_as(PutObjectResult, raw)
+
+    def _subscribe_many(
+        self,
+        *,
+        repos: Sequence[str],
+        cursor: str | None,
+        topics: Sequence[str] | None,
+        heartbeat_ms: int | None,
+        idle_timeout_ms: int | None,
+        reconnect: ReconnectPolicy | None,
+        run_id: str | None,
+    ) -> Generator[EventEnvelope, None, None]:
+        return subscribe_many_sync(
+            self._transport,
+            repos=repos,
+            cursor=cursor,
+            topics=topics,
+            heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms,
+            reconnect=reconnect,
+            run_id=run_id or self._transport.config.run_id,
+        )
 
     def _subscribe(
         self,
@@ -739,6 +762,28 @@ class AsyncAgentGitClient:
             OPERATIONS["objects.put"], {"repo": repo, "object_id": object_id}, bytes(data), options
         )
         return decode_as(PutObjectResult, raw)
+
+    def _subscribe_many(
+        self,
+        *,
+        repos: Sequence[str],
+        cursor: str | None,
+        topics: Sequence[str] | None,
+        heartbeat_ms: int | None,
+        idle_timeout_ms: int | None,
+        reconnect: ReconnectPolicy | None,
+        run_id: str | None,
+    ) -> AsyncGenerator[EventEnvelope, None]:
+        return subscribe_many_async(
+            self._transport,
+            repos=repos,
+            cursor=cursor,
+            topics=topics,
+            heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms,
+            reconnect=reconnect,
+            run_id=run_id or self._transport.config.run_id,
+        )
 
     def _subscribe(
         self,

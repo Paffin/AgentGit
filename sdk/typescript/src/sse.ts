@@ -1,6 +1,7 @@
 import { AgentGitError, errorFromInfo, isAgentGitError } from './errors.js';
 import { OPERATIONS } from './generated/operations.js';
-import type { AgentEvent, ReconnectOptions, SubscribeEventsOptions } from './types.js';
+import type { EventEnvelope } from './generated/models.js';
+import type { AgentEvent, ReconnectOptions, SubscribeEventsOptions, SubscribeManyEventsOptions } from './types.js';
 import type { Transport } from './transport.js';
 
 /** One dispatched Server-Sent Event. */
@@ -214,5 +215,88 @@ export async function* subscribeEvents(
   } finally {
     outer?.removeEventListener('abort', onAbort);
     controller.abort(); // closes the connection when the consumer stops early
+  }
+}
+
+/** Follows explicit repositories, preserving opaque checkpoints across reconnects. */
+export async function* subscribeManyEvents(
+  transport: Transport,
+  options: SubscribeManyEventsOptions,
+): AsyncGenerator<EventEnvelope, void, undefined> {
+  const repos = [...new Set(options.repos)].sort();
+  if (repos.length === 0 || repos.length > 30) throw new RangeError('Choose 1 to 30 repositories');
+  const topics = [...new Set(options.topics ?? [])].sort();
+  const op = OPERATIONS['events.subscribe_many'];
+  const controller = new AbortController();
+  const outer = options.signal;
+  if (outer?.aborted) return;
+  const abort = (): void => controller.abort();
+  outer?.addEventListener('abort', abort, { once: true });
+  const reconnect = options.reconnect === false ? undefined : { ...DEFAULT_RECONNECT, ...options.reconnect };
+  let cursor = options.cursor ?? '';
+  let failures = 0;
+  try {
+    for (;;) {
+      if (controller.signal.aborted) return;
+      let delivered = false;
+      try {
+        const response = await transport.openStream(
+          op,
+          {
+            repos,
+            topics,
+            cursor,
+            ...(options.heartbeatMs === undefined ? {} : { heartbeat_ms: options.heartbeatMs }),
+          },
+          { signal: controller.signal, runId: options.runId, headers: options.headers },
+        );
+        if (!response.body)
+          throw new AgentGitError({ code: 'unavailable', message: 'The event stream has no body', retryable: true });
+        for await (const frame of readSse(response.body, options.idleTimeoutMs ?? DEFAULT_IDLE_MS)) {
+          if (frame.event === 'error') {
+            const info = (JSON.parse(frame.data) as { error?: Record<string, unknown> }).error ?? {};
+            throw errorFromInfo(info, { status: 0, operation: op.id });
+          }
+          const envelope = JSON.parse(frame.data) as EventEnvelope;
+          if (typeof envelope.cursor !== 'string' || envelope.cursor.length === 0) {
+            throw new AgentGitError({
+              code: 'internal',
+              message: 'The event envelope has no cursor',
+              retryable: false,
+            });
+          }
+          cursor = envelope.cursor;
+          delivered = true;
+          failures = 0;
+          yield envelope;
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const transient =
+          error instanceof IdleTimeout || (isAgentGitError(error) && error.retryable) || error instanceof TypeError;
+        if (!reconnect || !transient) throw error;
+      }
+      if (!reconnect) return;
+      if (!delivered) failures++;
+      if (failures > reconnect.maxAttempts) {
+        throw new AgentGitError({
+          code: 'unavailable',
+          message: 'The event stream could not be re-established',
+          retryable: true,
+        });
+      }
+      const ceiling = Math.min(reconnect.maxDelayMs, reconnect.baseDelayMs * 2 ** Math.max(0, failures - 1));
+      try {
+        await transport.config.sleep(
+          delivered ? 0 : Math.round(transport.config.random() * ceiling),
+          controller.signal,
+        );
+      } catch {
+        return;
+      }
+    }
+  } finally {
+    outer?.removeEventListener('abort', abort);
+    controller.abort();
   }
 }

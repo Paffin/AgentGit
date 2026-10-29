@@ -2,7 +2,8 @@
 // Regenerate with `npm run generate`; CI runs `npm run generate:check`.
 
 import type { OperationId } from './operations.js';
-import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions } from '../types.js';
+import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions, SubscribeManyEventsOptions } from '../types.js';
+import type { EventEnvelope } from './models.js';
 
 /** The operation behind each namespaced method, for tooling and tests. */
 export const NAMESPACE_METHODS = {
@@ -47,7 +48,9 @@ export const NAMESPACE_METHODS = {
   },
   events: {
     replay: 'events.replay',
+    replayMany: 'events.replay_many',
     subscribe: 'events.subscribe',
+    subscribeMany: 'events.subscribe_many',
   },
   history: {
     ancestors: 'history.ancestors',
@@ -260,8 +263,12 @@ export interface Api {
   readonly events: {
     /** Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`) */
     replay(request: Req<'events.replay'>, options?: CallOptions): Promise<Res<'events.replay'>>;
+    /** Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`) */
+    replayMany(request?: Req<'events.replay_many'>, options?: CallOptions): Promise<Res<'events.replay_many'>>;
     /** Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live (`GET /v1/repos/{owner}/{rname}/events`, operation `events.subscribe`) */
     subscribe(options: SubscribeEventsOptions): AsyncGenerator<AgentEvent, void, undefined>;
+    /** Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor (`GET /v1/events`, operation `events.subscribe_many`) */
+    subscribeMany(options: SubscribeManyEventsOptions): AsyncGenerator<EventEnvelope, void, undefined>;
   };
   readonly history: {
     /** Changesets reachable from want but not from have, parents first (`POST /v1/repos/{owner}/{rname}/history/ancestors`, operation `history.ancestors`) */

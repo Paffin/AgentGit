@@ -147,6 +147,7 @@ const SPECIAL = {
   'objects.get': '(request: { repo: string; object_id: string }, options?: CallOptions): Promise<Uint8Array>',
   'tree.file': '(request: { repo: string; path: string; rev?: string }, options?: CallOptions): Promise<Uint8Array>',
   'events.subscribe': '(options: SubscribeEventsOptions): AsyncGenerator<AgentEvent, void, undefined>',
+  'events.subscribe_many': '(options: SubscribeManyEventsOptions): AsyncGenerator<EventEnvelope, void, undefined>',
 };
 
 // The hand-typed signatures above must keep matching the document: the same operations are non-JSON, and
@@ -160,6 +161,7 @@ const SPECIAL = {
     'objects.get': [],
     'tree.file': ['rev'],
     'events.subscribe': ['after_seq', 'heartbeat_ms', 'topics'],
+    'events.subscribe_many': ['repos', 'topics', 'cursor', 'heartbeat_ms'],
   };
   const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
   if (!same(new Set(nonJson), Object.keys(SPECIAL))) {
@@ -178,8 +180,9 @@ function apiTs() {
   const out = [BANNER];
   out.push("import type { OperationId } from './operations.js';");
   out.push(
-    "import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions } from '../types.js';",
+    "import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions, SubscribeManyEventsOptions } from '../types.js';",
   );
+  out.push("import type { EventEnvelope } from './models.js';");
   out.push('');
   out.push('/** The operation behind each namespaced method, for tooling and tests. */');
   out.push('export const NAMESPACE_METHODS = {');

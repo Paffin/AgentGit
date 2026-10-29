@@ -77,7 +77,7 @@ export interface BuiltRequest {
   hasJsonBody: boolean;
 }
 
-const QUERY_CSV = new Set(['topics']);
+const QUERY_CSV = new Set(['topics', 'repos']);
 
 function encodeSegment(value: unknown, name: string, op: OperationInfo): string {
   if (value === undefined || value === null || value === '') {

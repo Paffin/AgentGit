@@ -1,12 +1,12 @@
 import { AgentGitError } from './errors.js';
 import { NAMESPACE_METHODS } from './generated/api.js';
 import type { Api } from './generated/api.js';
-import type { NegotiateResponse } from './generated/models.js';
+import type { EventEnvelope, NegotiateResponse } from './generated/models.js';
 import { OPERATIONS, PAGINATED } from './generated/operations.js';
 import type { OperationId, PaginatedOperationId } from './generated/operations.js';
 import type { StoredObject } from './changeset.js';
 import { blobObject } from './hashing.js';
-import { subscribeEvents } from './sse.js';
+import { subscribeEvents, subscribeManyEvents } from './sse.js';
 import {
   abortableSleep,
   DEFAULT_RETRY,
@@ -23,6 +23,7 @@ import type {
   Res,
   RetryOptions,
   SubscribeEventsOptions,
+  SubscribeManyEventsOptions,
 } from './types.js';
 
 /** The protocol version this client speaks. */
@@ -175,6 +176,7 @@ export class AgentGitClient {
     };
     const events = self['events']!;
     events['subscribe'] = (opts: SubscribeEventsOptions) => this.subscribeEvents(opts);
+    events['subscribeMany'] = (opts: SubscribeManyEventsOptions) => this.subscribeManyEvents(opts);
   }
 
   /** The server root this client talks to. */
@@ -211,7 +213,7 @@ export class AgentGitClient {
   call<
     Id extends Exclude<
       OperationId,
-      'objects.put' | 'objects.get' | 'tree.file' | 'events.subscribe' | 'migration.prepare'
+      'objects.put' | 'objects.get' | 'tree.file' | 'events.subscribe' | 'events.subscribe_many' | 'migration.prepare'
     >,
   >(id: Id, request: Req<Id>, options?: CallOptions): Promise<Res<Id>> {
     return this.#invoke(id, request as Record<string, unknown>, undefined, options) as Promise<Res<Id>>;
@@ -292,6 +294,14 @@ export class AgentGitClient {
    */
   subscribeEvents(options: SubscribeEventsOptions): AsyncGenerator<AgentEvent, void, undefined> {
     return subscribeEvents(this.#transport, {
+      ...(this.#options.runId && !options.runId ? { runId: this.#options.runId } : {}),
+      ...options,
+    });
+  }
+
+  /** Cross-repository envelopes, including checkpoint-only frames, with opaque cursor resume. */
+  subscribeManyEvents(options: SubscribeManyEventsOptions): AsyncGenerator<EventEnvelope, void, undefined> {
+    return subscribeManyEvents(this.#transport, {
       ...(this.#options.runId && !options.runId ? { runId: this.#options.runId } : {}),
       ...options,
     });

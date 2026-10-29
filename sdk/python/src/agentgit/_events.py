@@ -17,7 +17,7 @@ import httpx
 
 from agentgit._async import AsyncTransport
 from agentgit._codec import decode_as
-from agentgit._generated.models import Event
+from agentgit._generated.models import Event, EventEnvelope
 from agentgit._generated.operations import OPERATIONS
 from agentgit._options import CallOptions, ReconnectPolicy
 from agentgit._sync import SyncTransport
@@ -162,6 +162,134 @@ async def subscribe_async(
                         if event.seq <= last:
                             continue
                         last = event.seq
+                        delivered = True
+                        failures = 0
+                        yield event
+        except AgentGitError as err:
+            if not err.retryable:
+                raise
+        except (httpx.TimeoutException, httpx.TransportError):
+            pass
+        if connected_at and time.monotonic() - connected_at > STABLE_CONNECTION_S:
+            failures = 0
+        if not delivered:
+            failures += 1
+        if failures > policy.max_attempts:
+            raise UnavailableError(
+                f"the event stream could not be re-established after {policy.max_attempts} attempts",
+                retryable=True,
+                operation=op.id,
+            )
+        await transport.sleep(0 if delivered else _backoff(policy, failures, transport.config.random()))
+
+
+def _many_params(
+    repos: Sequence[str], cursor: str, topics: Sequence[str], heartbeat_ms: int | None
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"repos": list(repos), "topics": list(topics), "cursor": cursor}
+    if heartbeat_ms is not None:
+        params["heartbeat_ms"] = heartbeat_ms
+    return params
+
+
+def _many_event(frame: SseFrame) -> EventEnvelope:
+    if frame.event == "error":
+        raise error_from_info(
+            json.loads(frame.data).get("error") or {}, status=0, operation="events.subscribe_many"
+        )
+    envelope = decode_as(EventEnvelope, json.loads(frame.data))
+    if not envelope.cursor:
+        raise ValueError("The event envelope has no cursor")
+    return envelope
+
+
+def subscribe_many_sync(
+    transport: SyncTransport,
+    *,
+    repos: Sequence[str],
+    cursor: str | None,
+    topics: Sequence[str] | None,
+    heartbeat_ms: int | None,
+    idle_timeout_ms: int | None,
+    reconnect: ReconnectPolicy | None,
+    run_id: str | None,
+) -> Generator[EventEnvelope, None, None]:
+    op = OPERATIONS["events.subscribe_many"]
+    policy = reconnect or ReconnectPolicy()
+    idle_s = _idle_seconds(idle_timeout_ms)
+    repos = tuple(sorted(set(repos)))
+    if not 1 <= len(repos) <= 30:
+        raise ValueError("Choose 1 to 30 repositories")
+    topics = tuple(sorted(set(topics or [])))
+    last = cursor or ""
+    failures = 0
+    while True:
+        delivered = False
+        connected_at = 0.0
+        try:
+            with transport.open_stream(
+                op, _many_params(repos, last, topics, heartbeat_ms), run_id=run_id, idle_timeout_s=idle_s
+            ) as response:
+                connected_at = time.monotonic()
+                parser = SseParser()
+                for chunk in response.iter_bytes():
+                    for frame in parser.feed(chunk):
+                        event = _many_event(frame)
+                        last = event.cursor
+                        delivered = True
+                        failures = 0
+                        yield event
+        except AgentGitError as err:
+            if not err.retryable:
+                raise
+        except (httpx.TimeoutException, httpx.TransportError):
+            pass  # idle watchdog or a dropped connection
+        if connected_at and time.monotonic() - connected_at > STABLE_CONNECTION_S:
+            failures = 0
+        if not delivered:
+            failures += 1
+        if failures > policy.max_attempts:
+            raise UnavailableError(
+                f"the event stream could not be re-established after {policy.max_attempts} attempts",
+                retryable=True,
+                operation=op.id,
+            )
+        transport.sleep(0 if delivered else _backoff(policy, failures, transport.config.random()))
+
+
+async def subscribe_many_async(
+    transport: AsyncTransport,
+    *,
+    repos: Sequence[str],
+    cursor: str | None,
+    topics: Sequence[str] | None,
+    heartbeat_ms: int | None,
+    idle_timeout_ms: int | None,
+    reconnect: ReconnectPolicy | None,
+    run_id: str | None,
+) -> AsyncGenerator[EventEnvelope, None]:
+    op = OPERATIONS["events.subscribe_many"]
+    policy = reconnect or ReconnectPolicy()
+    idle_s = _idle_seconds(idle_timeout_ms)
+    repos = tuple(sorted(set(repos)))
+    if not 1 <= len(repos) <= 30:
+        raise ValueError("Choose 1 to 30 repositories")
+    topics = tuple(sorted(set(topics or [])))
+    last = cursor or ""
+    failures = 0
+    while True:
+        delivered = False
+        connected_at = 0.0
+        try:
+            async with transport.open_stream(
+                op, _many_params(repos, last, topics, heartbeat_ms), run_id=run_id, idle_timeout_s=idle_s
+            ) as response:
+                connected_at = time.monotonic()
+                parser = SseParser()
+                async for chunk in response.aiter_bytes():
+                    for frame in parser.feed(chunk):
+                        event = _many_event(frame)
+                        last = event.cursor
                         delivered = True
                         failures = 0
                         yield event

@@ -58,6 +58,7 @@ __all__ = [
     "ErrorEnvelope",
     "ErrorInfo",
     "Event",
+    "EventEnvelope",
     "ExecutorPresence",
     "ExtendLeaseRequest",
     "FailJobRequest",
@@ -189,6 +190,8 @@ __all__ = [
     "ReflogRequest",
     "ReflogResponse",
     "RegisterAgentRequest",
+    "ReplayManyRequest",
+    "ReplayManyResponse",
     "ReplayRequest",
     "ReplayResponse",
     "Repo",
@@ -761,6 +764,13 @@ class Event:
     seq: int = field(default=0)
     timestamp_ms: int = field(default=0)
     topic: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class EventEnvelope:
+    """An opaque vector cursor; events from different repositories have no shared sequence."""
+    cursor: str = field(default="")
+    event: Event | None = field(default=None)
 
 
 @dataclass(kw_only=True)
@@ -1897,6 +1907,24 @@ class RegisterAgentRequest:
     public_key: str = field(default="")
     repo: str = field(default="")
     role: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ReplayManyRequest:
+    """The `ReplayManyRequest` message."""
+    cursor: str = field(default="")
+    from_start: bool = field(default=False)
+    limit: int = field(default=0)
+    repos: list[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class ReplayManyResponse:
+    """The `ReplayManyResponse` message."""
+    cursor: str = field(default="")
+    events: list[EventEnvelope] = field(default_factory=list)
+    has_more: bool = field(default=False)
 
 
 @dataclass(kw_only=True)

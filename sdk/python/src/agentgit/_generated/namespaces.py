@@ -58,6 +58,7 @@ from agentgit._generated.models import (
     ErrorEnvelope,
     ErrorInfo,
     Event,
+    EventEnvelope,
     ExecutorPresence,
     ExtendLeaseRequest,
     FailJobRequest,
@@ -189,6 +190,8 @@ from agentgit._generated.models import (
     ReflogRequest,
     ReflogResponse,
     RegisterAgentRequest,
+    ReplayManyRequest,
+    ReplayManyResponse,
     ReplayRequest,
     ReplayResponse,
     Repo,
@@ -660,6 +663,19 @@ class EventsApi:
         """Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`)."""
         return self._c._call("events.replay", {"repo": repo, "after_seq": after_seq, "limit": limit, "topics": topics}, options, ReplayResponse)
 
+    def replay_many(
+        self,
+        *,
+        cursor: str | None = None,
+        from_start: bool | None = None,
+        limit: int | None = None,
+        repos: Sequence[str] | None = None,
+        topics: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> ReplayManyResponse:
+        """Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`)."""
+        return self._c._call("events.replay_many", {"cursor": cursor, "from_start": from_start, "limit": limit, "repos": repos, "topics": topics}, options, ReplayManyResponse)
+
     def subscribe(
         self,
         *,
@@ -680,6 +696,18 @@ class EventsApi:
             idle_timeout_ms=idle_timeout_ms,
             reconnect=reconnect,
             run_id=run_id,
+        )
+
+    def subscribe_many(
+        self, *, repos: Sequence[str], cursor: str | None = None,
+        topics: Sequence[str] | None = None, heartbeat_ms: int | None = None,
+        idle_timeout_ms: int | None = None, reconnect: ReconnectPolicy | None = None,
+        run_id: str | None = None,
+    ) -> Generator[EventEnvelope, None, None]:
+        """Follow explicit repositories with opaque cursor resume; yields checkpoints too."""
+        return self._c._subscribe_many(
+            repos=repos, cursor=cursor, topics=topics, heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms, reconnect=reconnect, run_id=run_id,
         )
 
 
@@ -2423,6 +2451,19 @@ class AsyncEventsApi:
         """Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`)."""
         return await self._c._call("events.replay", {"repo": repo, "after_seq": after_seq, "limit": limit, "topics": topics}, options, ReplayResponse)
 
+    async def replay_many(
+        self,
+        *,
+        cursor: str | None = None,
+        from_start: bool | None = None,
+        limit: int | None = None,
+        repos: Sequence[str] | None = None,
+        topics: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> ReplayManyResponse:
+        """Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`)."""
+        return await self._c._call("events.replay_many", {"cursor": cursor, "from_start": from_start, "limit": limit, "repos": repos, "topics": topics}, options, ReplayManyResponse)
+
     def subscribe(
         self,
         *,
@@ -2443,6 +2484,18 @@ class AsyncEventsApi:
             idle_timeout_ms=idle_timeout_ms,
             reconnect=reconnect,
             run_id=run_id,
+        )
+
+    def subscribe_many(
+        self, *, repos: Sequence[str], cursor: str | None = None,
+        topics: Sequence[str] | None = None, heartbeat_ms: int | None = None,
+        idle_timeout_ms: int | None = None, reconnect: ReconnectPolicy | None = None,
+        run_id: str | None = None,
+    ) -> AsyncGenerator[EventEnvelope, None]:
+        """Follow explicit repositories with opaque cursor resume; yields checkpoints too."""
+        return self._c._subscribe_many(
+            repos=repos, cursor=cursor, topics=topics, heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms, reconnect=reconnect, run_id=run_id,
         )
 
 

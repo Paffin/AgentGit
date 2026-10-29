@@ -25,7 +25,7 @@ from agentgit.errors import (
 
 DEFAULT_TIMEOUT_MS = 30_000
 _ALPHABET = string.ascii_letters + string.digits
-_QUERY_CSV = frozenset({"topics"})
+_QUERY_CSV = frozenset({"topics", "repos"})
 
 # Errors the server marks retryable but where sending the identical request again cannot succeed:
 # ``stream_moved`` means a compare-and-swap lost against a newer version; the caller must re-read.

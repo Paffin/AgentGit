@@ -423,6 +423,13 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
 def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     admin, alice = tour["admin"], tour["alice"]
     assert len(alice.events.replay(repo=REPO, after_seq=0, limit=5).events) == 5
+    checkpoint = alice.events.replay_many(repos=[REPO])
+    assert checkpoint.cursor
+    feed = alice.events.subscribe_many(repos=[REPO], cursor=checkpoint.cursor)
+    try:
+        assert next(feed).cursor
+    finally:
+        feed.close()
     got = []
     for ev in alice.events.subscribe(repo=REPO, after_seq=0):
         got.append(ev.topic)

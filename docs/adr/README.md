@@ -64,3 +64,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0043 — Private single-file drafts](0043-private-file-drafts.md)
 
 - [0044 — Cross-repository events](0044-cross-repository-events.md)
+
+- [0045 — Hosting issue import](0045-hosting-issue-import.md)

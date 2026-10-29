@@ -214,6 +214,27 @@
         },
         "type": "object"
       },
+      "ApplyIssueImportRequest": {
+        "properties": {
+          "allow_unsupported": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expected_digest": {
+            "default": "",
+            "type": "string"
+          },
+          "manifest_json": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AssignTaskRequest": {
         "properties": {
           "agent": {
@@ -2380,6 +2401,21 @@
         },
         "type": "object"
       },
+      "ImportedIssueMapping": {
+        "properties": {
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "IntegrateRequest": {
         "properties": {
           "fencing_tokens": {
@@ -2585,6 +2621,77 @@
           "kind": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IssueImportPreview": {
+        "properties": {
+          "comments": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "conflicts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "create_count": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "default": "",
+            "type": "string"
+          },
+          "issues": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skip_count": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IssueImportResult": {
+        "properties": {
+          "created": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mappings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImportedIssueMapping"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -4081,6 +4188,19 @@
             "type": "string"
           },
           "proposal": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PreviewIssueImportRequest": {
+        "properties": {
+          "manifest_json": {
             "default": "",
             "type": "string"
           },
@@ -8920,6 +9040,128 @@
           }
         },
         "summary": "Create a user issue",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/import/apply": {
+      "post": {
+        "operationId": "issue.import_apply",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyIssueImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueImportResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Apply the inspected import manifest digest",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/import/preview": {
+      "post": {
+        "operationId": "issue.import_preview",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewIssueImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueImportPreview"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview normalized hosting issues and comments",
         "tags": [
           "Issues"
         ]

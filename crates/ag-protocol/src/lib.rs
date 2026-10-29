@@ -118,6 +118,9 @@ pub mod features {
     /// A bounded event stream with independent cursors for explicit repositories.
     pub const EVENTS_MULTI_REPO: &str = "events.multi_repo";
 
+    /// Previewed resumable import of normalized hosting issues and comments.
+    pub const ISSUES_IMPORT: &str = "issues.import";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -143,6 +146,7 @@ pub mod features {
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,
+        ISSUES_IMPORT,
         TASK_SCHEDULING,
         RUN_LOOKUP,
         PROPOSAL_COMMENTS,

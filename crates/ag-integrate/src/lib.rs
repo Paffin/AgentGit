@@ -34,6 +34,7 @@ mod fsck;
 mod gc;
 mod history;
 mod integrate;
+mod issue_import;
 mod layout;
 mod prepare;
 mod publish;
@@ -61,6 +62,10 @@ pub use gc::{DEFAULT_GC_GRACE_MS, DEFAULT_REFLOG_RETENTION_MS, GcOptions, GcRepo
 pub use history::{HybridGraph, LogEntry};
 pub use integrate::ContentionPolicy;
 pub use integrate::{IntegrateRequest, MergePreview, RecoveryReport};
+pub use issue_import::{
+    ImportedIssueMapping, IssueImportManifest, IssueImportPreview, IssueImportResult, MAX_ISSUE_IMPORT_BYTES,
+    SourceIssue, SourceIssueComment,
+};
 pub use layout::{InitOptions, Layout, RepoConfig};
 pub use prepare::{Preparation, PrepareContext, ValidationState};
 pub use publish::PublishResult;

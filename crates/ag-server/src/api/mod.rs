@@ -21,6 +21,7 @@ mod events_many;
 mod file_drafts;
 mod history;
 mod integration;
+mod issue_import;
 mod issues;
 mod jobs;
 mod objects;

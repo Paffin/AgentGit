@@ -783,6 +783,19 @@ impl ExecutionService for Grpc {
 
 #[tonic::async_trait]
 impl IssueService for Grpc {
+    async fn preview_import(
+        &self,
+        request: Request<v1::PreviewIssueImportRequest>,
+    ) -> Result<Response<v1::IssueImportPreview>, Status> {
+        unary!(self, request, "issue.import_preview", preview_issue_import)
+    }
+    async fn apply_import(
+        &self,
+        request: Request<v1::ApplyIssueImportRequest>,
+    ) -> Result<Response<v1::IssueImportResult>, Status> {
+        unary!(self, request, "issue.import_apply", apply_issue_import)
+    }
+
     async fn create(&self, request: Request<v1::CreateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
         unary!(self, request, "issue.create", create_issue)
     }

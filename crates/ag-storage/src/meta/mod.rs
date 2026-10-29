@@ -34,6 +34,7 @@
 //! backend only decides how a transaction is opened and closed.
 
 pub mod db;
+mod issue_imports;
 mod issues;
 mod jobs;
 mod migrate;
@@ -70,6 +71,7 @@ pub use comment_drafts::CommentDraftRow;
 pub use db::{Dialect, Param, Row, Value};
 pub use file_drafts::FileDraftRow;
 pub use intents::{IntentRow, IntentState, NewIntent};
+pub use issue_imports::IssueImportRow;
 pub use issues::{IssueActivityRow, IssueFilter, IssueRow};
 pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
 pub use migrate::{Migration, SCHEMA_VERSION};

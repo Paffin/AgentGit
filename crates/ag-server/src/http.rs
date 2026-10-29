@@ -1820,6 +1820,33 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     );
     r = r.route("/v1/events", get(subscribe_many_http));
 
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/issues/import/preview",
+        "issue.import_preview",
+        "Issues",
+        "Preview normalized hosting issues and comments",
+        v1::PreviewIssueImportRequest,
+        v1::IssueImportPreview,
+        preview_issue_import
+    );
+    route!(
+        r,
+        meta,
+        post,
+        "post",
+        "/v1/repos/{owner}/{rname}/issues/import/apply",
+        "issue.import_apply",
+        "Issues",
+        "Apply the inspected import manifest digest",
+        v1::ApplyIssueImportRequest,
+        v1::IssueImportResult,
+        apply_issue_import
+    );
+
     // ---- events ---------------------------------------------------------------------------------------------
     meta.push(RouteMeta::json::<v1::ReplayRequest, v1::ReplayResponse>(
         "get",

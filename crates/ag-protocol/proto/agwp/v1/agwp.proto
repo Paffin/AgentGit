@@ -2120,7 +2120,31 @@ message UpdateIssueRequest {
 message AddIssueCommentRequest { string repo = 1; uint64 number = 2; string body = 3; string idempotency_key = 4; }
 message ListIssueActivityRequest { string repo = 1; uint64 number = 2; uint32 page_size = 3; string page_token = 4; }
 message ListIssueActivityResponse { repeated IssueActivity activity = 1; string next_page_token = 2; }
+message PreviewIssueImportRequest { string repo = 1; string manifest_json = 2; }
+message ApplyIssueImportRequest {
+  string repo = 1;
+  string manifest_json = 2;
+  string expected_digest = 3;
+  bool allow_unsupported = 4;
+}
+message IssueImportPreview {
+  string digest = 1;
+  uint32 issues = 2;
+  uint32 comments = 3;
+  uint32 create_count = 4;
+  uint32 skip_count = 5;
+  repeated string warnings = 6;
+  repeated string conflicts = 7;
+}
+message ImportedIssueMapping { string source_id = 1; uint64 number = 2; }
+message IssueImportResult {
+  uint32 created = 1;
+  uint32 skipped = 2;
+  repeated ImportedIssueMapping mappings = 3;
+}
 service IssueService {
+  rpc PreviewImport(PreviewIssueImportRequest) returns (IssueImportPreview);
+  rpc ApplyImport(ApplyIssueImportRequest) returns (IssueImportResult);
   rpc Create(CreateIssueRequest) returns (Issue);
   rpc Get(GetIssueRequest) returns (Issue);
   rpc List(ListIssuesRequest) returns (ListIssuesResponse);

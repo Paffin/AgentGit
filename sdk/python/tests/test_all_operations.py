@@ -459,6 +459,32 @@ def test_operator_scheduling_gate(tour: dict[str, AgentGitClient]) -> None:
 
 def test_issue_discussion(tour: dict[str, AgentGitClient]) -> None:
     alice = tour["alice"]
+    manifest = json.dumps(
+        {
+            "version": 1,
+            "provider": "github",
+            "source_repo": "https://github.com/source/project",
+            "issues": [
+                {
+                    "source_id": "1",
+                    "title": "Imported issue",
+                    "body": "Original text",
+                    "state": "open",
+                    "author": "source-user",
+                    "url": "https://github.com/source/project/issues/1",
+                    "created_at_ms": 0,
+                    "updated_at_ms": 0,
+                }
+            ],
+        }
+    )
+    preview = alice.issues.import_preview(repo=REPO, manifest_json=manifest)
+    assert (
+        alice.issues.import_apply(
+            repo=REPO, manifest_json=manifest, expected_digest=preview.digest, allow_unsupported=False
+        ).created
+        == 1
+    )
     issue = alice.issues.create(repo=REPO, title="Move the project", body="Keep history")
     assert alice.issues.get(repo=REPO, number=issue.number).title == issue.title
     assert any(item.number == issue.number for item in alice.paginate("issue.list", repo=REPO))

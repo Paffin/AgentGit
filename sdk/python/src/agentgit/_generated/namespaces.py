@@ -14,6 +14,7 @@ from agentgit._generated.models import (
     Agent,
     AncestorsRequest,
     AncestorsResponse,
+    ApplyIssueImportRequest,
     AssignTaskRequest,
     Attestation,
     AuditEntry,
@@ -97,11 +98,14 @@ from agentgit._generated.models import (
     HeartbeatJobRequest,
     HeartbeatRequest,
     HeartbeatResponse,
+    ImportedIssueMapping,
     IntegrateRequest,
     IntegrationOutcome,
     IntegrationResult,
     Issue,
     IssueActivity,
+    IssueImportPreview,
+    IssueImportResult,
     Job,
     Lease,
     LeaseRef,
@@ -174,6 +178,7 @@ from agentgit._generated.models import (
     PredictResponse,
     Preparation,
     PrepareRequest,
+    PreviewIssueImportRequest,
     Principal,
     Proposal,
     ProposalDetail,
@@ -914,6 +919,28 @@ class IssuesApi:
     ) -> Issue:
         """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
         return self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    def import_apply(
+        self,
+        *,
+        repo: str,
+        allow_unsupported: bool | None = None,
+        expected_digest: str | None = None,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportResult:
+        """Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`)."""
+        return self._c._call("issue.import_apply", {"repo": repo, "allow_unsupported": allow_unsupported, "expected_digest": expected_digest, "manifest_json": manifest_json}, options, IssueImportResult)
+
+    def import_preview(
+        self,
+        *,
+        repo: str,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportPreview:
+        """Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`)."""
+        return self._c._call("issue.import_preview", {"repo": repo, "manifest_json": manifest_json}, options, IssueImportPreview)
 
     def list(
         self,
@@ -2702,6 +2729,28 @@ class AsyncIssuesApi:
     ) -> Issue:
         """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
         return await self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    async def import_apply(
+        self,
+        *,
+        repo: str,
+        allow_unsupported: bool | None = None,
+        expected_digest: str | None = None,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportResult:
+        """Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`)."""
+        return await self._c._call("issue.import_apply", {"repo": repo, "allow_unsupported": allow_unsupported, "expected_digest": expected_digest, "manifest_json": manifest_json}, options, IssueImportResult)
+
+    async def import_preview(
+        self,
+        *,
+        repo: str,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportPreview:
+        """Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`)."""
+        return await self._c._call("issue.import_preview", {"repo": repo, "manifest_json": manifest_json}, options, IssueImportPreview)
 
     async def list(
         self,

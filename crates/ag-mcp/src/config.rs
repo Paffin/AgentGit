@@ -22,19 +22,22 @@ pub enum Group {
     Discuss,
     /// Approve, request changes or comment on a proposal.
     Review,
+    /// Preview and apply normalized issue imports. Off unless explicitly named.
+    Issue,
     /// Land a proposal on its stream. Off unless the operator passes `--enable-integrate`.
     Integrate,
 }
 
 impl Group {
     /// Every group.
-    pub const ALL: [Group; 7] = [
+    pub const ALL: [Group; 8] = [
         Group::Read,
         Group::Workspace,
         Group::Propose,
         Group::Coordinate,
         Group::Discuss,
         Group::Review,
+        Group::Issue,
         Group::Integrate,
     ];
 
@@ -47,6 +50,7 @@ impl Group {
             Group::Coordinate => "coordinate",
             Group::Discuss => "discuss",
             Group::Review => "review",
+            Group::Issue => "issue",
             Group::Integrate => "integrate",
         }
     }
@@ -60,13 +64,16 @@ impl Group {
             "coordinate" => Ok(Group::Coordinate),
             "discuss" => Ok(Group::Discuss),
             "review" => Ok(Group::Review),
+            "issue" => Ok(Group::Issue),
             "integrate" => Err("`integrate` lands code on a stream; it cannot be switched on through --allow. \
                                 Pass --enable-integrate explicitly if you really want the integrate tool"
                 .into()),
             "admin" => Err("there is no `admin` group: policy, roles and credentials are deliberately not reachable \
                             through MCP"
                 .into()),
-            other => Err(format!("unknown group `{other}` (read, workspace, propose, coordinate, discuss, review)")),
+            other => {
+                Err(format!("unknown group `{other}` (read, workspace, propose, coordinate, discuss, review, issue)"))
+            }
         }
     }
 }

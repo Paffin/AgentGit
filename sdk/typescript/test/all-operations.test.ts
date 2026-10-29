@@ -457,6 +457,34 @@ describe('the tour', () => {
   });
 
   it('creates and discusses an issue through the public client', async () => {
+    const manifest = JSON.stringify({
+      version: 1,
+      provider: 'github',
+      source_repo: 'https://github.com/source/project',
+      issues: [
+        {
+          source_id: '1',
+          title: 'Imported issue',
+          body: 'Original text',
+          state: 'open',
+          author: 'source-user',
+          url: 'https://github.com/source/project/issues/1',
+          created_at_ms: 0,
+          updated_at_ms: 0,
+        },
+      ],
+    });
+    const preview = await alice.issues.importPreview({ repo, manifest_json: manifest });
+    expect(
+      (
+        await alice.issues.importApply({
+          repo,
+          manifest_json: manifest,
+          expected_digest: preview.digest,
+          allow_unsupported: false,
+        })
+      ).created,
+    ).toBe(1);
     const issue = await alice.issues.create({ repo, title: 'Move the project', body: 'Keep history' });
     expect((await alice.issues.get({ repo, number: issue.number })).title).toBe(issue.title);
     expect((await alice.issues.list({ repo })).issues.some((item) => item.number === issue.number)).toBe(true);

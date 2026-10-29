@@ -72,6 +72,8 @@ export const NAMESPACE_METHODS = {
     comment: 'issue.comment',
     create: 'issue.create',
     get: 'issue.get',
+    importApply: 'issue.import_apply',
+    importPreview: 'issue.import_preview',
     list: 'issue.list',
     update: 'issue.update',
   },
@@ -305,6 +307,10 @@ export interface Api {
     create(request: Req<'issue.create'>, options?: CallOptions): Promise<Res<'issue.create'>>;
     /** Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`) */
     get(request: Req<'issue.get'>, options?: CallOptions): Promise<Res<'issue.get'>>;
+    /** Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`) */
+    importApply(request: Req<'issue.import_apply'>, options?: CallOptions): Promise<Res<'issue.import_apply'>>;
+    /** Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`) */
+    importPreview(request: Req<'issue.import_preview'>, options?: CallOptions): Promise<Res<'issue.import_preview'>>;
     /** List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`) */
     list(request: Req<'issue.list'>, options?: CallOptions): Promise<Res<'issue.list'>>;
     /** Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`) */

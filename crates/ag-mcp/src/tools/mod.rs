@@ -12,6 +12,7 @@ use crate::output::{ToolError, ToolOutput};
 pub mod coordinate;
 pub mod discussions;
 pub mod file_drafts;
+pub mod issue_import;
 pub mod proposals;
 pub mod read;
 pub mod workspace;
@@ -104,6 +105,7 @@ impl Registry {
         tools.extend(proposals::tools());
         tools.extend(discussions::tools());
         tools.extend(coordinate::tools());
+        tools.extend(issue_import::tools());
         Self::from_tools(tools)
     }
 
@@ -429,6 +431,7 @@ mod tests {
                 Group::Workspace if matches!(t.name, "file_draft_get" | "file_draft_list") => {
                     assert!(t.ann.read_only);
                 }
+                Group::Issue if t.name == "issue_import_preview" => assert!(t.ann.read_only),
                 _ => assert!(!t.ann.read_only, "{} changes state so it cannot be marked read-only", t.name),
             }
         }

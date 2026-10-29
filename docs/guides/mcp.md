@@ -169,7 +169,7 @@ and the client decides.
 
 ## 4. What the agent gets
 
-39 tools in seven groups. The default is `read,workspace,propose,coordinate,discuss`; `--allow` names the groups explicitly.
+Tools are organized by permission group. The default is `read,workspace,propose,coordinate,discuss`; `--allow` names the groups explicitly.
 
 | Group | Tools |
 |---|---|
@@ -178,6 +178,7 @@ and the client decides.
 | `propose` | `propose`, `proposal_update`, `proposal_close`, `request_validation` |
 | `coordinate` | `task_claim`, `run_start`, `task_complete`, `run_heartbeat`, `run_finish`, `lease_acquire`, `lease_renew`, `lease_release` |
 | `discuss` | `discussion_start`, `discussion_reply`, `discussion_resolve`: exact-revision threads with version-bound resolution; no approval or integration rights |
+| `issue` (off unless named) | `issue_import_preview`, `issue_import_apply`: inspect a normalized import manifest, then explicitly apply its digest; no provider credentials |
 | `review` (off unless named) | `review`: approve, request changes or comment on a proposal's head. Keep it off for an agent that also authors changes: an author must not review its own work |
 | `integrate` (only with `--enable-integrate`) | `integrate`: lands a proposal if policy allows. It logs a warning at start and on every call |
 

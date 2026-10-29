@@ -512,6 +512,12 @@ first. These drafts contain `head` and `body` (up to 16 KiB of UTF-8), remain se
 from review-decision drafts, and can be saved on closed proposals. Saving or clearing
 a draft never posts a comment; post explicitly after inspecting the current proposal head.
 
+Issue migration uses `client.issues.importPreview` and `importApply` after negotiating `issues.import`.
+Pass a serialized normalized manifest in `manifest_json` (up to 4 MiB). Inspect the
+preview's warnings and conflicts, then explicitly apply the same manifest with its
+`expected_digest` and `allow_unsupported` decision. Durable source mappings make
+retrying an interrupted import safe. These methods do not accept provider credentials.
+
 Cross-repository activity uses `client.events.replayMany` and `subscribeMany` after negotiating
 `events.multi_repo`. Pass 1–30 explicit repositories. An empty cursor checkpoints now;
 replay with `from_start` to read history. Keep the returned opaque cursor and the same

@@ -14,6 +14,7 @@ __all__ = [
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
+    "ApplyIssueImportRequest",
     "AssignTaskRequest",
     "Attestation",
     "AuditEntry",
@@ -97,11 +98,14 @@ __all__ = [
     "HeartbeatJobRequest",
     "HeartbeatRequest",
     "HeartbeatResponse",
+    "ImportedIssueMapping",
     "IntegrateRequest",
     "IntegrationOutcome",
     "IntegrationResult",
     "Issue",
     "IssueActivity",
+    "IssueImportPreview",
+    "IssueImportResult",
     "Job",
     "Lease",
     "LeaseRef",
@@ -174,6 +178,7 @@ __all__ = [
     "PredictResponse",
     "Preparation",
     "PrepareRequest",
+    "PreviewIssueImportRequest",
     "Principal",
     "Proposal",
     "ProposalDetail",
@@ -330,6 +335,15 @@ class AncestorsResponse:
     """The `AncestorsResponse` message."""
     changeset_ids: list[str] = field(default_factory=list)
     next_page_token: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ApplyIssueImportRequest:
+    """The `ApplyIssueImportRequest` message."""
+    allow_unsupported: bool = field(default=False)
+    expected_digest: str = field(default="")
+    manifest_json: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1101,6 +1115,13 @@ class HeartbeatResponse:
 
 
 @dataclass(kw_only=True)
+class ImportedIssueMapping:
+    """The `ImportedIssueMapping` message."""
+    number: int = field(default=0)
+    source_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class IntegrateRequest:
     """The `IntegrateRequest` message."""
     fencing_tokens: list[int] = field(default_factory=list)
@@ -1159,6 +1180,26 @@ class IssueActivity:
     id: int = field(default=0)
     issue_number: int = field(default=0)
     kind: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class IssueImportPreview:
+    """The `IssueImportPreview` message."""
+    comments: int = field(default=0)
+    conflicts: list[str] = field(default_factory=list)
+    create_count: int = field(default=0)
+    digest: str = field(default="")
+    issues: int = field(default=0)
+    skip_count: int = field(default=0)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class IssueImportResult:
+    """The `IssueImportResult` message."""
+    created: int = field(default=0)
+    mappings: list[ImportedIssueMapping] = field(default_factory=list)
+    skipped: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -1737,6 +1778,13 @@ class PrepareRequest:
     enqueue_validations: bool = field(default=False)
     idempotency_key: str = field(default="")
     proposal: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class PreviewIssueImportRequest:
+    """The `PreviewIssueImportRequest` message."""
+    manifest_json: str = field(default="")
     repo: str = field(default="")
 
 

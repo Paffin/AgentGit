@@ -6,7 +6,8 @@
       "tree.diff",
       "objects.missing",
       "objects.verify",
-      "admin.fsck"
+      "admin.fsck",
+      "issue.import_preview"
     ],
     "keyed": [
       "repo.create",
@@ -58,7 +59,8 @@
       "proposal.save_comment_draft",
       "proposal.clear_comment_draft",
       "file_draft.save",
-      "file_draft.clear"
+      "file_draft.clear",
+      "issue.import_apply"
     ],
     "naturalWhenFieldPresent": {
       "workspace.modify": "expected_head",

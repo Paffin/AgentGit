@@ -1,6 +1,6 @@
 # Durable task execution limits — development evidence
 
-The branch implements server admission against durable run history, optimistic limit updates,
+PR #116, merged in `main`, implements server admission against durable run history, optimistic limit updates,
 and orchestrator recovery/continuation. It is not a published release.
 
 - Red→green: a third run against a two-run limit was admitted before the core guard and rejected after it.

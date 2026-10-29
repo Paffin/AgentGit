@@ -1224,6 +1224,9 @@ message FinishTaskRequest {
   string state = 3;
   // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
+  // Optional execution-policy precondition, checked atomically with the state change.
+  // Explicit zero matches an unset limit; omission preserves ordinary manual completion.
+  optional uint32 expected_max_attempts = 5;
 }
 
 message Lease {

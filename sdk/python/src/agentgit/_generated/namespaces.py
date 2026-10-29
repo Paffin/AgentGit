@@ -1619,12 +1619,13 @@ class TasksApi:
         *,
         repo: str,
         id: str,
+        expected_max_attempts: int | None = None,
         idempotency_key: str | None = None,
         state: str | None = None,
         options: CallOptions | None = None,
     ) -> Task:
         """Mark a task done or cancelled (`POST /v1/repos/{owner}/{rname}/tasks/{id}/finish`, operation `task.finish`)."""
-        return self._c._call("task.finish", {"repo": repo, "id": id, "idempotency_key": idempotency_key, "state": state}, options, Task)
+        return self._c._call("task.finish", {"repo": repo, "id": id, "expected_max_attempts": expected_max_attempts, "idempotency_key": idempotency_key, "state": state}, options, Task)
 
     def get(
         self,
@@ -3240,12 +3241,13 @@ class AsyncTasksApi:
         *,
         repo: str,
         id: str,
+        expected_max_attempts: int | None = None,
         idempotency_key: str | None = None,
         state: str | None = None,
         options: CallOptions | None = None,
     ) -> Task:
         """Mark a task done or cancelled (`POST /v1/repos/{owner}/{rname}/tasks/{id}/finish`, operation `task.finish`)."""
-        return await self._c._call("task.finish", {"repo": repo, "id": id, "idempotency_key": idempotency_key, "state": state}, options, Task)
+        return await self._c._call("task.finish", {"repo": repo, "id": id, "expected_max_attempts": expected_max_attempts, "idempotency_key": idempotency_key, "state": state}, options, Task)
 
     async def get(
         self,

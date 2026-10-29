@@ -54,6 +54,11 @@ async fn attempts_are_counted_once_and_an_operator_can_extend_the_same_task() {
         admin.call("PATCH", &path, Some(json!({"max_attempts":3,"expected_max_attempts":1})), &[]).await.status,
         412
     );
+    let stale_finish = admin
+        .post(&format!("{base}/tasks/{task}/finish"), json!({"state":"cancelled", "expected_max_attempts":1}))
+        .await;
+    assert_eq!(stale_finish.status, 412, "{}", stale_finish.json);
+    assert_eq!(creator.get(&format!("{base}/tasks/{task}")).await.json["state"], "in_progress");
     let second = admin.post(&format!("{base}/runs"), json!({"agent":"retry-bot","task_id":task})).await;
     assert_eq!(second.status, 200, "{}", second.json);
     assert_ne!(second.json["run_id"], started.json["run_id"]);

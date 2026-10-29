@@ -183,8 +183,21 @@ func (c *Client) SetTaskAttemptLimit(ctx context.Context, repo, id string, max, 
 // FinishTask marks a task done or cancelled. The server only lets the task's
 // owner (or anyone, for an unowned task) do this.
 func (c *Client) FinishTask(ctx context.Context, repo, id, state string) (*Task, error) {
+	return c.finishTask(ctx, repo, id, state, nil)
+}
+
+// FinishTaskAtAttemptLimit rejects a decision based on an obsolete retry policy.
+func (c *Client) FinishTaskAtAttemptLimit(ctx context.Context, repo, id, state string, expected uint32) (*Task, error) {
+	return c.finishTask(ctx, repo, id, state, &expected)
+}
+
+func (c *Client) finishTask(ctx context.Context, repo, id, state string, expected *uint32) (*Task, error) {
 	var out Task
-	if err := c.repoCall(ctx, "task.finish", http.MethodPost, repo, "/tasks/"+url.PathEscape(id)+"/finish", nil, map[string]string{"state": state}, &out); err != nil {
+	body := map[string]any{"state": state}
+	if expected != nil {
+		body["expected_max_attempts"] = *expected
+	}
+	if err := c.repoCall(ctx, "task.finish", http.MethodPost, repo, "/tasks/"+url.PathEscape(id)+"/finish", nil, body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -322,6 +322,12 @@ func (m *Manager) FinishTask(ctx context.Context, repo, taskID, state string) er
 	return err
 }
 
+// CancelTaskAtAttemptLimit preserves a task when its retry policy changed after scheduling.
+func (m *Manager) CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error {
+	_, err := m.o.Orch.FinishTaskAtAttemptLimit(ctx, repo, taskID, "cancelled", expected)
+	return err
+}
+
 // Shutdown stops accepting sessions and ends the running ones. With wait, it
 // lets them finish until ctx expires and cancels the rest; with cancel it
 // stops them at once. It returns when every session has been cleaned up.

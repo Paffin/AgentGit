@@ -41,3 +41,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0031 — Integration proposal snapshot](0031-integration-proposal-snapshot.md)
 - [0032 — Required discussion resolution](0032-required-discussion-resolution.md)
 - [0033 — Task execution-attempt limits](0033-task-attempt-limits.md)
+
+- [0034 — Task completion policy precondition](0034-task-finish-policy-precondition.md)

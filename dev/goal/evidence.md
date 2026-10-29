@@ -558,3 +558,20 @@ The policy_eval fuzz target compiles with generated counts and an invariant that
 required discussions cannot be allowed. Its dictionary/seed generator were updated; this is not
 a new fuzz campaign or mutation score. The fuzz lockfile's own workspace versions were aligned
 from beta.5 to beta.6; no third-party dependency version changed.
+
+## Retry policy changes during execution
+
+A real shell executor reproduced a stale automatic cancellation after the operator changed
+an active task from an unset limit to one allowed attempt. `task.finish` now supports optional
+`expected_max_attempts` and compares it in the state/audit write transaction. Automatic session
+and recovered-budget cancellation carry the observed value. On a rejected transition the
+scheduler discards local assumptions and reconstructs them from server state and history.
+
+Verification: the real-server scenario now retains the task, extends its limit and completes
+it with its second run. Four focused scheduler scenarios passed in 1.19s, including unchanged
+legacy cancellation and restart exhaustion. Core rejection preserves both task state and audit
+history (0.01s); HTTP stale cancellation returned 412 (0.14s). SDK tours passed (12 TypeScript,
+13 Python) with the new completion precondition. The previous failure is recorded in
+`/workspace/agentgit-quality/task-policy-finish-red.log`; follow-up logs share that prefix.
+No schema migration; ADR0034 describes the additive protocol field. Static Crapper/Dryer/
+Mutator scans were run; these are not coverage or mutation-kill measurements.

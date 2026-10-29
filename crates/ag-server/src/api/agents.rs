@@ -4,9 +4,7 @@ use ag_agent::leases::{acquire_with, extend, release};
 use ag_agent::predict::predict;
 use ag_agent::provenance::{ProvenanceRecord, SCHEMA, attach_signed, verify};
 use ag_agent::registry::{finish_run_as, heartbeat, reap_runs, register_agent_with_key, start_run_with};
-use ag_agent::tasks::{
-    add_dependency, create_task_with, finish_task, finish_task_as_operator, unfinished_dependencies,
-};
+use ag_agent::tasks::{add_dependency, create_task_with, finish_task_with_limit, unfinished_dependencies};
 use ag_crypto::{PublicKey, Signature};
 use ag_protocol::v1;
 use ag_storage::meta::{MetaError, TaskRow, Tx};
@@ -763,11 +761,14 @@ impl App {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let operator = self.authorize(call, &repo_name, Cap::AgentOperate, None).await.is_ok();
         self.with_repo_mut(call, &repo_name, Cap::TaskWrite, None, move |repo, actor| {
-            if operator {
-                finish_task_as_operator(repo.meta(), &req.id, &req.state, actor.as_str())?;
-            } else {
-                finish_task(repo.meta(), &req.id, &req.state, actor.as_str())?;
-            }
+            finish_task_with_limit(
+                repo.meta(),
+                &req.id,
+                &req.state,
+                actor.as_str(),
+                operator,
+                req.expected_max_attempts,
+            )?;
             let t = repo.meta().read(|tx| tx.task(&req.id))?.ok_or_else(|| ApiError::not_found("task not found"))?;
             task_view(repo, &t)
         })

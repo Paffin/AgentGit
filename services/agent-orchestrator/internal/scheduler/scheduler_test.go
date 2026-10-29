@@ -860,3 +860,33 @@ func TestTaskAttemptLimitSurvivesRestartAndCanBeExtended(t *testing.T) {
 		t.Fatalf("history was lost: %+v", h.task(task))
 	}
 }
+
+func TestChangingAttemptPolicyDuringRunDoesNotCancelTheTask(t *testing.T) {
+	release := filepath.Join(t.TempDir(), "release")
+	started := release + ".started"
+	ex := command(t, "policy-bot", fmt.Sprintf("if [ -f '%[1]s' ]; then exit 0; fi; touch '%[2]s'; while [ ! -f '%[1]s' ]; do sleep 0.01; done; exit 1", release, started))
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Attempts = 1; r.Schedule.Backoff = time.Second }, nil, ex)
+	task := h.addTask("Apply changed retry policy", nil)
+	h.reconcile()
+	h.eventually("executor started", func() bool { _, err := os.Stat(started); return err == nil })
+	if _, err := h.w.Srv.Admin.SetTaskAttemptLimit(context.Background(), repo, task, 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(release, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.waitIdle()
+	if h.state(task) != agwp.TaskInProgress {
+		t.Fatalf("changed task policy was ignored: %+v", h.task(task))
+	}
+	if _, err := h.w.Srv.Admin.SetTaskAttemptLimit(context.Background(), repo, task, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	h.clk.Advance(5 * time.Second)
+	h.reconcile()
+	h.waitIdle()
+	h.eventually("same task completed", func() bool { return h.state(task) == agwp.TaskDone })
+	if h.task(task).AttemptsStarted != 2 {
+		t.Fatalf("unexpected attempts: %+v", h.task(task))
+	}
+}

@@ -373,3 +373,16 @@ identities are retained in sorted order. The author cannot request their own rev
 Proposal detail includes optional `requested_reviewers`. A request grants no access and
 is not an approval. It remains after the head moves; review status is evaluated against
 the current head. Schema 9 stores these requests; back up before upgrading from schema 8.
+
+### Revision-bound virtual sync (development)
+
+Negotiate `workspaces.sync_precondition` before applying conflict choices from a prior
+preview. Sync replies include `stream_head`, the exact target revision used by the
+attempt. Send it as `expected_stream_head` with resolved files; a changed branch returns
+HTTP 412 / gRPC FailedPrecondition before the workspace can move. The workspace's own
+concurrency checks continue to apply. Older servers may omit the reply field or ignore
+the request field, so silently falling back would lose the preview's protection.
+
+A resolution may reference an existing `blob_id` together with `file_type` and
+`executable`, or delete a path. Keeping a binary or symlink version therefore preserves
+its original bytes and metadata. New text remains an ordinary inline file change.

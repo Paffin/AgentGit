@@ -2141,6 +2141,7 @@ class SubmitProvenanceRequest:
 @dataclass(kw_only=True)
 class SyncWorkspaceRequest:
     """The `SyncWorkspaceRequest` message."""
+    expected_stream_head: str = field(default="")
     idempotency_key: str = field(default="")
     name: str = field(default="")
     repo: str = field(default="")
@@ -2153,6 +2154,7 @@ class SyncWorkspaceResponse:
     conflicts: list[Conflict] = field(default_factory=list)
     head: str = field(default="")
     status: str = field(default="")
+    stream_head: str = field(default="")
 
 
 @dataclass(kw_only=True)

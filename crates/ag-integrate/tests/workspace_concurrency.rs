@@ -131,3 +131,38 @@ fn a_sync_merge_cannot_replace_a_concurrent_modification() {
     assert!(tree.get(&RepoPath::new("local").unwrap()).is_some());
     assert!(tree.get(&RepoPath::new("fast").unwrap()).is_some());
 }
+
+#[test]
+fn pinned_sync_refuses_a_branch_that_moved_after_the_user_inspected_it() {
+    let f = fx();
+    let actor = id("user:alice");
+    let base = f.land(None, &[("base", "base")]);
+    let ws = f.repo.workspace_create("review", &StreamName::new("main").unwrap(), &actor).unwrap();
+    let advanced = f.land(Some(base), &[("base", "changed")]);
+    let result = f.repo.workspace_sync_virtual_checked_at(&ws, &actor, &[], Some(&base));
+    assert!(result.is_err(), "stale target must be rejected before the workspace moves");
+    assert_eq!(f.repo.workspace_row("review").unwrap().head, Some(base));
+    assert_eq!(f.repo.meta().read(|tx| tx.stream("main")).unwrap().unwrap().state.head, Some(advanced));
+}
+
+#[test]
+fn pinned_sync_rechecks_the_branch_in_its_final_transaction() {
+    let f = fx();
+    let actor = id("user:alice");
+    let base = f.land(None, &[("base", "base")]);
+    f.repo.workspace_create("review", &StreamName::new("main").unwrap(), &actor).unwrap();
+    let blob = f.repo.put_blob(b"ours".to_vec()).unwrap();
+    f.repo.workspace_modify("review", &[put("ours", blob)], "ours", &actor, Some(&base)).unwrap();
+    let ws = f.repo.workspace_row("review").unwrap();
+    let target = f.land(Some(base), &[("base", "base"), ("upstream", "one")]);
+    let (slow, reached, resume) = paused(&f.repo);
+    let who = actor.clone();
+    let observed = ws.clone();
+    let worker =
+        std::thread::spawn(move || slow.workspace_sync_virtual_checked_at(&observed, &who, &[], Some(&target)));
+    reached.recv_timeout(Duration::from_secs(10)).unwrap();
+    f.land(Some(target), &[("base", "base"), ("upstream", "two")]);
+    resume.send(()).unwrap();
+    assert!(worker.join().unwrap().is_err());
+    assert_eq!(f.repo.workspace_row("review").unwrap().head, ws.head);
+}

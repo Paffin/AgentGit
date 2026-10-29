@@ -479,3 +479,21 @@ if (process.env['AGENTGIT_PUBLISH'] === '1') {
 `client.migrations.status({ id: plan.id })` resumes a report. Binary uploads keep one
 idempotency key across automatic retries. See
 [migration limits and what transfers](../../docs/guides/migrate-from-git.md).
+
+### Resolve against an inspected branch revision
+
+Negotiate `workspaces.sync_precondition` before relying on `expected_stream_head` in
+`workspaces.sync`. A conflicting sync returns `stream_head`, the exact branch revision
+used to prepare its conflicts. Read that immutable revision and repeat sync with the
+same `expected_stream_head` plus the chosen resolutions. If the branch moved, the server
+returns a precondition failure instead of applying stale choices. Read and decide again;
+do not silently retry with a newer head.
+
+A resolution can retain an existing `blob_id`, `file_type` and `executable` value without
+fetching or re-encoding its bytes. `op: delete` removes the path. Older servers omit
+`stream_head`; they must be upgraded before using the pinning guarantee.
+
+Workspace sync is retried automatically only when `expected_stream_head` is nonempty.
+An unpinned sync can apply resolutions against a moving branch, so a lost response
+leaves its outcome unknown and is not retried by default. Explicit unsafe-retry opt-in
+remains available for callers that deliberately accept that risk.

@@ -243,9 +243,14 @@ function withOpenObjects(doc) {
   }
   // Decoded responses are not default-filled in TypeScript. Older servers omit this additive field;
   // preserve the schema's optionality instead of letting its default [] make it required.
-  const detail = copy.components.schemas.ProposalDetail;
-  const requestedReviewers = detail?.properties?.requested_reviewers;
-  if (requestedReviewers && !detail.required?.includes('requested_reviewers')) delete requestedReviewers.default;
+  for (const [schemaName, field] of [
+    ['ProposalDetail', 'requested_reviewers'],
+    ['SyncWorkspaceResponse', 'stream_head'],
+  ]) {
+    const schema = copy.components.schemas[schemaName];
+    const property = schema?.properties?.[field];
+    if (property && !schema.required?.includes(field)) delete property.default;
+  }
   return copy;
 }
 

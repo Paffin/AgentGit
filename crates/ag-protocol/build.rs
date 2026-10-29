@@ -47,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         builder = builder.field_attribute(format!("agwp.v1.FileDiff.{field}"), "#[schema(required = false)]");
     }
     builder = builder.field_attribute("agwp.v1.ProposalDetail.requested_reviewers", "#[schema(required = false)]");
+    builder = builder.field_attribute("agwp.v1.SyncWorkspaceResponse.stream_head", "#[schema(required = false)]");
     builder.compile_fds(fds)?;
     Ok(())
 }

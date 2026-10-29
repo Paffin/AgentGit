@@ -21,6 +21,7 @@ from agentgit import (
     AgentGitClient,
     AsyncAgentGitClient,
     CallOptions,
+    FailedPreconditionError,
     PutOp,
     blob_object,
     build_changeset,
@@ -217,6 +218,11 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     ran = carol.queue.run(repo=REPO, stream="main")
     assert (ran.processed[0].state, ran.processed[0].outcome) == ("done", "integrated")
     Seed.head = m2.head
+    assert "workspaces.sync_precondition" in alice.negotiate().features
+    pinned = alice.workspaces.sync(repo=REPO, name="w1", expected_stream_head=Seed.head)
+    assert pinned.stream_head == Seed.head
+    with pytest.raises(FailedPreconditionError):
+        alice.workspaces.sync(repo=REPO, name="w1", expected_stream_head="0" * 64)
 
     alice.workspaces.create(repo=REPO, name="w2", stream="main")
     m3 = alice.workspaces.modify(repo=REPO, name="w2", changes=[put_file("e.txt", "e\n")])

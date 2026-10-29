@@ -168,3 +168,18 @@ it('sends requested reviewers and the inspected set to the encoded proposal path
     expected_reviewers: ['user:carol'],
   })
 })
+
+it('pins virtual sync to the inspected branch while retaining the initiating session', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'new-session', fetch: request })
+  await createApi(client).workspaces.sync('acme/repo', 'w/one', [], {
+    token: 'original-session',
+    expectedStreamHead: 'inspected',
+  })
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/workspaces/w%2Fone/sync')
+  expect(JSON.parse(String(options?.body))).toEqual({ expected_stream_head: 'inspected' })
+  expect(new Headers(options?.headers).get('authorization')).toBe('Bearer original-session')
+})

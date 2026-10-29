@@ -116,27 +116,38 @@ impl App {
     ) -> ApiResult<v1::SyncWorkspaceResponse> {
         let repo_name = require(&req.repo, "repo")?.to_string();
         let resolutions = changes(&req.resolutions)?;
+        let expected = if req.expected_stream_head.is_empty() {
+            None
+        } else {
+            Some(parse_id::<ChangesetId>(&req.expected_stream_head, "inspected branch head")?)
+        };
         let admin = self.is_repo_admin(call, &repo_name).await;
         let name = req.name.clone();
-        self.with_workspace_mut(call, &repo_name, Cap::WorkspaceWrite, name.clone(), move |repo, actor, observed| {
+        self.with_workspace_mut(call, &repo_name, Cap::WorkspaceWrite, name, move |repo, actor, observed| {
             check_owner(observed, actor, admin)?;
-            let outcome = repo.workspace_sync_virtual_checked(observed, actor, &resolutions)?;
-            let head = repo.workspace_row(&name)?.head.map(|h| h.to_string()).unwrap_or_default();
-            Ok(match outcome {
-                SyncOutcome::UpToDate => {
-                    v1::SyncWorkspaceResponse { status: "up_to_date".into(), head, conflicts: vec![] }
+            let current = repo.meta().read(|tx| tx.stream(&observed.stream))?.and_then(|s| s.state.head);
+            let target = expected.or(current);
+            let outcome = repo.workspace_sync_virtual_checked_at(observed, actor, &resolutions, target.as_ref())?;
+            let head = match &outcome {
+                SyncOutcome::FastForwarded { to } => Some(*to),
+                SyncOutcome::Merged { id } => Some(*id),
+                _ => observed.head,
+            }
+            .map(|head| head.to_string())
+            .unwrap_or_default();
+            let (status, conflicts) = match outcome {
+                SyncOutcome::UpToDate => ("up_to_date", vec![]),
+                SyncOutcome::FastForwarded { .. } => ("fast_forwarded", vec![]),
+                SyncOutcome::Merged { .. } => ("merged", vec![]),
+                SyncOutcome::Conflicted { conflicts } => {
+                    ("conflicted", conflicts.iter().map(convert::conflict).collect())
                 }
-                SyncOutcome::FastForwarded { .. } => {
-                    v1::SyncWorkspaceResponse { status: "fast_forwarded".into(), head, conflicts: vec![] }
-                }
-                SyncOutcome::Merged { .. } => {
-                    v1::SyncWorkspaceResponse { status: "merged".into(), head, conflicts: vec![] }
-                }
-                SyncOutcome::Conflicted { conflicts } => v1::SyncWorkspaceResponse {
-                    status: "conflicted".into(),
-                    head,
-                    conflicts: conflicts.iter().map(convert::conflict).collect(),
-                },
+            };
+            Ok(v1::SyncWorkspaceResponse {
+                status: status.into(),
+                head,
+                conflicts,
+                stream_head: target.map(|head| head.to_string()).unwrap_or_default(),
             })
         })
         .await

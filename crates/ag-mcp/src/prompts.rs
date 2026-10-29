@@ -68,9 +68,9 @@ fn resolve_conflicts(arg: &dyn Fn(&str) -> String) -> String {
     format!(
         "Bring workspace `{ws}` up to date with its stream and resolve conflicts.\n\n\
 1. workspace_sync with no resolutions. If the status is up_to_date, fast_forwarded or merged, you are done.\n\
-2. If it is conflicted, nothing changed: for each listed path read the stream's version (read_file with rev = the stream) and yours (rev = @{ws}), and the history of both sides (log, blame) to understand the intent of each change.\n\
+2. If it is conflicted, nothing changed: for each listed path read the exact stream_head returned by sync (read_file with rev = that changeset, rather than the moving branch name) and yours (rev = @{ws}), and the history of both sides (log, blame) to understand the intent of each change.\n\
 3. Decide the final content of every conflicting path - keep both intents where they are compatible. Do not discard the other side's work silently.\n\
-4. workspace_sync again with resolutions for EVERY conflicting path (full file content).\n\
+4. workspace_sync again with expected_stream_head set to the inspected stream_head and resolutions for EVERY conflicting path. Preserve blob_id, file_type and executable for a whole-file choice; deletion uses op=delete. A server without workspaces.sync_precondition must be upgraded before this guarded operation.\n\
 5. proposal_update to move your proposal to the new head, then proposal_status to check the verdicts.\n\n{RULES}"
     )
 }
@@ -234,6 +234,11 @@ mod tests {
             "request_changes",
             "expected_version",
             "next_page_token",
+            "stream_head",
+            "expected_stream_head",
+            "blob_id",
+            "file_type",
+            "sync_precondition",
         ];
         let mut mentioned = std::collections::BTreeSet::new();
         for p in PROMPTS {

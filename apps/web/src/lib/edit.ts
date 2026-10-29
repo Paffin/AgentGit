@@ -130,7 +130,15 @@ export async function proposeChange(api: Api, input: ProposeInput): Promise<Prop
   }
 }
 
-export type ResolvableKind = 'content' | 'both_added' | 'delete_modify'
-const RESOLVABLE = new Set<string>(['content', 'both_added', 'delete_modify'])
-/** Conflicts a person can settle by choosing or editing text; the rest (binary, type changes, renames) need the CLI. */
+export type ResolvableKind =
+  'content' | 'both_added' | 'delete_modify' | 'binary' | 'too_large' | 'type_change'
+const RESOLVABLE = new Set<string>([
+  'content',
+  'both_added',
+  'delete_modify',
+  'binary',
+  'too_large',
+  'type_change',
+])
+/** File conflicts a person can settle by preserving one version or editing regular text; structural conflicts need the CLI. */
 export const canResolveHere = (kind: string): boolean => RESOLVABLE.has(kind)

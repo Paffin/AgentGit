@@ -389,12 +389,24 @@ export function createApi(c: ApiClient) {
         o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}/changes`), body, o),
       /** Brings the stream head in. Conflicts change nothing until every one has a resolution. */
-      sync: (repo: string, name: string, resolutions: FileChange[] = [], o?: Opts) =>
-        c.post<SyncWorkspaceResponse>(
+      sync: (
+        repo: string,
+        name: string,
+        resolutions: FileChange[] = [],
+        options?: SessionOpts & { expectedStreamHead?: string },
+      ) => {
+        const { expectedStreamHead, ...request } = options ?? {}
+        return c.post<SyncWorkspaceResponse>(
           r(repo, `/workspaces/${encodeURIComponent(name)}/sync`),
-          resolutions.length ? { resolutions } : {},
-          o,
-        ),
+          {
+            ...(resolutions.length ? { resolutions } : {}),
+            ...(expectedStreamHead !== undefined
+              ? { expected_stream_head: expectedStreamHead }
+              : {}),
+          },
+          request,
+        )
+      },
       remove: (repo: string, name: string, o?: SessionOpts) =>
         c.del<Record<string, never>>(
           r(repo, `/workspaces/${encodeURIComponent(name)}`),

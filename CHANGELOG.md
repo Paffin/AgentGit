@@ -14,11 +14,17 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Browser conflict resolution can keep either exact binary, oversized or file-type version while preserving blob bytes, executable mode and symlink type. Virtual sync pins the inspected branch through its final transaction and reports its exact target to SDK/MCP clients.
+
 - Authors can request specific reviewers with an inspected-list update across the API and clients. Requests survive new revisions, never grant access or count as approval, and can be filtered before proposal pagination. Development metadata schema 9 requires a pre-upgrade backup.
 
 - Review suggestions can replace up to 100 consecutive original lines. Range drafts survive reload, previews show the source file, and batches reject overlapping ranges before publication. Existing one-line suggestions keep their original format.
 
 - Authors can preview and apply selected review suggestions across files as one proposal revision. Exact source lines, executable mode, BOM and line endings are preserved; conflicting selections are refused and discussions remain open.
+
+### Fixed
+
+- SDKs retry workspace sync automatically only when a nonempty inspected branch head guards the operation. Unguarded calls require explicit unsafe-retry opt-in.
 
 ### Changed
 

@@ -94,10 +94,14 @@ pub mod features {
     /// Task completion compares both the execution generation and retry policy.
     pub const TASK_FINISH_PRECONDITIONS: &str = "tasks.finish_preconditions";
 
+    /// Virtual sync compares the branch revision inspected by a resolving client.
+    pub const WORKSPACES_SYNC_PRECONDITION: &str = "workspaces.sync_precondition";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
         WORKSPACES_VIRTUAL,
+        WORKSPACES_SYNC_PRECONDITION,
         EXECUTION_JOBS,
         OBJECTS_CHUNKED,
         AUTH_OIDC,

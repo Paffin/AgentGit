@@ -51,12 +51,12 @@
       "task.depend",
       "task.finish",
       "workspace.delete",
-      "workspace.sync",
       "migration.commit",
       "proposal.set_reviewers"
     ],
     "naturalWhenFieldPresent": {
-      "workspace.modify": "expected_head"
+      "workspace.modify": "expected_head",
+      "workspace.sync": "expected_stream_head"
     }
   },
   "alwaysPresent": {

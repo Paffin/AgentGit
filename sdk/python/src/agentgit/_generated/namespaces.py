@@ -1867,12 +1867,13 @@ class WorkspacesApi:
         *,
         repo: str,
         name: str,
+        expected_stream_head: str | None = None,
         idempotency_key: str | None = None,
         resolutions: Sequence[FileChange | Mapping[str, Any]] | None = None,
         options: CallOptions | None = None,
     ) -> SyncWorkspaceResponse:
         """Bring the stream head into the workspace (with optional conflict resolutions) (`POST /v1/repos/{owner}/{rname}/workspaces/{name}/sync`, operation `workspace.sync`)."""
-        return self._c._call("workspace.sync", {"repo": repo, "name": name, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
+        return self._c._call("workspace.sync", {"repo": repo, "name": name, "expected_stream_head": expected_stream_head, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
 
 
 
@@ -3503,9 +3504,10 @@ class AsyncWorkspacesApi:
         *,
         repo: str,
         name: str,
+        expected_stream_head: str | None = None,
         idempotency_key: str | None = None,
         resolutions: Sequence[FileChange | Mapping[str, Any]] | None = None,
         options: CallOptions | None = None,
     ) -> SyncWorkspaceResponse:
         """Bring the stream head into the workspace (with optional conflict resolutions) (`POST /v1/repos/{owner}/{rname}/workspaces/{name}/sync`, operation `workspace.sync`)."""
-        return await self._c._call("workspace.sync", {"repo": repo, "name": name, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
+        return await self._c._call("workspace.sync", {"repo": repo, "name": name, "expected_stream_head": expected_stream_head, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)

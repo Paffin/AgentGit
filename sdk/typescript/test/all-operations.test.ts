@@ -217,6 +217,12 @@ describe('the tour', () => {
     // (queue states: queued, done, blocked, rejected, failed; outcome explains "done": "integrated")
     expect(ran.processed[0]).toMatchObject({ state: 'done', outcome: 'integrated' });
     seedHead = m2.head;
+    expect((await alice.negotiate()).features).toContain('workspaces.sync_precondition');
+    const pinned = await alice.workspaces.sync({ repo, name: 'w1', expected_stream_head: seedHead });
+    expect(pinned.stream_head).toBe(seedHead);
+    await expect(
+      alice.workspaces.sync({ repo, name: 'w1', expected_stream_head: '0'.repeat(64) }),
+    ).rejects.toMatchObject({ status: 412 });
 
     // a second proposal is attested directly and integrated; a third is closed
     await alice.workspaces.create({ repo, name: 'w2', stream: 'main' });

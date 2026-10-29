@@ -41,7 +41,9 @@ type OpenObject = Record<string, unknown>
 export type Blocker = Omit<S['Blocker'], 'detail'> & { detail?: OpenObject }
 export type Conflict = S['Conflict']
 export type Workspace = S['Workspace']
-export type SyncWorkspaceResponse = S['SyncWorkspaceResponse']
+// Older servers omit the pinned target revision.
+export type SyncWorkspaceResponse = Omit<S['SyncWorkspaceResponse'], 'stream_head'> &
+  Partial<Pick<S['SyncWorkspaceResponse'], 'stream_head'>>
 export type ValidationStatus = S['ValidationStatus']
 export type Attestation = S['Attestation']
 export type QueueEntry = S['QueueEntry']

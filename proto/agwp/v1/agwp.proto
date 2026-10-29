@@ -668,6 +668,9 @@ message SyncWorkspaceRequest {
   // sync changes nothing and reports the conflicts; with them the clean
   // parts of the merge plus these files become a two-parent merge changeset.
   repeated FileChange resolutions = 4;
+  // Optional branch revision inspected while preparing these resolutions.
+  // A mismatch refuses the sync without moving the workspace.
+  string expected_stream_head = 5;
 }
 
 message SyncWorkspaceResponse {
@@ -675,6 +678,9 @@ message SyncWorkspaceResponse {
   string status = 1;
   string head = 2;
   repeated Conflict conflicts = 3;
+  // Exact branch revision used for this attempt; empty for an empty branch.
+  // Older servers omit this field; negotiate workspaces.sync_precondition.
+  string stream_head = 4;
 }
 
 // ---------------------------------------------------------------------------

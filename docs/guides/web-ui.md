@@ -388,8 +388,15 @@ the listing, and opening another folder resets it.
 **Resolve the conflict.** When a change request no longer merges with its branch, its author sees *Resolve the
 conflict* (everyone else sees *Copy link to send to the author*). The resolver shows, per file, the branch's version and
 yours, with *Keep the branch's*, *Keep mine*, *Delete the file* and a text box for the result. Saving applies the
-resolutions through the draft and moves the change request to the merged version. Conflicts that are not about text
-(binary files, renames, type changes) say to use the command line.
+resolutions through the draft and moves the change request to the merged version. Binary files, oversized files and
+file-type changes can keep either exact version or delete the file: the original blob, type and executable mode are
+retained without converting bytes to text. Editing is available only for regular text versions. Renames and
+file/directory conflicts remain command-line work.
+
+The resolver pins both the proposal revision and the target branch. If either changes before saving, the newer
+work is preserved and the dialog asks you to inspect it again. Failed reads never mean a deleted file. This flow
+requires `proposals.update_head` and `workspaces.sync_precondition`; older servers need an upgrade before browser
+conflict resolution is available.
 
 ## Plain words
 

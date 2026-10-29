@@ -2,10 +2,12 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
-import type { Conflict, FileChange, Proposal } from '@/api/types'
-import { canResolveHere, deleteFile, putFile, workspaceName } from '@/lib/edit'
+import type { Conflict, Proposal } from '@/api/types'
+import { canResolveHere, workspaceName } from '@/lib/edit'
 import { conflictLabel } from '@/lib/conflict-label'
-import { decodeUtf8, looksBinary } from '@/lib/text'
+import { formatBytes } from '@/lib/format'
+import { loadConflictVersion, conflictChange } from '@/lib/conflictResolution'
+import type { ConflictChoice, ConflictVersion } from '@/lib/conflictResolution'
 import { useToasts } from '@/stores/toasts'
 import { useAuth } from '@/stores/auth'
 import Alert from '@/ui/Alert.vue'
@@ -15,179 +17,235 @@ import Skeleton from '@/ui/Skeleton.vue'
 import TextArea from '@/ui/TextArea.vue'
 import CopyButton from '@/ui/CopyButton.vue'
 
-/**
- * Resolve the conflicts of your own change request in the browser. The branch has moved under the change; for
- * each file that both sides changed, see both versions and choose or write the result. Nothing is guessed: the
- * server merges everything else, and the change request moves to the merged version only when every conflict has
- * an answer.
- */
 const props = defineProps<{ modelValue: boolean; repo: string; proposal: Proposal }>()
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; done: [] }>()
 const toasts = useToasts()
 const auth = useAuth()
-
-type Choice = 'mine' | 'theirs' | 'delete' | 'edit'
 interface Row {
   conflict: Conflict
-  mine: string | null
-  theirs: string | null
-  /** Why it cannot be settled here (binary, renamed, …). */
+  mine: ConflictVersion
+  theirs: ConflictVersion
   blocked: string
-  choice: Choice
+  editable: boolean
+  choice: ConflictChoice
+  editSource: 'mine' | 'theirs'
   text: string
 }
-
+interface Attempt {
+  repo: string
+  proposal: string
+  stream: string
+  head: string
+  branchHead: string
+  workspace: string
+  token: string | null
+  controller: AbortController
+  created: boolean
+  released: boolean
+}
 const phase = ref<'idle' | 'loading' | 'ready' | 'saving' | 'error'>('idle')
 const rows = ref<Row[]>([])
 const error = ref<ApiError | null>(null)
-let draft = ''
-let inspectedHead = ''
-
+let active: Attempt | undefined
 const asError = (e: unknown) =>
   e instanceof ApiError
     ? e
     : new ApiError({ status: 0, code: 'internal', message: describeError(e) })
+const request = (a: Attempt) => ({
+  token: a.token,
+  signal: a.controller.signal,
+  quietUnauthenticated: true,
+})
+const current = (a: Attempt) => active === a && !a.controller.signal.aborted
+const absent = (): ConflictVersion => ({ entry: null, text: null })
 
-async function read(rev: string, path: string): Promise<string | null | 'binary'> {
+async function release(a: Attempt) {
+  if (!a.created || a.released) return
+  a.released = true
   try {
-    const f = await api.tree.file(props.repo, rev, path, 512 * 1024)
-    if (f.truncated) return 'binary'
-    return looksBinary(f.bytes) ? 'binary' : decodeUtf8(f.bytes)
+    await api.workspaces.remove(a.repo, a.workspace, {
+      token: a.token,
+      quietUnauthenticated: true,
+      timeoutMs: 5000,
+    })
   } catch {
-    return null
+    // The private workspace remains visible to its original owner if cleanup fails.
   }
 }
-
-async function open() {
-  inspectedHead = props.proposal.head
-  if (!auth.capabilities?.features.includes('proposals.update_head')) {
-    error.value = new ApiError({
-      status: 0,
-      code: 'failed_precondition',
-      message: 'Upgrade the server to resolve conflicts with concurrent-update protection.',
-    })
-    phase.value = 'error'
-    return
-  }
-  phase.value = 'loading'
-  error.value = null
-  rows.value = []
-  draft = workspaceName()
-  try {
-    await api.workspaces.create(props.repo, {
-      name: draft,
-      stream: props.proposal.stream,
-      from_rev: inspectedHead,
-    })
-    const res = await api.workspaces.sync(props.repo, draft)
-    if (res.status !== 'conflicted') {
-      // The branch merges cleanly now (it moved again, or someone else resolved it).
-      await moveProposal(res.head)
-      return
-    }
-    const theirsRev = (await api.streams.head(props.repo, props.proposal.stream)).head
-    rows.value = await Promise.all(
-      res.conflicts.map(async (c): Promise<Row> => {
-        const [mine, theirs] = await Promise.all([
-          read(inspectedHead, c.path),
-          read(theirsRev, c.path),
-        ])
-        const blocked = !canResolveHere(c.kind)
-          ? `${conflictLabel(c)}: resolve this one with the command line.`
-          : mine === 'binary' || theirs === 'binary'
-            ? 'This file is binary or too large to edit here: use the command line.'
-            : ''
-        const m = typeof mine === 'string' ? mine : null
-        const t = typeof theirs === 'string' ? theirs : null
-        return {
-          conflict: c,
-          mine: m,
-          theirs: t,
-          blocked,
-          choice: m !== null ? 'mine' : 'theirs',
-          text: m ?? t ?? '',
-        }
-      }),
-    )
-    phase.value = 'ready'
-  } catch (e) {
-    error.value = asError(e)
-    phase.value = 'error'
-  }
+function invalidate() {
+  const previous = active
+  active = undefined
+  previous?.controller.abort()
+  if (previous) void release(previous)
+  phase.value = 'idle'
 }
-
-function pick(r: Row, choice: Choice) {
-  r.choice = choice
-  if (choice === 'mine') r.text = r.mine ?? ''
-  else if (choice === 'theirs') r.text = r.theirs ?? ''
+async function prepareRow(a: Attempt, conflict: Conflict): Promise<Row> {
+  const row: Row = {
+    conflict,
+    mine: absent(),
+    theirs: absent(),
+    blocked: '',
+    editable: false,
+    choice: '',
+    editSource: 'mine',
+    text: '',
+  }
+  if (!canResolveHere(conflict.kind)) {
+    row.blocked = `${conflictLabel(conflict)}: resolve this structural conflict with the command line.`
+    return row
+  }
+  ;[row.mine, row.theirs] = await Promise.all([
+    loadConflictVersion(api, a.repo, a.head, conflict.path, request(a)),
+    loadConflictVersion(api, a.repo, a.branchHead, conflict.path, request(a)),
+  ])
+  row.editable = [row.mine, row.theirs].every(
+    (v) => !v.entry || (v.entry.file_type === 'regular' && v.text !== null),
+  )
+  row.editSource = row.mine.entry ? 'mine' : 'theirs'
+  row.text = row[row.editSource].text ?? ''
+  if (row.editable) row.choice = row.editSource
+  return row
 }
-
-const unresolved = computed(() => rows.value.filter((r) => r.blocked).length)
-const headChanged = computed(
-  () =>
-    error.value?.code === 'failed_precondition' &&
-    error.value.message.includes('proposal head changed'),
-)
-const resolutionText = computed(() =>
-  rows.value
-    .map((r) => `${r.conflict.path}\n${r.choice === 'delete' ? '(delete file)' : r.text}`)
-    .join('\n\n'),
-)
-
-async function moveProposal(head: string) {
-  await api.proposals.update(props.repo, props.proposal.id, head, inspectedHead)
-  toasts.ok('Conflicts resolved', 'The change request now includes the latest branch.')
+async function moveProposal(a: Attempt, head: string) {
+  a.controller.signal.throwIfAborted()
+  if (!head) throw new Error('The merge did not return a revision.')
+  await api.proposals.update(a.repo, a.proposal, head, a.head, request(a))
+  if (!current(a)) return
+  toasts.ok('Conflicts resolved', 'The change request now includes the inspected branch revision.')
+  void release(a)
   emit('update:modelValue', false)
   emit('done')
 }
-
+async function open() {
+  invalidate()
+  error.value = null
+  rows.value = []
+  if (
+    !['proposals.update_head', 'workspaces.sync_precondition'].every((feature) =>
+      auth.capabilities?.features.includes(feature),
+    )
+  ) {
+    error.value = asError(
+      new Error('Upgrade the server to resolve conflicts with revision protection.'),
+    )
+    phase.value = 'error'
+    return
+  }
+  const a: Attempt = {
+    repo: props.repo,
+    proposal: props.proposal.id,
+    stream: props.proposal.stream,
+    head: props.proposal.head,
+    branchHead: '',
+    workspace: workspaceName(),
+    token: auth.token,
+    controller: new AbortController(),
+    created: false,
+    released: false,
+  }
+  active = a
+  phase.value = 'loading'
+  try {
+    const workspace = await api.workspaces.create(
+      a.repo,
+      { name: a.workspace, stream: a.stream, from_rev: a.head },
+      request(a),
+    )
+    a.created = true
+    if (!current(a)) {
+      await release(a)
+      return
+    }
+    if (workspace.head !== a.head)
+      throw new Error('The workspace did not open at the inspected revision.')
+    const result = await api.workspaces.sync(a.repo, a.workspace, [], request(a))
+    if (!current(a)) return
+    if (result.status !== 'conflicted') {
+      await moveProposal(a, result.head)
+      return
+    }
+    a.branchHead = result.stream_head ?? ''
+    if (!a.branchHead)
+      throw new Error('The server did not identify the branch revision used for this conflict.')
+    const prepared = await Promise.all(result.conflicts.map((conflict) => prepareRow(a, conflict)))
+    if (!current(a)) return
+    rows.value = prepared
+    phase.value = 'ready'
+  } catch (e) {
+    // An ambiguous create may have committed; an explicit collision belongs to somebody else.
+    a.created ||= !(e instanceof ApiError && e.code === 'already_exists')
+    void release(a)
+    if (!current(a)) return
+    error.value = asError(e)
+    phase.value = 'error'
+  }
+}
+function pick(row: Row, choice: ConflictChoice) {
+  row.choice = choice
+  if (choice === 'mine' || choice === 'theirs') {
+    row.editSource = choice
+    row.text = row[choice].text ?? ''
+  }
+}
+const unresolved = computed(() => rows.value.filter((row) => row.blocked || !row.choice).length)
+const headChanged = computed(
+  () =>
+    error.value?.code === 'failed_precondition' &&
+    /(?:proposal|branch) head changed/.test(error.value.message),
+)
+const resolutionText = computed(() =>
+  rows.value
+    .map(
+      (row) =>
+        `${row.conflict.path}\n${row.choice === 'delete' ? '(delete file)' : row.editable ? row.text : row.choice || '(not selected)'}`,
+    )
+    .join('\n\n'),
+)
+function summary(version: ConflictVersion): string {
+  if (!version.entry) return 'Deleted in this revision'
+  const entry = version.entry
+  return `${entry.file_type === 'symlink' ? 'Symbolic link' : 'Regular file'} · ${formatBytes(entry.size)}${entry.executable ? ' · executable' : ''}`
+}
 async function save() {
+  const a = active
+  if (!a || !current(a) || phase.value !== 'ready' || unresolved.value || headChanged.value) return
   phase.value = 'saving'
   error.value = null
   try {
-    const resolutions: FileChange[] = rows.value.map((r) =>
-      r.choice === 'delete' ? deleteFile(r.conflict.path) : putFile(r.conflict.path, r.text),
+    const resolutions = rows.value.map((row) =>
+      conflictChange(row.conflict.path, row.choice, row.mine, row.theirs, row.text, row.editSource),
     )
-    const res = await api.workspaces.sync(props.repo, draft, resolutions)
-    if (res.status === 'conflicted') {
-      error.value = new ApiError({
-        status: 409,
-        code: 'conflict',
-        message: 'Some conflicts are still open. Choose a result for every file.',
-      })
-      phase.value = 'ready'
-      return
-    }
-    await moveProposal(res.head)
+    const result = await api.workspaces.sync(a.repo, a.workspace, resolutions, {
+      ...request(a),
+      expectedStreamHead: a.branchHead,
+    })
+    if (!current(a)) return
+    if (result.status === 'conflicted')
+      throw new Error('Some conflicts remain unresolved. Inspect this change again.')
+    await moveProposal(a, result.head)
   } catch (e) {
+    if (!current(a)) return
     error.value = asError(e)
     phase.value = 'ready'
   }
 }
-
-async function cleanup() {
-  const name = draft
-  draft = ''
-  if (!name) return
-  try {
-    await api.workspaces.remove(props.repo, name)
-  } catch {
-    // A leftover draft is harmless.
-  }
-}
-
 watch(
   () => props.modelValue,
-  (on) => {
-    if (on) void open()
-    else {
-      phase.value = 'idle'
-      void cleanup()
-    }
+  (value) => {
+    if (value) void open()
+    else invalidate()
   },
   { immediate: true },
 )
-onBeforeUnmount(() => void cleanup())
+watch(
+  [() => props.repo, () => props.proposal.id, () => auth.token, () => auth.identity],
+  () => {
+    invalidate()
+    if (props.modelValue) emit('update:modelValue', false)
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(invalidate)
 </script>
 
 <template>
@@ -221,45 +279,63 @@ onBeforeUnmount(() => void cleanup())
           <div class="cols">
             <div>
               <h4>The branch’s version</h4>
+              <p class="faint">{{ summary(r.theirs) }}</p>
               <pre
                 class="ver"
                 tabindex="0"
                 role="region"
                 :aria-label="`The branch’s version of ${r.conflict.path}`"
-                >{{ r.theirs ?? '(the branch deleted this file)' }}</pre>
+                >{{
+                  r.theirs.text ??
+                  (r.theirs.entry
+                    ? 'No text preview. The original file will be preserved.'
+                    : '(the branch deleted this file)')
+                }}</pre>
             </div>
             <div>
               <h4>Your version</h4>
+              <p class="faint">{{ summary(r.mine) }}</p>
               <pre
                 class="ver"
                 tabindex="0"
                 role="region"
                 :aria-label="`Your version of ${r.conflict.path}`"
-                >{{ r.mine ?? '(you deleted this file)' }}</pre>
+                >{{
+                  r.mine.text ??
+                  (r.mine.entry
+                    ? 'No text preview. The original file will be preserved.'
+                    : '(you deleted this file)')
+                }}</pre>
             </div>
           </div>
+          <p v-if="!r.editable" class="faint">
+            Choose a complete file version. Its bytes, file type and executable mode stay unchanged.
+          </p>
           <div class="pick" role="group" :aria-label="`Keep for ${r.conflict.path}`">
             <Button
               size="sm"
               :variant="r.choice === 'theirs' ? 'primary' : 'secondary'"
+              :aria-pressed="r.choice === 'theirs'"
               @click="pick(r, 'theirs')"
               >Keep the branch’s</Button
             >
             <Button
               size="sm"
               :variant="r.choice === 'mine' ? 'primary' : 'secondary'"
+              :aria-pressed="r.choice === 'mine'"
               @click="pick(r, 'mine')"
               >Keep mine</Button
             >
             <Button
               size="sm"
               :variant="r.choice === 'delete' ? 'primary' : 'secondary'"
+              :aria-pressed="r.choice === 'delete'"
               @click="pick(r, 'delete')"
               >Delete the file</Button
             >
           </div>
           <TextArea
-            v-if="r.choice !== 'delete'"
+            v-if="r.editable && r.choice !== 'delete' && r[r.editSource].entry"
             v-model="r.text"
             :label="`Result for ${r.conflict.path}`"
             :rows="8"
@@ -268,9 +344,9 @@ onBeforeUnmount(() => void cleanup())
           />
         </template>
       </section>
-      <Alert v-if="headChanged" tone="warn" live="alert" title="The change request changed">
+      <Alert v-if="headChanged" tone="warn" live="alert" title="A revision changed">
         Your resolution has not replaced the newer changes. Copy your work, close this dialog, and
-        inspect the updated change request before resolving again.
+        inspect the updated branch and change request before resolving again.
         <CopyButton :text="resolutionText" label="Copy resolution text" with-label />
       </Alert>
       <Alert v-else-if="error" tone="bad" live="alert" title="Not saved">{{ error.message }}</Alert>

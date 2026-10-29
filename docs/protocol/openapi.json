@@ -5399,6 +5399,11 @@
       },
       "SyncWorkspaceRequest": {
         "properties": {
+          "expected_stream_head": {
+            "default": "",
+            "description": "Optional branch revision inspected while preparing these resolutions.\nA mismatch refuses the sync without moving the workspace.",
+            "type": "string"
+          },
           "idempotency_key": {
             "default": "",
             "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
@@ -5439,6 +5444,11 @@
           "status": {
             "default": "",
             "description": "\"up_to_date\", \"fast_forwarded\", \"merged\" or \"conflicted\".",
+            "type": "string"
+          },
+          "stream_head": {
+            "default": "",
+            "description": "Exact branch revision used for this attempt; empty for an empty branch.\nOlder servers omit this field; negotiate workspaces.sync_precondition.",
             "type": "string"
           }
         },

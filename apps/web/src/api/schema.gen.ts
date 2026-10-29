@@ -4802,6 +4802,12 @@ export interface components {
     }
     SyncWorkspaceRequest: {
       /**
+       * @description Optional branch revision inspected while preparing these resolutions.
+       *     A mismatch refuses the sync without moving the workspace.
+       * @default
+       */
+      expected_stream_head: string
+      /**
        * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
        * @default
        */
@@ -4828,6 +4834,12 @@ export interface components {
        * @default
        */
       status: string
+      /**
+       * @description Exact branch revision used for this attempt; empty for an empty branch.
+       *     Older servers omit this field; negotiate workspaces.sync_precondition.
+       * @default
+       */
+      stream_head: string
     }
     Task: {
       /**

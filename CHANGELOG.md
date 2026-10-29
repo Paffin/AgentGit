@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
+
 ## [0.3.0-beta.6] - 2026-10-28
 
 **Upgrade:** metadata schema 7 adds persistent task-source links. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.

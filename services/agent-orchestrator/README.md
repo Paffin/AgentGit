@@ -510,3 +510,13 @@ task and appear in scheduler status; they never grant a fresh budget.
 Older servers can still recover from fewer than 200 agent runs. A full legacy
 200-run result may be truncated, so recovery waits with a diagnostic asking for a
 server update. Cancelling or finishing a task remains a separate operator action.
+
+
+### Durable per-task attempt limits (development)
+
+A task with `max_attempts > 0` uses its server-side limit instead of `schedule.attempts`.
+`attempts_started` counts all admitted runs, including temporary failures. At the limit the
+scheduler reports `attempt_limit` and leaves the task in progress. An operator can extend the
+limit through `ag task attempts TASK --remote origin --max N --expected OLD`; no task or run is
+recreated. Restart recovers the backoff and server count. Tasks with `max_attempts = 0` retain
+the existing repository-level productive-attempt behavior.

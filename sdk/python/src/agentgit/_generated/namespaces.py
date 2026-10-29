@@ -206,6 +206,7 @@ from agentgit._generated.models import (
     SearchTreeResponse,
     SetAgentStateRequest,
     SetPolicyRequest,
+    SetTaskAttemptLimitRequest,
     SetTaskSchedulingRequest,
     StartRunRequest,
     Stream,
@@ -1590,6 +1591,7 @@ class TasksApi:
         description: str | None = None,
         expected_issue_version: int | None = None,
         idempotency_key: str | None = None,
+        max_attempts: int | None = None,
         scope: Sequence[str] | None = None,
         source_issue: int | None = None,
         source_run: str | None = None,
@@ -1598,7 +1600,7 @@ class TasksApi:
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "source_run": source_run, "source_task": source_task, "title": title}, options, Task)
+        return self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "max_attempts": max_attempts, "scope": scope, "source_issue": source_issue, "source_run": source_run, "source_task": source_task, "title": title}, options, Task)
 
     def depend(
         self,
@@ -1664,6 +1666,19 @@ class TasksApi:
     ) -> TaskScheduling:
         """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
         return self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
+
+    def set_attempt_limit(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_max_attempts: int | None = None,
+        idempotency_key: str | None = None,
+        max_attempts: int | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Set a task-local attempt limit (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit`, operation `task.set_attempt_limit`)."""
+        return self._c._call("task.set_attempt_limit", {"repo": repo, "id": id, "expected_max_attempts": expected_max_attempts, "idempotency_key": idempotency_key, "max_attempts": max_attempts}, options, Task)
 
     def update(
         self,
@@ -3196,6 +3211,7 @@ class AsyncTasksApi:
         description: str | None = None,
         expected_issue_version: int | None = None,
         idempotency_key: str | None = None,
+        max_attempts: int | None = None,
         scope: Sequence[str] | None = None,
         source_issue: int | None = None,
         source_run: str | None = None,
@@ -3204,7 +3220,7 @@ class AsyncTasksApi:
         options: CallOptions | None = None,
     ) -> Task:
         """Create a task (`POST /v1/repos/{owner}/{rname}/tasks`, operation `task.create`)."""
-        return await self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "scope": scope, "source_issue": source_issue, "source_run": source_run, "source_task": source_task, "title": title}, options, Task)
+        return await self._c._call("task.create", {"repo": repo, "assignee": assignee, "depends_on": depends_on, "description": description, "expected_issue_version": expected_issue_version, "idempotency_key": idempotency_key, "max_attempts": max_attempts, "scope": scope, "source_issue": source_issue, "source_run": source_run, "source_task": source_task, "title": title}, options, Task)
 
     async def depend(
         self,
@@ -3270,6 +3286,19 @@ class AsyncTasksApi:
     ) -> TaskScheduling:
         """Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`)."""
         return await self._c._call("task.scheduling.set", {"repo": repo, "expected_version": expected_version, "paused": paused, "reason": reason}, options, TaskScheduling)
+
+    async def set_attempt_limit(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_max_attempts: int | None = None,
+        idempotency_key: str | None = None,
+        max_attempts: int | None = None,
+        options: CallOptions | None = None,
+    ) -> Task:
+        """Set a task-local attempt limit (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit`, operation `task.set_attempt_limit`)."""
+        return await self._c._call("task.set_attempt_limit", {"repo": repo, "id": id, "expected_max_attempts": expected_max_attempts, "idempotency_key": idempotency_key, "max_attempts": max_attempts}, options, Task)
 
     async def update(
         self,

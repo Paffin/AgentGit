@@ -68,6 +68,10 @@ pub struct TaskRow {
     pub source_task: Option<String>,
     /// Failed or abandoned run that motivated this follow-up, if any.
     pub source_run: Option<String>,
+    /// Maximum total runs allowed for this task; zero leaves the server limit unset.
+    pub max_attempts: u32,
+    /// Total task-bound runs ever started, including interrupted runs.
+    pub attempts_started: u64,
 }
 
 /// A lease on a scope (path glob).
@@ -144,8 +148,7 @@ pub struct QueueRow {
 
 const AGENT_COLS: &str = "name, identity, public_key, role, created_at, disabled";
 const RUN_COLS: &str = "run_id, agent, task_id, started_at, finished_at, status, last_heartbeat, summary";
-const TASK_COLS: &str =
-    "id, title, description, owner, state, scope, created_by, created_at, updated_at, source_task, source_run";
+const TASK_COLS: &str = "id, title, description, owner, state, scope, created_by, created_at, updated_at, source_task, source_run, COALESCE((SELECT max_attempts FROM task_attempt_limits WHERE task_id=tasks.id),0), (SELECT COUNT(*) FROM agent_runs WHERE task_id=tasks.id)";
 const LEASE_COLS: &str = "id, scope, holder, exclusive, token, acquired_at, expires_at, released_at, task_id";
 const QUEUE_COLS: &str = "id, stream, proposal, state, enqueued_by, enqueued_at, processed_at, outcome";
 const PROVENANCE_COLS: &str = "id, changeset, agent, run_id, record, public_key, signature, created_at";
@@ -187,6 +190,8 @@ fn task_row(r: &Row) -> Result<TaskRow, MetaError> {
         updated_at: ts(r.i64(8)?),
         source_task: r.opt_string(9)?,
         source_run: r.opt_string(10)?,
+        max_attempts: r.i64(11)? as u32,
+        attempts_started: r.i64(12)? as u64,
     })
 }
 
@@ -381,6 +386,12 @@ impl Tx<'_> {
             &params![id, title, description, serde_json::to_string(scope)?, created_by, now],
         )?;
         self.task(id)?.ok_or_else(|| MetaError::Corrupt("task vanished".into()))
+    }
+
+    /// Stores an attempt limit; authorization and expected-value checks belong to the caller.
+    pub fn task_set_attempt_limit(&self, id: &str, max: u32) -> Result<(), MetaError> {
+        self.conn.execute("INSERT INTO task_attempt_limits(task_id,max_attempts) VALUES(?1,?2) ON CONFLICT(task_id) DO UPDATE SET max_attempts=excluded.max_attempts", &params![id,i64::from(max)])?;
+        self.task_update(id, None, None)
     }
 
     /// Attaches creation-time source links once; callers validate the source semantics.

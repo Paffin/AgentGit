@@ -1465,6 +1465,7 @@ _arguments "${_arguments_options[@]}" : \
 '*--scope=[Path glob the task is expected to touch (repeatable)]:SCOPE:_default' \
 '--source-task=[Original task for an independent follow-up]:SOURCE_TASK:_default' \
 '--source-run=[Failed or abandoned run of --source-task]:SOURCE_RUN:_default' \
+'--max-attempts=[Total runs permitted (0 leaves the server limit unset)]:MAX_ATTEMPTS:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
@@ -1496,6 +1497,29 @@ _arguments "${_arguments_options[@]}" : \
 always\:"Always colour"
 never\:"Never colour"))' \
 '--clear-scope[Remove the expected file-path scope (repository policy still applies)]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':task -- Task identifier:_default' \
+&& ret=0
+;;
+(attempts)
+_arguments "${_arguments_options[@]}" : \
+'--max=[New maximum total runs; zero leaves the server limit unset]:MAX:_default' \
+'--expected=[Limit you inspected; refuses a concurrent policy change]:EXPECTED:_default' \
+'--remote=[Use a configured server instead of the local repository]::NAME:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
 '(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
@@ -3908,6 +3932,7 @@ _ag__subcmd__task_commands() {
     local commands; commands=(
 'create:Create a task' \
 'edit:Refine instructions before a task'\''s first run; concurrent edits are refused' \
+'attempts:Inspect or change a task'\''s durable execution-attempt limit' \
 'list:List tasks' \
 'depend:Declare that TASK cannot start until ON is done' \
 'ready:Open tasks whose dependencies are all done' \
@@ -3915,6 +3940,11 @@ _ag__subcmd__task_commands() {
 'cancel:Cancel a task' \
     )
     _describe -t commands 'ag task commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__task__subcmd__attempts_commands] )) ||
+_ag__subcmd__task__subcmd__attempts_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag task attempts commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__task__subcmd__cancel_commands] )) ||
 _ag__subcmd__task__subcmd__cancel_commands() {

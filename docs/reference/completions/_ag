@@ -1237,7 +1237,30 @@ never\:"Never colour"))' \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:ag-agent-command-$line[1]:"
         case $line[1] in
-            (register)
+            (output)
+_arguments "${_arguments_options[@]}" : \
+'--remote=[Use a server instead of this repository (without a NAME\: origin)]::NAME:_default' \
+'(--delete --json)--stream=[Print one stream. Text output escapes terminal controls; --json preserves exact text]:STREAM:(stdout stderr)' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--delete[Permanently remove captured text, retaining the run and audit history. Remote use requires agent.operate]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':run -- Run identifier:_default' \
+&& ret=0
+;;
+(register)
 _arguments "${_arguments_options[@]}" : \
 '--role=[\`agent\` or \`reviewer\`]:ROLE:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
@@ -1346,12 +1369,15 @@ never\:"Never colour"))' \
 _arguments "${_arguments_options[@]}" : \
 '-n+[Show at most this many (0 = all)]:LIMIT:_default' \
 '--limit=[Show at most this many (0 = all)]:LIMIT:_default' \
+'--task=[Only runs linked to this task, including its older history]:TASK:_default' \
+'--remote=[Read runs from a server (without a NAME\: origin)]::NAME:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
 '--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
 always\:"Always colour"
 never\:"Never colour"))' \
+'--active[Only currently running executions]' \
 '--json[Machine-readable JSON output]' \
 '(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
 '(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
@@ -3262,6 +3288,7 @@ _ag_commands() {
 (( $+functions[_ag__subcmd__agent_commands] )) ||
 _ag__subcmd__agent_commands() {
     local commands; commands=(
+'output:Inspect saved stdout/stderr, or explicitly delete the captured text' \
 'register:Register an agent and create its signing key' \
 'list:List agents' \
 'start:Start a run. Prints the identity the agent must use (\`agent\:name#run_…\`)' \
@@ -3298,6 +3325,11 @@ _ag__subcmd__agent__subcmd__heartbeat_commands() {
 _ag__subcmd__agent__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'ag agent list commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__agent__subcmd__output_commands] )) ||
+_ag__subcmd__agent__subcmd__output_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag agent output commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__agent__subcmd__reap_commands] )) ||
 _ag__subcmd__agent__subcmd__reap_commands() {

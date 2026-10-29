@@ -168,6 +168,30 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 ]
 ```
 
+### ag agent output
+
+```json
+{
+  "available": "bool",
+  "captured_at_ms": "number",
+  "run_id": "string",
+  "sequence": "number",
+  "stderr": "string",
+  "stderr_bytes": "number",
+  "stdout": "string",
+  "stdout_bytes": "number"
+}
+```
+
+### ag agent output (delete)
+
+```json
+{
+  "deleted": "bool",
+  "run_id": "string"
+}
+```
+
 ### ag agent reap
 
 ```json

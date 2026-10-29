@@ -652,25 +652,40 @@ complete -c ag -n "__fish_ag_using_subcommand validate; and __fish_seen_subcomma
 complete -c ag -n "__fish_ag_using_subcommand validate; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand validate; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand validate; and __fish_seen_subcommand_from list" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "register" -d 'Register an agent and create its signing key'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "list" -d 'List agents'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "start" -d 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "finish" -d 'Finish a run and release its leases'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "heartbeat" -d 'Heartbeat a running run'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "runs" -d 'List runs, newest first'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "reap" -d 'Abandon runs with no recent heartbeat and release their leases'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "disable" -d 'Stop an agent from starting new runs'
-complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from register list start finish heartbeat runs reap disable enable" -f -a "enable" -d 'Allow a disabled agent to run again'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "output" -d 'Inspect saved stdout/stderr, or explicitly delete the captured text'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "register" -d 'Register an agent and create its signing key'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "list" -d 'List agents'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "start" -d 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "finish" -d 'Finish a run and release its leases'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "heartbeat" -d 'Heartbeat a running run'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "runs" -d 'List runs, newest first'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "reap" -d 'Abandon runs with no recent heartbeat and release their leases'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "disable" -d 'Stop an agent from starting new runs'
+complete -c ag -n "__fish_ag_using_subcommand agent; and not __fish_seen_subcommand_from output register list start finish heartbeat runs reap disable enable" -f -a "enable" -d 'Allow a disabled agent to run again'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l remote -d 'Use a server instead of this repository (without a NAME: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l stream -d 'Print one stream. Text output escapes terminal controls; --json preserves exact text' -r -f -a "stdout\t''
+stderr\t''"
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l delete -d 'Permanently remove captured text, retaining the run and audit history. Remote use requires agent.operate'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from output" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -l role -d '`agent` or `reviewer`' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from register" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -727,11 +742,14 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from heartbeat" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from heartbeat" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s n -l limit -d 'Show at most this many (0 = all)' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l task -d 'Only runs linked to this task, including its older history' -r
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l remote -d 'Read runs from a server (without a NAME: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l active -d 'Only currently running executions'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from runs" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'

@@ -133,6 +133,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     let start = r.rec("agent start", &a.ag(&["--json", "agent", "start", "bot", "--task", &t2]).ok());
     let (run_id, who) =
         (start["run_id"].as_str().unwrap().to_string(), start["identity"].as_str().unwrap().to_string());
+    r.rec("agent output", &a.ag(&["--json", "agent", "output", &run_id]).ok());
     r.rec("agent heartbeat", &a.ag(&["--json", "agent", "heartbeat", &run_id]).ok());
     r.rec("agent runs", &a.ag(&["--json", "agent", "runs"]).ok());
     let l = r.rec("lease acquire", &a.run_as(&who, &["--json", "lease", "acquire", "docs/**", "--exclusive"]).ok());
@@ -151,6 +152,7 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     );
     r.rec("provenance show", &a.ag(&["--json", "provenance", "show", "@"]).ok());
     r.rec("agent finish", &a.ag(&["--json", "agent", "finish", &run_id]).ok());
+    r.rec("agent output#delete", &a.ag(&["--json", "agent", "output", &run_id, "--delete"]).ok());
     r.rec("agent reap", &a.ag(&["--json", "agent", "reap"]).ok());
     r.rec("agent disable", &a.ag(&["--json", "agent", "disable", "bot"]).ok());
     r.rec("agent enable", &a.ag(&["--json", "agent", "enable", "bot"]).ok());

@@ -73,6 +73,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag validate run`](#ag-validate-run)
 - [`ag validate list`](#ag-validate-list)
 - [`ag agent`](#ag-agent)
+- [`ag agent output`](#ag-agent-output)
 - [`ag agent register`](#ag-agent-register)
 - [`ag agent list`](#ag-agent-list)
 - [`ag agent start`](#ag-agent-start)
@@ -1456,6 +1457,7 @@ Agent identities and runs
 Usage: ag agent [OPTIONS] <COMMAND>
 
 Commands:
+  output     Inspect saved stdout/stderr, or explicitly delete the captured text
   register   Register an agent and create its signing key
   list       List agents
   start      Start a run. Prints the identity the agent must use (`agent:name#run_…`)
@@ -1475,6 +1477,30 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag agent output
+
+```text
+Inspect saved stdout/stderr, or explicitly delete the captured text
+
+Usage: ag agent output [OPTIONS] <RUN>
+
+Arguments:
+  <RUN>  Run identifier
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote [<NAME>]  Use a server instead of this repository (without a NAME: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --stream <STREAM>  Print one stream. Text output escapes terminal controls; --json preserves exact text [possible values: stdout, stderr]
+      --delete           Permanently remove captured text, retaining the run and audit history. Remote use requires agent.operate
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag agent register
@@ -1595,15 +1621,18 @@ Arguments:
   [NAME]  Only this agent
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-  -n, --limit <LIMIT>  Show at most this many (0 = all) [default: 50]
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+  -n, --limit <LIMIT>    Show at most this many (0 = all) [default: 50]
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --task <TASK>      Only runs linked to this task, including its older history
+      --active           Only currently running executions
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --remote [<NAME>]  Read runs from a server (without a NAME: origin)
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## ag agent reap

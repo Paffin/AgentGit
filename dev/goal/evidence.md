@@ -661,3 +661,18 @@ to schema 8, retaining task/run/history records and the old creation-idempotency
 An operator configured the new limit and started a second distinct run. The old binary refused
 upgraded metadata; the pre-upgrade backup remained readable and unchanged. Report:
 `/workspace/agentgit-quality/task-attempt-upgrade-published-beta5-to8.json`.
+
+## Unreleased native execution inspection
+
+`ag agent runs --remote` reads the real server's run history, retaining the local JSON shape.
+Task and active filters apply before paging; `-n 0` follows all keyset pages. A real-server
+scenario covers 1002 records across the page boundary without loss or duplicates.
+`ag agent output RUN` reads captured stdout/stderr locally or on a configured remote;
+explicit deletion retains the run and is rejected for remote readers. Human text goes
+through the existing terminal-control sanitizer, while JSON preserves stored text.
+
+The local and remote CLI scenarios passed in 0.07s and 0.66s after refactoring. JSON shape
+checks passed; generated help, man pages and shell completions include the new commands.
+New helpers have cyclomatic complexity at most 7. Crapper/Dryer/Mutator scans are static
+inspection, not a mutation-kill or coverage claim. This feature branch is separate from the
+frozen beta.6 release candidate. Capture remains opt-in and final-snapshot only.

@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Native CLI run inspection: list remote runs with task/active filters and complete pagination, read captured stdout/stderr locally or remotely, and explicitly delete captured text without altering run history.
+
 ## [0.3.0-beta.6] - 2026-10-29
 
 **Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.

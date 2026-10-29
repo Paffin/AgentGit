@@ -23,6 +23,20 @@
         "role": "string"
       }
     ],
+    "agent output": {
+      "available": "bool",
+      "captured_at_ms": "number",
+      "run_id": "string",
+      "sequence": "number",
+      "stderr": "string",
+      "stderr_bytes": "number",
+      "stdout": "string",
+      "stdout_bytes": "number"
+    },
+    "agent output#delete": {
+      "deleted": "bool",
+      "run_id": "string"
+    },
     "agent reap": [],
     "agent register": {
       "created_at": "number",

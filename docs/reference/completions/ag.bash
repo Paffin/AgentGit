@@ -193,6 +193,9 @@ _ag() {
             ag__subcmd__agent,list)
                 cmd="ag__subcmd__agent__subcmd__list"
                 ;;
+            ag__subcmd__agent,output)
+                cmd="ag__subcmd__agent__subcmd__output"
+                ;;
             ag__subcmd__agent,reap)
                 cmd="ag__subcmd__agent__subcmd__reap"
                 ;;
@@ -467,7 +470,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__agent)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version register list start finish heartbeat runs reap disable enable"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version output register list start finish heartbeat runs reap disable enable"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -670,6 +673,44 @@ _ag() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ag__subcmd__agent__subcmd__output)
+            opts="-C -q -v -h -V --remote --stream --delete --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --remote)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --stream)
+                    COMPREPLY=($(compgen -W "stdout stderr" -- "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ag__subcmd__agent__subcmd__reap)
             opts="-C -q -v -h -V --timeout --dry-run --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -743,7 +784,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__agent__subcmd__runs)
-            opts="-n -C -q -v -h -V --limit --repo --as --json --color --quiet --verbose --help --version"
+            opts="-n -C -q -v -h -V --limit --task --active --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -754,6 +795,14 @@ _ag() {
                     return 0
                     ;;
                 -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --task)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

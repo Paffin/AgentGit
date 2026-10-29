@@ -21,6 +21,8 @@ use crate::ui;
 
 #[derive(Subcommand, Debug)]
 pub enum AgentCmd {
+    /// Inspect saved stdout/stderr, or explicitly delete the captured text.
+    Output(super::agent_output::OutputArgs),
     /// Register an agent and create its signing key.
     Register {
         /// Agent name (`[a-z0-9][a-z0-9_-]*`).
@@ -66,6 +68,15 @@ pub enum AgentCmd {
         /// Show at most this many (0 = all).
         #[arg(short = 'n', long, default_value_t = 50)]
         limit: usize,
+        /// Only runs linked to this task, including its older history.
+        #[arg(long)]
+        task: Option<String>,
+        /// Only currently running executions.
+        #[arg(long)]
+        active: bool,
+        /// Read runs from a server (without a NAME: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
     },
     /// Abandon runs with no recent heartbeat and release their leases.
     Reap {
@@ -101,6 +112,7 @@ pub enum AgentCmd {
 pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
     let meta = ctx.repo.meta();
     match cmd {
+        AgentCmd::Output(args) => super::agent_output::run(ctx, args)?,
         AgentCmd::Register { name, role } => {
             let keys = KeyStore::open(ctx.repo.layout().keys_dir())?;
             let row = registry::register_agent(meta, &keys, name, role, ctx.me.as_str())?;
@@ -159,8 +171,15 @@ pub fn agent(ctx: &Ctx, cmd: &AgentCmd) -> Result<u8> {
             registry::heartbeat(meta, run)?;
             ctx.done(&json!({"run": run}), || format!("ok {run}"))?;
         }
-        AgentCmd::Runs { name, limit } => {
-            let rows = meta.read(|tx| tx.runs(name.as_deref(), Ctx::cap(*limit)))?;
+        AgentCmd::Runs { name, limit, task, active, remote } => {
+            let rows = match remote {
+                Some(remote) => {
+                    super::remote::list_runs(ctx, remote, name.as_deref(), task.as_deref(), *active, Ctx::cap(*limit))?
+                }
+                None => {
+                    meta.read(|tx| tx.runs_page(name.as_deref(), task.as_deref(), *active, None, Ctx::cap(*limit)))?
+                }
+            };
             ctx.note_cap(rows.len(), *limit, "runs");
             if rows.is_empty() {
                 ctx.note("no runs yet; `ag agent start NAME` starts one");

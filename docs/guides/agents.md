@@ -315,3 +315,31 @@ rejects thread creation; new replies invalidate the version used for resolution.
 Network retries reuse idempotency keys. No command in this group grants approval
 or integrates code. The matching [MCP tools](mcp.md#line-feedback-from-people-and-agents-development)
 let an executor read and respond to the same feedback.
+
+## 14. Inspect execution history and output from the CLI (unreleased)
+
+Find a run on the configured server, then inspect the same captured text shown on its Web page:
+
+```sh
+ag agent runs --remote
+ag agent runs --remote --task TASK --active
+ag agent runs --remote -n 0
+ag agent output RUN --remote
+ag agent output RUN --remote --stream stderr
+ag --json agent output RUN --remote
+```
+
+The default run listing keeps the newest 50 records. `-n 0` follows all server pages;
+`--task` filters before paging. Omit `--remote` when working directly in the local repository.
+Readers can inspect output; deleting server output requires `agent.operate`:
+
+```sh
+ag agent output RUN --remote --delete
+```
+
+Deletion removes captured text and prevents later uploads for that run. The run, its outcome
+and audit history remain. JSON reports `available: false` when nothing was captured. Selecting
+a stream with no saved output fails instead of putting an explanatory message into a log pipe.
+Text mode escapes terminal control characters; JSON retains the exact stored text. `--json`
+and `--stream` are alternative output modes. Capture still requires operator opt-in, stores
+bounded final tails, and is not live log streaming.

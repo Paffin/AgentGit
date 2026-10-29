@@ -284,6 +284,104 @@ pub(crate) fn set_agent_state(ctx: &Ctx, remote: &str, agent: &str, disabled: bo
     })
 }
 
+async fn require_feature(client: &Client, feature: &str, description: &str) -> Result<()> {
+    if !client.negotiate().await?.features.iter().any(|value| value == feature) {
+        bail!("this server does not support {description}; update it before using this command");
+    }
+    Ok(())
+}
+
+/// Reads filtered durable run history, following keyset pages up to the requested cap.
+pub(crate) fn list_runs(
+    ctx: &Ctx,
+    remote: &str,
+    agent: Option<&str>,
+    task: Option<&str>,
+    active: bool,
+    limit: usize,
+) -> Result<Vec<ag_storage::meta::RunRow>> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        require_feature(&client, ag_protocol::features::TASK_HISTORY, "paged run history").await?;
+        collect_runs(&client, &config, agent, task, active, limit).await
+    })
+}
+
+async fn collect_runs(
+    client: &Client,
+    config: &Remote,
+    agent: Option<&str>,
+    task: Option<&str>,
+    active: bool,
+    limit: usize,
+) -> Result<Vec<ag_storage::meta::RunRow>> {
+    let mut rows = Vec::new();
+    let mut token = String::new();
+    let mut seen = BTreeSet::new();
+    loop {
+        let request = v1::ListRunsRequest {
+            repo: config.repo.clone(),
+            agent: agent.unwrap_or_default().into(),
+            task_id: task.unwrap_or_default().into(),
+            active_only: active,
+            limit: (limit - rows.len()).min(1000) as u32,
+            page_token: token.clone(),
+        };
+        let page = client
+            .retrying(|| async { client.agents().list_runs(client.req(request.clone())).await })
+            .await?
+            .into_inner();
+        check_run_page(&page, &mut seen)?;
+        rows.extend(page.runs.into_iter().map(run_row));
+        if rows.len() >= limit || page.next_page_token.is_empty() {
+            break;
+        }
+        token = page.next_page_token;
+    }
+    rows.truncate(limit);
+    Ok(rows)
+}
+
+fn check_run_page(page: &v1::ListRunsResponse, seen: &mut BTreeSet<String>) -> Result<()> {
+    if page.runs.is_empty() && !page.next_page_token.is_empty() {
+        bail!("server returned an empty run-history page with a continuation");
+    }
+    if !page.next_page_token.is_empty() && !seen.insert(page.next_page_token.clone()) {
+        bail!("server repeated a run-history continuation");
+    }
+    Ok(())
+}
+
+fn run_row(run: v1::Run) -> ag_storage::meta::RunRow {
+    ag_storage::meta::RunRow {
+        run_id: run.run_id,
+        agent: run.agent,
+        task_id: (!run.task_id.is_empty()).then_some(run.task_id),
+        started_at: ag_types::Timestamp::from_millis(run.started_at_ms),
+        finished_at: (run.finished_at_ms != 0).then(|| ag_types::Timestamp::from_millis(run.finished_at_ms)),
+        status: run.status,
+        last_heartbeat: ag_types::Timestamp::from_millis(run.last_heartbeat_ms),
+        summary: (!run.summary.is_empty()).then_some(run.summary),
+    }
+}
+
+/// Reads or explicitly removes one run's captured text without altering the run.
+pub(crate) fn run_output(ctx: &Ctx, remote: &str, run: &str, delete: bool) -> Result<v1::RunOutput> {
+    let (name, config) = resolve_remote(&ctx.root, Some(remote))?;
+    rt()?.block_on(async {
+        let client = connect(&ctx.root, &name, &config).await?;
+        require_feature(&client, ag_protocol::features::RUN_OUTPUT, "captured run output").await?;
+        let request = v1::GetRunOutputRequest { repo: config.repo, run_id: run.into() };
+        if delete {
+            client.retrying(|| async { client.agents().delete_run_output(client.req(request.clone())).await }).await?;
+            Ok(v1::RunOutput { run_id: run.into(), ..Default::default() })
+        } else {
+            Ok(client.agents().get_run_output(client.req(request)).await.map_err(ClientError::from)?.into_inner())
+        }
+    })
+}
+
 /// Refines a remote task using the same full-content precondition as the browser.
 pub(crate) fn task_attempts(ctx: &Ctx, remote: &str, id: &str, update: Option<(u32, u32)>) -> Result<v1::Task> {
     let (name, config) = resolve_remote(&ctx.root, Some(remote))?;

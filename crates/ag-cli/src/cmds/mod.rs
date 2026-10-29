@@ -1,6 +1,7 @@
 //! Command implementations, grouped by area.
 
 pub mod admin;
+pub mod agent_output;
 pub mod agents;
 pub mod auth;
 pub mod config;

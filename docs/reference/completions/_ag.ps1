@@ -1026,6 +1026,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('output', 'output', [CompletionResultType]::ParameterValue, 'Inspect saved stdout/stderr, or explicitly delete the captured text')
             [CompletionResult]::new('register', 'register', [CompletionResultType]::ParameterValue, 'Register an agent and create its signing key')
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List agents')
             [CompletionResult]::new('start', 'start', [CompletionResultType]::ParameterValue, 'Start a run. Prints the identity the agent must use (`agent:name#run_…`)')
@@ -1035,6 +1036,25 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             [CompletionResult]::new('reap', 'reap', [CompletionResultType]::ParameterValue, 'Abandon runs with no recent heartbeat and release their leases')
             [CompletionResult]::new('disable', 'disable', [CompletionResultType]::ParameterValue, 'Stop an agent from starting new runs')
             [CompletionResult]::new('enable', 'enable', [CompletionResultType]::ParameterValue, 'Allow a disabled agent to run again')
+            break
+        }
+        'ag;agent;output' {
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Use a server instead of this repository (without a NAME: origin)')
+            [CompletionResult]::new('--stream', '--stream', [CompletionResultType]::ParameterName, 'Print one stream. Text output escapes terminal controls; --json preserves exact text')
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
+            [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--delete', '--delete', [CompletionResultType]::ParameterName, 'Permanently remove captured text, retaining the run and audit history. Remote use requires agent.operate')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Explain what is happening on standard error: repository, identity, remote, timing')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             break
         }
         'ag;agent;register' {
@@ -1126,10 +1146,13 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
         'ag;agent;runs' {
             [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
             [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Show at most this many (0 = all)')
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only runs linked to this task, including its older history')
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'Read runs from a server (without a NAME: origin)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')
             [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never')
+            [CompletionResult]::new('--active', '--active', [CompletionResultType]::ParameterName, 'Only currently running executions')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Machine-readable JSON output')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')
             [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown')

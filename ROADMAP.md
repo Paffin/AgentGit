@@ -161,3 +161,5 @@ Automatic cancellation also carries an expected attempt policy. Concurrent opera
 Task completion is also bound to its observed execution generation. A late executor or stale scheduler cannot finish a newer attempt; capability negotiation protects older-server deployments (ADR0035).
 
 The beta.6 candidate includes the merged core concurrency protections, task execution policy and generation fencing, review suggestions and policy controls. Published beta.5 → schema-8 backup/upgrade/rollback verification passed; final publication still follows exact-commit release gates.
+
+Unreleased CLI execution inspection is implemented on `feature/cli-run-output`: remote task-filtered run history with complete paging, local/remote captured output and explicit output deletion. It is not included in the frozen beta.6 candidate.

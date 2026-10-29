@@ -484,3 +484,110 @@ fn remote_task_edit_uses_the_server_and_enforces_its_permissions() {
     assert!(!refused.status.success());
     assert!(text(&refused).contains("creator"), "{}", text(&refused));
 }
+
+#[test]
+fn captured_run_output_is_readable_and_only_an_operator_can_delete_it() {
+    let srv = Server::start();
+    let repo = "acme/output";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let handle = srv.app.repos.handle(repo).unwrap();
+    let key = ag_crypto::KeyPair::generate().unwrap();
+    ag_agent::registry::register_agent_with_key(handle.meta(), "bot", &key.public(), "agent", "system:test").unwrap();
+    let run = ag_agent::registry::start_run(handle.meta(), "bot", None).unwrap();
+    ag_agent::output::save(
+        handle.meta(),
+        &run.run_id,
+        &ag_agent::output::Output {
+            sequence: 1,
+            stdout: "hello λ\u{001b}[31m\n".into(),
+            stderr: "diagnostic\n".into(),
+            stdout_bytes: 17,
+            stderr_bytes: 11,
+            ..Default::default()
+        },
+        "system:test",
+    )
+    .unwrap();
+    ag_agent::registry::finish_run(handle.meta(), &run.run_id, "failed", Some("retain this result")).unwrap();
+    let reader = srv.user("user:reader", repo, Role::Reader);
+    let operator = srv.user("user:operator", repo, Role::Delegator);
+    let dir = tempfile::tempdir().unwrap();
+    ok(ag(dir.path(), "user:reader", &reader, &["init", "--namespace", repo]));
+    ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["remote", "add", "origin", &format!("{}/{repo}", srv.url), "--token-env", "AG_TOKEN"],
+    ));
+    let runs: Value =
+        serde_json::from_str(&ok(ag(dir.path(), "user:reader", &reader, &["--json", "agent", "runs", "--remote"])))
+            .unwrap();
+    assert_eq!(runs[0]["run_id"], run.run_id);
+    let active: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["--json", "agent", "runs", "--remote", "--active"],
+    )))
+    .unwrap();
+    assert!(active.as_array().unwrap().is_empty());
+    let unrelated: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["--json", "agent", "runs", "--remote", "--task", "task-missing"],
+    )))
+    .unwrap();
+    assert!(unrelated.as_array().unwrap().is_empty());
+    let saved: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["--json", "agent", "output", &run.run_id, "--remote"],
+    )))
+    .unwrap();
+    assert_eq!(saved["available"], true);
+    assert_eq!(saved["stdout"], "hello λ\u{001b}[31m\n");
+    let human =
+        ok(ag(dir.path(), "user:reader", &reader, &["agent", "output", &run.run_id, "--remote", "--stream", "stdout"]));
+    assert!(human.contains("hello λ\\u{001b}[31m"), "{human}");
+    assert!(!human.contains('\u{001b}'));
+    assert!(
+        !ag(dir.path(), "user:reader", &reader, &["agent", "output", &run.run_id, "--remote", "--delete"])
+            .status
+            .success()
+    );
+    ok(ag(dir.path(), "user:operator", &operator, &["agent", "output", &run.run_id, "--remote", "--delete"]));
+    let removed: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["--json", "agent", "output", &run.run_id, "--remote"],
+    )))
+    .unwrap();
+    assert_eq!(removed["available"], false);
+    assert_eq!(handle.meta().read(|tx| tx.run(&run.run_id)).unwrap().unwrap().status, "failed");
+    handle
+        .meta()
+        .write(|tx| {
+            for i in 0..1001 {
+                tx.run_start(&format!("run_history_{i:04}"), "bot", None)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let all: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:reader",
+        &reader,
+        &["--json", "agent", "runs", "--remote", "-n", "0"],
+    )))
+    .unwrap();
+    let all = all.as_array().unwrap();
+    assert_eq!(all.len(), 1002, "run history was silently truncated at a server page");
+    let ids: std::collections::BTreeSet<_> = all.iter().map(|r| r["run_id"].as_str().unwrap()).collect();
+    assert_eq!(ids.len(), all.len(), "continuation repeated a run");
+}

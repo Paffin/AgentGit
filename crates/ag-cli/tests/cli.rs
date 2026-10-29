@@ -645,3 +645,34 @@ fn task_attempt_limit_can_be_inspected_and_extended_without_replacing_the_task()
     assert_eq!(extended["max_attempts"], 2);
     ag.ag(&["agent", "start", "bot", "--task", id]).ok();
 }
+
+#[test]
+fn saved_output_is_available_locally_and_deletion_preserves_the_run() {
+    let a = Ag::new();
+    a.ag(&["agent", "register", "output-bot"]).ok();
+    let started = a.ag(&["--json", "agent", "start", "output-bot"]).ok().json();
+    let run = started["run_id"].as_str().unwrap();
+    assert_eq!(a.ag(&["--json", "agent", "output", run]).ok().json()["available"], false);
+    assert_ne!(a.ag(&["agent", "output", run, "--stream", "stdout"]).code(), 0);
+    let repo = ag_integrate::Repository::open(&a.root()).unwrap();
+    ag_agent::output::save(
+        repo.meta(),
+        run,
+        &ag_agent::output::Output {
+            sequence: 1,
+            stdout: "local progress\n".into(),
+            stderr: "local warning\n".into(),
+            stdout_bytes: 15,
+            stderr_bytes: 14,
+            ..Default::default()
+        },
+        "user:alice",
+    )
+    .unwrap();
+    assert_eq!(a.ag(&["--json", "agent", "output", run]).ok().json()["stderr"], "local warning\n");
+    assert_eq!(a.ag(&["agent", "output", run, "--stream", "stdout"]).ok().stdout(), "local progress\n");
+    a.ag(&["--json", "agent", "output", run, "--stream", "stdout"]).code_is(1);
+    assert_eq!(a.ag(&["--json", "agent", "output", run, "--delete"]).ok().json()["deleted"], true);
+    assert_eq!(a.ag(&["--json", "agent", "output", run]).ok().json()["available"], false);
+    assert_eq!(repo.meta().read(|tx| tx.run(run)).unwrap().unwrap().status, "running");
+}

@@ -204,6 +204,7 @@ export type SearchTreeRequest = S['SearchTreeRequest'];
 export type SearchTreeResponse = S['SearchTreeResponse'];
 export type SetAgentStateRequest = S['SetAgentStateRequest'];
 export type SetPolicyRequest = S['SetPolicyRequest'];
+export type SetTaskAttemptLimitRequest = S['SetTaskAttemptLimitRequest'];
 export type SetTaskSchedulingRequest = S['SetTaskSchedulingRequest'];
 export type StartRunRequest = S['StartRunRequest'];
 export type Stream = S['Stream'];

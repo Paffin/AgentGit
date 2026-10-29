@@ -83,6 +83,8 @@ pub mod features {
 
     /// Proposal head updates can require an inspected head atomically.
     pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
+    /// Durable task-local attempt limits and optimistic policy updates.
+    pub const TASK_ATTEMPT_LIMITS: &str = "tasks.attempt_limits";
 
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
@@ -106,6 +108,7 @@ pub mod features {
         TASK_HISTORY,
         TASK_LINEAGE,
         TASK_EDIT,
+        TASK_ATTEMPT_LIMITS,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

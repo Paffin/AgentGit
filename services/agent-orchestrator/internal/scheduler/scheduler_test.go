@@ -812,3 +812,51 @@ func TestSchedulerReportsItsExecutorConnection(t *testing.T) {
 	}
 	t.Fatal("registered executor missing")
 }
+
+func TestTaskAttemptLimitSurvivesRestartAndCanBeExtended(t *testing.T) {
+	counter := filepath.Join(t.TempDir(), "attempt-count")
+	script := fmt.Sprintf(`n=$(cat %[1]s 2>/dev/null || echo 0); n=$((n+1)); echo $n > %[1]s; if [ $n -lt 3 ]; then exit 1; fi; exit 0`, counter)
+	ex := command(t, "bounded-bot", script)
+	h := newHarness(t, func(r *config.Repo) { r.Schedule.Attempts = 1; r.Schedule.Backoff = time.Second }, nil, ex)
+	task := h.addTask("Retry this exact task", nil)
+	if _, err := h.w.Srv.Admin.SetTaskAttemptLimit(context.Background(), repo, task, 2, 0); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		h.reconcile()
+		h.waitIdle()
+		h.eventually("retry disposition", func() bool { return len(h.sched.Status().Retrying) == 1 })
+		h.clk.Advance(5 * time.Second)
+	}
+	if h.state(task) != agwp.TaskInProgress || h.task(task).AttemptsStarted != 2 {
+		t.Fatalf("task = %+v", h.task(task))
+	}
+	restarted := h.restart(func(r *config.Repo) { r.Schedule.Attempts = 1; r.Schedule.Backoff = time.Second }, ex)
+	if err := restarted.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.runs()) != 2 || len(h.mgr.Active()) != 0 {
+		t.Fatal("restart granted another attempt")
+	}
+	found := false
+	for _, item := range restarted.Status().Deferred {
+		if item.Task == task && item.Reason == ReasonAttemptLimit {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing attempt limit explanation: %+v", restarted.Status())
+	}
+	if _, err := h.w.Srv.Admin.SetTaskAttemptLimit(context.Background(), repo, task, 3, 2); err != nil {
+		t.Fatal(err)
+	}
+	h.clk.Advance(10 * time.Second)
+	if err := restarted.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.waitIdle()
+	h.eventually("completion after extension", func() bool { return h.state(task) == agwp.TaskDone })
+	if h.task(task).AttemptsStarted != 3 || len(h.runs()) != 3 {
+		t.Fatalf("history was lost: %+v", h.task(task))
+	}
+}

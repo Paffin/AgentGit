@@ -767,3 +767,56 @@ fn task_refinement_preserves_sources_and_rejects_stale_or_started_work() {
     e.meta.write(|tx| tx.task_update(&task.id, None, Some("open"))).unwrap();
     assert!(edit(&content, "user:admin", true).is_err());
 }
+
+#[test]
+fn task_attempt_limit_is_shared_by_every_run_and_preserves_history() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "retry-bot", "agent", "user:admin").unwrap();
+    let task = tasks::create_task(&e.meta, "Retry a bounded task", "", &[], "user:t").unwrap();
+    e.meta.write(|tx| tx.task_set_attempt_limit(&task.id, 2)).unwrap();
+    for _ in 0..2 {
+        let run = registry::start_run(&e.meta, "retry-bot", Some(&task.id)).unwrap();
+        registry::finish_run(&e.meta, &run.run_id, "failed", Some("executor failed")).unwrap();
+    }
+    let denied = registry::start_run(&e.meta, "retry-bot", Some(&task.id));
+    assert!(matches!(denied, Err(AgentError::Conflict(_))), "{denied:?}");
+    let stored = e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap();
+    assert_eq!(stored.max_attempts, 2);
+    assert_eq!(stored.attempts_started, 2);
+    assert_eq!(stored.state, "in_progress");
+}
+
+#[test]
+fn an_operator_extends_an_exhausted_task_without_rewriting_history() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "retry-bot", "agent", "user:admin").unwrap();
+    let task = tasks::create_task(&e.meta, "Keep these instructions", "same task", &[], "user:creator").unwrap();
+    e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 1, 0, "user:creator", false)).unwrap();
+    let run = registry::start_run(&e.meta, "retry-bot", Some(&task.id)).unwrap();
+    registry::finish_run(&e.meta, &run.run_id, "failed", Some("first attempt")).unwrap();
+    assert!(e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 2, 1, "user:creator", false)).is_err());
+    let extended = e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 2, 1, "user:operator", true)).unwrap();
+    assert_eq!(extended.description, "same task");
+    assert_eq!(extended.attempts_started, 1);
+    assert!(e.meta.write(|tx| tasks::set_attempt_limit_in(tx, &task.id, 3, 1, "user:operator", true)).is_err());
+    let next = registry::start_run(&e.meta, "retry-bot", Some(&task.id)).unwrap();
+    assert_ne!(next.run_id, run.run_id);
+    assert_eq!(e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap().attempts_started, 2);
+    assert!(e.meta.read(|tx| tx.run(&run.run_id)).unwrap().is_some());
+}
+
+#[test]
+fn a_rolled_back_run_does_not_consume_the_task_attempt_limit() {
+    let e = env();
+    registry::register_agent(&e.meta, &e.keys, "retry-bot", "agent", "user:admin").unwrap();
+    let task = tasks::create_task(&e.meta, "Atomic attempt", "", &[], "user:creator").unwrap();
+    e.meta.write(|tx| tx.task_set_attempt_limit(&task.id, 1)).unwrap();
+    let refused = registry::start_run_with(&e.meta, "retry-bot", Some(&task.id), |_, _| {
+        Err::<(), _>(ag_storage::meta::MetaError::Invalid("reject extra write".into()))
+    });
+    assert!(refused.is_err());
+    let unchanged = e.meta.read(|tx| tx.task(&task.id)).unwrap().unwrap();
+    assert_eq!(unchanged.attempts_started, 0);
+    assert_eq!(unchanged.state, "open");
+    assert!(registry::start_run(&e.meta, "retry-bot", Some(&task.id)).is_ok());
+}

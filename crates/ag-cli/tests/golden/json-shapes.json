@@ -847,15 +847,32 @@
       "status": "string",
       "to": "string"
     },
+    "task attempts": {
+      "attempts_started": "number",
+      "created_at": "number",
+      "created_by": "string",
+      "description": "string",
+      "id": "string",
+      "max_attempts": "number",
+      "owner": "null",
+      "scope": [],
+      "source_run": "null",
+      "source_task": "null",
+      "state": "string",
+      "title": "string",
+      "updated_at": "number"
+    },
     "task cancel": {
       "state": "string",
       "task": "string"
     },
     "task create": {
+      "attempts_started": "number",
       "created_at": "number",
       "created_by": "string",
       "description": "string",
       "id": "string",
+      "max_attempts": "number",
       "owner": "null",
       "scope": [
         "string"
@@ -867,10 +884,12 @@
       "updated_at": "number"
     },
     "task create#follow-up": {
+      "attempts_started": "number",
       "created_at": "number",
       "created_by": "string",
       "description": "string",
       "id": "string",
+      "max_attempts": "number",
       "owner": "null",
       "scope": [],
       "source_run": "string",
@@ -888,10 +907,12 @@
       "task": "string"
     },
     "task edit": {
+      "attempts_started": "number",
       "created_at": "number",
       "created_by": "string",
       "description": "string",
       "id": "string",
+      "max_attempts": "number",
       "owner": "null",
       "scope": [
         "string"
@@ -904,10 +925,12 @@
     },
     "task list": [
       {
+        "attempts_started": "number",
         "created_at": "number",
         "created_by": "string",
         "description": "string",
         "id": "string",
+        "max_attempts": "number",
         "owner": "null",
         "scope": [
           "string"
@@ -921,10 +944,12 @@
     ],
     "task ready": [
       {
+        "attempts_started": "number",
         "created_at": "number",
         "created_by": "string",
         "description": "string",
         "id": "string",
+        "max_attempts": "number",
         "owner": "null",
         "scope": [
           "string"

@@ -772,27 +772,29 @@ complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand agent; and __fish_seen_subcommand_from enable" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "create" -d 'Create a task'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "edit" -d 'Refine instructions before a task\'s first run; concurrent edits are refused'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "list" -d 'List tasks'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "depend" -d 'Declare that TASK cannot start until ON is done'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "ready" -d 'Open tasks whose dependencies are all done'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "done" -d 'Mark a task done'
-complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit list depend ready done cancel" -f -a "cancel" -d 'Cancel a task'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "create" -d 'Create a task'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "edit" -d 'Refine instructions before a task\'s first run; concurrent edits are refused'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "attempts" -d 'Inspect or change a task\'s durable execution-attempt limit'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "list" -d 'List tasks'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "depend" -d 'Declare that TASK cannot start until ON is done'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "ready" -d 'Open tasks whose dependencies are all done'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "done" -d 'Mark a task done'
+complete -c ag -n "__fish_ag_using_subcommand task; and not __fish_seen_subcommand_from create edit attempts list depend ready done cancel" -f -a "cancel" -d 'Cancel a task'
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -s d -l description -d 'Description' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l scope -d 'Path glob the task is expected to touch (repeatable)' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l source-task -d 'Original task for an independent follow-up' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l source-run -d 'Failed or abandoned run of --source-task' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l max-attempts -d 'Total runs permitted (0 leaves the server limit unset)' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from create" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
@@ -818,6 +820,19 @@ complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_f
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from edit" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from edit" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from edit" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l max -d 'New maximum total runs; zero leaves the server limit unset' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l expected -d 'Limit you inspected; refuses a concurrent policy change' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l remote -d 'Use a configured server instead of the local repository' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from attempts" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from list" -l state -d 'Filter by state: open, in_progress, done, cancelled' -r
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand task; and __fish_seen_subcommand_from list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r

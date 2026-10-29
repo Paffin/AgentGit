@@ -458,6 +458,25 @@ fn remote_task_edit_uses_the_server_and_enforces_its_permissions() {
     .unwrap();
     assert_eq!(updated["title"], "Remote λ");
     assert_eq!(updated["scope"], serde_json::json!([]));
+    let attempts: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["--json", "task", "attempts", &task.id, "--remote", "--max", "2", "--expected", "0"],
+    )))
+    .unwrap();
+    assert_eq!(attempts["max_attempts"], 2);
+    assert_eq!(attempts["attempts_started"], 0);
+    assert!(
+        !ag(
+            dir.path(),
+            "user:alice",
+            &alice,
+            &["task", "attempts", &task.id, "--remote", "--max", "3", "--expected", "0"]
+        )
+        .status
+        .success()
+    );
     let saved = handle.meta().read(|tx| tx.task(&task.id)).unwrap().unwrap();
     assert_eq!(saved.title, "Remote λ");
     assert_eq!(saved.description, "Before");

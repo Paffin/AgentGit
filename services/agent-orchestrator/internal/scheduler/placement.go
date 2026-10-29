@@ -21,6 +21,7 @@ const (
 	ReasonPredicted          = "predicted_overlap"   // the server's conflict prediction reports an overlap
 	ReasonExecutorBusy       = "executor_busy"       // no free slot (not a conflict)
 	ReasonRepoBusy           = "repo_busy"           // the repository's session limit is reached (not a conflict)
+	ReasonAttemptLimit       = "attempt_limit"       // durable task budget is exhausted; an operator may extend it
 	ReasonRetryBackoff       = "retry_backoff"       // waiting out the delay after a failed attempt
 	ReasonLeaseConflict      = "lease_conflict"      // the server refused the lease at start
 	ReasonStartFailed        = "start_failed"        // starting the session failed; retried after a delay

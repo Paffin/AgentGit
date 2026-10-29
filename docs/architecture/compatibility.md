@@ -93,3 +93,5 @@ Repository schema 4 adds durable user issues and activity ([ADR-0016](../adr/001
 Repository schema 5 initializes the operator task-launch gate ([ADR-0017](../adr/0017-task-execution-gate.md)). Binaries that do not enforce this gate refuse the newer schema instead of ignoring a pause.
 
 Repository schema 6 adds line review threads and replies ([ADR-0025](../adr/0025-line-review-threads.md)). A transaction upgrades schema 5 without changing existing records. Threads retain their immutable source revisions as GC roots, even after resolution or proposal closure. Take a backup before upgrade. Older binaries refuse schema 6; rollback means restoring the pre-upgrade backup, not opening upgraded data with an older binary.
+
+Repository schema 8 adds durable per-task execution limits and a task-run history index ([ADR-0033](../adr/0033-task-attempt-limits.md)). Existing tasks retain an unset limit and their complete run history. Back up before upgrading; older binaries refuse schema 8. Restore the pre-upgrade backup to downgrade.

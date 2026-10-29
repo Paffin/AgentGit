@@ -309,6 +309,7 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
     )
     assert refined.title == "Refined tour task"
     assert alice.tasks.get(repo=REPO, id=task.id).description == "A concrete result"
+    assert alice.tasks.set_attempt_limit(repo=REPO, id=task.id, max_attempts=2, expected_max_attempts=0).max_attempts == 2
     dep = alice.tasks.create(repo=REPO, title="depends")
     alice.tasks.depend(repo=REPO, task=dep.id, depends_on=task.id)
     assert len(alice.tasks.list(repo=REPO).tasks) == 2

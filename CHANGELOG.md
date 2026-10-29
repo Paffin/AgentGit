@@ -10,6 +10,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 ### Fixed
 
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.
+### Added
+
+- Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
 
 ## [0.3.0-beta.6] - 2026-10-28
 

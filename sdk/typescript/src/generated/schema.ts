@@ -1369,6 +1369,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set a task-local attempt limit */
+        patch: operations["task.set_attempt_limit"];
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/tasks/{id}/finish": {
         parameters: {
             query?: never;
@@ -2168,6 +2185,12 @@ export interface components {
             expected_issue_version: number;
             /** @default  */
             idempotency_key: string;
+            /**
+             * Format: int32
+             * @description Optional task-local run limit (0 keeps legacy behavior; maximum 10000).
+             * @default 0
+             */
+            max_attempts: number;
             /** @default  */
             repo: string;
             /** @default [] */
@@ -4639,6 +4662,25 @@ export interface components {
             /** @default  */
             stream: string;
         };
+        /** @description Execution policy is independent of immutable task instructions and run history. */
+        SetTaskAttemptLimitRequest: {
+            /**
+             * Format: int32
+             * @default 0
+             */
+            expected_max_attempts: number;
+            /** @default  */
+            id: string;
+            /** @default  */
+            idempotency_key: string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            max_attempts: number;
+            /** @default  */
+            repo: string;
+        };
         SetTaskSchedulingRequest: {
             /**
              * Format: int64
@@ -4744,6 +4786,12 @@ export interface components {
         Task: {
             /**
              * Format: int64
+             * @description All task-bound runs, including failed, abandoned and currently active runs.
+             * @default 0
+             */
+            attempts_started: number;
+            /**
+             * Format: int64
              * @default 0
              */
             created_at_ms: number;
@@ -4755,10 +4803,16 @@ export interface components {
             description: string;
             /** @default  */
             id: string;
+            /**
+             * Format: int32
+             * @description Zero leaves the server-side attempt limit unset.
+             * @default 0
+             */
+            max_attempts: number;
             /** @default  */
             owner: string;
             /**
-             * @description True when every dependency is done.
+             * @description True when dependencies are done and the configured attempt limit has room.
              * @default false
              */
             ready: boolean;
@@ -8837,6 +8891,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssignTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "task.set_attempt_limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskAttemptLimitRequest"];
             };
         };
         responses: {

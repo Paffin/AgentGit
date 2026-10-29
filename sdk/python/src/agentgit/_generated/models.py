@@ -206,6 +206,7 @@ __all__ = [
     "SearchTreeResponse",
     "SetAgentStateRequest",
     "SetPolicyRequest",
+    "SetTaskAttemptLimitRequest",
     "SetTaskSchedulingRequest",
     "StartRunRequest",
     "Stream",
@@ -573,6 +574,7 @@ class CreateTaskRequest:
     description: str = field(default="")
     expected_issue_version: int = field(default=0)
     idempotency_key: str = field(default="")
+    max_attempts: int = field(default=0)
     repo: str = field(default="")
     scope: list[str] = field(default_factory=list)
     source_issue: int = field(default=0)
@@ -2052,6 +2054,16 @@ class SetPolicyRequest:
 
 
 @dataclass(kw_only=True)
+class SetTaskAttemptLimitRequest:
+    """Execution policy is independent of immutable task instructions and run history."""
+    expected_max_attempts: int = field(default=0)
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    max_attempts: int = field(default=0)
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class SetTaskSchedulingRequest:
     """The `SetTaskSchedulingRequest` message."""
     expected_version: int = field(default=0)
@@ -2122,11 +2134,13 @@ class SyncWorkspaceResponse:
 @dataclass(kw_only=True)
 class Task:
     """The `Task` message."""
+    attempts_started: int = field(default=0)
     created_at_ms: int = field(default=0)
     created_by: str = field(default="")
     depends_on: list[str] = field(default_factory=list)
     description: str = field(default="")
     id: str = field(default="")
+    max_attempts: int = field(default=0)
     owner: str = field(default="")
     ready: bool = field(default=False)
     scope: list[str] = field(default_factory=list)

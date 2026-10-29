@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Reviewers can propose a replacement for a new-side line. Authors preview and apply it as a new proposal revision, preserving executable mode, Unicode and line endings. The operation requires inspected-head protection; earlier suggestions remain readable and are never applied automatically.
+
 ### Fixed
 
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.

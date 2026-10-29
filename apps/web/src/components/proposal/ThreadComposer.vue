@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { Proposal } from '@/api/types'
+import { formatSuggestion, parseSuggestion } from '@/lib/reviewSuggestion'
 import type { LineQuote } from '@/lib/diffDiscussion'
 import { api } from '@/api/instance'
 import { describeError } from '@/api/errors'
@@ -22,6 +23,29 @@ const draft = useCommentDraft(
   () => props.proposal.head,
 )
 const allowed = computed(() => auth.can(props.repo, 'commentProposal'))
+const suggestion = computed(() => parseSuggestion(draft.body.value))
+const explanation = computed({
+  get: () => suggestion.value?.explanation || '',
+  set: (value) => {
+    draft.body.value = formatSuggestion(value, suggestion.value?.replacement || '')
+  },
+})
+const replacement = computed({
+  get: () => suggestion.value?.replacement || '',
+  set: (value) => {
+    draft.body.value = formatSuggestion(suggestion.value?.explanation || '', value)
+  },
+})
+function suggest() {
+  if (selected.anchor.value?.side === 'new')
+    draft.body.value = formatSuggestion(draft.body.value, selected.anchor.value.text)
+}
+function removeSuggestion() {
+  if (suggestion.value)
+    draft.body.value = [suggestion.value.explanation, suggestion.value.replacement]
+      .filter(Boolean)
+      .join('\n\n')
+}
 const stale = computed(() => selected.anchor.value?.head !== props.proposal.head)
 const form = ref<HTMLElement | null>(null)
 const busy = ref(false),
@@ -115,13 +139,35 @@ async function create() {
     </p>
     <pre class="source">{{ selected.anchor.value.text }}</pre>
     <p class="muted">The server verifies this line against the exact revision you inspected.</p>
+    <template v-if="suggestion">
+      <TextArea v-model="explanation" label="Explain this suggestion" :disabled="busy" :rows="2" />
+      <TextArea
+        v-model="replacement"
+        label="Replacement code"
+        :disabled="busy"
+        :rows="5"
+        mono
+        hint="Replaces this one line. Multiple replacement lines are allowed. Empty deletes the line. Saved in this tab."
+      />
+      <Button size="sm" :disabled="busy" @click="removeSuggestion"
+        >Keep as ordinary discussion</Button
+      >
+    </template>
     <TextArea
+      v-else
       v-model="draft.body.value"
       label="Start this discussion"
       :rows="4"
       :disabled="busy"
       hint="Your line selection and draft are saved in this tab."
     />
+    <Button
+      v-if="!suggestion && selected.anchor.value.side === 'new'"
+      size="sm"
+      :disabled="busy || stale"
+      @click="suggest"
+      >Suggest a replacement</Button
+    >
     <Alert v-if="stale" tone="warn" title="The proposal has changed"
       >Select a line from the current Files changed view before opening this thread. Your text
       remains saved.<CopyButton :text="draft.body.value" label="Copy discussion draft" with-label

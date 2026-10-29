@@ -85,3 +85,11 @@ compatibility and publication limits. Next, structured review suggestions depend
 precondition: preview the exact replacement, preserve file metadata, apply only against the
 anchored head, and require fresh checks/reviews after changing the proposal. Suggestions and
 requested reviewers remain open; this prerequisite does not complete those workflows.
+
+Review suggestions: new-side line discussions can now contain a suggested replacement.
+The reviewer edits separate explanation/code fields with tab-local recovery. The author
+previews and applies through a private workspace plus the inspected-head precondition.
+Regular UTF-8 files up to 1 MiB retain executable mode, BOM and line endings. Empty replacement
+deletes the selected line; multiple replacement lines are supported. Old suggestions stay
+readable. Range anchors, batching, server-native metadata and a dedicated CLI apply command
+remain open. Requested reviewers and policy-required resolution remain independent work.

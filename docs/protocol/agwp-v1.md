@@ -290,6 +290,13 @@ server reads `anchor.text` itself and ignores supplied text. Text files are boun
 to 8 MiB and individual source lines and message bodies to 16 KiB. Old-side anchors
 require a base revision. Anchors never move with later proposal updates.
 
+The Web UI recognizes a single final fenced `suggestion` block in a thread body as a
+replacement proposal for its new-side anchor. An empty block deletes that line. The fence
+has at least three backticks and must exceed any backtick run in the content. This is a
+readable body convention, not a new server operation or permission. Applying it uses a
+private workspace and a head-checked proposal update; it does not resolve the thread or
+approve the resulting head. See [ADR 0030](../adr/0030-fenced-review-suggestions.md).
+
 Both list operations use `page_size` (maximum 100) and `page_token`. Threads use
 creation-time keyset ordering; replies use increasing IDs. Tokens are scoped to
 the repository and owning proposal/thread. Thread resolution does not by itself

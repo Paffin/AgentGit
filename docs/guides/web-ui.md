@@ -593,6 +593,23 @@ Counts are marked as partial when more pages are available; use **Load more
 discussions** to include older threads. Switching filters preserves expanded
 reply drafts.
 
+### Suggest a code change (development)
+
+Select a new-side line number in **Files changed**, then **Suggest a replacement**. Explain
+why and enter replacement code; multiple replacement lines are allowed, and an empty field
+deletes the selected line. The draft survives reload in the same tab. Post it as a line discussion.
+
+The change request's author can choose **Review and apply suggestion**, inspect the exact
+replacement and explicitly apply it. This creates a new revision, retaining executable mode
+and line endings. Existing checks and approvals must match the new revision. The discussion
+stays open until reviewed and resolved separately. Earlier-revision suggestions remain readable
+and copyable; they cannot overwrite newer work.
+
+Application requires a server with `proposals.update_head` and is limited to regular UTF-8
+files up to 1 MiB. Symlinks, binary files, old-side lines and changed source lines require the
+ordinary editor or CLI. This first version replaces one anchored line, not a selected range.
+
+
 ## Enable or disable new runs for one agent (development)
 
 Under **Agents & work → Registered agents**, an operator can choose **Disable…**

@@ -536,3 +536,12 @@ Workspace sync is retried automatically only when `expected_stream_head` is none
 An unpinned sync can apply resolutions against a moving branch, so a lost response
 leaves its outcome unknown and is not retried by default. Explicit unsafe-retry opt-in
 remains available for callers that deliberately accept that risk.
+
+
+Private review drafts use `client.proposals.get_draft`, `save_draft` and `clear_draft`
+(the same names are available on the async client). Negotiate `proposals.review_drafts`
+first. Save the complete draft with the `expected_version` returned by the last read;
+clear it with that guard. A conflict preserves the newer draft. The authenticated actor
+owns the notes; there is no owner argument. Drafts never post reviews or count as approval.
+Clearing removes content but retains a version, preventing stale saves from recreating it.
+Identical retries are safe; reread and decide before changing a conflicting draft.

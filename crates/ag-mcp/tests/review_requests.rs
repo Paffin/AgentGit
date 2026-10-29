@@ -81,7 +81,10 @@ fn older_servers_refuse_review_request_writes_and_filters_before_using_them() {
         )
         .unwrap();
     });
-    let mut m = Mcp::spawn(&["--server", &url, "--repo", "acme/reviews"], &[("AG_MCP_TOKEN", "test-token")]);
+    let mut m = Mcp::spawn(
+        &["--server", &url, "--repo", "acme/reviews", "--allow", "read,propose,review"],
+        &[("AG_MCP_TOKEN", "test-token")],
+    );
     m.request("server/discover", json!({}));
     m.refused(
         "proposal_set_reviewers",
@@ -89,5 +92,8 @@ fn older_servers_refuse_review_request_writes_and_filters_before_using_them() {
         "server_update_required",
     );
     m.refused("proposal_list", json!({"requested_reviewer":"user:bob"}), "server_update_required");
+    m.refused("review_draft_get", json!({"proposal_id":"prop_test"}), "server_update_required");
+    m.refused("review_draft_save", json!({"proposal_id":"prop_test","expected_version":0,"head":"0".repeat(64),"decision":"comment","body":"private"}), "server_update_required");
+    m.refused("review_draft_clear", json!({"proposal_id":"prop_test","expected_version":0}), "server_update_required");
     response.join().unwrap();
 }

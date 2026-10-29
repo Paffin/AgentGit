@@ -150,6 +150,32 @@ describe('the tour', () => {
     const requested = [];
     for await (const proposal of reviewsRequestedFrom(bob, repo, 'user:bob')) requested.push(proposal.id);
     expect(requested).toEqual([p1.id]);
+    expect((await bob.proposals.getDraft({ repo, id: p1.id })).present).toBe(false);
+    const privateDraft = await bob.proposals.saveDraft({
+      repo,
+      id: p1.id,
+      expected_version: 0,
+      head: m2.head,
+      decision: 'comment',
+      body: 'Private draft',
+    });
+    expect(privateDraft.version).toBe(1);
+    expect((await admin.proposals.getDraft({ repo, id: p1.id })).present).toBe(false);
+    expect((await bob.proposals.get({ repo, id: p1.id })).reviews).toHaveLength(0);
+    await expect(
+      bob.proposals.saveDraft({
+        repo,
+        id: p1.id,
+        expected_version: 0,
+        head: m2.head,
+        decision: 'comment',
+        body: 'Stale overwrite',
+      }),
+    ).rejects.toMatchObject({ status: 412 });
+    const clearedDraft = await bob.proposals.clearDraft({ repo, id: p1.id, expected_version: privateDraft.version });
+    expect(clearedDraft.present).toBe(false);
+    expect(clearedDraft.version).toBe(2);
+    expect((await bob.proposals.getDraft({ repo, id: p1.id })).body).toBe('');
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
     expect(
       (

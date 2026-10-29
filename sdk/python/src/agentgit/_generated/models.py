@@ -27,6 +27,7 @@ __all__ = [
     "Changeset",
     "ClaimJobRequest",
     "ClaimJobResponse",
+    "ClearReviewDraftRequest",
     "CloseProposalRequest",
     "CommentProposalRequest",
     "CompareAndSwapRequest",
@@ -72,6 +73,7 @@ __all__ = [
     "GetPolicyRequest",
     "GetProposalRequest",
     "GetRepoRequest",
+    "GetReviewDraftRequest",
     "GetRunOutputRequest",
     "GetRunRequest",
     "GetTaskRequest",
@@ -189,6 +191,7 @@ __all__ = [
     "ResolveRevResponse",
     "ResolveReviewThreadRequest",
     "Review",
+    "ReviewDraft",
     "ReviewLineAnchor",
     "ReviewProposalRequest",
     "ReviewThread",
@@ -201,6 +204,7 @@ __all__ = [
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SaveReviewDraftRequest",
     "SaveRunOutputRequest",
     "SearchMatch",
     "SearchTreeRequest",
@@ -445,6 +449,14 @@ class ClaimJobRequest:
 class ClaimJobResponse:
     """The `ClaimJobResponse` message."""
     job: Job | None = field(default=None)
+
+
+@dataclass(kw_only=True)
+class ClearReviewDraftRequest:
+    """The `ClearReviewDraftRequest` message."""
+    expected_version: int = field(default=0)
+    id: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -872,6 +884,13 @@ class GetProposalRequest:
 @dataclass(kw_only=True)
 class GetRepoRequest:
     """The `GetRepoRequest` message."""
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetReviewDraftRequest:
+    """The `GetReviewDraftRequest` message."""
+    id: str = field(default="")
     repo: str = field(default="")
 
 
@@ -1888,6 +1907,17 @@ class Review:
 
 
 @dataclass(kw_only=True)
+class ReviewDraft:
+    """Private, unsubmitted review notes for the current acting identity only."""
+    body: str = field(default="")
+    decision: str = field(default="")
+    head: str = field(default="")
+    present: bool = field(default=False)
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class ReviewLineAnchor:
     """A line location is immutable; text is filled from the repository by the server."""
     base: str = field(default="")
@@ -2006,6 +2036,17 @@ class RunSpec:
     memory_mb: int = field(default=0)
     network: bool = field(default=False)
     timeout_secs: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class SaveReviewDraftRequest:
+    """The `SaveReviewDraftRequest` message."""
+    body: str = field(default="")
+    decision: str = field(default="")
+    expected_version: int = field(default=0)
+    head: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)

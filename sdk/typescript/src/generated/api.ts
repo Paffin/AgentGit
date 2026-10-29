@@ -97,12 +97,15 @@ export const NAMESPACE_METHODS = {
     get: 'operations.get',
   },
   proposals: {
+    clearDraft: 'proposal.clear_draft',
     close: 'proposal.close',
     comment: 'proposal.comment',
     create: 'proposal.create',
     get: 'proposal.get',
+    getDraft: 'proposal.get_draft',
     list: 'proposal.list',
     review: 'proposal.review',
+    saveDraft: 'proposal.save_draft',
     setReviewers: 'proposal.set_reviewers',
     threadComments: 'proposal.thread_comments',
     threadCreate: 'proposal.thread_create',
@@ -332,6 +335,8 @@ export interface Api {
     get(request: Req<'operations.get'>, options?: CallOptions): Promise<Res<'operations.get'>>;
   };
   readonly proposals: {
+    /** Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`) */
+    clearDraft(request: Req<'proposal.clear_draft'>, options?: CallOptions): Promise<Res<'proposal.clear_draft'>>;
     /** Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`) */
     close(request: Req<'proposal.close'>, options?: CallOptions): Promise<Res<'proposal.close'>>;
     /** Add an idempotent discussion comment at the inspected head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments`, operation `proposal.comment`) */
@@ -340,10 +345,14 @@ export interface Api {
     create(request: Req<'proposal.create'>, options?: CallOptions): Promise<Res<'proposal.create'>>;
     /** One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`) */
     get(request: Req<'proposal.get'>, options?: CallOptions): Promise<Res<'proposal.get'>>;
+    /** Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`) */
+    getDraft(request: Req<'proposal.get_draft'>, options?: CallOptions): Promise<Res<'proposal.get_draft'>>;
     /** List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`) */
     list(request: Req<'proposal.list'>, options?: CallOptions): Promise<Res<'proposal.list'>>;
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
+    /** Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`) */
+    saveDraft(request: Req<'proposal.save_draft'>, options?: CallOptions): Promise<Res<'proposal.save_draft'>>;
     /** Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`) */
     setReviewers(request: Req<'proposal.set_reviewers'>, options?: CallOptions): Promise<Res<'proposal.set_reviewers'>>;
     /** List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`) */

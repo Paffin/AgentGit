@@ -420,11 +420,19 @@ mod tests {
         for t in reg.all() {
             match t.group {
                 Group::Read => assert!(t.ann.read_only, "{} is in the read group so it must be read-only", t.name),
+                Group::Review if t.name == "review_draft_get" => {
+                    // Private notes require the review opt-in even though reading does not mutate them.
+                    assert!(t.ann.read_only);
+                }
                 _ => assert!(!t.ann.read_only, "{} changes state so it cannot be marked read-only", t.name),
             }
         }
         let destructive: Vec<&str> = reg.all().iter().filter(|t| t.ann.destructive).map(|t| t.name).collect();
-        assert_eq!(destructive, ["workspace_delete", "proposal_close", "integrate"], "{destructive:?}");
+        assert_eq!(
+            destructive,
+            ["workspace_delete", "proposal_close", "review_draft_clear", "integrate"],
+            "{destructive:?}"
+        );
     }
 
     #[test]

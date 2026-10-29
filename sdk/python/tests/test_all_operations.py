@@ -144,6 +144,7 @@ def test_policy(tour: dict[str, AgentGitClient]) -> None:
 
 
 def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, AgentGitClient]) -> None:
+    admin = tour["admin"]
     alice, bob, carol, ci = tour["alice"], tour["bob"], tour["carol"], tour["ci"]
     assert alice.workspaces.create(repo=REPO, name="w1", stream="main").name == "w1"
     assert "w1" in [w.name for w in alice.workspaces.list(repo=REPO).workspaces]
@@ -163,6 +164,21 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     assert request_review(alice, REPO, p1.id, ["user:bob"]).reviewers == ["user:bob"]
     assert bob.proposals.get(repo=REPO, id=p1.id).requested_reviewers == ["user:bob"]
     assert [p.id for p in reviews_requested_from(bob, REPO, "user:bob")] == [p1.id]
+    assert not bob.proposals.get_draft(repo=REPO, id=p1.id).present
+    private_draft = bob.proposals.save_draft(
+        repo=REPO, id=p1.id, expected_version=0, head=m2.head, decision="comment", body="Private draft"
+    )
+    assert private_draft.version == 1
+    assert not admin.proposals.get_draft(repo=REPO, id=p1.id).present
+    assert bob.proposals.get(repo=REPO, id=p1.id).reviews == []
+    with pytest.raises(FailedPreconditionError):
+        bob.proposals.save_draft(
+            repo=REPO, id=p1.id, expected_version=0, head=m2.head, decision="comment", body="Stale overwrite"
+        )
+    cleared_draft = bob.proposals.clear_draft(repo=REPO, id=p1.id, expected_version=private_draft.version)
+    assert not cleared_draft.present
+    assert cleared_draft.version == 2
+    assert bob.proposals.get_draft(repo=REPO, id=p1.id).body == ""
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
     assert (
         bob.proposals.comment(

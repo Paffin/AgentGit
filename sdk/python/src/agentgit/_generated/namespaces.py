@@ -27,6 +27,7 @@ from agentgit._generated.models import (
     Changeset,
     ClaimJobRequest,
     ClaimJobResponse,
+    ClearReviewDraftRequest,
     CloseProposalRequest,
     CommentProposalRequest,
     CompareAndSwapRequest,
@@ -72,6 +73,7 @@ from agentgit._generated.models import (
     GetPolicyRequest,
     GetProposalRequest,
     GetRepoRequest,
+    GetReviewDraftRequest,
     GetRunOutputRequest,
     GetRunRequest,
     GetTaskRequest,
@@ -189,6 +191,7 @@ from agentgit._generated.models import (
     ResolveRevResponse,
     ResolveReviewThreadRequest,
     Review,
+    ReviewDraft,
     ReviewLineAnchor,
     ReviewProposalRequest,
     ReviewThread,
@@ -201,6 +204,7 @@ from agentgit._generated.models import (
     RunQueueRequest,
     RunQueueResponse,
     RunSpec,
+    SaveReviewDraftRequest,
     SaveRunOutputRequest,
     SearchMatch,
     SearchTreeRequest,
@@ -1128,6 +1132,17 @@ class ProposalsApi:
     def __init__(self, caller: SyncCaller) -> None:
         self._c = caller
 
+    def clear_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`)."""
+        return self._c._call("proposal.clear_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, ReviewDraft)
+
     def close(
         self,
         *,
@@ -1177,6 +1192,16 @@ class ProposalsApi:
         """One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`)."""
         return self._c._call("proposal.get", {"repo": repo, "id": id}, options, ProposalDetail)
 
+    def get_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`)."""
+        return self._c._call("proposal.get_draft", {"repo": repo, "id": id}, options, ReviewDraft)
+
     def list(
         self,
         *,
@@ -1206,6 +1231,20 @@ class ProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    def save_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        decision: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`)."""
+        return self._c._call("proposal.save_draft", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_version": expected_version, "head": head}, options, ReviewDraft)
 
     def set_reviewers(
         self,
@@ -2765,6 +2804,17 @@ class AsyncProposalsApi:
     def __init__(self, caller: AsyncCaller) -> None:
         self._c = caller
 
+    async def clear_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`)."""
+        return await self._c._call("proposal.clear_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, ReviewDraft)
+
     async def close(
         self,
         *,
@@ -2814,6 +2864,16 @@ class AsyncProposalsApi:
         """One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`)."""
         return await self._c._call("proposal.get", {"repo": repo, "id": id}, options, ProposalDetail)
 
+    async def get_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`)."""
+        return await self._c._call("proposal.get_draft", {"repo": repo, "id": id}, options, ReviewDraft)
+
     async def list(
         self,
         *,
@@ -2843,6 +2903,20 @@ class AsyncProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    async def save_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        decision: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`)."""
+        return await self._c._call("proposal.save_draft", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_version": expected_version, "head": head}, options, ReviewDraft)
 
     async def set_reviewers(
         self,

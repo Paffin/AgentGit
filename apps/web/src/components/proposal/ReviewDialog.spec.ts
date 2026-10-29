@@ -7,11 +7,24 @@ import type { Proposal } from '@/api/types'
 import ReviewDialog from './ReviewDialog.vue'
 import { useToasts } from '@/stores/toasts'
 
-const auth = reactive({ identity: 'user:reviewer', token: 'review-token', status: 'ready' })
+const auth = reactive({
+  identity: 'user:reviewer',
+  token: 'review-token',
+  status: 'ready',
+  capabilities: { features: [] as string[] },
+})
 vi.mock('@/stores/auth', () => ({ useAuth: () => auth }))
 
-const { review, capabilities } = vi.hoisted(() => ({ review: vi.fn(), capabilities: vi.fn() }))
-vi.mock('@/api/instance', () => ({ api: { capabilities, proposals: { review } } }))
+const { review, capabilities, reviewDraft, saveReviewDraft, clearReviewDraft } = vi.hoisted(() => ({
+  review: vi.fn(),
+  capabilities: vi.fn(),
+  reviewDraft: vi.fn(),
+  saveReviewDraft: vi.fn(),
+  clearReviewDraft: vi.fn(),
+}))
+vi.mock('@/api/instance', () => ({
+  api: { capabilities, proposals: { review, reviewDraft, saveReviewDraft, clearReviewDraft } },
+}))
 
 const proposal: Proposal = {
   id: 'proposal-one',
@@ -40,6 +53,31 @@ function show() {
 beforeEach(() => {
   sessionStorage.clear()
   Object.assign(auth, { identity: 'user:reviewer', token: 'review-token', status: 'ready' })
+  auth.capabilities.features = []
+  reviewDraft.mockReset().mockResolvedValue({
+    present: false,
+    version: 0,
+    head: '',
+    decision: '',
+    body: '',
+    updated_at_ms: 0,
+  })
+  saveReviewDraft.mockReset().mockResolvedValue({
+    present: true,
+    version: 1,
+    head: 'head-one',
+    decision: 'comment',
+    body: 'Shared draft',
+    updated_at_ms: 1,
+  })
+  clearReviewDraft.mockReset().mockResolvedValue({
+    present: false,
+    version: 2,
+    head: '',
+    decision: '',
+    body: '',
+    updated_at_ms: 2,
+  })
   review.mockReset()
   capabilities.mockReset().mockResolvedValue({ features: ['proposals.review_head'] })
 })
@@ -527,4 +565,137 @@ it('keeps a rejected review and requests sign-in before sending it again', async
   await w.get('form').trigger('submit')
   expect(review).toHaveBeenCalledTimes(1)
   w.unmount()
+})
+
+describe('account review drafts', () => {
+  it('saves to the account and closes without submitting a review', async () => {
+    auth.capabilities.features = ['proposals.review_drafts']
+    reviewDraft.mockResolvedValue({
+      present: false,
+      version: 3,
+      head: '',
+      decision: '',
+      body: '',
+      updated_at_ms: 1,
+    })
+    const w = show()
+    await flushPromises()
+    await w.get('textarea').setValue('Shared draft')
+    await w.get('input[value="comment"]').setValue()
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Save draft and close')!
+      .trigger('click')
+    await flushPromises()
+    expect(saveReviewDraft).toHaveBeenCalledWith(
+      'acme/demo',
+      'proposal-one',
+      { head: 'head-one', decision: 'comment', body: 'Shared draft', expected_version: 3 },
+      expect.objectContaining({ token: 'review-token' }),
+    )
+    expect(review).not.toHaveBeenCalled()
+    expect(w.emitted('update:modelValue')).toEqual([[false]])
+    w.unmount()
+  })
+
+  it('restores a draft from another device while preserving its inspected head', async () => {
+    auth.capabilities.features = ['proposals.review_drafts']
+    reviewDraft.mockResolvedValue({
+      present: true,
+      version: 3,
+      head: 'old-head',
+      decision: 'request_changes',
+      body: 'Remote reasoning',
+      updated_at_ms: 1,
+    })
+    const w = show()
+    await flushPromises()
+    expect(w.get('textarea').element.value).toBe('Remote reasoning')
+    expect(w.text()).toContain('The proposal changed')
+    expect(w.get('button[type="submit"]').attributes('aria-disabled')).toBe('true')
+    expect(review).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it('retains a local draft until an account conflict is explicitly resolved', async () => {
+    let w = show()
+    await w.get('textarea').setValue('Local reasoning')
+    w.unmount()
+    auth.capabilities.features = ['proposals.review_drafts']
+    reviewDraft.mockResolvedValue({
+      present: true,
+      version: 4,
+      head: 'head-one',
+      decision: 'comment',
+      body: 'Other device reasoning',
+      updated_at_ms: 1,
+    })
+    w = show()
+    await flushPromises()
+    expect(w.get('textarea').element.value).toBe('Local reasoning')
+    expect(w.text()).toContain('Two drafts')
+    expect(w.get('.account-preview').text()).toContain('Comment · head head-one')
+    expect(
+      w
+        .findAll('button')
+        .find((button) => button.text() === 'Save draft and close')!
+        .attributes('aria-disabled'),
+    ).toBe('true')
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Use account draft')!
+      .trigger('click')
+    expect(w.get('textarea').element.value).toBe('Other device reasoning')
+    w.unmount()
+  })
+
+  it('keeps a draft visible when an inspected account version is refused', async () => {
+    auth.capabilities.features = ['proposals.review_drafts']
+    saveReviewDraft.mockRejectedValue(
+      new ApiError({ status: 412, code: 'failed_precondition', message: 'Review draft changed' }),
+    )
+    const w = show()
+    await flushPromises()
+    await w.get('textarea').setValue('Do not lose this text')
+    await w
+      .findAll('button')
+      .find((button) => button.text() === 'Save draft and close')!
+      .trigger('click')
+    await flushPromises()
+    expect(w.get('textarea').element.value).toBe('Do not lose this text')
+    expect(w.text()).toContain('Review draft changed')
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    w.unmount()
+  })
+
+  it('reports a successful review even when a newer account draft prevents cleanup', async () => {
+    auth.capabilities.features = ['proposals.review_drafts']
+    reviewDraft.mockResolvedValue({
+      present: true,
+      version: 4,
+      head: 'head-one',
+      decision: 'comment',
+      body: 'Ready to submit',
+      updated_at_ms: 1,
+    })
+    review.mockResolvedValue({})
+    clearReviewDraft.mockRejectedValue(
+      new ApiError({ status: 412, code: 'failed_precondition', message: 'A newer draft is saved' }),
+    )
+    const w = show()
+    await flushPromises()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(review).toHaveBeenCalledTimes(1)
+    expect(clearReviewDraft).toHaveBeenCalledWith(
+      'acme/demo',
+      'proposal-one',
+      4,
+      expect.objectContaining({ token: 'review-token' }),
+    )
+    expect(w.emitted('done')).toEqual([[]])
+    expect(useToasts().items.some((toast) => toast.title === 'Comment added')).toBe(true)
+    expect(w.get('textarea').element.value).toBe('')
+    w.unmount()
+  })
 })

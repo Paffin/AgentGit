@@ -34,7 +34,7 @@ struct Cli {
     #[arg(long = "repo", env = "AG_MCP_REPO", value_delimiter = ',')]
     repos: Vec<String>,
 
-    /// Tool groups to switch on, comma-separated: read, workspace, propose, coordinate, discuss, review.
+    /// Tool groups to switch on, comma-separated: read, workspace, propose, coordinate, discuss, review, issue.
     /// Default: read,workspace,propose,coordinate,discuss.
     #[arg(long, env = "AG_MCP_ALLOW", value_delimiter = ',')]
     allow: Vec<String>,

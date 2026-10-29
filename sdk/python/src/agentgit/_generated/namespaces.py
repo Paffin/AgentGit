@@ -14,6 +14,7 @@ from agentgit._generated.models import (
     Agent,
     AncestorsRequest,
     AncestorsResponse,
+    ApplyIssueImportRequest,
     AssignTaskRequest,
     Attestation,
     AuditEntry,
@@ -27,13 +28,19 @@ from agentgit._generated.models import (
     Changeset,
     ClaimJobRequest,
     ClaimJobResponse,
+    ClearCommentDraftRequest,
+    ClearFileDraftRequest,
+    ClearReviewDraftRequest,
     CloseProposalRequest,
+    CommentDraft,
     CommentProposalRequest,
     CompareAndSwapRequest,
     CompleteJobRequest,
     CompleteRunRequest,
     ConfigureRepoRequest,
     Conflict,
+    ConflictOrigin,
+    ConflictResolutionScope,
     CreateIssueRequest,
     CreateProposalRequest,
     CreateRepoRequest,
@@ -52,11 +59,14 @@ from agentgit._generated.models import (
     ErrorEnvelope,
     ErrorInfo,
     Event,
+    EventEnvelope,
     ExecutorPresence,
     ExtendLeaseRequest,
     FailJobRequest,
     FileChange,
     FileDiff,
+    FileDraft,
+    FileDraftSummary,
     FileOp,
     FinishTaskRequest,
     FsckIssue,
@@ -66,12 +76,15 @@ from agentgit._generated.models import (
     GcResponse,
     GetCandidateRequest,
     GetChangesetRequest,
+    GetCommentDraftRequest,
+    GetFileDraftRequest,
     GetIssueRequest,
     GetJobRequest,
     GetOperationRequest,
     GetPolicyRequest,
     GetProposalRequest,
     GetRepoRequest,
+    GetReviewDraftRequest,
     GetRunOutputRequest,
     GetRunRequest,
     GetTaskRequest,
@@ -85,11 +98,14 @@ from agentgit._generated.models import (
     HeartbeatJobRequest,
     HeartbeatRequest,
     HeartbeatResponse,
+    ImportedIssueMapping,
     IntegrateRequest,
     IntegrationOutcome,
     IntegrationResult,
     Issue,
     IssueActivity,
+    IssueImportPreview,
+    IssueImportResult,
     Job,
     Lease,
     LeaseRef,
@@ -104,6 +120,8 @@ from agentgit._generated.models import (
     ListCredentialsResponse,
     ListDirectoryRequest,
     ListDirectoryResponse,
+    ListFileDraftsRequest,
+    ListFileDraftsResponse,
     ListIssueActivityRequest,
     ListIssueActivityResponse,
     ListIssuesRequest,
@@ -160,6 +178,7 @@ from agentgit._generated.models import (
     PredictResponse,
     Preparation,
     PrepareRequest,
+    PreviewIssueImportRequest,
     Principal,
     Proposal,
     ProposalDetail,
@@ -176,18 +195,22 @@ from agentgit._generated.models import (
     ReflogRequest,
     ReflogResponse,
     RegisterAgentRequest,
+    ReplayManyRequest,
+    ReplayManyResponse,
     ReplayRequest,
     ReplayResponse,
     Repo,
     ReportExecutorRequest,
     RequestValidationRequest,
     RequestValidationResponse,
+    RequestedReviewers,
     ResolvePathRequest,
     ResolvePathResponse,
     ResolveRevRequest,
     ResolveRevResponse,
     ResolveReviewThreadRequest,
     Review,
+    ReviewDraft,
     ReviewLineAnchor,
     ReviewProposalRequest,
     ReviewThread,
@@ -200,12 +223,16 @@ from agentgit._generated.models import (
     RunQueueRequest,
     RunQueueResponse,
     RunSpec,
+    SaveCommentDraftRequest,
+    SaveFileDraftRequest,
+    SaveReviewDraftRequest,
     SaveRunOutputRequest,
     SearchMatch,
     SearchTreeRequest,
     SearchTreeResponse,
     SetAgentStateRequest,
     SetPolicyRequest,
+    SetRequestedReviewersRequest,
     SetTaskAttemptLimitRequest,
     SetTaskSchedulingRequest,
     StartRunRequest,
@@ -564,6 +591,63 @@ class CredentialsApi:
 
 
 
+class DraftsApi:
+    """The `drafts` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: SyncCaller) -> None:
+        self._c = caller
+
+    def clear(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`)."""
+        return self._c._call("file_draft.clear", {"repo": repo, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+    def get(
+        self,
+        *,
+        repo: str,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`)."""
+        return self._c._call("file_draft.get", {"repo": repo, "path": path, "stream": stream}, options, FileDraft)
+
+    def list(
+        self,
+        *,
+        repo: str,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListFileDraftsResponse:
+        """List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`)."""
+        return self._c._call("file_draft.list", {"repo": repo, "stream": stream}, options, ListFileDraftsResponse)
+
+    def save(
+        self,
+        *,
+        repo: str,
+        base: str | None = None,
+        content: str | None = None,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`)."""
+        return self._c._call("file_draft.save", {"repo": repo, "base": base, "content": content, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+
+
 class EventsApi:
     """The `events` operations."""
 
@@ -583,6 +667,19 @@ class EventsApi:
     ) -> ReplayResponse:
         """Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`)."""
         return self._c._call("events.replay", {"repo": repo, "after_seq": after_seq, "limit": limit, "topics": topics}, options, ReplayResponse)
+
+    def replay_many(
+        self,
+        *,
+        cursor: str | None = None,
+        from_start: bool | None = None,
+        limit: int | None = None,
+        repos: Sequence[str] | None = None,
+        topics: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> ReplayManyResponse:
+        """Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`)."""
+        return self._c._call("events.replay_many", {"cursor": cursor, "from_start": from_start, "limit": limit, "repos": repos, "topics": topics}, options, ReplayManyResponse)
 
     def subscribe(
         self,
@@ -604,6 +701,18 @@ class EventsApi:
             idle_timeout_ms=idle_timeout_ms,
             reconnect=reconnect,
             run_id=run_id,
+        )
+
+    def subscribe_many(
+        self, *, repos: Sequence[str], cursor: str | None = None,
+        topics: Sequence[str] | None = None, heartbeat_ms: int | None = None,
+        idle_timeout_ms: int | None = None, reconnect: ReconnectPolicy | None = None,
+        run_id: str | None = None,
+    ) -> Generator[EventEnvelope, None, None]:
+        """Follow explicit repositories with opaque cursor resume; yields checkpoints too."""
+        return self._c._subscribe_many(
+            repos=repos, cursor=cursor, topics=topics, heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms, reconnect=reconnect, run_id=run_id,
         )
 
 
@@ -810,6 +919,28 @@ class IssuesApi:
     ) -> Issue:
         """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
         return self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    def import_apply(
+        self,
+        *,
+        repo: str,
+        allow_unsupported: bool | None = None,
+        expected_digest: str | None = None,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportResult:
+        """Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`)."""
+        return self._c._call("issue.import_apply", {"repo": repo, "allow_unsupported": allow_unsupported, "expected_digest": expected_digest, "manifest_json": manifest_json}, options, IssueImportResult)
+
+    def import_preview(
+        self,
+        *,
+        repo: str,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportPreview:
+        """Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`)."""
+        return self._c._call("issue.import_preview", {"repo": repo, "manifest_json": manifest_json}, options, IssueImportPreview)
 
     def list(
         self,
@@ -1126,6 +1257,28 @@ class ProposalsApi:
     def __init__(self, caller: SyncCaller) -> None:
         self._c = caller
 
+    def clear_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Clear the inspected private comment draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.clear_comment_draft`)."""
+        return self._c._call("proposal.clear_comment_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, CommentDraft)
+
+    def clear_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`)."""
+        return self._c._call("proposal.clear_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, ReviewDraft)
+
     def close(
         self,
         *,
@@ -1175,6 +1328,26 @@ class ProposalsApi:
         """One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`)."""
         return self._c._call("proposal.get", {"repo": repo, "id": id}, options, ProposalDetail)
 
+    def get_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Read your private comment draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.get_comment_draft`)."""
+        return self._c._call("proposal.get_comment_draft", {"repo": repo, "id": id}, options, CommentDraft)
+
+    def get_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`)."""
+        return self._c._call("proposal.get_draft", {"repo": repo, "id": id}, options, ReviewDraft)
+
     def list(
         self,
         *,
@@ -1182,13 +1355,14 @@ class ProposalsApi:
         author: str | None = None,
         page_size: int | None = None,
         page_token: str | None = None,
+        requested_reviewer: str | None = None,
         state: str | None = None,
         stream: str | None = None,
         task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
+        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "requested_reviewer": requested_reviewer, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     def review(
         self,
@@ -1203,6 +1377,45 @@ class ProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    def save_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Save your private comment draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.save_comment_draft`)."""
+        return self._c._call("proposal.save_comment_draft", {"repo": repo, "id": id, "body": body, "expected_version": expected_version, "head": head}, options, CommentDraft)
+
+    def save_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        decision: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`)."""
+        return self._c._call("proposal.save_draft", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_version": expected_version, "head": head}, options, ReviewDraft)
+
+    def set_reviewers(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_reviewers: Sequence[str] | None = None,
+        reviewers: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> RequestedReviewers:
+        """Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`)."""
+        return self._c._call("proposal.set_reviewers", {"repo": repo, "id": id, "expected_reviewers": expected_reviewers, "reviewers": reviewers}, options, RequestedReviewers)
 
     def thread_comments(
         self,
@@ -1852,12 +2065,13 @@ class WorkspacesApi:
         *,
         repo: str,
         name: str,
+        expected_stream_head: str | None = None,
         idempotency_key: str | None = None,
         resolutions: Sequence[FileChange | Mapping[str, Any]] | None = None,
         options: CallOptions | None = None,
     ) -> SyncWorkspaceResponse:
         """Bring the stream head into the workspace (with optional conflict resolutions) (`POST /v1/repos/{owner}/{rname}/workspaces/{name}/sync`, operation `workspace.sync`)."""
-        return self._c._call("workspace.sync", {"repo": repo, "name": name, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
+        return self._c._call("workspace.sync", {"repo": repo, "name": name, "expected_stream_head": expected_stream_head, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
 
 
 
@@ -2187,6 +2401,63 @@ class AsyncCredentialsApi:
 
 
 
+class AsyncDraftsApi:
+    """The `drafts` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: AsyncCaller) -> None:
+        self._c = caller
+
+    async def clear(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`)."""
+        return await self._c._call("file_draft.clear", {"repo": repo, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+    async def get(
+        self,
+        *,
+        repo: str,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`)."""
+        return await self._c._call("file_draft.get", {"repo": repo, "path": path, "stream": stream}, options, FileDraft)
+
+    async def list(
+        self,
+        *,
+        repo: str,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListFileDraftsResponse:
+        """List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`)."""
+        return await self._c._call("file_draft.list", {"repo": repo, "stream": stream}, options, ListFileDraftsResponse)
+
+    async def save(
+        self,
+        *,
+        repo: str,
+        base: str | None = None,
+        content: str | None = None,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`)."""
+        return await self._c._call("file_draft.save", {"repo": repo, "base": base, "content": content, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+
+
 class AsyncEventsApi:
     """The `events` operations."""
 
@@ -2206,6 +2477,19 @@ class AsyncEventsApi:
     ) -> ReplayResponse:
         """Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`)."""
         return await self._c._call("events.replay", {"repo": repo, "after_seq": after_seq, "limit": limit, "topics": topics}, options, ReplayResponse)
+
+    async def replay_many(
+        self,
+        *,
+        cursor: str | None = None,
+        from_start: bool | None = None,
+        limit: int | None = None,
+        repos: Sequence[str] | None = None,
+        topics: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> ReplayManyResponse:
+        """Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`)."""
+        return await self._c._call("events.replay_many", {"cursor": cursor, "from_start": from_start, "limit": limit, "repos": repos, "topics": topics}, options, ReplayManyResponse)
 
     def subscribe(
         self,
@@ -2227,6 +2511,18 @@ class AsyncEventsApi:
             idle_timeout_ms=idle_timeout_ms,
             reconnect=reconnect,
             run_id=run_id,
+        )
+
+    def subscribe_many(
+        self, *, repos: Sequence[str], cursor: str | None = None,
+        topics: Sequence[str] | None = None, heartbeat_ms: int | None = None,
+        idle_timeout_ms: int | None = None, reconnect: ReconnectPolicy | None = None,
+        run_id: str | None = None,
+    ) -> AsyncGenerator[EventEnvelope, None]:
+        """Follow explicit repositories with opaque cursor resume; yields checkpoints too."""
+        return self._c._subscribe_many(
+            repos=repos, cursor=cursor, topics=topics, heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms, reconnect=reconnect, run_id=run_id,
         )
 
 
@@ -2433,6 +2729,28 @@ class AsyncIssuesApi:
     ) -> Issue:
         """Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`)."""
         return await self._c._call("issue.get", {"repo": repo, "number": number}, options, Issue)
+
+    async def import_apply(
+        self,
+        *,
+        repo: str,
+        allow_unsupported: bool | None = None,
+        expected_digest: str | None = None,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportResult:
+        """Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`)."""
+        return await self._c._call("issue.import_apply", {"repo": repo, "allow_unsupported": allow_unsupported, "expected_digest": expected_digest, "manifest_json": manifest_json}, options, IssueImportResult)
+
+    async def import_preview(
+        self,
+        *,
+        repo: str,
+        manifest_json: str | None = None,
+        options: CallOptions | None = None,
+    ) -> IssueImportPreview:
+        """Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`)."""
+        return await self._c._call("issue.import_preview", {"repo": repo, "manifest_json": manifest_json}, options, IssueImportPreview)
 
     async def list(
         self,
@@ -2749,6 +3067,28 @@ class AsyncProposalsApi:
     def __init__(self, caller: AsyncCaller) -> None:
         self._c = caller
 
+    async def clear_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Clear the inspected private comment draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.clear_comment_draft`)."""
+        return await self._c._call("proposal.clear_comment_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, CommentDraft)
+
+    async def clear_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_version: int | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`)."""
+        return await self._c._call("proposal.clear_draft", {"repo": repo, "id": id, "expected_version": expected_version}, options, ReviewDraft)
+
     async def close(
         self,
         *,
@@ -2798,6 +3138,26 @@ class AsyncProposalsApi:
         """One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`)."""
         return await self._c._call("proposal.get", {"repo": repo, "id": id}, options, ProposalDetail)
 
+    async def get_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Read your private comment draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.get_comment_draft`)."""
+        return await self._c._call("proposal.get_comment_draft", {"repo": repo, "id": id}, options, CommentDraft)
+
+    async def get_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`)."""
+        return await self._c._call("proposal.get_draft", {"repo": repo, "id": id}, options, ReviewDraft)
+
     async def list(
         self,
         *,
@@ -2805,13 +3165,14 @@ class AsyncProposalsApi:
         author: str | None = None,
         page_size: int | None = None,
         page_token: str | None = None,
+        requested_reviewer: str | None = None,
         state: str | None = None,
         stream: str | None = None,
         task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
+        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "requested_reviewer": requested_reviewer, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     async def review(
         self,
@@ -2826,6 +3187,45 @@ class AsyncProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    async def save_comment_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> CommentDraft:
+        """Save your private comment draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.save_comment_draft`)."""
+        return await self._c._call("proposal.save_comment_draft", {"repo": repo, "id": id, "body": body, "expected_version": expected_version, "head": head}, options, CommentDraft)
+
+    async def save_draft(
+        self,
+        *,
+        repo: str,
+        id: str,
+        body: str | None = None,
+        decision: str | None = None,
+        expected_version: int | None = None,
+        head: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ReviewDraft:
+        """Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`)."""
+        return await self._c._call("proposal.save_draft", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_version": expected_version, "head": head}, options, ReviewDraft)
+
+    async def set_reviewers(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_reviewers: Sequence[str] | None = None,
+        reviewers: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> RequestedReviewers:
+        """Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`)."""
+        return await self._c._call("proposal.set_reviewers", {"repo": repo, "id": id, "expected_reviewers": expected_reviewers, "reviewers": reviewers}, options, RequestedReviewers)
 
     async def thread_comments(
         self,
@@ -3475,9 +3875,10 @@ class AsyncWorkspacesApi:
         *,
         repo: str,
         name: str,
+        expected_stream_head: str | None = None,
         idempotency_key: str | None = None,
         resolutions: Sequence[FileChange | Mapping[str, Any]] | None = None,
         options: CallOptions | None = None,
     ) -> SyncWorkspaceResponse:
         """Bring the stream head into the workspace (with optional conflict resolutions) (`POST /v1/repos/{owner}/{rname}/workspaces/{name}/sync`, operation `workspace.sync`)."""
-        return await self._c._call("workspace.sync", {"repo": repo, "name": name, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)
+        return await self._c._call("workspace.sync", {"repo": repo, "name": name, "expected_stream_head": expected_stream_head, "idempotency_key": idempotency_key, "resolutions": resolutions}, options, SyncWorkspaceResponse)

@@ -148,6 +148,9 @@ pub enum ProposalCmd {
         /// Filter by state: open, integrated, closed.
         #[arg(long)]
         state: Option<String>,
+        /// Only proposals that request this reviewer, matched before the limit.
+        #[arg(long, value_name = "IDENTITY")]
+        requested_reviewer: Option<String>,
         /// Show at most this many (0 = all).
         #[arg(short = 'n', long, default_value_t = 200)]
         limit: usize,
@@ -157,6 +160,8 @@ pub enum ProposalCmd {
         /// Proposal id.
         id: String,
     },
+    /// Inspect, add or remove requested reviewers (no approval or access change).
+    Reviewers(crate::cmds::reviewers::ReviewersArgs),
     /// Review the proposal's current head.
     Review {
         /// Proposal id.
@@ -193,8 +198,18 @@ pub enum ProposalCmd {
 
 pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
     match cmd {
-        ProposalCmd::List { state, limit } => {
-            let list = ctx.repo.meta().read(|tx| tx.proposals_list(state.as_deref(), Ctx::cap(*limit)))?;
+        ProposalCmd::List { state, requested_reviewer, limit } => {
+            let requested_reviewer = requested_reviewer
+                .as_deref()
+                .map(crate::cmds::reviewers::reviewer_identity)
+                .transpose()?
+                .map(|identity| identity.to_string());
+            let filter = ag_storage::meta::ProposalFilter {
+                state: state.as_deref(),
+                requested_reviewer: requested_reviewer.as_deref(),
+                ..Default::default()
+            };
+            let list = ctx.repo.meta().read(|tx| tx.proposals_page(&filter, None, Ctx::cap(*limit)))?;
             ctx.note_cap(list.len(), *limit, "proposals");
             if list.is_empty() {
                 ctx.note("no proposals match; `ag propose -t TITLE` opens one");
@@ -219,7 +234,8 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
         ProposalCmd::Show { id } => {
             let p = ctx.repo.find_proposal(id)?;
             let reviews = ctx.repo.meta().read(|tx| tx.reviews(&p.id))?;
-            ctx.out(&json!({"proposal": p, "reviews": reviews}), || {
+            let requested_reviewers = ctx.repo.requested_reviewers(&p.id)?;
+            ctx.out(&json!({"proposal": p, "reviews": reviews, "requested_reviewers": requested_reviewers}), || {
                 let mut s = format!(
                     "{}  [{}]\n  {}\n  head {} -> stream '{}'\n  author {}\n",
                     p.id, p.state, p.title, p.head, p.stream, p.author
@@ -227,6 +243,7 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
                 if !p.description.is_empty() {
                     let _ = writeln!(s, "\n{}\n", p.description);
                 }
+                let _ = writeln!(s, "{}", crate::cmds::reviewers::describe(&requested_reviewers));
                 for r in &reviews {
                     let current = if r.head == p.head { "" } else { "  (stale: older head)" };
                     let _ = writeln!(
@@ -241,6 +258,7 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
                 s
             })?;
         }
+        ProposalCmd::Reviewers(args) => return crate::cmds::reviewers::local(ctx, args),
         ProposalCmd::Review { id, approve, request_changes, comment, message } => {
             let decision = match (approve, request_changes, comment) {
                 (true, _, _) => "approve",
@@ -321,7 +339,7 @@ pub fn print_result(ctx: &Ctx, r: &IntegrationResult, proposal: Option<&str>, co
                 let _ =
                     writeln!(s, "Conflict: the proposal cannot be merged automatically; the stream was not changed.");
                 for c in conflicts {
-                    let _ = writeln!(s, "  {}  ({})", c.path, c.describe());
+                    let _ = writeln!(s, "  {}  ({}){}", c.path, c.describe(), crate::cmds::conflicts::local_sources(c));
                 }
                 if let Some(b) = base {
                     let _ = writeln!(s, "merge base: {}", b.short());
@@ -393,7 +411,7 @@ pub fn preview(ctx: &Ctx, a: &PreviewArgs) -> Result<u8> {
             let _ = writeln!(s, "candidate tree: {t}");
         }
         for c in &pv.conflicts {
-            let _ = writeln!(s, "conflict: {} ({})", c.path, c.describe());
+            let _ = writeln!(s, "conflict: {}", crate::cmds::conflicts::local(c));
         }
         for n in &pv.notes {
             let _ = writeln!(s, "note: {}", n.message);

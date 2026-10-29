@@ -654,7 +654,11 @@ pub fn pull(ctx: &Ctx, a: &SyncArgs) -> Result<u8> {
         Some(SyncOutcome::FastForwarded { to }) => format!("Fast-forwarded the workspace to {}.", to.short()),
         Some(SyncOutcome::Merged { id }) => format!("Merged remote changes into the workspace ({}).", id.short()),
         Some(SyncOutcome::Conflicted { conflicts }) => {
-            format!("Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.", conflicts.len())
+            format!(
+                "Merged with {} conflict(s); resolve the marked files, then `ag snapshot`.\n{}",
+                conflicts.len(),
+                conflicts.iter().map(crate::cmds::conflicts::local).collect::<Vec<_>>().join("\n")
+            )
         }
     };
     ctx.done(&serde_json::json!({"fetch": report, "workspace": outcome}), || text.clone())?;
@@ -786,6 +790,9 @@ pub enum RemoteCmd {
         /// Filter: open, integrated, closed.
         #[arg(long)]
         state: Option<String>,
+        /// Only proposals that request this reviewer, matched before paging.
+        #[arg(long, value_name = "IDENTITY")]
+        requested_reviewer: Option<String>,
     },
     /// Show a proposal with its reviews.
     Proposal {
@@ -804,6 +811,23 @@ pub enum RemoteCmd {
     Explain {
         /// Proposal id (any unique prefix).
         id: String,
+    },
+    /// Inspect, add or remove requested reviewers (no approval or access change).
+    Reviewers(crate::cmds::reviewers::ReviewersArgs),
+    /// Save or restore your private account review notes without submitting them.
+    ReviewDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::review_drafts::ReviewDraftCmd,
+    },
+    /// Save or restore private file edits without publishing a changeset.
+    FileDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::file_drafts::FileDraftCmd,
+    },
+    /// Save or restore a private general comment without posting it.
+    CommentDraft {
+        #[command(subcommand)]
+        cmd: crate::cmds::comment_drafts::CommentDraftCmd,
     },
     /// Review a proposal's current head.
     Review {
@@ -827,6 +851,11 @@ pub enum RemoteCmd {
         #[command(subcommand)]
         cmd: crate::cmds::discussions::DiscussionCmd,
     },
+    /// Inspect and explicitly sync server-side workspaces without a checkout.
+    Workspace {
+        #[command(subcommand)]
+        cmd: crate::cmds::virtual_workspaces::WorkspaceCmd,
+    },
     /// Integrate a proposal into its stream.
     Integrate {
         /// Proposal id.
@@ -840,10 +869,14 @@ pub enum RemoteCmd {
         /// Proposal id.
         id: String,
     },
+    /// Preview or explicitly apply a normalized GitHub/GitLab issue manifest.
+    ImportIssues(crate::cmds::issue_import::ImportArgs),
     /// List streams.
     Streams,
     /// Show the events of the repository (replay), or follow them live.
     Events {
+        #[command(flatten)]
+        feed: crate::cmds::event_feed::FeedArgs,
         /// Replay events after this sequence number.
         #[arg(long, default_value_t = 0)]
         after: u64,
@@ -1088,7 +1121,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     format!("{} ({}, via {})\nroles: {}", p.identity, p.kind, p.method, p.roles.join(", "))
                 })?;
             }
-            RemoteCmd::Proposals { state } => {
+            RemoteCmd::Proposals { state, requested_reviewer } => {
+                if requested_reviewer.is_some() {
+                    crate::cmds::reviewers::require_support(&c).await?;
+                }
+                let requested_reviewer = requested_reviewer.as_deref()
+                    .map(crate::cmds::reviewers::reviewer_identity)
+                    .transpose()?
+                    .map(|identity| identity.to_string());
                 // Every page: a repository with more proposals than one page must not be silently cut short.
                 let mut all = Vec::new();
                 let mut token = String::new();
@@ -1098,6 +1138,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .list(c.req(v1::ListProposalsRequest {
                             repo: repo.clone(),
                             state: state.clone().unwrap_or_default(),
+                            requested_reviewer: requested_reviewer.clone().unwrap_or_default(),
                             page_size: ag_protocol::limits::MAX_PAGE_SIZE,
                             page_token: token,
                             ..Default::default()
@@ -1149,6 +1190,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         &p.head[..12],
                         p.author
                     );
+                    t.push_str(&format!("{}\n", crate::cmds::reviewers::describe(&d.requested_reviewers)));
                     for r in &d.reviews {
                         t.push_str(&format!(
                             "  review: {} by {} on {}  {}\n",
@@ -1177,11 +1219,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 print(cli, &p, || {
                     let mut t = format!("strategy: {}\ncandidate tree: {}\n", p.strategy, p.candidate_tree);
                     for cf in &p.conflicts {
-                        t.push_str(&format!(
-                            "conflict: {} ({})\n",
-                            cf.path,
-                            if cf.message.is_empty() { &cf.kind } else { &cf.message }
-                        ));
+                        t.push_str(&format!("conflict: {}\n", crate::cmds::conflicts::wire(cf)));
                     }
                     if !p.problem.is_empty() {
                         t.push_str(&format!("problem: {}\n", p.problem));
@@ -1207,6 +1245,38 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     return Ok(exit::BLOCKED);
                 }
             }
+            RemoteCmd::Reviewers(args) => {
+                let result = crate::cmds::reviewers::remote(&c, &repo, args).await?;
+                if args.changes_state() {
+                    print_done(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
+                } else {
+                    print(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
+                }
+            }
+            RemoteCmd::ReviewDraft { cmd } => {
+                let result = crate::cmds::review_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::review_drafts::describe(&result))?;
+                }
+            }
+            RemoteCmd::FileDraft { cmd } => {
+                let result = crate::cmds::file_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::file_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::file_drafts::describe(&result))?;
+                }
+            }
+            RemoteCmd::CommentDraft { cmd } => {
+                let result = crate::cmds::comment_drafts::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() {
+                    print_done(cli, &result, || crate::cmds::comment_drafts::describe(&result))?;
+                } else {
+                    print(cli, &result, || crate::cmds::comment_drafts::describe(&result))?;
+                }
+            }
             RemoteCmd::Review { id, approve, request_changes, comment, message } => {
                 let decision = match (approve, request_changes, comment) {
                     (true, _, _) => "approve",
@@ -1221,6 +1291,12 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 let (value, message) = crate::cmds::discussions::run(&c, &repo, cmd).await?;
                 if cmd.changes_state() { print_done(cli, &value, || message)?; }
                 else { print(cli, &value, || message)?; }
+            }
+            RemoteCmd::Workspace { cmd } => {
+                let (value, message, conflicted) = crate::cmds::virtual_workspaces::run(&c, &repo, cmd).await?;
+                if cmd.changes_state() && !conflicted { print_done(cli, &value, || message)?; }
+                else { print(cli, &value, || message)?; }
+                if conflicted { return Ok(exit::REFUSED); }
             }
             RemoteCmd::Integrate { id, fencing_tokens } => {
                 let res = c
@@ -1253,11 +1329,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         "Conflict:\n{}",
                         o.conflicts
                             .iter()
-                            .map(|c| format!(
-                                "  - {} ({})",
-                                c.path,
-                                if c.message.is_empty() { &c.kind } else { &c.message }
-                            ))
+                            .map(|c| format!("  - {}", crate::cmds::conflicts::wire(c)))
                             .collect::<Vec<_>>()
                             .join("\n")
                     ),
@@ -1288,6 +1360,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     .into_inner();
                 print_done(cli, &p, || format!("Closed {}.", p.id))?;
             }
+            RemoteCmd::ImportIssues(args) => {
+                let result = crate::cmds::issue_import::run(&c, &repo, args).await?;
+                if args.apply {
+                    print_done(cli, &result, || crate::cmds::issue_import::describe(&result, true))?;
+                } else {
+                    print(cli, &result, || crate::cmds::issue_import::describe(&result, false))?;
+                }
+            }
             RemoteCmd::Streams => {
                 let r = c.streams().list(c.req(v1::ListStreamsRequest { repo })).await.map_err(s)?.into_inner();
                 print(cli, &r, || {
@@ -1306,8 +1386,10 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .join("\n")
                 })?;
             }
-            RemoteCmd::Events { after, topics, follow } => {
-                if *follow {
+            RemoteCmd::Events { after, topics, follow, feed } => {
+                if !feed.repos.is_empty() {
+                    crate::cmds::event_feed::run(&c, cli, feed, topics, *follow, *after).await?;
+                } else if *follow {
                     let mut stream = c
                         .events()
                         .subscribe(tonic::Request::new(v1::SubscribeRequest {

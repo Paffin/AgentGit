@@ -34,6 +34,7 @@
 //! backend only decides how a transaction is opened and closed.
 
 pub mod db;
+mod issue_imports;
 mod issues;
 mod jobs;
 mod migrate;
@@ -42,10 +43,13 @@ mod review_threads;
 
 mod agents;
 mod changesets;
+mod comment_drafts;
 mod derived;
+mod file_drafts;
 mod intents;
 mod outbox;
 mod records;
+mod review_drafts;
 mod streams;
 
 use std::fmt::Display;
@@ -63,8 +67,11 @@ use db::{Conn, SqliteConn, params};
 
 pub use agents::{AgentRow, LeaseRow, ProvenanceRow, QueueRow, RunRow, TaskRow};
 pub use changesets::ChangesetInfo;
+pub use comment_drafts::CommentDraftRow;
 pub use db::{Dialect, Param, Row, Value};
+pub use file_drafts::FileDraftRow;
 pub use intents::{IntentRow, IntentState, NewIntent};
+pub use issue_imports::IssueImportRow;
 pub use issues::{IssueActivityRow, IssueFilter, IssueRow};
 pub use jobs::{DEFAULT_JOB_ATTEMPTS, JobRow, JobState, NewJob};
 pub use migrate::{Migration, SCHEMA_VERSION};
@@ -73,6 +80,7 @@ pub use pg::{PgOptions, advisory_key, drop_schema, url_has_password, validate_sc
 pub use records::{
     AttestationRow, NewProposal, PinRow, PolicyRow, ProposalFilter, ProposalRow, ReviewRow, WorkspaceRow,
 };
+pub use review_drafts::ReviewDraftRow;
 pub use review_threads::{ReviewThreadAnchorRow, ReviewThreadRow, ThreadCommentRow};
 pub use streams::{ReflogEntry, StreamRow, StreamState};
 

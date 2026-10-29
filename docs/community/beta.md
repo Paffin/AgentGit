@@ -2,7 +2,7 @@
 
 AgentGit offers an early public beta for small teams working with coding agents. The goal is to let a team review and land agent changes with checks tied to the exact candidate tree and a clear explanation when policy blocks a change.
 
-**Current status: early public beta (`0.3.0-beta.5`).** This opens the supported single-server workflow to early adopters; it does not claim independent pilot results or production readiness. The remaining qualification gates below stay visible.
+**Current status: early public beta (`0.3.0-beta.7`).** This opens the supported single-server workflow to early adopters; it does not claim independent pilot results or production readiness. The remaining qualification gates below stay visible.
 
 ## Supported beta target
 

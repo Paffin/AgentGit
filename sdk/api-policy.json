@@ -6,7 +6,8 @@
       "tree.diff",
       "objects.missing",
       "objects.verify",
-      "admin.fsck"
+      "admin.fsck",
+      "issue.import_preview"
     ],
     "keyed": [
       "repo.create",
@@ -51,11 +52,19 @@
       "task.depend",
       "task.finish",
       "workspace.delete",
-      "workspace.sync",
-      "migration.commit"
+      "migration.commit",
+      "proposal.set_reviewers",
+      "proposal.save_draft",
+      "proposal.clear_draft",
+      "proposal.save_comment_draft",
+      "proposal.clear_comment_draft",
+      "file_draft.save",
+      "file_draft.clear",
+      "issue.import_apply"
     ],
     "naturalWhenFieldPresent": {
-      "workspace.modify": "expected_head"
+      "workspace.modify": "expected_head",
+      "workspace.sync": "expected_stream_head"
     }
   },
   "alwaysPresent": {
@@ -96,6 +105,7 @@
     "admin.roles": "roles",
     "admin": "admin",
     "migration": "migrations",
-    "issue": "issues"
+    "issue": "issues",
+    "file_draft": "drafts"
   }
 }

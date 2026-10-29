@@ -7,6 +7,8 @@ import type {
   Agent,
   Issue,
   IssueActivity,
+  IssueImportPreview,
+  IssueImportResult,
   AuditEntry,
   AuthConfig,
   Capabilities,
@@ -33,6 +35,10 @@ import type {
   Repo,
   Req,
   Review,
+  ReviewDraft,
+  CommentDraft,
+  FileDraft,
+  FileDraftSummary,
   ReviewThread,
   ThreadComment,
   RoleBinding,
@@ -62,6 +68,19 @@ export function createApi(c: ApiClient) {
   const r = repoPath
   return {
     client: c,
+    files: {
+      draft: (repo: string, stream: string, path: string, options?: SessionOpts) =>
+        c.get<FileDraft>(r(repo, '/file-draft'), { stream, path }, options),
+      listDrafts: async (repo: string, stream: string, options?: SessionOpts) =>
+        (await c.get<{ drafts: FileDraftSummary[] }>(r(repo, '/file-drafts'), { stream }, options)).drafts ?? [],
+      saveDraft: (
+        repo: string,
+        body: { stream: string; path: string; base: string; content: string; expected_version: number },
+        options?: SessionOpts,
+      ) => c.json<FileDraft>(r(repo, '/file-draft'), { ...options, method: 'PUT', body }),
+      clearDraft: (repo: string, stream: string, path: string, expectedVersion: number, options?: SessionOpts) =>
+        c.del<FileDraft>(r(repo, '/file-draft'), { stream, path, expected_version: expectedVersion }, options),
+    },
 
     // ---- session --------------------------------------------------------------------------------
     capabilities: (o?: Opts) =>
@@ -205,6 +224,13 @@ export function createApi(c: ApiClient) {
     },
 
     issues: {
+      previewImport: (repo: string, body: { manifest_json: string }, options?: SessionOpts) =>
+        c.post<IssueImportPreview>(r(repo, '/issues/import/preview'), body, options),
+      applyImport: (
+        repo: string,
+        body: { manifest_json: string; expected_digest: string; allow_unsupported: boolean },
+        options?: SessionOpts,
+      ) => c.post<IssueImportResult>(r(repo, '/issues/import/apply'), body, options),
       list: (
         repo: string,
         q: { state?: string; query?: string; page_size?: number; page_token?: string } = {},
@@ -253,6 +279,7 @@ export function createApi(c: ApiClient) {
           stream?: string
           author?: string
           task_id?: string
+          requested_reviewer?: string
           page_size?: number
           page_token?: string
         } = {},
@@ -267,6 +294,74 @@ export function createApi(c: ApiClient) {
       },
       get: (repo: string, id: string, o?: Opts) =>
         c.get<ProposalDetail>(r(repo, `/proposals/${encodeURIComponent(id)}`), undefined, o),
+      reviewDraft: (repo: string, id: string, options?: SessionOpts) =>
+        c.get<ReviewDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`),
+          undefined,
+          options,
+        ),
+      saveReviewDraft: (
+        repo: string,
+        id: string,
+        body: { head: string; decision: string; body: string; expected_version: number },
+        options?: SessionOpts,
+      ) =>
+        c.json<ReviewDraft>(r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`), {
+          ...options,
+          method: 'PUT',
+          body,
+        }),
+      clearReviewDraft: (
+        repo: string,
+        id: string,
+        expectedVersion: number,
+        options?: SessionOpts,
+      ) =>
+        c.del<ReviewDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/review-draft`),
+          { expected_version: expectedVersion },
+          options,
+        ),
+      commentDraft: (repo: string, id: string, options?: SessionOpts) =>
+        c.get<CommentDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`),
+          undefined,
+          options,
+        ),
+      saveCommentDraft: (
+        repo: string,
+        id: string,
+        body: { head: string; body: string; expected_version: number },
+        options?: SessionOpts,
+      ) =>
+        c.json<CommentDraft>(r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`), {
+          ...options,
+          method: 'PUT',
+          body,
+        }),
+      clearCommentDraft: (
+        repo: string,
+        id: string,
+        expectedVersion: number,
+        options?: SessionOpts,
+      ) =>
+        c.del<CommentDraft>(
+          r(repo, `/proposals/${encodeURIComponent(id)}/comment-draft`),
+          { expected_version: expectedVersion },
+          options,
+        ),
+      setReviewers: (
+        repo: string,
+        id: string,
+        reviewers: string[],
+        expectedReviewers: string[],
+        o?: SessionOpts,
+      ) =>
+        c.json<{ reviewers: string[] }>(r(repo, `/proposals/${encodeURIComponent(id)}/reviewers`), {
+          ...o,
+          method: 'PUT',
+          body: { reviewers, expected_reviewers: expectedReviewers },
+        }),
       comment: (
         repo: string,
         id: string,
@@ -376,12 +471,24 @@ export function createApi(c: ApiClient) {
         o?: SessionOpts,
       ) => c.post<Workspace>(r(repo, `/workspaces/${encodeURIComponent(name)}/changes`), body, o),
       /** Brings the stream head in. Conflicts change nothing until every one has a resolution. */
-      sync: (repo: string, name: string, resolutions: FileChange[] = [], o?: Opts) =>
-        c.post<SyncWorkspaceResponse>(
+      sync: (
+        repo: string,
+        name: string,
+        resolutions: FileChange[] = [],
+        options?: SessionOpts & { expectedStreamHead?: string },
+      ) => {
+        const { expectedStreamHead, ...request } = options ?? {}
+        return c.post<SyncWorkspaceResponse>(
           r(repo, `/workspaces/${encodeURIComponent(name)}/sync`),
-          resolutions.length ? { resolutions } : {},
-          o,
-        ),
+          {
+            ...(resolutions.length ? { resolutions } : {}),
+            ...(expectedStreamHead !== undefined
+              ? { expected_stream_head: expectedStreamHead }
+              : {}),
+          },
+          request,
+        )
+      },
       remove: (repo: string, name: string, o?: SessionOpts) =>
         c.del<Record<string, never>>(
           r(repo, `/workspaces/${encodeURIComponent(name)}`),

@@ -10,8 +10,12 @@ three backticks and is longer than every run of backticks in the explanation and
 An empty replacement requests deletion of the anchored logical line. Other clients retain
 readable text; no database migration, protobuf field or canonical VCS object changes.
 
-The first UI supports one anchor line on the new side, replaced by zero, one or multiple
-lines. It does not interpret general comments, replies, arbitrary Markdown or multiple
+The UI supports one anchor line on the new side, replaced by zero, one or multiple
+lines. A range uses the explicit fence header `suggestion:-0+N`: it replaces the anchor
+and the following `N` original lines (at most 100 lines total). A plain `suggestion`
+header still means exactly one line. The range must exist in the immutable anchored
+revision; the author previews the original file before confirming. Older clients
+retain range bodies as readable text and do not apply them as single-line suggestions. It does not interpret general comments, replies, arbitrary Markdown or multiple
 suggestions as executable instructions. It never executes the suggested code.
 
 Application is an explicit author action after preview. The client requires negotiated
@@ -30,8 +34,15 @@ The operation does not integrate a branch, forge an approval, preserve a validat
 content or automatically resolve the discussion. Normal new-head review and exact-tree check
 rules still apply. The old suggestion remains attached to its old revision and readable.
 
+Authors can also select suggestions from loaded discussions for one explicit batch preview.
+All anchors must belong to the current proposed head; overlapping original ranges are refused.
+Within each file, replacements run from the last original line upward so inserted or deleted
+lines cannot shift remaining anchors. Up to 100 suggestions and 4 MiB of resulting content
+produce one workspace changeset and one head-checked proposal update. Files are read once
+and every exact source line is checked before publishing. Discussions remain open.
+
 ## Remaining scope
 
-Multi-line anchor ranges, batched application, server-native suggestion metadata and an
+Server-native suggestion metadata and an
 explicit native CLI apply command remain future work. Existing CLI/SDK thread body operations
 can read and write the convention without schema changes.

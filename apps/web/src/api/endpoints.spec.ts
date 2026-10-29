@@ -30,6 +30,9 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
       options,
     )
 
+  if (operation === 'reviewers')
+    return api.proposals.setReviewers('acme/new', 'proposal-one', ['user:bob'], [], options)
+
   if (operation === 'proposal-update')
     return api.proposals.update('acme/new', 'proposal-one', 'new-head', 'seen-head', options)
 
@@ -61,6 +64,7 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'proposal-update',
+    'reviewers',
     'review',
 
     'task-dependency',
@@ -100,6 +104,7 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'proposal-update',
+    'reviewers',
     'review',
 
     'task-dependency',
@@ -145,4 +150,114 @@ it('patches an attempt limit with its inspected value and an encoded task id', a
   expect(String(url)).toContain('/v1/repos/acme/repo/tasks/task%2Fone/attempt-limit')
   expect(options?.method).toBe('PATCH')
   expect(JSON.parse(String(options?.body))).toEqual({ max_attempts: 0, expected_max_attempts: 2 })
+})
+
+it('sends requested reviewers and the inspected set to the encoded proposal path', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response('{"reviewers":["user:bob"]}', {
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.setReviewers('acme/repo', 'p/one', ['user:bob'], ['user:carol'])
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/v1/repos/acme/repo/proposals/p%2Fone/reviewers')
+  expect(options?.method).toBe('PUT')
+  expect(JSON.parse(String(options?.body))).toEqual({
+    reviewers: ['user:bob'],
+    expected_reviewers: ['user:carol'],
+  })
+})
+
+it('pins virtual sync to the inspected branch while retaining the initiating session', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'new-session', fetch: request })
+  await createApi(client).workspaces.sync('acme/repo', 'w/one', [], {
+    token: 'original-session',
+    expectedStreamHead: 'inspected',
+  })
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/workspaces/w%2Fone/sync')
+  expect(JSON.parse(String(options?.body))).toEqual({ expected_stream_head: 'inspected' })
+  expect(new Headers(options?.headers).get('authorization')).toBe('Bearer original-session')
+})
+
+it('keeps private draft content in the save body and captures the initiating session', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'new-session', fetch: request })
+  await createApi(client).proposals.saveReviewDraft(
+    'acme/repo',
+    'p/one',
+    { head: 'seen', decision: 'comment', body: 'private', expected_version: 0 },
+    { token: 'original', quietUnauthenticated: true },
+  )
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/review-draft')
+  expect(String(url)).not.toContain('private')
+  expect(options?.method).toBe('PUT')
+  expect(new Headers(options?.headers).get('authorization')).toBe('Bearer original')
+  expect(JSON.parse(String(options?.body))).toEqual({
+    head: 'seen',
+    decision: 'comment',
+    body: 'private',
+    expected_version: 0,
+  })
+})
+
+it('sends the clear-draft version in a DELETE query, including zero', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.clearReviewDraft('acme/repo', 'p/one', 0)
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/review-draft?expected_version=0')
+  expect(options?.method).toBe('DELETE')
+  expect(options?.body).toBeUndefined()
+})
+
+it('keeps account comment drafts distinct from reviews and sends private text only in the body', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () => new Response('{}', { headers: { 'content-type': 'application/json' } }),
+    )
+  const client = new ApiClient({ getToken: () => 'current-session', fetch: request })
+  const proposals = createApi(client).proposals
+  await proposals.commentDraft('acme/repo', 'p/one', { token: 'captured-session' })
+  await proposals.saveCommentDraft(
+    'acme/repo',
+    'p/one',
+    { head: 'inspected', body: 'unsubmitted notes', expected_version: 7 },
+    { token: 'captured-session' },
+  )
+  expect(request.mock.calls).toHaveLength(2)
+  for (const [url, options] of request.mock.calls) {
+    expect(String(url)).toContain('/proposals/p%2Fone/comment-draft')
+    expect(String(url)).not.toContain('unsubmitted')
+    expect(new Headers(options?.headers).get('authorization')).toBe('Bearer captured-session')
+  }
+  const [, saved] = request.mock.calls[1]!
+  expect(saved?.method).toBe('PUT')
+  expect(JSON.parse(String(saved?.body))).toEqual({
+    head: 'inspected',
+    body: 'unsubmitted notes',
+    expected_version: 7,
+  })
+})
+
+it('clears a private comment draft using its inspected version query', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.clearCommentDraft('acme/repo', 'p/one', 0)
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/proposals/p%2Fone/comment-draft?expected_version=0')
+  expect(options?.method).toBe('DELETE')
+  expect(options?.body).toBeUndefined()
 })

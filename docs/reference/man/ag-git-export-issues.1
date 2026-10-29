@@ -1,0 +1,58 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ag-git-export-issues 1  "export-issues 0.3.0-beta.7"
+.SH NAME
+ag\-git\-export\-issues \- Export GitHub/GitLab issues and comments to a normalized import manifest
+.SH SYNOPSIS
+\fBag git export\-issues\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-as\fR] [\fB\-\-host\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fB\-\-provider\fR> <\fB\-\-source\fR> <\fB\-\-output\fR>
+.SH DESCRIPTION
+Export GitHub/GitLab issues and comments to a normalized import manifest
+.SH OPTIONS
+.TP
+\fB\-C\fR, \fB\-\-repo\fR \fI<DIR>\fR
+Operate on the repository at this path (default: discovered from the current directory)
+.TP
+\fB\-\-provider\fR \fI<PROVIDER>\fR
+Source hosting provider
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+github
+.IP \(bu 2
+gitlab
+.RE
+.TP
+\fB\-\-as\fR \fI<IDENTITY>\fR
+Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-source\fR \fI<SOURCE>\fR
+Repository path, for example owner/repo or group/subgroup/repo
+.TP
+\fB\-\-host\fR \fI<HOST>\fR
+GitLab HTTPS origin, for example https://gitlab.example.com
+.TP
+\fB\-\-json\fR
+Machine\-readable JSON output
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR
+Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+.TP
+\fB\-\-output\fR \fI<OUTPUT>\fR
+New manifest file. An existing file is never replaced
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Explain what is happening on standard error: repository, identity, remote, timing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH VERSION
+v0.3.0\-beta.7

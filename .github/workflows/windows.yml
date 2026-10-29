@@ -15,6 +15,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  AG_REQUIRE_COMPONENTS: shell:powershell
 
 jobs:
   windows:
@@ -30,13 +31,22 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-workspace-crates: true
-      - name: Show the toolchain and Git
+      - name: Show the operating system, toolchain and Git
         run: |
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
           rustc -Vv
           git --version
           git config --show-origin --get-all core.autocrlf
           where.exe nasm
         continue-on-error: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the embedded Web UI
+        shell: bash
+        run: scripts/build_ui.sh
       - name: Build everything that is portable
         run: cargo build --workspace --all-targets
       # The execution plane (ag-sandbox, ag-worker) is Linux-only: ag-sandbox is empty here, ag-worker is a
@@ -60,3 +70,29 @@ jobs:
         run: |
           $env:AG = "$PWD\target\debug\ag.exe"
           .\examples\quickstart.ps1
+
+      - name: Windows archive and installer regression tests
+        run: python scripts/test_windows_release.py
+      - name: Installer tests on Windows PowerShell 5.1
+        # Start Python from Windows PowerShell too: inheriting pwsh's PSModulePath
+        # prevents the nested 5.1 process from loading its own utility module.
+        shell: powershell
+        run: |
+          $env:AG_TEST_PWSH = (Get-Command powershell.exe).Source
+          & $env:AG_TEST_PWSH -NoProfile -Command '$PSVersionTable; Get-Command Get-FileHash -ErrorAction Stop | Format-List Name, Source'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test_windows_release.py
+      - name: Package, install and run the native Windows client
+        shell: pwsh
+        run: |
+          $version = python -c "import pathlib,tomllib; print(tomllib.loads(pathlib.Path('Cargo.toml').read_text())['workspace']['package']['version'])"
+          ./scripts/smoke_windows_release.ps1 -Version $version -BinDir target/debug
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-install-rehearsal
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
+            dist/install.ps1
+          if-no-files-found: error
+          retention-days: 14

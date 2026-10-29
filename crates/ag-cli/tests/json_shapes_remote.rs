@@ -41,7 +41,14 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     let head = p1["proposal"]["head"].as_str().unwrap().to_string();
     let p1 = p1["proposal"]["id"].as_str().unwrap().to_string();
     record_discussions(&mut r, &a, &alice, &p1, &head);
+    record_review_drafts(&mut r, &a, &bob, &p1, &head);
+    record_virtual_workspace(&mut r, &a, &alice, &head);
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
+    r.rec(
+        "remote reviewers",
+        &as_user("user:alice", &alice, &["--json", "remote", "reviewers", &p1, "--add", "user:bob"]).ok(),
+    );
+    r.rec("remote reviewers", &as_user("user:bob", &bob, &["--json", "remote", "reviewers", &p1]).ok());
     r.rec("remote proposal", &as_user("user:alice", &alice, &["--json", "remote", "proposal", &p1]).ok());
     r.rec("remote prepare", &as_user("user:carol", &carol, &["--json", "remote", "prepare", &p1]).code_is(3));
     r.rec("remote explain", &as_user("user:carol", &carol, &["--json", "remote", "explain", &p1]).code_is(3));
@@ -173,4 +180,45 @@ fn record_remote_agents(srv: &Server, a: &Ag, token: &str, recorder: &mut Record
         0
     );
     assert!(!repo.meta().read(|tx| tx.agent("cli-bot")).unwrap().unwrap().disabled);
+}
+
+fn record_review_drafts(r: &mut Recorder, a: &Ag, token: &str, proposal: &str, head: &str) {
+    let run = |args: &[&str]| a.run_env("user:bob", args, &[("AG_TOKEN", token)]);
+    r.rec("remote review-draft get", &run(&["--json", "remote", "review-draft", "get", proposal]).ok());
+    r.rec(
+        "remote review-draft save",
+        &run(&[
+            "--json",
+            "remote",
+            "review-draft",
+            "save",
+            proposal,
+            "--head",
+            head,
+            "--decision",
+            "approve",
+            "-m",
+            "Private notes",
+            "--expected-version",
+            "0",
+        ])
+        .ok(),
+    );
+    r.rec("remote review-draft get", &run(&["--json", "remote", "review-draft", "get", proposal]).ok());
+    r.rec(
+        "remote review-draft clear",
+        &run(&["--json", "remote", "review-draft", "clear", proposal, "--expected-version", "1"]).ok(),
+    );
+}
+
+fn record_virtual_workspace(r: &mut Recorder, a: &Ag, token: &str, head: &str) {
+    let run = |args: &[&str]| a.run_env("user:alice", args, &[("AG_TOKEN", token)]);
+    r.rec(
+        "remote workspace create",
+        &run(&["--json", "remote", "workspace", "create", "scratch", "--stream", "main", "--from", head]).ok(),
+    );
+    r.rec("remote workspace list", &run(&["--json", "remote", "workspace", "list"]).ok());
+    r.rec("remote workspace show", &run(&["--json", "remote", "workspace", "show", "scratch"]).ok());
+    r.rec("remote workspace sync", &run(&["--json", "remote", "workspace", "sync", "scratch"]).ok());
+    r.rec("remote workspace delete", &run(&["--json", "remote", "workspace", "delete", "scratch"]).ok());
 }

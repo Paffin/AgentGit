@@ -27,10 +27,16 @@ export type SearchTreeResponse = S['SearchTreeResponse']
 export type SearchMatch = S['SearchMatch']
 export type Proposal = S['Proposal']
 export type Review = S['Review']
+export type ReviewDraft = S['ReviewDraft']
+export type CommentDraft = S['CommentDraft']
+export type FileDraft = S['FileDraft']
+export type FileDraftSummary = S['FileDraftSummary']
 export type ReviewThread = S['ReviewThread']
 export type ThreadComment = S['ThreadComment']
 export type ReviewLineAnchor = S['ReviewLineAnchor']
-export type ProposalDetail = S['ProposalDetail']
+// Older servers do not return the additive requested-reviewer routing field.
+export type ProposalDetail = Omit<S['ProposalDetail'], 'requested_reviewers'> &
+  Partial<Pick<S['ProposalDetail'], 'requested_reviewers'>>
 /**
  * The OpenAPI document describes free-form JSON objects (`type: object` with no properties), which the
  * generator renders as `Record<string, never>`. They are open-ended on the wire, so say so.
@@ -39,7 +45,9 @@ type OpenObject = Record<string, unknown>
 export type Blocker = Omit<S['Blocker'], 'detail'> & { detail?: OpenObject }
 export type Conflict = S['Conflict']
 export type Workspace = S['Workspace']
-export type SyncWorkspaceResponse = S['SyncWorkspaceResponse']
+// Older servers omit the pinned target revision.
+export type SyncWorkspaceResponse = Omit<S['SyncWorkspaceResponse'], 'stream_head'> &
+  Partial<Pick<S['SyncWorkspaceResponse'], 'stream_head'>>
 export type ValidationStatus = S['ValidationStatus']
 export type Attestation = S['Attestation']
 export type QueueEntry = S['QueueEntry']
@@ -58,6 +66,8 @@ export type Run = S['Run']
 export type RunOutput = S['RunOutput']
 export type Issue = S['Issue']
 export type IssueActivity = S['IssueActivity']
+export type IssueImportPreview = S['IssueImportPreview']
+export type IssueImportResult = S['IssueImportResult']
 // Lineage fields are absent on servers predating tasks.lineage.
 export type Task = Omit<S['Task'], 'source_task' | 'source_run'> &
   Partial<Pick<S['Task'], 'source_task' | 'source_run'>>

@@ -1136,6 +1136,16 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag proposal reviewers
+
+```json
+{
+  "reviewers": [
+    "string"
+  ]
+}
+```
+
 ### ag proposal show
 
 ```json
@@ -1153,6 +1163,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "title": "string",
     "updated_at": "number"
   },
+  "requested_reviewers": [
+    "string"
+  ],
   "reviews": []
 }
 ```
@@ -1550,6 +1563,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "policy_version": "number",
           "proposal": "string",
           "resolved": "bool",
+          "reviewers": [
+            "string"
+          ],
           "role": "string",
           "status": "string",
           "stream": "string",
@@ -1758,6 +1774,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "title": "string",
     "updated_at_ms": "number"
   },
+  "requested_reviewers": [
+    "string"
+  ],
   "reviews": []
 }
 ```
@@ -1807,6 +1826,55 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag remote review-draft clear
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote review-draft get
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote review-draft save
+
+```json
+{
+  "body": "string",
+  "decision": "string",
+  "head": "string",
+  "present": "bool",
+  "updated_at_ms": "number",
+  "version": "number"
+}
+```
+
+### ag remote reviewers
+
+```json
+{
+  "reviewers": [
+    "string"
+  ]
+}
+```
+
 ### ag remote streams
 
 ```json
@@ -1842,6 +1910,69 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "run_id": "string",
     "streams": []
   }
+}
+```
+
+### ag remote workspace create
+
+```json
+{
+  "base": "string",
+  "created_at_ms": "number",
+  "head": "string",
+  "name": "string",
+  "owner": "string",
+  "stream": "string",
+  "updated_at_ms": "number"
+}
+```
+
+### ag remote workspace delete
+
+```json
+{}
+```
+
+### ag remote workspace list
+
+```json
+{
+  "workspaces": [
+    {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    }
+  ]
+}
+```
+
+### ag remote workspace show
+
+```json
+{
+  "base": "string",
+  "created_at_ms": "number",
+  "head": "string",
+  "name": "string",
+  "owner": "string",
+  "stream": "string",
+  "updated_at_ms": "number"
+}
+```
+
+### ag remote workspace sync
+
+```json
+{
+  "conflicts": [],
+  "head": "string",
+  "status": "string",
+  "stream_head": "string"
 }
 ```
 
@@ -2063,6 +2194,11 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     {
       "kind": "string",
       "message": "string",
+      "origin": {
+        "base": "string",
+        "ours": "string",
+        "theirs": "string"
+      },
       "path": "string"
     }
   ],

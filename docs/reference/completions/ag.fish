@@ -317,22 +317,24 @@ complete -c ag -n "__fish_ag_using_subcommand propose" -s q -l quiet -d 'Print o
 complete -c ag -n "__fish_ag_using_subcommand propose" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand propose" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand propose" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "list" -d 'List proposals, newest first'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "show" -d 'Show a proposal with its reviews'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "review" -d 'Review the proposal\'s current head'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "update" -d 'Point the proposal at a new head (earlier approvals stop counting)'
-complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show review update close" -f -a "close" -d 'Close without integrating'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "list" -d 'List proposals, newest first'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "show" -d 'Show a proposal with its reviews'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "reviewers" -d 'Inspect, add or remove requested reviewers (no approval or access change)'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "review" -d 'Review the proposal\'s current head'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "update" -d 'Point the proposal at a new head (earlier approvals stop counting)'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and not __fish_seen_subcommand_from list show reviewers review update close" -f -a "close" -d 'Close without integrating'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l state -d 'Filter by state: open, integrated, closed' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l requested-reviewer -d 'Only proposals that request this reviewer, matched before the limit' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -s n -l limit -d 'Show at most this many (0 = all)' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from list" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -354,6 +356,20 @@ complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcomma
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from show" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from show" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l add -d 'Add a requested reviewer; repeat for several identities' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l remove -d 'Remove a requested reviewer; repeat for several identities' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l expected -d 'Require this complete inspected set; repeat for each identity' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l expect-empty -d 'Require that no reviewers have been requested yet'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from reviewers" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -s m -l message -d 'Review text' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -1107,18 +1123,34 @@ complete -c ag -n "__fish_ag_using_subcommand backup" -s q -l quiet -d 'Print on
 complete -c ag -n "__fish_ag_using_subcommand backup" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand backup" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand backup" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -f -a "import" -d 'Import a Git repository\'s history into a new stream'
-complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from import export" -f -a "export" -d 'Export a stream\'s history to a Git repository (created if missing)'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -f -a "export-issues" -d 'Export GitHub/GitLab issues and comments to a normalized import manifest'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -f -a "import" -d 'Import a Git repository\'s history into a new stream'
+complete -c ag -n "__fish_ag_using_subcommand git; and not __fish_seen_subcommand_from export-issues import export" -f -a "export" -d 'Export a stream\'s history to a Git repository (created if missing)'
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l provider -d 'Source hosting provider' -r -f -a "github\t''
+gitlab\t''"
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l source -d 'Repository path, for example owner/repo or group/subgroup/repo' -r
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l host -d 'GitLab HTTPS origin, for example https://gitlab.example.com' -r
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l output -d 'New manifest file. An existing file is never replaced' -r -F
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from export-issues" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from import" -l rev -d 'Revision to import' -r
 complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from import" -l stream -d 'Stream to create for the imported history' -r
 complete -c ag -n "__fish_ag_using_subcommand git; and __fish_seen_subcommand_from import" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
@@ -1196,35 +1228,41 @@ complete -c ag -n "__fish_ag_using_subcommand push" -s q -l quiet -d 'Print only
 complete -c ag -n "__fish_ag_using_subcommand push" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand push" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand push" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -l remote -d 'Remote to use (default: origin)' -r
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -l json -d 'Machine-readable JSON output'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -s h -l help -d 'Print help'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -s V -l version -d 'Print version'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "add" -d 'Add a remote'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "list" -d 'List remotes'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "remove" -d 'Forget a remote'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "whoami" -d 'Show who the server thinks you are'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "proposals" -d 'List proposals on the server'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "proposal" -d 'Show a proposal with its reviews'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "prepare" -d 'What would integrating do now, and what is missing?'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "explain" -d 'Explain why a server proposal cannot land, with the next commands. Changes nothing'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "review" -d 'Review a proposal\'s current head'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "discussion" -d 'Read and participate in revision-bound line discussions'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "integrate" -d 'Integrate a proposal into its stream'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "close" -d 'Close a proposal without integrating it'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "streams" -d 'List streams'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "events" -d 'Show the events of the repository (replay), or follow them live'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "policy" -d 'Show or set a stream\'s policy'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "log" -d 'Show history of a revision on the server'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "blame" -d 'Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`'
-complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat" -f -a "cat" -d 'Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "add" -d 'Add a remote'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "list" -d 'List remotes'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "remove" -d 'Forget a remote'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "whoami" -d 'Show who the server thinks you are'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "proposals" -d 'List proposals on the server'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "proposal" -d 'Show a proposal with its reviews'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "prepare" -d 'What would integrating do now, and what is missing?'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "explain" -d 'Explain why a server proposal cannot land, with the next commands. Changes nothing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "reviewers" -d 'Inspect, add or remove requested reviewers (no approval or access change)'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "review-draft" -d 'Save or restore your private account review notes without submitting them'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "file-draft" -d 'Save or restore private file edits without publishing a changeset'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "comment-draft" -d 'Save or restore a private general comment without posting it'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "review" -d 'Review a proposal\'s current head'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "discussion" -d 'Read and participate in revision-bound line discussions'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "workspace" -d 'Inspect and explicitly sync server-side workspaces without a checkout'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "integrate" -d 'Integrate a proposal into its stream'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "close" -d 'Close a proposal without integrating it'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "import-issues" -d 'Preview or explicitly apply a normalized GitHub/GitLab issue manifest'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "streams" -d 'List streams'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "events" -d 'Show the events of the repository (replay), or follow them live'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "policy" -d 'Show or set a stream\'s policy'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "log" -d 'Show history of a revision on the server'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "blame" -d 'Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`'
+complete -c ag -n "__fish_ag_using_subcommand remote; and not __fish_seen_subcommand_from add list remove whoami proposals proposal prepare explain reviewers review-draft file-draft comment-draft review discussion workspace integrate close import-issues streams events policy log blame cat" -f -a "cat" -d 'Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from add" -l token-env -d 'Environment variable holding the credential' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from add" -l ca-file -d 'Extra CA certificate (PEM) to trust' -r -F
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from add" -l remote -d 'Remote to use (default: origin)' -r
@@ -1273,6 +1311,7 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from whoami" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from whoami" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from proposals" -l state -d 'Filter: open, integrated, closed' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from proposals" -l requested-reviewer -d 'Only proposals that request this reviewer, matched before paging' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from proposals" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from proposals" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from proposals" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -1318,6 +1357,64 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from explain" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from explain" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from explain" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l add -d 'Add a requested reviewer; repeat for several identities' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l remove -d 'Remove a requested reviewer; repeat for several identities' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l expected -d 'Require this complete inspected set; repeat for each identity' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l expect-empty -d 'Require that no reviewers have been requested yet'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from reviewers" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -f -a "get" -d 'Read your private draft and its version, including a cleared version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -f -a "save" -d 'Save private notes; does not submit a review or advance the inspected head'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review-draft" -f -a "clear" -d 'Clear only the private draft version you inspected'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -f -a "list" -d 'List your saved file drafts in a stream, without downloading their content'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -f -a "get" -d 'Read metadata; download exact replacement bytes only with --output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -f -a "save" -d 'Save private replacement bytes for an existing file at an immutable revision'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from file-draft" -f -a "clear" -d 'Clear only the draft version you inspected'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -f -a "get" -d 'Read your private draft and its version, including a cleared version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -f -a "save" -d 'Save private notes; does not post a comment or advance the inspected head'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from comment-draft" -f -a "clear" -d 'Clear only the private draft version you inspected'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review" -s m -l message -d 'Review text' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from review" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
@@ -1349,6 +1446,22 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from discussion" -f -a "start" -d 'Start a thread on the exact revision and line you inspected'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from discussion" -f -a "reply" -d 'Reply to an open line discussion'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from discussion" -f -a "resolve" -d 'Resolve or reopen a thread only at the version you read'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -f -a "list" -d 'List server-side workspaces'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -f -a "show" -d 'Show a server-side workspace'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -f -a "create" -d 'Create an isolated workspace, optionally at an existing revision'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -f -a "sync" -d 'Merge the stream into a workspace; conflicts leave it unchanged'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from workspace" -f -a "delete" -d 'Delete the named server-side workspace'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from integrate" -l fencing-token -d 'Fencing tokens of exclusive leases the author holds' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from integrate" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from integrate" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
@@ -1372,6 +1485,21 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from close" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from close" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from close" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l file -d 'Normalized GitHub/GitLab issue manifest (UTF-8 JSON, at most 4 MiB)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l expected-digest -d 'Exact digest returned by the preview of this manifest' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l remote -d 'Remote to use (default: origin)' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
+always\t'Always colour'
+never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l apply -d 'Apply the manifest instead of only previewing it'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l allow-unsupported -d 'Acknowledge unsupported source features listed in the preview'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -l json -d 'Machine-readable JSON output'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -s h -l help -d 'Print help'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from import-issues" -s V -l version -d 'Print version'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -l remote -d 'Remote to use (default: origin)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
@@ -1383,6 +1511,10 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from streams" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l repository -d 'Explicit repository on the same server; repeat for up to 30 repositories' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l cursor -d 'Resume the opaque cursor returned by the previous page' -r
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l checkpoint -d 'Load a saved cursor, then atomically replace it after emitted events' -r -F
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l limit -d 'Maximum events in the replay page (default: 100; maximum: 1000)' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l after -d 'Replay events after this sequence number' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l topics -d 'Only these topics (prefix match), e.g. `stream,proposal`' -r
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l remote -d 'Remote to use (default: origin)' -r
@@ -1391,6 +1523,7 @@ complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'
 always\t'Always colour'
 never\t'Never colour'"
+complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l from-start -d 'Deliberately include history; otherwise a new feed starts from now'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l follow -d 'Keep following new events'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -l json -d 'Machine-readable JSON output'
 complete -c ag -n "__fish_ag_using_subcommand remote; and __fish_seen_subcommand_from events" -s q -l quiet -d 'Print only what was asked for: no confirmations or hints. Errors and refusals are still shown'

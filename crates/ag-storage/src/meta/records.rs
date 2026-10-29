@@ -208,6 +208,8 @@ pub struct ProposalFilter<'a> {
     pub author: Option<&'a str>,
     /// Linked task, exactly as stored.
     pub task_id: Option<&'a str>,
+    /// Requested reviewer identity, matched before paging.
+    pub requested_reviewer: Option<&'a str>,
 }
 
 /// The `WHERE … ORDER BY … LIMIT` of [`Tx::proposals_page`] and its arguments (separate so that a test can ask the
@@ -227,6 +229,10 @@ pub(crate) fn proposals_page_clause<'a>(
             clauses.push(format!("{column} = ?{}", args.len()));
         }
     }
+    if let Some(reviewer) = filter.requested_reviewer {
+        args.push(Param::from(reviewer));
+        clauses.push(format!("EXISTS (SELECT 1 FROM proposal_reviewers WHERE proposal_reviewers.proposal = proposals.id AND reviewer = ?{})", args.len()));
+    }
     if let Some((created, id)) = after {
         args.push(Param::from(created));
         args.push(Param::from(id));
@@ -239,6 +245,27 @@ pub(crate) fn proposals_page_clause<'a>(
 
 impl Tx<'_> {
     // ---- proposals -------------------------------------------------------
+
+    /// The requested reviewer identities, in canonical order.
+    pub fn proposal_reviewers(&self, proposal: &str) -> Result<Vec<String>, MetaError> {
+        self.conn
+            .query("SELECT reviewer FROM proposal_reviewers WHERE proposal = ?1 ORDER BY reviewer", &params![proposal])?
+            .iter()
+            .map(|row| row.string(0))
+            .collect()
+    }
+
+    /// Replaces routing metadata; callers compare the inspected set in the same transaction.
+    pub fn proposal_set_reviewers(&self, proposal: &str, reviewers: &[String]) -> Result<(), MetaError> {
+        self.conn.execute("DELETE FROM proposal_reviewers WHERE proposal = ?1", &params![proposal])?;
+        for reviewer in reviewers {
+            self.conn.execute(
+                "INSERT INTO proposal_reviewers (proposal, reviewer) VALUES (?1, ?2)",
+                &params![proposal, reviewer],
+            )?;
+        }
+        Ok(())
+    }
 
     /// Creates an open proposal.
     pub fn proposal_create(&self, p: &NewProposal<'_>) -> Result<ProposalRow, MetaError> {
@@ -608,6 +635,7 @@ impl Tx<'_> {
             "SELECT head FROM proposals WHERE state = 'open'",
             "SELECT head FROM workspaces WHERE head IS NOT NULL",
             "SELECT base FROM workspaces WHERE base IS NOT NULL",
+            "SELECT base FROM file_drafts WHERE base IS NOT NULL",
         ] {
             for r in self.conn.query(sql, &[])? {
                 roots.push(parse::<ChangesetId>(r.str(0)?, "root")?);

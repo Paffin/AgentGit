@@ -2,22 +2,38 @@
 export interface ReviewSuggestion {
   explanation: string
   replacement: string
+  /** Number of original lines, starting at the thread anchor. Defaults to one. */
+  lines?: number
 }
 
-export function formatSuggestion(explanation: string, replacement: string): string {
+export function suggestionLineCount(lines = 1): number {
+  if (!Number.isSafeInteger(lines) || lines < 1 || lines > 100)
+    throw new Error('Choose between 1 and 100 original lines.')
+  return lines
+}
+
+export function formatSuggestion(explanation: string, replacement: string, lines = 1): string {
+  suggestionLineCount(lines)
   const runs = `${explanation}\n${replacement}`.match(/`+/g) || []
   const fence = '`'.repeat(Math.max(3, ...runs.map((run) => run.length + 1)))
-  return `${explanation.trim()}\n\n${fence}suggestion\n${replacement}\n${fence}`.trimStart()
+  const range = lines === 1 ? '' : `:-0+${lines - 1}`
+  return `${explanation.trim()}\n\n${fence}suggestion${range}\n${replacement}\n${fence}`.trimStart()
 }
 
 export function parseSuggestion(body: string): ReviewSuggestion | null {
   const text = body.replace(/\r\n/g, '\n').trimEnd()
-  const match = /(?:^|\n)(`{3,})suggestion\n([\s\S]*)\n\1$/.exec(text)
+  const match = /(?:^|\n)(`{3,})suggestion(?::-0\+(\d+))?\n([\s\S]*)\n\1$/.exec(text)
   if (!match) return null
   const fence = match[1]!
-  const replacement = match[2]!
+  const lines = match[2] === undefined ? 1 : Number(match[2]) + 1
+  if (lines > 100) return null
+  const replacement = match[3]!
   if (replacement.split('\n').some((line) => line.startsWith(fence))) return null
-  return { explanation: text.slice(0, match.index).trim(), replacement }
+  return {
+    explanation: text.slice(0, match.index).trim(),
+    replacement,
+    ...(lines > 1 ? { lines } : {}),
+  }
 }
 
 interface LineSpan {
@@ -72,6 +88,18 @@ export function replaceSuggestedLine(
   expected: string,
   replacement: string,
 ): string {
+  return replaceSuggestedRange(source, line, expected, replacement)
+}
+
+/** A range belongs to the same immutable revision as its first-line anchor. */
+export function replaceSuggestedRange(
+  source: string,
+  line: number,
+  expected: string,
+  replacement: string,
+  lines = 1,
+): string {
+  suggestionLineCount(lines)
   if (source.includes('\0') || replacement.includes('\0'))
     throw new Error('This suggestion requires a text file.')
   const span = locateLine(source, line)
@@ -79,5 +107,6 @@ export function replaceSuggestedLine(
     throw new Error(
       'The source line differs from the reviewed line. Inspect the current change request.',
     )
-  return spliceLine(source, span, replacement)
+  const last = locateLine(source, line + lines - 1)
+  return spliceLine(source, { start: span.start, end: last.end, next: last.next }, replacement)
 }

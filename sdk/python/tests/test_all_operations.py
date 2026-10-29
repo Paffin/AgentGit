@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 import pytest
+from examples.review_requests import request_review, reviews_requested_from
 
 from agentgit import (
     NAMESPACE_METHODS,
@@ -20,6 +21,7 @@ from agentgit import (
     AgentGitClient,
     AsyncAgentGitClient,
     CallOptions,
+    FailedPreconditionError,
     PutOp,
     blob_object,
     build_changeset,
@@ -142,6 +144,7 @@ def test_policy(tour: dict[str, AgentGitClient]) -> None:
 
 
 def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, AgentGitClient]) -> None:
+    admin = tour["admin"]
     alice, bob, carol, ci = tour["alice"], tour["bob"], tour["carol"], tour["ci"]
     assert alice.workspaces.create(repo=REPO, name="w1", stream="main").name == "w1"
     assert "w1" in [w.name for w in alice.workspaces.list(repo=REPO).workspaces]
@@ -150,6 +153,19 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     )
     assert alice.workspaces.get(repo=REPO, name="w1").head == m1.head
     assert alice.workspaces.sync(repo=REPO, name="w1").status == "up_to_date"
+    assert not alice.drafts.get(repo=REPO, stream="main", path="a.txt").present
+    file_draft = alice.drafts.save(
+        repo=REPO,
+        stream="main",
+        path="a.txt",
+        base=m1.head,
+        content="cHJpdmF0ZSBlZGl0Cg==",
+        expected_version=0,
+    )
+    assert len(alice.drafts.list(repo=REPO, stream="main").drafts) == 1
+    assert not alice.drafts.clear(
+        repo=REPO, stream="main", path="a.txt", expected_version=file_draft.version
+    ).present
 
     p1 = alice.proposals.create(repo=REPO, stream="main", head=m1.head, title="seed")
     assert len(alice.proposals.list(repo=REPO).proposals) == 1
@@ -158,6 +174,24 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
         alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head, expected_head=m1.head).head == m2.head
     )
     assert alice.proposals.get(repo=REPO, id=p1.id).proposal.head == m2.head
+    assert request_review(alice, REPO, p1.id, ["user:bob"]).reviewers == ["user:bob"]
+    assert bob.proposals.get(repo=REPO, id=p1.id).requested_reviewers == ["user:bob"]
+    assert [p.id for p in reviews_requested_from(bob, REPO, "user:bob")] == [p1.id]
+    assert not bob.proposals.get_draft(repo=REPO, id=p1.id).present
+    private_draft = bob.proposals.save_draft(
+        repo=REPO, id=p1.id, expected_version=0, head=m2.head, decision="comment", body="Private draft"
+    )
+    assert private_draft.version == 1
+    assert not admin.proposals.get_draft(repo=REPO, id=p1.id).present
+    assert bob.proposals.get(repo=REPO, id=p1.id).reviews == []
+    with pytest.raises(FailedPreconditionError):
+        bob.proposals.save_draft(
+            repo=REPO, id=p1.id, expected_version=0, head=m2.head, decision="comment", body="Stale overwrite"
+        )
+    cleared_draft = bob.proposals.clear_draft(repo=REPO, id=p1.id, expected_version=private_draft.version)
+    assert not cleared_draft.present
+    assert cleared_draft.version == 2
+    assert bob.proposals.get_draft(repo=REPO, id=p1.id).body == ""
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
     assert (
         bob.proposals.comment(
@@ -213,6 +247,11 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     ran = carol.queue.run(repo=REPO, stream="main")
     assert (ran.processed[0].state, ran.processed[0].outcome) == ("done", "integrated")
     Seed.head = m2.head
+    assert "workspaces.sync_precondition" in alice.negotiate().features
+    pinned = alice.workspaces.sync(repo=REPO, name="w1", expected_stream_head=Seed.head)
+    assert pinned.stream_head == Seed.head
+    with pytest.raises(FailedPreconditionError):
+        alice.workspaces.sync(repo=REPO, name="w1", expected_stream_head="0" * 64)
 
     alice.workspaces.create(repo=REPO, name="w2", stream="main")
     m3 = alice.workspaces.modify(repo=REPO, name="w2", changes=[put_file("e.txt", "e\n")])
@@ -228,6 +267,20 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     m4 = alice.workspaces.modify(repo=REPO, name="w3", changes=[put_file("f.txt", "f\n")])
     p3 = alice.proposals.create(repo=REPO, stream="main", head=m4.head, title="third")
     assert alice.proposals.close(repo=REPO, id=p3.id).state == "closed"
+    assert not bob.proposals.get_comment_draft(repo=REPO, id=p3.id).present
+    comment_draft = bob.proposals.save_comment_draft(
+        repo=REPO, id=p3.id, head=p3.head, body="Private follow-up", expected_version=0
+    )
+    assert comment_draft.version == 1
+    assert not admin.proposals.get_comment_draft(repo=REPO, id=p3.id).present
+    assert not bob.proposals.get_draft(repo=REPO, id=p3.id).present
+    with pytest.raises(FailedPreconditionError) as stale_comment:
+        bob.proposals.save_comment_draft(
+            repo=REPO, id=p3.id, head=p3.head, body="Stale follow-up", expected_version=0
+        )
+    assert stale_comment.value.status == 412
+    assert bob.proposals.clear_comment_draft(repo=REPO, id=p3.id, expected_version=1).version == 2
+
     alice.workspaces.delete(repo=REPO, name="w3")
 
 
@@ -370,6 +423,13 @@ def test_agents_tasks_leases_and_provenance(tour: dict[str, AgentGitClient]) -> 
 def test_events_audit_and_maintenance(tour: dict[str, AgentGitClient]) -> None:
     admin, alice = tour["admin"], tour["alice"]
     assert len(alice.events.replay(repo=REPO, after_seq=0, limit=5).events) == 5
+    checkpoint = alice.events.replay_many(repos=[REPO])
+    assert checkpoint.cursor
+    feed = alice.events.subscribe_many(repos=[REPO], cursor=checkpoint.cursor)
+    try:
+        assert next(feed).cursor
+    finally:
+        feed.close()
     got = []
     for ev in alice.events.subscribe(repo=REPO, after_seq=0):
         got.append(ev.topic)
@@ -399,6 +459,32 @@ def test_operator_scheduling_gate(tour: dict[str, AgentGitClient]) -> None:
 
 def test_issue_discussion(tour: dict[str, AgentGitClient]) -> None:
     alice = tour["alice"]
+    manifest = json.dumps(
+        {
+            "version": 1,
+            "provider": "github",
+            "source_repo": "https://github.com/source/project",
+            "issues": [
+                {
+                    "source_id": "1",
+                    "title": "Imported issue",
+                    "body": "Original text",
+                    "state": "open",
+                    "author": "source-user",
+                    "url": "https://github.com/source/project/issues/1",
+                    "created_at_ms": 0,
+                    "updated_at_ms": 0,
+                }
+            ],
+        }
+    )
+    preview = alice.issues.import_preview(repo=REPO, manifest_json=manifest)
+    assert (
+        alice.issues.import_apply(
+            repo=REPO, manifest_json=manifest, expected_digest=preview.digest, allow_unsupported=False
+        ).created
+        == 1
+    )
     issue = alice.issues.create(repo=REPO, title="Move the project", body="Keep history")
     assert alice.issues.get(repo=REPO, number=issue.number).title == issue.title
     assert any(item.number == issue.number for item in alice.paginate("issue.list", repo=REPO))

@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use ag_changeset::Op;
 use ag_dag::{is_ancestor, merge_bases};
 use ag_merge::merge_trees;
-use ag_storage::meta::WorkspaceRow;
+use ag_storage::meta::{Tx, WorkspaceRow};
 use ag_tree::Tree;
 use ag_types::{BlobId, ChangesetId, FileType, Identity, RepoPath};
 use serde_json::json;
@@ -189,23 +189,65 @@ impl Repository {
         author: &Identity,
         resolutions: &[VirtualChange],
     ) -> Result<SyncOutcome> {
+        self.sync_virtual_with_target(observed, author, resolutions, None)
+    }
+
+    /// Syncs against exactly the branch head inspected by the caller, including an empty branch.
+    pub fn workspace_sync_virtual_checked_at(
+        &self,
+        observed: &WorkspaceRow,
+        author: &Identity,
+        resolutions: &[VirtualChange],
+        expected_stream_head: Option<&ChangesetId>,
+    ) -> Result<SyncOutcome> {
+        self.sync_virtual_with_target(observed, author, resolutions, Some(expected_stream_head.copied()))
+    }
+
+    fn move_synced_workspace(
+        &self,
+        tx: &Tx<'_>,
+        ws: &WorkspaceRow,
+        base: Option<&ChangesetId>,
+        head: Option<&ChangesetId>,
+        expected_stream_head: Option<Option<ChangesetId>>,
+    ) -> Result<WorkspaceRow> {
+        let actual = tx.stream(&ws.stream)?.and_then(|stream| stream.state.head);
+        check_sync_target(actual, expected_stream_head)?;
+        self.move_workspace(tx, ws, base, head)
+    }
+
+    fn sync_virtual_with_target(
+        &self,
+        observed: &WorkspaceRow,
+        author: &Identity,
+        resolutions: &[VirtualChange],
+        expected_stream_head: Option<Option<ChangesetId>>,
+    ) -> Result<SyncOutcome> {
         let ws = observed.clone();
         let name = ws.name.as_str();
         self.meta.read(|tx| tx.workspace_check(&ws)).map_err(crate::workspace::workspace_error)?;
-        let Some(stream_head) = self.meta.read(|tx| tx.stream(&ws.stream))?.and_then(|s| s.state.head) else {
+        let actual = self.meta.read(|tx| tx.stream(&ws.stream))?.and_then(|s| s.state.head);
+        check_sync_target(actual, expected_stream_head)?;
+        let Some(stream_head) = actual else {
             return Ok(SyncOutcome::UpToDate);
         };
         let g = self.graph();
         let Some(ws_head) = ws.head else {
-            self.meta.write_with_error(|tx| self.move_workspace(tx, &ws, Some(&stream_head), Some(&stream_head)))?;
+            self.meta.write_with_error(|tx| {
+                self.move_synced_workspace(tx, &ws, Some(&stream_head), Some(&stream_head), expected_stream_head)
+            })?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         };
         if is_ancestor(&g, &stream_head, &ws_head)? {
-            self.meta.write_with_error(|tx| self.move_workspace(tx, &ws, Some(&stream_head), Some(&ws_head)))?;
+            self.meta.write_with_error(|tx| {
+                self.move_synced_workspace(tx, &ws, Some(&stream_head), Some(&ws_head), expected_stream_head)
+            })?;
             return Ok(SyncOutcome::UpToDate);
         }
         if is_ancestor(&g, &ws_head, &stream_head)? {
-            self.meta.write_with_error(|tx| self.move_workspace(tx, &ws, Some(&stream_head), Some(&stream_head)))?;
+            self.meta.write_with_error(|tx| {
+                self.move_synced_workspace(tx, &ws, Some(&stream_head), Some(&stream_head), expected_stream_head)
+            })?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         }
         let base = match merge_bases(&g, &ws_head, &stream_head)?.as_slice() {
@@ -221,7 +263,18 @@ impl Repository {
 
         let mut result = merged.tree.clone();
         if !merged.is_clean() {
-            let infos: Vec<ConflictInfo> = merged.conflicts.iter().map(ConflictInfo::from_conflict).collect();
+            let mut scopes = merged.structural_resolution_scopes();
+            let infos: Vec<ConflictInfo> = merged
+                .conflicts
+                .iter()
+                .map(|conflict| {
+                    let mut info = ConflictInfo::from_conflict(conflict);
+                    if matches!(conflict.kind, ag_merge::ConflictKind::FileDirectory { .. }) {
+                        info.resolution_scope = scopes.remove(conflict.path.as_str()).map(Into::into);
+                    }
+                    info
+                })
+                .collect();
             let mut wanted: BTreeMap<RepoPath, Option<ag_tree::Entry>> = BTreeMap::new();
             for r in resolutions {
                 wanted.insert(r.path().clone(), self.change_to_target(r)?);
@@ -231,8 +284,7 @@ impl Repository {
             if resolutions.is_empty() || !unresolved.is_empty() {
                 return Ok(SyncOutcome::Conflicted { conflicts: infos });
             }
-            let ops = self.ops_towards(&result, &wanted);
-            result = result.apply(&ops, &self.limits)?;
+            result = merged.resolve_paths(&wanted, &self.limits)?;
         }
         let ops = ours.diff(&result);
         let id = self.commit(
@@ -247,10 +299,24 @@ impl Repository {
             ops,
         )?;
         self.meta.write_with_error(|tx| -> Result<()> {
-            self.move_workspace(tx, &ws, Some(&stream_head), Some(&id))?;
+            self.move_synced_workspace(tx, &ws, Some(&stream_head), Some(&id), expected_stream_head)?;
             tx.audit_append(author.as_str(), "workspace.sync", name, &json!({"merge": id}))?;
             Ok(())
         })?;
         Ok(SyncOutcome::Merged { id })
     }
+}
+
+fn check_sync_target(actual: Option<ChangesetId>, expected: Option<Option<ChangesetId>>) -> Result<()> {
+    if let Some(expected) = expected
+        && actual != expected
+    {
+        let show = |head: Option<ChangesetId>| head.map(|id| id.to_string()).unwrap_or_else(|| "empty".into());
+        return Err(Error::Conflict(format!(
+            "branch head changed: expected {}, found {}; inspect the current branch before resolving",
+            show(expected),
+            show(actual)
+        )));
+    }
+    Ok(())
 }

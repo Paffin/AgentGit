@@ -41,6 +41,8 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("snapshot", &a.ag(&["--json", "snapshot", "-m", "nothing changed"]).ok());
     let p1 = r.rec("propose", &a.ag(&["--json", "propose", "-t", "first"]).ok())["id"].as_str().unwrap().to_string();
     r.rec("proposal list", &a.ag(&["--json", "proposal", "list"]).ok());
+    r.rec("proposal reviewers", &a.ag(&["--json", "proposal", "reviewers", &p1, "--add", "user:bob"]).ok());
+    r.rec("proposal reviewers", &a.ag(&["--json", "proposal", "reviewers", &p1]).ok());
     r.rec("proposal show", &a.ag(&["--json", "proposal", "show", &p1]).ok());
     let preview = r.rec("preview", &a.ag(&["--json", "preview", &p1]).ok());
     let tree = preview["candidate_tree"].as_str().unwrap().to_string();
@@ -178,16 +180,17 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
         a.run_as("user:bob", &["proposal", "review", &p, "--approve"]).ok();
         a.ag(&["integrate", &p]).ok();
     };
-    land("docs.md", "d\n", "docs");
+    land("docs.md", "1\n2\n3\n4\n5\n6\n7\n8\n", "docs");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // fast-forward
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // up to date
     fs::write(ws.join("side.txt"), "s\n").unwrap();
     a.ag(&["snapshot", "-m", "side", "--workspace", "side"]).ok();
-    land("docs.md", "d2\n", "docs 2");
+    land("docs.md", "1\n2\nd2\n4\n5\n6\n7\n8\n", "docs 2");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).ok()); // merged
-    fs::write(ws.join("docs.md"), "side's d\n").unwrap();
+    fs::write(ws.join("docs.md"), "1\n2\nside's d\n4\n5\n6\n7\n8\n").unwrap();
     a.ag(&["snapshot", "-m", "side docs", "--workspace", "side"]).ok();
-    land("docs.md", "d3\n", "docs 3");
+    fs::rename(a.root().join("docs.md"), a.root().join("renamed.md")).unwrap();
+    land("renamed.md", "1\n2\nd3\n4\n5\n6\n7\n8\n", "docs 3");
     r.rec("sync", &a.ag(&["--json", "sync", "--workspace", "side"]).code_is(4)); // conflicted
     r.rec("status", &a.ag(&["--json", "status", "--workspace", "side"]).ok()); // a workspace with a base and a pending merge
     r.rec("workspace remove", &a.ag(&["--json", "workspace", "remove", "side"]).ok());

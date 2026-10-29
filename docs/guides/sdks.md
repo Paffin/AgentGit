@@ -474,6 +474,16 @@ Both generated HTTP SDKs expose `tree.search`. Start with a branch or changeset 
 
 A page can have no matches and still contain a continuation token because scanning is bounded. Read the `skipped_binary` and `skipped_large` counters before treating the result as exhaustive. See the [protocol contract](../protocol/agwp-v1.md#literal-content-search) for the exact limits.
 
+## Several repositories in one event feed
+
+On servers advertising `events.multi_repo`, replay and subscribe can take an explicit
+set of up to thirty repository names. Reuse the returned opaque cursor with the same
+repository and topic set. Empty cursor starts at the current positions; `from_start`
+requests historical replay. A checkpoint envelope has no event and should still have
+its cursor saved. Events have independent per-repository sequence numbers, so do not
+sort or deduplicate them using one global sequence. Both SDKs reuse their existing
+subscription transport and reconnect from the latest cursor.
+
 ## Regenerating the types
 
 The messages come from `docs/protocol/openapi.json`, which `ag-server` serves at `/openapi.json` and a Rust test keeps in

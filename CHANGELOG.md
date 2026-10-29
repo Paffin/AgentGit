@@ -12,6 +12,46 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Use component-specific fast CI for ordinary commits and cancel superseded work. Run the full platform/backend/browser/security matrix during qualification, reuse one server build for SDK runtimes, and retain compiled workspace caches.
 - Separate release preparation from publication. Promote the exact prepared and attested archives/images without rebuilding or repeating the Rust suite, with a three-minute publishing job and two-minute parallel public-install checks. Cold preparation and runner queues remain outside the five-minute ready-candidate publication target.
 
+### Added
+
+- `ag remote workspace list/show/create/sync/delete` exposes the virtual workspace workflow from the CLI. Explicit resolution files require a pinned stream head and capable server; JSON output retains complete/incomplete structural scopes without choosing paths automatically.
+
+- Browser file/directory conflicts support explicit whole-file or whole-folder choices with bounded complete previews, exact blob/type/mode preservation, visible removed paths and pinned revision checks. Independent clean changes survive; incomplete previews remain blocked.
+
+- Fresh structural sync previews include bounded candidate path scopes and an explicit completeness flag. Clients can account for synthetic rename destinations without guessing or treating a truncated preview as complete.
+
+- The release pipeline prepares a native Windows x64 ZIP with the CLI, server and MCP, plus a per-user PowerShell installer that verifies checksums. Native install-and-first-use smoke is required before publishing; the first Windows archive is not yet released.
+
+- Development builds can export GitHub/GitLab issues and comments to a portable manifest, preview it in Web or CLI, and resume an explicit import without duplicates. Source provenance is retained and unsupported metadata is reported. Schema13 requires a pre-upgrade backup.
+- Home receives live updates across up to thirty loaded repositories through one resumable event feed. CLI, SDKs and MCP expose bounded multi-repository replay with per-repository cursors.
+- Existing-file edits can be saved privately to an account and resumed through Web, CLI, SDK and MCP. Original revision and file metadata are retained; publication stays explicit. Development schema 12 requires a pre-upgrade backup.
+- General proposal comments gain separate private account drafts across Web, CLI, SDK and MCP, with explicit save and version-checked cleanup. Development schema 11 preserves existing review drafts; back up before upgrading.
+- Reviewers can explicitly save a private review draft to their account and resume on another device through Web UI, CLI, MCP or SDKs. Local drafts remain available, conflicting drafts require a choice, and versioned saves/clears never overwrite newer notes or submit a review. Development schema 10 requires a pre-upgrade backup.
+
+- Browser conflict resolution can keep either exact binary, oversized or file-type version while preserving blob bytes, executable mode and symlink type. Virtual sync pins the inspected branch through its final transaction and reports its exact target to SDK/MCP clients.
+
+- Authors can request specific reviewers with an inspected-list update across the API and clients. Requests survive new revisions, never grant access or count as approval, and can be filtered before proposal pagination. Development metadata schema 9 requires a pre-upgrade backup.
+
+- Review suggestions can replace up to 100 consecutive original lines. Range drafts survive reload, previews show the source file, and batches reject overlapping ranges before publication. Existing one-line suggestions keep their original format.
+
+- Authors can preview and apply selected review suggestions across files as one proposal revision. Exact source lines, executable mode, BOM and line endings are preserved; conflicting selections are refused and discussions remain open.
+
+### Fixed
+
+- Release completeness checks require the Windows ZIP for versions newer than beta.7, so an interrupted future upload is repaired instead of being mistaken for a complete release. Historical POSIX-only releases remain recognized.
+
+- Structural workspace sync preserves independent incoming additions, edits and deletions while applying explicit file/directory resolutions. Incomplete choices fail without moving the workspace; local structural sync and legacy pending snapshots refuse unsafe fallback commits.
+
+- Renamed conflict previews now read each version at its exact source path instead of mistaking a relocated file for deletion. CLI, SDK and MCP retain this metadata; the browser also supports explicit rename/delete choices and requires capable servers.
+
+- SDKs retry workspace sync automatically only when a nonempty inspected branch head guards the operation. Unguarded calls require explicit unsafe-retry opt-in.
+
+### Changed
+
+- Installation now prefers a stable release and explicitly falls back to a published prerelease when no stable exists. It prints a runnable local-demo command and safe PATH guidance; both READMEs and the getting-started guide lead with a verified install-to-first-change path.
+
+- The review workspace puts changed code first, keeps Review and Land in the header, and moves secondary actions and context into a quieter side panel. Phone layouts use a compact readiness strip and file navigation. All review, validation and permission states remain available.
+
 ## [0.3.0-beta.7] - 2026-10-29
 
 **Upgrade:** metadata schema 8 and control schema are unchanged from beta.6. Back up before upgrading. Returning to beta.5 or older requires the pre-upgrade backup.

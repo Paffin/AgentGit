@@ -51,15 +51,18 @@ describe('editing helpers', () => {
     expect(a).not.toBe(b)
   })
 
-  it('only offers to resolve here what a person can settle by choosing text', () => {
-    for (const k of ['content', 'both_added', 'delete_modify']) expect(canResolveHere(k)).toBe(true)
+  it('offers file choices while leaving structural conflicts to the command line', () => {
     for (const k of [
+      'content',
+      'both_added',
+      'delete_modify',
+      'rename_delete',
       'binary',
-      'type_change',
-      'rename_rename',
-      'directory_rename_ambiguous',
       'too_large',
+      'type_change',
     ])
+      expect(canResolveHere(k)).toBe(true)
+    for (const k of ['rename_rename', 'directory_rename_ambiguous', 'file_directory'])
       expect(canResolveHere(k)).toBe(false)
   })
 })

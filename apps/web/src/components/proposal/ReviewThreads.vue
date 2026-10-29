@@ -8,6 +8,7 @@ import { usePagedResource } from '@/composables/usePagedResource'
 import { useLiveReload } from '@/composables/useLiveReload'
 import ThreadComposer from './ThreadComposer.vue'
 import ReviewThreadCard from './ReviewThreadCard.vue'
+import BatchSuggestions from './BatchSuggestions.vue'
 import Button from '@/ui/Button.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 const props = defineProps<{ repo: string; proposal: Proposal; quote?: LineQuote | null }>()
@@ -89,6 +90,12 @@ watch([() => props.repo, () => props.proposal.id, () => auth.token], () => {
     >
       No {{ filter }} discussions in the loaded results.
     </p>
+    <BatchSuggestions
+      :repo="repo"
+      :proposal="proposal"
+      :threads="threads.data.value"
+      @applied="emit('applied')"
+    />
     <ReviewThreadCard
       v-for="thread in threads.data.value"
       v-show="filter === 'all' || thread.resolved === (filter === 'resolved')"

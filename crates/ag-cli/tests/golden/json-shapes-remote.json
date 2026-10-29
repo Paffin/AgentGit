@@ -254,6 +254,9 @@
               "policy_version": "number",
               "proposal": "string",
               "resolved": "bool",
+              "reviewers": [
+                "string"
+              ],
               "role": "string",
               "status": "string",
               "stream": "string",
@@ -415,6 +418,9 @@
         "title": "string",
         "updated_at_ms": "number"
       },
+      "requested_reviewers": [
+        "string"
+      ],
       "reviews": []
     },
     "remote proposals": {
@@ -444,6 +450,35 @@
       "reviewer": "string",
       "timestamp_ms": "number"
     },
+    "remote review-draft clear": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote review-draft get": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote review-draft save": {
+      "body": "string",
+      "decision": "string",
+      "head": "string",
+      "present": "bool",
+      "updated_at_ms": "number",
+      "version": "number"
+    },
+    "remote reviewers": {
+      "reviewers": [
+        "string"
+      ]
+    },
     "remote streams": {
       "streams": [
         {
@@ -471,6 +506,44 @@
         "run_id": "string",
         "streams": []
       }
+    },
+    "remote workspace create": {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    },
+    "remote workspace delete": {},
+    "remote workspace list": {
+      "workspaces": [
+        {
+          "base": "string",
+          "created_at_ms": "number",
+          "head": "string",
+          "name": "string",
+          "owner": "string",
+          "stream": "string",
+          "updated_at_ms": "number"
+        }
+      ]
+    },
+    "remote workspace show": {
+      "base": "string",
+      "created_at_ms": "number",
+      "head": "string",
+      "name": "string",
+      "owner": "string",
+      "stream": "string",
+      "updated_at_ms": "number"
+    },
+    "remote workspace sync": {
+      "conflicts": [],
+      "head": "string",
+      "status": "string",
+      "stream_head": "string"
     },
     "status#remote": {
       "base": "string",

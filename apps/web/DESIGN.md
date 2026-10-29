@@ -37,6 +37,14 @@ routes, permission checks, keyboard behavior and server-backed data.
 - Dark mode uses the existing paired tokens, not inversion. Motion only explains
   state changes and obeys `prefers-reduced-motion`.
 
+## Review workspace
+
+Lead with the change title and the two primary review/integration actions. Keep the
+four independent readiness states compact; do not put a large status card between
+the title and changed code. Details, requested reviewers and secondary actions live
+in a quiet side panel, after the code on phones. Preserve visible permission guidance
+for unavailable actions and keep file navigation compact on narrow screens.
+
 ## Verification
 
 Run the existing type, lint, unit and real-server browser checks after changes.

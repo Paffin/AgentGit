@@ -95,28 +95,27 @@ result, understand policy decisions and land a verified change. Migration must l
 team reach that workflow without losing its history or silently discarding hosting metadata.
 Work in the following order; keep each deliverable usable across the relevant clients.
 
-1. **Deliver the next development slice.** Beta.5 is published; its Linux archive checksum,
-   provenance and upgrade to development schema 7 have been verified. Admission controls and
-   task sources are already merged; they need their own subsequent release and schema-8 upgrade
-   notice, not a replacement beta.5 tag.
+1. **Deliver the next development slice.** Beta.7 is published with metadata schema 8.
+   Its Linux archive installation and first reviewed change have been exercised end to end.
+   The next release must include the development review workflow and its schema-13 upgrade
+   notice with backup/rollback guidance; existing beta tags remain immutable.
 2. **Finish the daily task and review workflow.** Queued-task refinement now preserves
    historical instructions and source links. Proposal updates now have an atomic inspected-head
    precondition as the prerequisite for safe review edits. Workspace mutations now compare the
    observed base/head in their final transaction, and proposal closing preserves terminal states. The final integration transaction also
-   rechecks the proposal head and open state. Single-line suggestions support explicit author preview and application. Next add batched/range suggestions and requested reviewers. Optional policy-required line-discussion resolution is now implemented
+   rechecks the proposal head and open state. Single-line, range and batched suggestions support explicit author preview and application across files in one revision. Requested reviewers route work across Web UI, CLI, MCP and SDKs without changing approval policy. Optional policy-required line-discussion resolution is now implemented
    across core, API, CLI explanations and Web UI. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
-   Account-backed drafts and non-text conflict resolution remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and
-   polling for the aggregate view. A cross-repository event feed remains future work.
+   Binary, oversized, file-type and rename/delete conflicts now support exact version choices; renamed content previews retain their per-side source paths. Private account-backed review-decision drafts now restore across browsers, with explicit save and version checks; general proposal comments now have separate private drafts with the same explicit save and version checks; single-file edits now support explicit account save and restore, including discovery after a file disappears from the current branch. Account-backed batch and new-file drafts remain open. Bounded file/directory conflicts now support whole-source choices with complete candidate previews; multi-target rename conflicts and larger structural cases remain open. The development Home page retains complete snapshots and uses one resumable live feed for up to thirty loaded repositories. Larger aggregate views keep bounded polling for the remaining repositories; CLI and SDKs share the scoped cross-repository cursor contract.
 3. **Make GitHub/GitLab cutover complete.** Code history, branch/tag mapping, the original bundle
-   and reconciliation already move through Web UI and CLI. Next design and implement resumable
-   hosting-metadata migration: issues and comments first, then pull/merge-request references,
-   releases and identity/permission mapping. Preview unsupported data and require deliberate
+   and reconciliation already move through Web UI and CLI. Development builds now export GitHub/GitLab issues and comments into bounded manifests and import them with preview, durable source mappings and resume without duplicates. Next extend beyond bounded initial snapshots to larger cutovers, pull/merge-request references, releases and identity/permission mapping. Preview unsupported data and require deliberate
    choices before publication. LFS payloads and CI configurations need separate transfer/setup;
    source YAML alone is not a working validation pipeline. Keep Git export and rollback visible
    in the [migration guide](docs/guides/migrate-from-git.md).
 4. **Qualify the real first-use experience.** Native archives already include the orchestrator;
-   browser setup prepares scoped executor access. Record an end-to-end run in a real MCP host
+   browser setup prepares scoped executor access. The Linux beta.7 archive now has an isolated
+   install-to-first-change smoke, and the installer/READMEs lead with that path. Record an
+   end-to-end run in a real MCP host
    ([#50](https://github.com/Paffin/AgentGit/issues/50)), clean macOS published-archive installation
    ([#52](https://github.com/Paffin/AgentGit/issues/52)), a screen-reader session
    ([#53](https://github.com/Paffin/AgentGit/issues/53)) and a physical-phone session
@@ -124,8 +123,9 @@ Work in the following order; keep each deliverable usable across the relevant cl
    ([#51](https://github.com/Paffin/AgentGit/issues/51)); automated browser runs do not substitute
    for these reports. The development rules form now edits protected-path approvers and check timing while preserving
    runner settings. Keep the dev sign-in exchange and remaining advanced controls on the onboarding backlog.
-5. **Finish distribution and widen support deliberately.** Verify Homebrew installation, add
-   a Windows release archive, publish crates and SDKs when registry ownership/trusted publishing
+5. **Finish distribution and widen support deliberately.** Verify Homebrew installation and
+   run the prepared Windows ZIP/PowerShell installer pipeline on a native Windows runner before
+   publishing its first archive. Publish crates and SDKs when registry ownership/trusted publishing
    is configured, and qualify installation outside CI. A stable tag follows the
    [beta exit evidence](docs/community/beta.md#release-gates), not a count of shipped features.
 6. **Qualify deployment and server follow-ups.** Compose and kind deployment already run in CI.

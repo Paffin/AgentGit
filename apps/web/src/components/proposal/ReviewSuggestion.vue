@@ -56,6 +56,8 @@ watch(
     () => props.proposal.id,
     () => props.proposal.head,
     () => props.thread.id,
+    () => props.thread.version,
+    () => props.thread.body,
     () => auth.token,
   ],
   reset,
@@ -76,6 +78,7 @@ async function inspect() {
       props.thread.anchor,
       props.suggestion.replacement,
       { token: auth.token, quietUnauthenticated: true, signal: controller.signal },
+      props.suggestion.lines,
     )
     if (mine === generation) preview.value = prepared
   } catch (cause) {
@@ -115,8 +118,13 @@ async function apply() {
 <template>
   <section class="suggestion" aria-label="Suggested replacement">
     <strong>Suggested replacement</strong>
+    <p v-if="suggestion.lines" class="muted">
+      Replaces original lines {{ thread.anchor?.line }}–{{
+        (thread.anchor?.line || 0) + suggestion.lines - 1
+      }}.
+    </p>
     <pre v-if="suggestion.replacement" class="replacement">{{ suggestion.replacement }}</pre>
-    <p v-else>Delete this line.</p>
+    <p v-else>Delete {{ suggestion.lines ? `these ${suggestion.lines} lines` : 'this line' }}.</p>
     <div class="actions">
       <CopyButton :text="suggestion.replacement" label="Copy suggested code" with-label />
       <Button v-if="canApply" size="sm" @click="inspect">Review and apply suggestion</Button>
@@ -127,15 +135,23 @@ async function apply() {
     </p>
   </section>
   <Dialog v-model="open" title="Apply this suggestion?" :dismissable="!busy" size="lg">
-    <p>{{ thread.anchor?.path }} · line {{ thread.anchor?.line }}</p>
-    <p class="muted">
-      Replaces only this line in the inspected revision. The discussion stays open for review.
+    <p>
+      {{ thread.anchor?.path }} ·
+      {{
+        suggestion.lines
+          ? `lines ${thread.anchor!.line}–${thread.anchor!.line + suggestion.lines - 1}`
+          : `line ${thread.anchor?.line}`
+      }}
     </p>
-    <h3>Current line</h3>
-    <pre class="replacement">{{ thread.anchor?.text }}</pre>
+    <p class="muted">
+      Replaces {{ suggestion.lines || 1 }} original {{ suggestion.lines ? 'lines' : 'line' }} in the
+      inspected revision. The discussion stays open for review.
+    </p>
+    <h3>{{ suggestion.lines ? 'Current file' : 'Current line' }}</h3>
+    <pre class="replacement">{{ suggestion.lines ? preview?.before : thread.anchor?.text }}</pre>
     <h3>Replacement</h3>
     <pre v-if="suggestion.replacement" class="replacement">{{ suggestion.replacement }}</pre>
-    <p v-else>Delete this line.</p>
+    <p v-else>Delete {{ suggestion.lines ? `these ${suggestion.lines} lines` : 'this line' }}.</p>
     <p v-if="busy" role="status">Preparing the change…</p>
     <Alert v-if="error" tone="bad" live="alert">{{ error }}</Alert>
     <template #footer>
@@ -160,6 +176,8 @@ async function apply() {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
+  max-height: 20rem;
+  overflow: auto;
 }
 .actions {
   display: flex;

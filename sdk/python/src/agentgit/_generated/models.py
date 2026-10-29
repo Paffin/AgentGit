@@ -14,6 +14,7 @@ __all__ = [
     "Agent",
     "AncestorsRequest",
     "AncestorsResponse",
+    "ApplyIssueImportRequest",
     "AssignTaskRequest",
     "Attestation",
     "AuditEntry",
@@ -27,13 +28,19 @@ __all__ = [
     "Changeset",
     "ClaimJobRequest",
     "ClaimJobResponse",
+    "ClearCommentDraftRequest",
+    "ClearFileDraftRequest",
+    "ClearReviewDraftRequest",
     "CloseProposalRequest",
+    "CommentDraft",
     "CommentProposalRequest",
     "CompareAndSwapRequest",
     "CompleteJobRequest",
     "CompleteRunRequest",
     "ConfigureRepoRequest",
     "Conflict",
+    "ConflictOrigin",
+    "ConflictResolutionScope",
     "CreateIssueRequest",
     "CreateProposalRequest",
     "CreateRepoRequest",
@@ -52,11 +59,14 @@ __all__ = [
     "ErrorEnvelope",
     "ErrorInfo",
     "Event",
+    "EventEnvelope",
     "ExecutorPresence",
     "ExtendLeaseRequest",
     "FailJobRequest",
     "FileChange",
     "FileDiff",
+    "FileDraft",
+    "FileDraftSummary",
     "FileOp",
     "FinishTaskRequest",
     "FsckIssue",
@@ -66,12 +76,15 @@ __all__ = [
     "GcResponse",
     "GetCandidateRequest",
     "GetChangesetRequest",
+    "GetCommentDraftRequest",
+    "GetFileDraftRequest",
     "GetIssueRequest",
     "GetJobRequest",
     "GetOperationRequest",
     "GetPolicyRequest",
     "GetProposalRequest",
     "GetRepoRequest",
+    "GetReviewDraftRequest",
     "GetRunOutputRequest",
     "GetRunRequest",
     "GetTaskRequest",
@@ -85,11 +98,14 @@ __all__ = [
     "HeartbeatJobRequest",
     "HeartbeatRequest",
     "HeartbeatResponse",
+    "ImportedIssueMapping",
     "IntegrateRequest",
     "IntegrationOutcome",
     "IntegrationResult",
     "Issue",
     "IssueActivity",
+    "IssueImportPreview",
+    "IssueImportResult",
     "Job",
     "Lease",
     "LeaseRef",
@@ -104,6 +120,8 @@ __all__ = [
     "ListCredentialsResponse",
     "ListDirectoryRequest",
     "ListDirectoryResponse",
+    "ListFileDraftsRequest",
+    "ListFileDraftsResponse",
     "ListIssueActivityRequest",
     "ListIssueActivityResponse",
     "ListIssuesRequest",
@@ -160,6 +178,7 @@ __all__ = [
     "PredictResponse",
     "Preparation",
     "PrepareRequest",
+    "PreviewIssueImportRequest",
     "Principal",
     "Proposal",
     "ProposalDetail",
@@ -176,18 +195,22 @@ __all__ = [
     "ReflogRequest",
     "ReflogResponse",
     "RegisterAgentRequest",
+    "ReplayManyRequest",
+    "ReplayManyResponse",
     "ReplayRequest",
     "ReplayResponse",
     "Repo",
     "ReportExecutorRequest",
     "RequestValidationRequest",
     "RequestValidationResponse",
+    "RequestedReviewers",
     "ResolvePathRequest",
     "ResolvePathResponse",
     "ResolveRevRequest",
     "ResolveRevResponse",
     "ResolveReviewThreadRequest",
     "Review",
+    "ReviewDraft",
     "ReviewLineAnchor",
     "ReviewProposalRequest",
     "ReviewThread",
@@ -200,12 +223,16 @@ __all__ = [
     "RunQueueRequest",
     "RunQueueResponse",
     "RunSpec",
+    "SaveCommentDraftRequest",
+    "SaveFileDraftRequest",
+    "SaveReviewDraftRequest",
     "SaveRunOutputRequest",
     "SearchMatch",
     "SearchTreeRequest",
     "SearchTreeResponse",
     "SetAgentStateRequest",
     "SetPolicyRequest",
+    "SetRequestedReviewersRequest",
     "SetTaskAttemptLimitRequest",
     "SetTaskSchedulingRequest",
     "StartRunRequest",
@@ -308,6 +335,15 @@ class AncestorsResponse:
     """The `AncestorsResponse` message."""
     changeset_ids: list[str] = field(default_factory=list)
     next_page_token: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ApplyIssueImportRequest:
+    """The `ApplyIssueImportRequest` message."""
+    allow_unsupported: bool = field(default=False)
+    expected_digest: str = field(default="")
+    manifest_json: str = field(default="")
+    repo: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -446,11 +482,46 @@ class ClaimJobResponse:
 
 
 @dataclass(kw_only=True)
+class ClearCommentDraftRequest:
+    """The `ClearCommentDraftRequest` message."""
+    expected_version: int = field(default=0)
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ClearFileDraftRequest:
+    """The `ClearFileDraftRequest` message."""
+    expected_version: int = field(default=0)
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ClearReviewDraftRequest:
+    """The `ClearReviewDraftRequest` message."""
+    expected_version: int = field(default=0)
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class CloseProposalRequest:
     """The `CloseProposalRequest` message."""
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class CommentDraft:
+    """Private, unsubmitted general discussion notes for the current acting identity."""
+    body: str = field(default="")
+    head: str = field(default="")
+    present: bool = field(default=False)
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -512,7 +583,24 @@ class Conflict:
     """The `Conflict` message."""
     kind: str = field(default="")
     message: str = field(default="")
+    origin: ConflictOrigin | None = field(default=None)
     path: str = field(default="")
+    resolution_scope: ConflictResolutionScope | None = field(default=None)
+
+
+@dataclass(kw_only=True)
+class ConflictOrigin:
+    """Exact paths at the three revisions when source locations differ after a rename."""
+    base: str = field(default="")
+    ours: str = field(default="")
+    theirs: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ConflictResolutionScope:
+    """Exact candidate paths at or beneath one file/directory conflict root."""
+    complete: bool = field(default=False)
+    paths: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -693,6 +781,13 @@ class Event:
 
 
 @dataclass(kw_only=True)
+class EventEnvelope:
+    """An opaque vector cursor; events from different repositories have no shared sequence."""
+    cursor: str = field(default="")
+    event: Event | None = field(default=None)
+
+
+@dataclass(kw_only=True)
 class ExecutorPresence:
     """The `ExecutorPresence` message."""
     available: int = field(default=0)
@@ -746,6 +841,31 @@ class FileDiff:
     path: str = field(default="")
     status: str = field(default="")
     truncated: bool = field(default=False)
+
+
+@dataclass(kw_only=True)
+class FileDraft:
+    """Private existing-file edit owned by the current acting identity."""
+    base: str = field(default="")
+    content: str = field(default="")
+    executable: bool = field(default=False)
+    file_type: str = field(default="")
+    original_blob_id: str = field(default="")
+    path: str = field(default="")
+    present: bool = field(default=False)
+    stream: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class FileDraftSummary:
+    """Discovery carries no private replacement bytes."""
+    base: str = field(default="")
+    path: str = field(default="")
+    stream: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -832,6 +952,21 @@ class GetChangesetRequest:
 
 
 @dataclass(kw_only=True)
+class GetCommentDraftRequest:
+    """The `GetCommentDraftRequest` message."""
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetFileDraftRequest:
+    """The `GetFileDraftRequest` message."""
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class GetIssueRequest:
     """The `GetIssueRequest` message."""
     number: int = field(default=0)
@@ -870,6 +1005,13 @@ class GetProposalRequest:
 @dataclass(kw_only=True)
 class GetRepoRequest:
     """The `GetRepoRequest` message."""
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetReviewDraftRequest:
+    """The `GetReviewDraftRequest` message."""
+    id: str = field(default="")
     repo: str = field(default="")
 
 
@@ -973,6 +1115,13 @@ class HeartbeatResponse:
 
 
 @dataclass(kw_only=True)
+class ImportedIssueMapping:
+    """The `ImportedIssueMapping` message."""
+    number: int = field(default=0)
+    source_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class IntegrateRequest:
     """The `IntegrateRequest` message."""
     fencing_tokens: list[int] = field(default_factory=list)
@@ -1031,6 +1180,26 @@ class IssueActivity:
     id: int = field(default=0)
     issue_number: int = field(default=0)
     kind: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class IssueImportPreview:
+    """The `IssueImportPreview` message."""
+    comments: int = field(default=0)
+    conflicts: list[str] = field(default_factory=list)
+    create_count: int = field(default=0)
+    digest: str = field(default="")
+    issues: int = field(default=0)
+    skip_count: int = field(default=0)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class IssueImportResult:
+    """The `IssueImportResult` message."""
+    created: int = field(default=0)
+    mappings: list[ImportedIssueMapping] = field(default_factory=list)
+    skipped: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -1154,6 +1323,19 @@ class ListDirectoryResponse:
 
 
 @dataclass(kw_only=True)
+class ListFileDraftsRequest:
+    """The `ListFileDraftsRequest` message."""
+    repo: str = field(default="")
+    stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListFileDraftsResponse:
+    """The `ListFileDraftsResponse` message."""
+    drafts: list[FileDraftSummary] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
 class ListIssueActivityRequest:
     """The `ListIssueActivityRequest` message."""
     number: int = field(default=0)
@@ -1234,6 +1416,7 @@ class ListProposalsRequest:
     page_size: int = field(default=0)
     page_token: str = field(default="")
     repo: str = field(default="")
+    requested_reviewer: str = field(default="")
     state: str = field(default="")
     stream: str = field(default="")
     task_id: str = field(default="")
@@ -1599,6 +1782,13 @@ class PrepareRequest:
 
 
 @dataclass(kw_only=True)
+class PreviewIssueImportRequest:
+    """The `PreviewIssueImportRequest` message."""
+    manifest_json: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class Principal:
     """The `Principal` message."""
     credential_id: str = field(default="")
@@ -1630,6 +1820,7 @@ class Proposal:
 class ProposalDetail:
     """The `ProposalDetail` message."""
     proposal: Proposal = field(default_factory=lambda: Proposal())
+    requested_reviewers: list[str] = field(default_factory=list)
     reviews: list[Review] = field(default_factory=list)
 
 
@@ -1767,6 +1958,24 @@ class RegisterAgentRequest:
 
 
 @dataclass(kw_only=True)
+class ReplayManyRequest:
+    """The `ReplayManyRequest` message."""
+    cursor: str = field(default="")
+    from_start: bool = field(default=False)
+    limit: int = field(default=0)
+    repos: list[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class ReplayManyResponse:
+    """The `ReplayManyResponse` message."""
+    cursor: str = field(default="")
+    events: list[EventEnvelope] = field(default_factory=list)
+    has_more: bool = field(default=False)
+
+
+@dataclass(kw_only=True)
 class ReplayRequest:
     """The `ReplayRequest` message."""
     after_seq: int = field(default=0)
@@ -1827,6 +2036,12 @@ class RequestValidationResponse:
 
 
 @dataclass(kw_only=True)
+class RequestedReviewers:
+    """The `RequestedReviewers` message."""
+    reviewers: list[str] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
 class ResolvePathRequest:
     """The `ResolvePathRequest` message."""
     path: str = field(default="")
@@ -1875,6 +2090,17 @@ class Review:
     proposal: str = field(default="")
     reviewer: str = field(default="")
     timestamp_ms: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class ReviewDraft:
+    """Private, unsubmitted review notes for the current acting identity only."""
+    body: str = field(default="")
+    decision: str = field(default="")
+    head: str = field(default="")
+    present: bool = field(default=False)
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
 
 
 @dataclass(kw_only=True)
@@ -1999,6 +2225,38 @@ class RunSpec:
 
 
 @dataclass(kw_only=True)
+class SaveCommentDraftRequest:
+    """The `SaveCommentDraftRequest` message."""
+    body: str = field(default="")
+    expected_version: int = field(default=0)
+    head: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SaveFileDraftRequest:
+    """The `SaveFileDraftRequest` message."""
+    base: str = field(default="")
+    content: str = field(default="")
+    expected_version: int = field(default=0)
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SaveReviewDraftRequest:
+    """The `SaveReviewDraftRequest` message."""
+    body: str = field(default="")
+    decision: str = field(default="")
+    expected_version: int = field(default=0)
+    head: str = field(default="")
+    id: str = field(default="")
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class SaveRunOutputRequest:
     """The `SaveRunOutputRequest` message."""
     output: RunOutput | None = field(default=None)
@@ -2056,6 +2314,15 @@ class SetPolicyRequest:
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SetRequestedReviewersRequest:
+    """Replaces review routing after comparing the complete inspected set."""
+    expected_reviewers: list[str] = field(default_factory=list)
+    id: str = field(default="")
+    repo: str = field(default="")
+    reviewers: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -2122,6 +2389,7 @@ class SubmitProvenanceRequest:
 @dataclass(kw_only=True)
 class SyncWorkspaceRequest:
     """The `SyncWorkspaceRequest` message."""
+    expected_stream_head: str = field(default="")
     idempotency_key: str = field(default="")
     name: str = field(default="")
     repo: str = field(default="")
@@ -2134,6 +2402,7 @@ class SyncWorkspaceResponse:
     conflicts: list[Conflict] = field(default_factory=list)
     head: str = field(default="")
     status: str = field(default="")
+    stream_head: str = field(default="")
 
 
 @dataclass(kw_only=True)

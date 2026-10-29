@@ -16,11 +16,14 @@ import TextArea from '@/ui/TextArea.vue'
 import SelectField from '@/ui/SelectField.vue'
 import RelativeTime from '@/ui/RelativeTime.vue'
 import EmptyState from '@/ui/EmptyState.vue'
+import IssueImportDialog from '@/components/issues/IssueImportDialog.vue'
 const { repo, routeParams } = useRepoName()
 const auth = useAuth(),
   route = useRoute(),
   router = useRouter()
 usePageTitle(() => `Issues · ${repo.value}`)
+const importing = ref(false)
+const importSupported = computed(() => !!auth.capabilities?.features.includes('issues.import'))
 const supported = computed(() => !!auth.capabilities?.features.includes('issues.v1'))
 const canWrite = computed(() => auth.can(repo.value, 'createIssue'))
 const identity = computed(() => JSON.stringify([auth.identity, repo.value]))
@@ -136,10 +139,12 @@ useLiveReload(['issue'], () => load())
         <h1>Issues</h1>
         <p class="muted">Plan work, discuss it, and connect it to an agent task.</p>
       </div>
-      <Button v-if="canWrite && supported && !creating" variant="primary" @click="showCreate(true)"
-        >New issue</Button
-      >
+      <div v-if="canWrite && supported && !creating" class="actions">
+        <Button v-if="importSupported" @click="importing = true">Import</Button>
+        <Button variant="primary" @click="showCreate(true)">New issue</Button>
+      </div>
     </header>
+    <IssueImportDialog v-model="importing" :repo="repo" @imported="load()" />
     <Alert v-if="!supported" tone="warn" title="Server update required"
       >This server does not support the issue tracker yet.</Alert
     >

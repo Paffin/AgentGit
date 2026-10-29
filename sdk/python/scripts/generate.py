@@ -304,7 +304,7 @@ def build_ops() -> list[Op]:
                     )
             if body == "bytes":
                 params.append(Param("data", "data", "bytes", True, "The binary request body."))
-            if op_id == "events.subscribe":
+            if op_id in {"events.subscribe", "events.subscribe_many"}:
                 params = []
             result = res_name or "Any"
             if response == "bytes":
@@ -347,7 +347,14 @@ def build_ops() -> list[Op]:
 def check_hand_written_operations(ops: list[Op]) -> None:
     """The operations that are not plain JSON have hand-written methods; the document must keep matching them."""
     non_json = {o.id for o in ops if o.body not in ("json", "none") or o.response != "json"}
-    hand_written = {"objects.put", "objects.get", "tree.file", "events.subscribe", "migration.prepare"}
+    hand_written = {
+        "objects.put",
+        "objects.get",
+        "tree.file",
+        "events.subscribe",
+        "events.subscribe_many",
+        "migration.prepare",
+    }
     if non_json != hand_written:
         raise SystemExit(
             f"non-JSON operations in the document: {sorted(non_json)}, expected {sorted(hand_written)}"
@@ -358,6 +365,7 @@ def check_hand_written_operations(ops: list[Op]) -> None:
         "objects.get": set(),
         "tree.file": {"rev"},
         "events.subscribe": {"after_seq", "heartbeat_ms", "topics"},
+        "events.subscribe_many": {"repos", "topics", "cursor", "heartbeat_ms"},
     }
     for o in ops:
         if o.id in expected_query and set(o.query_params) != expected_query[o.id]:
@@ -432,7 +440,7 @@ def method_py(o: Op, is_async: bool) -> str:
     for p in optional:
         sig.append(f"{p.name}: {p.typ} | None = None")
     sig.append("options: CallOptions | None = None")
-    if o.id == "events.subscribe":
+    if o.id in {"events.subscribe", "events.subscribe_many"}:
         return ""
     ret = o.result
     wire = ", ".join(f"{json.dumps(p.wire)}: {p.name}" for p in o.params)
@@ -452,7 +460,23 @@ def method_py(o: Op, is_async: bool) -> str:
     return "".join(lines)
 
 
-def events_methods(is_async: bool) -> str:
+def events_methods(is_async: bool, many: bool = False) -> str:
+    if many:
+        ret = "AsyncGenerator[EventEnvelope, None]" if is_async else "Generator[EventEnvelope, None, None]"
+        return f'''    def subscribe_many(
+        self, *, repos: Sequence[str], cursor: str | None = None,
+        topics: Sequence[str] | None = None, heartbeat_ms: int | None = None,
+        idle_timeout_ms: int | None = None, reconnect: ReconnectPolicy | None = None,
+        run_id: str | None = None,
+    ) -> {ret}:
+        """Follow explicit repositories with opaque cursor resume; yields checkpoints too."""
+        return self._c._subscribe_many(
+            repos=repos, cursor=cursor, topics=topics, heartbeat_ms=heartbeat_ms,
+            idle_timeout_ms=idle_timeout_ms, reconnect=reconnect, run_id=run_id,
+        )
+
+'''
+
     kw_ret = "AsyncGenerator[Event, None]" if is_async else "Generator[Event, None, None]"
     return (
         "    def subscribe(\n"
@@ -504,8 +528,8 @@ def namespaces_py(ops: list[Op]) -> str:
             out.append(f"    def __init__(self, caller: {caller}) -> None:\n")
             out.append("        self._c = caller\n\n")
             for o in sorted(by_ns[ns], key=lambda x: x.name):
-                if o.id == "events.subscribe":
-                    out.append(events_methods(is_async))
+                if o.id in {"events.subscribe", "events.subscribe_many"}:
+                    out.append(events_methods(is_async, many=o.id == "events.subscribe_many"))
                 else:
                     out.append(method_py(o, is_async))
             out.append("\n")

@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -282,6 +283,77 @@ class Packaging(unittest.TestCase):
         self.assertTrue((prefix / "share/doc/agentgit/LICENSE").is_file())
         self.assertEqual(list((prefix / "bin").glob(".*")), [], "no temporary files left behind")
 
+    def discover_release(self, stable, latest, lookup_error=None):
+        tools = self.dir / "discovery-tools"
+        tools.mkdir(exist_ok=True)
+        curl = tools / "curl"
+        lookup = lookup_error or ("200 " + (stable or "https://github.com/Paffin/AgentGit/releases"))
+        lookup_command = "exit 7" if lookup_error == "network" else "printf '%s' " + shlex.quote(lookup)
+        curl.write_text("#!/bin/sh\n" +
+                        "case \"$*\" in\n" +
+                        "  *releases/latest*) " + lookup_command + ";;\n" +
+                        "  *api.github.com*) printf '%s' " + shlex.quote(json.dumps(latest)) + ";;\n" +
+                        "  *) exit 1;;\nesac\n")
+        curl.chmod(0o755)
+        return run("sh", SCRIPTS / "install.sh", "--dry-run", "--target", self.target,
+                   env={"PATH": str(tools) + os.pathsep + os.environ["PATH"], "AG_VERSION": ""})
+
+    def test_default_install_prefers_stable_release(self):
+        result = self.discover_release("https://github.com/Paffin/AgentGit/releases/tag/v1.2.3",
+                                       [{"tag_name": "v2.0.0-beta.1", "draft": False, "prerelease": True}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("AgentGit 1.2.3 for", result.stdout)
+        self.assertNotIn("2.0.0-beta.1", result.stdout)
+
+    def test_default_install_falls_back_to_published_prerelease(self):
+        result = self.discover_release(None, [{"tag_name": "v0.3.0-beta.7", "draft": False, "prerelease": True}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("AgentGit 0.3.0-beta.7 for", result.stdout)
+        self.assertIn("prerelease", result.stdout)
+
+    def test_default_install_uses_published_release_after_stable_404(self):
+        result = self.discover_release(None, [{"tag_name": "v0.3.0-beta.7", "draft": False}],
+                                       lookup_error="404 https://github.com/Paffin/AgentGit/releases/latest")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("AgentGit 0.3.0-beta.7 for", result.stdout)
+
+    def test_default_install_fails_clearly_on_network_error(self):
+        result = self.discover_release(None, [{"tag_name": "v0.3.0-beta.7", "draft": False}], lookup_error="network")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not reach GitHub", result.stderr)
+        self.assertNotIn("Using published prerelease", result.stdout)
+
+    def test_default_install_does_not_treat_http_errors_as_a_beta_selection(self):
+        for status in ("401", "403", "429", "503"):
+            with self.subTest(status=status):
+                result = self.discover_release(None, [{"tag_name": "v0.3.0-beta.7", "draft": False}],
+                                               lookup_error=status + " https://github.com/Paffin/AgentGit/releases/latest")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("Using published prerelease", result.stdout)
+
+    def test_default_install_refuses_missing_or_draft_releases(self):
+        for releases in ([], [{"tag_name": "v0.3.0-beta.7", "draft": True, "prerelease": True}]):
+            with self.subTest(releases=releases):
+                result = self.discover_release(None, releases)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("no published release", result.stderr)
+
+    def test_install_next_steps_are_copyable_with_a_shell_sensitive_prefix(self):
+        prefix = self.dir / "Agent's tools $(touch UNEXPECTED)"
+        release = self.release_dir()
+        result = run("sh", SCRIPTS / "install.sh", "--version", self.version, "--prefix", prefix,
+                     "--base-url", f"file://{release}", "--no-attestation")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        start = next(line.strip() for line in result.stdout.splitlines() if " dev --open" in line)
+        launched = run("sh", "-c", start, cwd=self.dir)
+        self.assertEqual(launched.returncode, 0, launched.stderr)
+        self.assertIn("ag-server", launched.stdout)
+        path = next(line.strip() for line in result.stdout.splitlines() if "export PATH=" in line)
+        activated = run("sh", "-c", path + "\nag --version", cwd=self.dir)
+        self.assertEqual(activated.returncode, 0, activated.stderr)
+        self.assertIn(self.version, activated.stdout)
+        self.assertFalse((self.dir / "UNEXPECTED").exists())
+
     def test_install_sh_works_under_dash_when_available(self):
         ag_testkit.require_component("dash", self.id(), shutil.which("dash"), "dash is not installed")
         p, prefix = self.install(shell="dash")
@@ -325,6 +397,14 @@ class Packaging(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(binary, result.stderr)
                 self.assertEqual(old.read_text(), "old installation")
+
+    def test_legacy_install_does_not_recommend_commands_it_did_not_ship(self):
+        self.version = "0.2.0-rc.2"
+        result, _ = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("dev --open", result.stdout)
+        self.assertNotIn("ag login", result.stdout)
+        self.assertIn("legacy release", result.stdout)
 
     def test_pre_beta4_archives_install_without_an_orchestrator(self):
         self.version = "0.3.0-beta.3"

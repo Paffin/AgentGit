@@ -45,7 +45,7 @@ const stale = (r: Review) => r.head !== props.proposal.head
         >.
       </p>
       <Button
-        variant="primary"
+        variant="secondary"
         icon="check"
         :disabled="!canReview || proposal.state !== 'open'"
         :disabled-reason="

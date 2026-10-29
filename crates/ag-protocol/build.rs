@@ -15,7 +15,12 @@ const JSON_FIELDS: &[(&str, &str)] = &[
 ];
 
 /// `bytes` fields: base64 in JSON.
-const BYTES_FIELDS: &[&str] = &["agwp.v1.ObjectChunk.data", "agwp.v1.FileChange.content"];
+const BYTES_FIELDS: &[&str] = &[
+    "agwp.v1.ObjectChunk.data",
+    "agwp.v1.FileChange.content",
+    "agwp.v1.FileDraft.content",
+    "agwp.v1.SaveFileDraftRequest.content",
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
@@ -46,6 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for field in ["old_mode", "new_mode", "truncated"] {
         builder = builder.field_attribute(format!("agwp.v1.FileDiff.{field}"), "#[schema(required = false)]");
     }
+    builder = builder.field_attribute("agwp.v1.ProposalDetail.requested_reviewers", "#[schema(required = false)]");
+    builder = builder.field_attribute("agwp.v1.SyncWorkspaceResponse.stream_head", "#[schema(required = false)]");
     builder.compile_fds(fds)?;
     Ok(())
 }

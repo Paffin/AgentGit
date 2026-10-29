@@ -592,6 +592,11 @@
       "reviewer": "string",
       "timestamp": "number"
     },
+    "proposal reviewers": {
+      "reviewers": [
+        "string"
+      ]
+    },
     "proposal show": {
       "proposal": {
         "author": "string",
@@ -606,6 +611,9 @@
         "title": "string",
         "updated_at": "number"
       },
+      "requested_reviewers": [
+        "string"
+      ],
       "reviews": []
     },
     "proposal update": {
@@ -840,6 +848,11 @@
         {
           "kind": "string",
           "message": "string",
+          "origin": {
+            "base": "string",
+            "ours": "string",
+            "theirs": "string"
+          },
           "path": "string"
         }
       ],

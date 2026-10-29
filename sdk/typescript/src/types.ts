@@ -110,3 +110,11 @@ export interface SubscribeEventsOptions {
   runId?: string;
   headers?: Record<string, string>;
 }
+
+/** Explicit cross-repository feed. Checkpoint envelopes may have no event. */
+export interface SubscribeManyEventsOptions extends Omit<SubscribeEventsOptions, 'repo' | 'afterSeq'> {
+  /** Explicit repository set, between 1 and 30; held fixed across reconnects. */
+  repos: string[];
+  /** Opaque checkpoint from replayMany or subscribeMany; omit to start now. */
+  cursor?: string;
+}

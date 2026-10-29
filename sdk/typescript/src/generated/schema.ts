@@ -70,6 +70,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor */
+        get: operations["events.subscribe_many"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/events/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history */
+        get: operations["events.replay_many"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/claim": {
         parameters: {
             query?: never;
@@ -363,6 +397,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/file-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get private file drafts */
+        get: operations["file_draft.get"];
+        /** Save private file drafts */
+        put: operations["file_draft.save"];
+        post?: never;
+        /** Clear private file drafts */
+        delete: operations["file_draft.clear"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/file-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List private file drafts */
+        get: operations["file_draft.list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/files/{*path}": {
         parameters: {
             query?: never;
@@ -477,6 +547,40 @@ export interface paths {
         put?: never;
         /** Create a user issue */
         post: operations["issue.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues/import/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply the inspected import manifest digest */
+        post: operations["issue.import_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/issues/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview normalized hosting issues and comments */
+        post: operations["issue.import_preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -882,6 +986,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read your private comment draft */
+        get: operations["proposal.get_comment_draft"];
+        /** Save your private comment draft */
+        put: operations["proposal.save_comment_draft"];
+        post?: never;
+        /** Clear the inspected private comment draft */
+        delete: operations["proposal.clear_comment_draft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repos/{owner}/{rname}/proposals/{id}/comments": {
         parameters: {
             query?: never;
@@ -893,6 +1016,42 @@ export interface paths {
         put?: never;
         /** Add an idempotent discussion comment at the inspected head */
         post: operations["proposal.comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read your private review draft */
+        get: operations["proposal.get_draft"];
+        /** Save your private review draft */
+        put: operations["proposal.save_draft"];
+        post?: never;
+        /** Clear the inspected private review draft */
+        delete: operations["proposal.clear_draft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repos/{owner}/{rname}/proposals/{id}/reviewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the inspected set of requested reviewers */
+        put: operations["proposal.set_reviewers"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1693,6 +1852,16 @@ export interface components {
             /** @default  */
             next_page_token: string;
         };
+        ApplyIssueImportRequest: {
+            /** @default false */
+            allow_unsupported: boolean;
+            /** @default  */
+            expected_digest: string;
+            /** @default  */
+            manifest_json: string;
+            /** @default  */
+            repo: string;
+        };
         AssignTaskRequest: {
             /**
              * @description Registered agent name; empty restores automatic routing.
@@ -1964,6 +2133,41 @@ export interface components {
             /** @default null */
             job: components["schemas"]["Job"] | null;
         };
+        ClearCommentDraftRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+        };
+        ClearFileDraftRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            path: string;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            stream: string;
+        };
+        ClearReviewDraftRequest: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+        };
         CloseProposalRequest: {
             /** @default  */
             id: string;
@@ -1974,6 +2178,25 @@ export interface components {
             idempotency_key: string;
             /** @default  */
             repo: string;
+        };
+        /** @description Private, unsubmitted general discussion notes for the current acting identity. */
+        CommentDraft: {
+            /** @default  */
+            body: string;
+            /** @default  */
+            head: string;
+            /** @default false */
+            present: boolean;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
         };
         /** @description A discussion entry, never an approval or a request-changes vote. */
         CommentProposalRequest: {
@@ -2094,8 +2317,33 @@ export interface components {
              * @default
              */
             message: string;
+            origin?: components["schemas"]["ConflictOrigin"] | null;
             /** @default  */
             path: string;
+            resolution_scope?: components["schemas"]["ConflictResolutionScope"] | null;
+        };
+        /** @description Exact paths at the three revisions when source locations differ after a rename. */
+        ConflictOrigin: {
+            /** @default  */
+            base: string;
+            /** @default  */
+            ours: string;
+            /** @default  */
+            theirs: string;
+        };
+        /** @description Exact candidate paths at or beneath one file/directory conflict root. */
+        ConflictResolutionScope: {
+            /**
+             * @description False if any candidate was omitted; clients must not offer automatic subtree choices then.
+             * @default false
+             */
+            complete: boolean;
+            /**
+             * @description Ordered candidate entries; a complete scope includes the root.
+             *     At most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.
+             * @default []
+             */
+            paths: string[];
         };
         CreateIssueRequest: {
             /** @default  */
@@ -2419,6 +2667,13 @@ export interface components {
              */
             topic: string;
         };
+        /** @description An opaque vector cursor; events from different repositories have no shared sequence. */
+        EventEnvelope: {
+            /** @default  */
+            cursor: string;
+            /** @default null */
+            event: components["schemas"]["Event"] | null;
+        };
         ExecutorPresence: {
             /**
              * Format: int32
@@ -2541,6 +2796,57 @@ export interface components {
              * @default false
              */
             truncated: boolean;
+        };
+        /** @description Private existing-file edit owned by the current acting identity. */
+        FileDraft: {
+            /** @default  */
+            base: string;
+            /**
+             * Format: byte
+             * @default []
+             */
+            content: string;
+            /** @default false */
+            executable: boolean;
+            /** @default  */
+            file_type: string;
+            /** @default  */
+            original_blob_id: string;
+            /** @default  */
+            path: string;
+            /** @default false */
+            present: boolean;
+            /** @default  */
+            stream: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
+        };
+        /** @description Discovery carries no private replacement bytes. */
+        FileDraftSummary: {
+            /** @default  */
+            base: string;
+            /** @default  */
+            path: string;
+            /** @default  */
+            stream: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
         };
         FileOp: {
             /**
@@ -2708,6 +3014,20 @@ export interface components {
              */
             rev: string;
         };
+        GetCommentDraftRequest: {
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+        };
+        GetFileDraftRequest: {
+            /** @default  */
+            path: string;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            stream: string;
+        };
         GetIssueRequest: {
             /**
              * Format: int64
@@ -2753,6 +3073,12 @@ export interface components {
             repo: string;
         };
         GetRepoRequest: {
+            /** @default  */
+            repo: string;
+        };
+        GetReviewDraftRequest: {
+            /** @default  */
+            id: string;
             /** @default  */
             repo: string;
         };
@@ -2872,6 +3198,15 @@ export interface components {
              * @default 0
              */
             server_time_ms: number;
+        };
+        ImportedIssueMapping: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            number: number;
+            /** @default  */
+            source_id: string;
         };
         IntegrateRequest: {
             /**
@@ -3002,6 +3337,48 @@ export interface components {
             issue_number: number;
             /** @default  */
             kind: string;
+        };
+        IssueImportPreview: {
+            /**
+             * Format: int32
+             * @default 0
+             */
+            comments: number;
+            /** @default [] */
+            conflicts: string[];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            create_count: number;
+            /** @default  */
+            digest: string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            issues: number;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            skip_count: number;
+            /** @default [] */
+            warnings: string[];
+        };
+        IssueImportResult: {
+            /**
+             * Format: int32
+             * @default 0
+             */
+            created: number;
+            /** @default [] */
+            mappings: components["schemas"]["ImportedIssueMapping"][];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            skipped: number;
         };
         Job: {
             /**
@@ -3197,6 +3574,16 @@ export interface components {
             /** @default  */
             tree_id: string;
         };
+        ListFileDraftsRequest: {
+            /** @default  */
+            repo: string;
+            /** @default  */
+            stream: string;
+        };
+        ListFileDraftsResponse: {
+            /** @default [] */
+            drafts: components["schemas"]["FileDraftSummary"][];
+        };
         ListIssueActivityRequest: {
             /**
              * Format: int64
@@ -3299,6 +3686,11 @@ export interface components {
             page_token: string;
             /** @default  */
             repo: string;
+            /**
+             * @description Match a requested reviewer before keyset paging.
+             * @default
+             */
+            requested_reviewer: string;
             /** @default  */
             state: string;
             /** @default  */
@@ -3794,6 +4186,12 @@ export interface components {
             /** @default  */
             repo: string;
         };
+        PreviewIssueImportRequest: {
+            /** @default  */
+            manifest_json: string;
+            /** @default  */
+            repo: string;
+        };
         Principal: {
             /** @default  */
             credential_id: string;
@@ -3861,6 +4259,8 @@ export interface components {
         ProposalDetail: {
             /** @default {} */
             proposal: components["schemas"]["Proposal"];
+            /** @description Routing only; requests do not grant access or count as approval. */
+            requested_reviewers?: string[];
             /** @default [] */
             reviews: components["schemas"]["Review"][];
         };
@@ -4139,6 +4539,32 @@ export interface components {
             /** @default  */
             role: string;
         };
+        ReplayManyRequest: {
+            /** @default  */
+            cursor: string;
+            /**
+             * @description With no cursor, deliberately replay all history instead of checkpointing now.
+             * @default false
+             */
+            from_start: boolean;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            limit: number;
+            /** @default [] */
+            repos: string[];
+            /** @default [] */
+            topics: string[];
+        };
+        ReplayManyResponse: {
+            /** @default  */
+            cursor: string;
+            /** @default [] */
+            events: components["schemas"]["EventEnvelope"][];
+            /** @default false */
+            has_more: boolean;
+        };
         ReplayRequest: {
             /**
              * Format: int64
@@ -4265,6 +4691,10 @@ export interface components {
             /** @default [] */
             jobs: components["schemas"]["Job"][];
         };
+        RequestedReviewers: {
+            /** @default [] */
+            reviewers: string[];
+        };
         ResolvePathRequest: {
             /** @default  */
             path: string;
@@ -4336,6 +4766,27 @@ export interface components {
              * @default 0
              */
             timestamp_ms: number;
+        };
+        /** @description Private, unsubmitted review notes for the current acting identity only. */
+        ReviewDraft: {
+            /** @default  */
+            body: string;
+            /** @default  */
+            decision: string;
+            /** @default  */
+            head: string;
+            /** @default false */
+            present: boolean;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            updated_at_ms: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            version: number;
         };
         /** @description A line location is immutable; text is filled from the repository by the server. */
         ReviewLineAnchor: {
@@ -4576,6 +5027,60 @@ export interface components {
              */
             timeout_secs: number;
         };
+        SaveCommentDraftRequest: {
+            /** @default  */
+            body: string;
+            /**
+             * Format: int64
+             * @description Zero means no prior draft; all saves compare this version atomically.
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            head: string;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+        };
+        SaveFileDraftRequest: {
+            /** @default  */
+            base: string;
+            /**
+             * Format: byte
+             * @default []
+             */
+            content: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            path: string;
+            /** @default  */
+            repo: string;
+            /** @default  */
+            stream: string;
+        };
+        SaveReviewDraftRequest: {
+            /** @default  */
+            body: string;
+            /** @default  */
+            decision: string;
+            /**
+             * Format: int64
+             * @description Zero means no prior draft; all saves compare this version atomically.
+             * @default 0
+             */
+            expected_version: number;
+            /** @default  */
+            head: string;
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+        };
         SaveRunOutputRequest: {
             /** @default null */
             output: components["schemas"]["RunOutput"] | null;
@@ -4687,6 +5192,17 @@ export interface components {
             /** @default  */
             stream: string;
         };
+        /** @description Replaces review routing after comparing the complete inspected set. */
+        SetRequestedReviewersRequest: {
+            /** @default [] */
+            expected_reviewers: string[];
+            /** @default  */
+            id: string;
+            /** @default  */
+            repo: string;
+            /** @default [] */
+            reviewers: string[];
+        };
         /** @description Execution policy is independent of immutable task instructions and run history. */
         SetTaskAttemptLimitRequest: {
             /**
@@ -4781,6 +5297,12 @@ export interface components {
         };
         SyncWorkspaceRequest: {
             /**
+             * @description Optional branch revision inspected while preparing these resolutions.
+             *     A mismatch refuses the sync without moving the workspace.
+             * @default
+             */
+            expected_stream_head: string;
+            /**
              * @description Accepted and ignored: this operation does not deduplicate (see Conventions above).
              * @default
              */
@@ -4807,6 +5329,11 @@ export interface components {
              * @default
              */
             status: string;
+            /**
+             * @description Exact branch revision used for this attempt; empty for an empty branch.
+             *     Older servers omit this field; negotiate workspaces.sync_precondition.
+             */
+            stream_head?: string;
         };
         Task: {
             /**
@@ -5223,6 +5750,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokeCredentialResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "events.subscribe_many": {
+        parameters: {
+            query?: {
+                /** @description Required explicit comma-separated repository names (max30) */
+                repos?: string;
+                /** @description Comma-separated audit topic prefixes */
+                topics?: string;
+                /** @description Opaque cursor returned by replay or an earlier SSE envelope */
+                cursor?: string;
+                /** @description Checkpoint keep-alive interval (default15000,minimum1000) */
+                heartbeat_ms?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "events.replay_many": {
+        parameters: {
+            query?: {
+                cursor?: string;
+                from_start?: boolean;
+                limit?: number;
+                repos?: string[];
+                topics?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayManyResponse"];
                 };
             };
             /** @description Error */
@@ -5998,6 +6598,155 @@ export interface operations {
             };
         };
     };
+    "file_draft.get": {
+        parameters: {
+            query?: {
+                path?: string;
+                stream?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "file_draft.save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveFileDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "file_draft.clear": {
+        parameters: {
+            query?: {
+                expected_version?: number;
+                path?: string;
+                stream?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "file_draft.list": {
+        parameters: {
+            query?: {
+                stream?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListFileDraftsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     "tree.file": {
         parameters: {
             query?: {
@@ -6287,6 +7036,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.import_apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyIssueImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueImportResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "issue.import_preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssueImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueImportPreview"];
                 };
             };
             /** @description Error */
@@ -7275,6 +8100,7 @@ export interface operations {
                 author?: string;
                 page_size?: number;
                 page_token?: string;
+                requested_reviewer?: string;
                 state?: string;
                 stream?: string;
                 task_id?: string;
@@ -7461,6 +8287,117 @@ export interface operations {
             };
         };
     };
+    "proposal.get_comment_draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.save_comment_draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCommentDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.clear_comment_draft": {
+        parameters: {
+            query?: {
+                expected_version?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     "proposal.comment": {
         parameters: {
             query?: never;
@@ -7487,6 +8424,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Review"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.get_draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.save_draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveReviewDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.clear_draft": {
+        parameters: {
+            query?: {
+                expected_version?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    "proposal.set_reviewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository owner (first half of owner/name) */
+                owner: string;
+                /** @description Repository name (second half of owner/name) */
+                rname: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRequestedReviewersRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestedReviewers"];
                 };
             };
             /** @description Error */

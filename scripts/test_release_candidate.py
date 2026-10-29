@@ -7,8 +7,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from release_candidate import create, validate
-from request_release import required_assets, resolve_candidate, request_release
+from release_candidate import candidate_assets, create, validate
+from request_release import resolve_candidate, request_release
 from test_request_release import Api, BASE, REPO, SHA, green
 
 VERSION = '1.2.3'
@@ -18,7 +18,7 @@ class CandidateFiles(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        for name in required_assets(VERSION):
+        for name in candidate_assets(VERSION):
             (self.root / name).write_bytes(b'checked artifact')
         (self.root / 'RELEASE_NOTES.md').write_text('Release notes')
         (self.root / 'candidate-images.json').write_text(json.dumps({
@@ -45,6 +45,16 @@ class CandidateFiles(unittest.TestCase):
             validate(self.root, SHA, VERSION, 7)
         archive.unlink()
         with self.assertRaises(ValueError):
+            validate(self.root, SHA, VERSION, 7)
+
+    def test_windows_zip_is_required_and_covered_by_candidate_checksums(self):
+        archive = self.root / f'agentgit-{VERSION}-x86_64-pc-windows-msvc.zip'
+        self.assertTrue(archive.is_file(), 'prepared candidates must include the native Windows archive')
+        archive.write_bytes(b'tampered Windows archive')
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            validate(self.root, SHA, VERSION, 7)
+        archive.unlink()
+        with self.assertRaisesRegex(ValueError, 'required release set'):
             validate(self.root, SHA, VERSION, 7)
 
     def test_path_traversal_duplicates_extra_files_and_symlinks_are_rejected(self):

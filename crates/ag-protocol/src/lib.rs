@@ -83,6 +83,8 @@ pub mod features {
 
     /// Proposal head updates can require an inspected head atomically.
     pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
+    /// Author-controlled review routing with inspected-set preconditions.
+    pub const PROPOSALS_REVIEW_REQUESTS: &str = "proposals.review_requests";
 
     /// Stream policy can require all line discussions to be resolved before integration.
     pub const POLICY_RESOLVED_THREADS: &str = "policy.resolved_threads";
@@ -92,10 +94,42 @@ pub mod features {
     /// Task completion compares both the execution generation and retry policy.
     pub const TASK_FINISH_PRECONDITIONS: &str = "tasks.finish_preconditions";
 
+    /// Virtual sync compares the branch revision inspected by a resolving client.
+    pub const WORKSPACES_SYNC_PRECONDITION: &str = "workspaces.sync_precondition";
+
+    /// Virtual sync conflicts retain exact per-side paths after renames.
+    pub const WORKSPACES_CONFLICT_ORIGINS: &str = "workspaces.conflict_origins";
+
+    /// Structural virtual sync resolves the complete merged candidate, preserving independent changes.
+    pub const WORKSPACES_STRUCTURAL_RESOLUTION: &str = "workspaces.structural_resolution";
+
+    /// Bounded complete candidate paths for explicit file/directory resolution.
+    pub const WORKSPACES_STRUCTURAL_PREVIEW: &str = "workspaces.structural_preview";
+
+    /// Private versioned review drafts for the current acting identity.
+    pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
+
+    /// Private versioned general discussion drafts for the current acting identity.
+    pub const PROPOSALS_COMMENT_DRAFTS: &str = "proposals.comment_drafts";
+
+    /// Private existing-file edits with immutable original metadata.
+    pub const FILES_DRAFTS: &str = "files.drafts";
+
+    /// A bounded event stream with independent cursors for explicit repositories.
+    pub const EVENTS_MULTI_REPO: &str = "events.multi_repo";
+
+    /// Previewed resumable import of normalized hosting issues and comments.
+    pub const ISSUES_IMPORT: &str = "issues.import";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
+        EVENTS_MULTI_REPO,
         WORKSPACES_VIRTUAL,
+        WORKSPACES_SYNC_PRECONDITION,
+        WORKSPACES_CONFLICT_ORIGINS,
+        WORKSPACES_STRUCTURAL_RESOLUTION,
+        WORKSPACES_STRUCTURAL_PREVIEW,
         EXECUTION_JOBS,
         OBJECTS_CHUNKED,
         AUTH_OIDC,
@@ -105,9 +139,14 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         PROPOSALS_UPDATE_HEAD,
+        PROPOSALS_REVIEW_REQUESTS,
+        PROPOSALS_REVIEW_DRAFTS,
+        PROPOSALS_COMMENT_DRAFTS,
+        FILES_DRAFTS,
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,
+        ISSUES_IMPORT,
         TASK_SCHEDULING,
         RUN_LOOKUP,
         PROPOSAL_COMMENTS,

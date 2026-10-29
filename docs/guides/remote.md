@@ -72,6 +72,115 @@ ag pull                                  # the merged result comes back
 - `ag remote remove NAME` deletes the stored credential first; if it cannot, the remote is kept and the error
   names the file.
 
+## Private review drafts
+
+On development servers advertising `proposals.review_drafts`, save review notes to your
+account and resume them in the browser or SDK. Read the draft first, then pass its exact
+version when saving or clearing it. A missing draft starts at version zero; a cleared draft
+keeps its later version. Another device's edit produces a conflict instead of losing notes.
+
+```sh
+ag remote review-draft get prop_…
+ag remote review-draft save prop_… --head CHANGESET_ID --decision comment --body-file notes.md --expected-version 0
+ag remote review-draft clear prop_… --expected-version 1
+```
+
+Use the version actually returned by your preceding command, not the example values above.
+The head records the revision you inspected. Saving does not submit a review, grant approval,
+or notify reviewers. Only the current account can read its draft through the API; server
+administrators and backups can still contain these notes. Files use UTF-8 and retain line
+breaks, with a 64 KiB limit. `--json` returns the draft and its version for scripts.
+
+## Private comment drafts
+
+On development servers advertising `proposals.comment_drafts`, writers can save a general
+proposal comment privately before posting it. These notes are separate from review-decision
+drafts. Read the draft first and use its returned version for every save or clear.
+
+```sh
+ag remote comment-draft get prop_…
+ag remote comment-draft save prop_… --head CHANGESET_ID --body-file notes.md --expected-version 0
+ag remote comment-draft clear prop_… --expected-version 1
+```
+
+The versions above are examples; use the values returned by your preceding command. The head
+records the revision you inspected. Saving never posts a comment or sends a notification.
+Drafts remain available on closed proposals and only the current account can read them through
+the API; server administrators and backups can still contain them. UTF-8 files retain their
+line breaks and are limited to 16 KiB. `--json` includes the version, including after clearing.
+
+## Private file drafts
+
+Development servers advertising `files.drafts` can keep private replacement bytes for an
+existing file, bound to the exact base changeset you inspected. Saving a draft does not create
+a changeset, update a stream, or change a proposal.
+
+```sh
+ag remote file-draft list --stream main
+ag remote file-draft get --stream main --path src/config.json
+ag remote file-draft save --stream main --path src/config.json --base CHANGESET_ID --content-file edited.json --expected-version 0
+ag remote file-draft get --stream main --path src/config.json --output restored.json
+ag remote file-draft clear --stream main --path src/config.json --expected-version 1
+```
+
+Use the version returned by `get` for saves and clears, including the version of a cleared
+draft. Content files are binary-safe and limited to 4 MiB. Commands show metadata; bytes are
+written only when `get --output` is explicit, and that option replaces the named local file.
+The original file type and executable bit come from the immutable base. Each account can
+keep at most 20 active file drafts per repository. Drafts are private through the API;
+administrators and backups can still contain them.
+
+## Cross-repository event feed
+
+On development servers advertising `events.multi_repo`, use repeated `--repository` to
+follow an explicit set of up to 30 repositories on the configured server. The existing
+single-repository `remote events --after` command is unchanged; `--repo` still selects a
+local directory, so cross-repository feeds use the longer `--repository` option.
+
+```sh
+# Start from now and save the checkpoint; no historical flood.
+ag remote events --repository acme/api --repository acme/web --checkpoint feed.cursor
+# Resume that exact repository/topic scope and follow new events.
+ag --json remote events --repository acme/api --repository acme/web --checkpoint feed.cursor --follow
+# Explicit historical replay, one bounded page; repeat using the returned cursor.
+ag remote events --repository acme/api --repository acme/web --from-start --limit 100
+ag remote events --repository acme/api --repository acme/web --cursor OPAQUE_CURSOR --limit 100
+```
+
+Replay returns one page with its next cursor and `has_more`; the default page limit is 100,
+with a maximum of 1000. A cursor belongs to its repository/topic scope: do not reuse it for a
+different scope. Events retain repository-local ordering; there is no global sequence
+across repositories. Follow mode prints JSON envelopes one per line with `--json`. Heartbeats
+and checkpoints advance the checkpoint file without appearing as user actions. Checkpoints
+are replaced atomically after output is flushed; a failed output does not advance past the
+unwritten event. Resume with the same options after a disconnect.
+
+## Import hosting issues and comments
+
+First export a normalized manifest without needing a local AgentGit repository. The exporter
+reads `GITHUB_TOKEN` or `GITLAB_TOKEN` from the environment when required for source access;
+credentials are never written to the manifest. For a self-hosted GitLab, add `--host https://gitlab.example.com`.
+
+```sh
+ag git export-issues --provider github --source owner/repo --output issues.json
+ag git export-issues --provider gitlab --source group/repo --output gitlab-issues.json
+ag remote import-issues --file issues.json
+# After reviewing counts, warnings, conflicts and the returned digest:
+ag remote import-issues --file issues.json --apply --expected-digest DIGEST --allow-unsupported
+```
+
+`import-issues` previews by default on development servers advertising `issues.import`.
+Applying requires the exact preview digest; it never silently accepts a changed manifest.
+Repeating an unchanged import skips already imported issues; changed source records require
+review rather than overwriting earlier imports. Original authors, source links and timestamps
+are retained as visible provenance, while the importing account remains the AgentGit actor.
+
+The initial importer accepts at most 100 issues, 1000 comments and 4 MiB of UTF-8 JSON. It keeps
+open/closed state and user comments. Labels, assignees, milestones, reactions, attachment files,
+pull/merge requests, releases, permissions and edit history are outside this initial scope;
+GitLab system notes are omitted. Read the preview warnings before explicitly acknowledging
+these omissions with `--allow-unsupported`. An export never replaces an existing output file.
+
 ## Offline
 
 Nothing about a local repository needs the server:
@@ -110,3 +219,45 @@ It reads the server's current preparation without requesting validation jobs or 
 Use `ag --json remote explain PROPOSAL` in scripts: exit 0 means ready, 3 means a requirement is missing,
 and 4 means refused, conflicted or already closed. The result includes the candidate tree and policy version.
 An explanation is a snapshot; integration always checks the current policy and candidate again.
+
+## Server-side workspaces
+
+Use `ag remote workspace` for an isolated workspace on the server, without a local checkout:
+
+```bash
+ag remote workspace list
+ag remote workspace create review-fix --stream main --from <proposal-head>
+ag remote workspace show review-fix
+ag --json remote workspace sync review-fix
+```
+
+A conflicting sync exits with code 4 and leaves the workspace unchanged. Its JSON includes the
+workspace `head`, the exact `stream_head` inspected, and every conflict. For file/directory conflicts,
+`resolution_scope.paths` lists the candidate paths and `resolution_scope.complete` says whether that
+list is complete. An incomplete list is not permission to discard the omitted files. Read both versions
+and choose every change explicitly; the CLI does not select a side, generate deletions, or update a proposal.
+
+Save your choices as a JSON array of `FileChange` objects. `content` is standard base64 (including an
+explicit empty string for an empty file); alternatively use `blob_id` to preserve existing binary data.
+Carry over `file_type` and `executable` when choosing an existing version. A deletion has only `path`
+and `op`:
+
+```json
+[
+  {"path": "clash", "op": "put", "content": "ZmlsZQ==", "file_type": "regular", "executable": false},
+  {"path": "clash/a", "op": "delete"},
+  {"path": "clash/b", "op": "delete"}
+]
+```
+
+Apply that file against the `stream_head` from the sync you inspected:
+
+```bash
+ag --json remote workspace sync review-fix --resolutions choices.json --expected-stream-head <stream-head>
+ag remote workspace delete review-fix
+```
+
+`--resolutions` requires `--expected-stream-head`. The CLI refuses application unless the server
+advertises both guarded sync and structural resolution support. A changed stream head rejects the
+operation; inspect a fresh sync result before deciding again. Deleting a workspace removes that
+server-side workspace, not its proposal or the stream.

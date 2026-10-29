@@ -214,6 +214,27 @@
         },
         "type": "object"
       },
+      "ApplyIssueImportRequest": {
+        "properties": {
+          "allow_unsupported": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expected_digest": {
+            "default": "",
+            "type": "string"
+          },
+          "manifest_json": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AssignTaskRequest": {
         "properties": {
           "agent": {
@@ -645,6 +666,67 @@
         },
         "type": "object"
       },
+      "ClearCommentDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ClearFileDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ClearReviewDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CloseProposalRequest": {
         "properties": {
           "id": {
@@ -659,6 +741,35 @@
           "repo": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommentDraft": {
+        "description": "Private, unsubmitted general discussion notes for the current acting identity.",
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -848,9 +959,70 @@
             "description": "The conflict in words, with the details the code leaves out (e.g. \"content conflict (2 region(s))\").\nEmpty for outcomes stored before the field existed. Do not parse it.",
             "type": "string"
           },
+          "origin": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConflictOrigin",
+                "description": "Absent for ordinary same-path conflicts or outcomes stored by older versions.\nFor workspace sync, ours is the workspace and theirs is the returned stream_head.\nFor proposal preparation/integration, ours is the stream and theirs is the proposal.\nThe resolution is still written to Conflict.path, not to these source paths."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "path": {
             "default": "",
             "type": "string"
+          },
+          "resolution_scope": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConflictResolutionScope",
+                "description": "Optional bounded scope for file_directory in fresh virtual sync previews.\nMissing or incomplete metadata cannot drive a whole-subtree choice.\nDoes not include paths that exist only in source trees, or indicate a selected side."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ConflictOrigin": {
+        "description": "Exact paths at the three revisions when source locations differ after a rename.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "ours": {
+            "default": "",
+            "type": "string"
+          },
+          "theirs": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ConflictResolutionScope": {
+        "description": "Exact candidate paths at or beneath one file/directory conflict root.",
+        "properties": {
+          "complete": {
+            "default": false,
+            "description": "False if any candidate was omitted; clients must not offer automatic subtree choices then.",
+            "type": "boolean"
+          },
+          "paths": {
+            "default": [],
+            "description": "Ordered candidate entries; a complete scope includes the root.\nAt most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -1369,6 +1541,28 @@
         },
         "type": "object"
       },
+      "EventEnvelope": {
+        "description": "An opaque vector cursor; events from different repositories have no shared sequence.",
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "event": {
+            "default": null,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Event",
+                "description": "Absent for an initial checkpoint, filtered progress, or heartbeat."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ExecutorPresence": {
         "properties": {
           "available": {
@@ -1538,6 +1732,85 @@
             "default": false,
             "description": "Patch omitted due to the bounded diff budget; metadata still describes the change.",
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "FileDraft": {
+        "description": "Private existing-file edit owned by the current acting identity.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "content": {
+            "default": [],
+            "format": "byte",
+            "type": "string"
+          },
+          "executable": {
+            "default": false,
+            "type": "boolean"
+          },
+          "file_type": {
+            "default": "",
+            "type": "string"
+          },
+          "original_blob_id": {
+            "default": "",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "FileDraftSummary": {
+        "description": "Discovery carries no private replacement bytes.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1785,6 +2058,36 @@
         },
         "type": "object"
       },
+      "GetCommentDraftRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetFileDraftRequest": {
+        "properties": {
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GetIssueRequest": {
         "properties": {
           "number": {
@@ -1861,6 +2164,19 @@
       },
       "GetRepoRequest": {
         "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetReviewDraftRequest": {
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
           "repo": {
             "default": "",
             "type": "string"
@@ -2085,6 +2401,21 @@
         },
         "type": "object"
       },
+      "ImportedIssueMapping": {
+        "properties": {
+          "number": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_id": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "IntegrateRequest": {
         "properties": {
           "fencing_tokens": {
@@ -2290,6 +2621,77 @@
           "kind": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IssueImportPreview": {
+        "properties": {
+          "comments": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "conflicts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "create_count": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "default": "",
+            "type": "string"
+          },
+          "issues": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skip_count": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IssueImportResult": {
+        "properties": {
+          "created": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mappings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImportedIssueMapping"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -2618,6 +3020,31 @@
         },
         "type": "object"
       },
+      "ListFileDraftsRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFileDraftsResponse": {
+        "properties": {
+          "drafts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FileDraftSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ListIssueActivityRequest": {
         "properties": {
           "number": {
@@ -2810,6 +3237,11 @@
           },
           "repo": {
             "default": "",
+            "type": "string"
+          },
+          "requested_reviewer": {
+            "default": "",
+            "description": "Match a requested reviewer before keyset paging.",
             "type": "string"
           },
           "state": {
@@ -3766,6 +4198,19 @@
         },
         "type": "object"
       },
+      "PreviewIssueImportRequest": {
+        "properties": {
+          "manifest_json": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Principal": {
         "properties": {
           "credential_id": {
@@ -3879,6 +4324,14 @@
                 "type": "null"
               }
             ]
+          },
+          "requested_reviewers": {
+            "default": [],
+            "description": "Routing only; requests do not grant access or count as approval.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "reviews": {
             "default": [],
@@ -4310,6 +4763,60 @@
         },
         "type": "object"
       },
+      "ReplayManyRequest": {
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "from_start": {
+            "default": false,
+            "description": "With no cursor, deliberately replay all history instead of checkpointing now.",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 0,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "repos": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ReplayManyResponse": {
+        "properties": {
+          "cursor": {
+            "default": "",
+            "type": "string"
+          },
+          "events": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EventEnvelope"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ReplayRequest": {
         "properties": {
           "after_seq": {
@@ -4505,6 +5012,18 @@
         },
         "type": "object"
       },
+      "RequestedReviewers": {
+        "properties": {
+          "reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ResolvePathRequest": {
         "properties": {
           "path": {
@@ -4629,6 +5148,39 @@
           "timestamp_ms": {
             "default": 0,
             "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ReviewDraft": {
+        "description": "Private, unsubmitted review notes for the current acting identity only.",
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "decision": {
+            "default": "",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
             "type": "integer"
           }
         },
@@ -4996,6 +5548,98 @@
         },
         "type": "object"
       },
+      "SaveCommentDraftRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "description": "Zero means no prior draft; all saves compare this version atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SaveFileDraftRequest": {
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "content": {
+            "default": [],
+            "format": "byte",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SaveReviewDraftRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "type": "string"
+          },
+          "decision": {
+            "default": "",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "description": "Zero means no prior draft; all saves compare this version atomically.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "head": {
+            "default": "",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SaveRunOutputRequest": {
         "properties": {
           "output": {
@@ -5177,6 +5821,34 @@
         },
         "type": "object"
       },
+      "SetRequestedReviewersRequest": {
+        "description": "Replaces review routing after comparing the complete inspected set.",
+        "properties": {
+          "expected_reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "SetTaskAttemptLimitRequest": {
         "description": "Execution policy is independent of immutable task instructions and run history.",
         "properties": {
@@ -5346,6 +6018,11 @@
       },
       "SyncWorkspaceRequest": {
         "properties": {
+          "expected_stream_head": {
+            "default": "",
+            "description": "Optional branch revision inspected while preparing these resolutions.\nA mismatch refuses the sync without moving the workspace.",
+            "type": "string"
+          },
           "idempotency_key": {
             "default": "",
             "description": "Accepted and ignored: this operation does not deduplicate (see Conventions above).",
@@ -5386,6 +6063,11 @@
           "status": {
             "default": "",
             "description": "\"up_to_date\", \"fast_forwarded\", \"merged\" or \"conflicted\".",
+            "type": "string"
+          },
+          "stream_head": {
+            "default": "",
+            "description": "Exact branch revision used for this attempt; empty for an empty branch.\nOlder servers omit this field; negotiate workspaces.sync_precondition.",
             "type": "string"
           }
         },
@@ -6115,6 +6797,162 @@
         "summary": "Revoke a credential",
         "tags": [
           "Admin"
+        ]
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "events.subscribe_many",
+        "parameters": [
+          {
+            "description": "Required explicit comma-separated repository names (max30)",
+            "in": "query",
+            "name": "repos",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated audit topic prefixes",
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque cursor returned by replay or an earlier SSE envelope",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checkpoint keep-alive interval (default15000,minimum1000)",
+            "in": "query",
+            "name": "heartbeat_ms",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/v1/events/replay": {
+      "get": {
+        "operationId": "events.replay_many",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_start",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "With no cursor, deliberately replay all history instead of checkpointing now.",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repos",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayManyResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history",
+        "tags": [
+          "Events"
         ]
       }
     },
@@ -7411,6 +8249,272 @@
         ]
       }
     },
+    "/v1/repos/{owner}/{rname}/file-draft": {
+      "delete": {
+        "operationId": "file_draft.clear",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      },
+      "get": {
+        "operationId": "file_draft.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      },
+      "put": {
+        "operationId": "file_draft.save",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveFileDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/file-drafts": {
+      "get": {
+        "operationId": "file_draft.list",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFileDraftsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      }
+    },
     "/v1/repos/{owner}/{rname}/files/{*path}": {
       "get": {
         "operationId": "tree.file",
@@ -7936,6 +9040,128 @@
           }
         },
         "summary": "Create a user issue",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/import/apply": {
+      "post": {
+        "operationId": "issue.import_apply",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyIssueImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueImportResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Apply the inspected import manifest digest",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/issues/import/preview": {
+      "post": {
+        "operationId": "issue.import_preview",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewIssueImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueImportPreview"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview normalized hosting issues and comments",
         "tags": [
           "Issues"
         ]
@@ -9715,6 +10941,16 @@
           },
           {
             "in": "query",
+            "name": "requested_reviewer",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Match a requested reviewer before keyset paging.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "state",
             "required": false,
             "schema": {
@@ -10031,6 +11267,206 @@
         ]
       }
     },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/comment-draft": {
+      "delete": {
+        "operationId": "proposal.clear_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear the inspected private comment draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "get": {
+        "operationId": "proposal.get_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read your private comment draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "put": {
+        "operationId": "proposal.save_comment_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveCommentDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save your private comment draft",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
     "/v1/repos/{owner}/{rname}/proposals/{id}/comments": {
       "post": {
         "operationId": "proposal.comment",
@@ -10097,6 +11533,277 @@
           }
         },
         "summary": "Add an idempotent discussion comment at the inspected head",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/review-draft": {
+      "delete": {
+        "operationId": "proposal.clear_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear the inspected private review draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "get": {
+        "operationId": "proposal.get_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read your private review draft",
+        "tags": [
+          "Proposal"
+        ]
+      },
+      "put": {
+        "operationId": "proposal.save_draft",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveReviewDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save your private review draft",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/reviewers": {
+      "put": {
+        "operationId": "proposal.set_reviewers",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRequestedReviewersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestedReviewers"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replace the inspected set of requested reviewers",
         "tags": [
           "Proposal"
         ]

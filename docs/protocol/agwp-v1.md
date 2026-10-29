@@ -356,3 +356,85 @@ Owner, creation metadata, prerequisites and task/run source links are unaffected
 migration is introduced. [Semantics](../adr/0028-task-instruction-refinement.md).
 
 HTTP event subscriptions emit an initial SSE comment after authorization. This acknowledges an idle connection immediately without allocating an event sequence; clients continue to ignore comments and resume using real event IDs.
+
+
+### Requested reviewers (development)
+
+Negotiate `proposals.review_requests` before writing review requests or using the
+`requested_reviewer` proposal-list filter. An older server may ignore unknown filter
+fields; callers must not present that unfiltered result as a personal review queue.
+
+`PUT /v1/repos/{owner}/{repo}/proposals/{id}/reviewers` (`ProposalService.SetReviewers`)
+accepts `reviewers` and `expected_reviewers` arrays. Only the author of an open proposal
+may replace its requested set. A stale set returns HTTP 412 / gRPC FailedPrecondition;
+repeating the already-stored desired set is a successful no-op. Up to 20 unique principal
+identities are retained in sorted order. The author cannot request their own review.
+
+Proposal detail includes optional `requested_reviewers`. A request grants no access and
+is not an approval. It remains after the head moves; review status is evaluated against
+the current head. Schema 9 stores these requests; back up before upgrading from schema 8.
+
+### Revision-bound virtual sync (development)
+
+Negotiate `workspaces.sync_precondition` before applying conflict choices from a prior
+preview. Sync replies include `stream_head`, the exact target revision used by the
+attempt. Send it as `expected_stream_head` with resolved files; a changed branch returns
+HTTP 412 / gRPC FailedPrecondition before the workspace can move. The workspace's own
+concurrency checks continue to apply. Older servers may omit the reply field or ignore
+the request field, so silently falling back would lose the preview's protection.
+
+A resolution may reference an existing `blob_id` together with `file_type` and
+`executable`, or delete a path. Keeping a binary or symlink version therefore preserves
+its original bytes and metadata. New text remains an ordinary inline file change.
+
+
+### Private review drafts (development)
+
+Negotiate `proposals.review_drafts`. `GET`, `PUT` and `DELETE` on
+`/v1/repos/{owner}/{repo}/proposals/{id}/review-draft` access only the current full acting
+identity's draft, under the proposal's stream and review permission. There is no owner
+parameter. Private responses use `Cache-Control: no-store` and do not add public review,
+audit-body or repository-event entries.
+
+Save sends `head`, `decision`, `body` (at most 64 KiB UTF-8) and `expected_version`.
+Clear sends `expected_version` as a query parameter. Reads of an absent draft return
+`present=false, version=0`. Clearing content retains an incremented tombstone version;
+late saves using an earlier version fail with HTTP 412 / gRPC FailedPrecondition.
+Identical desired state is an idempotent no-op. A draft may reference an earlier revision,
+but it never pins history or bypasses the actual review's inspected-head check.
+
+Schema 10 stores this private metadata. Back up before upgrading; saved review drafts
+can appear in administrative backups even though they are not in shared proposal APIs.
+
+### Conflict source paths after renames
+
+`Conflict.origin`, when present, contains the nonempty repository paths `base`, `ours` and
+`theirs` where the three versions live. `Conflict.path` remains the output path to resolve.
+For workspace sync, `ours` is the workspace and `theirs` is the returned `stream_head`;
+for proposal preparation/integration the labels mean target stream and proposal respectively.
+Read each version at its source path instead of treating a missing output path as a deletion.
+Ordinary same-path conflicts and legacy stored outcomes have no origin. Never parse paths
+from `message`. Development servers advertise `workspaces.conflict_origins` for fresh sync
+responses; browser resolution requires it together with the existing revision preconditions.
+
+### Complete structural sync resolutions
+
+With `workspaces.structural_resolution`, virtual sync applies the supplied path states to the
+complete merge candidate, including independent clean incoming changes. Keeping a file above
+incoming descendants requires deleting those descendants explicitly; deleting the colliding
+file can retain the directory. The final tree must be valid and satisfy the existing limits.
+Incomplete choices fail without changing the workspace. Combine this capability with
+`workspaces.sync_precondition` when sending choices from an inspected preview. Older servers
+can lose clean incoming edits in structural cases and must not be used for this flow.
+
+### Structural preview scope
+
+Negotiate `workspaces.structural_preview` before using a file/directory conflict's optional
+`resolution_scope`. `paths` lists candidate paths at or beneath that conflict's root;
+`complete: true` guarantees the root and every candidate descendant are present. The server
+limits this to 100 paths per conflict and 1,000 across the response. A scope can be empty and
+incomplete; absence or `complete: false` cannot authorize a whole-subtree choice. Source paths
+alone do not cover synthetic destinations introduced by directory-rename propagation.
+
+Scopes are fresh virtual-sync metadata, not stored historical proof. Preserve the existing
+`stream_head` precondition when submitting explicit puts/deletes to the complete candidate.

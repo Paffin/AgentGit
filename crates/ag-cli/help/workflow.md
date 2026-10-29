@@ -44,3 +44,24 @@ Where am I? `ag status` shows the workspace, your proposals, your leases, your t
 Is everything healthy? `ag doctor`. What exactly happened? `ag trace`, `ag op show OPERATION`.
 
 More: docs/getting-started.md and docs/tutorials/first-agent-safe-repo.md
+
+Requesting a review
+
+    ag proposal reviewers PROPOSAL                         inspect the requested people
+    ag proposal reviewers PROPOSAL --add user:bob           request Bob's review
+    ag proposal reviewers PROPOSAL --remove user:bob        withdraw that request
+    ag proposal list --requested-reviewer user:bob          find Bob's requested work
+
+The same commands work against a configured server as `ag remote reviewers PROPOSAL ...`
+and `ag remote proposals --requested-reviewer user:bob`.
+Only the author of an open proposal can change its requested reviewers. A request is routing:
+it grants no repository access, records no approval, and adds no integration requirement.
+A new proposal revision keeps the requested people, but previous approvals remain tied to their old head.
+
+Edits compare the list that the command just read. If another writer changes it before the save, the command
+fails instead of overwriting that change. Scripts can require their own inspected list with repeatable
+`--expected IDENTITY`, or `--expect-empty` for an empty list. For example:
+
+    ag proposal reviewers PROPOSAL --add user:carol --expected user:bob
+
+An omitted edit flag only reads the list. Repeating an already-applied add or remove is safe.

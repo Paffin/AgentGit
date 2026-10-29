@@ -197,6 +197,19 @@ Diff line-number columns fit the largest number in the displayed patch, includin
 
 **Review drafts.** Closing the review dialog or reloading the page keeps the comment, decision and inspected head in this browser tab, separately for each account, repository and change request. The draft is removed only after the server accepts the review. Storage failures are shown; in that case copy the comment before leaving. Closing the browser tab still removes this local draft. If the author changes the head, the text stays and submission is blocked until you confirm that you reviewed the updated changes. The server checks the inspected head atomically when saving; a concurrent update rejects the review and keeps your text. Older servers without this capability require an upgrade before this UI submits a review.
 
+
+**Account review drafts (development).** On supported servers, **Save draft and close** stores
+this review's text, decision and inspected revision privately for your current account.
+Opening the same review on another device restores it when that tab has no draft. If both
+places have different drafts, choose **Use account draft** or **Keep this tab draft** explicitly.
+Typing alone does not upload changes. The limit is 64 KiB of UTF-8 notes.
+
+A save refused because another device changed the draft keeps your text. A successful review
+clears only the matching saved version; newer notes remain intact. Stored notes do not count
+as reviews or approvals and are not shown in the shared proposal or audit. They are part of
+repository backups, which administrators can access. Servers without this capability retain
+the local-only behavior. File-edit and general-comment drafts remain local to the browser.
+
 **Actions** are *Review*, *Run the checks*, *Land*, *Add to queue* and *Close*. Each is enabled only if your
 roles allow it; the buttons that are off are explained in words under the row ("Land: requires the integrator role"),
 not only in a tooltip. A **Next:** line picks the one thing to do first (a conflict before checks, checks before approvals).
@@ -370,7 +383,7 @@ This uses the server's virtual workspaces: a draft is opened on the branch (from
 applied as one version, the change request is opened from it, and the server workspace is removed. While sending, the editor locks the submitted title and description. Requests and retries retain the initiating credential; leaving or changing account stops unsent follow-up steps and ignores late results. Cancellation does not undo a server operation that already completed; the local draft remains available if completion was not confirmed. Text and symbolic-link targets can be edited. **Rename or move** and **Delete file** open reviewed change requests and preserve the original blob and mode. **Upload files** handles several text or binary files together, with explicit confirmation before replacing existing files (100 files, 4 MiB total).
 If the upload cannot read the branch, **Retry branch** keeps your selected files, destination, title and description.
 
-A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed confidential drafts require a separate authorization boundary.
+A workspace separates edits from the branch; it does not make stored objects confidential from other repository readers. Account-backed file drafts remain future work; the private review-draft endpoint is a separate authorization boundary.
 
 The editor pins the version you read. If someone changes the branch while you type, their work is checked by
 the normal merge and conflict rules. It is not silently replaced by your older copy. Leaving the file, changing
@@ -388,8 +401,25 @@ the listing, and opening another folder resets it.
 **Resolve the conflict.** When a change request no longer merges with its branch, its author sees *Resolve the
 conflict* (everyone else sees *Copy link to send to the author*). The resolver shows, per file, the branch's version and
 yours, with *Keep the branch's*, *Keep mine*, *Delete the file* and a text box for the result. Saving applies the
-resolutions through the draft and moves the change request to the merged version. Conflicts that are not about text
-(binary files, renames, type changes) say to use the command line.
+resolutions through the draft and moves the change request to the merged version. Binary files, oversized files and
+file-type changes can keep either exact version or delete the file: the original blob, type and executable mode are
+retained without converting bytes to text. Editing is available only for regular text versions.
+After a rename, each preview reads its original
+source path and displays it when it differs from the result path. Rename/delete conflicts allow
+an explicit choice between the relocated file and deletion. Servers must advertise
+`workspaces.conflict_origins`; older servers show upgrade guidance instead of ambiguous previews.
+
+For a file/directory collision, the author can choose a complete source file or folder. The dialog shows
+file counts and the exact candidate paths removed by that choice inside its details. Original blobs, symbolic
+links and executable modes are retained; unrelated clean changes survive. This requires
+`workspaces.structural_preview` and a complete server scope. The browser refuses incomplete previews,
+more than 100 source paths per root, more than 1,000 affected paths overall, or more than 100 tree requests.
+Other multi-target rename conflicts and larger cases remain command-line/API work.
+
+The resolver pins both the proposal revision and the target branch. If either changes before saving, the newer
+work is preserved and the dialog asks you to inspect it again. Failed reads never mean a deleted file. This flow
+requires `proposals.update_head`, `workspaces.sync_precondition` and `workspaces.conflict_origins`; older servers need an upgrade before browser
+conflict resolution is available.
 
 ## Plain words
 
@@ -595,11 +625,27 @@ Counts are marked as partial when more pages are available; use **Load more
 discussions** to include older threads. Switching filters preserves expanded
 reply drafts.
 
+### Request reviewers (development)
+
+The author of an open change request can choose **Request review** in its reviewer panel.
+Enter up to 20 identities, one per line, and confirm. This requests attention; it does not
+grant repository access, require approval in policy, or count as a review. Removing an identity
+from the list withdraws that request. If another edit wins first, your draft remains available.
+
+The panel marks a request reviewed only after that person approves or requests changes on
+the current revision. A new revision keeps the requested list and makes prior reviews pending
+again. On **Change requests**, select **Review requested from me** to filter before pagination;
+the URL can be bookmarked. Servers without this capability cannot apply that filter.
+
+This feature requires metadata schema 9. Back up before upgrading a repository; restore that
+pre-upgrade backup to return to beta.7 or older. See [ADR 0036](../adr/0036-requested-reviewers.md).
+
 ### Suggest a code change (development)
 
 Select a new-side line number in **Files changed**, then **Suggest a replacement**. Explain
-why and enter replacement code; multiple replacement lines are allowed, and an empty field
-deletes the selected line. The draft survives reload in the same tab. Post it as a line discussion.
+why and enter replacement code. **Lines to replace** selects 1–100 original lines starting
+at that line; the count and replacement survive reload in the same tab. Multiple replacement
+lines are allowed, and an empty replacement deletes the selected range. The draft survives reload in the same tab. Post it as a line discussion.
 
 The change request's author can choose **Review and apply suggestion**, inspect the exact
 replacement and explicitly apply it. This creates a new revision, retaining executable mode
@@ -607,9 +653,16 @@ and line endings. Existing checks and approvals must match the new revision. The
 stays open until reviewed and resolved separately. Earlier-revision suggestions remain readable
 and copyable; they cannot overwrite newer work.
 
+To combine changes, expand **Apply several suggestions** in the discussions, select the
+suggestions and choose **Review selected suggestions**. Inspect the prepared files before
+confirming. Up to 100 suggestions across files become one revision; overlapping suggestions
+for the same original lines are refused. Only loaded discussions are included: use **Load more
+discussions** to include older results. The total prepared content is limited to 4 MiB.
+
 Application requires a server with `proposals.update_head` and is limited to regular UTF-8
 files up to 1 MiB. Symlinks, binary files, old-side lines and changed source lines require the
-ordinary editor or CLI. This first version replaces one anchored line, not a selected range.
+ordinary editor or CLI. A range that extends past the file is refused. The preview shows the original file for
+multi-line replacements; confirm only after inspecting the entire selected range.
 
 
 ## Enable or disable new runs for one agent (development)

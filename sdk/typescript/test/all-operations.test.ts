@@ -17,6 +17,7 @@ import {
   type AgentKey,
   type OperationId,
 } from '../src/index.js';
+import { requestReview, reviewsRequestedFrom } from '../examples/review-requests.js';
 import { NAMESPACE_METHODS } from '../src/generated/api.js';
 import { REPO_ROOT, startServer, type RunningServer } from './harness/server.js';
 
@@ -135,6 +136,19 @@ describe('the tour', () => {
     });
     expect((await alice.workspaces.get({ repo, name: 'w1' })).head).toBe(m1.head);
     expect((await alice.workspaces.sync({ repo, name: 'w1' })).status).toBe('up_to_date');
+    expect((await alice.drafts.get({ repo, stream: 'main', path: 'a.txt' })).present).toBe(false);
+    const fileDraft = await alice.drafts.save({
+      repo,
+      stream: 'main',
+      path: 'a.txt',
+      base: m1.head,
+      content: Buffer.from('private edit\n').toString('base64'),
+      expected_version: 0,
+    });
+    expect((await alice.drafts.list({ repo, stream: 'main' })).drafts).toHaveLength(1);
+    expect(
+      (await alice.drafts.clear({ repo, stream: 'main', path: 'a.txt', expected_version: fileDraft.version })).present,
+    ).toBe(false);
 
     const p1 = await alice.proposals.create({ repo, stream: 'main', head: m1.head, title: 'seed' });
     expect((await alice.proposals.list({ repo })).proposals).toHaveLength(1);
@@ -144,6 +158,37 @@ describe('the tour', () => {
       m2.head,
     );
     expect((await alice.proposals.get({ repo, id: p1.id })).proposal.head).toBe(m2.head);
+    expect((await requestReview(alice, repo, p1.id, ['user:bob'])).reviewers).toEqual(['user:bob']);
+    expect((await bob.proposals.get({ repo, id: p1.id })).requested_reviewers).toEqual(['user:bob']);
+    const requested = [];
+    for await (const proposal of reviewsRequestedFrom(bob, repo, 'user:bob')) requested.push(proposal.id);
+    expect(requested).toEqual([p1.id]);
+    expect((await bob.proposals.getDraft({ repo, id: p1.id })).present).toBe(false);
+    const privateDraft = await bob.proposals.saveDraft({
+      repo,
+      id: p1.id,
+      expected_version: 0,
+      head: m2.head,
+      decision: 'comment',
+      body: 'Private draft',
+    });
+    expect(privateDraft.version).toBe(1);
+    expect((await admin.proposals.getDraft({ repo, id: p1.id })).present).toBe(false);
+    expect((await bob.proposals.get({ repo, id: p1.id })).reviews).toHaveLength(0);
+    await expect(
+      bob.proposals.saveDraft({
+        repo,
+        id: p1.id,
+        expected_version: 0,
+        head: m2.head,
+        decision: 'comment',
+        body: 'Stale overwrite',
+      }),
+    ).rejects.toMatchObject({ status: 412 });
+    const clearedDraft = await bob.proposals.clearDraft({ repo, id: p1.id, expected_version: privateDraft.version });
+    expect(clearedDraft.present).toBe(false);
+    expect(clearedDraft.version).toBe(2);
+    expect((await bob.proposals.getDraft({ repo, id: p1.id })).body).toBe('');
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
     expect(
       (
@@ -211,6 +256,12 @@ describe('the tour', () => {
     // (queue states: queued, done, blocked, rejected, failed; outcome explains "done": "integrated")
     expect(ran.processed[0]).toMatchObject({ state: 'done', outcome: 'integrated' });
     seedHead = m2.head;
+    expect((await alice.negotiate()).features).toContain('workspaces.sync_precondition');
+    const pinned = await alice.workspaces.sync({ repo, name: 'w1', expected_stream_head: seedHead });
+    expect(pinned.stream_head).toBe(seedHead);
+    await expect(
+      alice.workspaces.sync({ repo, name: 'w1', expected_stream_head: '0'.repeat(64) }),
+    ).rejects.toMatchObject({ status: 412 });
 
     // a second proposal is attested directly and integrated; a third is closed
     await alice.workspaces.create({ repo, name: 'w2', stream: 'main' });
@@ -232,6 +283,22 @@ describe('the tour', () => {
     const m4 = await alice.workspaces.modify({ repo, name: 'w3', changes: [putFile('f.txt', 'f\n')] });
     const p3 = await alice.proposals.create({ repo, stream: 'main', head: m4.head, title: 'third' });
     expect((await alice.proposals.close({ repo, id: p3.id })).state).toBe('closed');
+    expect((await bob.proposals.getCommentDraft({ repo, id: p3.id })).present).toBe(false);
+    const commentDraft = await bob.proposals.saveCommentDraft({
+      repo,
+      id: p3.id,
+      head: p3.head,
+      body: 'Private follow-up',
+      expected_version: 0,
+    });
+    expect(commentDraft.version).toBe(1);
+    expect((await admin.proposals.getCommentDraft({ repo, id: p3.id })).present).toBe(false);
+    expect((await bob.proposals.getDraft({ repo, id: p3.id })).present).toBe(false);
+    await expect(
+      bob.proposals.saveCommentDraft({ repo, id: p3.id, head: p3.head, body: 'Stale follow-up', expected_version: 0 }),
+    ).rejects.toMatchObject({ status: 412 });
+    expect((await bob.proposals.clearCommentDraft({ repo, id: p3.id, expected_version: 1 })).version).toBe(2);
+
     await alice.workspaces.delete({ repo, name: 'w3' });
   });
 
@@ -390,6 +457,34 @@ describe('the tour', () => {
   });
 
   it('creates and discusses an issue through the public client', async () => {
+    const manifest = JSON.stringify({
+      version: 1,
+      provider: 'github',
+      source_repo: 'https://github.com/source/project',
+      issues: [
+        {
+          source_id: '1',
+          title: 'Imported issue',
+          body: 'Original text',
+          state: 'open',
+          author: 'source-user',
+          url: 'https://github.com/source/project/issues/1',
+          created_at_ms: 0,
+          updated_at_ms: 0,
+        },
+      ],
+    });
+    const preview = await alice.issues.importPreview({ repo, manifest_json: manifest });
+    expect(
+      (
+        await alice.issues.importApply({
+          repo,
+          manifest_json: manifest,
+          expected_digest: preview.digest,
+          allow_unsupported: false,
+        })
+      ).created,
+    ).toBe(1);
     const issue = await alice.issues.create({ repo, title: 'Move the project', body: 'Keep history' });
     expect((await alice.issues.get({ repo, number: issue.number })).title).toBe(issue.title);
     expect((await alice.issues.list({ repo })).issues.some((item) => item.number === issue.number)).toBe(true);
@@ -422,6 +517,12 @@ describe('the tour', () => {
 
   it('events, audit and maintenance', async () => {
     expect((await alice.events.replay({ repo, after_seq: 0, limit: 5 })).events).toHaveLength(5);
+    const checkpoint = await alice.events.replayMany({ repos: [repo] });
+    expect(checkpoint.cursor).not.toBe('');
+    for await (const envelope of alice.events.subscribeMany({ repos: [repo], cursor: checkpoint.cursor })) {
+      expect(envelope.cursor).not.toBe('');
+      break;
+    }
     const got: string[] = [];
     for await (const ev of alice.events.subscribe({ repo, afterSeq: 0 })) {
       got.push(ev.topic);

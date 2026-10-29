@@ -11,6 +11,7 @@ import { useThreadAnchor } from '@/composables/useThreadAnchor'
 import Alert from '@/ui/Alert.vue'
 import Button from '@/ui/Button.vue'
 import TextArea from '@/ui/TextArea.vue'
+import TextField from '@/ui/TextField.vue'
 import CopyButton from '@/ui/CopyButton.vue'
 
 const props = defineProps<{ repo: string; proposal: Proposal; quote?: LineQuote | null }>()
@@ -27,15 +28,46 @@ const suggestion = computed(() => parseSuggestion(draft.body.value))
 const explanation = computed({
   get: () => suggestion.value?.explanation || '',
   set: (value) => {
-    draft.body.value = formatSuggestion(value, suggestion.value?.replacement || '')
+    draft.body.value = formatSuggestion(
+      value,
+      suggestion.value?.replacement || '',
+      suggestion.value?.lines,
+    )
   },
 })
 const replacement = computed({
   get: () => suggestion.value?.replacement || '',
   set: (value) => {
-    draft.body.value = formatSuggestion(suggestion.value?.explanation || '', value)
+    draft.body.value = formatSuggestion(
+      suggestion.value?.explanation || '',
+      value,
+      suggestion.value?.lines,
+    )
   },
 })
+const lineCount = ref('1')
+watch(
+  () => suggestion.value?.lines,
+  (value) => {
+    lineCount.value = String(value || 1)
+  },
+  { immediate: true },
+)
+const rangeError = computed(() =>
+  suggestion.value &&
+  (!/^\d+$/.test(lineCount.value) || Number(lineCount.value) < 1 || Number(lineCount.value) > 100)
+    ? 'Choose between 1 and 100 original lines.'
+    : '',
+)
+function setLineCount(value: string) {
+  lineCount.value = value
+  if (!rangeError.value && suggestion.value)
+    draft.body.value = formatSuggestion(
+      suggestion.value.explanation,
+      suggestion.value.replacement,
+      Number(value),
+    )
+}
 function suggest() {
   if (selected.anchor.value?.side === 'new')
     draft.body.value = formatSuggestion(draft.body.value, selected.anchor.value.text)
@@ -88,6 +120,7 @@ async function create() {
     !allowed.value ||
     busy.value ||
     stale.value ||
+    !!rangeError.value ||
     !selected.anchor.value ||
     !draft.body.value.trim()
   )
@@ -140,6 +173,17 @@ async function create() {
     <pre class="source">{{ selected.anchor.value.text }}</pre>
     <p class="muted">The server verifies this line against the exact revision you inspected.</p>
     <template v-if="suggestion">
+      <TextField
+        :model-value="lineCount"
+        label="Lines to replace"
+        type="number"
+        :min="1"
+        :max="100"
+        :disabled="busy"
+        :error="rangeError"
+        :hint="`Count original lines starting at line ${selected.anchor.value.line}. Saved with this draft.`"
+        @update:model-value="setLineCount"
+      />
       <TextArea v-model="explanation" label="Explain this suggestion" :disabled="busy" :rows="2" />
       <TextArea
         v-model="replacement"
@@ -147,7 +191,7 @@ async function create() {
         :disabled="busy"
         :rows="5"
         mono
-        hint="Replaces this one line. Multiple replacement lines are allowed. Empty deletes the line. Saved in this tab."
+        hint="Replaces the selected original lines. Empty deletes the range. Saved in this tab."
       />
       <Button size="sm" :disabled="busy" @click="removeSuggestion"
         >Keep as ordinary discussion</Button
@@ -178,7 +222,7 @@ async function create() {
       <Button
         type="submit"
         variant="primary"
-        :disabled="stale || !draft.body.value.trim()"
+        :disabled="stale || !!rangeError || !draft.body.value.trim()"
         :loading="busy"
         >Start discussion</Button
       >

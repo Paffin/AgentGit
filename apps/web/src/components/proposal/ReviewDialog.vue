@@ -4,6 +4,7 @@ import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
 import type { Proposal } from '@/api/types'
 import { shortId } from '@/lib/format'
+import { useAccountReviewDraft } from '@/composables/useAccountReviewDraft'
 import { useAuth } from '@/stores/auth'
 import { useToasts } from '@/stores/toasts'
 import Alert from '@/ui/Alert.vue'
@@ -128,11 +129,39 @@ onBeforeUnmount(() => {
   controller?.abort()
 })
 
+const account = useAccountReviewDraft({
+  repo: () => props.repo,
+  proposal: () => props.proposal.id,
+  open: () => props.modelValue,
+  local: { head: reviewedHead, decision, body },
+})
+const locked = computed(() => busy.value || account.saving.value)
+watch(
+  busy,
+  (value) => {
+    if (value) account.cancelPending()
+  },
+  { flush: 'sync' },
+)
+async function saveToAccount() {
+  if (busy.value || !account.canSave.value) return
+  const mine = context
+  if ((await account.save()) && mine === context) {
+    toasts.info('Review draft saved to your account')
+    emit('update:modelValue', false)
+  }
+}
+
 const options = [
   { value: 'approve', label: 'Approve', icon: 'check' },
   { value: 'request_changes', label: 'Request changes', icon: 'alert' },
   { value: 'comment', label: 'Comment', icon: 'comment' },
 ] as const
+
+const accountDecision = computed(
+  () =>
+    options.find((option) => option.value === account.available.value?.decision)?.label || 'Review',
+)
 
 const decisionMessages: Record<Decision, string> = {
   approve: 'Approval recorded',
@@ -159,13 +188,21 @@ function reviewError(value: unknown): ApiError {
 }
 
 async function submit() {
-  if (busy.value || headChanged.value || needsSignIn.value || auth.status !== 'ready') return
+  if (
+    busy.value ||
+    account.saving.value ||
+    headChanged.value ||
+    needsSignIn.value ||
+    auth.status !== 'ready'
+  )
+    return
   const mine = context
   const token = auth.token
   const current = new AbortController()
   controller = current
   const repository = props.repo
   const id = props.proposal.id
+  const cleanupVersion = account.cleanupVersion()
   const submitted = {
     decision: decision.value,
     expected_head: reviewedHead.value,
@@ -182,7 +219,10 @@ async function submit() {
       quietUnauthenticated: true,
     })
     if (mine !== context) return
+    const cleanupError = await account.clearAfterSubmit(cleanupVersion)
+    if (mine !== context) return
     toasts.ok(decisionMessages[submitted.decision])
+    if (cleanupError) toasts.warn('Account draft kept', cleanupError)
     restoring = true
     reset()
     restored.value = false
@@ -212,11 +252,11 @@ async function submit() {
     :model-value="modelValue"
     title="Write a review"
     :description="`Your decision is recorded against head ${shortId(proposal.head, 8)}. If the head changes, it stops counting.`"
-    :dismissable="!busy"
+    :dismissable="!locked"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <form id="review-form" class="form" @submit.prevent="submit">
-      <fieldset :disabled="busy" class="fields">
+      <fieldset :disabled="locked" class="fields">
         <legend class="sr-only">Review details</legend>
         <Alert v-if="headChanged" tone="warn" live="alert" title="The proposal changed">
           Your comment is kept. Review the updated changes before submitting your decision.
@@ -228,13 +268,44 @@ async function submit() {
         <Alert v-if="storageError" tone="warn" title="Review draft storage">{{
           storageError
         }}</Alert>
+        <p v-if="account.loading.value" class="faint" role="status">Checking your account draft…</p>
+        <p v-if="account.restored.value" class="faint" role="status">
+          Your account review draft was restored.
+        </p>
+        <Alert v-if="account.available.value" tone="warn" title="Two drafts">
+          Your text in this tab is unchanged. Choose which draft to continue before saving to your
+          account.
+          <details class="account-preview">
+            <summary>Account draft</summary>
+            <p class="faint">
+              {{ accountDecision }} · head {{ shortId(account.available.value.head, 8) }}
+            </p>
+            <pre tabindex="0" role="region" aria-label="Saved account review comment">{{
+              account.available.value.body || '(no comment)'
+            }}</pre>
+          </details>
+          <div class="draft-actions">
+            <Button size="sm" @click="account.useAccount">Use account draft</Button>
+            <Button size="sm" @click="account.keepLocal">Keep this tab draft</Button>
+          </div>
+        </Alert>
+        <Alert v-if="account.error.value" tone="warn" title="Account draft storage">
+          {{ account.error.value }}
+          <Button size="sm" :disabled="account.loading.value || locked" @click="account.load"
+            >Reload account draft</Button
+          >
+        </Alert>
         <Segmented v-model="decision" legend="Decision" :options="options" />
         <TextArea
           v-model="body"
           label="Comment"
           :rows="5"
           placeholder="What did you check? Anything the author should know?"
-          hint="Plain text. Your unfinished review is saved for this account in this browser tab, including across page reloads."
+          :hint="
+            account.supported.value
+              ? 'Plain text. This tab keeps your edits; Save draft and close also saves them to your account for another device.'
+              : 'Plain text. Your unfinished review is saved for this account in this browser tab, including across page reloads.'
+          "
         />
       </fieldset>
       <Alert v-if="error" tone="bad" live="alert" title="The server did not accept the review">
@@ -244,7 +315,14 @@ async function submit() {
       </Alert>
     </form>
     <template #footer>
-      <Button :disabled="busy" @click="emit('update:modelValue', false)"
+      <Button
+        v-if="account.supported.value"
+        :disabled="busy || !account.canSave.value"
+        :loading="account.saving.value"
+        @click="saveToAccount"
+        >Save draft and close</Button
+      >
+      <Button v-else :disabled="busy" @click="emit('update:modelValue', false)"
         >Keep draft and close</Button
       >
       <Button
@@ -252,7 +330,7 @@ async function submit() {
         form="review-form"
         variant="primary"
         :loading="busy"
-        :disabled="headChanged || needsSignIn || auth.status !== 'ready'"
+        :disabled="account.saving.value || headChanged || needsSignIn || auth.status !== 'ready'"
         >Submit review</Button
       >
     </template>
@@ -271,5 +349,20 @@ async function submit() {
   margin: 0;
   padding: 0;
   min-width: 0;
+}
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+.account-preview {
+  margin-top: var(--s-2);
+}
+.account-preview pre {
+  max-height: 12rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>

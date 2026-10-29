@@ -46,3 +46,23 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0034 — Task completion policy precondition](0034-task-finish-policy-precondition.md)
 
 - [0035 — Task completion execution generation](0035-task-completion-generation.md)
+
+- [0036 — Requested reviewers](0036-requested-reviewers.md)
+
+- [0037 — Pinned workspace sync](0037-pinned-workspace-sync.md)
+
+- [0038 — Private review drafts](0038-private-review-drafts.md)
+
+- [0039 — Exact conflict source paths](0039-conflict-source-paths.md)
+
+- [0040 — Complete structural sync resolutions](0040-structural-sync-resolutions.md)
+
+- [0041 — Bounded structural conflict previews](0041-structural-conflict-previews.md)
+
+- [0042 — Private proposal comment drafts](0042-private-comment-drafts.md)
+
+- [0043 — Private single-file drafts](0043-private-file-drafts.md)
+
+- [0044 — Cross-repository events](0044-cross-repository-events.md)
+
+- [0045 — Hosting issue import](0045-hosting-issue-import.md)

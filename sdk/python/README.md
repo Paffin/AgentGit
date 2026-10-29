@@ -101,7 +101,7 @@ print(status)  # integrated
 | `session` | `negotiate`, `auth_config`, `whoami` (and `client.negotiate()`, which also checks the protocol version) |
 | `repos` | `create`, `describe`, `list`, `configure` |
 | `workspaces` | `create`, `get`, `list`, `modify`, `sync`, `delete` |
-| `proposals` | `create`, `get`, `list`, `update`, `review`, `close` |
+| `proposals` | `create`, `get`, `list`, `update`, `set_reviewers`, `review`, `close` |
 | `integration` | `prepare`, `validate`, `integrate`, `attest`, `attestations` |
 | `queue` | `enqueue`, `list`, `run` |
 | `streams` | `list`, `create`, `head`, `cas`, `reflog` |
@@ -207,6 +207,41 @@ print(landed.outcome.status)  # integrated
 
 An `integrate` that cannot proceed is **not an error**: it answers `200` with `outcome.status` `blocked`, `conflict`,
 `denied` or `invalid` and a list of blockers with stable `code`s. Errors are for requests that failed.
+
+## Requesting reviewers
+
+On servers advertising `proposals.review_requests`, the proposal author can replace up to 20 requested reviewers. The helper reads the current list and sends it as the precondition. A conflict requires reviewing the newer list; do not blindly overwrite it. Passing an empty list clears the requests.
+
+Requests route attention: they do not grant access, count as an approval, or change integration policy. The list remains after a new proposal revision; decisions still belong to the exact head reviewed. Before using `requested_reviewer` on a listing or pagination, negotiate and require `proposals.review_requests`: an older server may ignore an unknown query field and return a broader list. The filtering helper below performs that check.
+
+<!-- example: sdk/python/examples/review_requests.py#review-requests -->
+
+```python
+from collections.abc import Iterator
+
+from agentgit import AgentGitClient, models
+
+
+def request_review(
+    client: AgentGitClient, repo: str, id: str, reviewers: list[str]
+) -> models.RequestedReviewers:
+    """Replace the inspected routing list; let the caller resolve a concurrent edit."""
+    current = client.proposals.get(repo=repo, id=id)
+    return client.proposals.set_reviewers(
+        repo=repo,
+        id=id,
+        reviewers=reviewers,
+        expected_reviewers=current.requested_reviewers,
+    )
+
+
+def reviews_requested_from(client: AgentGitClient, repo: str, reviewer: str) -> Iterator[models.Proposal]:
+    """Check support before filtering: old servers may ignore unknown query fields."""
+    hello = client.negotiate()
+    if "proposals.review_requests" not in hello.features:
+        raise ValueError("This server does not support requested-reviewer filtering.")
+    yield from client.paginate("proposal.list", repo=repo, requested_reviewer=reviewer)
+```
 
 ## Errors, retries, idempotency and deadlines
 
@@ -482,3 +517,68 @@ if os.environ.get("AGENTGIT_PUBLISH") == "1":
 `migrations.status(id=plan.id)` resumes a report. The same methods exist on
 `AsyncAgentGitClient`. Binary uploads keep one idempotency key across automatic retries.
 See [migration limits and what transfers](../../docs/guides/migrate-from-git.md).
+
+
+### Resolve against an inspected branch revision
+
+Negotiate `workspaces.sync_precondition` before relying on `expected_stream_head` in
+`workspaces.sync`. A conflicting sync returns `stream_head`, the exact branch revision
+used to prepare its conflicts. Read that immutable revision and repeat sync with the
+same `expected_stream_head` plus the chosen resolutions. If the branch moved, the server
+returns a precondition failure instead of applying stale choices. Read and decide again;
+do not silently retry with a newer head.
+
+A resolution can retain an existing `blob_id`, `file_type` and `executable` value without
+fetching or re-encoding its bytes. `op: delete` removes the path. Older servers omit
+`stream_head`; they must be upgraded before using the pinning guarantee.
+
+Workspace sync is retried automatically only when `expected_stream_head` is nonempty.
+An unpinned sync can apply resolutions against a moving branch, so a lost response
+leaves its outcome unknown and is not retried by default. Explicit unsafe-retry opt-in
+remains available for callers that deliberately accept that risk.
+
+
+Private review drafts use `client.proposals.get_draft`, `save_draft` and `clear_draft`
+(the same names are available on the async client). Negotiate `proposals.review_drafts`
+first. Save the complete draft with the `expected_version` returned by the last read;
+clear it with that guard. A conflict preserves the newer draft. The authenticated actor
+owns the notes; there is no owner argument. Drafts never post reviews or count as approval.
+Clearing removes content but retains a version, preventing stale saves from recreating it.
+Identical retries are safe; reread and decide before changing a conflicting draft.
+
+Private general-comment drafts use `client.proposals` methods `get_comment_draft`, `save_comment_draft` and `clear_comment_draft`
+with the same inspected-version and retry rules. Negotiate `proposals.comment_drafts`
+first. These drafts contain `head` and `body` (up to 16 KiB of UTF-8), remain separate
+from review-decision drafts, and can be saved on closed proposals. Saving or clearing
+a draft never posts a comment; post explicitly after inspecting the current proposal head.
+
+Issue migration uses `client.issues.import_preview` and `import_apply` after negotiating `issues.import`.
+Pass a serialized normalized manifest in `manifest_json` (up to 4 MiB). Inspect the
+preview's warnings and conflicts, then explicitly apply the same manifest with its
+`expected_digest` and `allow_unsupported` decision. Durable source mappings make
+retrying an interrupted import safe. These methods do not accept provider credentials.
+
+Cross-repository activity uses `client.events.replay_many` and `subscribe_many` after negotiating
+`events.multi_repo`. Pass 1–30 explicit repositories. An empty cursor checkpoints now;
+replay with `from_start` to read history. Keep the returned opaque cursor and the same
+repository/topic selection when resuming. Subscription envelopes also include checkpoints
+with no event; save their cursors too. Sequence numbers belong to individual repositories,
+so do not sort them as one global timeline.
+
+Private file edits use `client.drafts.get`, `save`, `clear` and `list` after negotiating
+`files.drafts`. Identify the draft by repository, stream and existing file path.
+Save the complete base64-encoded file content with its original `base` changeset and
+inspected `expected_version`. Drafts are limited to 4 MiB each and 20 live drafts per
+account/repository. Listing returns metadata only. Saving never publishes a changeset;
+inspect the current file before explicitly applying a saved draft to a workspace.
+
+Servers advertising `workspaces.conflict_origins` may include `conflict.origin` with
+`base`, `ours`, and `theirs` source paths when a rename moved the file. During workspace
+sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;
+resolve at `conflict.path`. Without origin metadata, both sides use `conflict.path`.
+For proposal preparation and integration, ours is the target stream and theirs is the proposal.
+
+With `workspaces.structural_preview`, fresh workspace sync conflicts may include
+`resolution_scope.paths` for a file/directory conflict. The scope is bounded; only
+`complete: true` identifies a complete set. An absent scope or `complete: false`
+must not authorize deleting unlisted paths or treating the listed paths as exhaustive.

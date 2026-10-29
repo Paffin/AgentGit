@@ -34,7 +34,7 @@ impl Migration {
 }
 
 /// Schema version understood by this build.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 13;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
@@ -64,6 +64,31 @@ pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
         version: 8,
         name: "0008_task_attempt_limits.sql",
         sql: include_str!("../../migrations/sqlite/0008_task_attempt_limits.sql"),
+    },
+    Migration {
+        version: 9,
+        name: "0009_proposal_reviewers.sql",
+        sql: include_str!("../../migrations/sqlite/0009_proposal_reviewers.sql"),
+    },
+    Migration {
+        version: 10,
+        name: "0010_review_drafts.sql",
+        sql: include_str!("../../migrations/sqlite/0010_review_drafts.sql"),
+    },
+    Migration {
+        version: 11,
+        name: "0011_comment_drafts.sql",
+        sql: include_str!("../../migrations/sqlite/0011_comment_drafts.sql"),
+    },
+    Migration {
+        version: 12,
+        name: "0012_file_drafts.sql",
+        sql: include_str!("../../migrations/sqlite/0012_file_drafts.sql"),
+    },
+    Migration {
+        version: 13,
+        name: "0013_issue_imports.sql",
+        sql: include_str!("../../migrations/sqlite/0013_issue_imports.sql"),
     },
 ];
 
@@ -95,6 +120,31 @@ pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
         version: 8,
         name: "0008_task_attempt_limits.sql",
         sql: include_str!("../../migrations/postgres/0008_task_attempt_limits.sql"),
+    },
+    Migration {
+        version: 9,
+        name: "0009_proposal_reviewers.sql",
+        sql: include_str!("../../migrations/postgres/0009_proposal_reviewers.sql"),
+    },
+    Migration {
+        version: 10,
+        name: "0010_review_drafts.sql",
+        sql: include_str!("../../migrations/postgres/0010_review_drafts.sql"),
+    },
+    Migration {
+        version: 11,
+        name: "0011_comment_drafts.sql",
+        sql: include_str!("../../migrations/postgres/0011_comment_drafts.sql"),
+    },
+    Migration {
+        version: 12,
+        name: "0012_file_drafts.sql",
+        sql: include_str!("../../migrations/postgres/0012_file_drafts.sql"),
+    },
+    Migration {
+        version: 13,
+        name: "0013_issue_imports.sql",
+        sql: include_str!("../../migrations/postgres/0013_issue_imports.sql"),
     },
 ];
 

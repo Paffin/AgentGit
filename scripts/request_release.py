@@ -10,6 +10,8 @@ import urllib.request
 
 PREPARE_WORKFLOW = '.github/workflows/prepare-release.yml'
 TARGETS = ('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu', 'aarch64-apple-darwin', 'x86_64-apple-darwin')
+# Published releases through this tag shipped only the four POSIX native archives.
+LAST_POSIX_ONLY_RELEASE = '0.3.0-beta.7'
 
 
 class GitHub:
@@ -143,11 +145,23 @@ def validate_request(repo, sha, version):
 
 
 
+def version_order(version):
+    """SemVer precedence for already validated versions; build metadata does not affect ordering."""
+    main, _, prerelease = version.split('+', 1)[0].partition('-')
+    core = tuple(int(part) for part in main.split('.'))
+    identifiers = tuple((0, int(part)) if part.isdigit() else (1, part)
+                        for part in prerelease.split('.'))
+    return core, not bool(prerelease), identifiers
+
+
 def required_assets(version):
     from package_release import RUST_BINARIES
-    return ({f'agentgit-{version}-{target}.tar.gz' for target in TARGETS}
-            | {f'agentgit-{version}-{binary}.cdx.json' for binary in RUST_BINARIES}
-            | {'SHA256SUMS', 'agentgit.rb'})
+    assets = ({f'agentgit-{version}-{target}.tar.gz' for target in TARGETS}
+              | {f'agentgit-{version}-{binary}.cdx.json' for binary in RUST_BINARIES}
+              | {'SHA256SUMS', 'agentgit.rb'})
+    if version_order(version) > version_order(LAST_POSIX_ONLY_RELEASE):
+        assets.add(f'agentgit-{version}-x86_64-pc-windows-msvc.zip')
+    return assets
 
 
 def is_published(release, version):

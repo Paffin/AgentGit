@@ -668,6 +668,9 @@ message SyncWorkspaceRequest {
   // sync changes nothing and reports the conflicts; with them the clean
   // parts of the merge plus these files become a two-parent merge changeset.
   repeated FileChange resolutions = 4;
+  // Optional branch revision inspected while preparing these resolutions.
+  // A mismatch refuses the sync without moving the workspace.
+  string expected_stream_head = 5;
 }
 
 message SyncWorkspaceResponse {
@@ -675,6 +678,9 @@ message SyncWorkspaceResponse {
   string status = 1;
   string head = 2;
   repeated Conflict conflicts = 3;
+  // Exact branch revision used for this attempt; empty for an empty branch.
+  // Older servers omit this field; negotiate workspaces.sync_precondition.
+  string stream_head = 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +734,8 @@ message GetProposalRequest {
 message ProposalDetail {
   Proposal proposal = 1;
   repeated Review reviews = 2;
+  // Routing only; requests do not grant access or count as approval.
+  repeated string requested_reviewers = 3;
 }
 
 message ListProposalsRequest {
@@ -739,6 +747,8 @@ message ListProposalsRequest {
   string page_token = 6;
   // Match the linked task before paging. Empty matches all tasks.
   string task_id = 7;
+  // Match a requested reviewer before keyset paging.
+  string requested_reviewer = 8;
 }
 
 message ListProposalsResponse {
@@ -754,6 +764,110 @@ message UpdateProposalRequest {
   string idempotency_key = 4;
   // Optional inspected head. If supplied, a concurrent change is refused atomically.
   string expected_head = 5;
+}
+
+// Private, unsubmitted review notes for the current acting identity only.
+message ReviewDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string head = 3;
+  string decision = 4;
+  string body = 5;
+  int64 updated_at_ms = 6;
+}
+message GetReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+}
+message SaveReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+  string head = 3;
+  string decision = 4;
+  string body = 5;
+  // Zero means no prior draft; all saves compare this version atomically.
+  uint64 expected_version = 6;
+}
+message ClearReviewDraftRequest {
+  string repo = 1;
+  string id = 2;
+  uint64 expected_version = 3;
+}
+
+// Private, unsubmitted general discussion notes for the current acting identity.
+message CommentDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string head = 3;
+  string body = 4;
+  int64 updated_at_ms = 5;
+}
+message GetCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+}
+message SaveCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+  string head = 3;
+  string body = 4;
+  // Zero means no prior draft; all saves compare this version atomically.
+  uint64 expected_version = 5;
+}
+message ClearCommentDraftRequest {
+  string repo = 1;
+  string id = 2;
+  uint64 expected_version = 3;
+}
+
+// Private existing-file edit owned by the current acting identity.
+message FileDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string stream = 3;
+  string path = 4;
+  string base = 5;
+  string original_blob_id = 6;
+  string file_type = 7;
+  bool executable = 8;
+  bytes content = 9;
+  int64 updated_at_ms = 10;
+}
+message GetFileDraftRequest { string repo = 1; string stream = 2; string path = 3; }
+message SaveFileDraftRequest {
+  string repo = 1;
+  string stream = 2;
+  string path = 3;
+  string base = 4;
+  bytes content = 5;
+  uint64 expected_version = 6;
+}
+message ClearFileDraftRequest {
+  string repo = 1;
+  string stream = 2;
+  string path = 3;
+  uint64 expected_version = 4;
+}
+message ListFileDraftsRequest { string repo = 1; string stream = 2; }
+// Discovery carries no private replacement bytes.
+message FileDraftSummary {
+  string stream = 1;
+  string path = 2;
+  string base = 3;
+  uint64 version = 4;
+  int64 updated_at_ms = 5;
+}
+message ListFileDraftsResponse { repeated FileDraftSummary drafts = 1; }
+
+// Replaces review routing after comparing the complete inspected set.
+message SetRequestedReviewersRequest {
+  string repo = 1;
+  string id = 2;
+  repeated string reviewers = 3;
+  repeated string expected_reviewers = 4;
+}
+message RequestedReviewers {
+  repeated string reviewers = 1;
 }
 
 message ReviewProposalRequest {
@@ -831,6 +945,22 @@ message CloseProposalRequest {
 // Integration
 // ---------------------------------------------------------------------------
 
+// Exact paths at the three revisions when source locations differ after a rename.
+message ConflictOrigin {
+  string base = 1;
+  string ours = 2;
+  string theirs = 3;
+}
+
+// Exact candidate paths at or beneath one file/directory conflict root.
+message ConflictResolutionScope {
+  // Ordered candidate entries; a complete scope includes the root.
+  // At most 100 paths per root and 1000 in one response. Incomplete scopes may be empty.
+  repeated string paths = 1;
+  // False if any candidate was omitted; clients must not offer automatic subtree choices then.
+  bool complete = 2;
+}
+
 message Conflict {
   string path = 1;
   // A stable code: "content", "both_added", "delete_modify", "binary", "type_change",
@@ -842,6 +972,15 @@ message Conflict {
   // The conflict in words, with the details the code leaves out (e.g. "content conflict (2 region(s))").
   // Empty for outcomes stored before the field existed. Do not parse it.
   string message = 3;
+  // Absent for ordinary same-path conflicts or outcomes stored by older versions.
+  // For workspace sync, ours is the workspace and theirs is the returned stream_head.
+  // For proposal preparation/integration, ours is the stream and theirs is the proposal.
+  // The resolution is still written to Conflict.path, not to these source paths.
+  ConflictOrigin origin = 4;
+  // Optional bounded scope for file_directory in fresh virtual sync previews.
+  // Missing or incomplete metadata cannot drive a whole-subtree choice.
+  // Does not include paths that exist only in source trees, or indicate a selected side.
+  ConflictResolutionScope resolution_scope = 5;
 }
 
 message Blocker {
@@ -1392,6 +1531,32 @@ message ReplayResponse {
   uint64 latest_seq = 2;
 }
 
+// An opaque vector cursor; events from different repositories have no shared sequence.
+message EventEnvelope {
+  string cursor = 1;
+  // Absent for an initial checkpoint, filtered progress, or heartbeat.
+  Event event = 2;
+}
+message ReplayManyRequest {
+  repeated string repos = 1;
+  repeated string topics = 2;
+  string cursor = 3;
+  uint32 limit = 4;
+  // With no cursor, deliberately replay all history instead of checkpointing now.
+  bool from_start = 5;
+}
+message ReplayManyResponse {
+  repeated EventEnvelope events = 1;
+  string cursor = 2;
+  bool has_more = 3;
+}
+message SubscribeManyRequest {
+  repeated string repos = 1;
+  repeated string topics = 2;
+  string cursor = 3;
+  uint32 heartbeat_ms = 4;
+}
+
 // ---------------------------------------------------------------------------
 // Administration
 // ---------------------------------------------------------------------------
@@ -1800,6 +1965,13 @@ service ProposalService {
   rpc Get(GetProposalRequest) returns (ProposalDetail);
   rpc List(ListProposalsRequest) returns (ListProposalsResponse);
   rpc Update(UpdateProposalRequest) returns (Proposal);
+  rpc GetDraft(GetReviewDraftRequest) returns (ReviewDraft);
+  rpc SaveDraft(SaveReviewDraftRequest) returns (ReviewDraft);
+  rpc ClearDraft(ClearReviewDraftRequest) returns (ReviewDraft);
+  rpc GetCommentDraft(GetCommentDraftRequest) returns (CommentDraft);
+  rpc SaveCommentDraft(SaveCommentDraftRequest) returns (CommentDraft);
+  rpc ClearCommentDraft(ClearCommentDraftRequest) returns (CommentDraft);
+  rpc SetReviewers(SetRequestedReviewersRequest) returns (RequestedReviewers);
   rpc Review(ReviewProposalRequest) returns (Review);
   rpc Comment(CommentProposalRequest) returns (Review);
   rpc ListThreads(ListReviewThreadsRequest) returns (ListReviewThreadsResponse);
@@ -1872,6 +2044,8 @@ service AgentService {
 service EventService {
   rpc Subscribe(SubscribeRequest) returns (stream Event);
   rpc Replay(ReplayRequest) returns (ReplayResponse);
+  rpc ReplayMany(ReplayManyRequest) returns (ReplayManyResponse);
+  rpc SubscribeMany(SubscribeManyRequest) returns (stream EventEnvelope);
 }
 
 service AdminService {
@@ -1946,7 +2120,31 @@ message UpdateIssueRequest {
 message AddIssueCommentRequest { string repo = 1; uint64 number = 2; string body = 3; string idempotency_key = 4; }
 message ListIssueActivityRequest { string repo = 1; uint64 number = 2; uint32 page_size = 3; string page_token = 4; }
 message ListIssueActivityResponse { repeated IssueActivity activity = 1; string next_page_token = 2; }
+message PreviewIssueImportRequest { string repo = 1; string manifest_json = 2; }
+message ApplyIssueImportRequest {
+  string repo = 1;
+  string manifest_json = 2;
+  string expected_digest = 3;
+  bool allow_unsupported = 4;
+}
+message IssueImportPreview {
+  string digest = 1;
+  uint32 issues = 2;
+  uint32 comments = 3;
+  uint32 create_count = 4;
+  uint32 skip_count = 5;
+  repeated string warnings = 6;
+  repeated string conflicts = 7;
+}
+message ImportedIssueMapping { string source_id = 1; uint64 number = 2; }
+message IssueImportResult {
+  uint32 created = 1;
+  uint32 skipped = 2;
+  repeated ImportedIssueMapping mappings = 3;
+}
 service IssueService {
+  rpc PreviewImport(PreviewIssueImportRequest) returns (IssueImportPreview);
+  rpc ApplyImport(ApplyIssueImportRequest) returns (IssueImportResult);
   rpc Create(CreateIssueRequest) returns (Issue);
   rpc Get(GetIssueRequest) returns (Issue);
   rpc List(ListIssuesRequest) returns (ListIssuesResponse);
@@ -1987,4 +2185,11 @@ message SetTaskAttemptLimitRequest {
   uint32 max_attempts = 3;
   uint32 expected_max_attempts = 4;
   string idempotency_key = 5;
+}
+
+service FileDraftService {
+  rpc Get(GetFileDraftRequest) returns (FileDraft);
+  rpc Save(SaveFileDraftRequest) returns (FileDraft);
+  rpc Clear(ClearFileDraftRequest) returns (FileDraft);
+  rpc List(ListFileDraftsRequest) returns (ListFileDraftsResponse);
 }

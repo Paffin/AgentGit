@@ -11,6 +11,8 @@ use crate::output::{ToolError, ToolOutput};
 
 pub mod coordinate;
 pub mod discussions;
+pub mod file_drafts;
+pub mod issue_import;
 pub mod proposals;
 pub mod read;
 pub mod workspace;
@@ -99,9 +101,11 @@ impl Registry {
         let mut tools = Vec::new();
         tools.extend(read::tools());
         tools.extend(workspace::tools());
+        tools.extend(file_drafts::tools());
         tools.extend(proposals::tools());
         tools.extend(discussions::tools());
         tools.extend(coordinate::tools());
+        tools.extend(issue_import::tools());
         Self::from_tools(tools)
     }
 
@@ -420,11 +424,30 @@ mod tests {
         for t in reg.all() {
             match t.group {
                 Group::Read => assert!(t.ann.read_only, "{} is in the read group so it must be read-only", t.name),
+                Group::Review if matches!(t.name, "review_draft_get" | "comment_draft_get") => {
+                    // Private notes require the review opt-in even though reading does not mutate them.
+                    assert!(t.ann.read_only);
+                }
+                Group::Workspace if matches!(t.name, "file_draft_get" | "file_draft_list") => {
+                    assert!(t.ann.read_only);
+                }
+                Group::Issue if t.name == "issue_import_preview" => assert!(t.ann.read_only),
                 _ => assert!(!t.ann.read_only, "{} changes state so it cannot be marked read-only", t.name),
             }
         }
         let destructive: Vec<&str> = reg.all().iter().filter(|t| t.ann.destructive).map(|t| t.name).collect();
-        assert_eq!(destructive, ["workspace_delete", "proposal_close", "integrate"], "{destructive:?}");
+        assert_eq!(
+            destructive,
+            [
+                "workspace_delete",
+                "file_draft_clear",
+                "proposal_close",
+                "review_draft_clear",
+                "comment_draft_clear",
+                "integrate"
+            ],
+            "{destructive:?}"
+        );
     }
 
     #[test]

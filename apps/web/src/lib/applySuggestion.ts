@@ -2,7 +2,7 @@ import type { Api } from '@/api/endpoints'
 import type { RequestOptions } from '@/api/client'
 import type { FileChange, ReviewLineAnchor } from '@/api/types'
 import { putFile, workspaceName } from './edit'
-import { replaceSuggestedLine } from './reviewSuggestion'
+import { replaceSuggestedRange, suggestionLineCount } from './reviewSuggestion'
 
 type Session = Pick<RequestOptions, 'token' | 'signal' | 'quietUnauthenticated'>
 export interface SuggestionPreview {
@@ -17,6 +17,7 @@ export async function previewSuggestion(
   anchor: ReviewLineAnchor,
   replacement: string,
   request: Session,
+  lines = 1,
 ): Promise<SuggestionPreview> {
   if (anchor.side !== 'new')
     throw new Error('Select a line in the proposed version to suggest a replacement.')
@@ -29,9 +30,92 @@ export async function previewSuggestion(
       'Suggestions apply to regular text files up to 1 MiB. Use the file editor for this file.',
     )
   const before = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes)
-  const after = replaceSuggestedLine(before, anchor.line, anchor.text, replacement)
+  const after = replaceSuggestedRange(before, anchor.line, anchor.text, replacement, lines)
   if (after === before) throw new Error('This suggestion does not change the file.')
   return { before, after, change: putFile(anchor.path, after, location.entry.executable) }
+}
+
+export interface SuggestionInput {
+  lines?: number
+  anchor: ReviewLineAnchor
+  replacement: string
+}
+
+/** Prepare one change per file, applying original line numbers from bottom to top. */
+export async function previewSuggestions(
+  api: Api,
+  repo: string,
+  head: string,
+  suggestions: SuggestionInput[],
+  request: Session,
+): Promise<SuggestionPreview[]> {
+  const files = groupSuggestions(head, suggestions)
+  const result: SuggestionPreview[] = []
+  let bytes = 0
+  for (const path of [...files.keys()].sort()) {
+    request.signal?.throwIfAborted()
+    const preview = await previewFileSuggestions(api, repo, files.get(path)!, request)
+    bytes += new TextEncoder().encode(preview.after).length
+    if (bytes > 4 * 1024 * 1024)
+      throw new Error('The selected changes exceed 4 MiB. Select fewer suggestions.')
+    result.push(preview)
+  }
+  return result
+}
+
+function groupSuggestions(
+  head: string,
+  suggestions: SuggestionInput[],
+): Map<string, SuggestionInput[]> {
+  if (!suggestions.length || suggestions.length > 100)
+    throw new Error('Select between 1 and 100 suggestions.')
+  const seen = new Set<string>()
+  const files = new Map<string, SuggestionInput[]>()
+  for (const suggestion of suggestions) {
+    const anchor = suggestion.anchor
+    if (anchor.head !== head || anchor.side !== 'new')
+      throw new Error('Every suggestion must belong to the current proposed revision.')
+    const lines = suggestionLineCount(suggestion.lines)
+    for (let offset = 0; offset < lines; offset++) {
+      const key = JSON.stringify([anchor.path, anchor.line + offset])
+      if (seen.has(key))
+        throw new Error('Choose only one suggestion for the same line or overlapping range.')
+      seen.add(key)
+    }
+    const group = files.get(anchor.path) || []
+    group.push(suggestion)
+    files.set(anchor.path, group)
+  }
+  return files
+}
+
+/** Each anchor still addresses the immutable original file's line numbers. */
+async function previewFileSuggestions(
+  api: Api,
+  repo: string,
+  suggestions: SuggestionInput[],
+  request: Session,
+): Promise<SuggestionPreview> {
+  const group = [...suggestions].sort((a, b) => b.anchor.line - a.anchor.line)
+  const first = group[0]!
+  const preview = await previewSuggestion(
+    api,
+    repo,
+    first.anchor,
+    first.replacement,
+    request,
+    first.lines,
+  )
+  for (const suggestion of group.slice(1))
+    preview.after = replaceSuggestedRange(
+      preview.after,
+      suggestion.anchor.line,
+      suggestion.anchor.text,
+      suggestion.replacement,
+      suggestion.lines,
+    )
+  preview.change = putFile(first.anchor.path, preview.after, preview.change.executable)
+  return preview
 }
 
 /** A private workspace prepares content; only a head-checked update publishes it to the proposal. */
@@ -44,6 +128,20 @@ export async function applySuggestion(
   preview: SuggestionPreview,
   request: Session,
 ): Promise<void> {
+  return applySuggestions(api, repo, proposal, stream, head, [preview], request)
+}
+
+/** Publish the complete preview in one changeset with one inspected-head update. */
+export async function applySuggestions(
+  api: Api,
+  repo: string,
+  proposal: string,
+  stream: string,
+  head: string,
+  previews: SuggestionPreview[],
+  request: Session,
+): Promise<void> {
+  if (!previews.length || previews.length > 100) throw new Error('Select between 1 and 100 files.')
   request.signal?.throwIfAborted()
   const name = workspaceName()
   const workspace = await api.workspaces.create(repo, { name, stream, from_rev: head }, request)
@@ -55,9 +153,12 @@ export async function applySuggestion(
       repo,
       name,
       {
-        changes: [preview.change],
+        changes: previews.map((preview) => preview.change),
         expected_head: head,
-        message: `Apply review suggestion to ${preview.change.path}`,
+        message:
+          previews.length === 1
+            ? `Apply review suggestion to ${previews[0]!.change.path}`
+            : 'Apply review suggestions',
       },
       request,
     )

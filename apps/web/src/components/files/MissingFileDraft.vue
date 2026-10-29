@@ -4,7 +4,13 @@ import { useAuth } from '@/stores/auth'
 import { useFileDraft } from '@/composables/useFileDraft'
 import FileEditor from './FileEditor.vue'
 
-const props = defineProps<{ repo: string; stream: string; path: string; enabled: boolean }>()
+const props = defineProps<{
+  repo: string
+  stream: string
+  path: string
+  enabled: boolean
+  accountSaved?: boolean
+}>()
 const emit = defineEmits<{ cancel: [] }>()
 const draft = useFileDraft({
   identity: useAuth().identity,
@@ -24,7 +30,7 @@ async function leave() {
 </script>
 
 <template>
-  <div v-if="enabled && saved && !dismissed" class="recovery">
+  <div v-if="enabled && (saved || accountSaved) && !dismissed" class="recovery">
     <p class="missing">
       This file was removed or moved. Proposing your recovered draft opens a review against the
       current branch.
@@ -34,9 +40,9 @@ async function leave() {
       :stream="stream"
       :rev="stream"
       :path="path"
-      :original="saved.original"
-      :executable="saved.executable"
-      :file-type="saved.fileType"
+      :original="saved?.original ?? ''"
+      :executable="saved?.executable"
+      :file-type="saved?.fileType"
       @cancel="leave"
     />
   </div>

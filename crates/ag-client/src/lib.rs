@@ -17,11 +17,12 @@ use ag_protocol::v1;
 use ag_protocol::v1::{
     admin_service_client::AdminServiceClient, agent_service_client::AgentServiceClient,
     event_service_client::EventServiceClient, execution_service_client::ExecutionServiceClient,
-    history_service_client::HistoryServiceClient, integration_service_client::IntegrationServiceClient,
-    object_service_client::ObjectServiceClient, proposal_service_client::ProposalServiceClient,
-    protocol_service_client::ProtocolServiceClient, repository_service_client::RepositoryServiceClient,
-    stream_service_client::StreamServiceClient, tree_service_client::TreeServiceClient,
-    workspace_service_client::WorkspaceServiceClient,
+    file_draft_service_client::FileDraftServiceClient, history_service_client::HistoryServiceClient,
+    integration_service_client::IntegrationServiceClient, issue_service_client::IssueServiceClient,
+    object_service_client::ObjectServiceClient,
+    proposal_service_client::ProposalServiceClient, protocol_service_client::ProtocolServiceClient,
+    repository_service_client::RepositoryServiceClient, stream_service_client::StreamServiceClient,
+    tree_service_client::TreeServiceClient, workspace_service_client::WorkspaceServiceClient,
 };
 use ag_protocol::{ErrorCode, ProtocolError};
 use ag_types::ObjectId;
@@ -205,7 +206,9 @@ impl Client {
         tree => TreeServiceClient,
         streams => StreamServiceClient,
         workspaces => WorkspaceServiceClient,
+        file_drafts => FileDraftServiceClient,
         proposals => ProposalServiceClient,
+        issues => IssueServiceClient,
         integration => IntegrationServiceClient,
         agents => AgentServiceClient,
         events => EventServiceClient,

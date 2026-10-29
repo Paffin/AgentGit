@@ -43,6 +43,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag proposal`](#ag-proposal)
 - [`ag proposal list`](#ag-proposal-list)
 - [`ag proposal show`](#ag-proposal-show)
+- [`ag proposal reviewers`](#ag-proposal-reviewers)
 - [`ag proposal review`](#ag-proposal-review)
 - [`ag proposal update`](#ag-proposal-update)
 - [`ag proposal close`](#ag-proposal-close)
@@ -111,6 +112,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag reindex`](#ag-reindex)
 - [`ag backup`](#ag-backup)
 - [`ag git`](#ag-git)
+- [`ag git export-issues`](#ag-git-export-issues)
 - [`ag git import`](#ag-git-import)
 - [`ag git export`](#ag-git-export)
 - [`ag clone`](#ag-clone)
@@ -126,6 +128,20 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote proposal`](#ag-remote-proposal)
 - [`ag remote prepare`](#ag-remote-prepare)
 - [`ag remote explain`](#ag-remote-explain)
+- [`ag remote reviewers`](#ag-remote-reviewers)
+- [`ag remote review-draft`](#ag-remote-review-draft)
+- [`ag remote review-draft get`](#ag-remote-review-draft-get)
+- [`ag remote review-draft save`](#ag-remote-review-draft-save)
+- [`ag remote review-draft clear`](#ag-remote-review-draft-clear)
+- [`ag remote file-draft`](#ag-remote-file-draft)
+- [`ag remote file-draft list`](#ag-remote-file-draft-list)
+- [`ag remote file-draft get`](#ag-remote-file-draft-get)
+- [`ag remote file-draft save`](#ag-remote-file-draft-save)
+- [`ag remote file-draft clear`](#ag-remote-file-draft-clear)
+- [`ag remote comment-draft`](#ag-remote-comment-draft)
+- [`ag remote comment-draft get`](#ag-remote-comment-draft-get)
+- [`ag remote comment-draft save`](#ag-remote-comment-draft-save)
+- [`ag remote comment-draft clear`](#ag-remote-comment-draft-clear)
 - [`ag remote review`](#ag-remote-review)
 - [`ag remote discussion`](#ag-remote-discussion)
 - [`ag remote discussion list`](#ag-remote-discussion-list)
@@ -133,8 +149,15 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote discussion start`](#ag-remote-discussion-start)
 - [`ag remote discussion reply`](#ag-remote-discussion-reply)
 - [`ag remote discussion resolve`](#ag-remote-discussion-resolve)
+- [`ag remote workspace`](#ag-remote-workspace)
+- [`ag remote workspace list`](#ag-remote-workspace-list)
+- [`ag remote workspace show`](#ag-remote-workspace-show)
+- [`ag remote workspace create`](#ag-remote-workspace-create)
+- [`ag remote workspace sync`](#ag-remote-workspace-sync)
+- [`ag remote workspace delete`](#ag-remote-workspace-delete)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
+- [`ag remote import-issues`](#ag-remote-import-issues)
 - [`ag remote streams`](#ag-remote-streams)
 - [`ag remote events`](#ag-remote-events)
 - [`ag remote policy`](#ag-remote-policy)
@@ -704,11 +727,12 @@ List, review, update or close proposals
 Usage: ag proposal [OPTIONS] <COMMAND>
 
 Commands:
-  list    List proposals, newest first
-  show    Show a proposal with its reviews
-  review  Review the proposal's current head
-  update  Point the proposal at a new head (earlier approvals stop counting)
-  close   Close without integrating
+  list       List proposals, newest first
+  show       Show a proposal with its reviews
+  reviewers  Inspect, add or remove requested reviewers (no approval or access change)
+  review     Review the proposal's current head
+  update     Point the proposal at a new head (earlier approvals stop counting)
+  close      Close without integrating
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -729,16 +753,17 @@ List proposals, newest first
 Usage: ag proposal list [OPTIONS]
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --state <STATE>  Filter by state: open, integrated, closed
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-  -n, --limit <LIMIT>  Show at most this many (0 = all) [default: 200]
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>                     Operate on the repository at this path (default: discovered from the current directory)
+      --state <STATE>                  Filter by state: open, integrated, closed
+      --as <IDENTITY>                  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --requested-reviewer <IDENTITY>  Only proposals that request this reviewer, matched before the limit
+      --json                           Machine-readable JSON output
+  -n, --limit <LIMIT>                  Show at most this many (0 = all) [default: 200]
+      --color <WHEN>                   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## ag proposal show
@@ -760,6 +785,31 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag proposal reviewers
+
+```text
+Inspect, add or remove requested reviewers (no approval or access change)
+
+Usage: ag proposal reviewers [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+      --add <IDENTITY>       Add a requested reviewer; repeat for several identities
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --remove <IDENTITY>    Remove a requested reviewer; repeat for several identities
+      --expected <IDENTITY>  Require this complete inspected set; repeat for each identity
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expect-empty         Require that no reviewers have been requested yet
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag proposal review
@@ -2308,8 +2358,9 @@ Import from or export to Git (needs the `git` command)
 Usage: ag git [OPTIONS] <COMMAND>
 
 Commands:
-  import  Import a Git repository's history into a new stream
-  export  Export a stream's history to a Git repository (created if missing)
+  export-issues  Export GitHub/GitLab issues and comments to a normalized import manifest
+  import         Import a Git repository's history into a new stream
+  export         Export a stream's history to a Git repository (created if missing)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -2320,6 +2371,28 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag git export-issues
+
+```text
+Export GitHub/GitLab issues and comments to a normalized import manifest
+
+Usage: ag git export-issues [OPTIONS] --provider <PROVIDER> --source <SOURCE> --output <OUTPUT>
+
+Options:
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --provider <PROVIDER>  Source hosting provider [possible values: github, gitlab]
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --source <SOURCE>      Repository path, for example owner/repo or group/subgroup/repo
+      --host <HOST>          GitLab HTTPS origin, for example https://gitlab.example.com
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --output <OUTPUT>      New manifest file. An existing file is never replaced
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag git import
@@ -2469,24 +2542,30 @@ Manage remotes and work with proposals, events and policy on a server
 Usage: ag remote [OPTIONS] <COMMAND>
 
 Commands:
-  add         Add a remote
-  list        List remotes
-  remove      Forget a remote
-  whoami      Show who the server thinks you are
-  proposals   List proposals on the server
-  proposal    Show a proposal with its reviews
-  prepare     What would integrating do now, and what is missing?
-  explain     Explain why a server proposal cannot land, with the next commands. Changes nothing
-  review      Review a proposal's current head
-  discussion  Read and participate in revision-bound line discussions
-  integrate   Integrate a proposal into its stream
-  close       Close a proposal without integrating it
-  streams     List streams
-  events      Show the events of the repository (replay), or follow them live
-  policy      Show or set a stream's policy
-  log         Show history of a revision on the server
-  blame       Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
-  cat         Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
+  add            Add a remote
+  list           List remotes
+  remove         Forget a remote
+  whoami         Show who the server thinks you are
+  proposals      List proposals on the server
+  proposal       Show a proposal with its reviews
+  prepare        What would integrating do now, and what is missing?
+  explain        Explain why a server proposal cannot land, with the next commands. Changes nothing
+  reviewers      Inspect, add or remove requested reviewers (no approval or access change)
+  review-draft   Save or restore your private account review notes without submitting them
+  file-draft     Save or restore private file edits without publishing a changeset
+  comment-draft  Save or restore a private general comment without posting it
+  review         Review a proposal's current head
+  discussion     Read and participate in revision-bound line discussions
+  workspace      Inspect and explicitly sync server-side workspaces without a checkout
+  integrate      Integrate a proposal into its stream
+  close          Close a proposal without integrating it
+  import-issues  Preview or explicitly apply a normalized GitHub/GitLab issue manifest
+  streams        List streams
+  events         Show the events of the repository (replay), or follow them live
+  policy         Show or set a stream's policy
+  log            Show history of a revision on the server
+  blame          Show which changeset introduced each line of a file on the server: `ag remote blame main:src/lib.rs`
+  cat            Print a file as of a revision on the server: `ag remote cat main:src/lib.rs`
 
 Options:
   -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
@@ -2594,16 +2673,17 @@ List proposals on the server
 Usage: ag remote proposals [OPTIONS]
 
 Options:
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --state <STATE>    Filter: open, integrated, closed
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>                     Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>                Remote to use (default: origin)
+      --state <STATE>                  Filter: open, integrated, closed
+      --as <IDENTITY>                  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --requested-reviewer <IDENTITY>  Only proposals that request this reviewer, matched before paging
+      --json                           Machine-readable JSON output
+      --color <WHEN>                   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## ag remote proposal
@@ -2671,6 +2751,409 @@ Options:
   -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag remote reviewers
+
+```text
+Inspect, add or remove requested reviewers (no approval or access change)
+
+Usage: ag remote reviewers [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+      --add <IDENTITY>       Add a requested reviewer; repeat for several identities
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>      Remote to use (default: origin)
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --remove <IDENTITY>    Remove a requested reviewer; repeat for several identities
+      --expected <IDENTITY>  Require this complete inspected set; repeat for each identity
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expect-empty         Require that no reviewers have been requested yet
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
+```
+
+## ag remote review-draft
+
+```text
+Save or restore your private account review notes without submitting them
+
+Usage: ag remote review-draft [OPTIONS] <COMMAND>
+
+Commands:
+  get    Read your private draft and its version, including a cleared version
+  save   Save private notes; does not submit a review or advance the inspected head
+  clear  Clear only the private draft version you inspected
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote review-draft get
+
+```text
+Read your private draft and its version, including a cleared version
+
+Usage: ag remote review-draft get [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote review-draft save
+
+```text
+Save private notes; does not submit a review or advance the inspected head
+
+Usage: ag remote review-draft save [OPTIONS] --head <HEAD> --decision <DECISION> --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --head <HEAD>
+          Exact proposal head you inspected
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --decision <DECISION>
+          Intended review decision; saving does not submit it [possible values: approve, request_changes, comment]
+      --json
+          Machine-readable JSON output
+  -m, --message <MESSAGE>
+          Private review notes [default: ""]
+      --body-file <PATH>
+          Read UTF-8 notes from this file, preserving line breaks (at most 64 KiB)
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; use zero only after observing no draft
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote review-draft clear
+
+```text
+Clear only the private draft version you inspected
+
+Usage: ag remote review-draft clear [OPTIONS] --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; zero means no draft has existed
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote file-draft
+
+```text
+Save or restore private file edits without publishing a changeset
+
+Usage: ag remote file-draft [OPTIONS] <COMMAND>
+
+Commands:
+  list   List your saved file drafts in a stream, without downloading their content
+  get    Read metadata; download exact replacement bytes only with --output
+  save   Save private replacement bytes for an existing file at an immutable revision
+  clear  Clear only the draft version you inspected
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft list
+
+```text
+List your saved file drafts in a stream, without downloading their content
+
+Usage: ag remote file-draft list [OPTIONS] --stream <STREAM>
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream containing the files
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft get
+
+```text
+Read metadata; download exact replacement bytes only with --output
+
+Usage: ag remote file-draft get [OPTIONS] --stream <STREAM> --path <PATH>
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream containing the file
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>      Repository-relative file path
+      --json             Machine-readable JSON output
+      --output <PATH>    Write saved bytes to this local file (replaces an existing file)
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote file-draft save
+
+```text
+Save private replacement bytes for an existing file at an immutable revision
+
+Usage: ag remote file-draft save [OPTIONS] --stream <STREAM> --path <PATH> --base <BASE> --content-file <PATH> --expected-version <EXPECTED_VERSION>
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --stream <STREAM>
+          Stream containing the file
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>
+          Repository-relative file path
+      --base <BASE>
+          Exact changeset containing the original file you inspected
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --content-file <PATH>
+          Binary replacement file, at most 4 MiB
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; zero only if no draft has existed
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote file-draft clear
+
+```text
+Clear only the draft version you inspected
+
+Usage: ag remote file-draft clear [OPTIONS] --stream <STREAM> --path <PATH> --expected-version <EXPECTED_VERSION>
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --stream <STREAM>
+          Stream containing the file
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --path <PATH>
+          Repository-relative file path
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get, including a cleared version
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote comment-draft
+
+```text
+Save or restore a private general comment without posting it
+
+Usage: ag remote comment-draft [OPTIONS] <COMMAND>
+
+Commands:
+  get    Read your private draft and its version, including a cleared version
+  save   Save private notes; does not post a comment or advance the inspected head
+  clear  Clear only the private draft version you inspected
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote comment-draft get
+
+```text
+Read your private draft and its version, including a cleared version
+
+Usage: ag remote comment-draft get [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote comment-draft save
+
+```text
+Save private notes; does not post a comment or advance the inspected head
+
+Usage: ag remote comment-draft save [OPTIONS] --head <HEAD> --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --head <HEAD>
+          Exact proposal head you inspected
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+  -m, --message <MESSAGE>
+          Private comment notes [default: ""]
+      --body-file <PATH>
+          Read UTF-8 notes from this file, preserving line breaks (at most 16 KiB)
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; use zero only after observing no draft
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote comment-draft clear
+
+```text
+Clear only the private draft version you inspected
+
+Usage: ag remote comment-draft clear [OPTIONS] --expected-version <EXPECTED_VERSION> <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --expected-version <EXPECTED_VERSION>
+          Version returned by get; zero means no draft has existed
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 ## ag remote review
@@ -2860,6 +3343,154 @@ Options:
           Print version
 ```
 
+## ag remote workspace
+
+```text
+Inspect and explicitly sync server-side workspaces without a checkout
+
+Usage: ag remote workspace [OPTIONS] <COMMAND>
+
+Commands:
+  list    List server-side workspaces
+  show    Show a server-side workspace
+  create  Create an isolated workspace, optionally at an existing revision
+  sync    Merge the stream into a workspace; conflicts leave it unchanged
+  delete  Delete the named server-side workspace
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace list
+
+```text
+List server-side workspaces
+
+Usage: ag remote workspace list [OPTIONS]
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace show
+
+```text
+Show a server-side workspace
+
+Usage: ag remote workspace show [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace create
+
+```text
+Create an isolated workspace, optionally at an existing revision
+
+Usage: ag remote workspace create [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  New workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --stream <STREAM>  Stream to follow [default: main]
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --from <REVISION>  Starting revision instead of the stream head
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## ag remote workspace sync
+
+```text
+Merge the stream into a workspace; conflicts leave it unchanged
+
+Usage: ag remote workspace sync [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>
+          Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>
+          Remote to use (default: origin)
+      --resolutions <PATH>
+          Explicit FileChange JSON array; content is base64, or use an existing blob_id
+      --as <IDENTITY>
+          Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --expected-stream-head <CHANGESET>
+          Exact nonempty stream head inspected in the preceding sync result
+      --json
+          Machine-readable JSON output
+      --color <WHEN>
+          Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet
+          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose
+          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+## ag remote workspace delete
+
+```text
+Delete the named server-side workspace
+
+Usage: ag remote workspace delete [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Server-side workspace name
+
+Options:
+  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>  Remote to use (default: origin)
+      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json             Machine-readable JSON output
+      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
 ## ag remote integrate
 
 ```text
@@ -2905,6 +3536,29 @@ Options:
   -V, --version          Print version
 ```
 
+## ag remote import-issues
+
+```text
+Preview or explicitly apply a normalized GitHub/GitLab issue manifest
+
+Usage: ag remote import-issues [OPTIONS] --file <PATH>
+
+Options:
+  -C, --repo <DIR>                Operate on the repository at this path (default: discovered from the current directory)
+      --file <PATH>               Normalized GitHub/GitLab issue manifest (UTF-8 JSON, at most 4 MiB)
+      --remote <REMOTE>           Remote to use (default: origin)
+      --apply                     Apply the manifest instead of only previewing it
+      --as <IDENTITY>             Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --expected-digest <DIGEST>  Exact digest returned by the preview of this manifest
+      --json                      Machine-readable JSON output
+      --allow-unsupported         Acknowledge unsupported source features listed in the preview
+      --color <WHEN>              Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                     Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                   Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                      Print help
+  -V, --version                   Print version
+```
+
 ## ag remote streams
 
 ```text
@@ -2932,18 +3586,23 @@ Show the events of the repository (replay), or follow them live
 Usage: ag remote events [OPTIONS]
 
 Options:
-      --after <AFTER>    Replay events after this sequence number [default: 0]
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --topics <TOPICS>  Only these topics (prefix match), e.g. `stream,proposal`
-      --follow           Keep following new events
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>               Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>          Remote to use (default: origin)
+      --repository <OWNER/NAME>  Explicit repository on the same server; repeat for up to 30 repositories
+      --as <IDENTITY>            Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --cursor <CURSOR>          Resume the opaque cursor returned by the previous page
+      --checkpoint <PATH>        Load a saved cursor, then atomically replace it after emitted events
+      --json                     Machine-readable JSON output
+      --color <WHEN>             Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --from-start               Deliberately include history; otherwise a new feed starts from now
+      --limit <LIMIT>            Maximum events in the replay page (default: 100; maximum: 1000)
+  -q, --quiet                    Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+      --after <AFTER>            Replay events after this sequence number [default: 0]
+  -v, --verbose                  Explain what is happening on standard error: repository, identity, remote, timing
+      --topics <TOPICS>          Only these topics (prefix match), e.g. `stream,proposal`
+      --follow                   Keep following new events
+  -h, --help                     Print help
+  -V, --version                  Print version
 ```
 
 ## ag remote policy

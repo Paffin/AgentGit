@@ -47,7 +47,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Outbox | ✅ | at-least-once; the one in-process consumer is tree derivation, run inline after each commit (no background dispatcher; failures are recorded and retried by the next pass, and shown by `ag doctor`, `/readyz` and the `agwp_derive_*` metrics) |
 | Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). The OCI backend is checked against real Docker and Podman in CI. Not yet: VM-level isolation, Windows workers, worker pools/labels |
 | Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Advisor, reviewers and semantic index are deterministic heuristics by default and can be switched to a model (any OpenAI-compatible endpoint you configure); models only propose comments. No simulated agent ships; the optional live path was run once, by hand, with one model |
-| MCP server for agents (`ag-mcp`) | ✅ | stdio, 31 tools, `integrate` only behind `--enable-integrate`, no administration; protocol, CLI and end-to-end suites against a real in-process server ([ADR-0008](../adr/0008-mcp-server.md), [guide](../guides/mcp.md)). Not run inside Claude Code, Claude Desktop or the Agent SDKs |
+| MCP server for agents (`ag-mcp`) | ✅ | stdio, role-gated tools, `integrate` only behind `--enable-integrate`, no administration; protocol, CLI and end-to-end suites against a real in-process server ([ADR-0008](../adr/0008-mcp-server.md), [guide](../guides/mcp.md)). Not run inside Claude Code, Claude Desktop or the Agent SDKs |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |
 | Crash recovery, object availability, unknown commit outcome | ✅ | tests above |
 | GC by generations | 🟡 | age-based grace period + roots; no separate generations |
@@ -123,3 +123,36 @@ the wire contract, stale generation rejection and current-generation completion.
 server/shell-executor scheduler scenarios cover restart, operator policy changes during work
 and a late first session while a second run owns the task. Capability tests refuse an older
 server before sending a conditional completion.
+
+## Development review workflow — ADR-0036 through ADR-0039
+
+These capabilities are implemented in the development branch and remain separate from beta.7's published schema8.
+
+| Capability | Status | Evidence and remaining scope |
+|---|---|---|
+| Requested reviewers | ✅ | [ADR-0036](../adr/0036-requested-reviewers.md); author-only inspected-list update, exact review permissions; API/CLI/SDK/MCP/Web tests. Routing never grants approval/access. |
+| Revision-pinned virtual sync | ✅ | [ADR-0037](../adr/0037-pinned-workspace-sync.md); final branch/head checks, exact blob/type/mode choices; HTTP/gRPC and browser regressions. Multi-path structural choices remain open. |
+| Private account review drafts | 🟡 | [ADR-0038](../adr/0038-private-review-drafts.md); owner isolation, versioned save/clear, guarded post-submit cleanup. General comments and file-edit drafts are not covered. |
+| Renamed conflict source paths | ✅ | [ADR-0039](../adr/0039-conflict-source-paths.md); both rename orientations through HTTP/gRPC, CLI and browser; older servers cannot silently lose a side. |
+
+The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI, unmerged work and the next correctness task. These rows do not close the beta's external qualification gates.
+
+## ADR-0040 — structural sync safety
+
+[ADR-0040](../adr/0040-structural-sync-resolutions.md) retains the full structural candidate for explicit virtual-sync resolutions. Tests preserve independent incoming additions, edits and deletions for both orientations and choices, reject invalid trees before workspace movement, and keep exact blob/type/mode metadata. Local structural sync and snapshots of legacy structural pending merges fail closed; `--force` does not bypass this protection. The bounded browser chooser uses complete candidate scopes from ADR-0041; larger and multi-target rename cases remain open.
+
+## ADR-0042 — private proposal comment drafts
+
+[ADR-0042](../adr/0042-private-comment-drafts.md) separates general-comment notes from review decisions. Core and storage tests cover exact actor ownership, independent slots, transactional versions, tombstones and the schema10-to11 upgrade. HTTP/gRPC tests cover permissions, closed proposals and private response handling. CLI and SDK tests exercise the same get/save/clear contract. Web component and browser scenarios cover explicit save, cross-device restore, conflicting versions and cleanup after posting. See the continuous checkpoint for validation status on the current unmerged head.
+
+## ADR-0043 — private single-file drafts
+
+[ADR-0043](../adr/0043-private-file-drafts.md) stores replacement bytes privately and retains the original revision as a GC root. Web, CLI, SDK and MCP implement explicit save/restore/clear; Web also lists saved paths. Existing-file scope only. Basic builds/type checks passed; extended test matrices were not run for this slice.
+
+## ADR-0044 — cross-repository event feed
+
+[ADR-0044](../adr/0044-cross-repository-events.md) reuses repository audit logs with a bounded, scoped cursor vector. Home, CLI and SDKs consume one stream; MCP provides bounded replay. A focused real-server check covers two-repository pagination/resume, denied scope and SSE cursor restoration. Basic builds are used for the client changes, without another broad test matrix.
+
+## ADR-0045 — hosting issues and comments
+
+[ADR-0045](../adr/0045-hosting-issue-import.md) binds explicit apply to a validated manifest digest and stores durable source mappings atomically with each issue/comments. A small real-server scenario covers preview, acknowledgement, import, retry and changed-source rejection. The CLI exporter, Web and SDK/MCP clients received basic builds/types only; live provider export qualification remains separate.

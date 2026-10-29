@@ -11,6 +11,7 @@ use ag_protocol::v1::{
     agent_service_server::{AgentService, AgentServiceServer},
     event_service_server::{EventService, EventServiceServer},
     execution_service_server::{ExecutionService, ExecutionServiceServer},
+    file_draft_service_server::{FileDraftService, FileDraftServiceServer},
     history_service_server::{HistoryService, HistoryServiceServer},
     integration_service_server::{IntegrationService, IntegrationServiceServer},
     issue_service_server::{IssueService, IssueServiceServer},
@@ -374,6 +375,48 @@ impl ProposalService for Grpc {
     async fn update(&self, request: Request<v1::UpdateProposalRequest>) -> Result<Response<v1::Proposal>, Status> {
         unary!(self, request, "proposal.update", update_proposal)
     }
+    async fn get_draft(
+        &self,
+        request: Request<v1::GetReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.get_draft", get_review_draft)
+    }
+    async fn save_draft(
+        &self,
+        request: Request<v1::SaveReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.save_draft", save_review_draft)
+    }
+    async fn clear_draft(
+        &self,
+        request: Request<v1::ClearReviewDraftRequest>,
+    ) -> Result<Response<v1::ReviewDraft>, Status> {
+        unary!(self, request, "proposal.clear_draft", clear_review_draft)
+    }
+    async fn get_comment_draft(
+        &self,
+        request: Request<v1::GetCommentDraftRequest>,
+    ) -> Result<Response<v1::CommentDraft>, Status> {
+        unary!(self, request, "proposal.get_comment_draft", get_comment_draft)
+    }
+    async fn save_comment_draft(
+        &self,
+        request: Request<v1::SaveCommentDraftRequest>,
+    ) -> Result<Response<v1::CommentDraft>, Status> {
+        unary!(self, request, "proposal.save_comment_draft", save_comment_draft)
+    }
+    async fn clear_comment_draft(
+        &self,
+        request: Request<v1::ClearCommentDraftRequest>,
+    ) -> Result<Response<v1::CommentDraft>, Status> {
+        unary!(self, request, "proposal.clear_comment_draft", clear_comment_draft)
+    }
+    async fn set_reviewers(
+        &self,
+        request: Request<v1::SetRequestedReviewersRequest>,
+    ) -> Result<Response<v1::RequestedReviewers>, Status> {
+        unary!(self, request, "proposal.set_reviewers", set_requested_reviewers)
+    }
     async fn review(&self, request: Request<v1::ReviewProposalRequest>) -> Result<Response<v1::Review>, Status> {
         unary!(self, request, "proposal.review", review_proposal)
     }
@@ -593,6 +636,28 @@ impl AgentService for Grpc {
 
 #[tonic::async_trait]
 impl EventService for Grpc {
+    type SubscribeManyStream = BoxStream<v1::EventEnvelope>;
+    async fn subscribe_many(
+        &self,
+        request: Request<v1::SubscribeManyRequest>,
+    ) -> Result<Response<Self::SubscribeManyStream>, Status> {
+        let mut ing = ingress_of(&request);
+        ing.deadline_ms = Some(crate::app::NO_DEADLINE_MS);
+        let req = request.into_inner();
+        let app = self.app.clone();
+        let stream = app
+            .clone()
+            .dispatch(ing, "events.subscribe_many", move |call| async move { app.subscribe_many(call, req).await })
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Box::pin(stream.map(|item| item.map_err(status)))))
+    }
+    async fn replay_many(
+        &self,
+        request: Request<v1::ReplayManyRequest>,
+    ) -> Result<Response<v1::ReplayManyResponse>, Status> {
+        unary!(self, request, "events.replay_many", replay_many)
+    }
     type SubscribeStream = BoxStream<v1::Event>;
     async fn subscribe(
         &self,
@@ -718,6 +783,19 @@ impl ExecutionService for Grpc {
 
 #[tonic::async_trait]
 impl IssueService for Grpc {
+    async fn preview_import(
+        &self,
+        request: Request<v1::PreviewIssueImportRequest>,
+    ) -> Result<Response<v1::IssueImportPreview>, Status> {
+        unary!(self, request, "issue.import_preview", preview_issue_import)
+    }
+    async fn apply_import(
+        &self,
+        request: Request<v1::ApplyIssueImportRequest>,
+    ) -> Result<Response<v1::IssueImportResult>, Status> {
+        unary!(self, request, "issue.import_apply", apply_issue_import)
+    }
+
     async fn create(&self, request: Request<v1::CreateIssueRequest>) -> Result<Response<v1::Issue>, Status> {
         unary!(self, request, "issue.create", create_issue)
     }
@@ -765,6 +843,7 @@ pub fn router(app: App) -> axum::Router {
         .add_service(svc!(StreamServiceServer))
         .add_service(svc!(WorkspaceServiceServer))
         .add_service(svc!(ProposalServiceServer))
+        .add_service(svc!(FileDraftServiceServer))
         .add_service(svc!(IntegrationServiceServer))
         .add_service(svc!(AgentServiceServer))
         .add_service(svc!(EventServiceServer))
@@ -787,5 +866,24 @@ mod tests {
         assert_eq!(parse_grpc_timeout("x"), None);
         assert_eq!(parse_grpc_timeout("5Q"), None);
         assert_eq!(parse_grpc_timeout(""), None);
+    }
+}
+
+#[tonic::async_trait]
+impl FileDraftService for Grpc {
+    async fn get(&self, request: Request<v1::GetFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.get", get_file_draft)
+    }
+    async fn save(&self, request: Request<v1::SaveFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.save", save_file_draft)
+    }
+    async fn clear(&self, request: Request<v1::ClearFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.clear", clear_file_draft)
+    }
+    async fn list(
+        &self,
+        request: Request<v1::ListFileDraftsRequest>,
+    ) -> Result<Response<v1::ListFileDraftsResponse>, Status> {
+        unary!(self, request, "file_draft.list", list_file_drafts)
     }
 }

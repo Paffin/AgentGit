@@ -39,4 +39,5 @@ export type {
   Res,
   RetryOptions,
   SubscribeEventsOptions,
+  SubscribeManyEventsOptions,
 } from './types.js';

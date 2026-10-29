@@ -68,6 +68,7 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
     },
   )
   const proposal = computed(() => detail.data.value?.proposal)
+  const requestedReviewers = computed(() => detail.data.value?.requested_reviewers ?? [])
   const reviews = computed(() => detail.data.value?.reviews ?? [])
 
   const prep = useResource<Preparation | null>(
@@ -111,7 +112,12 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
         },
         { signal },
       )
-      return { ...res, base, head: p.integrated_as || p.head }
+      return {
+        requestedReviewers,
+        ...res,
+        base,
+        head: p.integrated_as || p.head,
+      }
     },
     { immediate: false },
   )
@@ -186,6 +192,7 @@ export function useProposalData(repo: Ref<string>, id: Ref<string>) {
   })
 
   return {
+    requestedReviewers,
     detail,
     proposal,
     reviews,

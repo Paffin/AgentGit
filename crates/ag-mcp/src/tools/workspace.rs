@@ -264,44 +264,120 @@ fn write_files(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError>
     ))
 }
 
+fn resolution_source(value: &Value, index: usize) -> Result<(Value, usize), ToolError> {
+    let text = str_arg(value, "content");
+    let base64 = str_arg(value, "content_base64");
+    let blob = str_arg(value, "blob_id");
+    if [text, base64, blob].into_iter().flatten().count() != 1 {
+        return Err(ToolError::invalid(format!(
+            "resolutions[{index}]: give exactly one of `content`, `content_base64` or `blob_id`"
+        )));
+    }
+    if let Some(blob) = blob {
+        if blob.len() != 64 || !blob.bytes().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ToolError::invalid(format!("resolutions[{index}].blob_id must be a 64-character object id")));
+        }
+        return Ok((json!({"blob_id": blob}), 0));
+    }
+    let bytes = match (text, base64) {
+        (Some(text), _) => text.as_bytes().to_vec(),
+        (_, Some(encoded)) => base64::engine::general_purpose::STANDARD
+            .decode(encoded.trim())
+            .map_err(|e| ToolError::invalid(format!("resolutions[{index}].content_base64: {e}")))?,
+        _ => return Err(ToolError::invalid("a resolution needs one content source")),
+    };
+    Ok((json!({"content": base64::engine::general_purpose::STANDARD.encode(&bytes)}), bytes.len()))
+}
+
+fn resolution(value: &Value, index: usize) -> Result<(Value, usize), ToolError> {
+    let path = str_arg(value, "path").unwrap_or_default();
+    validate_repo_path(path).map_err(|e| ToolError::invalid(format!("resolutions[{index}].path: {e}")))?;
+    let op = str_arg(value, "op").unwrap_or("put");
+    if op == "delete" {
+        if ["content", "content_base64", "blob_id"].iter().any(|field| value.get(field).is_some()) {
+            return Err(ToolError::invalid(format!("resolutions[{index}]: delete takes no content")));
+        }
+        return Ok((json!({"path": path, "op": "delete"}), 0));
+    }
+    if op != "put" {
+        return Err(ToolError::invalid(format!("resolutions[{index}].op must be put or delete")));
+    }
+    let file_type = str_arg(value, "file_type").unwrap_or("regular");
+    if !["regular", "symlink"].contains(&file_type) {
+        return Err(ToolError::invalid(format!("resolutions[{index}].file_type must be regular or symlink")));
+    }
+    let (mut wire, bytes) = resolution_source(value, index)?;
+    wire["path"] = json!(path);
+    wire["op"] = json!("put");
+    wire["file_type"] = json!(file_type);
+    wire["executable"] = json!(value.get("executable").and_then(Value::as_bool).unwrap_or(false));
+    Ok((wire, bytes))
+}
+
+fn parse_resolutions(items: &[Value]) -> Result<Vec<Value>, ToolError> {
+    if items.len() > MAX_CHANGES {
+        return Err(ToolError::invalid("too many resolutions"));
+    }
+    let mut result = Vec::with_capacity(items.len());
+    let mut seen = std::collections::BTreeSet::new();
+    let mut total = 0usize;
+    for (index, item) in items.iter().enumerate() {
+        let (wire, bytes) = resolution(item, index)?;
+        if !seen.insert(wire["path"].to_string()) {
+            return Err(ToolError::invalid("a resolved path appears twice"));
+        }
+        total += bytes;
+        if total > MAX_WRITE_BYTES {
+            return Err(ToolError::local(
+                "too_large",
+                "Resolved content exceeds the 4 MiB limit; use existing blob ids for large files.",
+            ));
+        }
+        result.push(wire);
+    }
+    Ok(result)
+}
+
+fn sync_body(ctx: &CallCtx<'_>, args: &Value, repo: &str, run: Option<&str>) -> Result<Value, ToolError> {
+    let expected = str_arg(args, "expected_stream_head").filter(|head| !head.is_empty());
+    if expected.is_some() && !ctx.api.supports("workspaces.sync_precondition", &ctx.opts(run))? {
+        return Err(ToolError::local(
+            "server_update_required",
+            "This server cannot pin the branch revision for workspace sync.",
+        )
+        .hint("Update the server before applying an inspected conflict resolution."));
+    }
+    let items = args.get("resolutions").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]);
+    let wire = parse_resolutions(items)?;
+    let paths: Vec<&str> = wire.iter().filter_map(|value| value["path"].as_str()).collect();
+    if !paths.is_empty() {
+        check_write_scope(ctx, args, repo, &paths)?;
+    }
+    let mut body = json!({"resolutions": wire});
+    if let Some(expected) = expected {
+        body["expected_stream_head"] = json!(expected);
+    }
+    Ok(body)
+}
+
 fn workspace_sync(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let run = ctx.run_id(args)?;
     let name = workspace_name(args, "workspace")?;
-    let mut res = Vec::new();
-    for (i, r) in args.get("resolutions").and_then(Value::as_array).into_iter().flatten().enumerate() {
-        let path = str_arg(r, "path").unwrap_or_default();
-        validate_repo_path(path).map_err(|e| ToolError::invalid(format!("resolutions[{i}].path: {e}")))?;
-        let bytes = match (str_arg(r, "content"), str_arg(r, "content_base64")) {
-            (Some(t), None) => t.as_bytes().to_vec(),
-            (None, Some(b)) => base64::engine::general_purpose::STANDARD
-                .decode(b.trim())
-                .map_err(|e| ToolError::invalid(format!("resolutions[{i}].content_base64: {e}")))?,
-            _ => {
-                return Err(ToolError::invalid(format!(
-                    "resolutions[{i}]: give exactly one of `content` or `content_base64`"
-                )));
-            }
-        };
-        res.push((path.to_string(), bytes));
-    }
-    let paths: Vec<&str> = res.iter().map(|(p, _)| p.as_str()).collect();
-    if !paths.is_empty() {
-        check_write_scope(ctx, args, &repo, &paths)?;
-    }
-    let wire: Vec<Value> = res
-        .iter()
-        .map(|(p, b)| json!({"path": p, "op": "put", "content": base64::engine::general_purpose::STANDARD.encode(b)}))
-        .collect();
-    let v = ctx.api.send(
+    let body = sync_body(ctx, args, &repo, run)?;
+    let value = ctx.api.send(
         "POST",
         &format!("{}/workspaces/{}/sync", repo_path(&repo), enc(&name)),
-        Some(&json!({"resolutions": wire})),
+        Some(&body),
         &ctx.opts(run),
     )?;
-    let status = v.get("status").and_then(Value::as_str).unwrap_or("");
+    Ok(sync_output(&name, &value))
+}
+
+fn sync_output(name: &str, value: &Value) -> ToolOutput {
+    let status = value.get("status").and_then(Value::as_str).unwrap_or("");
     let conflicts: Vec<Value> =
-        v.get("conflicts").and_then(Value::as_array).into_iter().flatten().take(200).cloned().collect();
+        value.get("conflicts").and_then(Value::as_array).into_iter().flatten().take(200).cloned().collect();
     let summary = match status {
         "up_to_date" => format!("Workspace `{name}` already contains the stream head."),
         "fast_forwarded" => format!("Workspace `{name}` was fast-forwarded to the stream head."),
@@ -313,12 +389,18 @@ fn workspace_sync(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolErr
     };
     let mut out = ToolOutput::new(
         summary,
-        json!({"status": status, "head": v.get("head").cloned().unwrap_or(json!("")), "conflicts": conflicts}),
+        json!({"status": status, "head": value.get("head").cloned().unwrap_or(json!("")), "stream_head": value.get("stream_head").cloned().unwrap_or(json!("")), "conflicts": conflicts}),
     );
     if status == "conflicted" {
-        out = out.note("Read both versions with read_file (rev = the stream, and rev = @<workspace>), decide the final content of each conflicting path, then call workspace_sync again with `resolutions` for every conflicting path.");
+        let pinned = value.get("stream_head").and_then(Value::as_str).is_some_and(|head| !head.is_empty());
+        let advice = if pinned {
+            "Read both versions at the returned stream_head and your workspace revision. When a conflict has origin paths, read origin.ours at your workspace revision and origin.theirs at stream_head; otherwise use the conflict path. Decide every conflicting path, then repeat workspace_sync with expected_stream_head set to that inspected stream_head and resolutions for every conflict. Existing blob ids preserve binary content, file type and executable mode."
+        } else {
+            "This server did not identify a pinned branch revision. Upgrade it before applying an inspected resolution through MCP, or resolve through the local CLI. Do not treat the moving branch name as the reviewed revision."
+        };
+        out = out.note(advice);
     }
-    Ok(out)
+    out
 }
 
 fn workspace_delete(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
@@ -353,7 +435,11 @@ pub fn tools() -> Vec<ToolDef> {
         "properties": {
             "path": {"type": "string", "maxLength": 1024, "description": "A conflicting path."},
             "content": {"type": "string", "description": "The resolved content as text."},
-            "content_base64": {"type": "string", "description": "The resolved content, base64."}
+            "content_base64": {"type": "string", "description": "The resolved content, base64."},
+            "blob_id": {"type":"string","description":"Existing content blob to retain without downloading or re-encoding it.","minLength":64,"maxLength":64},
+            "op": {"type":"string","enum":["put","delete"],"description":"Defaults to put. Delete takes no content source."},
+            "file_type": {"type":"string","enum":["regular","symlink"],"description":"Type to preserve for put; defaults to regular."},
+            "executable": {"type":"boolean","description":"Executable mode to preserve for put."}
         }
     });
     vec![
@@ -416,13 +502,23 @@ pub fn tools() -> Vec<ToolDef> {
                 vec![
                     p_repo(),
                     ("workspace", t_str_max("Workspace name.", 64)),
-                    ("resolutions", t_arr("Final content for every conflicting path.", resolution, MAX_CHANGES)),
+                    (
+                        "resolutions",
+                        t_arr("Final content or existing blobs for every conflicting path.", resolution, MAX_CHANGES),
+                    ),
+                    (
+                        "expected_stream_head",
+                        t_str("Exact branch head inspected when preparing these resolutions; reject if it moved."),
+                    ),
                     ("lease_id", t_str("Check the resolved paths against this lease before writing.")),
                     p_run(),
                 ],
                 &["workspace"],
             ),
-            output(vec![("status", o_str()), ("head", o_str()), ("conflicts", o_arr())], &["status", "conflicts"]),
+            output(
+                vec![("status", o_str()), ("head", o_str()), ("stream_head", o_str()), ("conflicts", o_arr())],
+                &["status", "conflicts"],
+            ),
             workspace_sync,
         ),
         def(
@@ -473,5 +569,72 @@ mod tests {
             parse_changes(&[json!({"path": "a", "op": "put", "content": big})]).err().unwrap().code,
             "too_large"
         );
+    }
+    #[test]
+    fn resolutions_keep_blob_identity_type_mode_and_deletion() {
+        let blob = "a".repeat(64);
+        let values = parse_resolutions(&[
+            json!({"path":"image.bin","blob_id":blob,"executable":true,"file_type":"regular"}),
+            json!({"path":"link","blob_id":"b".repeat(64),"file_type":"symlink"}),
+            json!({"path":"gone","op":"delete"}),
+        ])
+        .unwrap();
+        assert_eq!(
+            values[0],
+            json!({"path":"image.bin","op":"put","blob_id":blob,"executable":true,"file_type":"regular"})
+        );
+        assert_eq!(values[1]["file_type"], "symlink");
+        assert_eq!(values[2], json!({"path":"gone","op":"delete"}));
+    }
+
+    #[test]
+    fn resolutions_reject_ambiguous_sources_and_duplicate_paths() {
+        for value in [
+            json!({"path":"a","content":"text","blob_id":"a".repeat(64)}),
+            json!({"path":"a","content_base64":"!!"}),
+            json!({"path":"a","blob_id":"short"}),
+            json!({"path":"a","op":"delete","content":"text"}),
+            json!({"path":"a","content":"text","file_type":"directory"}),
+        ] {
+            assert!(parse_resolutions(&[value]).is_err());
+        }
+        assert!(parse_resolutions(&[json!({"path":"a","content":""}), json!({"path":"a","op":"delete"})]).is_err());
+    }
+    #[test]
+    fn sync_preserves_renamed_conflict_source_paths() {
+        let conflict = json!({"path":"renamed.txt","kind":"content","message":"both edited",
+            "origin":{"base":"original.txt","ours":"renamed.txt","theirs":"original.txt"}});
+        let legacy = json!({"path":"same.txt","kind":"content","message":""});
+        let out = sync_output(
+            "work",
+            &json!({"status":"conflicted","stream_head":"known",
+            "conflicts":[conflict.clone(),legacy.clone()]}),
+        );
+        assert_eq!(out.data["conflicts"], json!([conflict, legacy]));
+        assert!(out.notes.join(" ").contains("origin.ours"));
+        assert!(out.notes.join(" ").contains("origin.theirs"));
+    }
+
+    #[test]
+    fn sync_preserves_incomplete_structural_preview() {
+        let conflict = json!({"path":"docs","kind":"file_directory","message":"",
+            "resolution_scope":{"paths":["docs","docs/guide.md"],"complete":false}});
+        let legacy = json!({"path":"old","kind":"file_directory","message":""});
+        let out = sync_output(
+            "work",
+            &json!({"status":"conflicted","stream_head":"known",
+            "conflicts":[conflict.clone(),legacy.clone()]}),
+        );
+        assert_eq!(out.data["conflicts"], json!([conflict, legacy]));
+    }
+
+    #[test]
+    fn sync_guidance_never_treats_an_absent_target_as_a_safe_pin() {
+        let legacy = sync_output("work", &json!({"status":"conflicted","conflicts":[]}));
+        let advice = legacy.notes.join(" ");
+        assert!(advice.contains("upgrade") || advice.contains("Upgrade"));
+        assert!(!advice.contains("expected_stream_head"));
+        let pinned = sync_output("work", &json!({"status":"conflicted","stream_head":"known","conflicts":[]}));
+        assert!(pinned.notes.join(" ").contains("expected_stream_head"));
     }
 }

@@ -2,7 +2,8 @@
 // Regenerate with `npm run generate`; CI runs `npm run generate:check`.
 
 import type { OperationId } from './operations.js';
-import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions } from '../types.js';
+import type { AgentEvent, CallOptions, PutObjectResult, Req, Res, SubscribeEventsOptions, SubscribeManyEventsOptions } from '../types.js';
+import type { EventEnvelope } from './models.js';
 
 /** The operation behind each namespaced method, for tooling and tests. */
 export const NAMESPACE_METHODS = {
@@ -39,9 +40,17 @@ export const NAMESPACE_METHODS = {
     mint: 'admin.credentials.mint',
     revoke: 'admin.credentials.revoke',
   },
+  drafts: {
+    clear: 'file_draft.clear',
+    get: 'file_draft.get',
+    list: 'file_draft.list',
+    save: 'file_draft.save',
+  },
   events: {
     replay: 'events.replay',
+    replayMany: 'events.replay_many',
     subscribe: 'events.subscribe',
+    subscribeMany: 'events.subscribe_many',
   },
   history: {
     ancestors: 'history.ancestors',
@@ -63,6 +72,8 @@ export const NAMESPACE_METHODS = {
     comment: 'issue.comment',
     create: 'issue.create',
     get: 'issue.get',
+    importApply: 'issue.import_apply',
+    importPreview: 'issue.import_preview',
     list: 'issue.list',
     update: 'issue.update',
   },
@@ -97,12 +108,19 @@ export const NAMESPACE_METHODS = {
     get: 'operations.get',
   },
   proposals: {
+    clearCommentDraft: 'proposal.clear_comment_draft',
+    clearDraft: 'proposal.clear_draft',
     close: 'proposal.close',
     comment: 'proposal.comment',
     create: 'proposal.create',
     get: 'proposal.get',
+    getCommentDraft: 'proposal.get_comment_draft',
+    getDraft: 'proposal.get_draft',
     list: 'proposal.list',
     review: 'proposal.review',
+    saveCommentDraft: 'proposal.save_comment_draft',
+    saveDraft: 'proposal.save_draft',
+    setReviewers: 'proposal.set_reviewers',
     threadComments: 'proposal.thread_comments',
     threadCreate: 'proposal.thread_create',
     threadReply: 'proposal.thread_reply',
@@ -234,11 +252,25 @@ export interface Api {
     /** Revoke a credential (`DELETE /v1/credentials/{credential_id}`, operation `admin.credentials.revoke`) */
     revoke(request: Req<'admin.credentials.revoke'>, options?: CallOptions): Promise<Res<'admin.credentials.revoke'>>;
   };
+  readonly drafts: {
+    /** Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`) */
+    clear(request: Req<'file_draft.clear'>, options?: CallOptions): Promise<Res<'file_draft.clear'>>;
+    /** Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`) */
+    get(request: Req<'file_draft.get'>, options?: CallOptions): Promise<Res<'file_draft.get'>>;
+    /** List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`) */
+    list(request: Req<'file_draft.list'>, options?: CallOptions): Promise<Res<'file_draft.list'>>;
+    /** Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`) */
+    save(request: Req<'file_draft.save'>, options?: CallOptions): Promise<Res<'file_draft.save'>>;
+  };
   readonly events: {
     /** Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`) */
     replay(request: Req<'events.replay'>, options?: CallOptions): Promise<Res<'events.replay'>>;
+    /** Replay explicit repositories using an opaque vector cursor; no cursor checkpoints now, from_start replays history (`GET /v1/events/replay`, operation `events.replay_many`) */
+    replayMany(request?: Req<'events.replay_many'>, options?: CallOptions): Promise<Res<'events.replay_many'>>;
     /** Server-Sent Events: replay after after_seq (or Last-Event-ID), then follow live (`GET /v1/repos/{owner}/{rname}/events`, operation `events.subscribe`) */
     subscribe(options: SubscribeEventsOptions): AsyncGenerator<AgentEvent, void, undefined>;
+    /** Multi-repository SSE; no cursor checkpoints now; Last-Event-ID resumes an opaque vector cursor (`GET /v1/events`, operation `events.subscribe_many`) */
+    subscribeMany(options: SubscribeManyEventsOptions): AsyncGenerator<EventEnvelope, void, undefined>;
   };
   readonly history: {
     /** Changesets reachable from want but not from have, parents first (`POST /v1/repos/{owner}/{rname}/history/ancestors`, operation `history.ancestors`) */
@@ -275,6 +307,10 @@ export interface Api {
     create(request: Req<'issue.create'>, options?: CallOptions): Promise<Res<'issue.create'>>;
     /** Read a user issue (`GET /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.get`) */
     get(request: Req<'issue.get'>, options?: CallOptions): Promise<Res<'issue.get'>>;
+    /** Apply the inspected import manifest digest (`POST /v1/repos/{owner}/{rname}/issues/import/apply`, operation `issue.import_apply`) */
+    importApply(request: Req<'issue.import_apply'>, options?: CallOptions): Promise<Res<'issue.import_apply'>>;
+    /** Preview normalized hosting issues and comments (`POST /v1/repos/{owner}/{rname}/issues/import/preview`, operation `issue.import_preview`) */
+    importPreview(request: Req<'issue.import_preview'>, options?: CallOptions): Promise<Res<'issue.import_preview'>>;
     /** List user issues (`GET /v1/repos/{owner}/{rname}/issues`, operation `issue.list`) */
     list(request: Req<'issue.list'>, options?: CallOptions): Promise<Res<'issue.list'>>;
     /** Edit or close an issue at an expected version (`PUT /v1/repos/{owner}/{rname}/issues/{number}`, operation `issue.update`) */
@@ -331,6 +367,10 @@ export interface Api {
     get(request: Req<'operations.get'>, options?: CallOptions): Promise<Res<'operations.get'>>;
   };
   readonly proposals: {
+    /** Clear the inspected private comment draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.clear_comment_draft`) */
+    clearCommentDraft(request: Req<'proposal.clear_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.clear_comment_draft'>>;
+    /** Clear the inspected private review draft (`DELETE /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.clear_draft`) */
+    clearDraft(request: Req<'proposal.clear_draft'>, options?: CallOptions): Promise<Res<'proposal.clear_draft'>>;
     /** Close without integrating (`POST /v1/repos/{owner}/{rname}/proposals/{id}/close`, operation `proposal.close`) */
     close(request: Req<'proposal.close'>, options?: CallOptions): Promise<Res<'proposal.close'>>;
     /** Add an idempotent discussion comment at the inspected head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/comments`, operation `proposal.comment`) */
@@ -339,10 +379,20 @@ export interface Api {
     create(request: Req<'proposal.create'>, options?: CallOptions): Promise<Res<'proposal.create'>>;
     /** One proposal with its reviews (`GET /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.get`) */
     get(request: Req<'proposal.get'>, options?: CallOptions): Promise<Res<'proposal.get'>>;
+    /** Read your private comment draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.get_comment_draft`) */
+    getCommentDraft(request: Req<'proposal.get_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.get_comment_draft'>>;
+    /** Read your private review draft (`GET /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.get_draft`) */
+    getDraft(request: Req<'proposal.get_draft'>, options?: CallOptions): Promise<Res<'proposal.get_draft'>>;
     /** List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`) */
     list(request: Req<'proposal.list'>, options?: CallOptions): Promise<Res<'proposal.list'>>;
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
+    /** Save your private comment draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/comment-draft`, operation `proposal.save_comment_draft`) */
+    saveCommentDraft(request: Req<'proposal.save_comment_draft'>, options?: CallOptions): Promise<Res<'proposal.save_comment_draft'>>;
+    /** Save your private review draft (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/review-draft`, operation `proposal.save_draft`) */
+    saveDraft(request: Req<'proposal.save_draft'>, options?: CallOptions): Promise<Res<'proposal.save_draft'>>;
+    /** Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`) */
+    setReviewers(request: Req<'proposal.set_reviewers'>, options?: CallOptions): Promise<Res<'proposal.set_reviewers'>>;
     /** List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`) */
     threadComments(request: Req<'proposal.thread_comments'>, options?: CallOptions): Promise<Res<'proposal.thread_comments'>>;
     /** Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`) */

@@ -178,6 +178,51 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  windows-binaries:
+    name: native Windows archive
+    timeout-minutes: 45
+    if: needs.verify.outputs.needed == 'true'
+    needs: verify
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      SOURCE_DATE_EPOCH: ${{ needs.verify.outputs.epoch }}
+      RUSTFLAGS: -C target-feature=+crt-static
+      AG_REQUIRE_COMPONENTS: shell:powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: release-windows
+          cache-workspace-crates: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the embedded Web UI
+        shell: bash
+        run: scripts/build_ui.sh
+      - name: Build supported Windows binaries with a static CRT
+        run: cargo build --release --locked -p agentgit-cli -p agentgit-server -p agentgit-mcp
+      - name: Test the installer, package and run the native archive
+        shell: pwsh
+        run: |
+          python scripts/test_windows_release.py
+          if ($LASTEXITCODE) { throw 'Windows packaging tests failed.' }
+          ./scripts/smoke_windows_release.ps1 -Version $env:VERSION -BinDir target/release
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: archive-x86_64-pc-windows-msvc
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
   sbom:
     timeout-minutes: 15
     if: needs.verify.outputs.needed == 'true'
@@ -378,7 +423,7 @@ jobs:
     timeout-minutes: 10
     if: needs.verify.outputs.needed == 'true'
     name: assemble and attest the candidate
-    needs: [verify, checks, scripts, binaries, sbom, manifest]
+    needs: [verify, checks, scripts, binaries, windows-binaries, sbom, manifest]
     runs-on: ubuntu-latest
     env:
       PUBLISH: ${{ needs.verify.outputs.publish }}
@@ -403,8 +448,9 @@ jobs:
           set -euo pipefail
           ls -la dist
           set -- dist/*.tar.gz; test $# = 4
+          set -- dist/*.zip; test $# = 1; test -f "$1"
           set -- dist/*.cdx.json; test $# = 4
-          python3 scripts/package_release.py sums dist/*.tar.gz dist/*.cdx.json | tee dist/SHA256SUMS
+          python3 scripts/package_release.py sums dist/*.tar.gz dist/*.zip dist/*.cdx.json | tee dist/SHA256SUMS
           (cd dist && sha256sum -c SHA256SUMS)
           python3 scripts/render_packaging.py --version "$VERSION" --sums dist/SHA256SUMS --out dist --only homebrew
           ruby -c dist/agentgit.rb

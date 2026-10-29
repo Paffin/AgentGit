@@ -111,7 +111,9 @@ export interface FeedStatusInfo {
 
 export interface FeedOptions {
   client: ApiClient
-  repo: string
+  repo?: string
+  /** Explicit bounded scope for the aggregate endpoint; the cursor remains opaque. */
+  repos?: readonly string[]
   /** Optional initiating session; retained across reconnects. */
   session?: Pick<RequestOptions, 'token' | 'quietUnauthenticated'>
   topics?: readonly string[]
@@ -145,18 +147,22 @@ function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+function eventValue(value: unknown): ServerEvent | null {
+  const v = value as Partial<ServerEvent> | null
+  if (!v || typeof v !== 'object') return null
+  if (typeof v.seq !== 'number' || typeof v.topic !== 'string') return null
+  return {
+    seq: v.seq,
+    topic: v.topic,
+    repo: typeof v.repo === 'string' ? v.repo : '',
+    timestamp_ms: typeof v.timestamp_ms === 'number' ? v.timestamp_ms : 0,
+    payload: v.payload && typeof v.payload === 'object' ? v.payload : {},
+  }
+}
+
 function parseEvent(data: string): ServerEvent | null {
   try {
-    const v = JSON.parse(data) as Partial<ServerEvent> | null
-    if (!v || typeof v !== 'object') return null
-    if (typeof v.seq !== 'number' || typeof v.topic !== 'string') return null
-    return {
-      seq: v.seq,
-      topic: v.topic,
-      repo: typeof v.repo === 'string' ? v.repo : '',
-      timestamp_ms: typeof v.timestamp_ms === 'number' ? v.timestamp_ms : 0,
-      payload: v.payload && typeof v.payload === 'object' ? v.payload : {},
-    }
+    return eventValue(JSON.parse(data))
   } catch {
     return null
   }
@@ -177,6 +183,10 @@ export function openEventFeed(options: FeedOptions): EventFeed {
   const now = options.now ?? Date.now
   const lifetime = new AbortController()
   let lastSeq: number | null = options.afterSeq ?? null
+  const aggregate = options.repos !== undefined
+  const repositories = new Set(options.repos)
+  let cursor: string | undefined
+  const delivered = new Map<string, number>()
   let closed = false
 
   const setStatus = (s: FeedStatus, info: FeedStatusInfo) => onStatus?.(s, info)
@@ -194,13 +204,25 @@ export function openEventFeed(options: FeedOptions): EventFeed {
     )
     try {
       setStatus(attempt === 0 ? 'connecting' : 'reconnecting', { attempt })
-      const res = await client.open(repoPath(repo, '/events'), {
+      const res = await client.open(aggregate ? '/v1/events' : repoPath(repo ?? '', '/events'), {
         ...options.session,
-        query: {
-          after_seq: lastSeq === null ? undefined : lastSeq,
-          topics: options.topics && options.topics.length > 0 ? [...options.topics] : undefined,
-        },
-        headers: lastSeq === null ? undefined : { 'last-event-id': String(lastSeq) },
+        query: aggregate
+          ? {
+              repos: [...repositories].join(','),
+              cursor,
+              topics: options.topics?.join(','),
+            }
+          : {
+              after_seq: lastSeq === null ? undefined : lastSeq,
+              topics: options.topics && options.topics.length > 0 ? [...options.topics] : undefined,
+            },
+        headers: aggregate
+          ? cursor
+            ? { 'last-event-id': cursor }
+            : undefined
+          : lastSeq === null
+            ? undefined
+            : { 'last-event-id': String(lastSeq) },
         signal: connection.signal,
         retries: 0,
         timeoutMs: 20_000,
@@ -218,6 +240,26 @@ export function openEventFeed(options: FeedOptions): EventFeed {
         lastActivity = now()
         for (const msg of parser.push(decoder.decode(value, { stream: true }))) {
           if (msg.event === 'error') throw parseStreamError(msg.data)
+          if (aggregate) {
+            let envelope: { cursor?: unknown; event?: unknown }
+            try {
+              envelope = JSON.parse(msg.data)
+            } catch {
+              continue
+            }
+            if (!envelope || typeof envelope.cursor !== 'string') continue
+            if (envelope.event == null) {
+              cursor = envelope.cursor
+              continue
+            }
+            const ev = eventValue(envelope.event)
+            if (!ev || !repositories.has(ev.repo)) continue
+            cursor = envelope.cursor
+            if (ev.seq <= (delivered.get(ev.repo) ?? -1)) continue
+            delivered.set(ev.repo, ev.seq)
+            onEvent(ev)
+            continue
+          }
           const ev = parseEvent(msg.data)
           if (!ev) continue
           if (lastSeq !== null && ev.seq <= lastSeq) continue // replay overlap: already delivered

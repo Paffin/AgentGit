@@ -20,7 +20,7 @@ function run(cmd, args) {
 }
 
 try {
-  run(bin('openapi-typescript'), ['../../docs/protocol/openapi.json', '-o', out])
+  run(process.execPath, ['scripts/generate-api.mjs', out])
   run(bin('prettier'), ['--config', join(root, '.prettierrc.json'), '--write', out])
   const fresh = readFileSync(out, 'utf8')
   const committed = readFileSync(join(root, 'src/api/schema.gen.ts'), 'utf8')

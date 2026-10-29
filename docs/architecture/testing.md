@@ -2,7 +2,7 @@
 
 ## Continuous feedback and qualification
 
-Normal PRs and main commits use path-aware fast CI: Linux Rust unit/core-storage contracts, SDK checks against one shared server build when API/SDK files change, Go contracts when the executor changes, and offline workflow checks when tooling changes. Web changes run lint, types, unit tests and a production build; documentation changes build the site. Unrelated changes do not start Rust or cross-platform builds. Unknown paths or unavailable Git history conservatively select all fast components.
+Normal PRs and main commits use path-aware fast CI: Linux Rust unit/core-storage contracts, SDK checks against one shared server build when API/SDK files change, Go contracts when the executor changes, and offline workflow checks when tooling changes. Web changes run lint, types, unit tests and a production build; documentation changes build the site. Unrelated changes do not start Rust or cross-platform builds. On main, selection covers all changes since the last successful run, so cancelling an earlier run cannot drop its pending checks. Unknown paths or unavailable Git/API history conservatively select all fast components.
 
 The full matrix runs through `qualification.yml` on demand, nightly, and during release preparation: macOS, Windows, Linux coverage (which also executes the full Linux suite), PostgreSQL/S3/HA, all SDK runtimes, CLI examples, all browser engines/viewports, CodeQL, fuzzing, OCI runtimes, packaging and performance checks. SDK/runtime jobs share one verified server/CLI/MCP build. Coverage supplies Linux full-suite correctness, so it is not also run as a separate identical Linux test job.
 

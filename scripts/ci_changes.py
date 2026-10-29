@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 import subprocess
 
+from request_release import GitHub
+
 FLAGS = ('rust', 'sdk', 'go', 'tooling', 'rust_deps', 'npm_deps', 'python_deps', 'go_deps')
 
 
@@ -65,10 +67,28 @@ def changed_paths(event, name):
     return result.stdout.decode('utf-8', errors='surrogateescape').rstrip('\0').split('\0') if result.stdout else []
 
 
+def last_successful_base(api, repo, workflow, current=None):
+    if workflow not in ('ci.yml', 'security.yml'):
+        return None
+    try:
+        runs = api.get('/repos/' + repo + '/actions/workflows/' + workflow +
+                       '/runs?branch=main&event=push&status=success&per_page=50')['workflow_runs']
+        sha = next((run['head_sha'] for run in runs if run['head_sha'] != current), None)
+        return sha if sha and re.fullmatch(r'[0-9a-f]{40}', sha) else None
+    except Exception:
+        return None  # Missing API/history must broaden the checks, not silently skip them.
+
+
 def main():
     try:
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-        paths = changed_paths(event, os.environ.get('GITHUB_EVENT_NAME', ''))
+        name = os.environ.get('GITHUB_EVENT_NAME', '')
+        if name == 'push' and os.environ.get('GITHUB_REF') == 'refs/heads/main':
+            base = last_successful_base(GitHub(os.environ.get('GH_TOKEN', '')),
+                                        os.environ['GITHUB_REPOSITORY'], os.environ['CI_WORKFLOW'], os.environ.get('GITHUB_SHA'))
+            paths = changed_paths({'before': base}, name) if base else None
+        else:
+            paths = changed_paths(event, name)
     except (OSError, KeyError, ValueError):
         paths = None
     flags = dict.fromkeys(FLAGS, True) if paths is None else classify(paths)

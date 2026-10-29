@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}
+  group: docs-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

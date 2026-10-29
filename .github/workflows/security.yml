@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}
+  group: security-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:
@@ -28,6 +28,9 @@ env:
 
 jobs:
   changes:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     outputs:
       rust_deps: ${{ steps.paths.outputs.rust_deps }}
@@ -40,6 +43,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW: security.yml
         run: python3 scripts/ci_changes.py
 
   cargo-deny:

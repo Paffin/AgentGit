@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: web-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}
+  group: web-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-${{ github.ref }}
+  group: windows-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

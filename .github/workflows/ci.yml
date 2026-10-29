@@ -40,6 +40,9 @@ jobs:
         run: python3 scripts/cancel_stale_ci.py
 
   changes:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     outputs:
       rust: ${{ steps.paths.outputs.rust }}
@@ -52,6 +55,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW: ci.yml
         run: python3 scripts/ci_changes.py
 
   tooling:

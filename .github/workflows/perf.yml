@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: perf-${{ github.ref }}
+  group: perf-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

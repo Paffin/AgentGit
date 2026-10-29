@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: full-ci-${{ github.ref }}
+  group: full-ci-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

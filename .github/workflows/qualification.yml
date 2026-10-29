@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: qualification-${{ github.ref }}
+  group: qualification-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:

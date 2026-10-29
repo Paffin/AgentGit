@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import yaml
 
-from ci_changes import FLAGS, changed_paths, classify
+from ci_changes import FLAGS, changed_paths, classify, last_successful_base
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,6 +44,18 @@ class ChangeSelection(unittest.TestCase):
     def test_workflow_and_unknown_paths_fail_closed(self):
         for path in ('.github/workflows/ci.yml', 'future-runtime/code.rs'):
             self.assertEqual(classify([path]), dict.fromkeys(FLAGS, True))
+
+    def test_main_covers_changes_since_last_green_run_and_does_not_reuse_itself(self):
+        class API:
+            def get(self, path):
+                self.path = path
+                return {'workflow_runs': [{'head_sha': 'b' * 40}, {'head_sha': 'a' * 40}]}
+        api = API()
+        self.assertEqual(last_successful_base(api, 'org/repo', 'ci.yml', 'b' * 40), 'a' * 40)
+        self.assertIn('status=success', api.path)
+        with patch.object(api, 'get', side_effect=RuntimeError('network')):
+            self.assertIsNone(last_successful_base(api, 'org/repo', 'ci.yml'))
+        self.assertIsNone(last_successful_base(api, 'org/repo', 'untrusted.yml'))
 
     def test_deleted_and_renamed_files_are_both_classified(self):
         old = os.getcwd()

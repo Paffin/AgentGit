@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.ref }}
+  group: quality-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

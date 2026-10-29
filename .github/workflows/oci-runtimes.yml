@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: oci-runtimes-${{ github.ref }}
+  group: oci-runtimes-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

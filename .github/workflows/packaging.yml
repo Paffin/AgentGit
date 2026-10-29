@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: packaging-${{ github.ref }}
+  group: packaging-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

@@ -322,11 +322,14 @@ impl Repository {
             return Err(Error::Conflict("only the author or an admin may close a proposal".into()));
         }
         self.meta.write(|tx| {
+            let current = tx.proposal(id)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{id}'")))?;
+            if current.state != "open" {
+                return Ok(Err(Error::Conflict(format!("proposal '{id}' is already {}", current.state))));
+            }
             tx.proposal_set_state(id, "closed", None)?;
             tx.audit_append(actor.as_str(), "proposal.close", id, &json!({}))?;
-            Ok(())
-        })?;
-        Ok(())
+            Ok(Ok(()))
+        })?
     }
 
     /// Records a review of the proposal's **current head**.

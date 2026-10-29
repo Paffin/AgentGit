@@ -139,17 +139,18 @@ impl Repository {
         let head_tree = self.tree_or_empty(ws.head.as_ref())?;
         let ops = self.ops_towards(&head_tree, &wanted);
         if ops.is_empty() {
-            return Ok(ws);
+            return self.with_unchanged_workspace(&ws, |tx| {
+                tx.workspace(name)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("workspace '{name}'")))
+            });
         }
         // Validate (file/directory clashes, limits) before creating anything.
         head_tree.apply(&ops, &self.limits)?;
         let id = self.commit(ws.head.into_iter().collect(), author, message, ops)?;
-        self.meta.write(|tx| {
+        self.with_unchanged_workspace(&ws, |tx| {
             tx.workspace_update(name, ws.base.as_ref(), Some(&id))?;
             tx.audit_append(author.as_str(), "workspace.modify", name, &json!({"changeset": id}))?;
-            Ok(())
-        })?;
-        self.workspace_row(name)
+            tx.workspace(name)?.ok_or_else(|| ag_storage::meta::MetaError::Corrupt("workspace vanished".into()))
+        })
     }
 
     /// Brings the stream head into a virtual workspace.
@@ -170,15 +171,15 @@ impl Repository {
         };
         let g = self.graph();
         let Some(ws_head) = ws.head else {
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         };
         if is_ancestor(&g, &stream_head, &ws_head)? {
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&ws_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&ws_head)))?;
             return Ok(SyncOutcome::UpToDate);
         }
         if is_ancestor(&g, &ws_head, &stream_head)? {
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         }
         let base = match merge_bases(&g, &ws_head, &stream_head)?.as_slice() {
@@ -219,7 +220,7 @@ impl Repository {
             ),
             ops,
         )?;
-        self.meta.write(|tx| {
+        self.with_unchanged_workspace(&ws, |tx| {
             tx.workspace_update(name, Some(&stream_head), Some(&id))?;
             tx.audit_append(author.as_str(), "workspace.sync", name, &json!({"merge": id}))?;
             Ok(())

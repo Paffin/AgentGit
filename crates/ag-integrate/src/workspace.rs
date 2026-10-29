@@ -14,7 +14,7 @@ use std::path::Path;
 
 use ag_dag::{is_ancestor, merge_bases};
 use ag_merge::{ConflictKind, TextMerge, merge_text, merge_trees};
-use ag_storage::meta::WorkspaceRow;
+use ag_storage::meta::{MetaError, Tx, WorkspaceRow};
 use ag_tree::Tree;
 use ag_types::{ChangesetId, Identity, StreamName};
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,25 @@ impl Repository {
             tx.audit_append(owner.as_str(), "workspace.create", name, &json!({"stream": stream}))?;
             Ok(row)
         })?)
+    }
+
+    pub(crate) fn with_unchanged_workspace<T>(
+        &self,
+        before: &WorkspaceRow,
+        write: impl FnOnce(&Tx<'_>) -> std::result::Result<T, MetaError>,
+    ) -> Result<T> {
+        self.meta.write(|tx| {
+            let current = tx
+                .workspace(&before.name)?
+                .ok_or_else(|| MetaError::NotFound(format!("workspace '{}'", before.name)))?;
+            if current.base != before.base || current.head != before.head {
+                return Ok(Err(Error::Conflict(format!(
+                    "workspace '{}' changed concurrently; reload before retrying",
+                    before.name
+                ))));
+            }
+            Ok(Ok(write(tx)?))
+        })?
     }
 
     /// Remembers the directory a workspace lives in.
@@ -218,7 +237,7 @@ impl Repository {
         }
         let ops = head_tree.diff(&tree);
         let id = self.commit(parents, author, message, ops)?;
-        self.meta.write(|tx| {
+        self.with_unchanged_workspace(&ws, |tx| {
             tx.workspace_update(name, ws.base.as_ref(), Some(&id))?;
             if pending.is_some() {
                 tx.meta_set(&pending_key(name), "")?;
@@ -259,16 +278,16 @@ impl Repository {
 
         let Some(ws_head) = ws.head else {
             update_dir(self, &ours_tree, &theirs_tree, dir)?;
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         };
         if is_ancestor(&g, &stream_head, &ws_head)? {
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&ws_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&ws_head)))?;
             return Ok(SyncOutcome::UpToDate);
         }
         if is_ancestor(&g, &ws_head, &stream_head)? {
             update_dir(self, &ours_tree, &theirs_tree, dir)?;
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.with_unchanged_workspace(&ws, |tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         }
         let bases = merge_bases(&g, &ws_head, &stream_head)?;
@@ -294,7 +313,7 @@ impl Repository {
                 ops,
             )?;
             update_dir(self, &ours_tree, &merged.tree, dir)?;
-            self.meta.write(|tx| {
+            self.with_unchanged_workspace(&ws, |tx| {
                 tx.workspace_update(name, Some(&stream_head), Some(&id))?;
                 tx.audit_append(author.as_str(), "workspace.sync", name, &json!({"merge": id}))?;
                 Ok(())
@@ -328,7 +347,7 @@ impl Repository {
             }
         }
         let pending = Pending { theirs: stream_head, paths };
-        self.meta.write(|tx| {
+        self.with_unchanged_workspace(&ws, |tx| {
             tx.workspace_update(name, Some(&stream_head), Some(&ws_head))?;
             tx.meta_set(&pending_key(name), &serde_json::to_string(&pending).expect("serializes"))?;
             tx.audit_append(author.as_str(), "workspace.sync_conflict", name, &json!({"conflicts": infos.len()}))?;
@@ -350,7 +369,7 @@ impl Repository {
         let old = self.tree_or_empty(ws.head.as_ref())?;
         let new: Tree = self.tree_of(target)?;
         update_dir(self, &old, &new, dir)?;
-        self.meta.write(|tx| {
+        self.with_unchanged_workspace(&ws, |tx| {
             tx.workspace_update(name, Some(target), Some(target))?;
             tx.meta_set(&pending_key(name), "")?;
             Ok(())

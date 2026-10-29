@@ -366,6 +366,42 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/file-draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get private file drafts */
+    get: operations['file_draft.get']
+    /** Save private file drafts */
+    put: operations['file_draft.save']
+    post?: never
+    /** Clear private file drafts */
+    delete: operations['file_draft.clear']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/repos/{owner}/{rname}/file-drafts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List private file drafts */
+    get: operations['file_draft.list']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/files/{*path}': {
     parameters: {
       query?: never
@@ -2025,6 +2061,19 @@ export interface components {
       /** @default  */
       repo: string
     }
+    ClearFileDraftRequest: {
+      /**
+       * Format: int64
+       * @default 0
+       */
+      expected_version: number
+      /** @default  */
+      path: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      stream: string
+    }
     ClearReviewDraftRequest: {
       /**
        * Format: int64
@@ -2648,6 +2697,57 @@ export interface components {
        */
       truncated: boolean
     }
+    /** @description Private existing-file edit owned by the current acting identity. */
+    FileDraft: {
+      /** @default  */
+      base: string
+      /**
+       * Format: byte
+       * @default []
+       */
+      content: string
+      /** @default false */
+      executable: boolean
+      /** @default  */
+      file_type: string
+      /** @default  */
+      original_blob_id: string
+      /** @default  */
+      path: string
+      /** @default false */
+      present: boolean
+      /** @default  */
+      stream: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      updated_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      version: number
+    }
+    /** @description Discovery carries no private replacement bytes. */
+    FileDraftSummary: {
+      /** @default  */
+      base: string
+      /** @default  */
+      path: string
+      /** @default  */
+      stream: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      updated_at_ms: number
+      /**
+       * Format: int64
+       * @default 0
+       */
+      version: number
+    }
     FileOp: {
       /**
        * @description Content blob (put only).
@@ -2819,6 +2919,14 @@ export interface components {
       id: string
       /** @default  */
       repo: string
+    }
+    GetFileDraftRequest: {
+      /** @default  */
+      path: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      stream: string
     }
     GetIssueRequest: {
       /**
@@ -3308,6 +3416,16 @@ export interface components {
       next_page_token: string
       /** @default  */
       tree_id: string
+    }
+    ListFileDraftsRequest: {
+      /** @default  */
+      repo: string
+      /** @default  */
+      stream: string
+    }
+    ListFileDraftsResponse: {
+      /** @default [] */
+      drafts: components['schemas']['FileDraftSummary'][]
     }
     ListIssueActivityRequest: {
       /**
@@ -4738,6 +4856,26 @@ export interface components {
       id: string
       /** @default  */
       repo: string
+    }
+    SaveFileDraftRequest: {
+      /** @default  */
+      base: string
+      /**
+       * Format: byte
+       * @default []
+       */
+      content: string
+      /**
+       * Format: int64
+       * @default 0
+       */
+      expected_version: number
+      /** @default  */
+      path: string
+      /** @default  */
+      repo: string
+      /** @default  */
+      stream: string
     }
     SaveReviewDraftRequest: {
       /** @default  */
@@ -6189,6 +6327,155 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ReplayResponse']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'file_draft.get': {
+    parameters: {
+      query?: {
+        path?: string
+        stream?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FileDraft']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'file_draft.save': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveFileDraftRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FileDraft']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'file_draft.clear': {
+    parameters: {
+      query?: {
+        expected_version?: number
+        path?: string
+        stream?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FileDraft']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'file_draft.list': {
+    parameters: {
+      query?: {
+        stream?: string
+      }
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ListFileDraftsResponse']
         }
       }
       /** @description Error */

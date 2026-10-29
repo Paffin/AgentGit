@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/instance'
 import { ApiError, describeError } from '@/api/errors'
-import { pathProblem, proposeChange, putFile } from '@/lib/edit'
+import { pathProblem, proposeChange, putFile, toBase64 } from '@/lib/edit'
+import { decodeUtf8, looksBinary, preserveTextFormat } from '@/lib/text'
 import { useBoard } from '@/stores/board'
 import { useToasts } from '@/stores/toasts'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
@@ -73,16 +74,18 @@ const draft = useFileDraft({
   isNew: !!props.isNew,
 })
 const recovered = draft.initial
-const originalText = recovered?.original ?? props.original
-const executable = recovered?.executable ?? props.executable === true
-const fileType = recovered?.fileType ?? (props.fileType === 'symlink' ? 'symlink' : 'regular')
+const originalText = ref(recovered?.original ?? props.original)
+const executable = ref(recovered?.executable ?? props.executable === true)
+const fileType = ref(recovered?.fileType ?? (props.fileType === 'symlink' ? 'symlink' : 'regular'))
 
 const initialPath = props.isNew ? (props.path ? `${props.path}/` : '') : props.path
 const newPath = ref(recovered?.path ?? initialPath)
 const text = ref(recovered?.text ?? props.original)
 const filePath = computed(() => (props.isNew ? newPath.value.trim() : props.path))
 const problem = computed(() => (props.isNew && newPath.value ? pathProblem(newPath.value) : null))
-const changed = computed(() => (props.isNew ? filePath.value !== '' : text.value !== originalText))
+const changed = computed(() =>
+  props.isNew ? filePath.value !== '' : text.value !== originalText.value,
+)
 const base = useResource(async () =>
   recovered
     ? recovered.base
@@ -90,9 +93,25 @@ const base = useResource(async () =>
       ? (await api.streams.head(props.repo, props.stream)).head
       : props.rev,
 )
+const restoredBase = ref<string | null>(null)
+const startingBase = computed(() => restoredBase.value ?? base.data.value)
+const accountSupported = computed(
+  () => !props.isNew && !!auth.capabilities?.features.includes('files.drafts'),
+)
+type AccountFileDraft = Awaited<ReturnType<typeof api.files.draft>>
+const accountAvailable = ref<AccountFileDraft | null>(null)
+const accountBusy = ref(false)
+const accountLoaded = ref(false)
+const accountError = ref('')
+const accountRestored = ref(false)
+let accountVersion = 0
+let adoptedVersion: number | null = null
+let restoringAccount = false
+
 const canPropose = computed(
   () =>
     auth.status === 'ready' &&
+    !accountBusy.value &&
     changed.value &&
     base.settled.value &&
     !base.error.value &&
@@ -106,10 +125,11 @@ const busy = ref(false)
 const error = ref<ApiError | null>(null)
 const submitted = ref(false)
 const dirty = computed(
-  () => !submitted.value && (text.value !== originalText || newPath.value !== initialPath),
+  () => !submitted.value && (text.value !== originalText.value || newPath.value !== initialPath),
 )
 const replaceDraft = ref(false)
 function persistDraft() {
+  if (restoringAccount) return
   if (submitted.value) {
     draft.clear()
     return
@@ -118,19 +138,19 @@ function persistDraft() {
     if (!draft.blocked.value) draft.clear()
     return
   }
-  if (!base.settled.value || base.error.value || base.data.value === undefined) return
+  if (!base.settled.value || base.error.value || startingBase.value === undefined) return
   draft.save({
     text: text.value,
-    original: originalText,
+    original: originalText.value,
     path: newPath.value,
-    base: base.data.value,
-    executable,
-    fileType,
+    base: startingBase.value,
+    executable: executable.value,
+    fileType: fileType.value,
     title: title.value,
     description: description.value,
   })
 }
-watch([text, newPath, title, description, base.data, base.settled, submitted], persistDraft, {
+watch([text, newPath, title, description, startingBase, base.settled, submitted], persistDraft, {
   flush: 'sync',
 })
 const { askingToLeave, requestLeave, decide } = useUnsavedChanges(dirty, busy)
@@ -153,7 +173,11 @@ async function cancel() {
 let draftUrl = ''
 function downloadDraft() {
   if (draftUrl) URL.revokeObjectURL(draftUrl)
-  draftUrl = URL.createObjectURL(new Blob([text.value], { type: 'text/plain;charset=utf-8' }))
+  draftUrl = URL.createObjectURL(
+    new Blob([preserveTextFormat(originalText.value, text.value)], {
+      type: 'text/plain;charset=utf-8',
+    }),
+  )
   const link = document.createElement('a')
   link.href = draftUrl
   link.download = filePath.value.split('/').pop() || 'draft.txt'
@@ -165,6 +189,118 @@ onBeforeUnmount(() => {
   if (draftUrl) URL.revokeObjectURL(draftUrl)
 })
 
+async function restoreAccountDraft(saved: AccountFileDraft) {
+  const mine = submission
+  const token = auth.token
+  accountBusy.value = true
+  accountError.value = ''
+  try {
+    const original = await api.tree.file(props.repo, saved.base, props.path, 4 * 1024 * 1024)
+    const bytes = Uint8Array.from(atob(saved.content), (char) => char.charCodeAt(0))
+    if (original.truncated || looksBinary(original.bytes) || looksBinary(bytes))
+      throw new Error(
+        'This account draft cannot be opened in the text editor. Use the CLI to retrieve it.',
+      )
+    if (mine !== submission || token !== auth.token) return
+    restoringAccount = true
+    originalText.value = decodeUtf8(original.bytes)
+    executable.value = saved.executable
+    fileType.value = saved.file_type === 'symlink' ? 'symlink' : 'regular'
+    restoredBase.value = saved.base
+    text.value = decodeUtf8(bytes)
+    adoptedVersion = saved.version
+    accountAvailable.value = null
+    accountRestored.value = true
+    restoringAccount = false
+    persistDraft()
+  } catch (cause) {
+    if (mine === submission && token === auth.token) accountError.value = describeError(cause)
+  } finally {
+    restoringAccount = false
+    if (mine === submission) accountBusy.value = false
+  }
+}
+async function loadAccountDraft() {
+  if (!accountSupported.value || auth.status !== 'ready') return
+  const mine = submission
+  const token = auth.token
+  accountBusy.value = true
+  accountLoaded.value = false
+  accountError.value = ''
+  adoptedVersion = null
+  try {
+    const saved = await api.files.draft(props.repo, props.stream, props.path, { token })
+    if (mine !== submission || token !== auth.token) return
+    accountVersion = saved.version
+    accountLoaded.value = true
+    accountAvailable.value = null
+    if (!saved.present) return
+    accountAvailable.value = saved
+    if (!dirty.value) await restoreAccountDraft(saved)
+  } catch (cause) {
+    if (mine === submission && token === auth.token) accountError.value = describeError(cause)
+  } finally {
+    if (mine === submission) accountBusy.value = false
+  }
+}
+function keepTabDraft() {
+  accountAvailable.value = null
+  adoptedVersion = null
+}
+async function saveAccountDraft() {
+  if (
+    !accountSupported.value ||
+    !accountLoaded.value ||
+    accountBusy.value ||
+    busy.value ||
+    submitted.value ||
+    accountAvailable.value ||
+    !startingBase.value
+  )
+    return
+  const content = preserveTextFormat(originalText.value, text.value)
+  if (new TextEncoder().encode(content).length > 4 * 1024 * 1024) {
+    accountError.value =
+      'Account file drafts are limited to 4 MiB. Download this draft to keep a copy.'
+    return
+  }
+  const mine = submission
+  const token = auth.token
+  accountBusy.value = true
+  accountError.value = ''
+  try {
+    const saved = await api.files.saveDraft(
+      props.repo,
+      {
+        stream: props.stream,
+        path: props.path,
+        base: startingBase.value,
+        content: toBase64(content),
+        expected_version: accountVersion,
+      },
+      { token, quietUnauthenticated: true },
+    )
+    if (mine !== submission || token !== auth.token) return
+    accountVersion = saved.version
+    adoptedVersion = saved.version
+    toasts.ok('File draft saved to your account')
+  } catch (cause) {
+    if (mine !== submission || token !== auth.token) return
+    accountError.value = describeError(cause)
+    if (cause instanceof ApiError && cause.code === 'failed_precondition')
+      accountLoaded.value = false
+  } finally {
+    if (mine === submission) accountBusy.value = false
+  }
+}
+watch(
+  [accountSupported, () => auth.status],
+  () => {
+    void loadAccountDraft()
+  },
+  { immediate: true },
+)
+
 function ask() {
   if (!title.value) title.value = props.isNew ? `Add ${filePath.value}` : `Update ${filePath.value}`
   error.value = null
@@ -172,9 +308,17 @@ function ask() {
 }
 
 async function propose() {
-  if (busy.value || !canPropose.value || !title.value.trim() || error.value?.isUnauthenticated)
+  if (
+    busy.value ||
+    submitted.value ||
+    !canPropose.value ||
+    !title.value.trim() ||
+    error.value?.isUnauthenticated
+  )
     return
   const mine = ++submission
+  const cleanupVersion = adoptedVersion
+  const token = auth.token
   const current = new AbortController()
   controller = current
   busy.value = true
@@ -183,26 +327,38 @@ async function propose() {
     const p = await proposeChange(api, {
       repo: props.repo,
       stream: props.stream,
-      fromRev: base.data.value || undefined,
-      expectedBase: base.data.value,
+      fromRev: startingBase.value || undefined,
+      expectedBase: startingBase.value,
       changes: [
         putFile(
           filePath.value,
-          text.value,
-          executable,
-          fileType === 'symlink' ? 'symlink' : undefined,
+          preserveTextFormat(originalText.value, text.value),
+          executable.value,
+          fileType.value === 'symlink' ? 'symlink' : undefined,
         ),
       ],
       title: title.value.trim(),
       description: description.value.trim() || undefined,
-      request: { token: auth.token, quietUnauthenticated: true, signal: current.signal },
+      request: { token, quietUnauthenticated: true, signal: current.signal },
     })
     if (mine !== submission || current.signal.aborted) return
     submitted.value = true
-    busy.value = false
     asking.value = false
     board.touched(['proposals', 'streams', 'predict'])
     toasts.ok('Change request opened', p.title)
+    if (cleanupVersion !== null) {
+      try {
+        await api.files.clearDraft(props.repo, props.stream, props.path, cleanupVersion, {
+          token,
+          signal: current.signal,
+          quietUnauthenticated: true,
+        })
+      } catch (cause) {
+        if (mine === submission) toasts.warn('Account draft kept', describeError(cause))
+      }
+      if (mine !== submission || current.signal.aborted) return
+    }
+    busy.value = false
     await router.push({
       name: 'proposal',
       params: { owner: props.repo.split('/')[0], name: props.repo.split('/')[1], id: p.id },
@@ -234,6 +390,24 @@ async function propose() {
         >Replace the unreadable draft</Button
       >
     </Alert>
+    <Alert v-if="accountAvailable" tone="info" title="An account file draft is available">
+      Your tab draft is unchanged. Choose which copy to continue.
+      <div class="btns">
+        <Button :disabled="busy || accountBusy" @click="restoreAccountDraft(accountAvailable)"
+          >Restore account draft</Button
+        >
+        <Button :disabled="busy || accountBusy" @click="keepTabDraft">Keep tab draft</Button>
+      </div>
+    </Alert>
+    <p v-else-if="accountRestored" class="faint" role="status">
+      Account draft restored with its original starting revision.
+    </p>
+    <Alert v-if="accountError" tone="warn">
+      {{ accountError }}
+      <Button :disabled="busy || accountBusy" @click="loadAccountDraft"
+        >Reload account draft</Button
+      >
+    </Alert>
     <ErrorState
       v-if="base.error.value"
       what="the starting revision"
@@ -256,7 +430,7 @@ async function propose() {
       v-model="text"
       :label="fileType === 'symlink' ? 'Link target' : isNew ? 'Contents' : `Contents of ${path}`"
       :rows="fileType === 'symlink' ? 3 : 18"
-      :disabled="busy"
+      :disabled="busy || accountBusy"
       mono
     />
     <div class="bar">
@@ -267,11 +441,21 @@ async function propose() {
             : 'No changes yet.'
         }}
         <span v-if="draft.saved.value" role="status" data-testid="draft-saved">
-          Draft saved in this tab. It survives reload and sign-in here; download it before closing
-          the tab.</span
+          {{
+            accountSupported
+              ? 'Draft saved in this tab. Save to account to continue on another device.'
+              : 'Draft saved in this tab. It survives reload and sign-in here; download it before closing the tab.'
+          }}</span
         >
       </p>
       <div class="btns">
+        <Button
+          v-if="accountSupported"
+          :loading="accountBusy"
+          :disabled="busy || !changed || !accountLoaded || !!accountAvailable"
+          @click="saveAccountDraft"
+          >Save to account</Button
+        >
         <Button :disabled="!dirty" icon="download" @click="downloadDraft">Download draft</Button>
         <Button :disabled="busy" @click="cancel">Cancel</Button>
         <Button
@@ -288,7 +472,7 @@ async function propose() {
     <Dialog
       :model-value="askingToLeave"
       title="Leave without proposing?"
-      description="Your edits have not been sent to the server. Keep editing, or discard them to continue."
+      description="Your edits have not been proposed. Keep editing, or discard this tab’s copy to continue."
       size="sm"
       alert
       @update:model-value="decide(false)"

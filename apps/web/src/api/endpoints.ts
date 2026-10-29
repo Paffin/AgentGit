@@ -35,6 +35,8 @@ import type {
   Review,
   ReviewDraft,
   CommentDraft,
+  FileDraft,
+  FileDraftSummary,
   ReviewThread,
   ThreadComment,
   RoleBinding,
@@ -64,6 +66,19 @@ export function createApi(c: ApiClient) {
   const r = repoPath
   return {
     client: c,
+    files: {
+      draft: (repo: string, stream: string, path: string, options?: SessionOpts) =>
+        c.get<FileDraft>(r(repo, '/file-draft'), { stream, path }, options),
+      listDrafts: async (repo: string, stream: string, options?: SessionOpts) =>
+        (await c.get<{ drafts: FileDraftSummary[] }>(r(repo, '/file-drafts'), { stream }, options)).drafts ?? [],
+      saveDraft: (
+        repo: string,
+        body: { stream: string; path: string; base: string; content: string; expected_version: number },
+        options?: SessionOpts,
+      ) => c.json<FileDraft>(r(repo, '/file-draft'), { ...options, method: 'PUT', body }),
+      clearDraft: (repo: string, stream: string, path: string, expectedVersion: number, options?: SessionOpts) =>
+        c.del<FileDraft>(r(repo, '/file-draft'), { stream, path, expected_version: expectedVersion }, options),
+    },
 
     // ---- session --------------------------------------------------------------------------------
     capabilities: (o?: Opts) =>

@@ -149,6 +149,16 @@ const streamNames = computed(() => board.streams.map((s) => s.name))
 const canEdit = computed(
   () => auth.can(repo.value, 'editFiles') && streamNames.value.includes(rev.value),
 )
+const accountDraftsSupported = computed(
+  () => canEdit.value && !!auth.capabilities?.features.includes('files.drafts'),
+)
+const accountDrafts = useResource(
+  (signal) => api.files.listDrafts(repo.value, rev.value, { signal, token: auth.token }),
+  {
+    watch: [repo, rev, () => auth.identity, () => auth.token, accountDraftsSupported],
+    enabled: () => accountDraftsSupported.value,
+  },
+)
 const writing = ref(false)
 const uploading = ref(false)
 watch([rev, path, repo], () => {
@@ -227,6 +237,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
       </form>
     </div>
 
+    <details v-if="accountDrafts.data.value?.length" class="saved-file-drafts">
+      <summary>Saved file drafts ({{ accountDrafts.data.value.length }})</summary>
+      <ul>
+        <li v-for="saved in accountDrafts.data.value" :key="saved.path">
+          <RouterLink :to="to(saved.path)">{{ saved.path }}</RouterLink>
+        </li>
+      </ul>
+    </details>
+    <ErrorState
+      v-if="accountDrafts.error.value"
+      what="saved account file drafts"
+      :error="accountDrafts.error.value"
+      compact
+      @retry="accountDrafts.reload()"
+    />
+
     <FileFinder
       v-model="finding"
       :repo="repo"
@@ -286,6 +312,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
           :stream="rev"
           :path="path"
           :enabled="canEdit"
+          :account-saved="accountDrafts.data.value?.some((saved) => saved.path === path) === true"
           @cancel="router.push(to(''))"
         >
           <EmptyState

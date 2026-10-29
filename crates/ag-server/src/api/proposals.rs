@@ -3,12 +3,28 @@
 use ag_protocol::v1;
 use ag_types::{ChangesetId, StreamName};
 
-use ag_storage::meta::ProposalFilter;
+use ag_storage::meta::{ProposalFilter, ProposalRow};
 
 use super::{convert, decode_keyset, encode_keyset, page_size, parse_id, require};
 use crate::app::{App, Call};
-use crate::authz::Cap;
+use crate::authz::{Cap, Scope};
 use crate::error::{ApiError, ApiResult};
+
+// Repository capability checks happen in with_repo_mut; bind the credential to
+// the proposal's immutable target stream before any proposal mutation.
+fn scoped_proposal(
+    repo: &ag_integrate::Repository,
+    repo_name: &str,
+    id: &str,
+    scope: &Scope,
+    cap: Cap,
+) -> ApiResult<ProposalRow> {
+    let proposal = repo.find_proposal(id)?;
+    if !scope.permits(Some(repo_name), cap, Some(&proposal.stream)) {
+        return Err(ApiError::denied("credential scope does not permit this proposal's stream"));
+    }
+    Ok(proposal)
+}
 
 impl App {
     /// Opens a proposal for a revision (publishing it first if needed).
@@ -94,8 +110,10 @@ impl App {
         } else {
             Some(parse_id::<ChangesetId>(&req.expected_head, "expected_head")?)
         };
+        let scope = call.principal.scope.clone();
+        let repo_name = req.repo.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalUpdate, None, move |repo, actor| {
-            let p = repo.find_proposal(&req.id)?;
+            let p = scoped_proposal(repo, &repo_name, &req.id, &scope, Cap::ProposalUpdate)?;
             if !super::owns(&p.author, actor) {
                 return Err(ApiError::denied("only the author may update a proposal"));
             }
@@ -113,8 +131,11 @@ impl App {
         } else {
             Some(parse_id(&req.expected_head, "reviewed changeset id")?)
         };
+        let scope = call.principal.scope.clone();
+        let repo_name = req.repo.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalReview, None, move |repo, actor| {
-            Ok(convert::review(&repo.review_at_head(&req.id, actor, &decision, &req.body, expected_head.as_ref())?))
+            let p = scoped_proposal(repo, &repo_name, &req.id, &scope, Cap::ProposalReview)?;
+            Ok(convert::review(&repo.review_at_head(&p.id, actor, &decision, &req.body, expected_head.as_ref())?))
         })
         .await
     }
@@ -124,8 +145,10 @@ impl App {
         validate_comment_body(&req.body)?;
         let expected: ChangesetId = parse_id(require(&req.expected_head, "expected_head")?, "inspected proposal head")?;
         let idem = self.idem();
+        let scope = call.principal.scope.clone();
+        let repo_name = req.repo.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalComment, None, move |repo, actor| {
-            let id = repo.find_proposal(&req.id)?.id;
+            let id = scoped_proposal(repo, &repo_name, &req.id, &scope, Cap::ProposalComment)?.id;
             let fingerprint = serde_json::to_string(&(&id, actor.as_str(), &req.body, expected.to_hex()))
                 .map_err(ApiError::internal)?;
             super::keyed(repo, idem, "proposal.comment", &req.idempotency_key, &fingerprint, |claim| {
@@ -143,8 +166,10 @@ impl App {
 
     /// Closes an open proposal (the author, or anyone who may close proposals).
     pub async fn close_proposal(&self, call: &Call, req: v1::CloseProposalRequest) -> ApiResult<v1::Proposal> {
+        let scope = call.principal.scope.clone();
+        let repo_name = req.repo.clone();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalClose, None, move |repo, actor| {
-            let p = repo.find_proposal(&req.id)?;
+            let p = scoped_proposal(repo, &repo_name, &req.id, &scope, Cap::ProposalClose)?;
             // One run does not close what another run of its agent proposed.
             if p.author.contains('#') && actor.as_str().contains('#') && !super::owns(&p.author, actor) {
                 return Err(ApiError::denied(format!("proposal {} was made by {}", p.id, p.author)));

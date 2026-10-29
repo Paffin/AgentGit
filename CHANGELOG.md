@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Proposal reviews, comments, updates and closes enforce the credential’s target-stream scope over HTTP and gRPC. A token restricted to another stream cannot mutate the proposal.
+
 - Concurrent workspace modifications, snapshots, resets and syncs now reject a changed base/head inside their final metadata transaction. Closing a proposal cannot overwrite a completed integration or record a second successful close.
 
 - Workspace creation validates its requested starting revision before committing its name, initial base/head and audit event. A rejected create request can be corrected and retried without cleanup.
@@ -170,111 +172,7 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - History and change-request pagination retain loaded rows after a failure and retry the same page. Filter changes discard stale results; explicit history revisions avoid redundant reloads.
 - Obsolete blame and changeset requests are cancelled when their view closes. Large diff expansion follows the selected patch, and comparison labels explain the default first-parent base.
-- Uploads can retry a failed branch lookup without losing selected files. Pending branch creation, settings saves and integration attempts keep their submitted values; settings and integration results stay attached to their original target.
-- Staged Git imports recover after temporary failures, keep separate references for each account and preserve request ownership across retries. Starting a new import clears only the local reference.
-- Import instructions use the shared clipboard fallback; changing the source URL no longer leaves a misleading copied confirmation.
-- Repository setup keeps its selected rules and initiating session. Leaving the wizard stops unsent follow-up work and late redirects; a failed rule update clearly reports that the repository was still created.
-- Change-request filters are preserved in the URL for bookmarks and returning from a request. Updating a filter keeps keyboard focus in the current field.
-- Browser tab titles retain the current repository when filters or anchors change, while navigation to another page still updates the title.
-- Long tab strips retain readable labels, and keyboard selection brings the whole tab into view without shifting the page vertically.
-
-### Changed
-
-- The real Keycloak browser job reuses the pinned Playwright runtime, avoiding repeated system-package downloads while retaining real-provider, embedded-server and reviewed-skip checks.
-
-### Known limits
-
-- Draft recovery and viewed-file progress are local to a browser tab. Multi-file JSON drafts can be transferred manually; there is no account-backed draft synchronization.
-- Code search scans literal text in files up to 1 MiB with bounded pages and explicit exclusions; it is not an indexed or regex search engine.
-- Task pages coordinate existing agent tasks; a full user issue tracker, durable line-review threads and the other roadmap subsystems remain open.
-
-## [0.3.0-beta.2] — 2026-10-27
-
-### Added
-
-- Reviewed version bumps on main can request the existing release pipeline after all checks pass for the exact commit. Existing complete releases are skipped, incomplete releases can be retried, and version tags are never moved.
-
-- Reviews can require the exact inspected head through the negotiated `proposals.review_head` capability; stale submissions are rejected atomically without a review or audit entry.
-
-- File search supports arrow keys, Home/End and Enter on any result, preserves IME input and modified link actions, and explains the keyboard controls in the dialog.
-
-- Faster Web UI test execution with isolated, bounded VM workers, Node environments for pure functions, and cancellable test-worker shutdown. Browser CI shares one verified embedded build and runs each project once in a pinned runtime.
-
-- Tab-scoped file drafts preserve text, original base, path and proposal description across reload and sign-in; storage failures are explicit and drafts remain separated by account/repository/branch/path.
-- Repository-wide file finding, reviewed rename/move/delete, binary-safe multi-file upload with replacement review, comparison history/swap, and expandable Home summaries with older-repository selection.
-- A platform goal ledger with a 142-row initial coverage inventory, staged backlog and explicit unverified acceptance work. A qualified Vitest mutation adapter detects empty test runs rather than crediting them as killed mutations.
-- `ag migrate --dry-run` verifies a full Git conversion and shows its reconciliation report before creating a destination. Previewing losses does not authorize a later lossy import.
-
-- `ag auth status` lists saved server identities and expiration locally; `--check` verifies credentials with a bounded timeout, without printing or rewriting secrets.
-- Folder filtering in the web file browser, and download/discard protection for unfinished web edits.
-
-### Fixed
-
-- Python CI and package checks require the committed lockfile; release metadata includes the normalized Python version and regenerated licence list.
-
-- Account and task-graph controls derive their accessible names from matching text; the account identity remains available to assistive technology when its visible label is hidden on a small screen.
-
-- Shared browser code is bundled once while views stay lazy; lazy JavaScript no longer adds speculative preload links. Keyboard focus checks poll rendered styles instead of depending on animation frames.
-
-- Directory navigation removes stale links immediately and retains loaded files after a next-page error. Review submission captures its target and content before waiting; clipboard feedback ignores obsolete requests.
-
-- History follows Back/Forward filters, isolates each changeset's lazy diff, and preserves revision/path context in native parent links. Clipboard fallback restores keyboard focus and cleans up on failure.
-
-- Closing a review dialog keeps unfinished text and decisions. A changed head requires explicit re-review; failed submissions preserve the draft, and successful submissions clear it.
-
-- Lazy route imports no longer preload their own entry twice; dependency and CSS preloads remain, and chunk hashes include the preload policy. Mutation workers now execute their own source copies instead of resolving relative imports into the original tree.
-
-- Content-hashed UI assets with dots in their names now keep immutable caching, including source maps. Reloads no longer revalidate these unchanged Vite chunks.
-
-- Reopening a file removed by another participant still recovers its saved tab draft, including the original revision and review conflict checks.
-- Browser qualification uses Playwright 1.64.1 after a native WebKit reload assertion on 1.56.1; the original recovery scenario passes without disabling crash, console or persistence checks.
-- Web file edits now start from the exact revision read, preserving conflict detection when another user advances the branch. New-file editing also checks the expected starting point, including empty branches.
-
-## [0.3.0-beta.1] — 2026-10-27
-
-### Added
-
-- Public beta for the single-server Linux/SQLite/filesystem workflow, with open external qualification gates and explicit migration limits.
-- Web import from full Git bundles: private preflight, all-branch/tag reconciliation, content-loss acknowledgement, idempotent publication, and downloadable receipt. Credentials stay with local Git.
-- Publication moves the complete prepared directory atomically without replacing an existing destination; a retry can recover after the move but before registry insertion.
-- `ag migrate` imports a full local Git clone/mirror or bundle into a new working repository. Original bundles and reports are retained and included in backups.
-- Deterministic mapping for Git branch names outside AgentGit's naming rules; unsupported refs, submodules, paths, repaired text and external LFS pointers are reported.
-- Deployment smoke tests exercise real bundle import and publication in the shipped server image. Git's native bundle/pack runtime is included in the shell-less images.
-
-### Scope
-
-- Hosting issues, pull/merge request discussions, permissions, releases, hosted CI settings and external LFS payloads are not imported. Browser migration currently requires local storage; see [the migration guide](docs/guides/migrate-from-git.md).
-- External MCP host qualification, independent pilots, physical-device and screen-reader verification remain open; beta is not a production-readiness certification.
-
-## [0.2.0-rc.3] — 2026-10-27
-
-### Added
-
-- Home now supports searching visible work, filtering by repository and category, manual refresh and a last-successful-refresh timestamp. Partial reads and truncated summaries are explicitly marked; failures never imply that the work queue is clear.
-- Change-request search and role-aware links to editing files or giving an agent work; glossary hints in repository navigation and table headers.
-- A focused beta programme with public acceptance gates, pilot reporting, contributor entry points and a launch kit. Alpha status remains until external evidence meets the gates.
-- `ag remote explain PROPOSAL` reports a server proposal's blockers, reasons and next commands with machine-readable output and distinct ready/blocked/refused exit codes.
-- Policy regression coverage for preset actor/author restrictions, provenance, file limits, approval explanations and validation age formatting.
-
-- Load scenarios verify acknowledged stream updates and read back each worker's last successfully written files
-  after concurrent integrations. Empty write runs, zero duration and zero workers are rejected. Performance smoke
-  runs also cover server/core pull requests and fail on execution or integrity errors without timing thresholds.
-
-- **Zero-setup start.** `ag-server dev` makes a data directory, an administrator with a fresh 8-hour credential (replaced
-  and the old one revoked at every start), the demo repository `demo/welcome` with the `agents` preset, and a reviewer
-  `user:reviewer`, then prints a link that signs you in (`...#token=...`; the Web UI takes the credential out of the
-  address bar at once) and the exact commands. Loopback only unless `--allow-non-loopback`. `ag login URL --token-file
-  FILE` / `ag logout URL` keep a credential per server in `credentials.json` (mode 0600), which `clone`, `fetch`, `pull`,
-  `push` and `ag remote` find on their own after `AG_TOKEN*`. The link is not one-time (that needs a new endpoint).
-- **Policy presets** `solo`, `team`, `agents`, `strict`, as data in `ag-policy`: `ag policy preset list|show|apply`,
-  `ag init --preset`, `ag remote policy --preset`, `ag-server admin policy-preset`. `ag policy explain [FILE|current]` and
-  `ag remote policy --explain` read any policy document in plain words; a test fails when `Policy` gains a field without a
-  sentence.
-- **`ag explain [PROPOSAL]`** turns a refusal into plain words and the exact next commands (one explanation per refusal
-  code, checked against the variants); the hints under `ag integrate` and `ag remote integrate|prepare` use the same
-  strings. The remote workflow also supports `ag remote explain PROPOSAL`.
-- **A Web UI a first-time user can use** (`docs/design/web-ux-review.md`): Home ("needs your attention") and navigation by
-  job (Overview, Change requests, Agents & work, Code, Settings); plain labels with the AgentGit word in a tooltip
+- Uploads can retry a failed branch lookup without losing selected files. Pending branch creation, settings saves and integration attempts keep their submitted values; settings and integration results stay attached to their original tar…2558 tokens truncated… with the AgentGit word in a tooltip
   (`lib/glossary.ts`, checked against the guide); every blocker carries its fix as an action (request validation, ask a
   reviewer, take the lease) and a "Next:" line; guided flows (new-repository wizard, getting-started checklist, "Give an
   agent work" that grants the role and mints the credential); a rules editor with presets and sentences, raw JSON under

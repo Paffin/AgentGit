@@ -30,6 +30,9 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
       options,
     )
 
+  if (operation === 'reviewers')
+    return api.proposals.setReviewers('acme/new', 'proposal-one', ['user:bob'], [], options)
+
   if (operation === 'proposal-update')
     return api.proposals.update('acme/new', 'proposal-one', 'new-head', 'seen-head', options)
 
@@ -61,6 +64,7 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'proposal-update',
+    'reviewers',
     'review',
 
     'task-dependency',
@@ -100,6 +104,7 @@ describe('repository setup request ownership', () => {
     'workspace-remove',
     'proposal-create',
     'proposal-update',
+    'reviewers',
     'review',
 
     'task-dependency',
@@ -145,4 +150,21 @@ it('patches an attempt limit with its inspected value and an encoded task id', a
   expect(String(url)).toContain('/v1/repos/acme/repo/tasks/task%2Fone/attempt-limit')
   expect(options?.method).toBe('PATCH')
   expect(JSON.parse(String(options?.body))).toEqual({ max_attempts: 0, expected_max_attempts: 2 })
+})
+
+it('sends requested reviewers and the inspected set to the encoded proposal path', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response('{"reviewers":["user:bob"]}', {
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+  const client = new ApiClient({ getToken: () => 'session', fetch: request })
+  await createApi(client).proposals.setReviewers('acme/repo', 'p/one', ['user:bob'], ['user:carol'])
+  const [url, options] = request.mock.calls[0]!
+  expect(String(url)).toContain('/v1/repos/acme/repo/proposals/p%2Fone/reviewers')
+  expect(options?.method).toBe('PUT')
+  expect(JSON.parse(String(options?.body))).toEqual({
+    reviewers: ['user:bob'],
+    expected_reviewers: ['user:carol'],
+  })
 })

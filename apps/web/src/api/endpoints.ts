@@ -253,6 +253,7 @@ export function createApi(c: ApiClient) {
           stream?: string
           author?: string
           task_id?: string
+          requested_reviewer?: string
           page_size?: number
           page_token?: string
         } = {},
@@ -267,6 +268,18 @@ export function createApi(c: ApiClient) {
       },
       get: (repo: string, id: string, o?: Opts) =>
         c.get<ProposalDetail>(r(repo, `/proposals/${encodeURIComponent(id)}`), undefined, o),
+      setReviewers: (
+        repo: string,
+        id: string,
+        reviewers: string[],
+        expectedReviewers: string[],
+        o?: SessionOpts,
+      ) =>
+        c.json<{ reviewers: string[] }>(r(repo, `/proposals/${encodeURIComponent(id)}/reviewers`), {
+          ...o,
+          method: 'PUT',
+          body: { reviewers, expected_reviewers: expectedReviewers },
+        }),
       comment: (
         repo: string,
         id: string,

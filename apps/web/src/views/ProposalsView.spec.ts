@@ -1,6 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 import LoadMore from '@/ui/LoadMore.vue'
 import ProposalsView from './ProposalsView.vue'
 
@@ -8,7 +9,13 @@ enableAutoUnmount(afterEach)
 afterEach(() => vi.useRealTimers())
 const list = vi.hoisted(() => vi.fn())
 vi.mock('@/api/instance', () => ({ api: { proposals: { list } } }))
-vi.mock('@/stores/auth', () => ({ useAuth: () => ({ can: () => false }) }))
+const auth = reactive({
+  can: () => false,
+  identity: 'user:bob',
+  token: 'session',
+  capabilities: { features: [] as string[] },
+})
+vi.mock('@/stores/auth', () => ({ useAuth: () => auth }))
 const page = (title: string, nextPageToken = '') => ({
   items: [
     { id: title, title, author: 'user:alice', stream: 'main', state: 'open', updated_at_ms: 1 },
@@ -16,6 +23,9 @@ const page = (title: string, nextPageToken = '') => ({
   nextPageToken,
 })
 beforeEach(() => {
+  auth.identity = 'user:bob'
+  auth.token = 'session'
+  auth.capabilities.features = []
   vi.useFakeTimers()
   list.mockReset().mockResolvedValue(page('First request', 'next-page'))
 })
@@ -209,5 +219,35 @@ describe('change request filter navigation', () => {
     expect(list.mock.lastCall![1]).toEqual(
       expect.objectContaining({ state: 'closed', author: 'user:bob' }),
     )
+  })
+})
+
+describe('requested-reviewer routing', () => {
+  it('uses the current principal in bookmarked filters and preserves the filter on pages', async () => {
+    auth.capabilities.features = ['proposals.review_requests']
+    const { w } = await show('/repos/acme/demo/proposals?reviewer=me')
+    expect(list.mock.lastCall![1].requested_reviewer).toBe('user:bob')
+    w.findComponent(LoadMore).vm.$emit('more')
+    await flushPromises()
+    expect(list.mock.lastCall![1]).toMatchObject({
+      requested_reviewer: 'user:bob',
+      page_token: 'next-page',
+    })
+    auth.identity = 'user:carol'
+    await vi.advanceTimersByTimeAsync(200)
+    await flushPromises()
+    expect(list.mock.lastCall![1].requested_reviewer).toBe('user:carol')
+    expect(list.mock.lastCall![1].page_token).toBeUndefined()
+  })
+
+  it('does not show an unfiltered queue when an older server cannot honor the bookmark', async () => {
+    const { w } = await show('/repos/acme/demo/proposals?reviewer=me')
+    expect(list).not.toHaveBeenCalled()
+    expect(w.text()).toContain('does not support requested-reviewer filtering')
+    await w.get('input[type=checkbox]').setValue(false)
+    await vi.advanceTimersByTimeAsync(200)
+    await flushPromises()
+    expect(list).toHaveBeenCalledOnce()
+    expect(list.mock.lastCall![1].requested_reviewer).toBeUndefined()
   })
 })

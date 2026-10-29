@@ -20,6 +20,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Authors can preview and apply selected review suggestions across files as one proposal revision. Exact source lines, executable mode, BOM and line endings are preserved; conflicting selections are refused and discussions remain open.
 
+### Changed
+
+- The review workspace puts changed code first, keeps Review and Land in the header, and moves secondary actions and context into a quieter side panel. Phone layouts use a compact readiness strip and file navigation. All review, validation and permission states remain available.
+
 ## [0.3.0-beta.7] - 2026-10-29
 
 **Upgrade:** metadata schema 8 and control schema are unchanged from beta.6. Back up before upgrading. Returning to beta.5 or older requires the pre-upgrade backup.

@@ -595,6 +595,21 @@ Counts are marked as partial when more pages are available; use **Load more
 discussions** to include older threads. Switching filters preserves expanded
 reply drafts.
 
+### Request reviewers (development)
+
+The author of an open change request can choose **Request review** in its reviewer panel.
+Enter up to 20 identities, one per line, and confirm. This requests attention; it does not
+grant repository access, require approval in policy, or count as a review. Removing an identity
+from the list withdraws that request. If another edit wins first, your draft remains available.
+
+The panel marks a request reviewed only after that person approves or requests changes on
+the current revision. A new revision keeps the requested list and makes prior reviews pending
+again. On **Change requests**, select **Review requested from me** to filter before pagination;
+the URL can be bookmarked. Servers without this capability cannot apply that filter.
+
+This feature requires metadata schema 9. Back up before upgrading a repository; restore that
+pre-upgrade backup to return to beta.7 or older. See [ADR 0036](../adr/0036-requested-reviewers.md).
+
 ### Suggest a code change (development)
 
 Select a new-side line number in **Files changed**, then **Suggest a replacement**. Explain

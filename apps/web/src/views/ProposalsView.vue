@@ -6,6 +6,8 @@ import type { Proposal } from '@/api/types'
 import { useRepoName } from '@/composables/useRepoName'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { shortId } from '@/lib/format'
+import { parseIdentity } from '@/lib/identity'
+import Checkbox from '@/ui/Checkbox.vue'
 import Badge from '@/ui/Badge.vue'
 import Button from '@/ui/Button.vue'
 import Icon from '@/ui/Icon.vue'
@@ -40,26 +42,43 @@ const readText = (value: unknown): string => (typeof value === 'string' ? value 
 const state = ref(readState(route.query.state))
 const author = ref(readText(route.query.author))
 const query = ref(readText(route.query.q))
+const reviewRequested = ref(route.query.reviewer === 'me')
 function syncFilters() {
   state.value = readState(route.query.state)
   author.value = readText(route.query.author)
   query.value = readText(route.query.q)
+  reviewRequested.value = route.query.reviewer === 'me'
 }
-watch([() => route.query.state, () => route.query.author, () => route.query.q], syncFilters)
-function updateFilters(values: Partial<{ state: StateFilter; author: string; q: string }>) {
+watch(
+  [
+    () => route.query.state,
+    () => route.query.author,
+    () => route.query.q,
+    () => route.query.reviewer,
+  ],
+  syncFilters,
+)
+function updateFilters(
+  values: Partial<{ state: StateFilter; author: string; q: string; reviewer: boolean }>,
+) {
   state.value = values.state ?? state.value
   author.value = values.author ?? author.value
   query.value = values.q ?? query.value
+  reviewRequested.value = values.reviewer ?? reviewRequested.value
   void router.replace({
     query: {
       ...route.query,
       state: state.value === 'open' ? undefined : state.value,
       author: author.value || undefined,
       q: query.value || undefined,
+      reviewer: reviewRequested.value ? 'me' : undefined,
     },
   })
 }
 const auth = useAuth()
+const reviewRequestsSupported = computed(
+  () => !!auth.capabilities?.features.includes('proposals.review_requests'),
+)
 const items = ref<Proposal[]>([])
 const next = ref('')
 const loading = ref(true)
@@ -98,9 +117,14 @@ async function load(append = false) {
   const mine = startLoad(append)
   if (mine === null) return
   try {
+    if (reviewRequested.value && !reviewRequestsSupported.value)
+      throw new Error('This server does not support requested-reviewer filtering.')
     const page = await api.proposals.list(repo.value, {
       state: state.value === 'all' ? undefined : state.value,
       author: author.value.trim() || undefined,
+      requested_reviewer: reviewRequested.value
+        ? parseIdentity(auth.identity).principal
+        : undefined,
       page_size: 50,
       page_token: append ? next.value : undefined,
     })
@@ -118,16 +142,27 @@ async function load(append = false) {
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined
-watch([state, author, repo], () => {
-  serial++
-  items.value = []
-  next.value = ''
-  more.value = false
-  loading.value = true
-  error.value = null
-  clearTimeout(timer)
-  timer = setTimeout(() => void load(), 200)
-})
+watch(
+  [
+    state,
+    author,
+    repo,
+    reviewRequested,
+    reviewRequestsSupported,
+    () => auth.identity,
+    () => auth.token,
+  ],
+  () => {
+    serial++
+    items.value = []
+    next.value = ''
+    more.value = false
+    loading.value = true
+    error.value = null
+    clearTimeout(timer)
+    timer = setTimeout(() => void load(), 200)
+  },
+)
 onBeforeUnmount(() => {
   serial++
   clearTimeout(timer)
@@ -170,6 +205,12 @@ const rows = computed(() => {
       </div>
     </div>
     <div class="tools">
+      <Checkbox
+        v-if="reviewRequestsSupported || reviewRequested"
+        :model-value="reviewRequested"
+        label="Review requested from me"
+        @update:model-value="updateFilters({ reviewer: $event })"
+      />
       <Segmented
         :model-value="state"
         legend="State"

@@ -99,31 +99,35 @@ function jump(file: FileDiff) {
       @retry="$emit('retry')"
     />
     <template v-else-if="diff">
-      <p class="base faint">
-        Comparing
-        <code class="mono">{{ diff.base ? shortId(diff.base, 8) : 'the empty tree' }}</code>
-        with the proposal’s head. Context is three lines.
-      </p>
       <div v-if="diff.files.length" class="review-tools">
         <TextField
           v-model="query"
           type="search"
           label="Filter changed files"
-          placeholder="File name or path"
+          placeholder="Filter changed files"
+          hide-label
         />
         <label v-if="storageKey" class="hide-viewed"
           ><input v-model="hideViewed" type="checkbox" aria-label="Hide viewed files" /> Hide viewed
           files</label
         >
-        <span v-if="storageKey" class="faint" role="status"
+        <span v-if="storageKey" class="faint viewed-count" role="status"
           >{{ viewedCount }} of {{ diff.files.length }} loaded files viewed</span
         >
         <Button v-if="query || hideViewed" size="sm" @click="showAll">Show all files</Button>
       </div>
-      <p v-if="storageKey" class="faint progress-note">
-        Viewed marks are saved in this tab for this exact comparison. They do not approve the change
-        request.
-      </p>
+      <details class="comparison-details">
+        <summary>Comparison details</summary>
+        <p class="base faint">
+          Comparing
+          <code class="mono">{{ diff.base ? shortId(diff.base, 8) : 'the empty tree' }}</code>
+          with the proposal’s head. Context is three lines.
+        </p>
+        <p v-if="storageKey" class="faint progress-note">
+          Viewed marks are saved in this tab for this exact comparison. They do not approve the
+          change request.
+        </p>
+      </details>
       <p v-if="storageError" role="status" class="faint">{{ storageError }}</p>
       <div class="layout" :class="{ 'with-nav': diff.files.length > 1 }">
         <nav v-if="diff.files.length > 1" class="files" aria-label="Changed files">
@@ -179,6 +183,8 @@ function jump(file: FileDiff) {
 </template>
 
 <style scoped>
+/* Hallmark · shape: app screen · theme: locked AgentGit · scope: component · v2.0.0 */
+/* Critique: filtering stays at hand; comparison guidance is disclosed and mobile file navigation stays one row. */
 .review-tools {
   display: flex;
   align-items: end;
@@ -203,7 +209,7 @@ function jump(file: FileDiff) {
   font-size: var(--fs-xs);
 }
 .progress-note {
-  margin-bottom: var(--s-3);
+  margin-bottom: 0;
   font-size: var(--fs-xs);
 }
 input[type='checkbox'] {
@@ -242,8 +248,8 @@ input[type='checkbox'] {
   text-decoration: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 6px var(--s-2);
+  gap: var(--s-1);
+  padding: var(--s-2);
   border-radius: var(--r-sm);
   color: var(--text);
   font-size: var(--fs-sm);
@@ -257,7 +263,7 @@ input[type='checkbox'] {
 }
 .n {
   display: flex;
-  gap: 6px;
+  gap: var(--s-1);
   align-items: center;
   font-size: var(--fs-xs);
 }
@@ -269,10 +275,72 @@ input[type='checkbox'] {
 }
 @media (min-width: 1100px) {
   .layout.with-nav {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 200px minmax(0, 1fr);
   }
   .files {
     order: 0;
+  }
+}
+
+.comparison-details {
+  margin-bottom: var(--s-3);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.comparison-details summary {
+  cursor: pointer;
+}
+.comparison-details .base {
+  margin-top: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.viewed-count {
+  font-size: var(--fs-sm);
+}
+@media (max-width: 700px) {
+  .review-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s-2);
+    margin-bottom: var(--s-2);
+  }
+  .review-tools :deep(.field) {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .viewed-count {
+    text-align: right;
+    font-size: var(--fs-xs);
+  }
+  .hide-viewed {
+    font-size: var(--fs-sm);
+  }
+  .files {
+    position: static;
+    max-height: none;
+  }
+  .files ul {
+    display: flex;
+    gap: var(--s-1);
+    overflow-x: auto;
+  }
+  .files li {
+    flex: none;
+    max-width: 85%;
+  }
+  .files a {
+    min-height: 44px;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-3);
+  }
+  .files .p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .files .n {
+    flex: none;
   }
 }
 </style>

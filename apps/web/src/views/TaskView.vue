@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ExecutionControl from '@/components/agents/ExecutionControl.vue'
 import TaskEditor from '@/components/agents/TaskEditor.vue'
+import TaskAttemptLimit from '@/components/agents/TaskAttemptLimit.vue'
 import { api } from '@/api/instance'
 import { describeError, isApiError } from '@/api/errors'
 import { useRepoName } from '@/composables/useRepoName'
@@ -325,6 +326,18 @@ async function change(kind: 'dependency' | 'done' | 'cancelled') {
       <p v-if="task.data.value.scope.length" class="state">
         Scope <code v-for="path in task.data.value.scope" :key="path">{{ path }}</code>
       </p>
+      <TaskAttemptLimit
+        :repo="repo"
+        :task="task.data.value"
+        @saved="
+          (updated) => {
+            task.data.value = updated
+            board.touched(['tasks'])
+            tasks.reload()
+          }
+        "
+        @reload="task.reload()"
+      />
       <ExecutionControl :repo="repo" />
       <Alert
         v-if="error && !finishing && !assigning"

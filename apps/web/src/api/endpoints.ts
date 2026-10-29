@@ -506,6 +506,18 @@ export function createApi(c: ApiClient) {
         expected: Pick<Task, 'title' | 'description' | 'scope'>,
         o?: SessionOpts,
       ) => c.patch<Task>(r(repo, `/tasks/${encodeURIComponent(id)}`), { content, expected }, o),
+      setTaskAttemptLimit: (
+        repo: string,
+        id: string,
+        maxAttempts: number,
+        expectedMaxAttempts: number,
+        o?: SessionOpts,
+      ) =>
+        c.patch<Task>(
+          r(repo, `/tasks/${encodeURIComponent(id)}/attempt-limit`),
+          { max_attempts: maxAttempts, expected_max_attempts: expectedMaxAttempts },
+          o,
+        ),
       assignTask: (
         repo: string,
         id: string,

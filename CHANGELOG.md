@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Task details show admitted attempts and let the creator change the attempt limit before execution, or an operator afterwards. Confirmation preserves the inspected limit; conflicting edits retain the draft. Existing task instructions and run history stay unchanged.
+
 ## [0.3.0-beta.6] - 2026-10-29
 
 **Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.

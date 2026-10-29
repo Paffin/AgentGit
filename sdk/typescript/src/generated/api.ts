@@ -103,6 +103,7 @@ export const NAMESPACE_METHODS = {
     get: 'proposal.get',
     list: 'proposal.list',
     review: 'proposal.review',
+    setReviewers: 'proposal.set_reviewers',
     threadComments: 'proposal.thread_comments',
     threadCreate: 'proposal.thread_create',
     threadReply: 'proposal.thread_reply',
@@ -343,6 +344,8 @@ export interface Api {
     list(request: Req<'proposal.list'>, options?: CallOptions): Promise<Res<'proposal.list'>>;
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
+    /** Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`) */
+    setReviewers(request: Req<'proposal.set_reviewers'>, options?: CallOptions): Promise<Res<'proposal.set_reviewers'>>;
     /** List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`) */
     threadComments(request: Req<'proposal.thread_comments'>, options?: CallOptions): Promise<Res<'proposal.thread_comments'>>;
     /** Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`) */

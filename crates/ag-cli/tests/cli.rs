@@ -645,3 +645,35 @@ fn task_attempt_limit_can_be_inspected_and_extended_without_replacing_the_task()
     assert_eq!(extended["max_attempts"], 2);
     ag.ag(&["agent", "start", "bot", "--task", id]).ok();
 }
+
+#[test]
+fn requested_reviewers_are_inspectable_guarded_and_not_reviews() {
+    let a = Ag::new();
+    a.write("review.txt", "Please inspect this.\n");
+    let proposal = a.propose_as("user:alice", "Review routing");
+    let empty = a.ag(&["--json", "proposal", "reviewers", &proposal]).ok().json();
+    assert_eq!(empty["reviewers"], serde_json::json!([]));
+    let first =
+        a.ag(&["--json", "proposal", "reviewers", &proposal, "--add", "user:bob", "--expect-empty"]).ok().json();
+    assert_eq!(first["reviewers"], serde_json::json!(["user:bob"]));
+    a.write("other.txt", "Not requested from Bob\n");
+    a.propose_as("user:alice", "Unrequested work");
+    let filtered = a.ag(&["--json", "proposal", "list", "--requested-reviewer", "user:bob"]).ok().json();
+    assert_eq!(filtered.as_array().unwrap().len(), 1);
+    assert_eq!(filtered[0]["id"], proposal);
+    let stale = a.ag(&["proposal", "reviewers", &proposal, "--add", "user:carol", "--expect-empty"]);
+    assert!(!stale.out.status.success(), "a stale inspected set must not overwrite review requests");
+    let current = a.ag(&["--json", "proposal", "reviewers", &proposal]).ok().json();
+    assert_eq!(current["reviewers"], first["reviewers"]);
+    let detail = a.ag(&["--json", "proposal", "show", &proposal]).ok().json();
+    assert_eq!(detail["reviews"], serde_json::json!([]));
+    let denied = a.run_as("user:bob", &["proposal", "reviewers", &proposal, "--add", "user:carol"]);
+    assert!(!denied.out.status.success());
+    let changed = a
+        .ag(&["--json", "proposal", "reviewers", &proposal, "--remove", "user:bob", "--add", "user:carol"])
+        .ok()
+        .json();
+    assert_eq!(changed["reviewers"], serde_json::json!(["user:carol"]));
+    a.ag(&["proposal", "close", &proposal]).ok();
+    assert!(!a.ag(&["proposal", "reviewers", &proposal, "--remove", "user:carol"]).out.status.success());
+}

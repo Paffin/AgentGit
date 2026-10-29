@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 import pytest
+from examples.review_requests import request_review, reviews_requested_from
 
 from agentgit import (
     NAMESPACE_METHODS,
@@ -158,6 +159,9 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
         alice.proposals.update(repo=REPO, id=p1.id, new_head=m2.head, expected_head=m1.head).head == m2.head
     )
     assert alice.proposals.get(repo=REPO, id=p1.id).proposal.head == m2.head
+    assert request_review(alice, REPO, p1.id, ["user:bob"]).reviewers == ["user:bob"]
+    assert bob.proposals.get(repo=REPO, id=p1.id).requested_reviewers == ["user:bob"]
+    assert [p.id for p in reviews_requested_from(bob, REPO, "user:bob")] == [p1.id]
     bob.proposals.review(repo=REPO, id=p1.id, decision="approve")
     assert (
         bob.proposals.comment(

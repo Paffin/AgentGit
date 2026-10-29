@@ -43,6 +43,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag proposal`](#ag-proposal)
 - [`ag proposal list`](#ag-proposal-list)
 - [`ag proposal show`](#ag-proposal-show)
+- [`ag proposal reviewers`](#ag-proposal-reviewers)
 - [`ag proposal review`](#ag-proposal-review)
 - [`ag proposal update`](#ag-proposal-update)
 - [`ag proposal close`](#ag-proposal-close)
@@ -126,6 +127,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote proposal`](#ag-remote-proposal)
 - [`ag remote prepare`](#ag-remote-prepare)
 - [`ag remote explain`](#ag-remote-explain)
+- [`ag remote reviewers`](#ag-remote-reviewers)
 - [`ag remote review`](#ag-remote-review)
 - [`ag remote discussion`](#ag-remote-discussion)
 - [`ag remote discussion list`](#ag-remote-discussion-list)
@@ -704,11 +706,12 @@ List, review, update or close proposals
 Usage: ag proposal [OPTIONS] <COMMAND>
 
 Commands:
-  list    List proposals, newest first
-  show    Show a proposal with its reviews
-  review  Review the proposal's current head
-  update  Point the proposal at a new head (earlier approvals stop counting)
-  close   Close without integrating
+  list       List proposals, newest first
+  show       Show a proposal with its reviews
+  reviewers  Inspect, add or remove requested reviewers (no approval or access change)
+  review     Review the proposal's current head
+  update     Point the proposal at a new head (earlier approvals stop counting)
+  close      Close without integrating
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -729,16 +732,17 @@ List proposals, newest first
 Usage: ag proposal list [OPTIONS]
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --state <STATE>  Filter by state: open, integrated, closed
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-  -n, --limit <LIMIT>  Show at most this many (0 = all) [default: 200]
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>                     Operate on the repository at this path (default: discovered from the current directory)
+      --state <STATE>                  Filter by state: open, integrated, closed
+      --as <IDENTITY>                  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --requested-reviewer <IDENTITY>  Only proposals that request this reviewer, matched before the limit
+      --json                           Machine-readable JSON output
+  -n, --limit <LIMIT>                  Show at most this many (0 = all) [default: 200]
+      --color <WHEN>                   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## ag proposal show
@@ -760,6 +764,31 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag proposal reviewers
+
+```text
+Inspect, add or remove requested reviewers (no approval or access change)
+
+Usage: ag proposal reviewers [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+      --add <IDENTITY>       Add a requested reviewer; repeat for several identities
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --remove <IDENTITY>    Remove a requested reviewer; repeat for several identities
+      --expected <IDENTITY>  Require this complete inspected set; repeat for each identity
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expect-empty         Require that no reviewers have been requested yet
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag proposal review
@@ -2477,6 +2506,7 @@ Commands:
   proposal    Show a proposal with its reviews
   prepare     What would integrating do now, and what is missing?
   explain     Explain why a server proposal cannot land, with the next commands. Changes nothing
+  reviewers   Inspect, add or remove requested reviewers (no approval or access change)
   review      Review a proposal's current head
   discussion  Read and participate in revision-bound line discussions
   integrate   Integrate a proposal into its stream
@@ -2594,16 +2624,17 @@ List proposals on the server
 Usage: ag remote proposals [OPTIONS]
 
 Options:
-  -C, --repo <DIR>       Operate on the repository at this path (default: discovered from the current directory)
-      --remote <REMOTE>  Remote to use (default: origin)
-      --state <STATE>    Filter: open, integrated, closed
-      --as <IDENTITY>    Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json             Machine-readable JSON output
-      --color <WHEN>     Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet            Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help             Print help
-  -V, --version          Print version
+  -C, --repo <DIR>                     Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>                Remote to use (default: origin)
+      --state <STATE>                  Filter: open, integrated, closed
+      --as <IDENTITY>                  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --requested-reviewer <IDENTITY>  Only proposals that request this reviewer, matched before paging
+      --json                           Machine-readable JSON output
+      --color <WHEN>                   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## ag remote proposal
@@ -2671,6 +2702,32 @@ Options:
   -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag remote reviewers
+
+```text
+Inspect, add or remove requested reviewers (no approval or access change)
+
+Usage: ag remote reviewers [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Proposal id or unique prefix
+
+Options:
+      --add <IDENTITY>       Add a requested reviewer; repeat for several identities
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --remote <REMOTE>      Remote to use (default: origin)
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --remove <IDENTITY>    Remove a requested reviewer; repeat for several identities
+      --expected <IDENTITY>  Require this complete inspected set; repeat for each identity
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --expect-empty         Require that no reviewers have been requested yet
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag remote review

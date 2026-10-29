@@ -484,3 +484,67 @@ fn remote_task_edit_uses_the_server_and_enforces_its_permissions() {
     assert!(!refused.status.success());
     assert!(text(&refused).contains("creator"), "{}", text(&refused));
 }
+
+#[test]
+fn remote_requested_reviewers_route_work_without_granting_review_rights() {
+    let srv = Server::start();
+    let repo = "acme/reviewer-requests";
+    srv.app
+        .repos
+        .create(repo, "main", "", &ag_types::Identity::new("system:test").unwrap(), Default::default())
+        .unwrap();
+    let alice = srv.user("user:alice", repo, Role::Writer);
+    let bob = srv.user("user:bob", repo, Role::Reviewer);
+    let dir = tempfile::tempdir().unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["init", "--namespace", repo]));
+    ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["remote", "add", "origin", &format!("{}/{repo}", srv.url), "--token-env", "AG_TOKEN"],
+    ));
+    fs::write(dir.path().join("file.txt"), "Review this\n").unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["snapshot", "-m", "Review routing"]));
+    let proposal = proposal_id(&ok(ag(dir.path(), "user:alice", &alice, &["push", "-t", "Review routing"])));
+    let saved: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["--json", "remote", "reviewers", &proposal, "--add", "user:bob", "--expect-empty"],
+    )))
+    .unwrap();
+    assert_eq!(saved["reviewers"], serde_json::json!(["user:bob"]));
+    fs::write(dir.path().join("other.txt"), "Not requested from Bob\n").unwrap();
+    ok(ag(dir.path(), "user:alice", &alice, &["snapshot", "-m", "Unrequested work"]));
+    ok(ag(dir.path(), "user:alice", &alice, &["push", "-t", "Unrequested work"]));
+    let listed: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:bob",
+        &bob,
+        &["--json", "remote", "proposals", "--requested-reviewer", "user:bob"],
+    )))
+    .unwrap();
+    assert_eq!(listed["proposals"].as_array().unwrap().len(), 1);
+    let detail: Value =
+        serde_json::from_str(&ok(ag(dir.path(), "user:bob", &bob, &["--json", "remote", "proposal", &proposal])))
+            .unwrap();
+    assert_eq!(detail["requested_reviewers"], serde_json::json!(["user:bob"]));
+    assert!(detail["reviews"].as_array().unwrap().is_empty());
+    let denied = ag(dir.path(), "user:bob", &bob, &["remote", "reviewers", &proposal, "--remove", "user:bob"]);
+    assert!(!denied.status.success());
+    let stale = ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["remote", "reviewers", &proposal, "--add", "user:carol", "--expect-empty"],
+    );
+    assert!(!stale.status.success());
+    let removed: Value = serde_json::from_str(&ok(ag(
+        dir.path(),
+        "user:alice",
+        &alice,
+        &["--json", "remote", "reviewers", &proposal, "--remove", "user:bob", "--expected", "user:bob"],
+    )))
+    .unwrap();
+    assert_eq!(removed["reviewers"], serde_json::json!([]));
+}

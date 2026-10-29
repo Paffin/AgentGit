@@ -254,6 +254,9 @@
               "policy_version": "number",
               "proposal": "string",
               "resolved": "bool",
+              "reviewers": [
+                "string"
+              ],
               "role": "string",
               "status": "string",
               "stream": "string",
@@ -415,6 +418,9 @@
         "title": "string",
         "updated_at_ms": "number"
       },
+      "requested_reviewers": [
+        "string"
+      ],
       "reviews": []
     },
     "remote proposals": {
@@ -443,6 +449,11 @@
       "proposal": "string",
       "reviewer": "string",
       "timestamp_ms": "number"
+    },
+    "remote reviewers": {
+      "reviewers": [
+        "string"
+      ]
     },
     "remote streams": {
       "streams": [

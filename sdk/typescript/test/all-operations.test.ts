@@ -17,6 +17,7 @@ import {
   type AgentKey,
   type OperationId,
 } from '../src/index.js';
+import { requestReview, reviewsRequestedFrom } from '../examples/review-requests.js';
 import { NAMESPACE_METHODS } from '../src/generated/api.js';
 import { REPO_ROOT, startServer, type RunningServer } from './harness/server.js';
 
@@ -144,6 +145,11 @@ describe('the tour', () => {
       m2.head,
     );
     expect((await alice.proposals.get({ repo, id: p1.id })).proposal.head).toBe(m2.head);
+    expect((await requestReview(alice, repo, p1.id, ['user:bob'])).reviewers).toEqual(['user:bob']);
+    expect((await bob.proposals.get({ repo, id: p1.id })).requested_reviewers).toEqual(['user:bob']);
+    const requested = [];
+    for await (const proposal of reviewsRequestedFrom(bob, repo, 'user:bob')) requested.push(proposal.id);
+    expect(requested).toEqual([p1.id]);
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
     expect(
       (

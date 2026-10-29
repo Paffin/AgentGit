@@ -93,6 +93,33 @@ fn proposal_update(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolEr
     ))
 }
 
+/// Refuse silently broadened reads or unguarded writes against an older server.
+pub(super) fn require_review_requests(ctx: &CallCtx<'_>, run: Option<&str>) -> Result<(), ToolError> {
+    if !ctx.api.supports("proposals.review_requests", &ctx.opts(run))? {
+        return Err(ToolError::local("server_update_required", "This server does not support requested reviewers.")
+            .hint("Update the server before managing or filtering requested reviewers."));
+    }
+    Ok(())
+}
+
+fn proposal_set_reviewers(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
+    let repo = ctx.repo(args)?;
+    let run = ctx.run_id(args)?;
+    require_review_requests(ctx, run)?;
+    ctx.check_cancelled()?;
+    let id = str_arg(args, "proposal_id").unwrap_or_default();
+    let value = ctx.api.send(
+        "PUT",
+        &format!("{}/proposals/{}/reviewers", repo_path(&repo), enc(id)),
+        Some(&json!({"reviewers":args["reviewers"],"expected_reviewers":args["expected_reviewers"]})),
+        &ctx.opts(run),
+    )?;
+    Ok(ToolOutput::new(
+        "Requested reviewers saved. Requests do not grant access or record approval.",
+        json!({"reviewers": value.get("reviewers").cloned().unwrap_or(json!([]))}),
+    ))
+}
+
 fn proposal_close(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let run = ctx.run_id(args)?;
@@ -311,6 +338,39 @@ pub fn tools() -> Vec<ToolDef> {
             ),
             output(vec![("proposal", o_obj())], &["proposal"]),
             proposal_update,
+        ),
+        def(
+            "proposal_set_reviewers",
+            Group::Propose,
+            "Set requested reviewers",
+            "The author of an open proposal replaces its requested reviewers. Pass the complete desired list and the exact expected_reviewers list read from proposal_status; an empty desired list clears requests. Concurrent edits are refused. Requests grant no access, record no approval and do not change policy.",
+            Ann::SET,
+            input(
+                vec![
+                    p_repo(),
+                    ("proposal_id", t_str("Proposal id (prop_…) or unique prefix.")),
+                    (
+                        "reviewers",
+                        t_arr(
+                            "Complete desired reviewer identities, excluding the author.",
+                            t_str("Reviewer identity, for example user:alice."),
+                            20,
+                        ),
+                    ),
+                    (
+                        "expected_reviewers",
+                        t_arr(
+                            "Exact previously inspected requested reviewer identities.",
+                            t_str("Reviewer identity."),
+                            20,
+                        ),
+                    ),
+                    p_run(),
+                ],
+                &["proposal_id", "reviewers", "expected_reviewers"],
+            ),
+            output(vec![("reviewers", o_arr())], &["reviewers"]),
+            proposal_set_reviewers,
         ),
         def(
             "proposal_close",

@@ -34,7 +34,7 @@ impl Migration {
 }
 
 /// Schema version understood by this build.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "0001_init.sql", sql: include_str!("../../migrations/sqlite/0001_init.sql") },
@@ -64,6 +64,11 @@ pub(crate) const SQLITE_MIGRATIONS: &[Migration] = &[
         version: 8,
         name: "0008_task_attempt_limits.sql",
         sql: include_str!("../../migrations/sqlite/0008_task_attempt_limits.sql"),
+    },
+    Migration {
+        version: 9,
+        name: "0009_proposal_reviewers.sql",
+        sql: include_str!("../../migrations/sqlite/0009_proposal_reviewers.sql"),
     },
 ];
 
@@ -95,6 +100,11 @@ pub(crate) const POSTGRES_MIGRATIONS: &[Migration] = &[
         version: 8,
         name: "0008_task_attempt_limits.sql",
         sql: include_str!("../../migrations/postgres/0008_task_attempt_limits.sql"),
+    },
+    Migration {
+        version: 9,
+        name: "0009_proposal_reviewers.sql",
+        sql: include_str!("../../migrations/postgres/0009_proposal_reviewers.sql"),
     },
 ];
 

@@ -46,6 +46,7 @@ impl App {
             Ok(v1::ProposalDetail {
                 proposal: Some(convert::proposal(&p)),
                 reviews: reviews.iter().map(convert::review).collect(),
+                requested_reviewers: repo.requested_reviewers(&p.id)?,
             })
         })
         .await
@@ -63,11 +64,18 @@ impl App {
             let some = |s: &str| (!s.is_empty()).then_some(s.to_string());
             let (state, stream, author) = (some(&req.state), some(&req.stream), some(&req.author));
             let task_id = some(&req.task_id);
+            let requested_reviewer = if req.requested_reviewer.is_empty() {
+                None
+            } else {
+                Some(ag_types::Identity::new(&req.requested_reviewer)
+                    .map_err(|e| ApiError::invalid(e.to_string()))?.principal().to_string())
+            };
             let filter = ProposalFilter {
                 state: state.as_deref(),
                 stream: stream.as_deref(),
                 author: author.as_deref(),
                 task_id: task_id.as_deref(),
+                requested_reviewer: requested_reviewer.as_deref(),
             };
             let after = after.as_ref().map(|(at, id)| (*at, id.as_str()));
             // One more than a page, to learn whether there is a next one.
@@ -106,6 +114,38 @@ impl App {
                 }
                 let head = repo.resolve_rev(&new_head_rev)?;
                 Ok(convert::proposal(&repo.update_proposal_at_head(&p.id, &head, actor, expected.as_ref())?))
+            },
+        )
+        .await
+    }
+
+    /// The author replaces the exact inspected set of requested reviewers.
+    pub async fn set_requested_reviewers(
+        &self,
+        call: &Call,
+        req: v1::SetRequestedReviewersRequest,
+    ) -> ApiResult<v1::RequestedReviewers> {
+        let identities = |values: Vec<String>| -> ApiResult<Vec<ag_types::Identity>> {
+            values
+                .into_iter()
+                .map(|value| ag_types::Identity::new(value).map_err(|e| ApiError::invalid(e.to_string())))
+                .collect()
+        };
+        let reviewers = identities(req.reviewers)?;
+        let expected = identities(req.expected_reviewers)?;
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::ProposalUpdate,
+            req.id.clone(),
+            move |repo, actor| {
+                let p = repo.find_proposal(&req.id)?;
+                if !super::owns(&p.author, actor) {
+                    return Err(ApiError::denied("only the author may request reviewers"));
+                }
+                Ok(v1::RequestedReviewers {
+                    reviewers: repo.set_requested_reviewers(&p.id, &reviewers, &expected, actor)?,
+                })
             },
         )
         .await

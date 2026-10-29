@@ -504,6 +504,7 @@ never\:"Never colour"))' \
             (list)
 _arguments "${_arguments_options[@]}" : \
 '--state=[Filter by state\: open, integrated, closed]:STATE:_default' \
+'--requested-reviewer=[Only proposals that request this reviewer, matched before the limit]:IDENTITY:_default' \
 '-n+[Show at most this many (0 = all)]:LIMIT:_default' \
 '--limit=[Show at most this many (0 = all)]:LIMIT:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
@@ -541,6 +542,30 @@ never\:"Never colour"))' \
 '-V[Print version]' \
 '--version[Print version]' \
 ':id -- Proposal id:_default' \
+&& ret=0
+;;
+(reviewers)
+_arguments "${_arguments_options[@]}" : \
+'*--add=[Add a requested reviewer; repeat for several identities]:IDENTITY:_default' \
+'*--remove=[Remove a requested reviewer; repeat for several identities]:IDENTITY:_default' \
+'(--expect-empty)*--expected=[Require this complete inspected set; repeat for each identity]:IDENTITY:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'(--expected)--expect-empty[Require that no reviewers have been requested yet]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id or unique prefix:_default' \
 && ret=0
 ;;
 (review)
@@ -2358,6 +2383,7 @@ never\:"Never colour"))' \
 (proposals)
 _arguments "${_arguments_options[@]}" : \
 '--state=[Filter\: open, integrated, closed]:STATE:_default' \
+'--requested-reviewer=[Only proposals that request this reviewer, matched before paging]:IDENTITY:_default' \
 '--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
 '-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
 '--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
@@ -2438,6 +2464,31 @@ never\:"Never colour"))' \
 '-V[Print version]' \
 '--version[Print version]' \
 ':id -- Proposal id (any unique prefix):_default' \
+&& ret=0
+;;
+(reviewers)
+_arguments "${_arguments_options[@]}" : \
+'*--add=[Add a requested reviewer; repeat for several identities]:IDENTITY:_default' \
+'*--remove=[Remove a requested reviewer; repeat for several identities]:IDENTITY:_default' \
+'(--expect-empty)*--expected=[Require this complete inspected set; repeat for each identity]:IDENTITY:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'(--expected)--expect-empty[Require that no reviewers have been requested yet]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':id -- Proposal id or unique prefix:_default' \
 && ret=0
 ;;
 (review)
@@ -3635,6 +3686,7 @@ _ag__subcmd__proposal_commands() {
     local commands; commands=(
 'list:List proposals, newest first' \
 'show:Show a proposal with its reviews' \
+'reviewers:Inspect, add or remove requested reviewers (no approval or access change)' \
 'review:Review the proposal'\''s current head' \
 'update:Point the proposal at a new head (earlier approvals stop counting)' \
 'close:Close without integrating' \
@@ -3655,6 +3707,11 @@ _ag__subcmd__proposal__subcmd__list_commands() {
 _ag__subcmd__proposal__subcmd__review_commands() {
     local commands; commands=()
     _describe -t commands 'ag proposal review commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__proposal__subcmd__reviewers_commands] )) ||
+_ag__subcmd__proposal__subcmd__reviewers_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag proposal reviewers commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__proposal__subcmd__show_commands] )) ||
 _ag__subcmd__proposal__subcmd__show_commands() {
@@ -3744,6 +3801,7 @@ _ag__subcmd__remote_commands() {
 'proposal:Show a proposal with its reviews' \
 'prepare:What would integrating do now, and what is missing?' \
 'explain:Explain why a server proposal cannot land, with the next commands. Changes nothing' \
+'reviewers:Inspect, add or remove requested reviewers (no approval or access change)' \
 'review:Review a proposal'\''s current head' \
 'discussion:Read and participate in revision-bound line discussions' \
 'integrate:Integrate a proposal into its stream' \
@@ -3867,6 +3925,11 @@ _ag__subcmd__remote__subcmd__remove_commands() {
 _ag__subcmd__remote__subcmd__review_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote review commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__reviewers_commands] )) ||
+_ag__subcmd__remote__subcmd__reviewers_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote reviewers commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__streams_commands] )) ||
 _ag__subcmd__remote__subcmd__streams_commands() {

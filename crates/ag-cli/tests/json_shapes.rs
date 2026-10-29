@@ -41,6 +41,8 @@ fn the_json_output_of_every_local_command_matches_the_documented_shape() {
     r.rec("snapshot", &a.ag(&["--json", "snapshot", "-m", "nothing changed"]).ok());
     let p1 = r.rec("propose", &a.ag(&["--json", "propose", "-t", "first"]).ok())["id"].as_str().unwrap().to_string();
     r.rec("proposal list", &a.ag(&["--json", "proposal", "list"]).ok());
+    r.rec("proposal reviewers", &a.ag(&["--json", "proposal", "reviewers", &p1, "--add", "user:bob"]).ok());
+    r.rec("proposal reviewers", &a.ag(&["--json", "proposal", "reviewers", &p1]).ok());
     r.rec("proposal show", &a.ag(&["--json", "proposal", "show", &p1]).ok());
     let preview = r.rec("preview", &a.ag(&["--json", "preview", &p1]).ok());
     let tree = preview["candidate_tree"].as_str().unwrap().to_string();

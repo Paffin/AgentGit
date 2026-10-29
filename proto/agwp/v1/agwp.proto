@@ -728,6 +728,8 @@ message GetProposalRequest {
 message ProposalDetail {
   Proposal proposal = 1;
   repeated Review reviews = 2;
+  // Routing only; requests do not grant access or count as approval.
+  repeated string requested_reviewers = 3;
 }
 
 message ListProposalsRequest {
@@ -739,6 +741,8 @@ message ListProposalsRequest {
   string page_token = 6;
   // Match the linked task before paging. Empty matches all tasks.
   string task_id = 7;
+  // Match a requested reviewer before keyset paging.
+  string requested_reviewer = 8;
 }
 
 message ListProposalsResponse {
@@ -754,6 +758,17 @@ message UpdateProposalRequest {
   string idempotency_key = 4;
   // Optional inspected head. If supplied, a concurrent change is refused atomically.
   string expected_head = 5;
+}
+
+// Replaces review routing after comparing the complete inspected set.
+message SetRequestedReviewersRequest {
+  string repo = 1;
+  string id = 2;
+  repeated string reviewers = 3;
+  repeated string expected_reviewers = 4;
+}
+message RequestedReviewers {
+  repeated string reviewers = 1;
 }
 
 message ReviewProposalRequest {
@@ -1800,6 +1815,7 @@ service ProposalService {
   rpc Get(GetProposalRequest) returns (ProposalDetail);
   rpc List(ListProposalsRequest) returns (ListProposalsResponse);
   rpc Update(UpdateProposalRequest) returns (Proposal);
+  rpc SetReviewers(SetRequestedReviewersRequest) returns (RequestedReviewers);
   rpc Review(ReviewProposalRequest) returns (Review);
   rpc Comment(CommentProposalRequest) returns (Review);
   rpc ListThreads(ListReviewThreadsRequest) returns (ListReviewThreadsResponse);

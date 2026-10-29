@@ -374,6 +374,12 @@ impl ProposalService for Grpc {
     async fn update(&self, request: Request<v1::UpdateProposalRequest>) -> Result<Response<v1::Proposal>, Status> {
         unary!(self, request, "proposal.update", update_proposal)
     }
+    async fn set_reviewers(
+        &self,
+        request: Request<v1::SetRequestedReviewersRequest>,
+    ) -> Result<Response<v1::RequestedReviewers>, Status> {
+        unary!(self, request, "proposal.set_reviewers", set_requested_reviewers)
+    }
     async fn review(&self, request: Request<v1::ReviewProposalRequest>) -> Result<Response<v1::Review>, Status> {
         unary!(self, request, "proposal.review", review_proposal)
     }

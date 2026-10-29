@@ -356,3 +356,20 @@ Owner, creation metadata, prerequisites and task/run source links are unaffected
 migration is introduced. [Semantics](../adr/0028-task-instruction-refinement.md).
 
 HTTP event subscriptions emit an initial SSE comment after authorization. This acknowledges an idle connection immediately without allocating an event sequence; clients continue to ignore comments and resume using real event IDs.
+
+
+### Requested reviewers (development)
+
+Negotiate `proposals.review_requests` before writing review requests or using the
+`requested_reviewer` proposal-list filter. An older server may ignore unknown filter
+fields; callers must not present that unfiltered result as a personal review queue.
+
+`PUT /v1/repos/{owner}/{repo}/proposals/{id}/reviewers` (`ProposalService.SetReviewers`)
+accepts `reviewers` and `expected_reviewers` arrays. Only the author of an open proposal
+may replace its requested set. A stale set returns HTTP 412 / gRPC FailedPrecondition;
+repeating the already-stored desired set is a successful no-op. Up to 20 unique principal
+identities are retained in sorted order. The author cannot request their own review.
+
+Proposal detail includes optional `requested_reviewers`. A request grants no access and
+is not an approval. It remains after the head moves; review status is evaluated against
+the current head. Schema 9 stores these requests; back up before upgrading from schema 8.

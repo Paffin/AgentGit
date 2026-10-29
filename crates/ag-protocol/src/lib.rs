@@ -83,6 +83,8 @@ pub mod features {
 
     /// Proposal head updates can require an inspected head atomically.
     pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
+    /// Author-controlled review routing with inspected-set preconditions.
+    pub const PROPOSALS_REVIEW_REQUESTS: &str = "proposals.review_requests";
 
     /// Stream policy can require all line discussions to be resolved before integration.
     pub const POLICY_RESOLVED_THREADS: &str = "policy.resolved_threads";
@@ -105,6 +107,7 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         PROPOSALS_UPDATE_HEAD,
+        PROPOSALS_REVIEW_REQUESTS,
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,

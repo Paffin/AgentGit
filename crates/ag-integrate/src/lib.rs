@@ -36,6 +36,7 @@ mod prepare;
 mod publish;
 mod queue;
 mod repo;
+mod review_requests;
 mod storage;
 mod types;
 mod virtual_ws;

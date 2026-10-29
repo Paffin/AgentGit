@@ -786,6 +786,9 @@ pub enum RemoteCmd {
         /// Filter: open, integrated, closed.
         #[arg(long)]
         state: Option<String>,
+        /// Only proposals that request this reviewer, matched before paging.
+        #[arg(long, value_name = "IDENTITY")]
+        requested_reviewer: Option<String>,
     },
     /// Show a proposal with its reviews.
     Proposal {
@@ -805,6 +808,8 @@ pub enum RemoteCmd {
         /// Proposal id (any unique prefix).
         id: String,
     },
+    /// Inspect, add or remove requested reviewers (no approval or access change).
+    Reviewers(crate::cmds::reviewers::ReviewersArgs),
     /// Review a proposal's current head.
     Review {
         /// Proposal id.
@@ -1088,7 +1093,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     format!("{} ({}, via {})\nroles: {}", p.identity, p.kind, p.method, p.roles.join(", "))
                 })?;
             }
-            RemoteCmd::Proposals { state } => {
+            RemoteCmd::Proposals { state, requested_reviewer } => {
+                if requested_reviewer.is_some() {
+                    crate::cmds::reviewers::require_support(&c).await?;
+                }
+                let requested_reviewer = requested_reviewer.as_deref()
+                    .map(crate::cmds::reviewers::reviewer_identity)
+                    .transpose()?
+                    .map(|identity| identity.to_string());
                 // Every page: a repository with more proposals than one page must not be silently cut short.
                 let mut all = Vec::new();
                 let mut token = String::new();
@@ -1098,6 +1110,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         .list(c.req(v1::ListProposalsRequest {
                             repo: repo.clone(),
                             state: state.clone().unwrap_or_default(),
+                            requested_reviewer: requested_reviewer.clone().unwrap_or_default(),
                             page_size: ag_protocol::limits::MAX_PAGE_SIZE,
                             page_token: token,
                             ..Default::default()
@@ -1149,6 +1162,7 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                         &p.head[..12],
                         p.author
                     );
+                    t.push_str(&format!("{}\n", crate::cmds::reviewers::describe(&d.requested_reviewers)));
                     for r in &d.reviews {
                         t.push_str(&format!(
                             "  review: {} by {} on {}  {}\n",
@@ -1205,6 +1219,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                 }
                 if !p.blockers.is_empty() {
                     return Ok(exit::BLOCKED);
+                }
+            }
+            RemoteCmd::Reviewers(args) => {
+                let result = crate::cmds::reviewers::remote(&c, &repo, args).await?;
+                if args.changes_state() {
+                    print_done(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
+                } else {
+                    print(cli, &result, || crate::cmds::reviewers::describe(&result.reviewers))?;
                 }
             }
             RemoteCmd::Review { id, approve, request_changes, comment, message } => {

@@ -654,7 +654,10 @@ fn predict(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
 fn proposal_list(ctx: &CallCtx<'_>, args: &Value) -> Result<ToolOutput, ToolError> {
     let repo = ctx.repo(args)?;
     let mut q = page_query(args, 30, 100);
-    for k in ["state", "stream", "author"] {
+    if str_arg(args, "requested_reviewer").is_some_and(|value| !value.is_empty()) {
+        super::proposals::require_review_requests(ctx, None)?;
+    }
+    for k in ["state", "stream", "author", "requested_reviewer"] {
         if let Some(v) = str_arg(args, k).filter(|v| !v.is_empty()) {
             q.push((k, v.to_string()));
         }
@@ -705,6 +708,7 @@ pub fn status_of(ctx: &CallCtx<'_>, repo: &str, id: &str) -> Result<Value, ToolE
     brief["reviews_total"] = json!(reviews.len());
     if let Some(o) = derived.as_object_mut() {
         o.insert("proposal".into(), brief);
+        o.insert("requested_reviewers".into(), json!(arr(&d, "requested_reviewers")));
         o.insert("validations".into(), prep.as_ref().and_then(|p| p.get("validations")).cloned().unwrap_or(json!([])));
         o.insert("prepared".into(), json!(prep.is_some()));
     }
@@ -1063,6 +1067,10 @@ pub fn tools() -> Vec<ToolDef> {
                         ("state", t_enum("Only proposals in this state.", &["open", "integrated", "closed"])),
                         ("stream", t_str("Only proposals for this stream.")),
                         ("author", t_str("Only proposals by this identity.")),
+                        (
+                            "requested_reviewer",
+                            t_str("Only proposals requesting review from this identity; requires server support."),
+                        ),
                     ];
                     p.extend(pagination());
                     p
@@ -1085,6 +1093,7 @@ pub fn tools() -> Vec<ToolDef> {
                     ("verdicts", o_obj()),
                     ("blockers", o_arr()),
                     ("ready_to_integrate", o_bool()),
+                    ("requested_reviewers", o_arr()),
                     ("next_steps", o_arr()),
                 ],
                 &["verdicts", "blockers"],

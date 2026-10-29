@@ -241,6 +241,11 @@ function withOpenObjects(doc) {
     target.default = {};
     target.$ref = ref;
   }
+  // Decoded responses are not default-filled in TypeScript. Older servers omit this additive field;
+  // preserve the schema's optionality instead of letting its default [] make it required.
+  const detail = copy.components.schemas.ProposalDetail;
+  const requestedReviewers = detail?.properties?.requested_reviewers;
+  if (requestedReviewers && !detail.required?.includes('requested_reviewers')) delete requestedReviewers.default;
   return copy;
 }
 

@@ -902,6 +902,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/repos/{owner}/{rname}/proposals/{id}/reviewers': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace the inspected set of requested reviewers */
+    put: operations['proposal.set_reviewers']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/repos/{owner}/{rname}/proposals/{id}/reviews': {
     parameters: {
       query?: never
@@ -3278,6 +3295,11 @@ export interface components {
       page_token: string
       /** @default  */
       repo: string
+      /**
+       * @description Match a requested reviewer before keyset paging.
+       * @default
+       */
+      requested_reviewer: string
       /** @default  */
       state: string
       /** @default  */
@@ -3840,6 +3862,11 @@ export interface components {
     ProposalDetail: {
       /** @default null */
       proposal: components['schemas']['Proposal'] | null
+      /**
+       * @description Routing only; requests do not grant access or count as approval.
+       * @default []
+       */
+      requested_reviewers: string[]
       /** @default [] */
       reviews: components['schemas']['Review'][]
     }
@@ -4243,6 +4270,10 @@ export interface components {
     RequestValidationResponse: {
       /** @default [] */
       jobs: components['schemas']['Job'][]
+    }
+    RequestedReviewers: {
+      /** @default [] */
+      reviewers: string[]
     }
     ResolvePathRequest: {
       /** @default  */
@@ -4665,6 +4696,17 @@ export interface components {
       repo: string
       /** @default  */
       stream: string
+    }
+    /** @description Replaces review routing after comparing the complete inspected set. */
+    SetRequestedReviewersRequest: {
+      /** @default [] */
+      expected_reviewers: string[]
+      /** @default  */
+      id: string
+      /** @default  */
+      repo: string
+      /** @default [] */
+      reviewers: string[]
     }
     /** @description Execution policy is independent of immutable task instructions and run history. */
     SetTaskAttemptLimitRequest: {
@@ -7254,6 +7296,7 @@ export interface operations {
         author?: string
         page_size?: number
         page_token?: string
+        requested_reviewer?: string
         state?: string
         stream?: string
         task_id?: string
@@ -7466,6 +7509,45 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Review']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope']
+        }
+      }
+    }
+  }
+  'proposal.set_reviewers': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Repository owner (first half of owner/name) */
+        owner: string
+        /** @description Repository name (second half of owner/name) */
+        rname: string
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetRequestedReviewersRequest']
+      }
+    }
+    responses: {
+      /** @description Success */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RequestedReviewers']
         }
       }
       /** @description Error */

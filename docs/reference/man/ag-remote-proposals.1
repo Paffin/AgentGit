@@ -4,7 +4,7 @@
 .SH NAME
 ag\-remote\-proposals \- List proposals on the server
 .SH SYNOPSIS
-\fBag remote proposals\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-state\fR] [\fB\-\-as\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
+\fBag remote proposals\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-\-remote\fR] [\fB\-\-state\fR] [\fB\-\-as\fR] [\fB\-\-requested\-reviewer\fR] [\fB\-\-json\fR] [\fB\-\-color\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
 .SH DESCRIPTION
 List proposals on the server
 .SH OPTIONS
@@ -20,6 +20,9 @@ Filter: open, integrated, closed
 .TP
 \fB\-\-as\fR \fI<IDENTITY>\fR
 Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+.TP
+\fB\-\-requested\-reviewer\fR \fI<IDENTITY>\fR
+Only proposals that request this reviewer, matched before paging
 .TP
 \fB\-\-json\fR
 Machine\-readable JSON output

@@ -286,6 +286,9 @@ _ag() {
             ag__subcmd__proposal,review)
                 cmd="ag__subcmd__proposal__subcmd__review"
                 ;;
+            ag__subcmd__proposal,reviewers)
+                cmd="ag__subcmd__proposal__subcmd__reviewers"
+                ;;
             ag__subcmd__proposal,show)
                 cmd="ag__subcmd__proposal__subcmd__show"
                 ;;
@@ -354,6 +357,9 @@ _ag() {
                 ;;
             ag__subcmd__remote,review)
                 cmd="ag__subcmd__remote__subcmd__review"
+                ;;
+            ag__subcmd__remote,reviewers)
+                cmd="ag__subcmd__remote__subcmd__reviewers"
                 ;;
             ag__subcmd__remote,streams)
                 cmd="ag__subcmd__remote__subcmd__streams"
@@ -2747,7 +2753,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__proposal)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version list show review update close"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version list show reviewers review update close"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2807,13 +2813,17 @@ _ag() {
             return 0
             ;;
         ag__subcmd__proposal__subcmd__list)
-            opts="-n -C -q -v -h -V --state --limit --repo --as --json --color --quiet --verbose --help --version"
+            opts="-n -C -q -v -h -V --state --requested-reviewer --limit --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --state)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --requested-reviewer)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -2860,6 +2870,48 @@ _ag() {
                     return 0
                     ;;
                 -m)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__proposal__subcmd__reviewers)
+            opts="-C -q -v -h -V --add --remove --expected --expect-empty --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --add)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remove)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --expected)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -3415,7 +3467,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote)
-            opts="-C -q -v -h -V --remote --repo --as --json --color --quiet --verbose --help --version add list remove whoami proposals proposal prepare explain review discussion integrate close streams events policy log blame cat"
+            opts="-C -q -v -h -V --remote --repo --as --json --color --quiet --verbose --help --version add list remove whoami proposals proposal prepare explain reviewers review discussion integrate close streams events policy log blame cat"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4169,13 +4221,17 @@ _ag() {
             return 0
             ;;
         ag__subcmd__remote__subcmd__proposals)
-            opts="-C -q -v -h -V --state --remote --repo --as --json --color --quiet --verbose --help --version"
+            opts="-C -q -v -h -V --state --requested-reviewer --remote --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --state)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --requested-reviewer)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -4252,6 +4308,52 @@ _ag() {
                     return 0
                     ;;
                 -m)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__remote__subcmd__reviewers)
+            opts="-C -q -v -h -V --add --remove --expected --expect-empty --remote --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --add)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remove)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --expected)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

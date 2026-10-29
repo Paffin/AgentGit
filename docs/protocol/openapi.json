@@ -2812,6 +2812,11 @@
             "default": "",
             "type": "string"
           },
+          "requested_reviewer": {
+            "default": "",
+            "description": "Match a requested reviewer before keyset paging.",
+            "type": "string"
+          },
           "state": {
             "default": "",
             "type": "string"
@@ -3880,6 +3885,14 @@
               }
             ]
           },
+          "requested_reviewers": {
+            "default": [],
+            "description": "Routing only; requests do not grant access or count as approval.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "reviews": {
             "default": [],
             "items": {
@@ -4499,6 +4512,18 @@
             "default": [],
             "items": {
               "$ref": "#/components/schemas/Job"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RequestedReviewers": {
+        "properties": {
+          "reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
             },
             "type": "array"
           }
@@ -5173,6 +5198,34 @@
           "stream": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SetRequestedReviewersRequest": {
+        "description": "Replaces review routing after comparing the complete inspected set.",
+        "properties": {
+          "expected_reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "reviewers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -9715,6 +9768,16 @@
           },
           {
             "in": "query",
+            "name": "requested_reviewer",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Match a requested reviewer before keyset paging.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "state",
             "required": false,
             "schema": {
@@ -10097,6 +10160,77 @@
           }
         },
         "summary": "Add an idempotent discussion comment at the inspected head",
+        "tags": [
+          "Proposal"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/proposals/{id}/reviewers": {
+      "put": {
+        "operationId": "proposal.set_reviewers",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRequestedReviewersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestedReviewers"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replace the inspected set of requested reviewers",
         "tags": [
           "Proposal"
         ]

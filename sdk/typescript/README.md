@@ -69,7 +69,7 @@ body, as the protocol prescribes.
 | `session`              | `negotiate`, `authConfig`, `whoami` (and `client.negotiate()`, which also checks the protocol version)  |
 | `repos`                | `create`, `describe`, `list`, `configure`                                                               |
 | `workspaces`           | `create`, `get`, `list`, `modify`, `sync`, `delete`                                                     |
-| `proposals`            | `create`, `get`, `list`, `update`, `review`, `close`                                                    |
+| `proposals`            | `create`, `get`, `list`, `update`, `setReviewers`, `review`, `close`                                    |
 | `integration`          | `prepare`, `validate`, `integrate`, `attest`, `attestations`                                            |
 | `queue`                | `enqueue`, `list`, `run`                                                                                |
 | `streams`              | `list`, `create`, `head`, `cas`, `reflog`                                                               |
@@ -183,6 +183,36 @@ console.log(landed.outcome.status); // integrated
 
 An `integrate` that cannot proceed is **not an error**: it answers `200` with `outcome.status` `blocked`, `conflict`,
 `denied` or `invalid` and a list of blockers with stable `code`s. Errors are for requests that failed.
+
+## Requesting reviewers
+
+On servers advertising `proposals.review_requests`, the proposal author can replace up to 20 requested reviewers. The helper reads the current list and sends it as the precondition. A conflict requires reviewing the newer list; do not blindly overwrite it. Passing an empty list clears the requests.
+
+Requests route attention: they do not grant access, count as an approval, or change integration policy. The list remains after a new proposal revision; decisions still belong to the exact head reviewed. Before using `requested_reviewer` on a listing or pagination, negotiate and require `proposals.review_requests`: an older server may ignore an unknown query field and return a broader list. The filtering helper below performs that check.
+
+<!-- example: sdk/typescript/examples/review-requests.ts#review-requests -->
+
+```ts
+import type { AgentGitClient } from '@agentgit/client';
+
+/** Replace the inspected routing list. A concurrent edit needs a fresh user decision. */
+export async function requestReview(client: AgentGitClient, repo: string, id: string, reviewers: string[]) {
+  const current = await client.proposals.get({ repo, id });
+  return client.proposals.setReviewers({
+    repo,
+    id,
+    reviewers,
+    expected_reviewers: current.requested_reviewers ?? [],
+  });
+}
+/** Gate the filter: older servers can ignore unknown query fields and return a broader list. */
+export async function* reviewsRequestedFrom(client: AgentGitClient, repo: string, reviewer: string) {
+  const hello = await client.negotiate();
+  if (!hello.features.includes('proposals.review_requests'))
+    throw new Error('This server does not support requested-reviewer filtering.');
+  yield* client.paginate('proposal.list', { repo, requested_reviewer: reviewer });
+}
+```
 
 ## Errors, retries, idempotency and deadlines
 

@@ -30,7 +30,9 @@ export type Review = S['Review']
 export type ReviewThread = S['ReviewThread']
 export type ThreadComment = S['ThreadComment']
 export type ReviewLineAnchor = S['ReviewLineAnchor']
-export type ProposalDetail = S['ProposalDetail']
+// Older servers do not return the additive requested-reviewer routing field.
+export type ProposalDetail = Omit<S['ProposalDetail'], 'requested_reviewers'> &
+  Partial<Pick<S['ProposalDetail'], 'requested_reviewers'>>
 /**
  * The OpenAPI document describes free-form JSON objects (`type: object` with no properties), which the
  * generator renders as `Record<string, never>`. They are open-ended on the wire, so say so.

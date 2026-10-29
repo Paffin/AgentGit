@@ -902,3 +902,31 @@ fn schema_seven_preserves_task_attempt_history() {
     assert_eq!(task.description, "Keep λ");
     assert!(upgraded.read(|tx| tx.run("run_old")).unwrap().is_some());
 }
+
+#[test]
+fn schema_eight_review_requests_migrate_and_persist_without_changing_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("meta.db");
+    let backup = dir.path().join("before.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 8) {
+            conn.execute_batch(migration.sql).unwrap();
+        }
+        conn.execute("INSERT INTO meta(key,value) VALUES('schema','8')", []).unwrap();
+        conn.execute("INSERT INTO proposals(id,stream,head,title,description,author,state,created_at,updated_at) VALUES('prop_old','main',?1,'Keep old review','description','user:author','open',1,1)", ["0".repeat(64)]).unwrap();
+        conn.pragma_update(None, "user_version", 8).unwrap();
+    }
+    std::fs::copy(&path, &backup).unwrap();
+    {
+        let upgraded = Meta::open(&path).unwrap();
+        assert!(upgraded.read(|tx| tx.proposal_reviewers("prop_old")).unwrap().is_empty());
+        upgraded.write(|tx| tx.proposal_set_reviewers("prop_old", &["user:bob".into()])).unwrap();
+    }
+    let reopened = Meta::open(&path).unwrap();
+    assert_eq!(reopened.read(|tx| tx.proposal_reviewers("prop_old")).unwrap(), ["user:bob"]);
+    assert_eq!(reopened.read(|tx| tx.proposal("prop_old")).unwrap().unwrap().title, "Keep old review");
+    let untouched = rusqlite::Connection::open(&backup).unwrap();
+    assert_eq!(untouched.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 8);
+    assert_eq!(untouched.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='proposal_reviewers'", [], |row| row.get::<_, i64>(0)).unwrap(), 0);
+}

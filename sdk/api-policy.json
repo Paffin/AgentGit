@@ -52,7 +52,8 @@
       "task.finish",
       "workspace.delete",
       "workspace.sync",
-      "migration.commit"
+      "migration.commit",
+      "proposal.set_reviewers"
     ],
     "naturalWhenFieldPresent": {
       "workspace.modify": "expected_head"

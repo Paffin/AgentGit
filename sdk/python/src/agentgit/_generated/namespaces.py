@@ -182,6 +182,7 @@ from agentgit._generated.models import (
     ReportExecutorRequest,
     RequestValidationRequest,
     RequestValidationResponse,
+    RequestedReviewers,
     ResolvePathRequest,
     ResolvePathResponse,
     ResolveRevRequest,
@@ -206,6 +207,7 @@ from agentgit._generated.models import (
     SearchTreeResponse,
     SetAgentStateRequest,
     SetPolicyRequest,
+    SetRequestedReviewersRequest,
     SetTaskAttemptLimitRequest,
     SetTaskSchedulingRequest,
     StartRunRequest,
@@ -1182,13 +1184,14 @@ class ProposalsApi:
         author: str | None = None,
         page_size: int | None = None,
         page_token: str | None = None,
+        requested_reviewer: str | None = None,
         state: str | None = None,
         stream: str | None = None,
         task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
+        return self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "requested_reviewer": requested_reviewer, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     def review(
         self,
@@ -1203,6 +1206,18 @@ class ProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    def set_reviewers(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_reviewers: Sequence[str] | None = None,
+        reviewers: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> RequestedReviewers:
+        """Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`)."""
+        return self._c._call("proposal.set_reviewers", {"repo": repo, "id": id, "expected_reviewers": expected_reviewers, "reviewers": reviewers}, options, RequestedReviewers)
 
     def thread_comments(
         self,
@@ -2805,13 +2820,14 @@ class AsyncProposalsApi:
         author: str | None = None,
         page_size: int | None = None,
         page_token: str | None = None,
+        requested_reviewer: str | None = None,
         state: str | None = None,
         stream: str | None = None,
         task_id: str | None = None,
         options: CallOptions | None = None,
     ) -> ListProposalsResponse:
         """List proposals (`GET /v1/repos/{owner}/{rname}/proposals`, operation `proposal.list`)."""
-        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
+        return await self._c._call("proposal.list", {"repo": repo, "author": author, "page_size": page_size, "page_token": page_token, "requested_reviewer": requested_reviewer, "state": state, "stream": stream, "task_id": task_id}, options, ListProposalsResponse)
 
     async def review(
         self,
@@ -2826,6 +2842,18 @@ class AsyncProposalsApi:
     ) -> Review:
         """Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`)."""
         return await self._c._call("proposal.review", {"repo": repo, "id": id, "body": body, "decision": decision, "expected_head": expected_head, "idempotency_key": idempotency_key}, options, Review)
+
+    async def set_reviewers(
+        self,
+        *,
+        repo: str,
+        id: str,
+        expected_reviewers: Sequence[str] | None = None,
+        reviewers: Sequence[str] | None = None,
+        options: CallOptions | None = None,
+    ) -> RequestedReviewers:
+        """Replace the inspected set of requested reviewers (`PUT /v1/repos/{owner}/{rname}/proposals/{id}/reviewers`, operation `proposal.set_reviewers`)."""
+        return await self._c._call("proposal.set_reviewers", {"repo": repo, "id": id, "expected_reviewers": expected_reviewers, "reviewers": reviewers}, options, RequestedReviewers)
 
     async def thread_comments(
         self,

@@ -1136,6 +1136,16 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 }
 ```
 
+### ag proposal reviewers
+
+```json
+{
+  "reviewers": [
+    "string"
+  ]
+}
+```
+
 ### ag proposal show
 
 ```json
@@ -1153,6 +1163,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "title": "string",
     "updated_at": "number"
   },
+  "requested_reviewers": [
+    "string"
+  ],
   "reviews": []
 }
 ```
@@ -1550,6 +1563,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
           "policy_version": "number",
           "proposal": "string",
           "resolved": "bool",
+          "reviewers": [
+            "string"
+          ],
           "role": "string",
           "status": "string",
           "stream": "string",
@@ -1758,6 +1774,9 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
     "title": "string",
     "updated_at_ms": "number"
   },
+  "requested_reviewers": [
+    "string"
+  ],
   "reviews": []
 }
 ```
@@ -1804,6 +1823,16 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
   "proposal": "string",
   "reviewer": "string",
   "timestamp_ms": "number"
+}
+```
+
+### ag remote reviewers
+
+```json
+{
+  "reviewers": [
+    "string"
+  ]
 }
 ```
 

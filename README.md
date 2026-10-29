@@ -34,6 +34,11 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with beta.6 or newer; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
 
+**Development (`main`):** requested reviewers add metadata schema 9. Back up before
+opening existing repositories with a development build; rollback restores that backup.
+Requests route review work and do not change permissions or approval policy.
+[Design and compatibility](docs/adr/0036-requested-reviewers.md).
+
 Stream rules can require every line discussion to be resolved before integration, including feedback on earlier revisions.
 
 Review threads support proposed line replacements, with explicit author preview and head-checked application.

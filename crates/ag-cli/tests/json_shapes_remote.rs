@@ -42,6 +42,11 @@ fn the_json_output_of_every_remote_command_matches_the_documented_shape() {
     let p1 = p1["proposal"]["id"].as_str().unwrap().to_string();
     record_discussions(&mut r, &a, &alice, &p1, &head);
     r.rec("remote proposals", &as_user("user:alice", &alice, &["--json", "remote", "proposals"]).ok());
+    r.rec(
+        "remote reviewers",
+        &as_user("user:alice", &alice, &["--json", "remote", "reviewers", &p1, "--add", "user:bob"]).ok(),
+    );
+    r.rec("remote reviewers", &as_user("user:bob", &bob, &["--json", "remote", "reviewers", &p1]).ok());
     r.rec("remote proposal", &as_user("user:alice", &alice, &["--json", "remote", "proposal", &p1]).ok());
     r.rec("remote prepare", &as_user("user:carol", &carol, &["--json", "remote", "prepare", &p1]).code_is(3));
     r.rec("remote explain", &as_user("user:carol", &carol, &["--json", "remote", "explain", &p1]).code_is(3));

@@ -101,7 +101,7 @@ print(status)  # integrated
 | `session` | `negotiate`, `auth_config`, `whoami` (and `client.negotiate()`, which also checks the protocol version) |
 | `repos` | `create`, `describe`, `list`, `configure` |
 | `workspaces` | `create`, `get`, `list`, `modify`, `sync`, `delete` |
-| `proposals` | `create`, `get`, `list`, `update`, `review`, `close` |
+| `proposals` | `create`, `get`, `list`, `update`, `set_reviewers`, `review`, `close` |
 | `integration` | `prepare`, `validate`, `integrate`, `attest`, `attestations` |
 | `queue` | `enqueue`, `list`, `run` |
 | `streams` | `list`, `create`, `head`, `cas`, `reflog` |
@@ -207,6 +207,41 @@ print(landed.outcome.status)  # integrated
 
 An `integrate` that cannot proceed is **not an error**: it answers `200` with `outcome.status` `blocked`, `conflict`,
 `denied` or `invalid` and a list of blockers with stable `code`s. Errors are for requests that failed.
+
+## Requesting reviewers
+
+On servers advertising `proposals.review_requests`, the proposal author can replace up to 20 requested reviewers. The helper reads the current list and sends it as the precondition. A conflict requires reviewing the newer list; do not blindly overwrite it. Passing an empty list clears the requests.
+
+Requests route attention: they do not grant access, count as an approval, or change integration policy. The list remains after a new proposal revision; decisions still belong to the exact head reviewed. Before using `requested_reviewer` on a listing or pagination, negotiate and require `proposals.review_requests`: an older server may ignore an unknown query field and return a broader list. The filtering helper below performs that check.
+
+<!-- example: sdk/python/examples/review_requests.py#review-requests -->
+
+```python
+from collections.abc import Iterator
+
+from agentgit import AgentGitClient, models
+
+
+def request_review(
+    client: AgentGitClient, repo: str, id: str, reviewers: list[str]
+) -> models.RequestedReviewers:
+    """Replace the inspected routing list; let the caller resolve a concurrent edit."""
+    current = client.proposals.get(repo=repo, id=id)
+    return client.proposals.set_reviewers(
+        repo=repo,
+        id=id,
+        reviewers=reviewers,
+        expected_reviewers=current.requested_reviewers,
+    )
+
+
+def reviews_requested_from(client: AgentGitClient, repo: str, reviewer: str) -> Iterator[models.Proposal]:
+    """Check support before filtering: old servers may ignore unknown query fields."""
+    hello = client.negotiate()
+    if "proposals.review_requests" not in hello.features:
+        raise ValueError("This server does not support requested-reviewer filtering.")
+    yield from client.paginate("proposal.list", repo=repo, requested_reviewer=reviewer)
+```
 
 ## Errors, retries, idempotency and deadlines
 

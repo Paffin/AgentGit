@@ -182,6 +182,7 @@ __all__ = [
     "ReportExecutorRequest",
     "RequestValidationRequest",
     "RequestValidationResponse",
+    "RequestedReviewers",
     "ResolvePathRequest",
     "ResolvePathResponse",
     "ResolveRevRequest",
@@ -206,6 +207,7 @@ __all__ = [
     "SearchTreeResponse",
     "SetAgentStateRequest",
     "SetPolicyRequest",
+    "SetRequestedReviewersRequest",
     "SetTaskAttemptLimitRequest",
     "SetTaskSchedulingRequest",
     "StartRunRequest",
@@ -1234,6 +1236,7 @@ class ListProposalsRequest:
     page_size: int = field(default=0)
     page_token: str = field(default="")
     repo: str = field(default="")
+    requested_reviewer: str = field(default="")
     state: str = field(default="")
     stream: str = field(default="")
     task_id: str = field(default="")
@@ -1630,6 +1633,7 @@ class Proposal:
 class ProposalDetail:
     """The `ProposalDetail` message."""
     proposal: Proposal = field(default_factory=lambda: Proposal())
+    requested_reviewers: list[str] = field(default_factory=list)
     reviews: list[Review] = field(default_factory=list)
 
 
@@ -1824,6 +1828,12 @@ class RequestValidationRequest:
 class RequestValidationResponse:
     """The `RequestValidationResponse` message."""
     jobs: list[Job] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class RequestedReviewers:
+    """The `RequestedReviewers` message."""
+    reviewers: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -2056,6 +2066,15 @@ class SetPolicyRequest:
     idempotency_key: str = field(default="")
     repo: str = field(default="")
     stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SetRequestedReviewersRequest:
+    """Replaces review routing after comparing the complete inspected set."""
+    expected_reviewers: list[str] = field(default_factory=list)
+    id: str = field(default="")
+    repo: str = field(default="")
+    reviewers: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)

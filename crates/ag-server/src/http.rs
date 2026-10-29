@@ -955,6 +955,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/proposals/{id}/reviewers",
+        "proposal.set_reviewers",
+        "Proposal",
+        "Replace the inspected set of requested reviewers",
+        v1::SetRequestedReviewersRequest,
+        v1::RequestedReviewers,
+        set_requested_reviewers
+    );
+    route!(
+        r,
+        meta,
         post,
         "post",
         "/v1/repos/{owner}/{rname}/proposals/{id}/reviews",

@@ -3,7 +3,7 @@
 use ag_protocol::v1;
 
 /// Number of message types the decoders below cover.
-pub const COUNT: usize = 224;
+pub const COUNT: usize = 225;
 
 /// Name of message type `idx`.
 pub fn name(idx: usize) -> &'static str {
@@ -231,7 +231,8 @@ pub fn name(idx: usize) -> &'static str {
         220 => "SetAgentStateRequest",
         221 => "TaskContent",
         222 => "UpdateTaskRequest",
-        223 => "Empty",
+        223 => "SetTaskAttemptLimitRequest",
+        224 => "Empty",
         _ => unreachable!(),
     }
 }
@@ -463,7 +464,8 @@ pub fn check_proto(idx: usize, data: &[u8]) {
         220 => if let Ok(m) = v1::SetAgentStateRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SetAgentStateRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         221 => if let Ok(m) = v1::TaskContent::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::TaskContent::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         222 => if let Ok(m) = v1::UpdateTaskRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::UpdateTaskRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
-        223 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        223 => if let Ok(m) = v1::SetTaskAttemptLimitRequest::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::SetTaskAttemptLimitRequest::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
+        224 => if let Ok(m) = v1::Empty::decode(data) { let bytes = m.encode_to_vec(); assert_eq!(v1::Empty::decode(bytes.as_slice()).unwrap(), m); assert_eq!(bytes.len(), m.encoded_len()); },
         _ => unreachable!(),
     }
 }
@@ -694,7 +696,8 @@ pub fn check_json(idx: usize, data: &[u8]) {
         220 => if let Ok(m) = serde_json::from_slice::<v1::SetAgentStateRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SetAgentStateRequest>(&s).unwrap(), m); },
         221 => if let Ok(m) = serde_json::from_slice::<v1::TaskContent>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::TaskContent>(&s).unwrap(), m); },
         222 => if let Ok(m) = serde_json::from_slice::<v1::UpdateTaskRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::UpdateTaskRequest>(&s).unwrap(), m); },
-        223 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
+        223 => if let Ok(m) = serde_json::from_slice::<v1::SetTaskAttemptLimitRequest>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::SetTaskAttemptLimitRequest>(&s).unwrap(), m); },
+        224 => if let Ok(m) = serde_json::from_slice::<v1::Empty>(data) { let s = serde_json::to_string(&m).unwrap(); assert_eq!(serde_json::from_str::<v1::Empty>(&s).unwrap(), m); },
         _ => unreachable!(),
     }
 }

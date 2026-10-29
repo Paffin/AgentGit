@@ -86,6 +86,8 @@ pub mod features {
 
     /// Stream policy can require all line discussions to be resolved before integration.
     pub const POLICY_RESOLVED_THREADS: &str = "policy.resolved_threads";
+    /// Durable task-local attempt limits and optimistic policy updates.
+    pub const TASK_ATTEMPT_LIMITS: &str = "tasks.attempt_limits";
 
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
@@ -110,6 +112,7 @@ pub mod features {
         TASK_HISTORY,
         TASK_LINEAGE,
         TASK_EDIT,
+        TASK_ATTEMPT_LIMITS,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

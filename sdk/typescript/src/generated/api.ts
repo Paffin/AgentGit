@@ -151,6 +151,7 @@ export const NAMESPACE_METHODS = {
     list: 'task.list',
     schedulingGet: 'task.scheduling.get',
     schedulingSet: 'task.scheduling.set',
+    setAttemptLimit: 'task.set_attempt_limit',
     update: 'task.update',
   },
   tree: {
@@ -424,6 +425,8 @@ export interface Api {
     schedulingGet(request: Req<'task.scheduling.get'>, options?: CallOptions): Promise<Res<'task.scheduling.get'>>;
     /** Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`) */
     schedulingSet(request: Req<'task.scheduling.set'>, options?: CallOptions): Promise<Res<'task.scheduling.set'>>;
+    /** Set a task-local attempt limit (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit`, operation `task.set_attempt_limit`) */
+    setAttemptLimit(request: Req<'task.set_attempt_limit'>, options?: CallOptions): Promise<Res<'task.set_attempt_limit'>>;
     /** Refine task instructions before the first run (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}`, operation `task.update`) */
     update(request: Req<'task.update'>, options?: CallOptions): Promise<Res<'task.update'>>;
   };

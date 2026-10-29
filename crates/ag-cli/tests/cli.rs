@@ -627,3 +627,21 @@ fn task_edit_changes_only_instructions_before_execution() {
     ag.ag(&["agent", "start", "bot", "--task", id]).ok();
     assert_ne!(ag.ag(&["task", "edit", id, "--title", "Too late"]).code(), 0);
 }
+
+#[test]
+fn task_attempt_limit_can_be_inspected_and_extended_without_replacing_the_task() {
+    let ag = Ag::new();
+    let task = ag.ag(&["--json", "task", "create", "Bounded", "--max-attempts", "1"]).ok().json();
+    let id = task["id"].as_str().unwrap();
+    assert_eq!(task["max_attempts"], 1);
+    ag.ag(&["agent", "register", "bot"]).ok();
+    let first = ag.ag(&["--json", "agent", "start", "bot", "--task", id]).ok().json();
+    ag.ag(&["agent", "finish", first["run_id"].as_str().unwrap(), "--status", "failed"]).ok();
+    assert_ne!(ag.ag(&["agent", "start", "bot", "--task", id]).code(), 0);
+    let inspected = ag.ag(&["--json", "task", "attempts", id]).ok().json();
+    assert_eq!(inspected["attempts_started"], 1);
+    let extended = ag.ag(&["--json", "task", "attempts", id, "--max", "2", "--expected", "1"]).ok().json();
+    assert_eq!(extended["id"], id);
+    assert_eq!(extended["max_attempts"], 2);
+    ag.ag(&["agent", "start", "bot", "--task", id]).ok();
+}

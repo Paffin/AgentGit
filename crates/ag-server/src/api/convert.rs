@@ -171,6 +171,8 @@ pub fn task(t: &TaskRow, depends_on: Vec<String>, ready: bool) -> v1::Task {
         ready,
         source_task: t.source_task.clone().unwrap_or_default(),
         source_run: t.source_run.clone().unwrap_or_default(),
+        max_attempts: t.max_attempts,
+        attempts_started: t.attempts_started,
     }
 }
 

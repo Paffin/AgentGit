@@ -193,13 +193,14 @@ func (c *Client) String() string {
 // and credentials.mint still ignore the key; see the server-gap list in the
 // service README). When the server catches up, add operations here.
 var Honoured = map[string]bool{
-	"repo.create":           true,
-	"proposal.create":       true,
-	"integration.integrate": true,
-	"objects.publish":       true,
-	"task.create":           true,
-	"agent.start_run":       true,
-	"lease.acquire":         true,
+	"repo.create":            true,
+	"proposal.create":        true,
+	"integration.integrate":  true,
+	"objects.publish":        true,
+	"task.create":            true,
+	"task.set_attempt_limit": true,
+	"agent.start_run":        true,
+	"lease.acquire":          true,
 }
 
 type call struct {

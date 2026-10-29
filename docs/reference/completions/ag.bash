@@ -388,6 +388,9 @@ _ag() {
             ag__subcmd__stream,show)
                 cmd="ag__subcmd__stream__subcmd__show"
                 ;;
+            ag__subcmd__task,attempts)
+                cmd="ag__subcmd__task__subcmd__attempts"
+                ;;
             ag__subcmd__task,cancel)
                 cmd="ag__subcmd__task__subcmd__cancel"
                 ;;
@@ -4674,12 +4677,54 @@ _ag() {
             return 0
             ;;
         ag__subcmd__task)
-            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version create edit list depend ready done cancel"
+            opts="-C -q -v -h -V --repo --as --json --color --quiet --verbose --help --version create edit attempts list depend ready done cancel"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --repo)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --as)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ag__subcmd__task__subcmd__attempts)
+            opts="-C -q -v -h -V --max --expected --remote --repo --as --json --color --quiet --verbose --help --version"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --max)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --expected)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --repo)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -4734,7 +4779,7 @@ _ag() {
             return 0
             ;;
         ag__subcmd__task__subcmd__create)
-            opts="-d -C -q -v -h -V --description --scope --source-task --source-run --repo --as --json --color --quiet --verbose --help --version"
+            opts="-d -C -q -v -h -V --description --scope --source-task --source-run --max-attempts --repo --as --json --color --quiet --verbose --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4757,6 +4802,10 @@ _ag() {
                     return 0
                     ;;
                 --source-run)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-attempts)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

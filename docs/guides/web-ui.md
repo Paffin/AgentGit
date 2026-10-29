@@ -124,8 +124,9 @@ The first page after signing in. It initially summarizes the 30 newest repositor
 
 Each row says which repository, who (and whether it is an agent waiting), and for how long. Opening a row's button
 takes you to the change request with the review or land dialog already open; it never starts work by itself (running a
-check is one click further, on the page). Home is re-read every 15 seconds while it is open, not live, because it spans
-many repositories. With nothing to do it says so and suggests where to go; without any repository it says how to get one.
+check is one click further, on the page). The aggregate view is re-read every 15 seconds while visible.
+Select one repository for live updates (development): one event stream refreshes its summary, with the same
+15-second fallback. Hidden tabs close that stream; returning to the tab reconnects and refreshes. With nothing to do it says so and suggests where to go; without any repository it says how to get one.
 
 ![Home: what needs you](../assets/ui-home.png)
 
@@ -424,8 +425,10 @@ Home shows work that needs attention across the repositories you can read. Searc
 reason, author or repository; every search word must match. Choose a repository or a category to narrow the list.
 Category counts follow the search and repository selection. **Clear filters** returns to all loaded work.
 
-The summary refreshes every 15 seconds while visible and shows its last successful refresh time. **Refresh** checks
-again immediately. If a repository or proposal cannot be read, or a summary limit is reached, an incomplete-data
+The summary shows its last successful refresh time. In development, selecting a repository also enables live
+updates; all-repository summaries and disconnected feeds retain the 15-second visible-tab fallback. Event bursts
+are coalesced, and refreshes triggered by events reuse the loaded repository catalogue. **Refresh** rereads the
+catalogue and summary immediately. If a repository or proposal cannot be read, or a summary limit is reached, an incomplete-data
 notice remains visible. An incomplete summary is never evidence that no work needs attention. Open the repository
 for its complete paginated list. The change-request list also offers a search over loaded results and direct links
 to editing files or giving an agent work when your role permits it.

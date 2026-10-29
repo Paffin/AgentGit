@@ -165,6 +165,27 @@ const tick = async (n = 6) => {
 }
 
 describe('openEventFeed', () => {
+  it('keeps an explicitly bound session on every connection attempt', async () => {
+    const h = setup()
+    const first = new Conn(),
+      second = new Conn()
+    h.queue.push(first, second)
+    const feed = openEventFeed({
+      ...h.feedOptions,
+      session: { token: 'bound-session', quietUnauthenticated: true },
+    })
+    await tick()
+    first.end()
+    await tick()
+    h.proceed()
+    await tick()
+    const calls = vi.mocked(h.feedOptions.client.open).mock.calls
+    expect(calls).toHaveLength(2)
+    for (const call of calls)
+      expect(call[1]).toMatchObject({ token: 'bound-session', quietUnauthenticated: true })
+    feed.close()
+  })
+
   it('delivers events in order and reports live', async () => {
     const h = setup()
     const conn = new Conn()

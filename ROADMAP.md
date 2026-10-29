@@ -103,8 +103,8 @@ Work in the following order; keep each deliverable usable across the relevant cl
    historical instructions and source links. Next add review suggestions,
    requested reviewers and policy-required thread resolution. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
-   Account-backed drafts and non-text conflict resolution remain open. Home currently polls
-   visible-page attention data; live updates should preserve its complete-snapshot behaviour.
+   Account-backed drafts and non-text conflict resolution remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and
+   polling for the aggregate view. A cross-repository event feed remains future work.
 3. **Make GitHub/GitLab cutover complete.** Code history, branch/tag mapping, the original bundle
    and reconciliation already move through Web UI and CLI. Next design and implement resumable
    hosting-metadata migration: issues and comments first, then pull/merge-request references,

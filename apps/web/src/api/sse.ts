@@ -2,7 +2,7 @@
 // in a URL is not acceptable, so we read the stream ourselves, resume with Last-Event-ID / after_seq,
 // ignore heartbeat comments and reconnect with backoff when the connection drops or goes quiet.
 import { ApiError, isApiError } from './errors'
-import type { ApiClient } from './client'
+import type { ApiClient, RequestOptions } from './client'
 import { repoPath } from './client'
 import type { ServerEvent } from './types'
 
@@ -112,6 +112,8 @@ export interface FeedStatusInfo {
 export interface FeedOptions {
   client: ApiClient
   repo: string
+  /** Optional initiating session; retained across reconnects. */
+  session?: Pick<RequestOptions, 'token' | 'quietUnauthenticated'>
   topics?: readonly string[]
   /** Deliver events with seq > afterSeq first; omit to start "now". */
   afterSeq?: number
@@ -193,6 +195,7 @@ export function openEventFeed(options: FeedOptions): EventFeed {
     try {
       setStatus(attempt === 0 ? 'connecting' : 'reconnecting', { attempt })
       const res = await client.open(repoPath(repo, '/events'), {
+        ...options.session,
         query: {
           after_seq: lastSeq === null ? undefined : lastSeq,
           topics: options.topics && options.topics.length > 0 ? [...options.topics] : undefined,

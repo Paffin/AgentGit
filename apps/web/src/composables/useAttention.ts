@@ -6,6 +6,7 @@ import type { AttentionItem } from '@/lib/attention'
 import { mapLimit } from '@/lib/pool'
 import { useAuth } from '@/stores/auth'
 import { serverNow } from '@/api/clock'
+import { useAttentionFeed } from './useAttentionFeed'
 
 const MAX_REPOS = 30
 const MAX_PROPOSALS_PER_REPO = 12
@@ -126,8 +127,9 @@ async function readSnapshot(
   stale: () => boolean,
   repository: string,
   limit: number,
+  catalogue?: Repo[],
 ) {
-  const repos = await repositoryCatalogue(stale)
+  const repos = catalogue ?? (await repositoryCatalogue(stale))
   if (stale()) return null
   const read = repository
     ? repos.filter((repo) => repo.name === repository)
@@ -141,7 +143,37 @@ async function readSnapshot(
   }
 }
 
-/** Bounded, visible-page polling; a complete snapshot is committed only by the newest request. */
+/** A burst schedules one read; events during that read schedule one trailing read. */
+function attentionRefreshQueue(reload: () => Promise<void>, busy: () => boolean) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let dirty = false
+  function request() {
+    dirty = true
+    if (busy() || timer || document.visibilityState !== 'visible') return
+    timer = setTimeout(() => {
+      timer = undefined
+      if (document.visibilityState === 'visible') void reload()
+    }, 300)
+  }
+  function begin() {
+    clearTimeout(timer)
+    timer = undefined
+    dirty = false
+  }
+  return {
+    request,
+    begin,
+    settled: () => {
+      if (dirty) request()
+    },
+  }
+}
+
+function cachedCatalogue(reuse: boolean, repository: string, repos: Repo[]) {
+  return reuse && repository && repos.length ? repos : undefined
+}
+
+/** Live invalidation for the selected repository, bounded polling otherwise; only complete snapshots commit. */
 export function useAttention(repository: Ref<string> = ref('')) {
   const auth = useAuth()
   const repos = shallowRef<Repo[]>([])
@@ -155,14 +187,21 @@ export function useAttention(repository: Ref<string> = ref('')) {
   const limit = ref(MAX_REPOS)
   let serial = 0
   let timer: ReturnType<typeof setInterval> | undefined
+  const refreshQueue = attentionRefreshQueue(
+    () => load(true),
+    () => loading.value,
+  )
+  const liveStatus = useAttentionFeed(repository, refreshQueue.request)
 
-  async function load() {
+  async function load(reuseCatalogue = false) {
+    refreshQueue.begin()
     const mine = ++serial
     const stale = () => mine !== serial || !auth.isAuthenticated
     loading.value = true
     try {
       if (stale()) return
-      const snapshot = await readSnapshot(auth, stale, repository.value, limit.value)
+      const cached = cachedCatalogue(reuseCatalogue, repository.value, repos.value)
+      const snapshot = await readSnapshot(auth, stale, repository.value, limit.value, cached)
       if (stale() || !snapshot) return
       repos.value = snapshot.repos
       items.value = snapshot.items
@@ -176,6 +215,7 @@ export function useAttention(repository: Ref<string> = ref('')) {
       if (mine === serial) {
         loading.value = false
         settled.value = true
+        refreshQueue.settled()
       }
     }
   }
@@ -186,6 +226,22 @@ export function useAttention(repository: Ref<string> = ref('')) {
   }
 
   watch(repository, () => void load())
+  watch(
+    () => auth.token,
+    () => {
+      serial++
+      repos.value = []
+      items.value = []
+      lastUpdated.value = 0
+      unreadable.value = 0
+      skipped.value = 0
+      limit.value = MAX_REPOS
+      error.value = null
+      settled.value = false
+      void load()
+    },
+    { flush: 'sync' },
+  )
 
   onMounted(() => {
     void load()
@@ -194,6 +250,7 @@ export function useAttention(repository: Ref<string> = ref('')) {
   onBeforeUnmount(() => {
     serial++
     clearInterval(timer)
+    refreshQueue.begin()
   })
   return {
     repos,
@@ -201,10 +258,11 @@ export function useAttention(repository: Ref<string> = ref('')) {
     loading,
     settled,
     lastUpdated,
+    liveStatus,
     error,
     skipped,
     unreadable,
-    reload: load,
+    reload: () => load(),
     loadMore,
   }
 }

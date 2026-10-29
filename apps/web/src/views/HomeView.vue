@@ -14,6 +14,7 @@ import Button from '@/ui/Button.vue'
 import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Icon from '@/ui/Icon.vue'
+import LiveIndicator from '@/ui/LiveIndicator.vue'
 import SelectField from '@/ui/SelectField.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import TextField from '@/ui/TextField.vue'
@@ -27,6 +28,7 @@ const {
   loading,
   settled,
   lastUpdated,
+  liveStatus,
   error,
   skipped,
   unreadable,
@@ -123,6 +125,21 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
           >Refresh</Button
         >
       </div>
+      <p v-if="lastUpdated" class="refresh-note">
+        <LiveIndicator v-if="repository" :status="liveStatus" />
+        Last refreshed {{ formatTime(lastUpdated) }}.
+        <template v-if="liveStatus === 'live'"
+          >Live updates for {{ repository }}; a check every 15 seconds keeps the summary
+          current.</template
+        >
+        <template v-else-if="repository"
+          >Live updates {{ liveStatus === 'connecting' ? 'are connecting' : 'are unavailable' }}.
+          Checks every 15 seconds while visible.</template
+        >
+        <template v-else
+          >Checks every 15 seconds while visible. Select a repository for live updates.</template
+        >
+      </p>
       <Alert
         v-if="incomplete"
         tone="warn"
@@ -267,9 +284,6 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
               </li>
             </ul>
           </section>
-          <p v-if="lastUpdated" class="refresh-note">
-            Last refreshed {{ formatTime(lastUpdated) }}. Checks every 15 seconds while visible.
-          </p>
         </div>
       </div>
     </template>
@@ -477,6 +491,8 @@ h1 {
   align-items: center;
 }
 .refresh-note {
+  margin-left: calc(var(--rail-width) + var(--rail-gap));
+  overflow-wrap: anywhere;
   font-size: var(--fs-xs);
   color: var(--text-3);
   padding-top: var(--s-2);
@@ -487,7 +503,8 @@ h1 {
 }
 @media (max-width: 820px) {
   .head,
-  .toolbar {
+  .toolbar,
+  .refresh-note {
     margin-left: 0;
   }
   .workspace {

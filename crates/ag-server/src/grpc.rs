@@ -11,6 +11,7 @@ use ag_protocol::v1::{
     agent_service_server::{AgentService, AgentServiceServer},
     event_service_server::{EventService, EventServiceServer},
     execution_service_server::{ExecutionService, ExecutionServiceServer},
+    file_draft_service_server::{FileDraftService, FileDraftServiceServer},
     history_service_server::{HistoryService, HistoryServiceServer},
     integration_service_server::{IntegrationService, IntegrationServiceServer},
     issue_service_server::{IssueService, IssueServiceServer},
@@ -807,6 +808,7 @@ pub fn router(app: App) -> axum::Router {
         .add_service(svc!(StreamServiceServer))
         .add_service(svc!(WorkspaceServiceServer))
         .add_service(svc!(ProposalServiceServer))
+        .add_service(svc!(FileDraftServiceServer))
         .add_service(svc!(IntegrationServiceServer))
         .add_service(svc!(AgentServiceServer))
         .add_service(svc!(EventServiceServer))
@@ -829,5 +831,24 @@ mod tests {
         assert_eq!(parse_grpc_timeout("x"), None);
         assert_eq!(parse_grpc_timeout("5Q"), None);
         assert_eq!(parse_grpc_timeout(""), None);
+    }
+}
+
+#[tonic::async_trait]
+impl FileDraftService for Grpc {
+    async fn get(&self, request: Request<v1::GetFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.get", get_file_draft)
+    }
+    async fn save(&self, request: Request<v1::SaveFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.save", save_file_draft)
+    }
+    async fn clear(&self, request: Request<v1::ClearFileDraftRequest>) -> Result<Response<v1::FileDraft>, Status> {
+        unary!(self, request, "file_draft.clear", clear_file_draft)
+    }
+    async fn list(
+        &self,
+        request: Request<v1::ListFileDraftsRequest>,
+    ) -> Result<Response<v1::ListFileDraftsResponse>, Status> {
+        unary!(self, request, "file_draft.list", list_file_drafts)
     }
 }

@@ -820,6 +820,45 @@ message ClearCommentDraftRequest {
   uint64 expected_version = 3;
 }
 
+// Private existing-file edit owned by the current acting identity.
+message FileDraft {
+  bool present = 1;
+  uint64 version = 2;
+  string stream = 3;
+  string path = 4;
+  string base = 5;
+  string original_blob_id = 6;
+  string file_type = 7;
+  bool executable = 8;
+  bytes content = 9;
+  int64 updated_at_ms = 10;
+}
+message GetFileDraftRequest { string repo = 1; string stream = 2; string path = 3; }
+message SaveFileDraftRequest {
+  string repo = 1;
+  string stream = 2;
+  string path = 3;
+  string base = 4;
+  bytes content = 5;
+  uint64 expected_version = 6;
+}
+message ClearFileDraftRequest {
+  string repo = 1;
+  string stream = 2;
+  string path = 3;
+  uint64 expected_version = 4;
+}
+message ListFileDraftsRequest { string repo = 1; string stream = 2; }
+// Discovery carries no private replacement bytes.
+message FileDraftSummary {
+  string stream = 1;
+  string path = 2;
+  string base = 3;
+  uint64 version = 4;
+  int64 updated_at_ms = 5;
+}
+message ListFileDraftsResponse { repeated FileDraftSummary drafts = 1; }
+
 // Replaces review routing after comparing the complete inspected set.
 message SetRequestedReviewersRequest {
   string repo = 1;
@@ -2094,4 +2133,11 @@ message SetTaskAttemptLimitRequest {
   uint32 max_attempts = 3;
   uint32 expected_max_attempts = 4;
   string idempotency_key = 5;
+}
+
+service FileDraftService {
+  rpc Get(GetFileDraftRequest) returns (FileDraft);
+  rpc Save(SaveFileDraftRequest) returns (FileDraft);
+  rpc Clear(ClearFileDraftRequest) returns (FileDraft);
+  rpc List(ListFileDraftsRequest) returns (ListFileDraftsResponse);
 }

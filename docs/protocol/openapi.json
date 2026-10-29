@@ -664,6 +664,29 @@
         },
         "type": "object"
       },
+      "ClearFileDraftRequest": {
+        "properties": {
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ClearReviewDraftRequest": {
         "properties": {
           "expected_version": {
@@ -1670,6 +1693,85 @@
         },
         "type": "object"
       },
+      "FileDraft": {
+        "description": "Private existing-file edit owned by the current acting identity.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "content": {
+            "default": [],
+            "format": "byte",
+            "type": "string"
+          },
+          "executable": {
+            "default": false,
+            "type": "boolean"
+          },
+          "file_type": {
+            "default": "",
+            "type": "string"
+          },
+          "original_blob_id": {
+            "default": "",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "present": {
+            "default": false,
+            "type": "boolean"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "FileDraftSummary": {
+        "description": "Discovery carries no private replacement bytes.",
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          },
+          "updated_at_ms": {
+            "default": 0,
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "FileOp": {
         "properties": {
           "blob_id": {
@@ -1920,6 +2022,23 @@
             "type": "string"
           },
           "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetFileDraftRequest": {
+        "properties": {
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
             "default": "",
             "type": "string"
           }
@@ -2768,6 +2887,31 @@
           "tree_id": {
             "default": "",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFileDraftsRequest": {
+        "properties": {
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFileDraftsResponse": {
+        "properties": {
+          "drafts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FileDraftSummary"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -5230,6 +5374,38 @@
             "type": "string"
           },
           "repo": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SaveFileDraftRequest": {
+        "properties": {
+          "base": {
+            "default": "",
+            "type": "string"
+          },
+          "content": {
+            "default": [],
+            "format": "byte",
+            "type": "string"
+          },
+          "expected_version": {
+            "default": 0,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "default": "",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "type": "string"
+          },
+          "stream": {
             "default": "",
             "type": "string"
           }
@@ -7718,6 +7894,272 @@
         "summary": "Replay events after a sequence number (query: after_seq, limit, topics=a,b)",
         "tags": [
           "Events"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/file-draft": {
+      "delete": {
+        "operationId": "file_draft.clear",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      },
+      "get": {
+        "operationId": "file_draft.get",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      },
+      "put": {
+        "operationId": "file_draft.save",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveFileDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDraft"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save private file drafts",
+        "tags": [
+          "File drafts"
+        ]
+      }
+    },
+    "/v1/repos/{owner}/{rname}/file-drafts": {
+      "get": {
+        "operationId": "file_draft.list",
+        "parameters": [
+          {
+            "description": "Repository owner (first half of owner/name)",
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository name (second half of owner/name)",
+            "in": "path",
+            "name": "rname",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFileDraftsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List private file drafts",
+        "tags": [
+          "File drafts"
         ]
       }
     },

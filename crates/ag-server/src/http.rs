@@ -256,6 +256,10 @@ where
             | "proposal.get_comment_draft"
             | "proposal.save_comment_draft"
             | "proposal.clear_comment_draft"
+            | "file_draft.get"
+            | "file_draft.save"
+            | "file_draft.clear"
+            | "file_draft.list"
     ) {
         response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     }
@@ -963,6 +967,58 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
         v1::UpdateProposalRequest,
         v1::Proposal,
         update_proposal
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/file-draft",
+        "file_draft.get",
+        "File drafts",
+        "Get private file drafts",
+        v1::GetFileDraftRequest,
+        v1::FileDraft,
+        get_file_draft
+    );
+    route!(
+        r,
+        meta,
+        put,
+        "put",
+        "/v1/repos/{owner}/{rname}/file-draft",
+        "file_draft.save",
+        "File drafts",
+        "Save private file drafts",
+        v1::SaveFileDraftRequest,
+        v1::FileDraft,
+        save_file_draft
+    );
+    route!(
+        r,
+        meta,
+        delete,
+        "delete",
+        "/v1/repos/{owner}/{rname}/file-draft",
+        "file_draft.clear",
+        "File drafts",
+        "Clear private file drafts",
+        v1::ClearFileDraftRequest,
+        v1::FileDraft,
+        clear_file_draft
+    );
+    route!(
+        r,
+        meta,
+        get,
+        "get",
+        "/v1/repos/{owner}/{rname}/file-drafts",
+        "file_draft.list",
+        "File drafts",
+        "List private file drafts",
+        v1::ListFileDraftsRequest,
+        v1::ListFileDraftsResponse,
+        list_file_drafts
     );
     route!(
         r,

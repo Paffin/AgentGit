@@ -112,6 +112,9 @@ pub mod features {
     /// Private versioned general discussion drafts for the current acting identity.
     pub const PROPOSALS_COMMENT_DRAFTS: &str = "proposals.comment_drafts";
 
+    /// Private existing-file edits with immutable original metadata.
+    pub const FILES_DRAFTS: &str = "files.drafts";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -132,6 +135,7 @@ pub mod features {
         PROPOSALS_REVIEW_REQUESTS,
         PROPOSALS_REVIEW_DRAFTS,
         PROPOSALS_COMMENT_DRAFTS,
+        FILES_DRAFTS,
         POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,

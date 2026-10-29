@@ -15,7 +15,12 @@ const JSON_FIELDS: &[(&str, &str)] = &[
 ];
 
 /// `bytes` fields: base64 in JSON.
-const BYTES_FIELDS: &[&str] = &["agwp.v1.ObjectChunk.data", "agwp.v1.FileChange.content"];
+const BYTES_FIELDS: &[&str] = &[
+    "agwp.v1.ObjectChunk.data",
+    "agwp.v1.FileChange.content",
+    "agwp.v1.FileDraft.content",
+    "agwp.v1.SaveFileDraftRequest.content",
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);

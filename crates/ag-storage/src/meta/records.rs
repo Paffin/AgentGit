@@ -635,6 +635,7 @@ impl Tx<'_> {
             "SELECT head FROM proposals WHERE state = 'open'",
             "SELECT head FROM workspaces WHERE head IS NOT NULL",
             "SELECT base FROM workspaces WHERE base IS NOT NULL",
+            "SELECT base FROM file_drafts WHERE base IS NOT NULL",
         ] {
             for r in self.conn.query(sql, &[])? {
                 roots.push(parse::<ChangesetId>(r.str(0)?, "root")?);

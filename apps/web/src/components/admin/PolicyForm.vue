@@ -65,11 +65,20 @@ function setProtected(i: number, patch: Partial<PolicyForm['protectedPaths'][num
   const rows = form.value.protectedPaths.map((r, n) => (n === i ? { ...r, ...patch } : r))
   set({ protectedPaths: rows })
 }
+function setTiming(index: number, patch: Partial<PolicyForm['checkTiming'][number]>) {
+  if (!form.value) return
+  set({
+    checkTiming: form.value.checkTiming.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+  })
+}
 function addProtected() {
   if (!form.value) return
   // An empty row would be dropped when the document is written, so start with a real example.
   set({
-    protectedPaths: [...form.value.protectedPaths, { glob: 'src/security/**', minApprovals: 2 }],
+    protectedPaths: [
+      ...form.value.protectedPaths,
+      { glob: 'src/security/**', minApprovals: 2, approvers: '' },
+    ],
   })
 }
 function removeProtected(i: number) {
@@ -188,9 +197,18 @@ function removeProtected(i: number) {
                 :max="9"
                 @update:model-value="(v) => setProtected(i, { minApprovals: int(v, 9) || 1 })"
               />
+
               <Button size="sm" variant="ghost" icon="trash" @click="removeProtected(i)"
                 >Remove path {{ i + 1 }}</Button
               >
+              <TextField
+                class="protected-approvers"
+                :model-value="r.approvers"
+                :label="`Who may approve path ${i + 1}`"
+                mono
+                hint="Identity patterns separated by commas, for example user:security-*. Empty uses the branch’s default approver rules. This does not grant repository access."
+                @update:model-value="(v) => setProtected(i, { approvers: v })"
+              />
             </li>
           </ul>
           <Button size="sm" icon="plus" @click="addProtected">Add a path</Button>
@@ -204,13 +222,41 @@ function removeProtected(i: number) {
           hint="0 means no limit."
           @update:model-value="(v) => set({ maxChangedFiles: int(v) })"
         />
+        <section v-for="(check, i) in form.checkTiming" :key="i" class="check-timing">
+          <h3>Timing for {{ check.check }}</h3>
+          <div class="row2">
+            <TextField
+              :model-value="check.maxAgeSecs"
+              label="Maximum result age (seconds)"
+              type="number"
+              :min="0"
+              hint="Empty means no age limit. Older attestations will not satisfy this check."
+              @update:model-value="(v) => setTiming(i, { maxAgeSecs: v })"
+            />
+            <TextField
+              v-if="check.timeoutSecs !== null"
+              :model-value="check.timeoutSecs"
+              label="Command timeout (seconds)"
+              type="number"
+              :min="1"
+              :max="86400"
+              placeholder="600"
+              hint="Empty uses the policy default of 600 seconds. Maximum: 86400."
+              @update:model-value="(v) => setTiming(i, { timeoutSecs: v })"
+            />
+          </div>
+          <p v-if="check.timeoutSecs === null" class="faint">
+            No worker command is configured; this check needs an externally submitted attestation.
+          </p>
+        </section>
         <p class="faint checks" data-testid="policy-checks">
           <template v-if="form.checks.length">
             Required checks: <strong>{{ form.checks.join(', ') }}</strong
             >.
           </template>
           <template v-else>No checks are required.</template>
-          Checks need a trusted runner, so they are set under Advanced.
+          Add or remove checks and configure trusted runner keys under Advanced. Timing can be
+          adjusted above.
         </p>
       </fieldset>
 
@@ -343,6 +389,13 @@ legend {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
   gap: var(--s-2);
   align-items: end;
+}
+.protected-approvers {
+  grid-column: 1 / -1;
+}
+.check-timing h3 {
+  font-size: var(--fs-sm);
+  margin: 0 0 var(--s-2);
 }
 .checks {
   font-size: var(--fs-sm);

@@ -127,7 +127,8 @@ export interface PolicyForm {
   agentPaths: string
   agentMaxFiles: number
   requireProvenance: boolean
-  protectedPaths: { glob: string; minApprovals: number }[]
+  protectedPaths: { glob: string; minApprovals: number; approvers: string; original?: PolicyDoc }[]
+  checkTiming: { check: string; maxAgeSecs: string; timeoutSecs: string | null }[]
   maxChangedFiles: number
   /** Names of required checks (read-only here: adding one needs a trusted runner, which is under Advanced). */
   checks: string[]
@@ -138,6 +139,30 @@ const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 const strs = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+
+const numericText = (value: unknown): string => (typeof value === 'number' ? String(value) : '')
+
+function setNumericText(target: PolicyDoc, key: string, value: string) {
+  if (value === numericText(target[key])) return
+  if (value.trim() === '') delete target[key]
+  else target[key] = Number(value)
+}
+
+function editedChecks(form: PolicyForm, base: PolicyDoc): unknown {
+  if (!Array.isArray(base.required_validations)) return base.required_validations
+  return base.required_validations.map((value, i) => {
+    const check = { ...obj(value) },
+      timing = form.checkTiming[i]
+    if (!timing) return check
+    setNumericText(check, 'max_age_secs', timing.maxAgeSecs)
+    if (timing.timeoutSecs !== null && check.run) {
+      const run = { ...obj(check.run) }
+      setNumericText(run, 'timeout_secs', timing.timeoutSecs)
+      check.run = run
+    }
+    return check
+  })
+}
 
 export function formFromDoc(doc: PolicyDoc): PolicyForm {
   const a = obj(doc.approvals)
@@ -155,7 +180,19 @@ export function formFromDoc(doc: PolicyDoc): PolicyForm {
     protectedPaths: (Array.isArray(doc.protected_paths) ? doc.protected_paths : []).map((p) => ({
       glob: String(obj(p).glob ?? ''),
       minApprovals: num(obj(p).min_approvals, 1),
+      approvers: strs(obj(p).approvers).join(', '),
+      original: obj(p),
     })),
+    checkTiming: (Array.isArray(doc.required_validations) ? doc.required_validations : []).map(
+      (value) => {
+        const check = obj(value)
+        return {
+          check: String(check.check ?? ''),
+          maxAgeSecs: numericText(check.max_age_secs),
+          timeoutSecs: check.run ? numericText(obj(check.run).timeout_secs) : null,
+        }
+      },
+    ),
     maxChangedFiles: num(doc.max_changed_files),
     checks: (Array.isArray(doc.required_validations) ? doc.required_validations : [])
       .map((v) => String(obj(v).check ?? ''))
@@ -189,15 +226,23 @@ export function docFromForm(form: PolicyForm, base: PolicyDoc = {}): PolicyDoc {
   else delete out.require_provenance_for_agents
   const protectedPaths = form.protectedPaths
     .filter((p) => p.glob.trim())
-    .map((p) => ({ glob: p.glob.trim(), min_approvals: p.minApprovals }))
-  if (protectedPaths.length) {
-    // Keep each rule's own approvers when the glob is unchanged.
-    const old = Array.isArray(base.protected_paths) ? base.protected_paths.map(obj) : []
-    out.protected_paths = protectedPaths.map((p) => {
-      const was = old.find((o) => o.glob === p.glob)
-      return was ? { ...was, ...p } : p
+    .map((p) => {
+      const rule = {
+        ...p.original,
+        glob: p.glob.trim(),
+        min_approvals: p.minApprovals,
+      } as PolicyDoc
+      const approvers = p.approvers
+        .split(/[,\n]/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+      if (approvers.length) rule.approvers = approvers
+      else delete rule.approvers
+      return rule
     })
-  } else delete out.protected_paths
+  if (protectedPaths.length) out.protected_paths = protectedPaths
+  else delete out.protected_paths
+  if (base.required_validations !== undefined) out.required_validations = editedChecks(form, base)
   if (form.maxChangedFiles > 0) out.max_changed_files = form.maxChangedFiles
   else delete out.max_changed_files
   return out
@@ -252,8 +297,7 @@ export function describePolicy(doc: PolicyDoc): string[] {
       ? `These checks must pass on the exact files before landing: ${list(checks)}.`
       : 'No checks are required before landing.',
   )
-  for (const p of Array.isArray(doc.protected_paths) ? doc.protected_paths.map(obj) : [])
-    out.push(`Changes to ${String(p.glob)} need ${approvalsWord(num(p.min_approvals, 1))}.`)
+  out.push(...describeRuleSettings(doc))
   if (num(doc.max_changed_files) > 0)
     out.push(`A change may touch at most ${num(doc.max_changed_files)} files.`)
   const admins = strs(doc.admins)
@@ -265,10 +309,77 @@ export function describePolicy(doc: PolicyDoc): string[] {
   return out
 }
 
+function describeRuleSettings(doc: PolicyDoc): string[] {
+  const out: string[] = []
+  for (const p of Array.isArray(doc.protected_paths) ? doc.protected_paths.map(obj) : []) {
+    out.push(`Changes to ${String(p.glob)} need ${approvalsWord(num(p.min_approvals, 1))}.`)
+    if (strs(p.approvers).length)
+      out.push(`For ${String(p.glob)}, only ${list(strs(p.approvers))} may approve.`)
+  }
+  for (const check of Array.isArray(doc.required_validations)
+    ? doc.required_validations.map(obj)
+    : []) {
+    if (typeof check.max_age_secs === 'number')
+      out.push(
+        `Check ${String(check.check)} accepts results at most ${check.max_age_secs} seconds old.`,
+      )
+    if (check.run)
+      out.push(
+        `Check ${String(check.check)} has a command timeout of ${num(obj(check.run).timeout_secs, 600)} seconds.`,
+      )
+  }
+  return out
+}
+
 export interface Effect {
   /** `allows`: something becomes possible or easier; `denies`: something is no longer possible or harder. */
   kind: 'allows' | 'denies' | 'changes'
   text: string
+}
+
+function ruleMap(doc: PolicyDoc, field: string, name: string) {
+  const values = Array.isArray(doc[field]) ? doc[field] : []
+  return new Map(
+    values.map((value) => {
+      const row = obj(value)
+      return [String(row[name]), row]
+    }),
+  )
+}
+
+function timingText(check: PolicyDoc) {
+  const age = typeof check.max_age_secs === 'number' ? `${check.max_age_secs}s` : 'unlimited'
+  const timeout = check.run ? `${num(obj(check.run).timeout_secs, 600)}s` : 'external attestation'
+  return `maximum result age ${age}, command timeout ${timeout}`
+}
+
+function ruleSettingChanges(before: PolicyDoc, after: PolicyDoc): Effect[] {
+  const effects: Effect[] = []
+  const previousPaths = ruleMap(before, 'protected_paths', 'glob')
+  for (const [path, current] of ruleMap(after, 'protected_paths', 'glob')) {
+    const previous = previousPaths.get(path)
+    if (
+      previous &&
+      JSON.stringify(strs(previous.approvers)) !== JSON.stringify(strs(current.approvers))
+    ) {
+      const who = strs(current.approvers)
+      effects.push({
+        kind: 'changes',
+        text: `Approvers for ${path}: ${who.length ? list(who) : 'the branch default rules'}.`,
+      })
+    }
+  }
+  const previousChecks = ruleMap(before, 'required_validations', 'check')
+  for (const [name, current] of ruleMap(after, 'required_validations', 'check')) {
+    const previous = previousChecks.get(name)
+    if (previous && timingText(previous) !== timingText(current)) {
+      effects.push({
+        kind: 'changes',
+        text: `Check ${name}: ${timingText(current)} (was ${timingText(previous)}).`,
+      })
+    }
+  }
+  return effects
 }
 
 /** What changing the rules from `before` to `after` does, as effects on people and agents. */
@@ -415,5 +526,6 @@ export function describeChange(before: PolicyDoc, after: PolicyDoc): Effect[] {
           : `Anyone allowed by default may now ${who}.`,
       })
   }
+  out.push(...ruleSettingChanges(before, after))
   return out
 }

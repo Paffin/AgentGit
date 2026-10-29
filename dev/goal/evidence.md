@@ -493,3 +493,17 @@ feed or a physical-device/screen-reader qualification.
 
 The previous candidate's PostgreSQL-only schema-5 fixture also retained the schema-7 task-source columns while pretending to be schema 5. It now removes those columns before reopening and checks the current destination version, preserving the original stream assertion. This corrects the fixture, not the production migration.
 Home filters also survive reload and browser Back in bookmarkable URLs.
+
+## Protected-path approvers and check timing in the rules form
+
+The Web rules form now edits per-path approver patterns, maximum validation-result age and
+existing runner timeouts. Empty approvers inherit branch defaults; empty timeout uses the
+policy's 600-second default. Runner commands, resource limits and issuer restrictions survive
+editing. Renaming a protected path preserves its own restrictions instead of silently dropping
+approvers. A focused regression reproduced that loss before the fix. Sixteen pure-form tests
+pass; desktop and phone Chromium checks save through the real server, compare the complete
+canonical check configuration and reload the saved fields (two scenarios, 8.3 seconds).
+The server adds default resource fields, so the comparison uses its canonical baseline.
+Crapper/Dryer and mutation-site discovery were run; discovery is not a mutation-kill score.
+No policy schema, permission semantics or native-client contract changed. This slice is
+Unreleased and is not part of the already-running beta.6 candidate.

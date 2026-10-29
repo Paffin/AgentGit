@@ -331,10 +331,10 @@ impl Repository {
         if !is_author && !self.is_admin(&prop.stream, actor)? {
             return Err(Error::Conflict("only the author or an admin may close a proposal".into()));
         }
-        self.meta.write(|tx| {
+        self.meta.write_with_error(|tx| -> Result<()> {
             let current = tx.proposal(id)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{id}'")))?;
             if current.state != "open" {
-                return Err(MetaError::Invalid(format!("proposal '{id}' is already {}", current.state)));
+                return Err(Error::Conflict(format!("proposal '{id}' is already {}", current.state)));
             }
             tx.proposal_set_state(id, "closed", None)?;
             tx.audit_append(actor.as_str(), "proposal.close", id, &json!({}))?;

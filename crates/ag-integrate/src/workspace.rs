@@ -67,6 +67,13 @@ pub struct Change {
     pub path: String,
 }
 
+pub(crate) fn workspace_error(error: ag_storage::meta::MetaError) -> Error {
+    match error {
+        ag_storage::meta::MetaError::Invalid(message) => Error::Conflict(message),
+        other => other.into(),
+    }
+}
+
 impl Repository {
     /// Creates a workspace tracking `stream`, starting at the stream's head.
     pub fn workspace_create(&self, name: &str, stream: &StreamName, owner: &Identity) -> Result<WorkspaceRow> {
@@ -108,7 +115,7 @@ impl Repository {
         base: Option<&ChangesetId>,
         head: Option<&ChangesetId>,
     ) -> Result<WorkspaceRow> {
-        tx.workspace_check(expected)?;
+        tx.workspace_check(expected).map_err(workspace_error)?;
         for root in [base, head].into_iter().flatten() {
             self.validate_retention_root(tx, root)?;
         }
@@ -149,16 +156,19 @@ impl Repository {
         if name == "default" {
             return Err(Error::Conflict("the default workspace cannot be removed".into()));
         }
-        let removed = self.meta.write(|tx| {
-            tx.workspace_check(observed)?;
-            let r = tx.workspace_delete(name)?;
-            if r {
-                tx.meta_set(&format!("workspace.{name}.dir"), "")?;
-                tx.meta_set(&pending_key(name), "")?;
-                tx.audit_append(actor.as_str(), "workspace.remove", name, &json!({}))?;
-            }
-            Ok(r)
-        })?;
+        let removed = self
+            .meta
+            .write(|tx| {
+                tx.workspace_check(observed)?;
+                let r = tx.workspace_delete(name)?;
+                if r {
+                    tx.meta_set(&format!("workspace.{name}.dir"), "")?;
+                    tx.meta_set(&pending_key(name), "")?;
+                    tx.audit_append(actor.as_str(), "workspace.remove", name, &json!({}))?;
+                }
+                Ok(r)
+            })
+            .map_err(workspace_error)?;
         if removed { Ok(()) } else { Err(Error::NotFound(format!("workspace '{name}'"))) }
     }
 
@@ -330,7 +340,7 @@ impl Repository {
 
         // Conflicted: apply the clean part, then write marker files for text conflicts.
         self.meta.write_with_error(|tx| -> Result<SyncOutcome> {
-            tx.workspace_check(&ws)?;
+            tx.workspace_check(&ws).map_err(workspace_error)?;
             update_dir(self, &ours_tree, &merged.tree, dir)?;
             let mut paths = Vec::new();
             let mut infos = Vec::new();

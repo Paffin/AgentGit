@@ -132,7 +132,7 @@ impl Repository {
     ) -> Result<WorkspaceRow> {
         let ws = observed.clone();
         let name = ws.name.as_str();
-        self.meta.read(|tx| tx.workspace_check(&ws))?;
+        self.meta.read(|tx| tx.workspace_check(&ws)).map_err(crate::workspace::workspace_error)?;
         if self.workspace_is_merging(name)? {
             return Err(Error::Conflict("this workspace has a conflicted directory sync pending".into()));
         }
@@ -154,7 +154,7 @@ impl Repository {
         let head_tree = self.tree_or_empty(ws.head.as_ref())?;
         let ops = self.ops_towards(&head_tree, &wanted);
         if ops.is_empty() {
-            return Ok(self.meta.read(|tx| tx.workspace_check(&ws))?);
+            return self.meta.read(|tx| tx.workspace_check(&ws)).map_err(crate::workspace::workspace_error);
         }
         // Validate (file/directory clashes, limits) before creating anything.
         head_tree.apply(&ops, &self.limits)?;
@@ -191,7 +191,7 @@ impl Repository {
     ) -> Result<SyncOutcome> {
         let ws = observed.clone();
         let name = ws.name.as_str();
-        self.meta.read(|tx| tx.workspace_check(&ws))?;
+        self.meta.read(|tx| tx.workspace_check(&ws)).map_err(crate::workspace::workspace_error)?;
         let Some(stream_head) = self.meta.read(|tx| tx.stream(&ws.stream))?.and_then(|s| s.state.head) else {
             return Ok(SyncOutcome::UpToDate);
         };

@@ -740,9 +740,12 @@ class FileDiff:
     additions: int = field(default=0)
     binary: bool = field(default=False)
     deletions: int = field(default=0)
+    new_mode: str = field(default="")
+    old_mode: str = field(default="")
     patch: str = field(default="")
     path: str = field(default="")
     status: str = field(default="")
+    truncated: bool = field(default=False)
 
 
 @dataclass(kw_only=True)

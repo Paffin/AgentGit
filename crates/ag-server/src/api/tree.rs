@@ -172,6 +172,9 @@ impl App {
                         additions: f.additions,
                         deletions: f.deletions,
                         patch: f.patch,
+                        old_mode: f.old_mode,
+                        new_mode: f.new_mode,
+                        truncated: f.truncated,
                     })
                     .collect(),
                 truncated,

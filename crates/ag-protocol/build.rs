@@ -42,6 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "#[serde(with = \"crate::serde_b64\")] #[schema(value_type = String, format = Byte)]",
         );
     }
+    // Additive diff metadata is absent when a new client talks to an older server.
+    for field in ["old_mode", "new_mode", "truncated"] {
+        builder = builder.field_attribute(format!("agwp.v1.FileDiff.{field}"), "#[schema(required = false)]");
+    }
     builder.compile_fds(fds)?;
     Ok(())
 }

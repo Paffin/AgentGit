@@ -3,9 +3,8 @@
 
 use std::collections::BTreeSet;
 
-use ag_changeset::Op;
 use ag_dag::{Graph, is_ancestor, reachable};
-use ag_diff::{diff_hunks, is_binary, split_lines, unified_diff};
+use ag_diff::{diff_hunks, is_binary, split_lines, unified_diff_limited};
 use ag_storage::meta::{IntentRow, StreamState};
 use ag_tree::{Entry, Tree};
 use ag_types::{ChangesetId, Identity};
@@ -36,6 +35,12 @@ pub struct FileDiff {
     pub deletions: u32,
     /// Unified diff text.
     pub patch: String,
+    /// Git mode before the change, empty for an addition.
+    pub old_mode: String,
+    /// Git mode after the change, empty for a deletion.
+    pub new_mode: String,
+    /// Patch omitted because the input or output exceeds this report's byte budget.
+    pub truncated: bool,
 }
 
 fn line_counts(old: &[u8], new: &[u8]) -> (u32, u32) {
@@ -72,30 +77,82 @@ impl Repository {
                 truncated = true;
                 break;
             }
-            let (status, ob, nb): (&'static str, Vec<u8>, Vec<u8>) = match &op {
-                Op::Delete { path } => ("deleted", self.entry_bytes(old.get(path).expect("existed"))?, Vec::new()),
-                Op::Put { path, .. } => {
-                    let ne = new.get(path).expect("exists");
-                    match old.get(path) {
-                        None => ("added", Vec::new(), self.entry_bytes(ne)?),
-                        Some(oe) => ("modified", self.entry_bytes(oe)?, self.entry_bytes(ne)?),
+            let before = old.get(op.path());
+            let after = new.get(op.path());
+            let status = if before.is_none() {
+                "added"
+            } else if after.is_none() {
+                "deleted"
+            } else {
+                "modified"
+            };
+            let mode = |entry: Option<&Entry>| {
+                match entry {
+                    None => "",
+                    Some(e) if e.file_type == ag_types::FileType::Symlink => "120000",
+                    Some(e) if e.executable => "100755",
+                    Some(_) => "100644",
+                }
+                .to_string()
+            };
+            let (old_mode, new_mode) = (mode(before), mode(after));
+            let remaining = MAX_DIFF_BYTES - bytes;
+            let same_content = before.zip(after).is_some_and(|(a, b)| a.content == b.content);
+            let mut omitted = false;
+            let (mut ob, mut nb) = (Vec::new(), Vec::new());
+            if !same_content {
+                let size = |entry: Option<&Entry>| -> Result<u64> {
+                    match entry {
+                        Some(e) => {
+                            self.blob_len(&e.content)?.ok_or_else(|| Error::NotFound(format!("blob {}", e.content)))
+                        }
+                        None => Ok(0),
+                    }
+                };
+                // Bound input before allocating bytes or line vectors. Large files can still expose mode changes.
+                omitted = size(before)?.saturating_add(size(after)?) > remaining as u64;
+                if !omitted {
+                    if let Some(e) = before {
+                        ob = self.entry_bytes(e)?;
+                    }
+                    if let Some(e) = after {
+                        nb = self.entry_bytes(e)?;
                     }
                 }
-            };
+            }
             let binary = is_binary(&ob) || is_binary(&nb);
-            let (additions, deletions, patch) = if binary {
+            let (additions, deletions, patch) = if binary || omitted || same_content {
                 (0, 0, String::new())
             } else {
-                let (a, d) = line_counts(&ob, &nb);
                 let (on, nn) = match status {
                     "added" => ("/dev/null".to_string(), format!("b/{path}")),
                     "deleted" => (format!("a/{path}"), "/dev/null".to_string()),
                     _ => (format!("a/{path}"), format!("b/{path}")),
                 };
-                (a, d, unified_diff(&on, &nn, &ob, &nb, context))
+                match unified_diff_limited(&on, &nn, &ob, &nb, context, remaining) {
+                    Some(patch) => {
+                        let (a, d) = line_counts(&ob, &nb);
+                        (a, d, patch)
+                    }
+                    None => {
+                        omitted = true;
+                        (0, 0, String::new())
+                    }
+                }
             };
             bytes += patch.len();
-            files.push(FileDiff { path, status, binary, additions, deletions, patch });
+            truncated |= omitted;
+            files.push(FileDiff {
+                path,
+                status,
+                binary,
+                additions,
+                deletions,
+                patch,
+                old_mode,
+                new_mode,
+                truncated: omitted,
+            });
         }
         Ok((files, truncated))
     }

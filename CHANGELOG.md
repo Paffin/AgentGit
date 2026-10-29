@@ -7,6 +7,21 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+## [0.3.0-beta.7] - 2026-10-29
+
+**Upgrade:** metadata schema 8 and control schema are unchanged from beta.6. Back up before upgrading. Returning to beta.5 or older requires the pre-upgrade backup.
+
+### Fixed
+
+- Enforce credential stream restrictions for proposal reviews, discussions, workspace mutations, validation scheduling and queue admission, including requests that name a proposal or workspace instead of a stream (#124).
+- Serialize garbage collection with metadata root changes and validate newly retained history before committing it. Pins, publication and workspace roots cannot acknowledge objects swept by a concurrent collector; backups use the same lock order (#130).
+- Compare workspace head/base in the committing transaction and preserve the winner of concurrent modifications and syncs (#129).
+- Reject a close that loses a race with proposal integration, preserving its integrated terminal state (#131).
+- Create a workspace at its requested starting revision atomically; invalid revisions leave no workspace behind (#125).
+- Preserve UTF-8 BOM bytes when editing or renaming files in the browser (#123).
+- Include old/new Git modes and explicit per-file truncation in API/Web diffs; bound both diff input and generated patch bytes (#127, #128).
+- Align security support, release and schema documentation with the current beta and check these statements for drift (#126).
+
 ## [0.3.0-beta.6] - 2026-10-29
 
 **Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.

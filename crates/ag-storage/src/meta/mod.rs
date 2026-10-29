@@ -333,25 +333,50 @@ impl Meta {
     }
 
     /// Writes a consistent snapshot of the whole database to `dest` (which must
-    /// not exist) using `VACUUM INTO`. Safe while other connections are writing.
+    /// not exist) using SQLite’s backup API. Safe while other connections are writing.
     ///
     /// SQLite only: a PostgreSQL repository is backed up with `pg_dump` or
     /// continuous archiving (see `docs/operations/postgres-and-s3.md`), because
     /// a faithful copy needs the server's own tooling.
     pub fn backup_to(&self, dest: &Path) -> Result<(), MetaError> {
+        self.backup_to_with_guard(dest, || Ok(()))
+    }
+
+    /// Acquires a guard after locking SQLite, snapshots the database, and returns the guard.
+    /// The metadata-before-object order matches GC and avoids a backup/collector deadlock.
+    pub fn backup_to_with_guard<G, E: From<MetaError>>(
+        &self,
+        dest: &Path,
+        acquire: impl FnOnce() -> Result<G, E>,
+    ) -> Result<G, E> {
         let Backend::Sqlite(m) = &self.backend else {
             return Err(MetaError::Invalid(
                 "this repository keeps its metadata in PostgreSQL; back it up with pg_dump (or PITR) and check the \
                  result with `ag verify` — see docs/operations/postgres-and-s3.md"
                     .into(),
-            ));
+            )
+            .into());
         };
         if dest.exists() {
-            return Err(MetaError::AlreadyExists(format!("backup target {}", dest.display())));
+            return Err(MetaError::AlreadyExists(format!("backup target {}", dest.display())).into());
         }
-        let guard = Self::sqlite(m);
-        guard.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])?;
-        Ok(())
+        let mut guard = Self::sqlite(m);
+        let source_path = guard.path().filter(|path| !path.is_empty()).map(str::to_string);
+        if let Some(path) = source_path {
+            // Exclude writers on every connection before taking the object-store guard.
+            // A separate read connection lets SQLite's backup API copy this protected snapshot.
+            let tx = guard.transaction_with_behavior(TransactionBehavior::Immediate).map_err(MetaError::from)?;
+            let held = acquire()?;
+            let source = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(MetaError::from)?;
+            source.backup(rusqlite::MAIN_DB, dest, None).map_err(MetaError::from)?;
+            tx.commit().map_err(MetaError::from)?;
+            Ok(held)
+        } else {
+            let held = acquire()?;
+            guard.backup(rusqlite::MAIN_DB, dest, None).map_err(MetaError::from)?;
+            Ok(held)
+        }
     }
 
     /// Runs `f` in a read transaction (consistent snapshot).
@@ -397,6 +422,22 @@ impl Meta {
         };
         self.writes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(out)
+    }
+
+    /// Like [`Self::write`], preserving a caller's error type while rolling back on every error.
+    pub fn write_with_error<T, E: From<MetaError>>(&self, f: impl FnOnce(&Tx<'_>) -> Result<T, E>) -> Result<T, E> {
+        let mut cause = None;
+        let result = self.write(|tx| match f(tx) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                cause = Some(error);
+                Err(MetaError::Invalid("transaction aborted by caller".into()))
+            }
+        });
+        match cause {
+            Some(error) => Err(error),
+            None => result.map_err(E::from),
+        }
     }
 
     /// How many write transactions this handle has committed since it was opened. Each is one durable commit

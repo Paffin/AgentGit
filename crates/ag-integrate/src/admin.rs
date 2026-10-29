@@ -221,6 +221,10 @@ impl Repository {
         let id = random_id("prop")?;
         let op = random_id("op")?;
         let outcome = self.meta.write(|tx| {
+            if !tx.is_ready(head)? {
+                return Err(MetaError::ParentNotReady(*head));
+            }
+            self.validate_retention_root(tx, head).map_err(|e| MetaError::Invalid(e.to_string()))?;
             if let Some(key) = idempotency_key {
                 let payload = json!({"stream": stream, "head": head});
                 let (intent, created) = tx.intent_create(&ag_storage::meta::NewIntent {
@@ -307,7 +311,13 @@ impl Repository {
         if published.state != ag_storage::meta::IntentState::Published {
             return Err(Error::Invalid(format!("cannot publish {new_head}: {}", published.reason.unwrap_or_default())));
         }
-        self.meta.write(|tx| replace_proposal_head(tx, id, new_head, actor, &expected))?
+        self.meta.write(|tx| {
+            if !tx.is_ready(new_head)? {
+                return Err(MetaError::ParentNotReady(*new_head));
+            }
+            self.validate_retention_root(tx, new_head).map_err(|e| MetaError::Invalid(e.to_string()))?;
+            replace_proposal_head(tx, id, new_head, actor, &expected)
+        })?
     }
 
     /// Closes an open proposal without integrating it (author or admin).
@@ -322,6 +332,10 @@ impl Repository {
             return Err(Error::Conflict("only the author or an admin may close a proposal".into()));
         }
         self.meta.write(|tx| {
+            let current = tx.proposal(id)?.ok_or_else(|| MetaError::NotFound(format!("proposal '{id}'")))?;
+            if current.state != "open" {
+                return Err(MetaError::Invalid(format!("proposal '{id}' is already {}", current.state)));
+            }
             tx.proposal_set_state(id, "closed", None)?;
             tx.audit_append(actor.as_str(), "proposal.close", id, &json!({}))?;
             Ok(())
@@ -470,7 +484,8 @@ impl Repository {
         if !self.objects.contains(&id.object_id())? {
             return Err(Error::NotFound(format!("changeset {id}")));
         }
-        self.meta.write(|tx| {
+        self.meta.write_with_error(|tx| -> Result<()> {
+            self.validate_retention_root(tx, id)?;
             tx.pin_put(name, id, reason)?;
             tx.audit_append(actor.as_str(), "pin.set", name, &json!({"changeset": id}))?;
             Ok(())

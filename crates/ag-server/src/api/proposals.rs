@@ -94,14 +94,20 @@ impl App {
         } else {
             Some(parse_id::<ChangesetId>(&req.expected_head, "expected_head")?)
         };
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalUpdate, None, move |repo, actor| {
-            let p = repo.find_proposal(&req.id)?;
-            if !super::owns(&p.author, actor) {
-                return Err(ApiError::denied("only the author may update a proposal"));
-            }
-            let head = repo.resolve_rev(&new_head_rev)?;
-            Ok(convert::proposal(&repo.update_proposal_at_head(&p.id, &head, actor, expected.as_ref())?))
-        })
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::ProposalUpdate,
+            req.id.clone(),
+            move |repo, actor| {
+                let p = repo.find_proposal(&req.id)?;
+                if !super::owns(&p.author, actor) {
+                    return Err(ApiError::denied("only the author may update a proposal"));
+                }
+                let head = repo.resolve_rev(&new_head_rev)?;
+                Ok(convert::proposal(&repo.update_proposal_at_head(&p.id, &head, actor, expected.as_ref())?))
+            },
+        )
         .await
     }
 
@@ -113,9 +119,21 @@ impl App {
         } else {
             Some(parse_id(&req.expected_head, "reviewed changeset id")?)
         };
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalReview, None, move |repo, actor| {
-            Ok(convert::review(&repo.review_at_head(&req.id, actor, &decision, &req.body, expected_head.as_ref())?))
-        })
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::ProposalReview,
+            req.id.clone(),
+            move |repo, actor| {
+                Ok(convert::review(&repo.review_at_head(
+                    &req.id,
+                    actor,
+                    &decision,
+                    &req.body,
+                    expected_head.as_ref(),
+                )?))
+            },
+        )
         .await
     }
 
@@ -124,34 +142,46 @@ impl App {
         validate_comment_body(&req.body)?;
         let expected: ChangesetId = parse_id(require(&req.expected_head, "expected_head")?, "inspected proposal head")?;
         let idem = self.idem();
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalComment, None, move |repo, actor| {
-            let id = repo.find_proposal(&req.id)?.id;
-            let fingerprint = serde_json::to_string(&(&id, actor.as_str(), &req.body, expected.to_hex()))
-                .map_err(ApiError::internal)?;
-            super::keyed(repo, idem, "proposal.comment", &req.idempotency_key, &fingerprint, |claim| {
-                let result = repo.meta().write(|tx| append_comment(tx, &id, actor, &req.body, &expected, claim))?;
-                result.ok_or_else(|| {
-                    ApiError::new(
-                        ag_protocol::ErrorCode::FailedPrecondition,
-                        "proposal head changed; inspect it before posting the comment",
-                    )
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::ProposalComment,
+            req.id.clone(),
+            move |repo, actor| {
+                let id = repo.find_proposal(&req.id)?.id;
+                let fingerprint = serde_json::to_string(&(&id, actor.as_str(), &req.body, expected.to_hex()))
+                    .map_err(ApiError::internal)?;
+                super::keyed(repo, idem, "proposal.comment", &req.idempotency_key, &fingerprint, |claim| {
+                    let result = repo.meta().write(|tx| append_comment(tx, &id, actor, &req.body, &expected, claim))?;
+                    result.ok_or_else(|| {
+                        ApiError::new(
+                            ag_protocol::ErrorCode::FailedPrecondition,
+                            "proposal head changed; inspect it before posting the comment",
+                        )
+                    })
                 })
-            })
-        })
+            },
+        )
         .await
     }
 
     /// Closes an open proposal (the author, or anyone who may close proposals).
     pub async fn close_proposal(&self, call: &Call, req: v1::CloseProposalRequest) -> ApiResult<v1::Proposal> {
-        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalClose, None, move |repo, actor| {
-            let p = repo.find_proposal(&req.id)?;
-            // One run does not close what another run of its agent proposed.
-            if p.author.contains('#') && actor.as_str().contains('#') && !super::owns(&p.author, actor) {
-                return Err(ApiError::denied(format!("proposal {} was made by {}", p.id, p.author)));
-            }
-            repo.close_proposal(&p.id, actor)?;
-            Ok(convert::proposal(&repo.find_proposal(&p.id)?))
-        })
+        self.with_proposal_mut(
+            call,
+            require(&req.repo, "repo")?,
+            Cap::ProposalClose,
+            req.id.clone(),
+            move |repo, actor| {
+                let p = repo.find_proposal(&req.id)?;
+                // One run does not close what another run of its agent proposed.
+                if p.author.contains('#') && actor.as_str().contains('#') && !super::owns(&p.author, actor) {
+                    return Err(ApiError::denied(format!("proposal {} was made by {}", p.id, p.author)));
+                }
+                repo.close_proposal(&p.id, actor)?;
+                Ok(convert::proposal(&repo.find_proposal(&p.id)?))
+            },
+        )
         .await
     }
 }

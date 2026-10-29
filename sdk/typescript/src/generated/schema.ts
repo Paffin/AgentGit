@@ -2517,6 +2517,13 @@ export interface components {
              * @default 0
              */
             deletions: number;
+            /** @default  */
+            new_mode: string;
+            /**
+             * @description Git modes: 100644, 100755, 120000; empty when that side is absent.
+             * @default
+             */
+            old_mode: string;
             /**
              * @description Unified diff text (empty for binary files).
              * @default
@@ -2529,6 +2536,11 @@ export interface components {
              * @default
              */
             status: string;
+            /**
+             * @description Patch omitted due to the bounded diff budget; metadata still describes the change.
+             * @default false
+             */
+            truncated: boolean;
         };
         FileOp: {
             /**

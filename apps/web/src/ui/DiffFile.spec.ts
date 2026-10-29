@@ -87,3 +87,20 @@ describe('line discussion context', () => {
     w.unmount()
   })
 })
+
+describe('semantic and omitted diffs', () => {
+  it('shows an executable-only change and both modes', () => {
+    const w = mount(DiffFile, {
+      props: { file: { ...file(0), patch: '', old_mode: '100644', new_mode: '100755' } },
+    })
+    expect(w.text()).toContain('Regular file → Executable file')
+    expect(w.text()).toContain('100644 → 100755')
+    w.unmount()
+  })
+  it('distinguishes an omitted patch from an unchanged text file', () => {
+    const w = mount(DiffFile, { props: { file: { ...file(0), patch: '', truncated: true } } })
+    expect(w.text()).toContain('Text diff omitted')
+    expect(w.text()).not.toContain('No textual changes')
+    w.unmount()
+  })
+})

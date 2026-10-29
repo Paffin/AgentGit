@@ -24,29 +24,21 @@ The core that stores, merges and recovers never calls a language model; anything
 
 This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
 
-**Available in beta.5:** repository issues with comments, close/reopen, conflict-safe edits and an atomic handoff to agent tasks with an expected result and explicit file scope. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Operators can pause and resume new task-bound runs without interrupting existing sessions, and inspect current or historical runs through permanent links. Task creators can reserve a registered agent at creation or reassign queued work; the server and orchestrator enforce the choice. A registered agent still needs a configured executor. The registered-agent view shows expiring executor connection reports and last reported capacity. Its setup wizard prepares repository-scoped credentials and a task executor configuration; host installation remains a separate step. Optional bounded executor output can be viewed, downloaded and deleted from a run page. This release uses schema 6; take a database backup before upgrading. Older binaries require restoring the pre-upgrade backup.
+**Available in the current beta:** repository issues with comments, close/reopen, conflict-safe edits and an atomic handoff to agent tasks with an expected result and explicit file scope. See the [Web UI guide](docs/guides/web-ui.md#repository-issues). Labels, milestones, attachments and provider issue import remain unfinished. Operators can pause and resume new task-bound runs without interrupting existing sessions, and inspect current or historical runs through permanent links. Task creators can reserve a registered agent at creation or reassign queued work; the server and orchestrator enforce the choice. A registered agent still needs a configured executor. The registered-agent view shows expiring executor connection reports and last reported capacity. Its setup wizard prepares repository-scoped credentials and a task executor configuration; host installation remains a separate step. Optional bounded executor output can be viewed, downloaded and deleted from a run page. The current release uses metadata schema 8; take a database backup before upgrading. Older binaries require restoring the pre-upgrade backup.
 
-**Review in beta.5:** revision-bound line discussions, replies and conflict-safe resolution are shared by Web UI, CLI and MCP. Filter open or resolved threads without losing reply drafts; source anchors retain the exact reviewed revision. CLI JSON response shapes are documented for automation. [Upgrade and rollback guidance](docs/adr/0025-line-review-threads.md).
+**Review in the current beta:** revision-bound line discussions, replies and conflict-safe resolution are shared by Web UI, CLI and MCP. Filter open or resolved threads without losing reply drafts; source anchors retain the exact reviewed revision. CLI JSON response shapes are documented for automation. [Upgrade and rollback guidance](docs/adr/0025-line-review-threads.md).
 
-**Development (`main`):** operators can disable or re-enable new runs for an individual agent from the browser or `ag agent disable NAME --remote origin` (`enable` to restore admission). Existing sessions, keys and history are retained. This is not included in the beta.5 archives; see [ADR-0026](docs/adr/0026-agent-run-admission.md).
+**Available since beta.6:** operators can disable or re-enable new runs for an individual agent from the browser or `ag agent disable NAME --remote origin` (`enable` to restore admission). Existing sessions, keys and history are retained. This is included in beta.6 and newer; see [ADR-0026](docs/adr/0026-agent-run-admission.md).
 
-**Development core:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. Concurrent operator policy changes are protected from stale automatic cancellation, and late results cannot finish a newer task attempt. [Execution limits](docs/adr/0033-task-attempt-limits.md).
+**Available since beta.6:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. Concurrent operator policy changes are protected from stale automatic cancellation, and late results cannot finish a newer task attempt. [Execution limits](docs/adr/0033-task-attempt-limits.md).
 
-**Development upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
+**Upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with beta.6 or newer; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
 
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
+Stream rules can require every line discussion to be resolved before integration, including feedback on earlier revisions.
 
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
+Review threads support proposed line replacements, with explicit author preview and head-checked application.
 
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
-
-Development stream rules can require every line discussion to be resolved before integration, including feedback on earlier revisions.
-
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
-
-Development review threads support proposed line replacements, with explicit author preview and head-checked application.
-
-Development rules also expose protected-path approvers and check timing without editing JSON; runner settings survive form edits.
+Rules also expose protected-path approvers and check timing without editing JSON; runner settings survive form edits.
 
 ## Coming from GitHub or GitLab?
 
@@ -54,9 +46,9 @@ Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundl
 
 The beta also supports keyboard-driven file finding, recoverable file drafts, and review drafts that stay while you inspect the diff. Web reviews are bound to the exact head you inspected; an author update rejects a stale submission and preserves your text. These changes are included in beta.2 and documented in the [changelog](CHANGELOG.md) and [Web UI guide](docs/guides/web-ui.md).
 
-Development also supports editing task instructions before the first run through Web UI, CLI and API, with concurrent-edit protection. This is not in beta.5 archives. [Task editing](docs/guides/web-ui.md#refine-queued-task-instructions-development).
+Beta.6 and newer also support editing task instructions before the first run through Web UI, CLI and API, with concurrent-edit protection. This is included in beta.6 and newer. [Task editing](docs/guides/web-ui.md#refine-queued-task-instructions-development).
 
-Development Home keeps queue filters in bookmarkable links and can follow a selected repository live; event bursts share one refresh, while the aggregate view retains bounded polling.
+Home keeps queue filters in bookmarkable links and can follow a selected repository live; event bursts share one refresh, while the aggregate view retains bounded polling.
 
 Next priorities are complete review workflows and hosting-metadata migration.
 The [roadmap](ROADMAP.md#next) separates delivered features, published releases and remaining qualification.
@@ -102,11 +94,11 @@ git clone https://github.com/Paffin/AgentGit && cd AgentGit
 cargo install --path crates/ag-cli          # installs the `ag` binary
 ```
 
-The public beta is [`v0.3.0-beta.5`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.5). It includes the following archives and install commands. Archives contain `ag`, `ag-server`, `ag-worker`, `ag-mcp` and `orchestrator` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
+The current release target is [`v0.3.0-beta.7`](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.7). Use the following archives and install commands after its Release workflow completes. Archives contain `ag`, `ag-server`, `ag-worker`, `ag-mcp` and `orchestrator` for Linux and macOS; release verification is tracked by the [Release workflow](https://github.com/Paffin/AgentGit/actions/workflows/release.yml).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.5
-docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.5
+curl -fsSL https://raw.githubusercontent.com/Paffin/AgentGit/main/scripts/install.sh | sh -s -- --version 0.3.0-beta.7
+docker pull ghcr.io/paffin/agentgit-cli:0.3.0-beta.7
 ```
 
 `--version` is needed while only pre-releases exist. For an existing rc.2 installation, see the [previous rc.2 procedure](docs/getting-started.md#on-020-rc2-until-the-next-release). The [rc.2 verification record](docs/operations/releasing.md) describes that release's checks and limitations; it is not evidence for rc.3. [Install options](docs/getting-started.md#install) has the details.
@@ -135,7 +127,7 @@ ag clone http://127.0.0.1:8080/demo/welcome              # edit, `ag snapshot`, 
 ```
 
 `ag-server dev` prints a link that signs you in to the Web UI and the exact commands above. It is an evaluation mode
-(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in `v0.3.0-beta.5`. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
+(loopback only, plain HTTP, an 8-hour credential), not a deployment. It is included in `v0.3.0-beta.7`. For the previous `v0.2.0-rc.2` archive, [Getting started](docs/getting-started.md#on-020-rc2-until-the-next-release) has the same
 start on rc.2 in a few more lines.
 
 ### As a server
@@ -321,9 +313,9 @@ not been run in production by anyone but its authors, and there has been no exte
 - Credentials can be bound to one agent run ([ADR-0010](docs/adr/0010-run-bound-credentials.md)), but that is opt-in
   per client; acting on another agent's run needs `agent.operate`, which a plain writer does not have. Fencing tokens for
   job claims are optional per request ([ADR-0012](docs/adr/0012-job-claim-fencing.md)).
-- Only prereleases are available; the current beta is `v0.3.0-beta.5`. No stable release, and no
+- Only prereleases are available; the current beta is `v0.3.0-beta.7`. No stable release, and no
   crates.io, npm or PyPI package; the 21 `agentgit-<x>` crates are only dry-run
-  ([releasing](docs/operations/releasing.md)). Metadata schema 6 requires a pre-upgrade backup; rollback restores that backup with the older binary.
+  ([releasing](docs/operations/releasing.md)). Metadata schema 8 requires a pre-upgrade backup; rollback restores that backup with the older binary.
 - `ag validate run` is not a sandbox. Untrusted code goes through [`ag-worker`](docs/guides/workers.md), whose sandbox
   shares the host kernel. Verified against real Docker and Podman and cgroup v2; not verified for microVMs, Windows
   (the worker refuses to run) or macOS beyond a limits-only fallback ([sandbox](docs/architecture/sandbox.md)).

@@ -217,3 +217,15 @@ proptest! {
         prop_assert_eq!(diff_hunks(&a, &b), diff_hunks(&a, &b));
     }
 }
+
+#[test]
+fn bounded_patches_are_complete_or_omitted_at_utf8_boundaries() {
+    let old = "old\n".as_bytes();
+    let new = "новое\n".as_bytes();
+    let full = unified_diff("a", "b", old, new, 3);
+    assert_eq!(super::unified_diff_limited("a", "b", old, new, 3, full.len()), Some(full.clone()));
+    for limit in [0, 1, full.len() - 1] {
+        assert!(super::unified_diff_limited("a", "b", old, new, 3, limit).is_none());
+    }
+    assert_eq!(super::unified_diff_limited("a", "b", old, old, 3, 0), Some(String::new()));
+}

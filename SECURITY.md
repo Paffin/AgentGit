@@ -7,13 +7,17 @@ agents. We take integrity and isolation bugs seriously.
 
 | Version | Supported |
 |---------|-----------|
-| `main` (pre-release) | security fixes land here first; this is the only thing that exists to run |
-| 0.1.x | **no release has been published yet** - there is no `v0.1.0` tag, GitHub release or published image. When the first tag is cut, the latest 0.1 release will be supported and this table will say so |
+| `main` | Security fixes land here first; unreleased changes are identified in the changelog. |
+| `0.3.0-beta.7` | Current patch release; use its binaries after the Release workflow completes. |
+| `0.3.0-beta.6` and earlier prereleases | Upgrade to the current patch release for the fixes to stream scopes, workspace concurrency and retention. |
 
-AgentGit is **alpha** software. The on-disk formats are versioned (`ChangesetV1`, tree manifest v1,
-metadata schema 2, control schema 3) and are meant to be stable - [what is promised, and the old data that
-proves it](docs/architecture/compatibility.md) - but they have not had an external audit. Do not use it as the
-only copy of irreplaceable data: keep backups (`ag backup`) and a Git mirror (`ag git export`).
+AgentGit is **beta** software. The current repository metadata schema is **8**;
+`ChangesetV1`, tree manifest v1 and repository configuration format 1 remain unchanged.
+The server control database is migrated independently; use the same server version across replicas.
+Beta.7 introduces no storage migration relative to beta.6. Returning to beta.5 or older
+requires the pre-upgrade backup, not opening the upgraded database with an older binary.
+See [compatibility](docs/architecture/compatibility.md) and [releasing](docs/operations/releasing.md).
+There has been no independent external security audit. Keep backups (`ag backup`) and a Git mirror (`ag git export`).
 
 ## Reporting a vulnerability
 

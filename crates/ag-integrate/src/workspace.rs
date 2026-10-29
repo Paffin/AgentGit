@@ -70,20 +70,49 @@ pub struct Change {
 impl Repository {
     /// Creates a workspace tracking `stream`, starting at the stream's head.
     pub fn workspace_create(&self, name: &str, stream: &StreamName, owner: &Identity) -> Result<WorkspaceRow> {
+        self.workspace_create_at(name, stream, owner, None)
+    }
+
+    /// Creates a workspace at an explicit revision, validating it before any row is committed.
+    pub fn workspace_create_at(
+        &self,
+        name: &str,
+        stream: &StreamName,
+        owner: &Identity,
+        from: Option<&ChangesetId>,
+    ) -> Result<WorkspaceRow> {
         if name.is_empty()
             || name.len() > 64
             || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
             return Err(Error::Invalid("workspace names use letters, digits, '_' and '-' (max 64)".into()));
         }
-        Ok(self.meta.write(|tx| {
+        self.meta.write_with_error(|tx| -> Result<WorkspaceRow> {
             let s = tx
                 .stream(stream.as_str())?
                 .ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("stream '{stream}'")))?;
-            let row = tx.workspace_create(name, stream.as_str(), s.state.head.as_ref(), owner.as_str())?;
+            let base = from.or(s.state.head.as_ref());
+            if let Some(head) = base {
+                self.validate_retention_root(tx, head)?;
+            }
+            let row = tx.workspace_create(name, stream.as_str(), base, owner.as_str())?;
             tx.audit_append(owner.as_str(), "workspace.create", name, &json!({"stream": stream}))?;
             Ok(row)
-        })?)
+        })
+    }
+
+    pub(crate) fn move_workspace(
+        &self,
+        tx: &ag_storage::meta::Tx<'_>,
+        expected: &WorkspaceRow,
+        base: Option<&ChangesetId>,
+        head: Option<&ChangesetId>,
+    ) -> Result<WorkspaceRow> {
+        tx.workspace_check(expected)?;
+        for root in [base, head].into_iter().flatten() {
+            self.validate_retention_root(tx, root)?;
+        }
+        Ok(tx.workspace_compare_and_swap(expected, base, head)?)
     }
 
     /// Remembers the directory a workspace lives in.
@@ -110,10 +139,18 @@ impl Repository {
     /// Removes a workspace record. Its snapshots stay in the object store until
     /// garbage collection finds them unreachable; its directory is untouched.
     pub fn workspace_remove(&self, name: &str, actor: &Identity) -> Result<()> {
+        let observed = self.workspace_row(name)?;
+        self.workspace_remove_checked(&observed, actor)
+    }
+
+    /// Removes only the workspace row authorized by the caller.
+    pub fn workspace_remove_checked(&self, observed: &WorkspaceRow, actor: &Identity) -> Result<()> {
+        let name = observed.name.as_str();
         if name == "default" {
             return Err(Error::Conflict("the default workspace cannot be removed".into()));
         }
         let removed = self.meta.write(|tx| {
+            tx.workspace_check(observed)?;
             let r = tx.workspace_delete(name)?;
             if r {
                 tx.meta_set(&format!("workspace.{name}.dir"), "")?;
@@ -203,8 +240,8 @@ impl Repository {
         }
         let ops = head_tree.diff(&tree);
         let id = self.commit(parents, author, message, ops)?;
-        self.meta.write(|tx| {
-            tx.workspace_update(name, ws.base.as_ref(), Some(&id))?;
+        self.meta.write_with_error(|tx| -> Result<()> {
+            self.move_workspace(tx, &ws, ws.base.as_ref(), Some(&id))?;
             if pending.is_some() {
                 tx.meta_set(&pending_key(name), "")?;
             }
@@ -243,17 +280,21 @@ impl Repository {
         let theirs_tree = self.tree_of(&stream_head)?;
 
         let Some(ws_head) = ws.head else {
-            update_dir(self, &ours_tree, &theirs_tree, dir)?;
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.meta.write_with_error(|tx| -> Result<()> {
+                self.move_workspace(tx, &ws, Some(&stream_head), Some(&stream_head))?;
+                update_dir(self, &ours_tree, &theirs_tree, dir)
+            })?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         };
         if is_ancestor(&g, &stream_head, &ws_head)? {
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&ws_head)))?;
+            self.meta.write_with_error(|tx| self.move_workspace(tx, &ws, Some(&stream_head), Some(&ws_head)))?;
             return Ok(SyncOutcome::UpToDate);
         }
         if is_ancestor(&g, &ws_head, &stream_head)? {
-            update_dir(self, &ours_tree, &theirs_tree, dir)?;
-            self.meta.write(|tx| tx.workspace_update(name, Some(&stream_head), Some(&stream_head)))?;
+            self.meta.write_with_error(|tx| -> Result<()> {
+                self.move_workspace(tx, &ws, Some(&stream_head), Some(&stream_head))?;
+                update_dir(self, &ours_tree, &theirs_tree, dir)
+            })?;
             return Ok(SyncOutcome::FastForwarded { to: stream_head });
         }
         let bases = merge_bases(&g, &ws_head, &stream_head)?;
@@ -278,9 +319,9 @@ impl Repository {
                 ),
                 ops,
             )?;
-            update_dir(self, &ours_tree, &merged.tree, dir)?;
-            self.meta.write(|tx| {
-                tx.workspace_update(name, Some(&stream_head), Some(&id))?;
+            self.meta.write_with_error(|tx| -> Result<()> {
+                self.move_workspace(tx, &ws, Some(&stream_head), Some(&id))?;
+                update_dir(self, &ours_tree, &merged.tree, dir)?;
                 tx.audit_append(author.as_str(), "workspace.sync", name, &json!({"merge": id}))?;
                 Ok(())
             })?;
@@ -288,38 +329,38 @@ impl Repository {
         }
 
         // Conflicted: apply the clean part, then write marker files for text conflicts.
-        update_dir(self, &ours_tree, &merged.tree, dir)?;
-        let mut paths = Vec::new();
-        let mut infos = Vec::new();
-        for c in &merged.conflicts {
-            infos.push(ConflictInfo::from_conflict(c));
-            paths.push(c.path.to_string());
-            if let ConflictKind::Content { .. } = c.kind {
-                // After a rename the three versions live at different paths; the marker file goes where
-                // the merged result keeps the file.
-                let (bp, op, tp) = match &c.origin {
-                    Some(o) => (&o.base, &o.ours, &o.theirs),
-                    None => (&c.path, &c.path, &c.path),
-                };
-                let (b, o, t) = (base_tree.get(bp), ours_tree.get(op), theirs_tree.get(tp));
-                if let (Some(b), Some(o), Some(t)) = (b, o, t)
-                    && let TextMerge::Conflicted { rendered, .. } =
-                        merge_text(&self.blob(&b.content)?, &self.blob(&o.content)?, &self.blob(&t.content)?)
-                {
-                    let mut abs = dir.to_path_buf();
-                    abs.extend(c.path.components());
-                    std::fs::write(abs, rendered)?;
+        self.meta.write_with_error(|tx| -> Result<SyncOutcome> {
+            tx.workspace_check(&ws)?;
+            update_dir(self, &ours_tree, &merged.tree, dir)?;
+            let mut paths = Vec::new();
+            let mut infos = Vec::new();
+            for c in &merged.conflicts {
+                infos.push(ConflictInfo::from_conflict(c));
+                paths.push(c.path.to_string());
+                if let ConflictKind::Content { .. } = c.kind {
+                    // After a rename the three versions live at different paths; the marker file goes where
+                    // the merged result keeps the file.
+                    let (bp, op, tp) = match &c.origin {
+                        Some(o) => (&o.base, &o.ours, &o.theirs),
+                        None => (&c.path, &c.path, &c.path),
+                    };
+                    let (b, o, t) = (base_tree.get(bp), ours_tree.get(op), theirs_tree.get(tp));
+                    if let (Some(b), Some(o), Some(t)) = (b, o, t)
+                        && let TextMerge::Conflicted { rendered, .. } =
+                            merge_text(&self.blob(&b.content)?, &self.blob(&o.content)?, &self.blob(&t.content)?)
+                    {
+                        let mut abs = dir.to_path_buf();
+                        abs.extend(c.path.components());
+                        std::fs::write(abs, rendered)?;
+                    }
                 }
             }
-        }
-        let pending = Pending { theirs: stream_head, paths };
-        self.meta.write(|tx| {
-            tx.workspace_update(name, Some(&stream_head), Some(&ws_head))?;
+            let pending = Pending { theirs: stream_head, paths };
+            self.move_workspace(tx, &ws, Some(&stream_head), Some(&ws_head))?;
             tx.meta_set(&pending_key(name), &serde_json::to_string(&pending).expect("serializes"))?;
             tx.audit_append(author.as_str(), "workspace.sync_conflict", name, &json!({"conflicts": infos.len()}))?;
-            Ok(())
-        })?;
-        Ok(SyncOutcome::Conflicted { conflicts: infos })
+            Ok(SyncOutcome::Conflicted { conflicts: infos })
+        })
     }
 
     /// Re-targets a workspace (and its directory) at an arbitrary stored changeset.
@@ -334,9 +375,9 @@ impl Repository {
         }
         let old = self.tree_or_empty(ws.head.as_ref())?;
         let new: Tree = self.tree_of(target)?;
-        update_dir(self, &old, &new, dir)?;
-        self.meta.write(|tx| {
-            tx.workspace_update(name, Some(target), Some(target))?;
+        self.meta.write_with_error(|tx| -> Result<()> {
+            self.move_workspace(tx, &ws, Some(target), Some(target))?;
+            update_dir(self, &old, &new, dir)?;
             tx.meta_set(&pending_key(name), "")?;
             Ok(())
         })?;

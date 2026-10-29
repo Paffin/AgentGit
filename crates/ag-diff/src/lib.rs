@@ -201,15 +201,28 @@ fn myers<T: Eq>(a: &[T], b: &[T]) -> Option<Vec<Hunk>> {
 /// Renders a unified diff of two byte strings, line based. Returns an empty
 /// string if they are equal. Binary data is reported in one line.
 pub fn unified_diff(old_name: &str, new_name: &str, old: &[u8], new: &[u8], context: usize) -> String {
+    unified_diff_limited(old_name, new_name, old, new, context, usize::MAX).expect("unlimited output")
+}
+
+/// Renders a complete patch within `max_bytes`, or returns `None` without retaining oversized output.
+/// Callers handling untrusted files should also bound the input before splitting it into lines.
+pub fn unified_diff_limited(
+    old_name: &str,
+    new_name: &str,
+    old: &[u8],
+    new: &[u8],
+    context: usize,
+    max_bytes: usize,
+) -> Option<String> {
     if old == new {
-        return String::new();
+        return Some(String::new());
     }
-    let mut out = String::new();
-    let _ = writeln!(out, "--- {old_name}");
-    let _ = writeln!(out, "+++ {new_name}");
+    let mut out = LimitedOutput { text: String::new(), limit: max_bytes };
+    writeln!(out, "--- {old_name}").ok()?;
+    writeln!(out, "+++ {new_name}").ok()?;
     if is_binary(old) || is_binary(new) {
-        let _ = writeln!(out, "Binary files differ");
-        return out;
+        writeln!(out, "Binary files differ").ok()?;
+        return Some(out.text);
     }
     let a = split_lines(old);
     let b = split_lines(new);
@@ -228,28 +241,28 @@ pub fn unified_diff(old_name: &str, new_name: &str, old: &[u8], new: &[u8], cont
         let b_from = first.b_start.saturating_sub(context);
         let a_to = last.a_end().saturating_add(context).min(a.len());
         let b_to = last.b_end().saturating_add(context).min(b.len());
-        let _ = writeln!(out, "@@ -{} +{} @@", range(a_from, a_to - a_from), range(b_from, b_to - b_from));
+        writeln!(out, "@@ -{} +{} @@", range(a_from, a_to - a_from), range(b_from, b_to - b_from)).ok()?;
         let mut ai = a_from;
         for h in &hunks[i..=j] {
             while ai < h.a_start {
-                push_line(&mut out, ' ', a[ai], ai + 1 == a.len());
+                push_line(&mut out, ' ', a[ai], ai + 1 == a.len()).ok()?;
                 ai += 1;
             }
             for idx in h.a_start..h.a_end() {
-                push_line(&mut out, '-', a[idx], idx + 1 == a.len());
+                push_line(&mut out, '-', a[idx], idx + 1 == a.len()).ok()?;
             }
             for idx in h.b_start..h.b_end() {
-                push_line(&mut out, '+', b[idx], idx + 1 == b.len());
+                push_line(&mut out, '+', b[idx], idx + 1 == b.len()).ok()?;
             }
             ai = h.a_end();
         }
         while ai < a_to {
-            push_line(&mut out, ' ', a[ai], ai + 1 == a.len());
+            push_line(&mut out, ' ', a[ai], ai + 1 == a.len()).ok()?;
             ai += 1;
         }
         i = j + 1;
     }
-    out
+    Some(out.text)
 }
 
 fn range(start: usize, len: usize) -> String {
@@ -260,14 +273,27 @@ fn range(start: usize, len: usize) -> String {
     }
 }
 
-fn push_line(out: &mut String, tag: char, line: &[u8], is_last: bool) {
-    out.push(tag);
-    let text = String::from_utf8_lossy(line);
-    out.push_str(text.trim_end_matches('\n'));
-    out.push('\n');
-    if is_last && !line.ends_with(b"\n") {
-        out.push_str("\\ No newline at end of file\n");
+struct LimitedOutput {
+    text: String,
+    limit: usize,
+}
+impl std::fmt::Write for LimitedOutput {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        if text.len() > self.limit.saturating_sub(self.text.len()) {
+            return Err(std::fmt::Error);
+        }
+        self.text.push_str(text);
+        Ok(())
     }
+}
+
+fn push_line(out: &mut impl std::fmt::Write, tag: char, line: &[u8], is_last: bool) -> std::fmt::Result {
+    let text = String::from_utf8_lossy(line);
+    writeln!(out, "{tag}{}", text.trim_end_matches('\n'))?;
+    if is_last && !line.ends_with(b"\n") {
+        writeln!(out, "\\ No newline at end of file")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

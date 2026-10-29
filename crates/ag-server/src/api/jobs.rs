@@ -142,7 +142,7 @@ impl App {
         let name = repo.to_string();
         let events = self.metrics.job_events.clone();
         let jobs = self
-            .with_repo_mut(call, &stream_hint, Cap::IntegrateValidate, None, move |r, actor| {
+            .with_proposal_mut(call, &stream_hint, Cap::IntegrateValidate, prep.proposal.clone(), move |r, actor| {
                 let stream = r.find_proposal(&proposal)?.stream;
                 let mut out = Vec::new();
                 for v in &todo {
@@ -221,7 +221,9 @@ impl App {
         self.authorize(call, &repo, Cap::IntegrateValidate, None).await?;
         let p = proposal.clone();
         let prep = self
-            .with_repo(call, &repo, Cap::IntegratePrepare, None, move |r, actor| Ok(r.prepare(&p, actor, &[])?))
+            .with_proposal(call, &repo, Cap::IntegratePrepare, p.clone(), move |r, actor| {
+                Ok(r.prepare(&p, actor, &[])?)
+            })
             .await?;
         if prep.preview.candidate_tree.is_none() {
             return Err(ApiError::new(

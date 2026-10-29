@@ -19,7 +19,9 @@ export type DirEntry = S['DirEntry']
 export type BlameLine = S['BlameLine']
 export type BlameResponse = S['BlameResponse']
 export type TreeEntry = S['TreeEntry']
-export type FileDiff = S['FileDiff']
+// Older servers omit the additive mode/truncation metadata introduced in beta.7.
+export type FileDiff = Omit<S['FileDiff'], 'old_mode' | 'new_mode' | 'truncated'> &
+  Partial<Pick<S['FileDiff'], 'old_mode' | 'new_mode' | 'truncated'>>
 export type DiffResponse = S['DiffResponse']
 export type SearchTreeResponse = S['SearchTreeResponse']
 export type SearchMatch = S['SearchMatch']

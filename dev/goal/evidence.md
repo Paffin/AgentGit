@@ -521,6 +521,32 @@ passed in 8.9 seconds. The stale case checks the actionable warning, preserved t
 stale save, copy control and unchanged competing head. Only the expected HTTP 412 console line
 for this proposal route is allowed in that scenario; other console failures remain failures.
 
+## Explicit review suggestions on the shared proposal workflow
+
+The first suggestion slice uses a final fenced suggestion block in a line thread's existing
+body. The Web composer presents explanation and replacement separately and restores the
+combined draft after reload. Other clients retain readable text; ADR 0030 describes the
+convention and its limits. No schema, server permission or VCS format changed.
+
+An author previews the anchored line and proposed replacement before applying. The client
+reads the immutable source, verifies the line and regular-file type, preserves executable
+mode/BOM/line endings, prepares a private workspace, and updates the proposal with its
+inspected head. Request ownership survives cleanup; cancellation stops later publication.
+The existing thread remains open, and approvals and checks remain tied to their old head.
+Range anchors, batches and a dedicated CLI apply command remain future work.
+
+Eight focused helper tests cover exact text, line deletion, Unicode, BOM/CRLF, stale/missing
+lines, code fences, symlinks, truncation, executable metadata, concurrent-update refusal and
+cancellation cleanup. A real-server Chromium desktop/phone scenario posts as a reviewer,
+restores the draft, applies as the author, checks exact CRLF bytes and executable mode, checks
+old-head approval binding, then reloads and verifies a reader cannot apply. Both passed in
+11.4 seconds. The final run additionally retains the ordinary discussion regression.
+The final desktop/phone run included the existing ordinary line-discussion flow: four real
+browser scenarios passed in 19.1 seconds. Typed production build, full Web typecheck, scoped
+lint and 98-file documentation checks passed. Helper complexity is at most 7; duplicate
+inspection including the existing workspace editor found no candidates. Mutation discovery
+is inventory only, not a claimed mutation-kill score. CRLF-delimited CLI comment bodies and
+trailing newline after the suggestion fence are accepted by the parser.
 ## Proposal snapshot at the integration commit boundary
 
 A failpoint reproduction held integration after candidate computation, then updated the proposal.

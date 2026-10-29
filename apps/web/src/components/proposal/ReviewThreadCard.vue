@@ -17,10 +17,13 @@ import ErrorState from '@/ui/ErrorState.vue'
 import TextArea from '@/ui/TextArea.vue'
 import IdentityLabel from '@/ui/IdentityLabel.vue'
 import RelativeTime from '@/ui/RelativeTime.vue'
+import { parseSuggestion } from '@/lib/reviewSuggestion'
+import ReviewSuggestion from './ReviewSuggestion.vue'
 
 const props = defineProps<{ repo: string; proposal: Proposal; thread: ReviewThread }>()
-const emit = defineEmits<{ changed: [] }>()
+const emit = defineEmits<{ changed: []; applied: [] }>()
 const auth = useAuth()
+const suggestion = computed(() => parseSuggestion(props.thread.body))
 const sourceRevision = computed(() =>
   props.thread.anchor?.side === 'old' ? props.thread.anchor.base : props.thread.anchor?.head,
 )
@@ -190,7 +193,15 @@ async function mutate(resolve: boolean) {
     </p>
     <RouterLink :to="sourceLink">View source at this revision</RouterLink>
     <pre class="source">{{ thread.anchor?.text }}</pre>
-    <p class="body">{{ thread.body }}</p>
+    <p class="body">{{ suggestion ? suggestion.explanation : thread.body }}</p>
+    <ReviewSuggestion
+      v-if="suggestion"
+      :repo="repo"
+      :proposal="proposal"
+      :thread="thread"
+      :suggestion="suggestion"
+      @applied="emit('applied')"
+    />
     <div class="row">
       <Button size="sm" :aria-expanded="expanded" @click="expanded = !expanded">{{
         expanded ? 'Hide replies' : 'Replies and actions'

@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Reviewers can propose a replacement for a new-side line. Authors preview and apply it as a new proposal revision, preserving executable mode, Unicode and line endings. The operation requires inspected-head protection; earlier suggestions remain readable and are never applied automatically.
+
 - Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
 
 - Optional stream policy `require_resolved_threads` blocks integration until every line discussion is resolved, including earlier revisions. Core preparation and commit share the rule; Web UI exposes the setting and remediation, and CLI explanations include resolution commands. Upgrade every replica before enabling it.

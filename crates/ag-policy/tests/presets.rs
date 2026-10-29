@@ -76,6 +76,7 @@ impl Case<'_> {
                 attestations: &atts,
                 approvals: &approvals,
                 has_provenance: self.provenance,
+                unresolved_threads: 0,
                 now: Timestamp::from_millis(1_000_100),
             },
         )

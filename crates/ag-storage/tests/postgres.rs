@@ -20,6 +20,12 @@ fn url() -> Option<String> {
     ag_testkit::require_here("postgres", "AG_TEST_POSTGRES_URL is not set (use scripts/pg-test.sh)", postgres_url())
 }
 
+fn remove_attempt_limit_schema(tx: &ag_storage::meta::Tx<'_>) -> Result<(), MetaError> {
+    tx.raw_execute("DROP TABLE task_attempt_limits", &[])?;
+    tx.raw_execute("DROP INDEX agent_runs_by_task", &[])?;
+    Ok(())
+}
+
 fn open(url: &str, schema: &str) -> Meta {
     Meta::open_postgres(url, schema, Arc::new(SystemClock), Limits::default()).expect("open")
 }
@@ -83,6 +89,7 @@ fn a_version_1_schema_migrates_forward_and_a_newer_one_is_refused() {
     // schema 1, exactly as it would have been created by release 0.1 on PostgreSQL
     let m = open(&url, schema.name());
     m.write(|tx| {
+        remove_attempt_limit_schema(tx)?;
         tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
         tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
         tx.raw_execute("DROP TABLE issue_activity, issues", &[])?;
@@ -636,6 +643,7 @@ fn schema_five_upgrades_to_line_threads_without_losing_existing_rows() {
     let m = open(&url, schema.name());
     m.write(|tx| {
         tx.create_stream(&StreamName::new("main").unwrap(), "user:before-upgrade")?;
+        remove_attempt_limit_schema(tx)?;
         tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
         tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
         tx.raw_execute("UPDATE meta SET value = '5' WHERE key = 'schema'", &[])
@@ -655,6 +663,7 @@ fn a_version_6_schema_migrates_without_inventing_task_sources() {
     let m = open(&url, schema.name());
     m.write(|tx| {
         tx.task_create("task_original", "Original", "Keep λ", &[], "user:t")?;
+        remove_attempt_limit_schema(tx)?;
         tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
         tx.raw_execute("UPDATE meta SET value = '6' WHERE key = 'schema'", &[])
     })
@@ -675,4 +684,25 @@ fn a_version_6_schema_migrates_without_inventing_task_sources() {
         reopened.read(|tx| tx.task("task_follow")).unwrap().unwrap().source_task.as_deref(),
         Some("task_original")
     );
+}
+
+#[test]
+fn schema_seven_retains_run_history_and_starts_without_an_attempt_limit() {
+    let Some(url) = url() else { return };
+    let schema = TempSchema::new(&url);
+    let meta = open(&url, schema.name());
+    meta.write(|tx| {
+        tx.task_create("task_old", "Existing task", "instructions", &[], "user:original")?;
+        tx.run_start("run_old", "old-agent", Some("task_old"))?;
+        remove_attempt_limit_schema(tx)?;
+        tx.raw_execute("UPDATE meta SET value='7' WHERE key='schema'", &[])
+    })
+    .unwrap();
+    drop(meta);
+    let upgraded = open(&url, schema.name());
+    let task = upgraded.read(|tx| tx.task("task_old")).unwrap().unwrap();
+    assert_eq!(task.max_attempts, 0);
+    assert_eq!(task.attempts_started, 1);
+    assert_eq!(task.description, "instructions");
+    assert!(upgraded.read(|tx| tx.run("run_old")).unwrap().is_some());
 }

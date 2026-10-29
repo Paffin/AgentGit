@@ -747,6 +747,8 @@ message UpdateProposalRequest {
   string new_head = 3;
   // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
+  // Optional inspected head. If supplied, a concurrent change is refused atomically.
+  string expected_head = 5;
 }
 
 message ReviewProposalRequest {
@@ -1154,11 +1156,15 @@ message Task {
   int64 created_at_ms = 8;
   int64 updated_at_ms = 9;
   repeated string depends_on = 10;
-  // True when every dependency is done.
+  // True when dependencies are done and the configured attempt limit has room.
   bool ready = 11;
   // Immutable source links for independently scheduled follow-up work.
   string source_task = 12;
   string source_run = 13;
+  // Zero leaves the server-side attempt limit unset.
+  uint32 max_attempts = 14;
+  // All task-bound runs, including failed, abandoned and currently active runs.
+  uint64 attempts_started = 15;
 }
 
 message CreateTaskRequest {
@@ -1177,6 +1183,8 @@ message CreateTaskRequest {
   string source_task = 10;
   // Optional failed/abandoned run belonging to source_task.
   string source_run = 11;
+  // Optional task-local run limit (0 keeps legacy behavior; maximum 10000).
+  uint32 max_attempts = 12;
 }
 
 message AssignTaskRequest {
@@ -1216,6 +1224,9 @@ message FinishTaskRequest {
   string state = 3;
   // Accepted and ignored: this operation does not deduplicate (see Conventions above).
   string idempotency_key = 4;
+  // Optional execution-policy precondition, checked atomically with the state change.
+  // Explicit zero matches an unset limit; omission preserves ordinary manual completion.
+  optional uint32 expected_max_attempts = 5;
 }
 
 message Lease {
@@ -1837,6 +1848,7 @@ service AgentService {
   rpc CreateTask(CreateTaskRequest) returns (Task);
   rpc AssignTask(AssignTaskRequest) returns (Task);
   rpc UpdateTask(UpdateTaskRequest) returns (Task);
+  rpc SetTaskAttemptLimit(SetTaskAttemptLimitRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc AddDependency(AddDependencyRequest) returns (Task);
@@ -1958,5 +1970,14 @@ message UpdateTaskRequest {
   TaskContent content = 3;
   // Full content observed when editing started; required, compared atomically.
   TaskContent expected = 4;
+  string idempotency_key = 5;
+}
+
+// Execution policy is independent of immutable task instructions and run history.
+message SetTaskAttemptLimitRequest {
+  string repo = 1;
+  string id = 2;
+  uint32 max_attempts = 3;
+  uint32 expected_max_attempts = 4;
   string idempotency_key = 5;
 }

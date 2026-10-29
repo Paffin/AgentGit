@@ -255,6 +255,26 @@ writing anything. An idempotency key records the response atomically with the
 comment. Comments use review records with `decision=comment`, remain available
 after closure and do not supersede approval or request-changes decisions.
 
+### Required line-discussion resolution (development)
+
+`policy.resolved_threads` advertises support for the optional policy field
+`require_resolved_threads`. When true, preparation and integration report
+`unresolved_threads` with `detail.count` until every line discussion is resolved,
+including earlier-head anchors. The count is read inside the integration transaction;
+no new endpoint or permission is introduced. General comments and approvals are separate.
+The default is false. Upgrade all replicas before enabling the field; older servers reject it.
+See [ADR 0032](../adr/0032-required-discussion-resolution.md).
+
+### Proposal head preconditions (development)
+
+Servers advertising `proposals.update_head` accept optional `expected_head` on
+`proposal.update` (`PATCH /proposals/{id}`, gRPC `Update`). Send the full inspected
+changeset ID. A mismatch returns `failed_precondition` (HTTP 412); comparison and head
+replacement share one metadata transaction. Omission preserves legacy request compatibility
+but cannot detect changes before the request began. Negotiate support before relying on the
+field: an older server may ignore it. This operation does not deduplicate idempotency keys.
+See [ADR 0029](../adr/0029-proposal-head-preconditions.md).
+
 ### Line review threads (development)
 
 `proposals.threads` advertises metadata schema 6 and these operations:
@@ -279,6 +299,13 @@ current proposal; source revisions must be published in the repository. The
 server reads `anchor.text` itself and ignores supplied text. Text files are bounded
 to 8 MiB and individual source lines and message bodies to 16 KiB. Old-side anchors
 require a base revision. Anchors never move with later proposal updates.
+
+The Web UI recognizes a single final fenced `suggestion` block in a thread body as a
+replacement proposal for its new-side anchor. An empty block deletes that line. The fence
+has at least three backticks and must exceed any backtick run in the content. This is a
+readable body convention, not a new server operation or permission. Applying it uses a
+private workspace and a head-checked proposal update; it does not resolve the thread or
+approve the resulting head. See [ADR 0030](../adr/0030-fenced-review-suggestions.md).
 
 Both list operations use `page_size` (maximum 100) and `page_token`. Threads use
 creation-time keyset ordering; replies use increasing IDs. Tokens are scoped to

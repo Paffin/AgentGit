@@ -507,3 +507,111 @@ The server adds default resource fields, so the comparison uses its canonical ba
 Crapper/Dryer and mutation-site discovery were run; discovery is not a mutation-kill score.
 No policy schema, permission semantics or native-client contract changed. This slice is
 Unreleased and is not part of the already-running beta.6 candidate.
+
+## Proposal-head preconditions before review suggestions
+
+A reproduced core regression showed that a stale replacement could overwrite a newer proposal
+head. `update_proposal_at_head` compares the inspected head in the metadata transaction that
+writes the replacement and audit. Requests omitting the new optional field retain wire compatibility
+and compare the head observed at operation start. They cannot detect earlier client staleness.
+`proposals.update_head` advertises support; old servers must not be trusted to enforce this field.
+No schema or canonical-object format changes. ADR 0029 records publication and retry limits.
+
+The Web conflict resolver freezes its opening head, requires capability negotiation and preserves
+resolution text on a stale save. Core tests cover stale replacement and two simultaneous contenders;
+PostgreSQL runs require the real backend through AG_REQUIRE_COMPONENTS. HTTP verifies 412 and
+unchanged head. Both SDK tours use the new field; the local CLI exposes --expected-head. Structured
+suggestion creation/application remains the next deliverable, not claimed by this prerequisite.
+
+Validation for this slice: 13 core policy tests passed on SQLite (0.14 seconds); the two focused
+stale/concurrent cases passed on required PostgreSQL (0.36 seconds after refactoring). The focused
+HTTP scenario passed in 0.22 seconds. TypeScript's 12-test and Python's 13-test all-operation tours
+passed against the real server and used expected_head. Typed Web build, full Web typecheck,
+scoped lint, CLI documentation generation and 97-file documentation checks passed. Crapper
+reported complexity 7 for update_proposal_at_head and 8 for its transactional helper; Dryer found
+no duplicate candidates. Mutation-site discovery does not establish a mutation-kill score.
+The final two real-server Chromium scenarios (normal resolution and concurrent replacement)
+passed in 8.9 seconds. The stale case checks the actionable warning, preserved text, disabled
+stale save, copy control and unchanged competing head. Only the expected HTTP 412 console line
+for this proposal route is allowed in that scenario; other console failures remain failures.
+
+## Explicit review suggestions on the shared proposal workflow
+
+The first suggestion slice uses a final fenced suggestion block in a line thread's existing
+body. The Web composer presents explanation and replacement separately and restores the
+combined draft after reload. Other clients retain readable text; ADR 0030 describes the
+convention and its limits. No schema, server permission or VCS format changed.
+
+An author previews the anchored line and proposed replacement before applying. The client
+reads the immutable source, verifies the line and regular-file type, preserves executable
+mode/BOM/line endings, prepares a private workspace, and updates the proposal with its
+inspected head. Request ownership survives cleanup; cancellation stops later publication.
+The existing thread remains open, and approvals and checks remain tied to their old head.
+Range anchors, batches and a dedicated CLI apply command remain future work.
+
+Eight focused helper tests cover exact text, line deletion, Unicode, BOM/CRLF, stale/missing
+lines, code fences, symlinks, truncation, executable metadata, concurrent-update refusal and
+cancellation cleanup. A real-server Chromium desktop/phone scenario posts as a reviewer,
+restores the draft, applies as the author, checks exact CRLF bytes and executable mode, checks
+old-head approval binding, then reloads and verifies a reader cannot apply. Both passed in
+11.4 seconds. The final run additionally retains the ordinary discussion regression.
+The final desktop/phone run included the existing ordinary line-discussion flow: four real
+browser scenarios passed in 19.1 seconds. Typed production build, full Web typecheck, scoped
+lint and 98-file documentation checks passed. Helper complexity is at most 7; duplicate
+inspection including the existing workspace editor found no candidates. Mutation discovery
+is inventory only, not a claimed mutation-kill score. CRLF-delimited CLI comment bodies and
+trailing newline after the suggestion fence are accepted by the parser.
+## Proposal snapshot at the integration commit boundary
+
+A failpoint reproduction held integration after candidate computation, then updated the proposal.
+The old code integrated the obsolete candidate and marked the newer proposal integrated. The
+transaction now compares the stream and proposal head/open state before writing. A mismatch
+re-enters the existing loop, which aborts work for a changed or closed proposal. The same guard
+protects the already-integrated path. No schema or wire changes; see ADR 0031.
+
+The 31 engine tests passed on SQLite (0.47s), including four controlled races: update/close
+against ordinary/already-integrated completion. Six proposal-related cases passed on required
+PostgreSQL (0.76s). Each new race verifies the stream is unchanged, the concurrent proposal
+state survives and the old integration is aborted. Existing retry/recovery tests remain intact.
+The compatibility guide's obsolete schema-5/no-published-release statements were reconciled
+with development schema 7 and the already recorded beta.5 archive/upgrade evidence.
+
+## Optional required resolution of line discussions
+
+`require_resolved_threads` defaults to false and is omitted from serialized default policies.
+With the rule enabled, the pure policy evaluator emits `unresolved_threads` from a count read
+inside the committing metadata transaction. Earlier-head discussions count. Preparation and
+already-integrated completion share the rule. A reopened discussion before commit blocks the
+operation. Approval and general comments remain independent; permissions are unchanged.
+
+The Web rule toggle requires `policy.resolved_threads`; blocker explanations lead to Reviews.
+CLI explanations list existing remote discussion commands. ADR 0032 records rollout: upgrade
+all replicas before enabling, since old binaries reject unknown policy fields. No schema change.
+
+Evidence: 36 integrate-library and 54 policy-library tests passed; 31 engine and 16 policy
+integration tests passed; the three focused cases passed on required PostgreSQL in 0.41s.
+Two real HTTP discussion tests passed in 0.20s. The 63 focused Web tests passed, and desktop /
+phone Chromium ran administrator rule save/reload, reviewer approval, blocked landing, explicit
+resolution and successful landing in 12.2s. The initial browser test omitted the separate approval
+required by the policy editor's starter; the completed scenario obtains it through the review UI.
+The policy_eval fuzz target compiles with generated counts and an invariant that unresolved
+required discussions cannot be allowed. Its dictionary/seed generator were updated; this is not
+a new fuzz campaign or mutation score. The fuzz lockfile's own workspace versions were aligned
+from beta.5 to beta.6; no third-party dependency version changed.
+
+## Retry policy changes during execution
+
+A real shell executor reproduced a stale automatic cancellation after the operator changed
+an active task from an unset limit to one allowed attempt. `task.finish` now supports optional
+`expected_max_attempts` and compares it in the state/audit write transaction. Automatic session
+and recovered-budget cancellation carry the observed value. On a rejected transition the
+scheduler discards local assumptions and reconstructs them from server state and history.
+
+Verification: the real-server scenario now retains the task, extends its limit and completes
+it with its second run. Four focused scheduler scenarios passed in 1.19s, including unchanged
+legacy cancellation and restart exhaustion. Core rejection preserves both task state and audit
+history (0.01s); HTTP stale cancellation returned 412 (0.14s). SDK tours passed (12 TypeScript,
+13 Python) with the new completion precondition. The previous failure is recorded in
+`/workspace/agentgit-quality/task-policy-finish-red.log`; follow-up logs share that prefix.
+No schema migration; ADR0034 describes the additive protocol field. Static Crapper/Dryer/
+Mutator scans were run; these are not coverage or mutation-kill measurements.

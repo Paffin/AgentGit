@@ -180,6 +180,9 @@ pub enum ProposalCmd {
         id: String,
         /// New head (default: the workspace head).
         rev: Option<String>,
+        /// Refuse the update if the proposal no longer has this inspected head.
+        #[arg(long)]
+        expected_head: Option<String>,
     },
     /// Close without integrating.
     Close {
@@ -248,9 +251,10 @@ pub fn proposal(ctx: &Ctx, cmd: &ProposalCmd) -> Result<u8> {
             let r = ctx.repo.review(id, &ctx.me, decision, message)?;
             ctx.done(&r, || format!("Recorded '{decision}' by {} on {}", ctx.me, r.head.short()))?;
         }
-        ProposalCmd::Update { id, rev } => {
+        ProposalCmd::Update { id, rev, expected_head } => {
             let head = rev_or_default(ctx, rev)?;
-            let p = ctx.repo.update_proposal(id, &head, &ctx.me)?;
+            let expected = expected_head.as_deref().map(|rev| ctx.repo.resolve_rev(rev)).transpose()?;
+            let p = ctx.repo.update_proposal_at_head(id, &head, &ctx.me, expected.as_ref())?;
             ctx.done(&p, || {
                 format!("Proposal {} now points at {} (earlier approvals no longer count)", p.id, p.head.short())
             })?;

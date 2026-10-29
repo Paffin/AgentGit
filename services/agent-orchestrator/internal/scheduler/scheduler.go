@@ -48,6 +48,7 @@ type Sessions interface {
 	Cancel(runID, reason string) bool
 	Has(runID string) bool
 	FinishTask(ctx context.Context, repo, taskID, state string) error
+	CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error
 }
 
 // PathSource tells which files each open proposal changes (satisfied by
@@ -318,6 +319,10 @@ func (s *Scheduler) Reconcile(ctx context.Context) (err error) {
 		if !ok {
 			continue // not ours
 		}
+		if t.MaxAttempts > 0 && t.AttemptsStarted >= uint64(t.MaxAttempts) {
+			s.setDeferred(t, ReasonAttemptLimit, fmt.Sprintf("%d of %d attempts started; an operator can extend this task's limit", t.AttemptsStarted, t.MaxAttempts))
+			continue
+		}
 		if t.State == agwp.TaskInProgress {
 			// An adopted task: the previous process may have spent attempts on it.
 			if !s.recoverBudget(ctx, t, ex) {
@@ -446,12 +451,21 @@ func (s *Scheduler) recoverBudget(ctx context.Context, t agwp.Task, ex config.Ex
 	s.mu.Lock()
 	s.seeded[t.ID] = true
 	s.mu.Unlock()
+	if t.MaxAttempts > 0 {
+		s.mu.Lock()
+		s.attempts[t.ID] = int(t.AttemptsStarted)
+		if !last.IsZero() {
+			s.retryAt[t.ID] = last.Add(s.backoffFor(max(1, int(t.AttemptsStarted))))
+		}
+		s.mu.Unlock()
+		return true
+	}
 	if spent+temp == 0 {
 		return true
 	}
 	if spent >= s.o.Repo.Schedule.Attempts || temp >= maxTempFails {
 		s.log.Warn("giving up on the task: its attempt budget was spent before this process started", "task", t.ID, "attempts", spent, "temporary_failures", temp)
-		if err := s.o.Sessions.FinishTask(ctx, repo, t.ID, agwp.TaskCancelled); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
+		if err := s.o.Sessions.CancelTaskAtAttemptLimit(ctx, repo, t.ID, t.MaxAttempts); err != nil && !agwp.IsCode(err, agwp.CodeFailedPrecond) {
 			s.log.Warn("could not cancel the task", "task", t.ID, "err", err)
 		}
 		s.clearDeferred(t.ID)
@@ -553,11 +567,15 @@ func (s *Scheduler) repoSessions() []session.Info {
 func (s *Scheduler) startSession(ctx context.Context, t agwp.Task, ex config.Executor) (*session.Info, error) {
 	s.mu.Lock()
 	attempt := s.attempts[t.ID] + 1
+	if t.MaxAttempts > 0 {
+		attempt = int(t.AttemptsStarted) + 1
+	}
 	s.mu.Unlock()
 	sc := s.o.Repo.Schedule
 	info, err := s.o.Sessions.Start(ctx, session.Request{
 		Repo: s.o.Repo.Name, Stream: s.o.Repo.Stream, Task: t, Executor: ex, Attempt: attempt,
 		Lease: sc.Lease, LeaseTTL: sc.LeaseTTL, Decide: s.decide,
+		Reconsider: func() { s.forgetTask(t.ID) },
 	})
 	if err != nil {
 		return nil, err
@@ -602,6 +620,10 @@ func (s *Scheduler) decide(res session.Result) session.Disposition {
 	if open > 0 {
 		s.log.Warn("the session failed after opening proposals; the task waits for them", "task", id, "proposals", props)
 		return waitForLanding()
+	}
+	if res.Task.MaxAttempts > 0 {
+		s.retryAt[id] = s.o.Clock.Now().Add(s.backoffFor(res.Attempt))
+		return session.Keep // exhaustion defers the task; extending its durable limit can resume it
 	}
 	if res.ExitCode == session.ExitTempFail && s.tempFails[id] < maxTempFails {
 		s.tempFails[id]++
@@ -708,7 +730,7 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 	for id, a := range pending {
 		t, ok := byID[id]
 		if !ok || t.State == agwp.TaskDone || t.State == agwp.TaskCancelled {
-			s.forgetWaiting(id)
+			s.forgetTask(id)
 			continue
 		}
 		integrated, openNow := 0, 0
@@ -745,7 +767,7 @@ func (s *Scheduler) resolveWaiting(ctx context.Context, tasks []agwp.Task, liveR
 			continue
 		}
 		s.log.Info("work landed or was closed; task finished", "task", id, "state", state)
-		s.forgetWaiting(id)
+		s.forgetTask(id)
 		// The caller's task list was read before this; record the new state in it so the
 		// finished task is not offered for adoption in this same pass.
 		for i := range tasks {
@@ -762,7 +784,7 @@ func (s *Scheduler) attemptsOf(id string) int {
 	return s.attempts[id]
 }
 
-func (s *Scheduler) forgetWaiting(id string) {
+func (s *Scheduler) forgetTask(id string) {
 	s.mu.Lock()
 	delete(s.awaiting, id)
 	delete(s.attempts, id)

@@ -145,19 +145,21 @@ const (
 
 // Task is a unit of work with dependencies and a declared scope.
 type Task struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	State       string   `json:"state"`
-	Owner       string   `json:"owner"`
-	DependsOn   []string `json:"depends_on"`
-	Scope       []string `json:"scope"`
-	Ready       bool     `json:"ready"`
-	CreatedBy   string   `json:"created_by"`
-	CreatedAtMs int64    `json:"created_at_ms"`
-	UpdatedAtMs int64    `json:"updated_at_ms"`
-	SourceTask  string   `json:"source_task,omitempty"`
-	SourceRun   string   `json:"source_run,omitempty"`
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	State           string   `json:"state"`
+	Owner           string   `json:"owner"`
+	DependsOn       []string `json:"depends_on"`
+	Scope           []string `json:"scope"`
+	Ready           bool     `json:"ready"`
+	CreatedBy       string   `json:"created_by"`
+	CreatedAtMs     int64    `json:"created_at_ms"`
+	UpdatedAtMs     int64    `json:"updated_at_ms"`
+	SourceTask      string   `json:"source_task,omitempty"`
+	SourceRun       string   `json:"source_run,omitempty"`
+	MaxAttempts     uint32   `json:"max_attempts,omitempty"`
+	AttemptsStarted uint64   `json:"attempts_started,omitempty"`
 }
 
 // Lease is a soft or exclusive claim on a path scope.

@@ -206,7 +206,10 @@ dialog (not offered to the author); *Copy link to ask a reviewer*; *Land with th
 dialog; *Resolve the conflict* opens the resolver (below). A fix is a button only when your role allows it. Otherwise
 the row says who to ask ("Ask someone with the reviewer role") instead of showing a button that would fail. *Integrate* shows the strategy (fast-forward or merge), asks for fencing
 tokens when a lease is involved, and reports the outcome the server decided: integrated, blocked (nothing changed, with
-the blockers), conflict (with the paths) or refused by policy.
+the blockers), conflict (with the paths) or refused by policy. When resolving conflicts, the editor
+retains the proposal revision it opened. A concurrent update refuses the save and keeps your
+resolution text available; inspect the updated proposal before starting a new resolution.
+This requires a development server advertising `proposals.update_head`.
 
 ## Branches and history
 
@@ -592,6 +595,23 @@ Counts are marked as partial when more pages are available; use **Load more
 discussions** to include older threads. Switching filters preserves expanded
 reply drafts.
 
+### Suggest a code change (development)
+
+Select a new-side line number in **Files changed**, then **Suggest a replacement**. Explain
+why and enter replacement code; multiple replacement lines are allowed, and an empty field
+deletes the selected line. The draft survives reload in the same tab. Post it as a line discussion.
+
+The change request's author can choose **Review and apply suggestion**, inspect the exact
+replacement and explicitly apply it. This creates a new revision, retaining executable mode
+and line endings. Existing checks and approvals must match the new revision. The discussion
+stays open until reviewed and resolved separately. Earlier-revision suggestions remain readable
+and copyable; they cannot overwrite newer work.
+
+Application requires a server with `proposals.update_head` and is limited to regular UTF-8
+files up to 1 MiB. Symlinks, binary files, old-side lines and changed source lines require the
+ordinary editor or CLI. This first version replaces one anchored line, not a selected range.
+
+
 ## Enable or disable new runs for one agent (development)
 
 Under **Agents & work → Registered agents**, an operator can choose **Disable…**
@@ -647,3 +667,12 @@ available through `ag task edit TASK --title "Clear expected result"` (local), o
 `--remote origin` for a configured server. `--description` replaces the description;
 repeat `--scope` to replace path patterns, or use `--clear-scope`. Omitted fields are preserved.
 See [ADR-0028](../adr/0028-task-instruction-refinement.md).
+
+
+### Required discussion resolution (development)
+
+The branch rules form can require every line discussion to be resolved before landing.
+**Read and resolve discussions** opens Reviews from the blocker; discussions on earlier heads
+still count. Open **Replies and actions**, read the replies, then resolve at the version shown.
+A concurrent reply/reopening is checked again by the server at integration. Approval remains a
+separate decision. Upgrade all replicas before enabling this rule.

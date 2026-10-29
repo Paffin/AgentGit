@@ -385,3 +385,129 @@ fn setting_the_same_policy_again_is_a_no_op_that_keeps_the_attestations_valid() 
     assert_eq!(changed.version, first.version + 1);
     assert_eq!(audit(&f), 2);
 }
+
+#[test]
+fn updating_a_proposal_rejects_a_stale_inspected_head() {
+    let f = fx();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    let second = f.snap(Some(first), &[("a", "second")], "user:bob");
+    let stale_edit = f.snap(Some(first), &[("a", "stale edit")], "user:bob");
+    f.repo.update_proposal_at_head(&proposal, &second, &id("user:bob"), Some(&first)).unwrap();
+    let result = f.repo.update_proposal_at_head(&proposal, &stale_edit, &id("user:bob"), Some(&first));
+    assert!(matches!(result, Err(ag_integrate::Error::Conflict(_))), "stale update: {result:?}");
+    assert_eq!(f.repo.find_proposal(&proposal).unwrap().head, second);
+}
+
+#[test]
+fn concurrent_proposal_updates_have_one_winner() {
+    let f = fx();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    let heads = [f.snap(Some(first), &[("a", "left")], "user:bob"), f.snap(Some(first), &[("a", "right")], "user:bob")];
+    let barrier = std::sync::Barrier::new(2);
+    let results = std::thread::scope(|scope| {
+        let handles: Vec<_> = heads
+            .iter()
+            .map(|head| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    f.repo.update_proposal_at_head(&proposal, head, &id("user:bob"), Some(&first))
+                })
+            })
+            .collect();
+        handles.into_iter().map(|handle| handle.join().unwrap()).collect::<Vec<_>>()
+    });
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(results.iter().filter(|result| matches!(result, Err(ag_integrate::Error::Conflict(_)))).count(), 1);
+    let winner = results.into_iter().find_map(Result::ok).unwrap();
+    assert_eq!(f.repo.find_proposal(&proposal).unwrap().head, winner.head);
+}
+
+fn discussion(f: &Fx, proposal: &str, head: ag_types::ChangesetId, name: &str) {
+    use ag_storage::meta::{ReviewThreadAnchorRow, ReviewThreadRow};
+    f.repo
+        .meta()
+        .write(|tx| {
+            tx.insert_review_thread(&ReviewThreadRow {
+                id: name.into(),
+                proposal: proposal.into(),
+                anchor: ReviewThreadAnchorRow {
+                    base: None,
+                    head,
+                    path: "a".into(),
+                    side: "new".into(),
+                    line: 1,
+                    source_text: "first".into(),
+                },
+                body: "Please explain this".into(),
+                author: "user:carol".into(),
+                resolved: false,
+                version: 1,
+                created_at_ms: 0,
+                updated_at_ms: 0,
+            })
+        })
+        .unwrap();
+}
+
+#[test]
+fn required_discussions_include_earlier_heads_and_block_until_resolved() {
+    let f = fx();
+    f.repo.set_policy("main", r#"{"require_resolved_threads":true}"#, &id("user:alice")).unwrap();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    discussion(&f, &proposal, first, "thread_old");
+    let next = f.snap(Some(first), &[("a", "next")], "user:bob");
+    f.repo.update_proposal(&proposal, &next, &id("user:bob")).unwrap();
+    let result = f.integrate(&proposal, "user:alice");
+    let (_, blockers) = blocked(&result);
+    assert_eq!(blockers[0].code, "unresolved_threads");
+    assert_eq!(blockers[0].detail["count"], 1);
+    assert_eq!(f.head(), None);
+    f.repo.meta().write(|tx| tx.resolve_review_thread("thread_old", 1, true)).unwrap();
+    assert_eq!(f.integrate(&proposal, "user:alice").state, IntentState::Integrated);
+}
+
+#[test]
+fn required_discussions_also_block_already_integrated_completion() {
+    let f = fx();
+    let first = f.land(None, &[("a", "first")]);
+    f.repo.set_policy("main", r#"{"require_resolved_threads":true}"#, &id("user:alice")).unwrap();
+    let proposal = f.propose(first, "already included", "user:bob");
+    discussion(&f, &proposal, first, "thread_contained");
+    let result = f.integrate(&proposal, "user:alice");
+    assert_eq!(blocked(&result).1[0].code, "unresolved_threads");
+    let preview = f.repo.prepare(&proposal, &id("user:alice"), &[]).unwrap();
+    assert_eq!(preview.blockers[0].code, "unresolved_threads");
+    assert_eq!(f.repo.find_proposal(&proposal).unwrap().state, "open");
+    f.repo.meta().write(|tx| tx.resolve_review_thread("thread_contained", 1, true)).unwrap();
+    assert_eq!(f.integrate(&proposal, "user:alice").state, IntentState::Integrated);
+}
+
+#[test]
+fn a_reopened_discussion_is_rechecked_inside_the_integration_transaction() {
+    let f = fx();
+    f.repo.set_policy("main", r#"{"require_resolved_threads":true}"#, &id("user:alice")).unwrap();
+    let first = f.snap(None, &[("a", "first")], "user:bob");
+    let proposal = f.propose(first, "change", "user:bob");
+    discussion(&f, &proposal, first, "thread_race");
+    f.repo.meta().write(|tx| tx.resolve_review_thread("thread_race", 1, true)).unwrap();
+    let gate = f.repo.failpoints().arm_gate("integrate.before_commit");
+    let result = std::thread::scope(|scope| {
+        let repo = &f.repo;
+        let request = IntegrateRequest {
+            proposal_id: proposal.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        };
+        let worker = scope.spawn(move || repo.integrate(&request).unwrap());
+        assert!(gate.wait_reached(std::time::Duration::from_secs(5)));
+        f.repo.meta().write(|tx| tx.resolve_review_thread("thread_race", 2, false)).unwrap();
+        gate.release();
+        worker.join().unwrap()
+    });
+    assert_eq!(blocked(&result).1[0].code, "unresolved_threads");
+    assert_eq!(f.head(), None);
+}

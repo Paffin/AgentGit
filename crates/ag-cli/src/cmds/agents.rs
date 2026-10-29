@@ -285,6 +285,9 @@ pub enum TaskCmd {
         /// Failed or abandoned run of --source-task.
         #[arg(long, requires = "source_task")]
         source_run: Option<String>,
+        /// Total runs permitted (0 leaves the server limit unset).
+        #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=10000))]
+        max_attempts: u32,
     },
     /// Refine instructions before a task's first run; concurrent edits are refused.
     Edit {
@@ -293,6 +296,20 @@ pub enum TaskCmd {
         #[command(flatten)]
         changes: TaskEdit,
         /// Edit on a configured server instead of locally (default name: origin).
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
+        remote: Option<String>,
+    },
+    /// Inspect or change a task's durable execution-attempt limit.
+    Attempts {
+        /// Task identifier.
+        task: String,
+        /// New maximum total runs; zero leaves the server limit unset.
+        #[arg(long, requires = "expected", value_parser = clap::value_parser!(u32).range(0..=10000))]
+        max: Option<u32>,
+        /// Limit you inspected; refuses a concurrent policy change.
+        #[arg(long, requires = "max", value_parser = clap::value_parser!(u32).range(0..=10000))]
+        expected: Option<u32>,
+        /// Use a configured server instead of the local repository.
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "origin")]
         remote: Option<String>,
     },
@@ -335,6 +352,9 @@ fn task_rows(rows: &[ag_storage::meta::TaskRow]) -> String {
             t.owner.clone().unwrap_or_else(|| "-".into()),
             t.scope.join(", ")
         );
+        if t.max_attempts > 0 {
+            let _ = writeln!(s, "  attempts: {} of {}", t.attempts_started, t.max_attempts);
+        }
         if let Some(source) = &t.source_task {
             let run = t.source_run.as_deref().map(|id| format!(" · run {id}")).unwrap_or_default();
             let _ = writeln!(s, "  from {source}{run}");
@@ -346,8 +366,11 @@ fn task_rows(rows: &[ag_storage::meta::TaskRow]) -> String {
 pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
     let meta = ctx.repo.meta();
     match cmd {
-        TaskCmd::Create { title, description, scope, source_task, source_run } => {
+        TaskCmd::Create { title, description, scope, source_task, source_run, max_attempts } => {
             let (_, t) = tasks::create_task_with(meta, title, description, scope, &[], ctx.me.as_str(), |tx, task| {
+                if *max_attempts > 0 {
+                    tasks::set_attempt_limit_in(tx, &task.id, *max_attempts, 0, ctx.me.as_str(), false)?;
+                }
                 tasks::attach_source(
                     tx,
                     &task.id,
@@ -358,6 +381,31 @@ pub fn task(ctx: &Ctx, cmd: &TaskCmd) -> Result<u8> {
                 tx.task(&task.id)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound("created task missing".into()))
             })?;
             ctx.created(&t.id, &t, || format!("Created task {}", t.id))?;
+        }
+        TaskCmd::Attempts { task, max, expected, remote } => {
+            if let Some(remote) = remote {
+                let row = super::remote::task_attempts(ctx, remote, task, max.zip(*expected))?;
+                ctx.out(&row, || {
+                    format!(
+                        "Task {}: {} attempt(s) started; limit {} (0 = unset)",
+                        row.id, row.attempts_started, row.max_attempts
+                    )
+                })?;
+            } else {
+                let row = meta.write(|tx| {
+                    if let (Some(max), Some(expected)) = (max, expected) {
+                        tasks::set_attempt_limit_in(tx, task, *max, *expected, ctx.me.as_str(), true)
+                    } else {
+                        tx.task(task)?.ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("task '{task}'")))
+                    }
+                })?;
+                ctx.out(&row, || {
+                    format!(
+                        "Task {}: {} attempt(s) started; limit {} (0 = unset)",
+                        row.id, row.attempts_started, row.max_attempts
+                    )
+                })?;
+            }
         }
         TaskCmd::Edit { task, changes, remote } => {
             if let Some(remote) = remote {

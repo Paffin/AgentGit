@@ -11,7 +11,7 @@ import ReviewThreadCard from './ReviewThreadCard.vue'
 import Button from '@/ui/Button.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 const props = defineProps<{ repo: string; proposal: Proposal; quote?: LineQuote | null }>()
-const emit = defineEmits<{ quoted: []; general: [quote: LineQuote, body: string] }>()
+const emit = defineEmits<{ quoted: []; applied: []; general: [quote: LineQuote, body: string] }>()
 const auth = useAuth()
 const threads = usePagedResource(
   (cursor, signal) =>
@@ -97,6 +97,7 @@ watch([() => props.repo, () => props.proposal.id, () => auth.token], () => {
       :proposal="proposal"
       :thread="thread"
       @changed="threads.reload()"
+      @applied="emit('applied')"
     />
     <p
       v-if="!threads.data.value.length && threads.settled.value && !threads.error.value"

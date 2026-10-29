@@ -880,3 +880,25 @@ fn schema_six_tasks_upgrade_without_inventing_sources() {
     drop(upgraded);
     assert!(Meta::open(&path).unwrap().read(|tx| tx.task("task_old")).unwrap().is_some());
 }
+
+#[test]
+fn schema_seven_preserves_task_attempt_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("meta.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for migration in migrate::SQLITE_MIGRATIONS.iter().filter(|m| m.version <= 7) {
+            conn.execute_batch(migration.sql).unwrap();
+        }
+        conn.execute("INSERT INTO meta(key,value) VALUES('schema','7')", []).unwrap();
+        conn.execute("INSERT INTO tasks(id,title,description,state,scope,created_by,created_at,updated_at) VALUES('task_old','Existing task','Keep λ','in_progress','[]','user:original',1,1)", []).unwrap();
+        conn.execute("INSERT INTO agent_runs(run_id,agent,task_id,started_at,status,last_heartbeat) VALUES('run_old','old-agent','task_old',1,'failed',1)", []).unwrap();
+        conn.pragma_update(None, "user_version", 7).unwrap();
+    }
+    let upgraded = Meta::open(&path).unwrap();
+    let task = upgraded.read(|tx| tx.task("task_old")).unwrap().unwrap();
+    assert_eq!(task.max_attempts, 0);
+    assert_eq!(task.attempts_started, 1);
+    assert_eq!(task.description, "Keep λ");
+    assert!(upgraded.read(|tx| tx.run("run_old")).unwrap().is_some());
+}

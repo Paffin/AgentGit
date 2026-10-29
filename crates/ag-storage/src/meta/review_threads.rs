@@ -93,6 +93,14 @@ fn comment(row: &Row) -> Result<ThreadCommentRow, MetaError> {
     })
 }
 impl Tx<'_> {
+    /// Count all open discussions, including anchors on earlier proposal heads.
+    pub fn unresolved_review_threads(&self, proposal: &str) -> Result<u64, MetaError> {
+        let row = self
+            .conn
+            .query_one("SELECT COUNT(*) FROM review_threads WHERE proposal=?1 AND resolved=0", &params![proposal])?;
+        Ok(row.i64(0)? as u64)
+    }
+
     /// Immutable source revisions retained by review history.
     pub fn review_thread_roots(&self) -> Result<Vec<ChangesetId>, MetaError> {
         self.conn.query("SELECT source_head FROM review_threads UNION SELECT source_base FROM review_threads WHERE source_base IS NOT NULL", &[])?.iter().map(|row| parse(row.str(0)?,"thread source revision")).collect()

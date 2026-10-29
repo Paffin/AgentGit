@@ -267,3 +267,10 @@ describe('review summaries', () => {
     expect(s.current.filter((r) => r.reviewer.startsWith('agent:rev'))).toHaveLength(1)
   })
 })
+
+it('explains required discussions without calling them an approval or refusal', () => {
+  const explanation = explainBlocker(blocker('unresolved_threads', { count: 2 }))
+  expect(explanation.title).toBe('2 open line discussions must be resolved')
+  expect(explanation.hint).toContain('earlier revisions')
+  expect(explanation.severity).toBe('provide')
+})

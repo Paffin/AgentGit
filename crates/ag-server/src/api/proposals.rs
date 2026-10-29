@@ -89,13 +89,18 @@ impl App {
     /// Moves a proposal to a newer head.
     pub async fn update_proposal(&self, call: &Call, req: v1::UpdateProposalRequest) -> ApiResult<v1::Proposal> {
         let new_head_rev = require(&req.new_head, "new_head")?.to_string();
+        let expected = if req.expected_head.is_empty() {
+            None
+        } else {
+            Some(parse_id::<ChangesetId>(&req.expected_head, "expected_head")?)
+        };
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::ProposalUpdate, None, move |repo, actor| {
             let p = repo.find_proposal(&req.id)?;
             if !super::owns(&p.author, actor) {
                 return Err(ApiError::denied("only the author may update a proposal"));
             }
             let head = repo.resolve_rev(&new_head_rev)?;
-            Ok(convert::proposal(&repo.update_proposal(&p.id, &head, actor)?))
+            Ok(convert::proposal(&repo.update_proposal_at_head(&p.id, &head, actor, expected.as_ref())?))
         })
         .await
     }

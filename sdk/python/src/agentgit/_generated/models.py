@@ -206,6 +206,7 @@ __all__ = [
     "SearchTreeResponse",
     "SetAgentStateRequest",
     "SetPolicyRequest",
+    "SetTaskAttemptLimitRequest",
     "SetTaskSchedulingRequest",
     "StartRunRequest",
     "Stream",
@@ -573,6 +574,7 @@ class CreateTaskRequest:
     description: str = field(default="")
     expected_issue_version: int = field(default=0)
     idempotency_key: str = field(default="")
+    max_attempts: int = field(default=0)
     repo: str = field(default="")
     scope: list[str] = field(default_factory=list)
     source_issue: int = field(default=0)
@@ -756,6 +758,7 @@ class FileOp:
 @dataclass(kw_only=True)
 class FinishTaskRequest:
     """Only the task's owner may finish it - or an operator (`agent.operate`), whose action is recorded in the audit log as an operator's, with the owner it overrode."""
+    expected_max_attempts: int | None = field(default=None)
     id: str = field(default="")
     idempotency_key: str = field(default="")
     repo: str = field(default="")
@@ -2052,6 +2055,16 @@ class SetPolicyRequest:
 
 
 @dataclass(kw_only=True)
+class SetTaskAttemptLimitRequest:
+    """Execution policy is independent of immutable task instructions and run history."""
+    expected_max_attempts: int = field(default=0)
+    id: str = field(default="")
+    idempotency_key: str = field(default="")
+    max_attempts: int = field(default=0)
+    repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
 class SetTaskSchedulingRequest:
     """The `SetTaskSchedulingRequest` message."""
     expected_version: int = field(default=0)
@@ -2122,11 +2135,13 @@ class SyncWorkspaceResponse:
 @dataclass(kw_only=True)
 class Task:
     """The `Task` message."""
+    attempts_started: int = field(default=0)
     created_at_ms: int = field(default=0)
     created_by: str = field(default="")
     depends_on: list[str] = field(default_factory=list)
     description: str = field(default="")
     id: str = field(default="")
+    max_attempts: int = field(default=0)
     owner: str = field(default="")
     ready: bool = field(default=False)
     scope: list[str] = field(default_factory=list)
@@ -2197,6 +2212,7 @@ class UpdateIssueRequest:
 @dataclass(kw_only=True)
 class UpdateProposalRequest:
     """The `UpdateProposalRequest` message."""
+    expected_head: str = field(default="")
     id: str = field(default="")
     idempotency_key: str = field(default="")
     new_head: str = field(default="")

@@ -30,6 +30,9 @@ const invoke = (api: ReturnType<typeof createApi>, operation: string) => {
       options,
     )
 
+  if (operation === 'proposal-update')
+    return api.proposals.update('acme/new', 'proposal-one', 'new-head', 'seen-head', options)
+
   if (operation === 'task-dependency')
     return api.agents.addDependency('acme/new', 'task-one', 'task-two', options)
   if (operation === 'task-finish')
@@ -55,6 +58,7 @@ describe('repository setup request ownership', () => {
     'workspace-modify',
     'workspace-remove',
     'proposal-create',
+    'proposal-update',
     'review',
 
     'task-dependency',
@@ -92,6 +96,7 @@ describe('repository setup request ownership', () => {
     'workspace-modify',
     'workspace-remove',
     'proposal-create',
+    'proposal-update',
     'review',
 
     'task-dependency',
@@ -111,4 +116,17 @@ describe('repository setup request ownership', () => {
     await expect(invoke(createApi(client), operation)).rejects.toMatchObject({ status: 401 })
     expect(rejected).not.toHaveBeenCalled()
   })
+})
+
+it('sends the inspected proposal head with a replacement', async () => {
+  let sent: unknown
+  const client = new ApiClient({
+    getToken: () => '',
+    fetch: async (_input, init) => {
+      sent = JSON.parse(String(init?.body))
+      return new Response('{}', { headers: { 'content-type': 'application/json' } })
+    },
+  })
+  await createApi(client).proposals.update('acme/repo', 'proposal', 'next', 'inspected')
+  expect(sent).toEqual({ new_head: 'next', expected_head: 'inspected' })
 })

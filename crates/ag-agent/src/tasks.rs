@@ -257,17 +257,26 @@ pub(crate) fn claim_in_tx(tx: &Tx<'_>, task: &str, owner: &str) -> Result<(), Me
 /// (`agent:bot#run_…`) may only finish the task *that run* claimed - another run of the same agent has no say in
 /// it. Use [`finish_task_as_operator`] for an operator that overrides the owner.
 pub fn finish_task(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_inner(meta, task, state, actor, false)
+    finish_task_with_limit(meta, task, state, actor, false, None)
 }
 
 /// Like [`finish_task`] for an operator: the task is finished whoever owns it. The audit entry says that it was
 /// an operator's doing and whose task it overrode, so the log never shows an owner finishing what an operator
 /// finished for it.
 pub fn finish_task_as_operator(meta: &Meta, task: &str, state: &str, actor: &str) -> Result<(), AgentError> {
-    finish_task_inner(meta, task, state, actor, true)
+    finish_task_with_limit(meta, task, state, actor, true, None)
 }
 
-fn finish_task_inner(meta: &Meta, task: &str, state: &str, actor: &str, operator: bool) -> Result<(), AgentError> {
+/// Finishes only if the optional execution-policy precondition still matches.
+/// The check shares the task transition transaction; zero is a meaningful expected limit.
+pub fn finish_task_with_limit(
+    meta: &Meta,
+    task: &str,
+    state: &str,
+    actor: &str,
+    operator: bool,
+    expected_max_attempts: Option<u32>,
+) -> Result<(), AgentError> {
     if !["done", "cancelled"].contains(&state) {
         return Err(AgentError::Invalid("state must be 'done' or 'cancelled'".into()));
     }
@@ -277,6 +286,9 @@ fn finish_task_inner(meta: &Meta, task: &str, state: &str, actor: &str, operator
     };
     meta.write(|tx| {
         let t = tx.task(task)?.ok_or_else(|| MetaError::NotFound(format!("task '{task}'")))?;
+        if expected_max_attempts.is_some_and(|expected| t.max_attempts != expected) {
+            return Err(MetaError::Invalid("task attempt limit changed; reload before finishing".into()));
+        }
         let mut details = json!({"state": state});
         match t.owner.as_ref() {
             Some(o) if operator => {
@@ -316,7 +328,9 @@ pub fn ready_tasks(meta: &Meta) -> Result<Vec<TaskRow>, AgentError> {
     Ok(meta.read(|tx| {
         let mut out = Vec::new();
         for t in tx.tasks(Some("open"))? {
-            if unfinished_dependencies(tx, &t.id)?.is_empty() {
+            if unfinished_dependencies(tx, &t.id)?.is_empty()
+                && (t.max_attempts == 0 || t.attempts_started < u64::from(t.max_attempts))
+            {
                 out.push(t);
             }
         }
@@ -408,4 +422,58 @@ fn assignment_owner(tx: &Tx<'_>, agent: &str) -> Result<Option<String>, MetaErro
         return Err(MetaError::Invalid("the selected agent is disabled".into()));
     }
     Ok(Some(registered.identity))
+}
+
+/// Largest explicit attempt limit supported by the task policy and history readers.
+pub const MAX_ATTEMPTS: u32 = 10_000;
+
+/// Validates a task-local attempt limit; zero retains the legacy server behavior.
+pub fn validate_attempt_limit(max: u32) -> Result<(), AgentError> {
+    if max > MAX_ATTEMPTS {
+        return Err(AgentError::Invalid(format!("max_attempts must be between 0 and {MAX_ATTEMPTS}")));
+    }
+    Ok(())
+}
+
+/// Updates execution policy without changing task instructions or run history.
+/// The creator may edit before execution; afterwards an operator is required.
+pub fn set_attempt_limit_in(
+    tx: &Tx<'_>,
+    id: &str,
+    max: u32,
+    expected: u32,
+    actor: &str,
+    operator: bool,
+) -> Result<TaskRow, MetaError> {
+    validate_attempt_limit(max).map_err(|e| MetaError::Invalid(e.to_string()))?;
+    let task = tx.task(id)?.ok_or_else(|| MetaError::NotFound(format!("task '{id}'")))?;
+    validate_attempt_update(&task, expected, actor, operator)?;
+    if max == expected {
+        return Ok(task);
+    }
+    tx.task_set_attempt_limit(id, max)?;
+    tx.audit_append(
+        actor,
+        "task.attempts",
+        id,
+        &json!({"before":expected,"after":max,"attempts_started":task.attempts_started,"operator":operator}),
+    )?;
+    tx.outbox_push("task.attempts", &json!({"id":id,"max_attempts":max}))?;
+    tx.task(id)?.ok_or_else(|| MetaError::Corrupt("updated task missing".into()))
+}
+
+fn validate_attempt_update(task: &TaskRow, expected: u32, actor: &str, operator: bool) -> Result<(), MetaError> {
+    if !operator && (task.created_by.split('#').next() != actor.split('#').next() || task.attempts_started > 0) {
+        return Err(MetaError::Invalid(
+            "only an operator can change an attempt limit after execution starts; before that the creator may edit it"
+                .into(),
+        ));
+    }
+    if task.state == "done" || task.state == "cancelled" {
+        return Err(MetaError::Invalid("finished task policy is immutable; create a follow-up task".into()));
+    }
+    if task.max_attempts != expected {
+        return Err(MetaError::Invalid("task attempt limit changed; reload before saving".into()));
+    }
+    Ok(())
 }

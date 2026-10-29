@@ -532,6 +532,12 @@ impl AgentService for Grpc {
     async fn update_task(&self, request: Request<v1::UpdateTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.update", update_task)
     }
+    async fn set_task_attempt_limit(
+        &self,
+        request: Request<v1::SetTaskAttemptLimitRequest>,
+    ) -> Result<Response<v1::Task>, Status> {
+        unary!(self, request, "task.set_attempt_limit", set_task_attempt_limit)
+    }
     async fn assign_task(&self, request: Request<v1::AssignTaskRequest>) -> Result<Response<v1::Task>, Status> {
         unary!(self, request, "task.assign", assign_task)
     }

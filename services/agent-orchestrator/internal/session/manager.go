@@ -175,6 +175,9 @@ func (m *Manager) Start(ctx context.Context, req Request) (*Info, error) {
 		return nil, fmt.Errorf("read claimed task: %w", err)
 	}
 	req.Task = *claimed
+	if claimed.MaxAttempts > 0 {
+		req.Attempt = int(claimed.AttemptsStarted)
+	}
 	s := newSession(m, req, run, key)
 	fail := func(cause error, summary string) (*Info, error) {
 		m.completeRun(run.RunID, req.Repo, "failed", summary)
@@ -316,6 +319,12 @@ func (m *Manager) completeRun(runID, repo, status, summary string) {
 // operator did, and whose task it was. No credential is minted for it.
 func (m *Manager) FinishTask(ctx context.Context, repo, taskID, state string) error {
 	_, err := m.o.Orch.FinishTask(ctx, repo, taskID, state)
+	return err
+}
+
+// CancelTaskAtAttemptLimit preserves a task when its retry policy changed after scheduling.
+func (m *Manager) CancelTaskAtAttemptLimit(ctx context.Context, repo, taskID string, expected uint32) error {
+	_, err := m.o.Orch.FinishTaskAtAttemptLimit(ctx, repo, taskID, "cancelled", expected)
 	return err
 }
 

@@ -213,3 +213,15 @@ describe('describeChange', () => {
     expect(e).toEqual([{ kind: 'allows', text: 'Authors may now approve their own changes.' }])
   })
 })
+
+it('round-trips the discussion gate and preserves it when choosing a preset', () => {
+  const doc = { require_resolved_threads: true }
+  expect(docFromForm(formFromDoc(doc), doc).require_resolved_threads).toBe(true)
+  expect(applyPreset('solo', doc).require_resolved_threads).toBe(true)
+  expect(describePolicy(doc).join(' ')).toContain('Every line discussion must be resolved')
+  expect(
+    describeChange({}, doc)
+      .map((item) => item.text)
+      .join(' '),
+  ).toContain('now block landing')
+})

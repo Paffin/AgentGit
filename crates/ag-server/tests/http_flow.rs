@@ -226,8 +226,24 @@ async fn a_review_cannot_approve_a_head_the_reviewer_did_not_see() {
         .await;
     assert_eq!(proposal.status, 200, "{}", proposal.json);
     let path = format!("/v1/repos/acme/review-head/proposals/{}", proposal.json["id"].as_str().unwrap());
-    let changed = author.call("PATCH", &path, Some(json!({"new_head": updated.to_string()})), &[]).await;
+    let changed = author
+        .call("PATCH", &path, Some(json!({"new_head": updated.to_string(), "expected_head": seen.to_string()})), &[])
+        .await;
     assert_eq!(changed.status, 200, "{}", changed.json);
+
+    let stale_update = author
+        .call(
+            "PATCH",
+            &path,
+            Some(json!({
+                "new_head": seen.to_string(), "expected_head": seen.to_string()
+            })),
+            &[],
+        )
+        .await;
+    assert_eq!(stale_update.status, 412, "{}", stale_update.json);
+    assert_eq!(stale_update.json["error"]["code"], "failed_precondition");
+    assert_eq!(author.get(&path).await.json["proposal"]["head"], updated.to_string());
 
     for decision in ["approve", "request_changes", "comment"] {
         let stale = reviewer

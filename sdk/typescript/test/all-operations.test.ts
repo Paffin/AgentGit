@@ -140,7 +140,9 @@ describe('the tour', () => {
     expect((await alice.proposals.list({ repo })).proposals).toHaveLength(1);
     // move the proposal to a newer head
     const m2 = await alice.workspaces.modify({ repo, name: 'w1', message: 'more', changes: [putFile('d.txt', 'd\n')] });
-    expect((await alice.proposals.update({ repo, id: p1.id, new_head: m2.head })).head).toBe(m2.head);
+    expect((await alice.proposals.update({ repo, id: p1.id, new_head: m2.head, expected_head: m1.head })).head).toBe(
+      m2.head,
+    );
     expect((await alice.proposals.get({ repo, id: p1.id })).proposal.head).toBe(m2.head);
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
     expect(
@@ -321,6 +323,10 @@ describe('the tour', () => {
     });
     expect(refined.title).toBe('Refined tour task');
     expect((await alice.tasks.get({ repo, id: task.id })).description).toBe('A concrete result');
+    expect(
+      (await alice.tasks.setAttemptLimit({ repo, id: task.id, max_attempts: 2, expected_max_attempts: 0 }))
+        .max_attempts,
+    ).toBe(2);
     const dep = await alice.tasks.create({ repo, title: 'depends' });
     await alice.tasks.depend({ repo, task: dep.id, depends_on: task.id });
     expect((await alice.tasks.list({ repo })).tasks).toHaveLength(2);
@@ -353,7 +359,7 @@ describe('the tour', () => {
     const entry = await runner.provenance.submit({ repo, record, signature: signProvenance(record, key.privateKey) });
     expect(entry.verified).toBe(true);
     expect((await alice.provenance.list({ repo, changeset: head })).entries).toHaveLength(1);
-    await runner.tasks.finish({ repo, id: task.id, state: 'done' });
+    await runner.tasks.finish({ repo, id: task.id, state: 'done', expected_max_attempts: 2 });
     await runner.agents.complete({ repo, run_id: run.run_id, status: 'completed' });
     expect((await alice.tasks.get({ repo, id: dep.id })).ready).toBe(true);
     const followUp = await alice.tasks.create({ repo, title: 'Separate follow-up', source_task: task.id });

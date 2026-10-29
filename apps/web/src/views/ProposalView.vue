@@ -525,7 +525,8 @@ function changed() {
                 :proposal="proposal"
                 :quote="lineQuote"
                 @quoted="lineQuote = null"
-                @general="useGeneralDiscussion" />
+                @general="useGeneralDiscussion"
+                @applied="changed" />
               <ProposalComment
                 :repo="repo"
                 :proposal="proposal"

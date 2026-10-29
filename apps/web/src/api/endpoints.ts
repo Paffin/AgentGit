@@ -340,10 +340,10 @@ export function createApi(c: ApiClient) {
       close: (repo: string, id: string, o?: Opts) =>
         c.post<Proposal>(r(repo, `/proposals/${encodeURIComponent(id)}/close`), {}, o),
       /** Moves a proposal to a newer head (only its author may). */
-      update: (repo: string, id: string, newHead: string, o?: Opts) =>
+      update: (repo: string, id: string, newHead: string, expectedHead?: string, o?: SessionOpts) =>
         c.patch<Proposal>(
           r(repo, `/proposals/${encodeURIComponent(id)}`),
-          { new_head: newHead },
+          { new_head: newHead, expected_head: expectedHead },
           o,
         ),
       create: (

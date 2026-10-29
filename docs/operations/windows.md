@@ -23,24 +23,54 @@ what works, what is adapted, what is refused, and which tests prove each stateme
 | `ag clone/fetch/pull/push`, `ag remote` | works | TLS is rustls with bundled roots (no OpenSSL, no Windows certificate store) |
 | `ag-server` (HTTP/JSON + gRPC, SQLite metadata, filesystem objects) | works | console process; Ctrl+C / Ctrl+Break / closing the console stop it gracefully |
 | PostgreSQL metadata, S3 objects | client code compiles and its offline tests run; **not exercised against a server on Windows** | the backend suites need a PostgreSQL / S3 test server (Linux job) |
-| Web UI, SDKs, Go orchestrator | not part of this page | not run by the Windows workflow |
+| Web UI | embedded build and HTTP first-use smoke in development Windows packaging | interactive browser qualification on Windows remains open |
+| SDKs, Go orchestrator | not part of this page | no native executor is included in the Windows ZIP |
 | `ag-sandbox`, `ag-worker` | **not supported** | the sandbox is Linux namespaces/seccomp/cgroups (or a container runtime). `ag-worker.exe` builds, but every invocation prints *"not supported on this platform"* and exits 2 (`crates/ag-worker/tests/unsupported.rs`). `ag validate run` still works: it runs a command **without** sandboxing, as it does everywhere. |
 
 ## Install
 
-Build from source (a release installer is the release track's job, see [Releasing](releasing.md)):
+**The published beta.7 release has no Windows archive.** For that release, build from source using the
+instructions below. The development release workflow now prepares a native x86_64 ZIP with `ag.exe`,
+`ag-server.exe` (including the Web UI) and `ag-mcp.exe`. It excludes the Linux-only worker and the
+executor that has not been qualified on Windows. A native Windows build, isolated install and first-use
+smoke test must pass before the ZIP can be included in a future tagged release.
 
-1. Rust 1.89+ (`rustup`), the *MSVC* toolchain (`x86_64-pc-windows-msvc`).
-2. Visual Studio Build Tools with the **Desktop development with C++** workload (SQLite and the TLS libraries
-   are compiled from source). The CI runner also has NASM on `PATH`; whether a clean machine needs it is **(unverified)**.
-3. `cargo install --path crates/ag-cli` and `cargo install --path crates/ag-server`.
-4. Git for Windows only if you use `ag git ...`.
+To try an unpublished build, download the `windows-install-rehearsal` artifact from a successful
+[Windows workflow](../../.github/workflows/windows.yml) run and extract it into a folder you own.
+It contains the distribution ZIP, `SHA256SUMS` and `install.ps1`. From that folder, use the version in
+the ZIP filename (replace `VERSION` below):
 
-A built binary needs no installer; whether it needs the Visual C++ redistributable depends on the CRT linkage
-(**unverified**: build with `-C target-feature=+crt-static` to avoid it).
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version VERSION -BaseUrl . -NoAttestation -Prefix "$env:LOCALAPPDATA\AgentGit-preview"
+& "$env:LOCALAPPDATA\AgentGit-preview\bin\ag-server.exe" dev --open
+```
 
-The demo from the README runs on Windows as [`examples/quickstart.ps1`](../../examples/quickstart.ps1) (PowerShell 7
-and Windows PowerShell 5.1); CI runs it in both.
+Stop any running AgentGit programs before upgrading an existing installation.
+The installer verifies the ZIP checksum before writing executables. It only extracts the three named
+programs and does not change your PowerShell profile or permanent `PATH`. Its final output includes
+commands for adding the installation to the current terminal and opening the demo. A custom directory
+can contain spaces or brackets. Remove that installation directory to uninstall; demo data remains in
+`ag-dev-data` beneath the directory where you launched the server.
+
+A public release's download can additionally be verified with `gh attestation verify` when GitHub CLI is
+installed and signed in; `-RequireAttestation` makes that mandatory. Rehearsal artifacts are not attested,
+so use `-NoAttestation` when testing one with a signed-in GitHub CLI. Without an explicit version the
+installer selects a published release that actually contains a Windows ZIP. Until one exists, it says
+so without installing anything. The executables are not Authenticode-signed; this flow does not bypass
+Windows application trust decisions.
+
+### Build from source today
+
+1. Install Rust 1.89+ (`rustup`), using `x86_64-pc-windows-msvc`.
+2. Install Visual Studio Build Tools with **Desktop development with C++**. SQLite and TLS libraries
+   compile from source. CI also has NASM on `PATH`; whether a clean machine needs it remains unverified.
+3. Run `cargo install --path crates/ag-cli --locked` and `cargo install --path crates/ag-server --locked`.
+4. Install Git for Windows only if you use `ag git ...`.
+
+The future release ZIP builds with a static C runtime to avoid requiring a separate Visual C++
+redistributable. That packaging path still needs its first Windows release-run qualification.
+The CLI demo also runs as [`examples/quickstart.ps1`](../../examples/quickstart.ps1), tested in
+PowerShell 7 and Windows PowerShell 5.1.
 
 ## What AgentGit does with your files on Windows
 

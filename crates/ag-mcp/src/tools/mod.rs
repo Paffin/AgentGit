@@ -11,6 +11,7 @@ use crate::output::{ToolError, ToolOutput};
 
 pub mod coordinate;
 pub mod discussions;
+pub mod file_drafts;
 pub mod proposals;
 pub mod read;
 pub mod workspace;
@@ -99,6 +100,7 @@ impl Registry {
         let mut tools = Vec::new();
         tools.extend(read::tools());
         tools.extend(workspace::tools());
+        tools.extend(file_drafts::tools());
         tools.extend(proposals::tools());
         tools.extend(discussions::tools());
         tools.extend(coordinate::tools());
@@ -424,13 +426,23 @@ mod tests {
                     // Private notes require the review opt-in even though reading does not mutate them.
                     assert!(t.ann.read_only);
                 }
+                Group::Workspace if matches!(t.name, "file_draft_get" | "file_draft_list") => {
+                    assert!(t.ann.read_only);
+                }
                 _ => assert!(!t.ann.read_only, "{} changes state so it cannot be marked read-only", t.name),
             }
         }
         let destructive: Vec<&str> = reg.all().iter().filter(|t| t.ann.destructive).map(|t| t.name).collect();
         assert_eq!(
             destructive,
-            ["workspace_delete", "proposal_close", "review_draft_clear", "comment_draft_clear", "integrate"],
+            [
+                "workspace_delete",
+                "file_draft_clear",
+                "proposal_close",
+                "review_draft_clear",
+                "comment_draft_clear",
+                "integrate"
+            ],
             "{destructive:?}"
         );
     }

@@ -28,6 +28,7 @@ __all__ = [
     "ClaimJobRequest",
     "ClaimJobResponse",
     "ClearCommentDraftRequest",
+    "ClearFileDraftRequest",
     "ClearReviewDraftRequest",
     "CloseProposalRequest",
     "CommentDraft",
@@ -62,6 +63,8 @@ __all__ = [
     "FailJobRequest",
     "FileChange",
     "FileDiff",
+    "FileDraft",
+    "FileDraftSummary",
     "FileOp",
     "FinishTaskRequest",
     "FsckIssue",
@@ -72,6 +75,7 @@ __all__ = [
     "GetCandidateRequest",
     "GetChangesetRequest",
     "GetCommentDraftRequest",
+    "GetFileDraftRequest",
     "GetIssueRequest",
     "GetJobRequest",
     "GetOperationRequest",
@@ -111,6 +115,8 @@ __all__ = [
     "ListCredentialsResponse",
     "ListDirectoryRequest",
     "ListDirectoryResponse",
+    "ListFileDraftsRequest",
+    "ListFileDraftsResponse",
     "ListIssueActivityRequest",
     "ListIssueActivityResponse",
     "ListIssuesRequest",
@@ -210,6 +216,7 @@ __all__ = [
     "RunQueueResponse",
     "RunSpec",
     "SaveCommentDraftRequest",
+    "SaveFileDraftRequest",
     "SaveReviewDraftRequest",
     "SaveRunOutputRequest",
     "SearchMatch",
@@ -463,6 +470,15 @@ class ClearCommentDraftRequest:
     expected_version: int = field(default=0)
     id: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ClearFileDraftRequest:
+    """The `ClearFileDraftRequest` message."""
+    expected_version: int = field(default=0)
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -804,6 +820,31 @@ class FileDiff:
 
 
 @dataclass(kw_only=True)
+class FileDraft:
+    """Private existing-file edit owned by the current acting identity."""
+    base: str = field(default="")
+    content: str = field(default="")
+    executable: bool = field(default=False)
+    file_type: str = field(default="")
+    original_blob_id: str = field(default="")
+    path: str = field(default="")
+    present: bool = field(default=False)
+    stream: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
+class FileDraftSummary:
+    """Discovery carries no private replacement bytes."""
+    base: str = field(default="")
+    path: str = field(default="")
+    stream: str = field(default="")
+    updated_at_ms: int = field(default=0)
+    version: int = field(default=0)
+
+
+@dataclass(kw_only=True)
 class FileOp:
     """The `FileOp` message."""
     blob_id: str = field(default="")
@@ -891,6 +932,14 @@ class GetCommentDraftRequest:
     """The `GetCommentDraftRequest` message."""
     id: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class GetFileDraftRequest:
+    """The `GetFileDraftRequest` message."""
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
 
 
 @dataclass(kw_only=True)
@@ -1220,6 +1269,19 @@ class ListDirectoryResponse:
     entries: list[DirEntry] = field(default_factory=list)
     next_page_token: str = field(default="")
     tree_id: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListFileDraftsRequest:
+    """The `ListFileDraftsRequest` message."""
+    repo: str = field(default="")
+    stream: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class ListFileDraftsResponse:
+    """The `ListFileDraftsResponse` message."""
+    drafts: list[FileDraftSummary] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -2094,6 +2156,17 @@ class SaveCommentDraftRequest:
     head: str = field(default="")
     id: str = field(default="")
     repo: str = field(default="")
+
+
+@dataclass(kw_only=True)
+class SaveFileDraftRequest:
+    """The `SaveFileDraftRequest` message."""
+    base: str = field(default="")
+    content: str = field(default="")
+    expected_version: int = field(default=0)
+    path: str = field(default="")
+    repo: str = field(default="")
+    stream: str = field(default="")
 
 
 @dataclass(kw_only=True)

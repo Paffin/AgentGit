@@ -56,7 +56,9 @@
       "proposal.save_draft",
       "proposal.clear_draft",
       "proposal.save_comment_draft",
-      "proposal.clear_comment_draft"
+      "proposal.clear_comment_draft",
+      "file_draft.save",
+      "file_draft.clear"
     ],
     "naturalWhenFieldPresent": {
       "workspace.modify": "expected_head",
@@ -101,6 +103,7 @@
     "admin.roles": "roles",
     "admin": "admin",
     "migration": "migrations",
-    "issue": "issues"
+    "issue": "issues",
+    "file_draft": "drafts"
   }
 }

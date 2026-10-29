@@ -28,6 +28,7 @@ from agentgit._generated.models import (
     ClaimJobRequest,
     ClaimJobResponse,
     ClearCommentDraftRequest,
+    ClearFileDraftRequest,
     ClearReviewDraftRequest,
     CloseProposalRequest,
     CommentDraft,
@@ -62,6 +63,8 @@ from agentgit._generated.models import (
     FailJobRequest,
     FileChange,
     FileDiff,
+    FileDraft,
+    FileDraftSummary,
     FileOp,
     FinishTaskRequest,
     FsckIssue,
@@ -72,6 +75,7 @@ from agentgit._generated.models import (
     GetCandidateRequest,
     GetChangesetRequest,
     GetCommentDraftRequest,
+    GetFileDraftRequest,
     GetIssueRequest,
     GetJobRequest,
     GetOperationRequest,
@@ -111,6 +115,8 @@ from agentgit._generated.models import (
     ListCredentialsResponse,
     ListDirectoryRequest,
     ListDirectoryResponse,
+    ListFileDraftsRequest,
+    ListFileDraftsResponse,
     ListIssueActivityRequest,
     ListIssueActivityResponse,
     ListIssuesRequest,
@@ -210,6 +216,7 @@ from agentgit._generated.models import (
     RunQueueResponse,
     RunSpec,
     SaveCommentDraftRequest,
+    SaveFileDraftRequest,
     SaveReviewDraftRequest,
     SaveRunOutputRequest,
     SearchMatch,
@@ -573,6 +580,63 @@ class CredentialsApi:
     ) -> RevokeCredentialResponse:
         """Revoke a credential (`DELETE /v1/credentials/{credential_id}`, operation `admin.credentials.revoke`)."""
         return self._c._call("admin.credentials.revoke", {"credential_id": credential_id}, options, RevokeCredentialResponse)
+
+
+
+class DraftsApi:
+    """The `drafts` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: SyncCaller) -> None:
+        self._c = caller
+
+    def clear(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`)."""
+        return self._c._call("file_draft.clear", {"repo": repo, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+    def get(
+        self,
+        *,
+        repo: str,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`)."""
+        return self._c._call("file_draft.get", {"repo": repo, "path": path, "stream": stream}, options, FileDraft)
+
+    def list(
+        self,
+        *,
+        repo: str,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListFileDraftsResponse:
+        """List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`)."""
+        return self._c._call("file_draft.list", {"repo": repo, "stream": stream}, options, ListFileDraftsResponse)
+
+    def save(
+        self,
+        *,
+        repo: str,
+        base: str | None = None,
+        content: str | None = None,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`)."""
+        return self._c._call("file_draft.save", {"repo": repo, "base": base, "content": content, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
 
 
 
@@ -2279,6 +2343,63 @@ class AsyncCredentialsApi:
     ) -> RevokeCredentialResponse:
         """Revoke a credential (`DELETE /v1/credentials/{credential_id}`, operation `admin.credentials.revoke`)."""
         return await self._c._call("admin.credentials.revoke", {"credential_id": credential_id}, options, RevokeCredentialResponse)
+
+
+
+class AsyncDraftsApi:
+    """The `drafts` operations."""
+
+    __slots__ = ("_c",)
+
+    def __init__(self, caller: AsyncCaller) -> None:
+        self._c = caller
+
+    async def clear(
+        self,
+        *,
+        repo: str,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`)."""
+        return await self._c._call("file_draft.clear", {"repo": repo, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
+
+    async def get(
+        self,
+        *,
+        repo: str,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`)."""
+        return await self._c._call("file_draft.get", {"repo": repo, "path": path, "stream": stream}, options, FileDraft)
+
+    async def list(
+        self,
+        *,
+        repo: str,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> ListFileDraftsResponse:
+        """List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`)."""
+        return await self._c._call("file_draft.list", {"repo": repo, "stream": stream}, options, ListFileDraftsResponse)
+
+    async def save(
+        self,
+        *,
+        repo: str,
+        base: str | None = None,
+        content: str | None = None,
+        expected_version: int | None = None,
+        path: str | None = None,
+        stream: str | None = None,
+        options: CallOptions | None = None,
+    ) -> FileDraft:
+        """Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`)."""
+        return await self._c._call("file_draft.save", {"repo": repo, "base": base, "content": content, "expected_version": expected_version, "path": path, "stream": stream}, options, FileDraft)
 
 
 

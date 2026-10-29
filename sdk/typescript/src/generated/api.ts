@@ -39,6 +39,12 @@ export const NAMESPACE_METHODS = {
     mint: 'admin.credentials.mint',
     revoke: 'admin.credentials.revoke',
   },
+  drafts: {
+    clear: 'file_draft.clear',
+    get: 'file_draft.get',
+    list: 'file_draft.list',
+    save: 'file_draft.save',
+  },
   events: {
     replay: 'events.replay',
     subscribe: 'events.subscribe',
@@ -240,6 +246,16 @@ export interface Api {
     mint(request: Req<'admin.credentials.mint'>, options?: CallOptions): Promise<Res<'admin.credentials.mint'>>;
     /** Revoke a credential (`DELETE /v1/credentials/{credential_id}`, operation `admin.credentials.revoke`) */
     revoke(request: Req<'admin.credentials.revoke'>, options?: CallOptions): Promise<Res<'admin.credentials.revoke'>>;
+  };
+  readonly drafts: {
+    /** Clear private file drafts (`DELETE /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.clear`) */
+    clear(request: Req<'file_draft.clear'>, options?: CallOptions): Promise<Res<'file_draft.clear'>>;
+    /** Get private file drafts (`GET /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.get`) */
+    get(request: Req<'file_draft.get'>, options?: CallOptions): Promise<Res<'file_draft.get'>>;
+    /** List private file drafts (`GET /v1/repos/{owner}/{rname}/file-drafts`, operation `file_draft.list`) */
+    list(request: Req<'file_draft.list'>, options?: CallOptions): Promise<Res<'file_draft.list'>>;
+    /** Save private file drafts (`PUT /v1/repos/{owner}/{rname}/file-draft`, operation `file_draft.save`) */
+    save(request: Req<'file_draft.save'>, options?: CallOptions): Promise<Res<'file_draft.save'>>;
   };
   readonly events: {
     /** Replay events after a sequence number (query: after_seq, limit, topics=a,b) (`GET /v1/repos/{owner}/{rname}/events/replay`, operation `events.replay`) */

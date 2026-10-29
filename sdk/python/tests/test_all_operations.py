@@ -153,6 +153,19 @@ def test_workspaces_proposals_reviews_and_the_execution_plane(tour: dict[str, Ag
     )
     assert alice.workspaces.get(repo=REPO, name="w1").head == m1.head
     assert alice.workspaces.sync(repo=REPO, name="w1").status == "up_to_date"
+    assert not alice.drafts.get(repo=REPO, stream="main", path="a.txt").present
+    file_draft = alice.drafts.save(
+        repo=REPO,
+        stream="main",
+        path="a.txt",
+        base=m1.head,
+        content="cHJpdmF0ZSBlZGl0Cg==",
+        expected_version=0,
+    )
+    assert len(alice.drafts.list(repo=REPO, stream="main").drafts) == 1
+    assert not alice.drafts.clear(
+        repo=REPO, stream="main", path="a.txt", expected_version=file_draft.version
+    ).present
 
     p1 = alice.proposals.create(repo=REPO, stream="main", head=m1.head, title="seed")
     assert len(alice.proposals.list(repo=REPO).proposals) == 1

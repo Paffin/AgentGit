@@ -39,6 +39,7 @@ from agentgit._generated.namespaces import (
     AsyncAdminApi,
     AsyncAgentsApi,
     AsyncCredentialsApi,
+    AsyncDraftsApi,
     AsyncEventsApi,
     AsyncHistoryApi,
     AsyncIntegrationApi,
@@ -59,6 +60,7 @@ from agentgit._generated.namespaces import (
     AsyncTreeApi,
     AsyncWorkspacesApi,
     CredentialsApi,
+    DraftsApi,
     EventsApi,
     HistoryApi,
     IntegrationApi,
@@ -252,6 +254,7 @@ class AgentGitClient:
     session: SessionApi
     repos: ReposApi
     workspaces: WorkspacesApi
+    drafts: DraftsApi
     proposals: ProposalsApi
     integration: IntegrationApi
     queue: QueueApi
@@ -306,6 +309,7 @@ class AgentGitClient:
         self.session = SessionApi(self)
         self.repos = ReposApi(self)
         self.workspaces = WorkspacesApi(self)
+        self.drafts = DraftsApi(self)
         self.proposals = ProposalsApi(self)
         self.integration = IntegrationApi(self)
         self.queue = QueueApi(self)
@@ -611,6 +615,7 @@ class AsyncAgentGitClient:
     session: AsyncSessionApi
     repos: AsyncReposApi
     workspaces: AsyncWorkspacesApi
+    drafts: AsyncDraftsApi
     proposals: AsyncProposalsApi
     integration: AsyncIntegrationApi
     queue: AsyncQueueApi
@@ -667,6 +672,7 @@ class AsyncAgentGitClient:
         self.session = AsyncSessionApi(self)
         self.repos = AsyncReposApi(self)
         self.workspaces = AsyncWorkspacesApi(self)
+        self.drafts = AsyncDraftsApi(self)
         self.proposals = AsyncProposalsApi(self)
         self.integration = AsyncIntegrationApi(self)
         self.queue = AsyncQueueApi(self)

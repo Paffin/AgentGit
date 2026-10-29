@@ -136,6 +136,19 @@ describe('the tour', () => {
     });
     expect((await alice.workspaces.get({ repo, name: 'w1' })).head).toBe(m1.head);
     expect((await alice.workspaces.sync({ repo, name: 'w1' })).status).toBe('up_to_date');
+    expect((await alice.drafts.get({ repo, stream: 'main', path: 'a.txt' })).present).toBe(false);
+    const fileDraft = await alice.drafts.save({
+      repo,
+      stream: 'main',
+      path: 'a.txt',
+      base: m1.head,
+      content: Buffer.from('private edit\n').toString('base64'),
+      expected_version: 0,
+    });
+    expect((await alice.drafts.list({ repo, stream: 'main' })).drafts).toHaveLength(1);
+    expect(
+      (await alice.drafts.clear({ repo, stream: 'main', path: 'a.txt', expected_version: fileDraft.version })).present,
+    ).toBe(false);
 
     const p1 = await alice.proposals.create({ repo, stream: 'main', head: m1.head, title: 'seed' });
     expect((await alice.proposals.list({ repo })).proposals).toHaveLength(1);

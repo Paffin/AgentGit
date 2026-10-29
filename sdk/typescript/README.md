@@ -512,6 +512,13 @@ first. These drafts contain `head` and `body` (up to 16 KiB of UTF-8), remain se
 from review-decision drafts, and can be saved on closed proposals. Saving or clearing
 a draft never posts a comment; post explicitly after inspecting the current proposal head.
 
+Private file edits use `client.drafts.get`, `save`, `clear` and `list` after negotiating
+`files.drafts`. Identify the draft by repository, stream and existing file path.
+Save the complete base64-encoded file content with its original `base` changeset and
+inspected `expected_version`. Drafts are limited to 4 MiB each and 20 live drafts per
+account/repository. Listing returns metadata only. Saving never publishes a changeset;
+inspect the current file before explicitly applying a saved draft to a workspace.
+
 Servers advertising `workspaces.conflict_origins` may include `conflict.origin` with
 `base`, `ours`, and `theirs` source paths when a rename moved the file. During workspace
 sync, read `origin.ours` at the workspace head and `origin.theirs` at `stream_head`;

@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Fixed
+
+- Browser file edits and renames preserve UTF-8 BOM and uniform CRLF line endings, including textarea normalization. Rename-only changes retain the original file bytes.
+
 ### Added
 
 - The Web UI has a shared, restrained visual system across the work queue, repository list and overview: readable controls, sentence-case table headers, semantic status icons and a consolidated summary strip. Existing routes, URL filters, permissions and light/dark modes are retained.

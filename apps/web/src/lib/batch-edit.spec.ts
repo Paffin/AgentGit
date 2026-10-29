@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { batchChanges, restoreBatch, type DraftFile } from './batch-edit'
+import { decodeUtf8 } from './text'
 const file = (over: Partial<DraftFile> = {}): DraftFile => ({
   id: '1',
   originalPath: 'a.txt',
@@ -43,5 +44,35 @@ describe('multi-file edits', () => {
     expect(() => restoreBatch(JSON.stringify({ ...draft, files: [{ path: 'bad' }] }))).toThrow(
       /draft/,
     )
+  })
+})
+
+describe('existing text file formats', () => {
+  const bytesOf = (content: string) => Array.from(atob(content), (c) => c.charCodeAt(0))
+  it.each(['\ufeffa\n', '\ufeffa\r\n', 'a\r\nb\n'])(
+    'preserves all bytes on a rename: %j',
+    (source) => {
+      const bytes = new TextEncoder().encode(source)
+      const decoded = decodeUtf8(bytes)
+      const changes = batchChanges([
+        file({ path: 'renamed.txt', original: decoded, text: decoded }),
+      ])
+      const put = changes.find((change) => change.op === 'put')!
+      expect(bytesOf(put.content!)).toEqual(Array.from(bytes))
+    },
+  )
+  it('retains BOM and CRLF after a textarea edit and rename', () => {
+    const original = decodeUtf8(new TextEncoder().encode('\ufefffirst\r\nsecond\r\n'))
+    const changes = batchChanges([
+      file({ path: 'renamed.txt', original, text: 'changed\nsecond\n' }),
+    ])
+    const put = changes.find((change) => change.op === 'put')!
+    expect(bytesOf(put.content!)).toEqual(
+      Array.from(new TextEncoder().encode('\ufeffchanged\r\nsecond\r\n')),
+    )
+  })
+  it('does not introduce a BOM or change LF for an ordinary file', () => {
+    const changes = batchChanges([file({ original: 'first\n', text: 'changed\n' })])
+    expect(bytesOf(changes[0]!.content!)).toEqual(Array.from(new TextEncoder().encode('changed\n')))
   })
 })

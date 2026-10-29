@@ -19,7 +19,7 @@ class BrowserPipeline(unittest.TestCase):
 
     def test_the_pipeline_contract_is_executed_by_ci(self):
         ci = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
-        commands = '\n'.join(step.get('run', '') for job in ci['jobs'].values() for step in job['steps'])
+        commands = '\n'.join(step.get('run', '') for job in ci['jobs'].values() for step in job.get('steps', []))
         self.assertIn('test_web_e2e_workflow', commands)
 
     def test_runtime_matches_the_browser_library_and_is_immutable(self):
@@ -32,9 +32,9 @@ class BrowserPipeline(unittest.TestCase):
     def test_identity_browser_runs_in_the_same_pinned_runtime(self):
         job = self.jobs['identity-provider']
         self.assertEqual(job['env']['PLAYWRIGHT_IMAGE'], self.browser['container']['image'])
-        commands = '\n'.join(step.get('run', '') for step in job['steps'])
+        commands = '\n'.join(step.get('run', '') for step in job.get('steps', []))
         self.assertNotIn('playwright install', commands)
-        execution = next(step['run'] for step in job['steps'] if 'keycloak.spec.ts' in step.get('run', ''))
+        execution = next(step['run'] for step in job.get('steps', []) if 'keycloak.spec.ts' in step.get('run', ''))
         with tempfile.TemporaryDirectory(prefix='browser runtime ') as directory:
             root = Path(directory)
             docker = root / 'docker'
@@ -77,7 +77,7 @@ class BrowserPipeline(unittest.TestCase):
     def test_browser_jobs_use_one_shared_embedded_server_build(self):
         builds = [name for name, job in self.jobs.items() if name != 'identity-provider'
                   and any('cargo build -p agentgit-server -p agentgit-cli' in step.get('run', '')
-                          for step in job['steps'])]
+                          for step in job.get('steps', []))]
         self.assertEqual(len(builds), 1)
         self.assertIn(builds[0], self.browser['needs'])
         self.assertEqual(self.jobs[builds[0]]['runs-on'], 'ubuntu-24.04')

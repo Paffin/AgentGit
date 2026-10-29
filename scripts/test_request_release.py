@@ -13,13 +13,10 @@ from request_release import GitHub, TARGETS, checks_pending, main, request_relea
 REPO = 'acme/project'
 SHA = 'a' * 40
 BASE = '/repos/' + REPO
-REQUIRED = ['CI', 'CodeQL', 'Containers', 'Docs', 'Packaging', 'Quality', 'Security', 'Web UI', 'Windows']
-PATHS = dict(zip(REQUIRED, ['ci', 'codeql', 'containers', 'docs', 'packaging', 'quality', 'security', 'web', 'windows']))
-
-
 def green():
-    return [dict(id=i + 1, name=name, path='.github/workflows/' + PATHS[name] + '.yml', status='completed', conclusion='success')
-            for i, name in enumerate(REQUIRED)]
+    return [dict(id=1, name='Prepare release', path='.github/workflows/prepare-release.yml',
+                 event='workflow_dispatch', head_branch='main', head_sha=SHA,
+                 status='completed', conclusion='success')]
 
 
 class Api:
@@ -44,14 +41,15 @@ class ReleaseRequest(unittest.TestCase):
         self.assertNotIn('agentgit-0.3.0-beta.4-orchestrator.cdx.json', assets)
         self.assertIn('agentgit-0.3.0-beta.4-ag-mcp.cdx.json', assets)
 
-    def test_every_required_workflow_runs_for_a_release_changelog_change(self):
-        from request_release import REQUIRED as workflows
+    def test_qualification_includes_all_expensive_suites(self):
         root = Path(__file__).resolve().parent.parent
-        for workflow in workflows:
-            config = yaml.load((root / workflow).read_text(), Loader=yaml.BaseLoader)
-            push = config["on"]["push"]
-            if "paths" in push:
-                self.assertIn("CHANGELOG.md", push["paths"], workflow)
+        doc = yaml.safe_load((root / '.github/workflows/qualification.yml').read_text())
+        self.assertEqual(set(doc.get('on', doc.get(True))), {'workflow_call', 'workflow_dispatch', 'schedule'})
+        jobs = doc['jobs']
+        required = {'core', 'web', 'security', 'codeql', 'containers', 'docs', 'packaging',
+                    'coverage', 'windows', 'fuzz', 'performance', 'oci'}
+        self.assertEqual(set(jobs['complete']['needs']), required)
+        self.assertIn("!= 'success'", jobs['complete']['steps'][0]['run'])
 
     def test_checks_finish_before_tag_and_dispatch(self):
         api = Api()
@@ -137,44 +135,44 @@ class ReleaseRequest(unittest.TestCase):
         request_release(api, REPO, SHA, '0.3.0-beta.2', lambda *_: None)
         self.assertEqual(len(api.writes), 1)
 
-    def test_missing_and_pending_checks_are_not_success(self):
-        self.assertIn('Windows', checks_pending(green()[:-1]))
+    def test_missing_and_pending_qualification_are_not_success(self):
+        self.assertEqual(checks_pending([]), ['Prepared release candidate'])
         runs = green()
         runs[0].update(status='in_progress', conclusion=None)
-        self.assertIn('CI', checks_pending(runs))
+        self.assertEqual(checks_pending(runs), ['Prepared release candidate'])
 
-    def test_new_failed_run_cannot_be_hidden_by_old_success(self):
-        runs = green() + [dict(id=100, name='CI', path='.github/workflows/ci.yml', status='completed', conclusion='failure')]
-        with self.assertRaisesRegex(RuntimeError, 'CI'):
+    def test_latest_failed_attempt_cannot_be_hidden_by_old_success(self):
+        runs = green() + [dict(green()[0], id=2, conclusion='failure')]
+        with self.assertRaisesRegex(RuntimeError, 'preparation'):
             checks_pending(runs)
 
-    def test_all_triggered_workflows_must_pass(self):
-        runs = green() + [dict(id=100, name='Fuzz', path='.github/workflows/fuzz.yml', status='completed', conclusion='failure')]
-        with self.assertRaisesRegex(RuntimeError, 'Fuzz'):
-            checks_pending(runs)
-        self.assertEqual(checks_pending(green()), [])
+    def test_only_exact_trusted_qualification_is_accepted(self):
+        from request_release import resolve_candidate
+        key = BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page=1'
+        for change in ({'head_sha': 'b' * 40}, {'head_branch': 'feature'},
+                       {'path': '.github/workflows/pretend.yml'}, {'event': 'pull_request'},
+                       {'conclusion': 'skipped'}, {'conclusion': 'cancelled'}):
+            api = Api()
+            api.values[key] = {'workflow_runs': [dict(green()[0], **change)]}
+            with self.assertRaises(RuntimeError):
+                resolve_candidate(api, REPO, SHA)
+        api = Api()
+        api.values[key] = {'workflow_runs': green()}
+        api.values[BASE + '/actions/runs/1/artifacts?per_page=100&page=1'] = {'artifacts': [dict(name='release-dist', size_in_bytes=1, expired=False)]}
+        resolve_candidate(api, REPO, SHA)
 
-    def test_another_workflow_with_the_same_name_cannot_hide_failed_ci(self):
-        runs = green()
-        runs[0]['conclusion'] = 'failure'
-        runs.append(dict(id=100, name='CI', path='.github/workflows/other.yml', status='completed', conclusion='success'))
-        with self.assertRaisesRegex(RuntimeError, 'CI'):
-            checks_pending(runs)
+    def test_unrelated_cancelled_fast_run_does_not_block_a_qualified_release(self):
+        runs = green() + [dict(id=5, path='.github/workflows/ci.yml', status='completed', conclusion='cancelled')]
+        self.assertEqual(checks_pending(runs, SHA), [])
 
-    def test_only_the_actual_request_workflow_is_ignored(self):
-        runs = green() + [dict(id=100, name='Request release', path='.github/workflows/other.yml', status='completed', conclusion='failure')]
-        with self.assertRaisesRegex(RuntimeError, 'Request release'):
-            checks_pending(runs)
+    def test_qualification_is_reused_without_dispatch(self):
+        api = Api()
+        key = BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page=1'
+        api.values[key] = {'workflow_runs': green()}
+        api.values[BASE + '/actions/runs/1/artifacts?per_page=100&page=1'] = {'artifacts': [dict(name='release-dist', size_in_bytes=1, expired=False)]}
+        wait_checks(api, BASE, SHA, sleep=lambda _: self.fail('already qualified'))
+        self.assertEqual(api.writes, [])
 
-    def test_optional_pending_workflows_are_waited_for_and_identified_by_path(self):
-        for name in ('Fuzz', 'CI'):
-            with self.subTest(name=name):
-                runs = green() + [dict(id=100, name=name, path='.github/workflows/other.yml', status='in_progress', conclusion=None)]
-                self.assertEqual(checks_pending(runs), [name + ' (.github/workflows/other.yml)'])
-
-    def test_request_workflow_does_not_wait_for_itself(self):
-        runs = green() + [dict(id=100, name='Request release', path='.github/workflows/request-release.yml', status='in_progress', conclusion=None)]
-        self.assertEqual(checks_pending(runs), [])
 
 
 class ReleaseSafety(unittest.TestCase):
@@ -199,32 +197,33 @@ class ReleaseSafety(unittest.TestCase):
 
     def test_pending_checks_timeout_without_creating_a_tag(self):
         api = Api()
-        api.values[BASE + '/actions/runs?head_sha=' + SHA + '&event=push&per_page=100&page=1'] = {'workflow_runs': []}
+        api.values[BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page=1'] = {'workflow_runs': []}
         with self.assertRaisesRegex(RuntimeError, 'did not finish'):
             wait_checks(api, BASE, SHA, timeout=0, clock=lambda: 0, sleep=lambda _: self.fail('no sleep'))
-        self.assertEqual(api.writes, [])
+        self.assertEqual(api.writes, [(BASE + '/actions/workflows/prepare-release.yml/dispatches', {'ref': 'main', 'inputs': {'force': 'false'}})])
 
     def test_all_workflow_pages_are_read(self):
         api = Api()
-        prefix = BASE + '/actions/runs?head_sha=' + SHA + '&event=push&per_page=100&page='
-        api.values[prefix + '1'] = {'workflow_runs': green() * 11 + [green()[0]]}
-        api.values[prefix + '2'] = {'workflow_runs': [dict(id=100, name='Fuzz', path='.github/workflows/fuzz.yml', status='completed', conclusion='failure')]}
+        prefix = BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page='
+        api.values[prefix + '1'] = {'workflow_runs': green() * 100}
+        api.values[prefix + '2'] = {'workflow_runs': [dict(green()[0], id=100, conclusion='failure')]}
         runs = workflow_runs(api, BASE, SHA)
         self.assertEqual(len(runs), 101)
-        with self.assertRaisesRegex(RuntimeError, 'Fuzz'):
+        with self.assertRaisesRegex(RuntimeError, 'preparation'):
             checks_pending(runs)
 
     def test_wait_returns_only_after_all_checks_pass(self):
         api = Api()
-        key = BASE + '/actions/runs?head_sha=' + SHA + '&event=push&per_page=100&page=1'
+        key = BASE + '/actions/runs?head_sha=' + SHA + '&per_page=100&page=1'
         api.values[key] = {'workflow_runs': []}
         sleeps = []
         visible = io.BytesIO()
         console = io.TextIOWrapper(visible, encoding='utf-8')
         def advance(delay):
-            self.assertIn(b'Waiting for: CI', visible.getvalue(), 'show progress before waiting')
+            self.assertIn(b'Preparing release candidate', visible.getvalue(), 'show progress before waiting')
             sleeps.append(delay)
             api.values[key] = {'workflow_runs': green()}
+            api.values[BASE + '/actions/runs/1/artifacts?per_page=100&page=1'] = {'artifacts': [dict(name='release-dist', size_in_bytes=1, expired=False)]}
         with contextlib.redirect_stdout(console):
             wait_checks(api, BASE, SHA, timeout=30, clock=lambda: 0, sleep=advance)
         self.assertEqual(sleeps, [20])
@@ -263,7 +262,7 @@ class ReleaseSafety(unittest.TestCase):
         self.assertEqual(checkout['ref'], '${{ github.sha }}')
         self.assertFalse(checkout['persist-credentials'])
         self.assertEqual(job['permissions'], {'contents': 'write', 'actions': 'write'})
-        release = yaml.safe_load((root / '.github/workflows/release.yml').read_text())
+        release = yaml.safe_load((root / '.github/workflows/prepare-release.yml').read_text())
         targets = [row['target'] for row in release['jobs']['binaries']['strategy']['matrix']['include']]
         self.assertCountEqual(TARGETS, targets)
 

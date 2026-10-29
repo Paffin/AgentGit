@@ -1,35 +1,8 @@
 name: OCI runtimes and cgroup v2
 
-# The OCI sandbox is only worth anything if a real container runtime accepts its flags and the kernel enforces
-# what they request; the namespace sandbox's memory and task limits are only exact on a real, delegated cgroup v2
-# hierarchy. Neither can be shown with a fake runtime or a fake directory, so these jobs run the real thing:
-#
-#   * docker, rootful podman and rootless podman, each against a small image pinned by digest and pulled here
-#     (the sandbox never pulls), asserting from *inside* the container: no network, read-only root, no new
-#     privileges, no capabilities, memory / pids / CPU limits, no view of the worker's keys, cleanup.
-#   * the whole `ag-sandbox` suite on a delegated cgroup v2 subtree prepared as root and used by the test user,
-#     including crates/ag-sandbox/tests/cgroup_real.rs (memory.max, pids.max, memory.peak, OOM kills, removal).
-#
-# AG_REQUIRE_COMPONENTS (oci:docker / oci:podman, cgroup-v2, namespace-sandbox) turns every skip of what the job
-# claims to run into a failure: a runner that cannot do it must not go green. Whatever still skips is listed, and
-# fails the job unless tests/skip-allowlist.toml has reviewed it (scripts/check_skips.py).
-
+# Docker, Podman and cgroup integration checks run during qualification.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "crates/ag-sandbox/**"
-      - "crates/ag-worker/**"
-      - "crates/ag-client/**"
-      - ".github/workflows/oci-runtimes.yml"
-      - "Cargo.lock"
-  pull_request:
-    paths:
-      - "crates/ag-sandbox/**"
-      - "crates/ag-worker/**"
-      - "crates/ag-client/**"
-      - ".github/workflows/oci-runtimes.yml"
-      - "Cargo.lock"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -50,6 +23,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -70,6 +44,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
       - name: The host
         run: |
           uname -r
@@ -185,6 +161,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
       # Ubuntu 24.04 restricts unprivileged user namespaces with AppArmor (see ci.yml).
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true

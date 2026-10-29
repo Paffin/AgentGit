@@ -1,28 +1,28 @@
 name: Docs
 
-# The documentation site (MkDocs Material, docs/ is the source of truth), the tutorials' commands run against the real
-# binaries, and the deploy to GitHub Pages.
-#
-#   site      builds the site with `mkdocs build --strict` on every push and pull request: a broken link, a broken
-#             #anchor or a page missing from the navigation fails the build.
-#   snippets  builds `ag` and `ag-server` and runs every command of the tutorials (scripts/doc_snippets.py), checks
-#             that the output the pages show is what the commands print, and that the policy documents of the
-#             cookbook go through the real parser.
-#   deploy    publishes the site from main to GitHub Pages, but only when Pages is enabled for the repository
-#             (Settings, Pages, Source: GitHub Actions). When it is not, the job says so and succeeds: the build above
-#             is still checked, nothing is published. It never runs for pull requests.
-
+# Fast site checks/deployment for documentation edits; executable tutorials run during qualification.
 on:
   push:
     branches: [main]
+    paths: ["docs/**", "README*", "ROADMAP.md", "SECURITY.md", "CONTRIBUTING.md", "mkdocs.yml", ".github/workflows/docs.yml"]
   pull_request:
+    paths: ["docs/**", "README*", "ROADMAP.md", "SECURITY.md", "CONTRIBUTING.md", "mkdocs.yml", ".github/workflows/docs.yml"]
   workflow_dispatch:
+    inputs:
+      full:
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: docs-${{ github.ref }}
+  group: docs-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}
   cancel-in-progress: true
 
 env:
@@ -60,6 +60,7 @@ jobs:
           retention-days: 7
 
   snippets:
+    if: inputs.full
     name: tutorials run against the real binaries
     runs-on: ubuntu-latest
     steps:
@@ -70,6 +71,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
       - name: Build ag and ag-server
         run: cargo build -p agentgit-cli -p agentgit-server
       - name: The harness has tests of its own
@@ -81,8 +84,8 @@ jobs:
 
   deploy:
     name: deploy to GitHub Pages
-    needs: [site, snippets]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: site
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

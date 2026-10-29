@@ -1,5 +1,14 @@
 # Testing
 
+## Continuous feedback and qualification
+
+Normal PRs and main commits use path-aware fast CI: Linux Rust unit/core-storage contracts, SDK checks against one shared server build when API/SDK files change, Go contracts when the executor changes, and offline workflow checks when tooling changes. Web changes run lint, types, unit tests and a production build; documentation changes build the site. Unrelated changes do not start Rust or cross-platform builds. Unknown paths or unavailable Git history conservatively select all fast components.
+
+The full matrix runs through `qualification.yml` on demand, nightly, and during release preparation: macOS, Windows, Linux coverage (which also executes the full Linux suite), PostgreSQL/S3/HA, all SDK runtimes, CLI examples, all browser engines/viewports, CodeQL, fuzzing, OCI runtimes, packaging and performance checks. SDK/runtime jobs share one verified server/CLI/MCP build. Coverage supplies Linux full-suite correctness, so it is not also run as a separate identical Linux test job.
+
+Stale branch runs are cancelled. Release publication promotes prepared, attested bytes and does not add a third full Rust run. See [Releasing](../operations/releasing.md) for the ready-candidate contract and publication time budget.
+
+
 What the tests of AgentGit are, which of them run where, how much of the code they reach, how many wrong
 versions of the code they notice, and what a green build still does not tell you. The commands are the ones CI runs;
 every number below was measured on the date given and is reproducible with the command next to it.
@@ -177,7 +186,7 @@ remains is listed here, each with the reason it cannot be real, and exists only 
   the mutation runs above show where it was weak and was fixed; nothing here shows the absence of bugs.
 * **Coverage is measured for Rust only**; the TypeScript, Python and Go code is tested but has no coverage number.
   Mutation testing covers five crates, not the server, the engine or the CLI.
-* **Not run on every push:** the nightly fuzzing, the weekly mutation runs and CodeQL's weekly schedule. A change
+* **Not run on every push:** full qualification, fuzzing, mutation testing, cross-platform integration and CodeQL. A change
   can be merged between two of them.
 * **Platforms:** Linux and macOS run the whole suite; Windows runs the CLI, client and server ([Windows](../operations/windows.md)).
   The namespace sandbox is Linux-only. Real Docker and Podman runtimes are exercised only where

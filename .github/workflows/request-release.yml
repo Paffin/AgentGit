@@ -10,6 +10,11 @@ on:
       - "scripts/request_release.py"
       - ".github/workflows/request-release.yml"
   workflow_dispatch:
+    inputs:
+      ready_only:
+        description: "Publish a prepared candidate immediately; fail if it is not ready"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -35,4 +40,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.sha }}
+          READY_ONLY: ${{ inputs.ready_only }}
         run: python3 scripts/request_release.py

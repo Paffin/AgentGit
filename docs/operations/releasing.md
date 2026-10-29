@@ -1,77 +1,46 @@
 # Releasing
 
-A release is a tag `vX.Y.Z` (or `vX.Y.Z-rc.1`) on `main`. Pushing the tag runs
-[`.github/workflows/release.yml`](../../.github/workflows/release.yml), which builds, checks and **publishes** it.
-The same workflow can be started by hand as a **rehearsal** that does everything except publish; that is how it
-is tested, and how you should test changes to it (see [Rehearsing](#rehearsing-a-release-without-publishing)).
+A release has two distinct stages. **Preparation** builds and qualifies a candidate for an exact main commit. **Publication** promotes those already tested bytes; it never compiles or repeats the Rust suite.
 
-## What a tag does
+## Prepare a candidate
 
-| Stage | What happens |
-|---|---|
-| **verify** | `scripts/check_release.py` fails the run unless the tag equals the workspace version in `Cargo.toml` **and** `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section. |
-| **release tooling tests** | `scripts/test_release_scripts.py` and `scripts/test_sbom_release.py`: the version check, the archive builder, the Homebrew/Scoop renderer and `install.sh` (with a tampered download, a missing checksum, a wrong platform …). |
-| **tests** | `cargo test --workspace --locked` (with unprivileged user namespaces enabled and the sandbox suites required, as in CI). |
-| **binaries** | `ag`, `ag-server`, `ag-worker` and `ag-mcp` built `--release --locked` natively on Linux x86_64 (`ubuntu-22.04`, so glibc ≥ 2.35), Linux aarch64 (`ubuntu-22.04-arm`), macOS aarch64 and macOS x86_64, and `orchestrator` built natively with Go (`CGO_ENABLED=0`, version injected at link time), then packed by `scripts/package_release.py` into `agentgit-X.Y.Z-<target>.tar.gz` (the five binaries, `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`, `README.md`; the archive is deterministic). Every archive is then **unpacked and run**: the `--version` strings of the first three must carry the version and this commit (`ag-mcp` has no build script: its crate version only; `orchestrator version` must match the workspace version), and the end-to-end smoke ([`scripts/e2e_smoke.py`](../../scripts/e2e_smoke.py): create a repository, grant, mint a credential, `ag clone`, snapshot, `ag push`, integrate, read back over HTTP, check metrics) runs against the unpacked `ag-server`. |
-| **sbom** | One CycloneDX 1.5 SBOM per shipped Rust binary (`cargo cyclonedx --describe binaries`, from `Cargo.lock`). The Go executor dependency inventory and license text are included in `THIRD_PARTY_LICENSES.md`; no Go CycloneDX SBOM is claimed. |
-| **images** | `ghcr.io/paffin/agentgit-server` and `…/agentgit-cli`: each architecture is built **natively** (`ubuntu-latest` for amd64, `ubuntu-22.04-arm` for arm64; an emulated Rust build would take hours) from [`deploy/docker/Dockerfile`](../../deploy/docker/Dockerfile) and pushed by digest, then **merged into one multi-arch tag** (`:X.Y.Z`, plus `:latest` for a non-prerelease) with SBOM and max-mode provenance attached. |
-| **release** | `SHA256SUMS` over the archives and SBOMs, the rendered Homebrew formula (`agentgit.rb`), GitHub build-provenance attestations for every file and image (and a `gh attestation verify` of each in the same run), release notes cut from the CHANGELOG section, and the GitHub release (a pre-release when the tag has a `-suffix`). |
-| **install** | `scripts/install.sh` installs the assembled release on Linux x86_64, Linux aarch64 and macOS with `--require-attestation`; a corrupted archive must be refused and install nothing; the installed binaries run the end-to-end smoke. |
+[Prepare release](../../.github/workflows/prepare-release.yml) runs the complete [Qualification](../../.github/workflows/qualification.yml) matrix alongside four native Linux/macOS builds and both container architectures. Native archives are unpacked and exercised, SBOMs and checksums are generated, and every file is attested. The installer then runs against the assembled archives on three fresh runners.
 
-## Rehearsing a release without publishing
-
-*Actions → Release → Run workflow*, or from a terminal:
+Successful preparation retains `release-dist` for 14 days. `candidate.json` binds its version, source SHA and preparation run ID; `candidate-images.json` records immutable container manifest digests. The candidate image tags use the source commit, not a public version or `latest`.
 
 ```sh
-gh workflow run release.yml --ref main -f version=0.0.0-rc.dry -f publish=false
+gh workflow run prepare-release.yml --ref main
 ```
 
-`version` is only checked for being semver (it need not match `Cargo.toml`; the archives are named after it, the
-binaries inside report the `Cargo.toml` version), and release notes fall back to `## [Unreleased]` when the
-CHANGELOG has no section of that name. `publish=true` is honoured **only** when the run is on the tag `vX.Y.Z`
-that `version` names — on a branch it fails immediately with "Nothing was published". Everything that would
-write to the outside world (`docker push` to GHCR, `gh release create`) is behind that one flag, which the
-`verify` job computes and every later job reads.
+Use `-f force=true` to rehearse preparation of an already published version. This does not replace a GitHub release or move its version tags. Preparation can take tens of minutes on a cold cache, particularly Intel macOS; it runs separately from continuous development checks.
 
-What the rehearsal proves, and how it differs from the real thing:
+## Publish a ready candidate
 
-| Step | In a rehearsal | In a real release |
-|---|---|---|
-| Version, CHANGELOG, workspace tests, four native builds, archives, SBOMs, `SHA256SUMS`, formula rendering | **identical** | identical |
-| Attestations | really created and then really verified with `gh attestation verify` (Sigstore, this workflow's identity) | identical |
-| Images | built natively for amd64 **and** arm64, started and health-checked; exported as tarballs | pushed by digest to GHCR |
-| Multi-arch manifest | merged with `docker buildx imagetools create` in a throw-away **local registry** and inspected: it must list `linux/amd64` and `linux/arm64`, and the merged tag must run | merged on GHCR, then attested |
-| GitHub release | the command is printed; all files are uploaded as the workflow artifact `release-dist` | `gh release create` |
-| `install.sh` | installs `release-dist` through a `file://` base URL | would download from the release URL |
+```sh
+# Fails immediately if this exact main commit has no complete, unexpired candidate.
+gh workflow run request-release.yml --ref main -f ready_only=true
+```
 
-Evidence (all on `main`'s code, nothing published): see [Evidence](#evidence) at the end of this page.
+The request creates the immutable version tag only after validating a successful preparation for that exact commit. [Release](../../.github/workflows/release.yml) downloads that run's immutable artifact, verifies its complete file list, checksums, source/version/run binding and attestations, and promotes the recorded container digests. It uploads the same files to GitHub and verifies installation from the public release URL on Linux x86_64, Linux arm64 and macOS arm64.
+
+The publication job has a **3-minute** execution limit and its parallel installation jobs have **2-minute** limits. The target is under five minutes for publication of a **ready** candidate. Runner queue time and cold preparation are separate; a missing candidate or failed check is an error, never an excuse to build silently during publication. A timeout is a failed release run, not a successful five-minute release.
+
+To verify the fast path without publishing:
+
+```sh
+gh workflow run release.yml --ref main -f version=X.Y.Z -f publish=false
+```
+
+This downloads and verifies the prepared candidate but does not move public image tags, create a release, or run public-install checks. For actual publication, `publish=true` is accepted only on the matching `vX.Y.Z` tag. Directly pushing an unprepared tag fails closed.
 
 ## Cutting a release
 
-```sh
-# 1. bump Cargo.toml workspace/package versions, apps/web/package.json, sdk/typescript/package.json
-#    and sdk/python/pyproject.toml plus sdk/python/src/agentgit/__init__.py; refresh Cargo.lock and npm lock roots
-#    Set the three default image tags under deploy/ to the same candidate version.
-cargo update -w
-(cd sdk/python && uv lock)
-scripts/third_party_licenses.sh
-# 2. move [Unreleased] into a dated [X.Y.Z] section of CHANGELOG.md
-# 3. check what the workflow will check
-python3 scripts/check_release.py vX.Y.Z --notes
-python3 scripts/check_publish_metadata.py
-cargo build -p agentgit-cli --locked
-AG=target/debug/ag python3 scripts/gen_cli_docs.py
-cargo test --workspace --locked
-# 4. rehearse on the exact commit you are about to tag
-gh workflow run release.yml --ref main -f version=X.Y.Z-rc.dry -f publish=false
-# 5. merge the reviewed version bump into main
-# Request release waits for that exact commit's checks, then creates the immutable tag and dispatches Release.
-# Observe both workflows; only a completed Release with its assets is a published version.
-```
+1. Update the workspace, npm and Python versions and lock files; set deployment defaults, regenerate CLI/protocol documentation and dependency notices.
+2. Add a nonempty, dated version section in `CHANGELOG.md` and merge the reviewed candidate to `main`.
+3. The automatic Request release workflow starts or reuses preparation in the background, then publishes when ready. Ordinary commits continue through fast, component-specific CI. If main moves before the tag is made, the old request stops.
+4. Observe preparation and publication separately. Only a complete Release run, including public-install checks, is a verified release.
 
-Once a version tag is pinned, its release continues from that commit while main can advance. Later requests for the same version report the pinned commit without moving the tag or waiting for unrelated checks; bump the version to request another release. The publication check expects the four Rust SBOMs actually shipped; the native Go executor is inside each platform archive.
-
-Use a prerelease suffix for release candidates and betas. The published beta remains the installation target until the next release has completed; see [What is not proven](#what-is-not-proven).
+A manually requested `ready_only=true` publication never waits for preparation. Published versions are skipped and existing tags are never moved. An expired artifact must be prepared again. Retry a failed publication on its existing tag using the same prepared source commit.
 
 ## Verifying what you downloaded
 
@@ -118,7 +87,7 @@ no token is stored in the repository or the workflow. One-time setup on each reg
   repository `AgentGit`, workflow `publish-sdks.yml`, environment `pypi`.
 
 Both names were free on 2026-10-17 (`scripts/check_publish_metadata.py --online`). The
-[`Packaging`](../../.github/workflows/packaging.yml) workflow runs the build-and-check half on every change.
+[`Packaging`](../../.github/workflows/packaging.yml) workflow runs the build-and-check half during qualification.
 
 ## crates.io
 
@@ -267,13 +236,7 @@ runs themselves (`Release`, `Containers`, `Packaging`) are in the Actions tab wi
 
 ## Release requests from main
 
-A reviewed version bump on `main`, with matching package versions and a nonempty changelog section, requests the next release automatically. `Request release` waits for successful CI, CodeQL, Containers, Docs, Packaging, Quality, Security, Web UI and Windows runs for that exact push, plus any other workflows triggered by it. A newer main commit cancels the request; a failed or timed-out check creates no tag.
-
-After the checks pass, the request creates `v<version>` at the checked commit and dispatches the existing Release workflow on that tag. That workflow still builds, tests, attests and verifies the actual archives and images before publication. The request itself is not a successful release. Existing published versions are skipped; an existing tag is never moved. If a request failed after creating its tag, rerun Request release on the same main commit. If main has moved, run Release manually on the existing tag with its matching version. Rehearsals remain available through Release with `publish=false`.
-
-The request uses a write token only on trusted main pushes or a manual run on main; it has no pull-request or workflow-run trigger and does not persist checkout credentials.
-
-Required checks are identified by their workflow file paths, so another workflow using the same display name cannot hide a failed or unfinished check. Optional workflows triggered by the same commit must finish successfully too.
+A reviewed version bump on main starts or reuses Prepare release for that exact commit. Preparation includes the full qualification matrix, native builds, provenance and installation tests. The request stops if main moves, and cannot create a tag after a failed preparation. Publication only consumes an immutable successful candidate; it does not repeat the full test suite or rebuild archives.
 
 Manual publication accepts a version with or without its leading `v`, but validates the actual tag selected in the workflow. A branch or a different version is refused before publishing. Tests execute the workflow’s mode-selection shell block and pass its result to the real version/changelog validator.
 

@@ -1,13 +1,8 @@
 name: Windows
 
-# Windows is a supported platform for the CLI, the server and the clients (see docs/operations/windows.md).
-# This is a separate workflow from ci.yml so that it can be iterated on without blocking anything; it becomes a
-# required check once it has been green and stable on main.
-
+# Native Windows qualification; not scheduled by each ordinary edit.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -33,6 +28,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
       - name: Show the toolchain and Git
         run: |
           rustc -Vv

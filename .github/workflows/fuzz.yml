@@ -1,67 +1,12 @@
 name: Fuzz
 
-# libFuzzer targets for every parser and decoder that touches untrusted bytes (fuzz/; docs/architecture/security.md
-# "Fuzzing"). What runs where:
-#
-#   pull_request / push to main (when the fuzzed crates, the protocol or fuzz/ change)
-#       build every target once with the address sanitizer, then run each for 60 s from the checked-in seeds plus
-#       the corpus the nightly run cached. A smoke test: it catches a regression that a seed or a recently
-#       found input reaches, not a new bug that needs hours.
-#   schedule (every night) and workflow_dispatch
-#       every target for 15 minutes (or `seconds`), four jobs in parallel, starting from the corpus of the last night;
-#       the corpus is minimised and cached for the next run. A crash, a hang over 20 s or 2 GB of memory fails the
-#       job and uploads the reproducer (fuzz/artifacts) as a workflow artifact.
-#
-# Reproduce a failure:  cargo +nightly fuzz run -s address --features heavy <target> <downloaded artifact file>
-
+# Bounded fuzz qualification plus separate extended nightly/manual campaigns.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "fuzz/**"
-      - "proto/**"
-      - "Cargo.lock"
-      - "crates/ag-types/**"
-      - "crates/ag-crypto/**"
-      - "crates/ag-object/**"
-      - "crates/ag-changeset/**"
-      - "crates/ag-dag/**"
-      - "crates/ag-diff/**"
-      - "crates/ag-tree/**"
-      - "crates/ag-merge/**"
-      - "crates/ag-policy/**"
-      - "crates/ag-sandbox/**"
-      - "crates/ag-storage/**"
-      - "crates/ag-agent/**"
-      - "crates/ag-protocol/**"
-      - "crates/ag-client/**"
-      - "crates/ag-worker/**"
-      - "crates/ag-git/**"
-      - "crates/ag-integrate/**"
-      - ".github/workflows/fuzz.yml"
-  pull_request:
-    paths:
-      - "fuzz/**"
-      - "proto/**"
-      - "Cargo.lock"
-      - "crates/ag-types/**"
-      - "crates/ag-crypto/**"
-      - "crates/ag-object/**"
-      - "crates/ag-changeset/**"
-      - "crates/ag-dag/**"
-      - "crates/ag-diff/**"
-      - "crates/ag-tree/**"
-      - "crates/ag-merge/**"
-      - "crates/ag-policy/**"
-      - "crates/ag-sandbox/**"
-      - "crates/ag-storage/**"
-      - "crates/ag-agent/**"
-      - "crates/ag-protocol/**"
-      - "crates/ag-client/**"
-      - "crates/ag-worker/**"
-      - "crates/ag-git/**"
-      - "crates/ag-integrate/**"
-      - ".github/workflows/fuzz.yml"
+  workflow_call:
+    inputs:
+      extended:
+        type: boolean
+        default: false
   schedule:
     - cron: "41 2 * * *"
   workflow_dispatch:
@@ -78,7 +23,7 @@ permissions:
 
 concurrency:
   group: fuzz-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -104,6 +49,7 @@ jobs:
           toolchain: ${{ env.FUZZ_NIGHTLY }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           workspaces: fuzz
           key: fuzz-asan
       - name: cargo-fuzz
@@ -134,11 +80,12 @@ jobs:
 
   smoke:
     name: smoke (${{ matrix.group }}, 60 s per target)
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: ${{ !inputs.extended && github.workflow != 'Fuzz' }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -189,11 +136,12 @@ jobs:
 
   nightly:
     name: nightly (${{ matrix.group }})
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: inputs.extended || github.workflow == 'Fuzz'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:

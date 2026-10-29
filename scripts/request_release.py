@@ -1,4 +1,4 @@
-"""Request the existing release pipeline only for a fully checked main commit."""
+"""Prepare a main commit in the background, or publish its ready candidate immediately."""
 from __future__ import annotations
 
 import json
@@ -8,18 +8,7 @@ import time
 import urllib.error
 import urllib.request
 
-REQUIRED = {
-    '.github/workflows/ci.yml': 'CI',
-    '.github/workflows/codeql.yml': 'CodeQL',
-    '.github/workflows/containers.yml': 'Containers',
-    '.github/workflows/docs.yml': 'Docs',
-    '.github/workflows/packaging.yml': 'Packaging',
-    '.github/workflows/quality.yml': 'Quality',
-    '.github/workflows/security.yml': 'Security',
-    '.github/workflows/web.yml': 'Web UI',
-    '.github/workflows/windows.yml': 'Windows',
-}
-IGNORED = frozenset(('.github/workflows/request-release.yml', '.github/workflows/release.yml'))
+PREPARE_WORKFLOW = '.github/workflows/prepare-release.yml'
 TARGETS = ('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu', 'aarch64-apple-darwin', 'x86_64-apple-darwin')
 
 
@@ -55,26 +44,31 @@ class GitHub:
         return self.request('POST', path, body)
 
 
-def checks_pending(runs):
-    latest = {}
-    for run in sorted(runs, key=lambda item: item['id'], reverse=True):
-        if run['path'] not in IGNORED:
-            latest.setdefault(run['path'], run)
-    failed = [run['name'] + ' (' + path + ')' for path, run in latest.items()
-              if run['status'] == 'completed' and run['conclusion'] != 'success']
-    if failed:
-        raise RuntimeError('release blocked by checks: ' + ', '.join(sorted(failed)))
-    pending = set(REQUIRED).difference(latest)
-    pending = pending.union(path for path, run in latest.items() if run['status'] != 'completed')
-    return sorted(REQUIRED[path] if path in REQUIRED else latest[path]['name'] + ' (' + path + ')'
-                  for path in pending)
+def candidate_run(runs, sha=None):
+    matches = [run for run in runs
+               if run.get('path') == PREPARE_WORKFLOW
+               and run.get('event') in ('workflow_dispatch', 'schedule')
+               and run.get('head_branch') == 'main'
+               and (sha is None or run.get('head_sha') == sha)]
+    return max(matches, key=lambda run: run['id'], default=None)
+
+
+def checks_pending(runs, sha=None):
+    run = candidate_run(runs, sha)
+    if run is None:
+        return ['Prepared release candidate']
+    if run['status'] != 'completed':
+        return ['Prepared release candidate']
+    if run['conclusion'] != 'success':
+        raise RuntimeError('release blocked by candidate preparation: ' + str(run['conclusion']))
+    return []
 
 
 def workflow_runs(api, base, sha):
     runs = []
     page = 1
     while True:
-        result = api.get(f'{base}/actions/runs?head_sha={sha}&event=push&per_page=100&page={page}')
+        result = api.get(f'{base}/actions/runs?head_sha={sha}&per_page=100&page={page}')
         batch = result['workflow_runs']
         runs.extend(batch)
         if len(batch) < 100:
@@ -88,14 +82,36 @@ def is_current(api, base, sha):
 
 def wait_checks(api, base, sha, *, timeout=5400, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + timeout
+    runs = workflow_runs(api, base, sha)
+    if candidate_run(runs, sha) is None:
+        api.post(base + '/actions/workflows/prepare-release.yml/dispatches', {'ref': 'main', 'inputs': {'force': 'false'}})
     while is_current(api, base, sha):
-        pending = checks_pending(workflow_runs(api, base, sha))
-        if not pending:
+        if not checks_pending(workflow_runs(api, base, sha), sha):
+            resolve_candidate(api, base.removeprefix('/repos/'), sha)
             return
         if clock() >= deadline:
-            raise RuntimeError('release checks did not finish: ' + ', '.join(pending))
-        print('Waiting for: ' + ', '.join(pending), flush=True)
+            raise RuntimeError('release preparation did not finish')
+        print('Preparing release candidate for ' + sha[:12], flush=True)
         sleep(20)
+
+
+def resolve_candidate(api, repo, sha):
+    validate_request(repo, sha, '0.0.0')
+    base = '/repos/' + repo
+    runs = workflow_runs(api, base, sha)
+    if checks_pending(runs, sha):
+        raise RuntimeError('No ready candidate for this exact commit; run Prepare release first')
+    run = candidate_run(runs, sha)
+    page = 1
+    while True:
+        batch = api.get(f"{base}/actions/runs/{run['id']}/artifacts?per_page=100&page={page}")['artifacts']
+        for artifact in batch:
+            if artifact['name'] == 'release-dist' and not artifact.get('expired', True) and artifact.get('size_in_bytes', 0) > 0:
+                return run, artifact
+        if len(batch) < 100:
+            break
+        page += 1
+    raise RuntimeError('Prepared candidate is missing or expired; prepare it again')
 
 
 def tag_commit(api, base, ref):
@@ -142,7 +158,7 @@ def is_published(release, version):
     return required_assets(version).issubset(uploaded)
 
 
-def request_release(api, repo, sha, version, wait=None):
+def request_release(api, repo, sha, version, wait=None, *, ready_only=False):
     validate_request(repo, sha, version)
     base, tag = '/repos/' + repo, 'v' + version
     release = api.optional(base + '/releases/tags/' + tag)
@@ -155,7 +171,10 @@ def request_release(api, repo, sha, version, wait=None):
             return f'{tag} already pinned to {pinned[:12]}; bump the version to release another commit'
     if not is_current(api, base, sha):
         return 'main moved; no release requested'
-    (wait or wait_checks)(api, base, sha)
+    if ready_only:
+        resolve_candidate(api, repo, sha)
+    else:
+        (wait or wait_checks)(api, base, sha)
     if not is_current(api, base, sha):
         return 'main moved; no release requested'
     ensure_tag(api, base, tag, sha)
@@ -170,7 +189,7 @@ def main():
     version = check_release.workspace_version()
     check_release.resolve('v' + version, False)
     result = request_release(GitHub(os.environ['GH_TOKEN']), os.environ['GITHUB_REPOSITORY'],
-                             os.environ['RELEASE_SHA'], version)
+                             os.environ['RELEASE_SHA'], version, ready_only=os.environ.get('READY_ONLY') == 'true')
     print(result)
 
 

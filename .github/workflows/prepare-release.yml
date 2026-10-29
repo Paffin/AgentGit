@@ -1,0 +1,497 @@
+name: Prepare release
+
+# Slow preparation runs independently; only ready, tested artifacts can be published.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Prepare even if this version is already published (validation only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  REGISTRY_IMAGE_SERVER: ghcr.io/paffin/agentgit-server
+  REGISTRY_IMAGE_CLI: ghcr.io/paffin/agentgit-cli
+
+jobs:
+  verify:
+    name: Candidate version and source
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      cargo_version: ${{ steps.version.outputs.cargo_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      commit_date: ${{ steps.version.outputs.commit_date }}
+      epoch: ${{ steps.version.outputs.epoch }}
+      needed: ${{ steps.version.outputs.needed }}
+      publish: "false"
+      dry_run: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: python3 scripts/prepare_release.py
+
+  qualify:
+    needs: verify
+    if: needs.verify.outputs.needed == 'true'
+    uses: ./.github/workflows/qualification.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      pages: write
+      id-token: write
+    secrets: inherit
+
+  scripts:
+    if: needs.verify.outputs.needed == 'true'
+    name: release tooling tests
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/test_release_scripts.py
+
+  binaries:
+    if: needs.verify.outputs.needed == 'true'
+    name: binaries (${{ matrix.target }})
+    needs: verify
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - {target: x86_64-unknown-linux-gnu, os: ubuntu-22.04}
+          - {target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm}
+          - {target: aarch64-apple-darwin, os: macos-14}
+          - {target: x86_64-apple-darwin, os: macos-15-intel}
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
+      SOURCE_DATE_EPOCH: ${{ needs.verify.outputs.epoch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          key: release-${{ matrix.target }}
+      # ag-server serves the Web UI from inside its binary (cargo feature `ui`): the build must exist before cargo
+      # compiles it, or the archive's ag-server serves a page that says how to build the UI.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build the Web UI (apps/web/dist, embedded by the build below)
+        run: scripts/build_ui.sh
+      - name: Build
+        env:
+          # Do not embed the build directory in the binaries.
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p agentgit-cli -p agentgit-server -p agentgit-worker -p agentgit-mcp
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      - name: Build the native executor
+        working-directory: services/agent-orchestrator
+        env:
+          CGO_ENABLED: "0"
+        run: >-
+          go build -trimpath -buildvcs=false
+          -ldflags "-s -w -X github.com/Paffin/AgentGit/services/agent-orchestrator/internal/app.Version=$CARGO_VERSION"
+          -o "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/orchestrator" ./cmd/orchestrator
+      - name: Archive
+        run: |
+          python3 scripts/package_release.py archive --version "$VERSION" --target ${{ matrix.target }} \
+            --bin-dir target/${{ matrix.target }}/release --out dist
+          ls -la dist
+      - name: Smoke-test what is in the archive (versions, then the real end-to-end flow)
+        run: |
+          set -euo pipefail
+          name="agentgit-${VERSION}-${{ matrix.target }}"
+          work="$RUNNER_TEMP/unpacked"; mkdir -p "$work"
+          tar -xzf "dist/$name.tar.gz" -C "$work"
+          bin="$work/$name"
+          ls -la "$bin"
+          for b in ag ag-server ag-worker; do
+            v=$("$bin/$b" --version); echo "$v"
+            case "$v" in "$b $CARGO_VERSION ("*") "*|"$b $CARGO_VERSION ("*")") ;; *) echo "::error::$b --version is '$v'"; exit 1;; esac
+            case "$v" in *"${GITHUB_SHA:0:12}"*) ;; *) echo "::error::$b does not report this commit"; exit 1;; esac
+          done
+          "$bin/ag-worker" doctor || true
+          python3 scripts/onboarding_smoke.py --ag "$bin/ag" --server "$bin/ag-server"
+          # ag-mcp has no build script, so its version line carries no commit: check the crate version only.
+          v=$("$bin/ag-mcp" --version); echo "$v"
+          [ "$v" = "ag-mcp $CARGO_VERSION" ] || { echo "::error::ag-mcp --version is '$v'"; exit 1; }
+          v=$("$bin/orchestrator" version); echo "$v"
+          [ "$v" = "agent-orchestrator $CARGO_VERSION" ] || { echo "::error::orchestrator version is '$v'"; exit 1; }
+          tools=$("$bin/ag-mcp" --list-tools --server http://127.0.0.1:1)
+          case "$tools" in *'"name": "task_claim"'*) ;; *) echo "::error::ag-mcp lists no task_claim tool"; exit 1;; esac
+          AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+          AG_METRICS_TOKEN=$(openssl rand -hex 32)
+          export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN
+          "$bin/ag-server" serve --listen 127.0.0.1:18080 --data-dir "$work/data" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag "$bin/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" || { tail -50 "$work/server.log"; exit 1; }
+          # The unpacked ag-server carries the Web UI (the server from the smoke above is still running).
+          page=$(curl -fsS -H 'Accept: text/html' http://127.0.0.1:18080/)
+          case "$page" in *'<div id="app">'*) echo "ag-server serves the embedded Web UI";; *) echo "$page" | head -20; echo "::error::the archive's ag-server has no Web UI"; exit 1;; esac
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: archive-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  sbom:
+    if: needs.verify.outputs.needed == 'true'
+    name: CycloneDX SBOMs
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-cyclonedx@0.5.9
+      # The same script the Security workflow runs on every change (so a break shows up there, not at release time).
+      # The web UI SBOM it can also write is not a release asset yet: the release job below expects four binary inventories.
+      - name: One SBOM per Rust binary (from Cargo.lock; build-time dependencies included)
+        run: scripts/sbom.sh --version "$VERSION" --out dist --no-web
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: dist/*.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+  image:
+    if: needs.verify.outputs.needed == 'true'
+    name: image (${{ matrix.arch }})
+    needs: verify
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: amd64, os: ubuntu-latest}
+          - {arch: arm64, os: ubuntu-22.04-arm}
+    runs-on: ${{ matrix.os }}
+    env:
+      PUBLISH: "true"
+      VERSION: ${{ needs.verify.outputs.version }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Native builds on native runners: an emulated Rust build would take hours. Publishing pushes each
+      # architecture by digest; a rehearsal exports a tarball instead. The manifest job merges them.
+      - name: Server image
+        id: server
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: server
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ needs.verify.outputs.commit_date }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/Paffin/AgentGit
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
+          cache-from: |
+            type=gha,scope=agentgit-image
+            type=gha,scope=agentgit-image-release-${{ matrix.arch }}
+          cache-to: type=gha,scope=agentgit-image-release-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+          outputs: ${{ format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_SERVER) }}
+      - name: CLI image
+        id: cli
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: cli
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            AG_BUILD_COMMIT=${{ github.sha }}
+            AG_BUILD_DATE=${{ needs.verify.outputs.commit_date }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/Paffin/AgentGit
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
+          cache-from: type=gha,scope=agentgit-image-release-${{ matrix.arch }}
+          provenance: mode=max
+          sbom: true
+          outputs: ${{ format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY_IMAGE_CLI) }}
+      - name: Keep the result for the manifest job
+        run: |
+          mkdir -p "$RUNNER_TEMP/handoff"
+          if [ "$PUBLISH" = true ]; then
+            digest="${{ steps.server.outputs.digest }}"; touch "$RUNNER_TEMP/handoff/server-${digest#sha256:}"
+            digest="${{ steps.cli.outputs.digest }}"; touch "$RUNNER_TEMP/handoff/cli-${digest#sha256:}"
+          else
+            cp "$RUNNER_TEMP"/server-${{ matrix.arch }}.tar "$RUNNER_TEMP"/cli-${{ matrix.arch }}.tar "$RUNNER_TEMP/handoff/"
+          fi
+          ls -la "$RUNNER_TEMP/handoff"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ matrix.arch }}
+          path: ${{ runner.temp }}/handoff
+          if-no-files-found: error
+          retention-days: 3
+
+  manifest:
+    if: needs.verify.outputs.needed == 'true'
+    name: multi-arch manifest
+    needs: [verify, image]
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH: "true"
+      VERSION: ${{ needs.verify.outputs.version }}
+      PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: image-*
+          path: handoff
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish - merge the per-architecture digests into one tag
+        run: |
+          set -euo pipefail
+          for kind in server cli; do
+            image=$([ "$kind" = server ] && echo "$REGISTRY_IMAGE_SERVER" || echo "$REGISTRY_IMAGE_CLI")
+            tags="-t $image:candidate-$GITHUB_SHA"
+            refs=""
+            for f in handoff/image-*/"$kind"-*; do refs="$refs $image@sha256:${f##*/"$kind"-}"; done
+            # shellcheck disable=SC2086
+            docker buildx imagetools create $tags $refs
+            docker buildx imagetools inspect "$image:candidate-$GITHUB_SHA"
+          done
+      - name: Publish - attest the images
+        id: digests
+        run: |
+          set -euo pipefail
+          for kind in server cli; do
+            image=$([ "$kind" = server ] && echo "$REGISTRY_IMAGE_SERVER" || echo "$REGISTRY_IMAGE_CLI")
+            echo "$kind=$(docker buildx imagetools inspect "$image:candidate-$GITHUB_SHA" --format '{{json .Manifest.Digest}}' | tr -d '"')" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY_IMAGE_SERVER }}
+          subject-digest: ${{ steps.digests.outputs.server }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY_IMAGE_CLI }}
+          subject-digest: ${{ steps.digests.outputs.cli }}
+          push-to-registry: true
+
+      - name: Record immutable image digests
+        env:
+          SERVER_DIGEST: ${{ steps.digests.outputs.server }}
+          CLI_DIGEST: ${{ steps.digests.outputs.cli }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          Path('candidate-images.json').write_text(json.dumps({
+              'sha': os.environ['GITHUB_SHA'], 'version': os.environ['VERSION'],
+              'server': os.environ['SERVER_DIGEST'], 'cli': os.environ['CLI_DIGEST'],
+          }))
+          PYTHON
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: candidate-images
+          path: candidate-images.json
+          retention-days: 14
+
+  release:
+    if: needs.verify.outputs.needed == 'true'
+    name: assemble and attest the candidate
+    needs: [verify, qualify, scripts, binaries, sbom, manifest]
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH: ${{ needs.verify.outputs.publish }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      DRY_RUN: ${{ needs.verify.outputs.dry_run }}
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: "{archive-*,sbom,candidate-images}"
+          merge-multiple: true
+      - name: Checksums and the Homebrew formula
+        run: |
+          set -euo pipefail
+          ls -la dist
+          set -- dist/*.tar.gz; test $# = 4
+          set -- dist/*.cdx.json; test $# = 4
+          python3 scripts/package_release.py sums dist/*.tar.gz dist/*.cdx.json | tee dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+          python3 scripts/render_packaging.py --version "$VERSION" --sums dist/SHA256SUMS --out dist --only homebrew
+          ruby -c dist/agentgit.rb
+      - name: Candidate manifest and notes
+        run: |
+          python3 scripts/check_release.py "v$VERSION" --notes > dist/RELEASE_NOTES.md
+          python3 scripts/release_candidate.py create dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        with:
+          subject-path: dist/*
+      - name: The attestations verify
+        run: |
+          set -euo pipefail
+          for f in dist/*; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/prepare-release.yml" > /dev/null
+            echo "attested: $f"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: dist
+          retention-days: 14
+      - name: Summary
+        run: |
+          title="Ready candidate (publication is a separate fast operation)"
+          [ "$PUBLISH" = true ] && title="Published"
+          {
+            echo "## $title"
+            echo
+            echo '```'
+            (cd dist && wc -c -- * | grep -v ' total$')
+            echo '```'
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  install:
+    if: needs.verify.outputs.needed == 'true'
+    name: install.sh (${{ matrix.os }})
+    needs: [verify, release]
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      CARGO_VERSION: ${{ needs.verify.outputs.cargo_version }}
+      PUBLISHED: ${{ needs.verify.outputs.publish }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+      - name: Install the version-pinned release, verifying checksum and attestation
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/prefix"
+          # Real releases exercise the public download path on a fresh runner. Rehearsals use the same layout locally.
+          base_url="file://$PWD/dist"
+          if [ "$PUBLISHED" = true ]; then
+            base_url="https://github.com/Paffin/AgentGit/releases/download/v$VERSION"
+          fi
+          uname -a
+          if [ "${RUNNER_OS}" = macOS ]; then sw_vers; fi
+          echo "Installing AgentGit $VERSION from $base_url"
+          sh scripts/install.sh --version "$VERSION" --prefix "$prefix" --base-url "$base_url" --require-attestation
+          "$prefix/bin/ag" --version
+          "$prefix/bin/ag-server" --version
+          "$prefix/bin/ag-worker" --version
+          "$prefix/bin/ag-mcp" --version
+          [ "$("$prefix/bin/orchestrator" version)" = "agent-orchestrator $CARGO_VERSION" ]
+          case "$("$prefix/bin/ag" --version)" in "ag $CARGO_VERSION "*) ;; *) echo "::error::unexpected version"; exit 1;; esac
+      - name: A corrupted download is refused and installs nothing
+        run: |
+          set -euo pipefail
+          mkdir bad && cp dist/* bad/
+          for f in bad/agentgit-*.tar.gz; do printf 'x' >> "$f"; done
+          if sh scripts/install.sh --version "$VERSION" --prefix "$RUNNER_TEMP/bad-prefix" --base-url "file://$PWD/bad" --no-attestation; then
+            echo "::error::install.sh accepted a corrupted archive"; exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/bad-prefix/bin"
+      - name: The installed binaries work end to end
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/prefix"
+          AG_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+          AG_METRICS_TOKEN=$(openssl rand -hex 32)
+          export AG_BOOTSTRAP_TOKEN AG_METRICS_TOKEN
+          "$prefix/bin/ag-server" serve --listen 127.0.0.1:18080 --data-dir "$RUNNER_TEMP/data" > "$RUNNER_TEMP/server.log" 2>&1 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          python3 scripts/e2e_smoke.py --url http://127.0.0.1:18080 --ag "$prefix/bin/ag" \
+            --bootstrap-token "$AG_BOOTSTRAP_TOKEN" --metrics-token "$AG_METRICS_TOKEN" || { tail -50 "$RUNNER_TEMP/server.log"; exit 1; }

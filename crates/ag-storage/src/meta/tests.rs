@@ -847,7 +847,7 @@ fn schema_five_upgrades_without_altering_the_backup_or_existing_data() {
     }
     std::fs::copy(&path, &backup).unwrap();
     let m = Meta::open(&path).unwrap();
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("6"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap(), Some(migrate::SCHEMA_VERSION.to_string()));
     assert_eq!(m.read(|tx| tx.stream("main")).unwrap().unwrap().created_by, "user:original");
     assert!(m.read(|tx| tx.review_threads("none", None, 1)).unwrap().is_empty());
     let old = rusqlite::Connection::open(&backup).unwrap();

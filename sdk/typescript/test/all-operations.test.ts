@@ -313,9 +313,12 @@ describe('the tour', () => {
     });
     const task = await alice.tasks.create({ repo, title: 'tour task', scope: ['src/**'], assignee: 'tour-bot' });
     await alice.tasks.assign({ repo, id: task.id, agent: 'tour-bot', expected_owner: 'agent:tour-bot' });
-    const refined = await alice.tasks.update({ repo, id: task.id,
+    const refined = await alice.tasks.update({
+      repo,
+      id: task.id,
       expected: { title: task.title, description: task.description, scope: task.scope },
-      content: { title: 'Refined tour task', description: 'A concrete result', scope: ['src/**'] } });
+      content: { title: 'Refined tour task', description: 'A concrete result', scope: ['src/**'] },
+    });
     expect(refined.title).toBe('Refined tour task');
     expect((await alice.tasks.get({ repo, id: task.id })).description).toBe('A concrete result');
     const dep = await alice.tasks.create({ repo, title: 'depends' });

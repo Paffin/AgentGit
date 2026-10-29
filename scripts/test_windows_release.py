@@ -12,6 +12,8 @@ import tempfile
 import unittest
 import zipfile
 
+import ag_testkit
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 PACKAGE = Path(os.environ.get("AG_TEST_PACKAGE", str(SCRIPTS / "package_release.py")))
@@ -76,7 +78,7 @@ class ReleaseInputs(unittest.TestCase):
     def test_release_checksum_recipe_includes_windows_zip(self):
         import glob
         import shlex
-        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        workflow = (ROOT / ".github/workflows/prepare-release.yml").read_text()
         recipe = next(line.strip().split("|", 1)[0].strip() for line in workflow.splitlines()
                       if "package_release.py sums dist/" in line)
         patterns = shlex.split(recipe)[3:]
@@ -96,9 +98,9 @@ class ReleaseInputs(unittest.TestCase):
         self.assertIn("windows-binaries", release.split("    steps:", 1)[0])
 
 
-@unittest.skipUnless(PWSH, "PowerShell not available; Windows CI runs installer tests")
 class WindowsInstaller(unittest.TestCase):
     def setUp(self):
+        ag_testkit.require_component("shell:powershell", self.id(), PWSH, "PowerShell is not installed")
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)

@@ -14,12 +14,17 @@ from request_release import GitHub, required_assets, resolve_candidate, validate
 EXTRA = {'candidate.json', 'candidate-images.json', 'RELEASE_NOTES.md'}
 
 
+def candidate_assets(version):
+    """New candidates include Windows; older published POSIX releases stay recognizable."""
+    return required_assets(version) | EXTRA | {f'agentgit-{version}-x86_64-pc-windows-msvc.zip'}
+
+
 def validate(directory, sha, version, run_id):
     validate_request('candidate/source', sha, version)
     if type(run_id) not in (str, int) or not str(run_id).isdigit() or int(run_id) <= 0:
         raise ValueError('invalid preparation run')
     directory = Path(directory)
-    expected = required_assets(version) | EXTRA
+    expected = candidate_assets(version)
     actual = {p.name for p in directory.iterdir() if p.is_file()}
     if actual != expected or any(p.is_symlink() or not p.is_file() for p in directory.iterdir()):
         raise ValueError('candidate files differ from the required release set')
@@ -53,7 +58,7 @@ def create(directory, sha, version, run_id):
     validate_request(os.environ.get('GITHUB_REPOSITORY', 'test/repo'), sha, version)
     directory = Path(directory)
     (directory / 'candidate.json').write_text(json.dumps({'sha': sha, 'version': version, 'run_id': int(run_id)}))
-    expected = required_assets(version) | EXTRA
+    expected = candidate_assets(version)
     if {p.name for p in directory.iterdir()} != expected:
         raise ValueError('incomplete candidate')
     sums = ''.join(hashlib.sha256((directory / name).read_bytes()).hexdigest() + '  ' + name + '\n'

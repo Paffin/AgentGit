@@ -1,6 +1,6 @@
 # Continuous AgentGit progress
 
-Status: **CONTINUE**. Completing a slice does not complete the platform roadmap.
+Status: **CONTINUE**. Rebased on current main; draft PR preparation and P0 structural-sync repair underway. Completing a slice does not complete the platform roadmap.
 
 ## Recovery and authorization
 
@@ -16,28 +16,28 @@ Status: **CONTINUE**. Completing a slice does not complete the platform roadmap.
 
 | Slice | Evidence |
 |---|---|
-| Single/range/batched review suggestions with exact-head guard | commits `8e047a9`, `226be48`; Web and browser suites, mutation checks |
-| Requested reviewers across core/API/CLI/SDK/MCP/Web, metadata9 | `c5cd1a8`, `29d7a9b`; core/API/client tests; ADR0036 |
-| Code-first review page and responsive secondary actions | `97b3df9`; desktop/phone screenshots and browser checks |
-| Binary/type/oversized conflict choices and pinned workspace sync | `214a0ea`; core150, HTTP/gRPC, Web812, browser6; ADR0037 |
-| Private account review drafts and guarded cleanup, metadata10 | `f8e7fcb`, `5f6bf25`, `e18b594`, `dde140c`; storage/core302, server274, MCP108, Web830, SDK177/202; ADR0038 |
-| Rename conflict source paths retained through every client | `58cf3a5`; integration suite, HTTP/gRPC both orientations, Web836, browser12, SDK178/203, CLI56+3; ADR0039 |
-| Install/README EN+RU simplification | `c4a7179`; release-script54, ShellCheck, real published beta7 install/login/clone/edit/push/integrate/pull; README quickstart2 |
-| Windows ZIP/PowerShell installer and native CI gate | `ed58cae`;15 offline PowerShell/package tests,54 POSIX regressions,9 selected mutations killed, workflow/docs checks; native execution still pending |
+| Single/range/batched review suggestions with exact-head guard | commits `fdfd318`, `6c56df3`; Web and browser suites, mutation checks |
+| Requested reviewers across core/API/CLI/SDK/MCP/Web, metadata9 | `8b20c45`, `eb8acbf`; core/API/client tests; ADR0036 |
+| Code-first review page and responsive secondary actions | `b470792`; desktop/phone screenshots and browser checks |
+| Binary/type/oversized conflict choices and pinned workspace sync | `35592e6`; core150, HTTP/gRPC, Web812, browser6; ADR0037 |
+| Private account review drafts and guarded cleanup, metadata10 | `1cb6d15`, `a76e99b`, `2eba2d8`, `7e48676`; storage/core302, server274, MCP108, Web830, SDK177/202; ADR0038 |
+| Rename conflict source paths retained through every client | `ca0da01`; integration suite, HTTP/gRPC both orientations, Web836, browser12, SDK178/203, CLI56+3; ADR0039 |
+| Install/README EN+RU simplification | `dc7f768`; release-script54, ShellCheck, real published beta7 install/login/clone/edit/push/integrate/pull; README quickstart2 |
+| Windows ZIP/PowerShell installer and native CI gate | `6210f99`;15 offline PowerShell/package tests,54 POSIX regressions,9 selected mutations killed, workflow/docs checks; native execution still pending |
 
 Detailed action and validation logs: `/workspace/agentgit-evidence/WORK_LOG.txt` and per-slice logs in that directory. Cumulative binary-safe patch: `/workspace/agentgit-evidence/roadmap-review-workflows.patch`. Logs outside the checkout are supporting artifacts, not substitutes for committed tests.
 
 ## Current audit
 
-Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceability/testing, Web UX review, beta gates. GitHub currently has no open PR and four open qualification issues: #50 real MCP host, #51 external pilots, #53 screen reader, #55 physical phone. Main advanced by CI-only #133/#134/#135 (prepared releases, reusable permissions, background runner headroom). Main's background qualification is running; do not call it green merely because fast checks pass.
+Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceability/testing, Web UX review, beta gates. GitHub audit found no open PR and four open qualification issues: #50 real MCP host, #51 external pilots, #53 screen reader, #55 physical phone. Issue #52 is closed with real published beta.7 macOS arm64 checksum/provenance and57 checks ([evidence](https://github.com/Paffin/AgentGit/issues/52#issuecomment-6508589245)); Finder quarantine/Homebrew remain outside that proof. Main advanced by CI-only #133/#134/#135 (prepared releases, reusable permissions, background runner headroom). Main's background qualification is running; do not call it green merely because fast checks pass.
 
 ## Prioritized backlog
 
 | ID | Priority/status | Work and dependency | Acceptance/evidence required |
 |---|---|---|---|
-| D1 | P0 IN PROGRESS | Reconcile unmerged batch with current main; retain new prepared-release/CI design | clean rebase, no lost Windows/install changes; static CI/skip/docs gates pass |
-| D2 | P0 READY after D1 | Push working branch, open draft PR, inspect mandatory CI; **never merge** | exact head checks, fix actual failures; native Windows ZIP/install/PS5.1 evidence |
-| R1 | P1 READY | Select next daily-review slice from task2 | small end-to-end deliverable with tests/review; no roadmap reduction |
+| D1 | P0 DONE | Reconcile unmerged batch with current main; retain new prepared-release/CI design | clean rebase, no lost Windows/install changes; static CI/skip/docs gates pass |
+| D2 | P0 IN PROGRESS | Push working branch, open draft PR, inspect mandatory CI; **never merge** | exact head checks, fix actual failures; native Windows ZIP/install/PS5.1 evidence |
+| R1 | P0 IN PROGRESS | Fix structural sync losing independent incoming add/edit/delete when file/directory merge falls back to ours | retain raw conflicting candidate, apply explicit choices before tree validation; both orientations/no partial workspace mutation |
 | R2 | P1 OPEN | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
 | R3 | P1 OPEN | Account-backed file-edit drafts | immutable base, byte/mode preservation, conflicts keep local work; no automatic publication |
 | R4 | P1 OPEN | Multi-path rename/file-directory resolution | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
@@ -58,3 +58,7 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 2. Run skip-source gate (new Windows tests currently use `unittest.skipUnless`, inspect against repository helper policy), workflow/release/docs compatibility and focused changed-code checks.
 3. Open draft PR for whole batch and await/repair CI while implementing the next independent R1 slice.
 4. Update this checkpoint with new SHAs, PR, CI URLs, failures and next item. Keep release gates open until evidence really exists.
+
+## Reconciliation checkpoint
+
+Rebase on `8a00194` completed without losing application changes. Retained main's fast publish workflow; moved Windows build/verification into `prepare-release.yml`. New candidate manifests require and checksum the Windows ZIP without changing recognition of historical published beta.7. Fixed the new PowerShell tests to use the repository's required-component helper; fast tooling runs only shell-independent Windows archive contracts. Full PowerShell tests are required in native jobs. Beta programme status corrected from beta.5 to the actual published beta.7; external gates remain open.

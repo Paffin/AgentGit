@@ -83,6 +83,7 @@ jobs:
           for test in test_ci_policy test_release_candidate test_request_release test_release_scripts test_check_workflows test_web_e2e_workflow test_check_dependabot test_py39_compat; do
             python3 "scripts/$test.py"
           done
+          python3 scripts/test_windows_release.py WindowsArchive ReleaseInputs
 
   rust:
     name: Linux unit and storage contracts

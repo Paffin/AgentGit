@@ -15,6 +15,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  AG_REQUIRE_COMPONENTS: shell:powershell
 
 jobs:
   windows:

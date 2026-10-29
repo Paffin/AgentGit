@@ -12,6 +12,7 @@ from unittest.mock import patch
 import yaml
 
 from ci_changes import FLAGS, changed_paths, classify, last_successful_base
+from release_ci import pending_checks
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,8 +42,13 @@ class ChangeSelection(unittest.TestCase):
         self.assertTrue(classify(['Cargo.lock'])['rust_deps'])
         self.assertTrue(classify(['deploy/compose/compose.yaml'])['tooling'])
 
-    def test_workflow_and_unknown_paths_fail_closed(self):
-        for path in ('.github/workflows/ci.yml', 'future-runtime/code.rs'):
+    def test_workflows_run_contract_checks_without_compiling_unchanged_code(self):
+        flags = classify(['.github/workflows/prepare-release.yml'])
+        self.assertTrue(flags['tooling'])
+        self.assertEqual(sum(flags.values()), 1)
+
+    def test_unknown_paths_fail_closed(self):
+        for path in ('.github/actions/custom/action.yml', 'future-runtime/code.rs'):
             self.assertEqual(classify([path]), dict.fromkeys(FLAGS, True))
 
     def test_main_covers_changes_since_last_green_run_and_does_not_reuse_itself(self):
@@ -174,10 +180,30 @@ class PipelinePolicy(unittest.TestCase):
         self.assertIn('--source-digest "$GITHUB_SHA"', commands)
         self.assertEqual(jobs['install']['needs'], 'publish')
         prepare = workflow('prepare-release')['jobs']
-        self.assertIn('qualify', prepare['release']['needs'])
-        self.assertEqual(prepare['qualify']['uses'], './.github/workflows/qualification.yml')
+        self.assertIn('checks', prepare['release']['needs'])
+        self.assertNotIn('qualify', prepare)
+        self.assertIn('release_ci.py', prepare['checks']['steps'][-1]['run'])
+        self.assertFalse(any('qualification.yml' in job.get('uses', '') for job in prepare.values()))
         for job in ('binaries', 'image'):
             self.assertEqual(prepare[job]['needs'], 'verify')
+
+    def test_release_reuses_only_successful_exact_main_commit_checks(self):
+        def run(name, **extra):
+            return dict(id=1, path='.github/workflows/' + name + '.yml',
+                        head_sha='a' * 40, event='push', head_branch='main',
+                        status='completed', conclusion='success', **extra)
+        good = [run('ci'), run('security')]
+        self.assertEqual(pending_checks(good, 'a' * 40), [])
+        self.assertEqual(len(pending_checks(good, 'b' * 40)), 2)
+        pr = [dict(r, event='pull_request') for r in good]
+        self.assertEqual(len(pending_checks(pr, 'a' * 40)), 2)
+        running = dict(run('web'), status='in_progress', conclusion=None)
+        self.assertEqual(len(pending_checks(good + [running], 'a' * 40)), 1)
+        for conclusion in ('failure', 'cancelled', 'skipped', 'timed_out'):
+            with self.assertRaises(RuntimeError):
+                pending_checks(good + [dict(run('web'), conclusion=conclusion)], 'a' * 40)
+        with self.assertRaises(RuntimeError):
+            pending_checks(good + [dict(run('ci'), id=2, conclusion='failure')], 'a' * 40)
 
     def test_reusable_workflows_never_increase_inherited_permissions(self):
         rank = {'none': 0, 'read': 1, 'write': 2}

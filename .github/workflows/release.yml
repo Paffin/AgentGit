@@ -1,6 +1,6 @@
 name: Release
 
-# Fast promotion only. Slow builds, full qualification and native smoke tests belong to Prepare release.
+# Fast promotion only. Builds and native smoke tests belong to Prepare release; full qualification is nightly.
 # Execution budgets are 3 minutes for publication plus 2 for parallel public-install checks (runner queue excluded).
 on:
   push:

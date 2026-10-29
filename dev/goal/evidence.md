@@ -467,3 +467,13 @@ Baseline: `b5629da` (published beta.5 documentation; immutable release source re
 
 The form draft is held while the dialog is open; it is not account-backed autosave. Editing does
 not pause dispatch. Work started first freezes instructions, and a separate follow-up is required.
+
+
+## Beta.6 release gate follow-up (2026-10-29)
+
+The candidate at `598e63e` was not published. CI, Windows and coverage all exposed the same
+stale schema-5 upgrade assertion: the database correctly reached schema 7 while the test
+expected 6. The fixture now compares with the current schema constant, preserving its source
+schema, original stream and unchanged backup assertions. The four focused schema tests passed.
+The SDK gate separately required formatting the new operation-tour call. No gate was removed
+or lowered; a new exact-commit release request is needed after the correction.

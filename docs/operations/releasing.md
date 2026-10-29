@@ -301,3 +301,10 @@ binary refused the upgraded schema; it successfully verified the untouched pre-u
 This verifies that upgrade path, not production readiness or a general downgrade operation.
 External MCP-host, clean macOS, physical-phone, screen-reader and pilot reports remain open in
 the [beta programme](../community/beta.md).
+
+
+Migration regression fixtures keep their source schema pinned but compare the upgraded database
+with the current storage schema version. A new migration must retain the fixture's data and
+untouched backup assertions; changing the destination version must not disable those checks.
+Run the SDK's full lint command before requesting a release: its formatting check is separate
+from type checking and live API tests.

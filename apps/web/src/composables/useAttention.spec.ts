@@ -1,15 +1,16 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h, ref, type Ref } from 'vue'
+import { defineComponent, h, reactive, ref, type Ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAttention } from './useAttention'
 
 const mocks = vi.hoisted(() => ({
+  notify: () => {},
   list: vi.fn(),
   proposals: vi.fn(),
   runs: vi.fn(),
   prepare: vi.fn(),
   detail: vi.fn(),
-  auth: { isAuthenticated: true, identity: 'user:dana', can: () => true },
+  auth: { isAuthenticated: true, identity: 'user:dana', token: 'first', can: () => true },
 }))
 vi.mock('@/api/instance', () => ({
   api: {
@@ -20,6 +21,12 @@ vi.mock('@/api/instance', () => ({
   },
 }))
 vi.mock('@/stores/auth', () => ({ useAuth: () => mocks.auth }))
+vi.mock('./useAttentionFeed', () => ({
+  useAttentionFeed: (_repo: unknown, notify: () => void) => {
+    mocks.notify = notify
+    return ref('idle')
+  },
+}))
 
 let wrapper: ReturnType<typeof mount> | undefined
 afterEach(() => {
@@ -41,6 +48,12 @@ function setup(repository?: Ref<string>) {
   return attention
 }
 function seed() {
+  mocks.auth = reactive({
+    isAuthenticated: true,
+    identity: 'user:dana',
+    token: 'first',
+    can: () => true,
+  })
   mocks.list.mockReset()
   mocks.list.mockResolvedValue({ items: [{ name: 'acme/repo', created_at_ms: 1 }] })
   mocks.proposals.mockResolvedValue({
@@ -153,6 +166,31 @@ describe('home attention data', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect(mocks.list).toHaveBeenCalledTimes(1)
   })
+  it('coalesces events without rereading the catalogue or replacing an in-flight snapshot', async () => {
+    seed()
+    vi.useFakeTimers()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    setup(ref('acme/repo'))
+    await flushPromises()
+    let finish!: (value: unknown) => void
+    mocks.proposals.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    for (let i = 0; i < 20; i++) mocks.notify()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(mocks.proposals).toHaveBeenCalledTimes(2)
+    for (let i = 0; i < 20; i++) mocks.notify()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mocks.proposals).toHaveBeenCalledTimes(2)
+    finish({ items: [], nextPageToken: '' })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(mocks.proposals).toHaveBeenCalledTimes(3)
+    expect(mocks.list).toHaveBeenCalledTimes(1)
+  })
   it('sends no requests after the session has ended', async () => {
     seed()
     mocks.auth.isAuthenticated = false
@@ -160,6 +198,29 @@ describe('home attention data', () => {
     await flushPromises()
     expect(mocks.list).not.toHaveBeenCalled()
     expect(state.loading.value).toBe(false)
+  })
+  it('clears the previous account immediately and rejects its late snapshot', async () => {
+    seed()
+    const state = setup()
+    await flushPromises()
+    expect(state.items.value).toHaveLength(1)
+    let finish!: (value: unknown) => void
+    mocks.list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const pending = state.reload()
+    mocks.list.mockResolvedValue({ items: [{ name: 'new/repository', created_at_ms: 1 }] })
+    mocks.proposals.mockResolvedValue({ items: [], nextPageToken: '' })
+    mocks.auth.token = 'second'
+    expect(state.items.value).toEqual([])
+    expect(state.repos.value).toEqual([])
+    await flushPromises()
+    finish({ items: [{ name: 'private/old', created_at_ms: 1 }] })
+    await pending
+    expect(state.repos.value.map((repo) => repo.name)).toEqual(['new/repository'])
   })
   it('never commits an older request after a newer refresh has completed', async () => {
     seed()

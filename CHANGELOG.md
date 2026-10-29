@@ -11,6 +11,12 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 **Upgrade:** metadata schema 7 adds persistent task-source links. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
 
+### Improved
+
+- Home search, repository and category filters survive reload and browser Back and can be bookmarked as a personal work queue.
+
+- Home can follow one selected repository live. Event bursts coalesce without overlapping snapshots or rereading the full catalogue, hidden tabs close the feed, and account changes clear the previous summary. Aggregate views retain the visible-tab polling fallback.
+
 ### Added
 
 - Queued tasks can be refined before their first run through Web UI, local/remote CLI and HTTP/gRPC/SDKs. Full-content preconditions protect concurrent edits, keyed retries replay atomically, and historical instructions remain immutable after any run.

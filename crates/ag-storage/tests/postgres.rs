@@ -636,6 +636,7 @@ fn schema_five_upgrades_to_line_threads_without_losing_existing_rows() {
     let m = open(&url, schema.name());
     m.write(|tx| {
         tx.create_stream(&StreamName::new("main").unwrap(), "user:before-upgrade")?;
+        tx.raw_execute("ALTER TABLE tasks DROP COLUMN source_run, DROP COLUMN source_task", &[])?;
         tx.raw_execute("DROP TABLE review_thread_comments, review_threads", &[])?;
         tx.raw_execute("UPDATE meta SET value = '5' WHERE key = 'schema'", &[])
     })
@@ -644,7 +645,7 @@ fn schema_five_upgrades_to_line_threads_without_losing_existing_rows() {
     let m = open(&url, schema.name());
     assert_eq!(m.read(|tx| tx.stream("main")).unwrap().unwrap().created_by, "user:before-upgrade");
     assert!(m.read(|tx| tx.review_threads("none", None, 10)).unwrap().is_empty());
-    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap().as_deref(), Some("6"));
+    assert_eq!(m.read(|tx| tx.meta_get("schema")).unwrap(), Some(ag_storage::meta::SCHEMA_VERSION.to_string()));
 }
 
 #[test]

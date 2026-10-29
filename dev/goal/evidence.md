@@ -477,3 +477,19 @@ expected 6. The fixture now compares with the current schema constant, preservin
 schema, original stream and unchanged backup assertions. The four focused schema tests passed.
 The SDK gate separately required formatting the new operation-tour call. No gate was removed
 or lowered; a new exact-commit release request is needed after the correction.
+
+
+## Live Home updates in the next beta.6 candidate
+
+A selected repository uses one dedicated event stream; the all-repository view keeps bounded
+15-second polling. No stream is opened for every repository. Hidden tabs, account changes,
+filter changes and unmount close the old feed; callbacks from replaced feeds are ignored.
+Initial/reconnected feeds refresh the snapshot to cover the connection gap. Event bursts
+coalesce, wait for an in-flight snapshot and reuse the loaded catalogue. Manual/fallback
+refreshes still reload it. Twelve focused tests cover lifecycle, backpressure, stale snapshots
+and immediate account-data clearing. Real-server browser checks create and close a proposal
+and observe Home within five seconds, before its polling interval. This is not a global event
+feed or a physical-device/screen-reader qualification.
+
+The previous candidate's PostgreSQL-only schema-5 fixture also retained the schema-7 task-source columns while pretending to be schema 5. It now removes those columns before reopening and checks the current destination version, preserving the original stream assertion. This corrects the fixture, not the production migration.
+Home filters also survive reload and browser Back in bookmarkable URLs.

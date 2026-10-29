@@ -72,3 +72,8 @@ Historical tasks require a separate follow-up. See ADR-0028 and the evidence jou
 Beta.5 is now published from a36168b. Its downloaded Linux archive passed checksum, exact-source
 attestation and schema-7 upgrade/backup checks; details are in the release guide. This does not
 close external device, host or pilot qualification.
+
+
+Live Home: selected-repository invalidation now follows one event feed, with coalescing,
+visibility/session cleanup and complete-snapshot replacement. The aggregate view remains
+polled; a global authorized event feed is separate future server work.

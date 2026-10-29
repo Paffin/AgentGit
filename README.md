@@ -40,6 +40,8 @@ The beta also supports keyboard-driven file finding, recoverable file drafts, an
 
 Development also supports editing task instructions before the first run through Web UI, CLI and API, with concurrent-edit protection. This is not in beta.5 archives. [Task editing](docs/guides/web-ui.md#refine-queued-task-instructions-development).
 
+Development Home keeps queue filters in bookmarkable links and can follow a selected repository live; event bursts share one refresh, while the aggregate view retains bounded polling.
+
 Next priorities are complete review workflows and hosting-metadata migration.
 The [roadmap](ROADMAP.md#next) separates delivered features, published releases and remaining qualification.
 

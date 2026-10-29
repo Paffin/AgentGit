@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useAttention } from '@/composables/useAttention'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -14,27 +14,54 @@ import Button from '@/ui/Button.vue'
 import EmptyState from '@/ui/EmptyState.vue'
 import ErrorState from '@/ui/ErrorState.vue'
 import Icon from '@/ui/Icon.vue'
+import LiveIndicator from '@/ui/LiveIndicator.vue'
 import SelectField from '@/ui/SelectField.vue'
 import Skeleton from '@/ui/Skeleton.vue'
 import TextField from '@/ui/TextField.vue'
 
 const auth = useAuth()
 usePageTitle(() => 'Home')
-const repository = ref('')
+const route = useRoute()
+const router = useRouter()
+const readText = (value: unknown): string => (typeof value === 'string' ? value : '')
+const readKind = (value: unknown) => ATTENTION_ORDER.find((kind) => kind === value)
+const repository = ref(readText(route.query.repo))
 const {
   repos,
   items,
   loading,
   settled,
   lastUpdated,
+  liveStatus,
   error,
   skipped,
   unreadable,
   reload,
   loadMore,
 } = useAttention(repository)
-const query = ref('')
-const kind = ref<AttentionKind>()
+const query = ref(readText(route.query.q))
+const kind = ref<AttentionKind | undefined>(readKind(route.query.kind))
+watch(
+  () => route.query,
+  () => {
+    repository.value = readText(route.query.repo)
+    query.value = readText(route.query.q)
+    kind.value = readKind(route.query.kind)
+  },
+)
+function updateFilters(values: Partial<{ q: string; repo: string; kind: AttentionKind | '' }>) {
+  query.value = values.q ?? query.value
+  repository.value = values.repo ?? repository.value
+  kind.value = values.kind === '' ? undefined : (values.kind ?? kind.value)
+  void router.replace({
+    query: {
+      ...route.query,
+      q: query.value || undefined,
+      repo: repository.value || undefined,
+      kind: kind.value,
+    },
+  })
+}
 const scoped = computed(() =>
   filterAttention(items.value, { query: query.value, repo: repository.value }),
 )
@@ -57,9 +84,7 @@ const split = (repo: string) => {
   return { owner, name }
 }
 function clearFilters() {
-  query.value = ''
-  repository.value = ''
-  kind.value = undefined
+  updateFilters({ q: '', repo: '', kind: '' })
 }
 function target(i: AttentionItem): RouteLocationRaw {
   const { owner, name } = split(i.repo)
@@ -106,23 +131,40 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
     <template v-else>
       <div class="toolbar" role="search" aria-label="Find work">
         <TextField
-          v-model="query"
+          :model-value="query"
           label="Search work"
           hide-label
           type="search"
           placeholder="Search changes, agents, repositories"
+          @update:model-value="(value) => updateFilters({ q: value })"
           ><template #prefix><Icon name="search" :size="16" /></template
         ></TextField>
         <SelectField
-          v-model="repository"
+          :model-value="repository"
           label="Repository"
           hide-label
           :options="repositoryOptions"
+          @update:model-value="(value) => updateFilters({ repo: value })"
         />
         <Button icon="refresh" :loading="loading" data-testid="home-refresh" @click="reload"
           >Refresh</Button
         >
       </div>
+      <p v-if="lastUpdated" class="refresh-note">
+        <LiveIndicator v-if="repository" :status="liveStatus" />
+        Last refreshed {{ formatTime(lastUpdated) }}.
+        <template v-if="liveStatus === 'live'"
+          >Live updates for {{ repository }}; a check every 15 seconds keeps the summary
+          current.</template
+        >
+        <template v-else-if="repository"
+          >Live updates {{ liveStatus === 'connecting' ? 'are connecting' : 'are unavailable' }}.
+          Checks every 15 seconds while visible.</template
+        >
+        <template v-else
+          >Checks every 15 seconds while visible. Select a repository for live updates.</template
+        >
+      </p>
       <Alert
         v-if="incomplete"
         tone="warn"
@@ -148,7 +190,7 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
               type="button"
               :class="{ selected: !kind }"
               :aria-pressed="!kind"
-              @click="kind = undefined"
+              @click="updateFilters({ kind: '' })"
             >
               <span>All work</span><span class="count">{{ scoped.length }}</span>
             </button>
@@ -158,7 +200,7 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
               type="button"
               :class="{ selected: kind === category }"
               :aria-pressed="kind === category"
-              @click="kind = category"
+              @click="updateFilters({ kind: category })"
             >
               <span>{{ ATTENTION_TITLE[category] }}</span
               ><span class="count">{{ counts.get(category) ?? 0 }}</span>
@@ -267,9 +309,6 @@ const itemLink = (i: AttentionItem): RouteLocationRaw =>
               </li>
             </ul>
           </section>
-          <p v-if="lastUpdated" class="refresh-note">
-            Last refreshed {{ formatTime(lastUpdated) }}. Checks every 15 seconds while visible.
-          </p>
         </div>
       </div>
     </template>
@@ -477,6 +516,8 @@ h1 {
   align-items: center;
 }
 .refresh-note {
+  margin-left: calc(var(--rail-width) + var(--rail-gap));
+  overflow-wrap: anywhere;
   font-size: var(--fs-xs);
   color: var(--text-3);
   padding-top: var(--s-2);
@@ -487,7 +528,8 @@ h1 {
 }
 @media (max-width: 820px) {
   .head,
-  .toolbar {
+  .toolbar,
+  .refresh-note {
     margin-left: 0;
   }
   .workspace {

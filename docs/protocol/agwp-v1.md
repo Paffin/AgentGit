@@ -354,3 +354,5 @@ identical requests replay once, even if the original content is now stale; diffe
 under that key is refused. Retry with the original body and key after an uncertain result.
 Owner, creation metadata, prerequisites and task/run source links are unaffected. No metadata
 migration is introduced. [Semantics](../adr/0028-task-instruction-refinement.md).
+
+HTTP event subscriptions emit an initial SSE comment after authorization. This acknowledges an idle connection immediately without allocating an event sequence; clients continue to ignore comments and resume using real event IDs.

@@ -308,3 +308,12 @@ with the current storage schema version. A new migration must retain the fixture
 untouched backup assertions; changing the destination version must not disable those checks.
 Run the SDK's full lint command before requesting a release: its formatting check is separate
 from type checking and live API tests.
+
+### Beta.6 candidate: schema-8 upgrade evidence (2026-10-29)
+
+The published beta.5 Linux archive was used to create a task and failed run before opening
+its repository with the beta.6 development server. Schema 6 → 8 preserved existing rows,
+run history and the creation-idempotency replay. The new attempt policy then allowed a
+second distinct run. The old binary refused schema 8, and restoring the pre-upgrade copy
+passed verification with that old binary. This qualifies the upgrade path, not publication
+of beta.6. The release workflow still gates and builds the exact tagged commit.

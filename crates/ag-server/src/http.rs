@@ -1653,7 +1653,13 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
                                     .data(serde_json::json!({"error": e.0.to_info()}).to_string()),
                             })
                         });
-                        let mut resp = Sse::new(sse)
+                        // Flush an authorized idle connection immediately. Some clients do not
+                        // expose fetch headers until body bytes arrive; waiting for the first
+                        // heartbeat would leave a healthy subscription looking disconnected.
+                        let ready = futures_util::stream::once(async {
+                            Ok::<SseEvent, Infallible>(SseEvent::default().comment("connected"))
+                        });
+                        let mut resp = Sse::new(ready.chain(sse))
                             .keep_alive(KeepAlive::new().interval(Duration::from_secs(25)))
                             .into_response();
                         resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));

@@ -633,3 +633,31 @@ servers and preservation of explicit zero (0.008s). TypeScript/Python SDK tours 
 (12/13 tests) using both conditions; Web types remain valid. Crapper/Dryer/Mutator scans are
 static inspection, not a measured mutation score. Logs: task-completion-fence-* in the
 implementation workspace.
+
+## Immediate SSE readiness and safe return from a proposal
+
+The Firefox Home failure reproduced with the existing real-server scenario. An idle HTTP
+subscription sent no body before its heartbeat: a bounded socket read failed after 2 seconds.
+The server now emits an authorized SSE comment immediately, without allocating an event ID.
+The same socket scenario passes in 0.07s and Firefox reports live updates before the poll interval.
+
+The WebKit navigation failure was a separate client race: the diff loader reread route-derived
+repository state after an await. A controlled unmount reproduced a request to an empty repository.
+The loader now captures its repository and honors cancellation before the next request; initial
+detail loads require a complete repository. Five focused composable tests and Web types passed.
+
+The exact Home → selected repository → live proposal → bookmarked filter/reload → proposal →
+Back → live removal flow passed on Chromium, Firefox and phone (3 scenarios in the combined
+run), then WebKit (8.8s including setup). Console-error assertions were retained. Screenshots show
+real content, live status and working controls without framework overlays on desktop and phone.
+The Browser skill's connection tool is absent; existing Playwright is used under the original
+real-browser qualification authorization. WebKit uses downloaded matching binaries and isolated
+Debian libraries because this host has no privileged package installation; its host-location
+validator was skipped only after loading those libraries, while the browser and all app assertions
+ran normally. CI uses its standard browser image without these local setup options.
+
+The downloaded published beta.5 archive also upgraded a populated repository from schema 6
+to schema 8, retaining task/run/history records and the old creation-idempotency response.
+An operator configured the new limit and started a second distinct run. The old binary refused
+upgraded metadata; the pre-upgrade backup remained readable and unchanged. Report:
+`/workspace/agentgit-quality/task-attempt-upgrade-published-beta5-to8.json`.

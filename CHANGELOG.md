@@ -7,9 +7,9 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
-### Improved
+## [0.3.0-beta.6] - 2026-10-29
 
-- Web rules now edit protected-path approvers and required-check timing directly, with plain-language change summaries. Renaming a protected path preserves its approver restrictions and other settings.
+**Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
 
 ### Added
 
@@ -19,7 +19,23 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 - Optional stream policy `require_resolved_threads` blocks integration until every line discussion is resolved, including earlier revisions. Core preparation and commit share the rule; Web UI exposes the setting and remediation, and CLI explanations include resolution commands. Upgrade every replica before enabling it.
 
+- Queued tasks can be refined before their first run through Web UI, local/remote CLI and HTTP/gRPC/SDKs. Full-content preconditions protect concurrent edits, keyed retries replay atomically, and historical instructions remain immutable after any run.
+
+- Task follow-ups can retain validated source task/run links across reloads. The source run must be failed or abandoned and belong to that task; ownership, prerequisites and retry history remain independent. Development metadata schema 7 requires a pre-upgrade backup.
+
+- Per-agent run admission controls in Web UI, remote CLI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
+
+### Improved
+
+- Web rules now edit protected-path approvers and required-check timing directly, with plain-language change summaries. Renaming a protected path preserves its approver restrictions and other settings.
+
+- Home search, repository and category filters survive reload and browser Back and can be bookmarked as a personal work queue.
+
+- Home can follow one selected repository live. Event bursts coalesce without overlapping snapshots or rereading the full catalogue, hidden tabs close the feed, and account changes clear the previous summary. Aggregate views retain the visible-tab polling fallback.
+
 ### Fixed
+
+- Idle event subscriptions acknowledge their connection immediately, so browsers do not wait for the first heartbeat to show live updates. Leaving a proposal cancels its pending diff instead of issuing a request with an empty repository.
 
 - Automatic task completion is fenced by the observed execution generation. A delayed result from an older run cannot complete or cancel a newer attempt of the same task.
 
@@ -28,26 +44,6 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.
 
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.
-
-## [0.3.0-beta.6] - 2026-10-28
-
-**Upgrade:** metadata schema 8 includes persistent task-source links and durable execution-attempt limits. Back up before opening existing repositories; restore the pre-upgrade backup to return to beta.5 or an older binary. Task refinement itself adds no further migration.
-
-### Improved
-
-- Home search, repository and category filters survive reload and browser Back and can be bookmarked as a personal work queue.
-
-- Home can follow one selected repository live. Event bursts coalesce without overlapping snapshots or rereading the full catalogue, hidden tabs close the feed, and account changes clear the previous summary. Aggregate views retain the visible-tab polling fallback.
-
-### Added
-
-- Queued tasks can be refined before their first run through Web UI, local/remote CLI and HTTP/gRPC/SDKs. Full-content preconditions protect concurrent edits, keyed retries replay atomically, and historical instructions remain immutable after any run.
-
-- Task follow-ups can retain validated source task/run links across reloads. The source run must be failed or abandoned and belong to that task; ownership, prerequisites and retry history remain independent. Development metadata schema 7 requires a pre-upgrade backup.
-
-- Per-agent run admission controls in Web UI, remote CLI and the shared HTTP/gRPC API. Operators can disable or re-enable new runs without deleting keys or interrupting existing sessions; state comparison, audit and retry-safe writes are atomic.
-
-### Fixed
 
 - Agent enabled-state checks now occur inside the run creation transaction, preventing a run from starting after a concurrent disable has committed.
 - The orchestrator rereads a task after claiming it so instruction edits committed after task selection reach the executor and its file leases.

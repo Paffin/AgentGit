@@ -159,3 +159,5 @@ Merged in [PR #116](https://github.com/Paffin/AgentGit/pull/116): server-transac
 Automatic cancellation also carries an expected attempt policy. Concurrent operator changes survive stale session decisions, and reconciliation reloads durable history (ADR0034).
 
 Task completion is also bound to its observed execution generation. A late executor or stale scheduler cannot finish a newer attempt; capability negotiation protects older-server deployments (ADR0035).
+
+The beta.6 candidate includes the merged core concurrency protections, task execution policy and generation fencing, review suggestions and policy controls. Published beta.5 → schema-8 backup/upgrade/rollback verification passed; final publication still follows exact-commit release gates.

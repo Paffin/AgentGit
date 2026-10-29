@@ -46,6 +46,8 @@ Development conflict resolution compares the inspected proposal head before upda
 
 Development review threads support proposed line replacements, with explicit author preview and head-checked application.
 
+Development rules also expose protected-path approvers and check timing without editing JSON; runner settings survive form edits.
+
 ## Coming from GitHub or GitLab?
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).

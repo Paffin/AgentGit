@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Improved
+
+- Web rules now edit protected-path approvers and required-check timing directly, with plain-language change summaries. Renaming a protected path preserves its approver restrictions and other settings.
+
 ### Added
 
 - Reviewers can propose a replacement for a new-side line. Authors preview and apply it as a new proposal revision, preserving executable mode, Unicode and line endings. The operation requires inspected-head protection; earlier suggestions remain readable and are never applied automatically.

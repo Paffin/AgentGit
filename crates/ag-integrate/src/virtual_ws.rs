@@ -273,8 +273,7 @@ impl Repository {
             if resolutions.is_empty() || !unresolved.is_empty() {
                 return Ok(SyncOutcome::Conflicted { conflicts: infos });
             }
-            let ops = self.ops_towards(&result, &wanted);
-            result = result.apply(&ops, &self.limits)?;
+            result = merged.resolve_paths(&wanted, &self.limits)?;
         }
         let ops = ours.diff(&result);
         let id = self.commit(

@@ -54,3 +54,5 @@ which test: [ADR traceability](../architecture/adr-traceability.md).
 - [0038 — Private review drafts](0038-private-review-drafts.md)
 
 - [0039 — Exact conflict source paths](0039-conflict-source-paths.md)
+
+- [0040 — Complete structural sync resolutions](0040-structural-sync-resolutions.md)

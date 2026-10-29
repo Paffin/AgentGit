@@ -209,10 +209,39 @@ impl Repository {
             .collect())
     }
 
+    // Old binaries could leave a pending merge built from a structural fallback.
+    // Recheck its original inputs rather than trusting the pending list of paths.
+    fn validate_pending_snapshot(&self, ws: &WorkspaceRow, pending: &Pending) -> Result<()> {
+        let head = ws.head.ok_or_else(|| Error::Invalid("pending merge has no workspace head".into()))?;
+        let bases = merge_bases(&self.graph(), &head, &pending.theirs)?;
+        let [base] = bases.as_slice() else {
+            return Err(Error::Invalid(
+                "pending merge has no unique merge base; back up edits before resetting".into(),
+            ));
+        };
+        let merged = merge_trees(
+            &self.tree_of(base)?,
+            &self.tree_of(&head)?,
+            &self.tree_of(&pending.theirs)?,
+            &RepoBlobs(self),
+            &self.limits,
+        )
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+        if merged.conflicts.iter().any(|c| matches!(c.kind, ConflictKind::FileDirectory { .. })) {
+            return Err(Error::Conflict(
+                "pending file/directory merge may lack incoming files; back up local edits, reset the workspace, \
+                 then retry with explicit structural resolutions; snapshot was not created, even with --force"
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Records the state of `dir` as the workspace's next snapshot. Returns
     /// `None` if nothing changed. While a conflicted sync is pending, the
     /// snapshot becomes the merge changeset (parents: head + the stream head
     /// that was merged) and refuses to proceed if conflict markers remain.
+    /// Legacy pending file/directory merges are refused even with `force`.
     pub fn snapshot(
         &self,
         name: &str,
@@ -222,10 +251,13 @@ impl Repository {
         force: bool,
     ) -> Result<Option<ChangesetId>> {
         let ws = self.workspace_row(name)?;
+        let pending = self.pending_merge(name)?;
+        if let Some(pending) = &pending {
+            self.validate_pending_snapshot(&ws, pending)?;
+        }
         let rules = IgnoreRules::load(dir)?;
         let head_tree = self.tree_or_empty(ws.head.as_ref())?;
         let (tree, _) = scan_against(self, dir, &rules, true, &head_tree)?;
-        let pending = self.pending_merge(name)?;
         if tree == head_tree && pending.is_none() {
             return Ok(None);
         }
@@ -269,7 +301,8 @@ impl Repository {
     }
 
     /// Brings the stream's head into the workspace and updates `dir`.
-    /// The directory must have no uncommitted changes.
+    /// The directory must have no uncommitted changes. A file/directory clash is
+    /// refused before changing the directory or workspace metadata.
     pub fn sync_workspace(&self, name: &str, dir: &Path, author: &Identity) -> Result<SyncOutcome> {
         if self.pending_merge(name)?.is_some() {
             return Err(Error::Conflict("a conflicted sync is pending; resolve the files and snapshot first".into()));
@@ -316,6 +349,7 @@ impl Repository {
         let base_tree = self.tree_of(&base)?;
         let merged = merge_trees(&base_tree, &ours_tree, &theirs_tree, &RepoBlobs(self), &self.limits)
             .map_err(|e| Error::Invalid(e.to_string()))?;
+        require_directory_sync_safe(&merged.conflicts)?;
         if merged.is_clean() {
             let ops = ours_tree.diff(&merged.tree);
             let id = self.commit(
@@ -397,4 +431,17 @@ impl Repository {
 
 fn has_markers(bytes: &[u8]) -> bool {
     bytes.split(|b| *b == b'\n').any(|l| l.starts_with(b"<<<<<<< ours") || l.starts_with(b">>>>>>> theirs"))
+}
+
+// A structural fallback is not the complete merged state. Do not turn it into a
+// pending directory merge whose next snapshot would discard clean incoming edits.
+fn require_directory_sync_safe(conflicts: &[ag_merge::Conflict]) -> Result<()> {
+    let Some(conflict) = conflicts.iter().find(|c| matches!(c.kind, ConflictKind::FileDirectory { .. })) else {
+        return Ok(());
+    };
+    Err(Error::Conflict(format!(
+        "file/directory conflict at '{}': this sync left the workspace and directory unchanged; \
+         use explicit virtual workspace resolutions, or change and snapshot the local layout before retrying",
+        conflict.path
+    )))
 }

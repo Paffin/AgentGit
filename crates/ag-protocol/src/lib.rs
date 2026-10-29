@@ -100,6 +100,9 @@ pub mod features {
     /// Virtual sync conflicts retain exact per-side paths after renames.
     pub const WORKSPACES_CONFLICT_ORIGINS: &str = "workspaces.conflict_origins";
 
+    /// Structural virtual sync resolves the complete merged candidate, preserving independent changes.
+    pub const WORKSPACES_STRUCTURAL_RESOLUTION: &str = "workspaces.structural_resolution";
+
     /// Private versioned review drafts for the current acting identity.
     pub const PROPOSALS_REVIEW_DRAFTS: &str = "proposals.review_drafts";
 
@@ -109,6 +112,7 @@ pub mod features {
         WORKSPACES_VIRTUAL,
         WORKSPACES_SYNC_PRECONDITION,
         WORKSPACES_CONFLICT_ORIGINS,
+        WORKSPACES_STRUCTURAL_RESOLUTION,
         EXECUTION_JOBS,
         OBJECTS_CHUNKED,
         AUTH_OIDC,

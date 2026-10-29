@@ -29,7 +29,7 @@ Detailed action and validation logs: `/workspace/agentgit-evidence/WORK_LOG.txt`
 
 ## Current audit
 
-Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceability/testing, Web UX review, beta gates. GitHub audit found no open PR and four open qualification issues: #50 real MCP host, #51 external pilots, #53 screen reader, #55 physical phone. Issue #52 is closed with real published beta.7 macOS arm64 checksum/provenance and57 checks ([evidence](https://github.com/Paffin/AgentGit/issues/52#issuecomment-6508589245)); Finder quarantine/Homebrew remain outside that proof. Main advanced by CI-only #133/#134/#135 (prepared releases, reusable permissions, background runner headroom). Main's background qualification is running; do not call it green merely because fast checks pass.
+Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceability/testing, Web UX review, beta gates. Initial GitHub audit found no open PR and four open qualification issues: #50 real MCP host, #51 external pilots, #53 screen reader, #55 physical phone. Issue #52 is closed with real published beta.7 macOS arm64 checksum/provenance and57 checks ([evidence](https://github.com/Paffin/AgentGit/issues/52#issuecomment-6508589245)); Finder quarantine/Homebrew remain outside that proof. Main advanced by CI-only #133/#134/#135 (prepared releases, reusable permissions, background runner headroom). Main's background qualification is running; do not call it green merely because fast checks pass.
 
 ## Prioritized backlog
 
@@ -37,7 +37,7 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 |---|---|---|---|
 | D1 | P0 DONE | Reconcile unmerged batch with current main; retain new prepared-release/CI design | clean rebase, no lost Windows/install changes; static CI/skip/docs gates pass |
 | D2 | P0 IN PROGRESS | Push working branch, open draft PR, inspect mandatory CI; **never merge** | exact head checks, fix actual failures; native Windows ZIP/install/PS5.1 evidence |
-| R1 | P0 IN PROGRESS | Fix structural sync losing independent incoming add/edit/delete when file/directory merge falls back to ours | retain raw conflicting candidate, apply explicit choices before tree validation; both orientations/no partial workspace mutation |
+| R1 | P0 DONE | Fix structural sync losing independent incoming add/edit/delete when file/directory merge falls back to ours | retain raw conflicting candidate, apply explicit choices before tree validation; both orientations/no partial workspace mutation |
 | R2 | P1 OPEN | Private general discussion drafts | per-account isolation, stale-save/clear protections, UI restore, SDK/CLI parity |
 | R3 | P1 OPEN | Account-backed file-edit drafts | immutable base, byte/mode preservation, conflicts keep local work; no automatic publication |
 | R4 | P1 OPEN | Multi-path rename/file-directory resolution | complete explicit result, preserve independent clean edits; never infer deletion from failed reads |
@@ -62,3 +62,16 @@ Read ROADMAP, both READMEs, CHANGELOG, ADR index/0036-0039, architecture traceab
 ## Reconciliation checkpoint
 
 Rebase on `8a00194` completed without losing application changes. Retained main's fast publish workflow; moved Windows build/verification into `prepare-release.yml`. New candidate manifests require and checksum the Windows ZIP without changing recognition of historical published beta.7. Fixed the new PowerShell tests to use the repository's required-component helper; fast tooling runs only shell-independent Windows archive contracts. Full PowerShell tests are required in native jobs. Beta programme status corrected from beta.5 to the actual published beta.7; external gates remain open.
+
+## Active delivery / CI
+
+- Draft PR [#136](https://github.com/Paffin/AgentGit/pull/136), base main, head `codex/roadmap-review-workflows`. **Do not merge.**
+- Pushed head `93bc4776aa2dac3623c2f1a8c39f6cc451a7947a` after rebase and prepared-pipeline adaptation.
+- Windows native/PowerShell5.1 run explicitly dispatched on that head: [40962143088](https://github.com/Paffin/AgentGit/actions/runs/40962143088), in progress.
+- PR fast CI [40962144429](https://github.com/Paffin/AgentGit/actions/runs/40962144429), Web [40962144494](https://github.com/Paffin/AgentGit/actions/runs/40962144494), Docs [40962144418](https://github.com/Paffin/AgentGit/actions/runs/40962144418); statuses must be refreshed before claiming success.
+- P0 structural sync repair passed239 merge/integrate tests (3 existing ignored), targeted regressions and independent review. Virtual sync preserves complete candidate; local sync and legacy pending snapshots fail closed before unsafe writes.
+- Overall goal remains CONTINUE. The prior stop marked only a milestone; installation/README completion is not platform completion.
+
+## Next available product slice
+
+R4: bounded whole-file/directory choices in Web. Dependency P0 is repaired. A server-supplied complete candidate path list is necessary: input-tree union can miss synthetic paths from directory renames. Do not infer rename mappings in the browser. Bound metadata and browser work; refuse incomplete previews, preserve exact blobs/types/modes and independent changes, require pinned revision/capability guards. Keep multi-target rename/rename separate until explicitly supported.

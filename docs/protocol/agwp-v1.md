@@ -416,3 +416,13 @@ Read each version at its source path instead of treating a missing output path a
 Ordinary same-path conflicts and legacy stored outcomes have no origin. Never parse paths
 from `message`. Development servers advertise `workspaces.conflict_origins` for fresh sync
 responses; browser resolution requires it together with the existing revision preconditions.
+
+### Complete structural sync resolutions
+
+With `workspaces.structural_resolution`, virtual sync applies the supplied path states to the
+complete merge candidate, including independent clean incoming changes. Keeping a file above
+incoming descendants requires deleting those descendants explicitly; deleting the colliding
+file can retain the directory. The final tree must be valid and satisfy the existing limits.
+Incomplete choices fail without changing the workspace. Combine this capability with
+`workspaces.sync_precondition` when sending choices from an inspected preview. Older servers
+can lose clean incoming edits in structural cases and must not be used for this flow.

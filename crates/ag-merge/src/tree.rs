@@ -295,12 +295,42 @@ pub struct TreeMerge {
     /// Explanations of what the merge decided on its own, ordered by (side, directory). Empty for
     /// `ag-merge/2`.
     pub notes: Vec<MergeNote>,
+    // A file/directory clash cannot inhabit Tree. Retain its exact merged entries for an
+    // explicit resolution instead of later reconstructing them from the fallback tree.
+    unresolved_entries: Option<BTreeMap<RepoPath, Entry>>,
 }
 
 impl TreeMerge {
     /// True if the merge produced an unambiguous result.
     pub fn is_clean(&self) -> bool {
         self.conflicts.is_empty()
+    }
+
+    /// Applies explicit resolved path states before validating the resulting tree.
+    ///
+    /// Unlike the best-effort [`Self::tree`], this preserves the clean parts of a merge
+    /// containing a file/directory clash. A caller must supply all desired structural
+    /// changes: keeping a file never implicitly deletes entries beneath it.
+    pub fn resolve_paths(
+        &self,
+        replacements: &BTreeMap<RepoPath, Option<Entry>>,
+        limits: &Limits,
+    ) -> Result<Tree, TreeError> {
+        let mut entries = match &self.unresolved_entries {
+            Some(entries) => entries.clone(),
+            None => self.tree.iter().map(|(path, entry)| (path.clone(), *entry)).collect(),
+        };
+        for (path, entry) in replacements {
+            match entry {
+                Some(entry) => {
+                    entries.insert(path.clone(), *entry);
+                }
+                None => {
+                    entries.remove(path);
+                }
+            }
+        }
+        Tree::from_entries(entries, limits)
     }
 }
 
@@ -447,7 +477,7 @@ pub(crate) fn merge_incremental(
         Err(e) => return Err(e.into()),
     };
     conflicts.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(Some(TreeMerge { tree, conflicts, notes: plan.notes.clone() }))
+    Ok(Some(TreeMerge { tree, conflicts, notes: plan.notes.clone(), unresolved_entries: None }))
 }
 
 /// The reference algorithm: visit every path of the three trees and build the merged map from scratch.
@@ -503,6 +533,7 @@ pub(crate) fn merge_full(
             }
         }
     }
+    let unresolved_entries = (!file_dir.is_empty()).then(|| merged.clone());
     for (file, inside) in file_dir {
         conflicts.push(Conflict { path: file, kind: ConflictKind::FileDirectory { inside }, origin: None });
     }
@@ -520,7 +551,7 @@ pub(crate) fn merge_full(
         // silently drop everything "theirs" added: it is an error, never a clean result.
         Err(e) => return Err(e.into()),
     };
-    Ok(TreeMerge { tree, conflicts, notes: plan.notes.clone() })
+    Ok(TreeMerge { tree, conflicts, notes: plan.notes.clone(), unresolved_entries })
 }
 
 /// A file that moved on at least one side and is merged at its new path.

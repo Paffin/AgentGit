@@ -47,7 +47,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Outbox | ✅ | at-least-once; the one in-process consumer is tree derivation, run inline after each commit (no background dispatcher; failures are recorded and retried by the next pass, and shown by `ag doctor`, `/readyz` and the `agwp_derive_*` metrics) |
 | Isolated execution plane | 🟡 | `ag-worker` + [`ag-sandbox`](sandbox.md): claims jobs, verifies the exact tree, runs the check isolated, signs; [guide](../guides/workers.md). The OCI backend is checked against real Docker and Podman in CI. Not yet: VM-level isolation, Windows workers, worker pools/labels |
 | Agent Platform in Go (orchestrator, sessions, advisor, semantic index) | ✅ | `services/agent-orchestrator`, tested against the real server ([guide](../guides/orchestrator.md)). Trust boundary (§3): it holds a scoped credential, and `TestOrchestratorNeverIntegrates` fails on any call to integrate, set policy, grant roles, create repositories or approve. Advisor, reviewers and semantic index are deterministic heuristics by default and can be switched to a model (any OpenAI-compatible endpoint you configure); models only propose comments. No simulated agent ships; the optional live path was run once, by hand, with one model |
-| MCP server for agents (`ag-mcp`) | ✅ | stdio, 31 tools, `integrate` only behind `--enable-integrate`, no administration; protocol, CLI and end-to-end suites against a real in-process server ([ADR-0008](../adr/0008-mcp-server.md), [guide](../guides/mcp.md)). Not run inside Claude Code, Claude Desktop or the Agent SDKs |
+| MCP server for agents (`ag-mcp`) | ✅ | stdio, role-gated tools, `integrate` only behind `--enable-integrate`, no administration; protocol, CLI and end-to-end suites against a real in-process server ([ADR-0008](../adr/0008-mcp-server.md), [guide](../guides/mcp.md)). Not run inside Claude Code, Claude Desktop or the Agent SDKs |
 | SHA-256 domain-separated IDs; custom canonical binary format; protobuf is transport only | ✅ | + independent-implementation vectors |
 | Crash recovery, object availability, unknown commit outcome | ✅ | tests above |
 | GC by generations | 🟡 | age-based grace period + roots; no separate generations |
@@ -123,3 +123,20 @@ the wire contract, stale generation rejection and current-generation completion.
 server/shell-executor scheduler scenarios cover restart, operator policy changes during work
 and a late first session while a second run owns the task. Capability tests refuse an older
 server before sending a conditional completion.
+
+## Development review workflow — ADR-0036 through ADR-0039
+
+These capabilities are implemented in the development branch and remain separate from beta.7's published schema8.
+
+| Capability | Status | Evidence and remaining scope |
+|---|---|---|
+| Requested reviewers | ✅ | [ADR-0036](../adr/0036-requested-reviewers.md); author-only inspected-list update, exact review permissions; API/CLI/SDK/MCP/Web tests. Routing never grants approval/access. |
+| Revision-pinned virtual sync | ✅ | [ADR-0037](../adr/0037-pinned-workspace-sync.md); final branch/head checks, exact blob/type/mode choices; HTTP/gRPC and browser regressions. Multi-path structural choices remain open. |
+| Private account review drafts | 🟡 | [ADR-0038](../adr/0038-private-review-drafts.md); owner isolation, versioned save/clear, guarded post-submit cleanup. General comments and file-edit drafts are not covered. |
+| Renamed conflict source paths | ✅ | [ADR-0039](../adr/0039-conflict-source-paths.md); both rename orientations through HTTP/gRPC, CLI and browser; older servers cannot silently lose a side. |
+
+The [continuous checkpoint](../../dev/continuous-progress.md) records pending CI, unmerged work and the next correctness task. These rows do not close the beta's external qualification gates.
+
+## ADR-0040 — structural sync safety
+
+[ADR-0040](../adr/0040-structural-sync-resolutions.md) retains the full structural candidate for explicit virtual-sync resolutions. Tests preserve independent incoming additions, edits and deletions for both orientations and choices, reject invalid trees before workspace movement, and keep exact blob/type/mode metadata. Local structural sync and snapshots of legacy structural pending merges fail closed; `--force` does not bypass this protection. A complete browser structural chooser remains an open product task.

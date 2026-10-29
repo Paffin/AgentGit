@@ -19,7 +19,7 @@ AgentGit is a version control system for repositories that people, coding agents
 
 A change lands only when the repository's policy says it may, and the policy is checked in the same transaction that
 moves the branch, so nothing can change between "checked" and "merged". Test results are signed and tied to the exact
-tree they ran on. Every agent run has its own identity, and every decision ends up in an audit log you can verify.
+tree they ran on. The final transaction also rechecks the proposal head and open state. Every agent run has its own identity, and every decision ends up in an audit log you can verify.
 The core that stores, merges and recovers never calls a language model; anything smart sits on top and can only propose.
 
 This is an early public beta: [status and limits](#status-and-limits) are below, and nobody but its authors has run it in production.
@@ -33,6 +33,8 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 **Development core:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. [Execution limits](docs/adr/0033-task-attempt-limits.md).
 
 **Development upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
+
+Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
 Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 

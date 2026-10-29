@@ -820,3 +820,56 @@ fn the_wait_between_attempts_is_spread_per_operation_and_bounded() {
     let none = ag_integrate::ContentionPolicy { attempts: 8, max_backoff_ms: 0 };
     assert!(none.backoff("op_a", 12).is_zero(), "0 means retry at once");
 }
+
+#[test]
+fn integration_does_not_commit_a_proposal_replaced_after_candidate_computation() {
+    proposal_mutation_during_integration(false, false);
+}
+
+#[test]
+fn integration_does_not_reopen_a_closed_proposal() {
+    proposal_mutation_during_integration(false, true);
+}
+
+#[test]
+fn already_integrated_does_not_mark_a_new_proposal_head_integrated() {
+    proposal_mutation_during_integration(true, false);
+}
+
+#[test]
+fn already_integrated_does_not_reopen_a_closed_proposal() {
+    proposal_mutation_during_integration(true, true);
+}
+
+fn proposal_mutation_during_integration(already_integrated: bool, close: bool) {
+    let f = fx();
+    let first =
+        if already_integrated { f.land(None, &[("a", "first")]) } else { f.snap(None, &[("a", "first")], "user:bob") };
+    let proposal = f.propose(first, "change", "user:bob");
+    let second = f.snap(Some(first), &[("a", "second")], "user:bob");
+    let expected_stream = f.head();
+    let gate = f.repo.failpoints().arm_gate("integrate.before_commit");
+    let outcome = std::thread::scope(|scope| {
+        let repo = &f.repo;
+        let req = IntegrateRequest {
+            proposal_id: proposal.clone(),
+            actor: id("user:alice"),
+            idempotency_key: None,
+            fencing_tokens: vec![],
+        };
+        let worker = scope.spawn(move || repo.integrate(&req).unwrap());
+        assert!(gate.wait_reached(std::time::Duration::from_secs(5)));
+        if close {
+            f.repo.close_proposal(&proposal, &id("user:bob")).unwrap();
+        } else {
+            f.repo.update_proposal_at_head(&proposal, &second, &id("user:bob"), Some(&first)).unwrap();
+        }
+        gate.release();
+        worker.join().unwrap()
+    });
+    assert_eq!(outcome.state, IntentState::Aborted, "{outcome:?}");
+    assert_eq!(f.head(), expected_stream);
+    let current = f.repo.find_proposal(&proposal).unwrap();
+    assert_eq!(current.head, if close { first } else { second });
+    assert_eq!(current.state, if close { "closed" } else { "open" });
+}

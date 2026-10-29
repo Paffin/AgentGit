@@ -101,7 +101,8 @@ Work in the following order; keep each deliverable usable across the relevant cl
    notice, not a replacement beta.5 tag.
 2. **Finish the daily task and review workflow.** Queued-task refinement now preserves
    historical instructions and source links. Proposal updates now have an atomic inspected-head
-   precondition as the prerequisite for safe review edits. Next add review suggestions,
+   precondition as the prerequisite for safe review edits. The final integration transaction also
+   rechecks the proposal head and open state. Next add review suggestions,
    requested reviewers and policy-required thread resolution. Preserve drafts, exact-head
    checks and explicit confirmation when a user changes executable work or a review decision.
    Account-backed drafts and non-text conflict resolution remain open. The development Home page uses one live stream for a selected repository, retaining complete snapshots and

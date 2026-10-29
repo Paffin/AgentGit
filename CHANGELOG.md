@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- Workspace creation validates its requested starting revision before committing its name, initial base/head and audit event. A rejected create request can be corrected and retried without cleanup.
+
 - Browser file edits and renames preserve UTF-8 BOM and uniform CRLF line endings, including textarea normalization. Rename-only changes retain the original file bytes.
 
 ### Added

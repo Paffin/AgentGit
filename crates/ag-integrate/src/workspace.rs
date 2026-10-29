@@ -70,17 +70,32 @@ pub struct Change {
 impl Repository {
     /// Creates a workspace tracking `stream`, starting at the stream's head.
     pub fn workspace_create(&self, name: &str, stream: &StreamName, owner: &Identity) -> Result<WorkspaceRow> {
+        self.workspace_create_at(name, stream, owner, None)
+    }
+
+    /// Creates a workspace at an existing changeset, or at the stream head when omitted.
+    /// Creation and the initial base/head are committed in one transaction.
+    pub fn workspace_create_at(
+        &self,
+        name: &str,
+        stream: &StreamName,
+        owner: &Identity,
+        at: Option<&ChangesetId>,
+    ) -> Result<WorkspaceRow> {
         if name.is_empty()
             || name.len() > 64
             || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
             return Err(Error::Invalid("workspace names use letters, digits, '_' and '-' (max 64)".into()));
         }
+        if let Some(at) = at {
+            self.changeset(at)?;
+        }
         Ok(self.meta.write(|tx| {
             let s = tx
                 .stream(stream.as_str())?
                 .ok_or_else(|| ag_storage::meta::MetaError::NotFound(format!("stream '{stream}'")))?;
-            let row = tx.workspace_create(name, stream.as_str(), s.state.head.as_ref(), owner.as_str())?;
+            let row = tx.workspace_create(name, stream.as_str(), at.or(s.state.head.as_ref()), owner.as_str())?;
             tx.audit_append(owner.as_str(), "workspace.create", name, &json!({"stream": stream}))?;
             Ok(row)
         })?)

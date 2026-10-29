@@ -59,17 +59,13 @@ impl App {
         let (name, from_rev) = (require(&req.name, "name")?.to_string(), req.from_rev.clone());
         let scope = stream.to_string();
         self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::WorkspaceWrite, Some(&scope), move |repo, actor| {
-            let row = repo.workspace_create(&name, &stream, actor).map_err(|e| match e {
+            let at = if from_rev.is_empty() { None } else { Some(repo.resolve_rev(&from_rev)?) };
+            let row = repo.workspace_create_at(&name, &stream, actor, at.as_ref()).map_err(|e| match e {
                 ag_integrate::Error::Meta(ag_storage::meta::MetaError::AlreadyExists(m)) => {
                     ApiError::new(ag_protocol::ErrorCode::AlreadyExists, m)
                 }
                 other => other.into(),
             })?;
-            if !from_rev.is_empty() {
-                let id = repo.resolve_rev(&from_rev)?;
-                repo.meta().write(|tx| tx.workspace_update(&name, Some(&id), Some(&id)))?;
-                return Ok(convert::workspace(&repo.workspace_row(&name)?));
-            }
             Ok(convert::workspace(&row))
         })
         .await

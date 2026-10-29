@@ -27,6 +27,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Improved
 
+- Keep the policy serialization helper before its test module so current Rust lint checks accept the beta candidate.
+
 - Web rules now edit protected-path approvers and required-check timing directly, with plain-language change summaries. Renaming a protected path preserves its approver restrictions and other settings.
 
 - Home search, repository and category filters survive reload and browser Back and can be bookmarked as a personal work queue.

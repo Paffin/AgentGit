@@ -262,6 +262,10 @@ impl Policy {
     }
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,8 +323,4 @@ mod tests {
         let badglob = r#"{"protected_paths":[{"glob":"[","min_approvals":1}]}"#;
         assert!(matches!(Policy::parse(badglob), Err(PolicyError::Invalid(_))));
     }
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
 }

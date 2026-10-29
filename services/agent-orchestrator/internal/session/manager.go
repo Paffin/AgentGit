@@ -175,6 +175,9 @@ func (m *Manager) Start(ctx context.Context, req Request) (*Info, error) {
 		return nil, fmt.Errorf("read claimed task: %w", err)
 	}
 	req.Task = *claimed
+	if claimed.MaxAttempts > 0 {
+		req.Attempt = int(claimed.AttemptsStarted)
+	}
 	s := newSession(m, req, run, key)
 	fail := func(cause error, summary string) (*Info, error) {
 		m.completeRun(run.RunID, req.Repo, "failed", summary)

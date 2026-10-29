@@ -2074,6 +2074,26 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ## ag task
 
+### ag task attempts
+
+```json
+{
+  "attempts_started": "number",
+  "created_at": "number",
+  "created_by": "string",
+  "description": "string",
+  "id": "string",
+  "max_attempts": "number",
+  "owner": "null",
+  "scope": [],
+  "source_run": "null",
+  "source_task": "null",
+  "state": "string",
+  "title": "string",
+  "updated_at": "number"
+}
+```
+
 ### ag task cancel
 
 ```json
@@ -2087,10 +2107,12 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ```json
 {
+  "attempts_started": "number",
   "created_at": "number",
   "created_by": "string",
   "description": "string",
   "id": "string",
+  "max_attempts": "number",
   "owner": "null",
   "scope": [
     "string"
@@ -2107,10 +2129,12 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ```json
 {
+  "attempts_started": "number",
   "created_at": "number",
   "created_by": "string",
   "description": "string",
   "id": "string",
+  "max_attempts": "number",
   "owner": "null",
   "scope": [],
   "source_run": "string",
@@ -2143,10 +2167,12 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ```json
 {
+  "attempts_started": "number",
   "created_at": "number",
   "created_by": "string",
   "description": "string",
   "id": "string",
+  "max_attempts": "number",
   "owner": "null",
   "scope": [
     "string"
@@ -2184,10 +2210,12 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 ```json
 [
   {
+    "attempts_started": "number",
     "created_at": "number",
     "created_by": "string",
     "description": "string",
     "id": "string",
+    "max_attempts": "number",
     "owner": "null",
     "scope": [
       "string"
@@ -2206,10 +2234,12 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 ```json
 [
   {
+    "attempts_started": "number",
     "created_at": "number",
     "created_by": "string",
     "description": "string",
     "id": "string",
+    "max_attempts": "number",
     "owner": "null",
     "scope": [
       "string"

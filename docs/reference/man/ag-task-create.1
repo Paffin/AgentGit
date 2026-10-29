@@ -4,7 +4,7 @@
 .SH NAME
 ag\-task\-create \- Create a task
 .SH SYNOPSIS
-\fBag task create\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-d\fR|\fB\-\-description\fR] [\fB\-\-as\fR] [\fB\-\-scope\fR] [\fB\-\-json\fR] [\fB\-\-source\-task\fR] [\fB\-\-color\fR] [\fB\-\-source\-run\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fITITLE\fR>
+\fBag task create\fR [\fB\-C\fR|\fB\-\-repo\fR] [\fB\-d\fR|\fB\-\-description\fR] [\fB\-\-as\fR] [\fB\-\-scope\fR] [\fB\-\-json\fR] [\fB\-\-source\-task\fR] [\fB\-\-color\fR] [\fB\-\-source\-run\fR] [\fB\-\-max\-attempts\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fITITLE\fR>
 .SH DESCRIPTION
 Create a task
 .SH OPTIONS
@@ -32,6 +32,9 @@ Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
 .TP
 \fB\-\-source\-run\fR \fI<SOURCE_RUN>\fR
 Failed or abandoned run of \-\-source\-task
+.TP
+\fB\-\-max\-attempts\fR \fI<MAX_ATTEMPTS>\fR [default: 0]
+Total runs permitted (0 leaves the server limit unset)
 .TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Print only what was asked for: no confirmations or hints. Errors and refusals are still shown

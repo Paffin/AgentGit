@@ -520,3 +520,12 @@ token** or repository credential settings to invalidate one. If token creation h
 uncertain network outcome, the error identifies the credential description to revoke
 before retrying. The wizard never installs software or provides a coding model on the
 host. This flow requires the development build and is not in beta.3.
+
+
+### Recover a bounded task without recreating it (development)
+
+Tasks may carry a durable `max_attempts` limit. The orchestrator uses the server's count of
+started runs; restarts cannot grant a fresh budget. When exhausted, it leaves the task in
+progress and reports `attempt_limit`. Extend it with `ag task attempts TASK --remote origin
+--max NEW --expected OLD`. Explicit limits count temporary failures as well. Zero keeps the
+existing `schedule.attempts` behavior. See [task retry controls](agents.md#bound-retries-without-losing-the-task-development).

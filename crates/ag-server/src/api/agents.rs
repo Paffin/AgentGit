@@ -18,6 +18,15 @@ use crate::authz::Cap;
 use crate::error::{ApiError, ApiResult};
 
 fn task_request_fingerprint(req: &v1::CreateTaskRequest, actor: &Identity) -> ApiResult<String> {
+    ag_agent::tasks::validate_attempt_limit(req.max_attempts)?;
+    let mut fingerprint = legacy_task_request_fingerprint(req, actor)?;
+    if req.max_attempts > 0 {
+        fingerprint.push_str(&format!("\0max_attempts:{}", req.max_attempts));
+    }
+    Ok(fingerprint)
+}
+
+fn legacy_task_request_fingerprint(req: &v1::CreateTaskRequest, actor: &Identity) -> ApiResult<String> {
     if !req.assignee.is_empty() {
         ag_agent::registry::validate_name(&req.assignee)?;
     }
@@ -60,12 +69,15 @@ fn created_task_row(
     req: &v1::CreateTaskRequest,
     actor: &Identity,
 ) -> Result<TaskRow, MetaError> {
+    if req.max_attempts > 0 {
+        ag_agent::tasks::set_attempt_limit_in(tx, &t.id, req.max_attempts, 0, actor.as_str(), false)?;
+    }
     ag_agent::tasks::attach_source(tx, &t.id, &req.source_task, &req.source_run, actor.as_str())?;
     super::issues::link_created_task(tx, actor, req.source_issue, req.expected_issue_version, &t.id)?;
     if !req.assignee.is_empty() {
         return ag_agent::tasks::assign_in_tx(tx, &t.id, &req.assignee, "", actor.as_str(), false);
     }
-    if req.source_task.is_empty() {
+    if req.source_task.is_empty() && req.max_attempts == 0 {
         return Ok(t.clone());
     }
     tx.task(&t.id)?.ok_or_else(|| MetaError::NotFound("created task missing".into()))
@@ -133,7 +145,9 @@ fn check_lease_run(repo: &ag_integrate::Repository, lease_id: &str, actor: &Iden
 
 /// A task with its dependencies, read in the caller's transaction.
 fn task_view_in(tx: &Tx<'_>, t: &TaskRow) -> Result<v1::Task, MetaError> {
-    let (deps, ready) = (tx.task_deps(&t.id)?, unfinished_dependencies(tx, &t.id)?.is_empty());
+    let deps = tx.task_deps(&t.id)?;
+    let ready = unfinished_dependencies(tx, &t.id)?.is_empty()
+        && (t.max_attempts == 0 || t.attempts_started < u64::from(t.max_attempts));
     Ok(convert::task(t, deps, ready))
 }
 
@@ -595,6 +609,41 @@ impl App {
         }
         self.authorize(call, &req.repo, Cap::IssueWrite, None).await?;
         Ok(self.authorize(call, &req.repo, Cap::IssueManage, None).await.is_ok())
+    }
+
+    /// Changes only the attempt policy, retaining task instructions and execution history.
+    pub async fn set_task_attempt_limit(
+        &self,
+        call: &Call,
+        req: v1::SetTaskAttemptLimitRequest,
+    ) -> ApiResult<v1::Task> {
+        ag_agent::tasks::validate_attempt_limit(req.max_attempts)?;
+        let operator = self.authorize(call, &req.repo, Cap::AgentOperate, None).await.is_ok();
+        let idem = self.idem();
+        self.with_repo_mut(call, require(&req.repo, "repo")?, Cap::TaskWrite, None, move |repo, actor| {
+            let fingerprint =
+                serde_json::to_string(&(&req.id, req.max_attempts, req.expected_max_attempts, actor.as_str()))
+                    .map_err(ApiError::internal)?;
+            keyed(repo, idem, "task.set_attempt_limit", &req.idempotency_key, &fingerprint, |claim| {
+                repo.meta()
+                    .write(|tx| {
+                        claim.ensure_available(tx)?;
+                        let task = ag_agent::tasks::set_attempt_limit_in(
+                            tx,
+                            &req.id,
+                            req.max_attempts,
+                            req.expected_max_attempts,
+                            actor.as_str(),
+                            operator,
+                        )?;
+                        let response = task_view_in(tx, &task)?;
+                        claim.record(tx, &response)?;
+                        Ok(response)
+                    })
+                    .map_err(task_edit_error)
+            })
+        })
+        .await
     }
 
     /// Creates a task and records optional issue and follow-up sources atomically.

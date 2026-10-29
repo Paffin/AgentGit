@@ -1414,6 +1414,19 @@ pub fn api_router(app: App) -> (Router, Vec<RouteMeta>) {
     route!(
         r,
         meta,
+        patch,
+        "patch",
+        "/v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit",
+        "task.set_attempt_limit",
+        "Agent",
+        "Set a task-local attempt limit",
+        v1::SetTaskAttemptLimitRequest,
+        v1::Task,
+        set_task_attempt_limit
+    );
+    route!(
+        r,
+        meta,
         put,
         "put",
         "/v1/repos/{owner}/{rname}/tasks/{id}/assignee",

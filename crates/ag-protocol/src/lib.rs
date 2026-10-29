@@ -81,6 +81,9 @@ pub mod features {
     /// Review submission can atomically require the exact head inspected by the caller.
     pub const PROPOSALS_REVIEW_HEAD: &str = "proposals.review_head";
 
+    /// Durable task-local attempt limits and optimistic policy updates.
+    pub const TASK_ATTEMPT_LIMITS: &str = "tasks.attempt_limits";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -102,6 +105,7 @@ pub mod features {
         TASK_HISTORY,
         TASK_LINEAGE,
         TASK_EDIT,
+        TASK_ATTEMPT_LIMITS,
         RUN_OUTPUT,
         TASK_ASSIGNMENT,
         EXECUTOR_PRESENCE,

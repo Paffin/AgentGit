@@ -151,6 +151,7 @@ export const NAMESPACE_METHODS = {
     list: 'task.list',
     schedulingGet: 'task.scheduling.get',
     schedulingSet: 'task.scheduling.set',
+    setAttemptLimit: 'task.set_attempt_limit',
     update: 'task.update',
   },
   tree: {
@@ -257,7 +258,10 @@ export interface Api {
     /** Submit a signed attestation (`POST /v1/repos/{owner}/{rname}/attestations`, operation `integration.attest`) */
     attest(request: Req<'integration.attest'>, options?: CallOptions): Promise<Res<'integration.attest'>>;
     /** Attestations for a tree (`GET /v1/repos/{owner}/{rname}/attestations`, operation `integration.attestations`) */
-    attestations(request: Req<'integration.attestations'>, options?: CallOptions): Promise<Res<'integration.attestations'>>;
+    attestations(
+      request: Req<'integration.attestations'>,
+      options?: CallOptions,
+    ): Promise<Res<'integration.attestations'>>;
     /** Integrate the proposal into its stream (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/integrate`, operation `integration.integrate`) */
     integrate(request: Req<'integration.integrate'>, options?: CallOptions): Promise<Res<'integration.integrate'>>;
     /** What integrating would do now, and what is missing (`POST /v1/repos/{owner}/{rname}/proposals/{proposal}/prepare`, operation `integration.prepare`) */
@@ -321,7 +325,10 @@ export interface Api {
     /** Publish a head and its unpublished ancestors (`POST /v1/repos/{owner}/{rname}/publish`, operation `objects.publish`) */
     publish(request: Req<'objects.publish'>, options?: CallOptions): Promise<Res<'objects.publish'>>;
     /** Upload one object envelope (binary body); the server verifies that it hashes to object_id and answers {object_id, stored} (`PUT /v1/repos/{owner}/{rname}/objects/{object_id}`, operation `objects.put`) */
-    put(request: { repo: string; object_id: string; data: Uint8Array }, options?: CallOptions): Promise<PutObjectResult>;
+    put(
+      request: { repo: string; object_id: string; data: Uint8Array },
+      options?: CallOptions,
+    ): Promise<PutObjectResult>;
     /** Re-read and hash objects (`POST /v1/repos/{owner}/{rname}/objects/verify`, operation `objects.verify`) */
     verify(request: Req<'objects.verify'>, options?: CallOptions): Promise<Res<'objects.verify'>>;
   };
@@ -343,13 +350,19 @@ export interface Api {
     /** Review the current head (`POST /v1/repos/{owner}/{rname}/proposals/{id}/reviews`, operation `proposal.review`) */
     review(request: Req<'proposal.review'>, options?: CallOptions): Promise<Res<'proposal.review'>>;
     /** List thread replies (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_comments`) */
-    threadComments(request: Req<'proposal.thread_comments'>, options?: CallOptions): Promise<Res<'proposal.thread_comments'>>;
+    threadComments(
+      request: Req<'proposal.thread_comments'>,
+      options?: CallOptions,
+    ): Promise<Res<'proposal.thread_comments'>>;
     /** Create a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.thread_create`) */
     threadCreate(request: Req<'proposal.thread_create'>, options?: CallOptions): Promise<Res<'proposal.thread_create'>>;
     /** Reply to a line discussion (`POST /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}/comments`, operation `proposal.thread_reply`) */
     threadReply(request: Req<'proposal.thread_reply'>, options?: CallOptions): Promise<Res<'proposal.thread_reply'>>;
     /** Resolve or reopen a line discussion (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}/threads/{thread_id}`, operation `proposal.thread_resolve`) */
-    threadResolve(request: Req<'proposal.thread_resolve'>, options?: CallOptions): Promise<Res<'proposal.thread_resolve'>>;
+    threadResolve(
+      request: Req<'proposal.thread_resolve'>,
+      options?: CallOptions,
+    ): Promise<Res<'proposal.thread_resolve'>>;
     /** List threads (`GET /v1/repos/{owner}/{rname}/proposals/{id}/threads`, operation `proposal.threads`) */
     threads(request: Req<'proposal.threads'>, options?: CallOptions): Promise<Res<'proposal.threads'>>;
     /** Move a proposal to a newer head (`PATCH /v1/repos/{owner}/{rname}/proposals/{id}`, operation `proposal.update`) */
@@ -424,6 +437,11 @@ export interface Api {
     schedulingGet(request: Req<'task.scheduling.get'>, options?: CallOptions): Promise<Res<'task.scheduling.get'>>;
     /** Pause or resume new task launches (`PUT /v1/repos/{owner}/{rname}/tasks/scheduling`, operation `task.scheduling.set`) */
     schedulingSet(request: Req<'task.scheduling.set'>, options?: CallOptions): Promise<Res<'task.scheduling.set'>>;
+    /** Set a task-local attempt limit (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}/attempt-limit`, operation `task.set_attempt_limit`) */
+    setAttemptLimit(
+      request: Req<'task.set_attempt_limit'>,
+      options?: CallOptions,
+    ): Promise<Res<'task.set_attempt_limit'>>;
     /** Refine task instructions before the first run (`PATCH /v1/repos/{owner}/{rname}/tasks/{id}`, operation `task.update`) */
     update(request: Req<'task.update'>, options?: CallOptions): Promise<Res<'task.update'>>;
   };

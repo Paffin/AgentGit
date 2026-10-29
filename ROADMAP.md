@@ -81,7 +81,7 @@ is not proof that a downloadable archive has passed release verification.
 |---|---|---|
 | Published `v0.3.0-beta.4` | Git migration with reconciliation, code search, multi-file editing, issues → tasks → assigned executor → run → change request, saved output, task/run history | Metadata schema 5; [release](https://github.com/Paffin/AgentGit/releases/tag/v0.3.0-beta.4) |
 | Published `v0.3.0-beta.5` | Revision-bound review threads, replies and resolution across Web UI/CLI/MCP; thread filters and review-context handoff | Metadata schema 6; [release and verification](docs/operations/releasing.md#beta5-publication-evidence) |
-| `v0.3.0-beta.6` candidate (`main`) | Per-agent new-run admission controls, durable source links for follow-up tasks, and pre-run task refinement across API and clients | Metadata schema 7; [admission controls](docs/adr/0026-agent-run-admission.md), [task sources](docs/adr/0027-task-source-links.md) |
+| `v0.3.0-beta.6` candidate (`main`) | Per-agent new-run admission controls, durable source links for follow-up tasks, and pre-run task refinement and durable attempt limits across API and clients | Metadata schema 8; [admission controls](docs/adr/0026-agent-run-admission.md), [task sources](docs/adr/0027-task-source-links.md) |
 
 Back up before opening existing repositories with a newer schema. Rollback means restoring
 that pre-upgrade backup, not running an older binary against the upgraded database.
@@ -97,7 +97,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
 
 1. **Deliver the next development slice.** Beta.5 is published; its Linux archive checksum,
    provenance and upgrade to development schema 7 have been verified. Admission controls and
-   task sources are already merged; they need their own subsequent release and schema-7 upgrade
+   task sources are already merged; they need their own subsequent release and schema-8 upgrade
    notice, not a replacement beta.5 tag.
 2. **Finish the daily task and review workflow.** Queued-task refinement now preserves
    historical instructions and source links. Proposal updates now have an atomic inspected-head

@@ -607,6 +607,12 @@ and line endings. Existing checks and approvals must match the new revision. The
 stays open until reviewed and resolved separately. Earlier-revision suggestions remain readable
 and copyable; they cannot overwrite newer work.
 
+To combine changes, expand **Apply several suggestions** in the discussions, select the
+suggestions and choose **Review selected suggestions**. Inspect the prepared files before
+confirming. Up to 100 suggestions across files become one revision; conflicting suggestions
+for the same line are refused. Only loaded discussions are included: use **Load more
+discussions** to include older results. The total prepared content is limited to 4 MiB.
+
 Application requires a server with `proposals.update_head` and is limited to regular UTF-8
 files up to 1 MiB. Symlinks, binary files, old-side lines and changed source lines require the
 ordinary editor or CLI. This first version replaces one anchored line, not a selected range.

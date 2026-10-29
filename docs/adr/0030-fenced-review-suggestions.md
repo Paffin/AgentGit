@@ -30,8 +30,15 @@ The operation does not integrate a branch, forge an approval, preserve a validat
 content or automatically resolve the discussion. Normal new-head review and exact-tree check
 rules still apply. The old suggestion remains attached to its old revision and readable.
 
+Authors can also select suggestions from loaded discussions for one explicit batch preview.
+All anchors must belong to the current proposed head; duplicate file/line anchors are refused.
+Within each file, replacements run from the last original line upward so inserted or deleted
+lines cannot shift remaining anchors. Up to 100 suggestions and 4 MiB of resulting content
+produce one workspace changeset and one head-checked proposal update. Files are read once
+and every exact source line is checked before publishing. Discussions remain open.
+
 ## Remaining scope
 
-Multi-line anchor ranges, batched application, server-native suggestion metadata and an
+Multi-line anchor ranges, server-native suggestion metadata and an
 explicit native CLI apply command remain future work. Existing CLI/SDK thread body operations
 can read and write the convention without schema changes.

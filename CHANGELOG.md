@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
+
 - Optional stream policy `require_resolved_threads` blocks integration until every line discussion is resolved, including earlier revisions. Core preparation and commit share the rule; Web UI exposes the setting and remediation, and CLI explanations include resolution commands. Upgrade every replica before enabling it.
 
 ### Fixed
@@ -16,9 +18,6 @@ on-disk formats are versioned and refuse to open when newer than the build under
 - Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.
 
 - Proposal head updates can compare the inspected revision atomically. The browser conflict resolver requires this capability and retains its opening revision; concurrent work cannot be silently replaced. The local CLI and generated SDKs expose the same optional precondition.
-### Added
-
-- Durable per-task execution-attempt limits across the core, HTTP/gRPC, CLI, SDKs and orchestrator. Exhausted limited tasks can resume after an operator extends the budget, retaining their identity and history across restarts. Metadata schema 8 requires a pre-upgrade backup.
 
 ## [0.3.0-beta.6] - 2026-10-28
 

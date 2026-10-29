@@ -130,7 +130,7 @@ Work in the following order; keep each deliverable usable across the relevant cl
 6. **Qualify deployment and server follow-ups.** Compose and kind deployment already run in CI.
    Remaining evidence includes production-like ingress/storage, HA and Prometheus Operator
    overlays, PostgreSQL failover, mixed-build upgrades, replica reaping and load on PostgreSQL,
-   S3 and TLS. Server work includes required job fencing, client addresses in audit entries,
+   S3 and TLS. Required job fencing is implemented in the development branch as an operator-controlled server setting. Remaining server work includes client addresses in audit entries,
    tree-cache sharing, same-stream writer scheduling and merge notes on the wire. Literal
    content search is shipped; copy detection and MCP search remain separate work.
 7. **Scale and isolation when measurements justify them.** Hierarchical Merkle trees, packed
@@ -165,3 +165,5 @@ The beta.6 candidate includes the merged core concurrency protections, task exec
 Unreleased CLI execution inspection is implemented on `feature/cli-run-output`: remote task-filtered run history with complete paging, local/remote captured output and explicit output deletion. It is not included in the frozen beta.6 candidate.
 
 Unreleased bounded live execution output is implemented on `feature/live-run-output`, with explicit 1s–1m capture intervals, independent heartbeat supervision, partial-secret handling and a real native browser scenario. It remains separate from the beta.6 candidate.
+
+Unreleased strict validation-job claims are implemented on `feature/required-job-fencing`: `[jobs] require_fencing_token = true` rejects heartbeat/complete/fail without the current claim number. Enable it on every replica after upgrading custom workers.

@@ -195,3 +195,24 @@ configuration can satisfy the check. To learn the digest of a worker, run one jo
 * A job whose environment digest is pinned runs to the end before the worker can compare digests (the digest
   describes the run); a worker that can never produce the pinned digest burns the job's time on every attempt
   until the attempt limit. Pin digests only for workers you have run one job on.
+
+## Requiring current job claims
+
+After upgrading every worker, enable this on **every server replica** and restart them:
+
+```toml
+[jobs]
+require_fencing_token = true
+```
+
+The built-in `ag-worker` already sends the `attempts` value returned by `ClaimJob` as
+`fencing_token` on heartbeat, complete and fail. Custom workers must do the same,
+using the value from their own claim, never fetching a newer value to retry an old
+result. A missing or zero token returns `failed_precondition` (HTTP 412) in strict
+mode without changing the job. A stale token is still rejected by the atomic claim
+check. Claiming jobs and reading them remain available.
+
+The default is `false` for older workers. Mixed strict/compatibility replicas do
+not provide an installation-wide guarantee; finish the rollout on every replica.
+No metadata migration is required. This setting protects job ownership; signed
+attestations must still satisfy the stream policy.

@@ -43,7 +43,9 @@ stored data, hashes or the audit format. `ag-worker` sends the token on every ca
 * ✅ No stored state changes; replicas and builds of different ages interoperate (an old server ignores the field, an
   old worker omits it).
 * ⚠️ Fencing is opt-in per request. An old worker, or one that never sends the token, is as exposed as before. A
-  server option that *requires* it can come once workers have been upgraded; not done here.
+  server option now requires it after workers have been upgraded: `[jobs] require_fencing_token = true`.
+  Set it on every replica; the default remains false for compatibility. Missing/zero tokens return
+  `failed_precondition` before any job or attestation mutation.
 * ⚠️ The token is the claim count, so it also moves when a job is claimed again after a retry (`fail` with a delay):
   a worker must use the number of *its* claim, which is what `ag-worker` does by taking it from the claimed job.
 * Tests: `a_claim_number_fences_a_stale_claimant_of_the_same_name` (storage; SQLite and PostgreSQL),

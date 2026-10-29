@@ -138,6 +138,13 @@ overlay is `deploy/kubernetes/overlays/ha`; the Compose stack stays single-host.
   that works for either backend, and `restore-control` reads it; `pg_dump` of the control schema is the other way
   ([High availability](high-availability.md#moving-from-one-server-to-replicas)).
 
+## Validation job claims
+
+Set `[jobs] require_fencing_token = true` after upgrading every worker to send its
+claim number on heartbeat, complete and fail. Apply the setting to every replica;
+missing tokens then fail before mutation. See [worker rollout](../guides/workers.md#requiring-current-job-claims).
+The default is `false` for compatibility with older custom workers.
+
 ## Stale agent runs
 
 An agent that crashes leaves its run `running`, its task `in_progress` and its leases held. The server ends such

@@ -78,7 +78,7 @@ Legend: ✅ implemented and tested · 🟡 partly · 🔜 planned (see the [road
 | Autonomous review | 🟡 | reviews by agents are possible and policy decides whether they count; the orchestrator's reviewers (heuristic or model-backed) only post comments, never approve |
 | Policy-bound autonomy | ✅ | `agent_autonomy` |
 | Replay & trace | 🟡 | `ag trace`, audit chain, `events.replay` and the SSE subscription (`api_contract` tests) |
-| Soft leases; fencing tokens for exclusivity | ✅ | exclusive file leases carry fencing tokens (`fencing_tokens_are_strictly_increasing_and_reject_stale_holders`); execution-plane job claims carry an optional one, the claim number, so a paused worker cannot act on a claim handed out again ([ADR-0012](../adr/0012-job-claim-fencing.md); `a_claim_number_fences_a_stale_claimant_of_the_same_name`, `a_stale_claim_of_the_same_worker_is_fenced_off`). Opt-in per request: no server option requires it yet |
+| Soft leases; fencing tokens for exclusivity | ✅ | exclusive file leases carry fencing tokens (`fencing_tokens_are_strictly_increasing_and_reject_stale_holders`); execution-plane job claims carry an optional one, the claim number, so a paused worker cannot act on a claim handed out again ([ADR-0012](../adr/0012-job-claim-fencing.md); `a_claim_number_fences_a_stale_claimant_of_the_same_name`, `a_stale_claim_of_the_same_worker_is_fenced_off`). Development: `[jobs] require_fencing_token = true` requires it on every mutation; compatibility mode remains the default |
 
 ## §8 — security
 

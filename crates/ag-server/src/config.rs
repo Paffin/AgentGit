@@ -42,12 +42,23 @@ pub struct ServerConfig {
     pub repos: ReposSection,
     /// Running agents: when a silent run counts as abandoned.
     pub agents: AgentsSection,
+    /// Validation job claim requirements.
+    pub jobs: JobsSection,
     /// Prometheus metrics.
     pub metrics: MetricsSection,
     /// The Web UI.
     pub ui: crate::ui::UiSection,
     /// Logging and tracing.
     pub telemetry: TelemetrySection,
+}
+
+/// `[jobs]` — compatibility policy for execution-plane claim mutations.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct JobsSection {
+    /// Require the current claim number on heartbeat, complete and fail.
+    /// Enable after all workers send `Job.attempts` as their `fencing_token`.
+    pub require_fencing_token: bool,
 }
 
 /// `[server]`

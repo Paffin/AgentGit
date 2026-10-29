@@ -27,3 +27,7 @@ log_filter = "info"
 # [agents]
 # run_stale_after_secs = 900
 # reap_interval_secs = 60
+
+# Require the claim number on every worker mutation after upgrading all workers.
+# [jobs]
+# require_fencing_token = true

@@ -101,7 +101,13 @@ pub(super) fn validation_jobs_in(
 
 /// `<principal>|<label>`: the label is the worker's own name for this loop.
 /// The claim a request names (`fencing_token`): `None` when it names none (0), as every client did before the field.
-fn claim_of(token: u64) -> ApiResult<Option<u32>> {
+fn claim_of(token: u64, required: bool) -> ApiResult<Option<u32>> {
+    if token == 0 && required {
+        return Err(ApiError::new(
+            ag_protocol::ErrorCode::FailedPrecondition,
+            "fencing_token is required; send the attempts value returned when this job was claimed",
+        ));
+    }
     match token {
         0 => Ok(None),
         t => {
@@ -400,7 +406,7 @@ impl App {
         let worker = worker_id(call, &req.worker)?;
         let lease_ms = if req.lease_ms <= 0 { DEFAULT_LEASE_MS } else { req.lease_ms.min(MAX_LEASE_MS) };
         let repo = require(&req.repo, "repo")?.to_string();
-        let claim = claim_of(req.fencing_token)?;
+        let claim = claim_of(req.fencing_token, self.cfg.jobs.require_fencing_token)?;
         let name = repo.clone();
         self.with_repo_mut(call, &repo, Cap::JobsClaim, None, move |r, _| {
             let j = r.meta().write(|tx| tx.job_heartbeat(&req.job_id, &worker, claim, lease_ms))?;
@@ -413,7 +419,7 @@ impl App {
     pub async fn complete_job(&self, call: &Call, req: v1::CompleteJobRequest) -> ApiResult<v1::Job> {
         let worker = worker_id(call, &req.worker)?;
         let repo = require(&req.repo, "repo")?.to_string();
-        let claim = claim_of(req.fencing_token)?;
+        let claim = claim_of(req.fencing_token, self.cfg.jobs.require_fencing_token)?;
         let issuer_ok = call.principal.identity.principal();
         let name = repo.clone();
         let events = self.metrics.job_events.clone();
@@ -492,7 +498,7 @@ impl App {
     pub async fn fail_job(&self, call: &Call, req: v1::FailJobRequest) -> ApiResult<v1::Job> {
         let worker = worker_id(call, &req.worker)?;
         let repo = require(&req.repo, "repo")?.to_string();
-        let claim = claim_of(req.fencing_token)?;
+        let claim = claim_of(req.fencing_token, self.cfg.jobs.require_fencing_token)?;
         let name = repo.clone();
         let events = self.metrics.job_events.clone();
         // What a worker reports is untrusted and as large as a request: the job keeps - and the append-only,

@@ -700,3 +700,22 @@ a second snapshot while the run is still running → finish → see final output
 The shared browser pipeline now builds that native orchestrator once, verifies its checksum
 with the server and CLI, and passes it to all browser jobs. Seven pipeline contract checks
 passed. Full archival logs and unknown/encoded-secret detection remain outside this slice.
+
+
+### Strict validation-job claims (2026-10-29, unreleased)
+
+`[jobs] require_fencing_token = true` makes heartbeat, complete and fail require
+the claim number returned by ClaimJob. The shared API rejects omitted/zero values
+with failed_precondition before job or attestation mutation. The current storage
+predicate still rejects obsolete nonzero claims. Default compatibility is retained;
+all replicas must be configured alike after custom workers have been upgraded.
+No schema or wire changes. Built-in workers already send this number.
+
+The new real HTTP scenario first failed because the old server rejected the new
+configuration. After implementation all eight jobs_flow cases passed in 1.20s:
+missing/zero rejection, unchanged claim state, current heartbeat, retry, stale
+completion rejection and successful current completion; legacy compatibility and
+signed validation scenarios also passed. Logs: strict-job-fencing-{red,green}.log
+in the workspace quality directory. The modified claim parser has CC 5; Dryer
+reported no duplicate candidates. Mutator was a static inventory, not a mutation
+score. README EN/RU, roadmap, deployment/worker guides and ADR0012 were updated.

@@ -426,3 +426,69 @@ async fn a_stale_claim_of_the_same_worker_is_fenced_off() {
     assert_eq!(done.status, 200, "{}", done.json);
     srv.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn strict_job_fencing_requires_the_claim_on_every_mutation() {
+    let srv = TestServer::start_with(|cfg| {
+        // Parse the operator-facing configuration, including its strict-mode spelling.
+        let mut value = toml::Value::try_from(&*cfg).unwrap();
+        value
+            .as_table_mut()
+            .unwrap()
+            .insert("jobs".into(), toml::from_str::<toml::Value>("require_fencing_token = true").unwrap());
+        *cfg = value.try_into().unwrap();
+    })
+    .await;
+    let key = KeyPair::generate().unwrap();
+    let (alice, _, pid) = seed(&srv, "acme/web", &key).await;
+    let ci = user_with_role(&srv, "service:ci-1", "acme/web", "runner").await;
+    alice.post(&format!("/v1/repos/acme/web/proposals/{pid}/validate"), json!({})).await;
+    let job = ci.post("/v1/jobs/claim", json!({"worker":"w"})).await.json["job"].clone();
+    let jid = job["id"].as_str().unwrap();
+    let token = job["attempts"].as_u64().unwrap();
+    for action in ["heartbeat", "fail", "complete"] {
+        let path = format!("/v1/repos/acme/web/jobs/{jid}/{action}");
+        for omitted in [true, false] {
+            let mut body = json!({"worker":"w", "stale":true});
+            if !omitted {
+                body["fencing_token"] = json!(0);
+            }
+            let r = ci.post(&path, body).await;
+            assert_eq!(r.status, 412, "{action}: {}", r.json);
+            assert!(r.json["error"]["message"].as_str().unwrap().contains("fencing_token"));
+        }
+    }
+    let current = alice.get(&format!("/v1/repos/acme/web/jobs/{jid}")).await.json;
+    assert_eq!(current, job, "refused calls must leave the claim untouched");
+    let beat = ci
+        .post(&format!("/v1/repos/acme/web/jobs/{jid}/heartbeat"), json!({"worker":"w", "fencing_token":token}))
+        .await;
+    assert_eq!(beat.status, 200, "{}", beat.json);
+    let fail = ci
+        .post(
+            &format!("/v1/repos/acme/web/jobs/{jid}/fail"),
+            json!({"worker":"w", "fencing_token":token, "retry_after_ms":1}),
+        )
+        .await;
+    assert_eq!(fail.status, 200, "{}", fail.json);
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    let next = ci.post("/v1/jobs/claim", json!({"worker":"w"})).await.json["job"].clone();
+    assert_eq!(next["id"], job["id"]);
+    assert!(next["attempts"].as_u64().unwrap() > token);
+    let stale = ci
+        .post(
+            &format!("/v1/repos/acme/web/jobs/{jid}/complete"),
+            json!({"worker":"w", "fencing_token":token, "stale":true}),
+        )
+        .await;
+    assert_eq!(stale.status, 412);
+    let done = ci
+        .post(
+            &format!("/v1/repos/acme/web/jobs/{jid}/complete"),
+            json!({"worker":"w", "fencing_token":next["attempts"], "stale":true}),
+        )
+        .await;
+    assert_eq!(done.status, 200, "{}", done.json);
+    assert_eq!(done.json["state"], "succeeded");
+    srv.stop().await;
+}

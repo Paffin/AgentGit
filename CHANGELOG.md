@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- Server operators can require validation-job claim tokens with `[jobs] require_fencing_token = true`, rejecting tokenless worker mutations after a full worker/replica rollout.
+
 - Opt-in live executor output: bounded redacted snapshots update during execution, notify connected clients and respect deletion. The Web wizard can enable it, and browser CI runs the real native orchestrator from the downloaded profile.
 
 - Native CLI run inspection: list remote runs with task/active filters and complete pagination, read captured stdout/stderr locally or remotely, and explicitly delete captured text without altering run history.

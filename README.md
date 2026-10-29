@@ -34,19 +34,16 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Unreleased CLI:** inspect remote run history with task/active filters and read or delete captured output using `ag agent runs --remote` and `ag agent output RUN --remote`. [Execution inspection](docs/guides/agents.md#14-inspect-execution-history-and-output-from-the-cli-unreleased).
 
+Development: validation workers can be required to present their current job claim on every mutation; see the [worker rollout guide](docs/guides/workers.md#requiring-current-job-claims).
+
 **Development core:** Tasks can carry a server-enforced attempt limit. `ag task attempts TASK --max 5 --expected 3` lets an operator extend an exhausted task without losing its history; restart recovery uses durable run records. Zero keeps the existing repository retry policy. Concurrent operator policy changes are protected from stale automatic cancellation, and late results cannot finish a newer task attempt. [Execution limits](docs/adr/0033-task-attempt-limits.md).
 
 **Development upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
 
 Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
-
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
 Development stream rules can require every line discussion to be resolved before integration, including feedback on earlier revisions.
-
-Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
 
 Development review threads support proposed line replacements, with explicit author preview and head-checked application.
 

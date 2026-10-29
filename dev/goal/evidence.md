@@ -535,3 +535,26 @@ PostgreSQL (0.76s). Each new race verifies the stream is unchanged, the concurre
 state survives and the old integration is aborted. Existing retry/recovery tests remain intact.
 The compatibility guide's obsolete schema-5/no-published-release statements were reconciled
 with development schema 7 and the already recorded beta.5 archive/upgrade evidence.
+
+## Optional required resolution of line discussions
+
+`require_resolved_threads` defaults to false and is omitted from serialized default policies.
+With the rule enabled, the pure policy evaluator emits `unresolved_threads` from a count read
+inside the committing metadata transaction. Earlier-head discussions count. Preparation and
+already-integrated completion share the rule. A reopened discussion before commit blocks the
+operation. Approval and general comments remain independent; permissions are unchanged.
+
+The Web rule toggle requires `policy.resolved_threads`; blocker explanations lead to Reviews.
+CLI explanations list existing remote discussion commands. ADR 0032 records rollout: upgrade
+all replicas before enabling, since old binaries reject unknown policy fields. No schema change.
+
+Evidence: 36 integrate-library and 54 policy-library tests passed; 31 engine and 16 policy
+integration tests passed; the three focused cases passed on required PostgreSQL in 0.41s.
+Two real HTTP discussion tests passed in 0.20s. The 63 focused Web tests passed, and desktop /
+phone Chromium ran administrator rule save/reload, reviewer approval, blocked landing, explicit
+resolution and successful landing in 12.2s. The initial browser test omitted the separate approval
+required by the policy editor's starter; the completed scenario obtains it through the review UI.
+The policy_eval fuzz target compiles with generated counts and an invariant that unresolved
+required discussions cannot be allowed. Its dictionary/seed generator were updated; this is not
+a new fuzz campaign or mutation score. The fuzz lockfile's own workspace versions were aligned
+from beta.5 to beta.6; no third-party dependency version changed.

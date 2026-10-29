@@ -446,6 +446,9 @@ impl Repository {
             if !integration_snapshot_matches(tx, prop, st)? {
                 return Ok(None);
             }
+            if let Some(blocked) = contained_discussion_blocker(tx, op, actor, prop, &head, tree.id())? {
+                return Ok(Some(blocked));
+            }
             tx.proposal_set_state(&prop.id, "integrated", Some(&head))?;
             let i = tx.intent_transition(
                 op,
@@ -768,15 +771,7 @@ pub(crate) fn verdict_in_tx(
     changed: &[String],
     tokens: &[u64],
 ) -> std::result::Result<Verdict, ag_storage::meta::MetaError> {
-    use ag_storage::meta::MetaError;
-    let (policy, policy_version) = match tx.policy_current(&prop.stream)? {
-        Some(row) => (
-            Policy::parse(&row.doc)
-                .map_err(|e| MetaError::Invalid(format!("stored policy v{} is invalid: {e}", row.version)))?,
-            row.version,
-        ),
-        None => (Policy::default(), 0),
-    };
+    let (policy, policy_version) = policy_in_tx(tx, &prop.stream)?;
     let attestations: Vec<Attestation> =
         tx.attestations_for_tree(&tree_id)?.iter().filter_map(attestation_from_row).collect();
     let approvals: Vec<ApprovalFact> = tx
@@ -803,6 +798,7 @@ pub(crate) fn verdict_in_tx(
         attestations: &attestations,
         approvals: &approvals,
         has_provenance,
+        unresolved_threads: if policy.require_resolved_threads { tx.unresolved_review_threads(&prop.id)? } else { 0 },
         now: tx.now(),
     };
     let evaluation: Evaluation = evaluate(&policy, &facts);
@@ -852,4 +848,55 @@ fn integration_snapshot_matches(
         return Ok(false);
     }
     Ok(tx.stream(&proposal.stream)?.is_some_and(|row| row.state == *stream))
+}
+
+fn policy_in_tx(
+    tx: &ag_storage::meta::Tx<'_>,
+    stream: &str,
+) -> std::result::Result<(Policy, u64), ag_storage::meta::MetaError> {
+    use ag_storage::meta::MetaError;
+    Ok(match tx.policy_current(stream)? {
+        Some(row) => (
+            Policy::parse(&row.doc)
+                .map_err(|e| MetaError::Invalid(format!("stored policy v{} is invalid: {e}", row.version)))?,
+            row.version,
+        ),
+        None => (Policy::default(), 0),
+    })
+}
+
+fn contained_discussion_blocker(
+    tx: &ag_storage::meta::Tx<'_>,
+    op: &str,
+    actor: &Identity,
+    proposal: &ProposalRow,
+    head: &ChangesetId,
+    tree: TreeId,
+) -> std::result::Result<Option<IntentRow>, ag_storage::meta::MetaError> {
+    let (policy_version, requirement) = discussion_gate_in_tx(tx, proposal)?;
+    let Some(requirement) = requirement else { return Ok(None) };
+    let outcome = Outcome::Blocked {
+        candidate_changeset: *head,
+        candidate_tree: tree,
+        policy_version,
+        blockers: vec![requirement],
+    };
+    let intent = tx.intent_transition(
+        op,
+        &[IntentState::Prepared, IntentState::Ready, IntentState::Blocked],
+        IntentState::Blocked,
+        Some(&outcome_json(&outcome)),
+        None,
+    )?;
+    tx.audit_append(actor.as_str(), "integrate.blocked", op, &outcome_json(&outcome))?;
+    Ok(Some(intent))
+}
+
+pub(crate) fn discussion_gate_in_tx(
+    tx: &ag_storage::meta::Tx<'_>,
+    proposal: &ProposalRow,
+) -> std::result::Result<(u64, Option<Blocker>), ag_storage::meta::MetaError> {
+    let (policy, version) = policy_in_tx(tx, &proposal.stream)?;
+    let count = if policy.require_resolved_threads { tx.unresolved_review_threads(&proposal.id)? } else { 0 };
+    Ok((version, policy.thread_resolution_requirement(count).as_ref().map(Blocker::from_unmet)))
 }

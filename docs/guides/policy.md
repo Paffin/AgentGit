@@ -139,6 +139,22 @@ envelope.
 
 `max_changed_files` (0 = unlimited): integrations changing more files are `Denied`.
 
+## Require resolved line discussions (development)
+
+Set `"require_resolved_threads": true` to require every line discussion on a proposal to be
+resolved before landing. Discussions on earlier heads still count. General comments and
+approvals are separate; applying a suggested edit does not resolve its discussion. The default
+is false, and Web preset changes preserve an existing explicit choice.
+
+The Web rules form offers **Require resolved line discussions** on a server advertising
+`policy.resolved_threads`. Native `ag policy set` uses the same document; `ag policy explain`
+explains the rule. `ag remote discussion list`, `replies` and `resolve --expected-version`
+manage the discussions through a configured remote. Review all replies before resolving.
+
+Upgrade all replicas before enabling this field: older binaries reject it. Before downgrading,
+save a policy without the field using a supporting server, or restore an earlier backup.
+See [ADR 0032](../adr/0032-required-discussion-resolution.md).
+
 ## Outcome codes
 
 `ag integrate --json` returns `outcome.status` ∈ `integrated`, `blocked`, `conflict`, `denied`, `invalid`,
@@ -148,6 +164,7 @@ and for blocked/denied a list of `blockers[]` with a stable `code`:
 |---|---|---|
 | `missing_validation` | no trusted PASS for this exact tree | 3 |
 | `insufficient_approvals` | not enough eligible approvals of the current head (`detail.scope`: `default` or a glob) | 3 |
+| `unresolved_threads` | line discussions remain open under a policy requiring resolution | 3 |
 | `changes_requested` | an eligible reviewer asked for changes | 3 |
 | `missing_provenance` | agent-authored change without signed provenance | 3 |
 | `lease` | an exclusive lease on the scope is held by someone else, or the token is stale/missing | 3 |

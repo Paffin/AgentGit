@@ -90,6 +90,7 @@ PUB = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"  # RFC 
 policies = [
     "{}",
     '{"approvals":{"min":1}}',
+    '{"require_resolved_threads":true}',
     '{"integrators":["user:*"],"allowed_authors":["user:*","agent:*"],"max_changed_files":50}',
     json.dumps({
         "integrators": ["user:*"],

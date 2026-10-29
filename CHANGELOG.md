@@ -7,6 +7,10 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Added
+
+- Optional stream policy `require_resolved_threads` blocks integration until every line discussion is resolved, including earlier revisions. Core preparation and commit share the rule; Web UI exposes the setting and remediation, and CLI explanations include resolution commands. Upgrade every replica before enabling it.
+
 ### Fixed
 
 - Integration rechecks the proposal head and open state together with the stream inside its commit transaction. A proposal updated or closed after candidate computation aborts the old operation, including the already-integrated path.

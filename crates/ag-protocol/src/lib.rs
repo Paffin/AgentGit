@@ -84,6 +84,9 @@ pub mod features {
     /// Proposal head updates can require an inspected head atomically.
     pub const PROPOSALS_UPDATE_HEAD: &str = "proposals.update_head";
 
+    /// Stream policy can require all line discussions to be resolved before integration.
+    pub const POLICY_RESOLVED_THREADS: &str = "policy.resolved_threads";
+
     /// Every feature this implementation knows.
     pub const ALL: &[&str] = &[
         EVENTS_REPLAY,
@@ -97,6 +100,7 @@ pub mod features {
         AGENTS_OPERATE,
         PROPOSALS_REVIEW_HEAD,
         PROPOSALS_UPDATE_HEAD,
+        POLICY_RESOLVED_THREADS,
         TREE_SEARCH,
         ISSUES,
         TASK_SCHEDULING,

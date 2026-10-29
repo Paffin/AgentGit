@@ -83,6 +83,7 @@ impl Ctx {
                 attestations: &self.atts,
                 approvals: &self.approvals,
                 has_provenance: self.provenance,
+                unresolved_threads: 0,
                 now: Timestamp::from_millis(1_000_000),
             },
         )
@@ -218,6 +219,7 @@ fn extreme_timestamps_are_blocked_not_a_panic() {
             attestations: &facts_now.atts,
             approvals: &facts_now.approvals,
             has_provenance: false,
+            unresolved_threads: 0,
             now: Timestamp::from_millis(at),
         };
         let _ = evaluate(&p, &far);
@@ -527,6 +529,7 @@ fn every_unmet_requirement_reads_as_a_sentence_and_the_denials_are_the_ones_that
             false,
         ),
         (Unmet::ChangesRequested { reviewer: "user:carol".into() }, "user:carol requested changes", false),
+        (Unmet::UnresolvedThreads { count: 2 }, "2 unresolved line discussion(s) must be resolved", false),
         (Unmet::MissingProvenance, "agent-authored change has no signed provenance", false),
         (Unmet::TooManyChangedFiles { changed: 5, max: 3 }, "5 files changed, policy allows at most 3", true),
     ];
@@ -555,6 +558,7 @@ fn every_unmet_requirement_has_a_fixed_wire_code_equal_to_its_serde_tag() {
         Unmet::MissingValidation { check: "c".into() },
         Unmet::InsufficientApprovals { scope: "default".into(), required: 2, have: 1 },
         Unmet::ChangesRequested { reviewer: "u".into() },
+        Unmet::UnresolvedThreads { count: 2 },
         Unmet::MissingProvenance,
         Unmet::TooManyChangedFiles { changed: 5, max: 3 },
     ];
@@ -564,8 +568,42 @@ fn every_unmet_requirement_has_a_fixed_wire_code_equal_to_its_serde_tag() {
         assert_eq!(u.code(), tag, "{u:?}");
         assert!(seen.insert(u.code()), "codes are distinct");
     }
-    assert_eq!(seen.len(), 8);
+    assert_eq!(seen.len(), 9);
     let mut listed: Vec<&str> = Unmet::CODES.to_vec();
     listed.sort_unstable();
     assert_eq!(seen.into_iter().collect::<Vec<_>>(), listed, "Unmet::CODES lists exactly the codes of the variants");
+}
+
+#[test]
+fn required_discussions_block_until_every_thread_is_resolved() {
+    let actor = id("user:alice");
+    let author = id("user:bob");
+    let mut facts = Facts {
+        actor: &actor,
+        author: &author,
+        proposal_head: cs(1),
+        candidate_tree: tree(1),
+        policy_version: 1,
+        changed: &[],
+        attestations: &[],
+        approvals: &[],
+        has_provenance: false,
+        unresolved_threads: 2,
+        now: Timestamp::from_millis(1),
+    };
+    let mut policy = Policy::default();
+    assert!(evaluate(&policy, &facts).is_allowed());
+    policy.require_resolved_threads = true;
+    let blocked = evaluate(&policy, &facts);
+    assert_eq!(blocked.decision, Decision::Blocked);
+    assert!(blocked.unmet.iter().any(|item| item.code() == "unresolved_threads"));
+    facts.unresolved_threads = 0;
+    assert!(evaluate(&policy, &facts).is_allowed());
+}
+
+#[test]
+fn disabled_discussion_policy_does_not_change_serialized_legacy_documents() {
+    assert!(serde_json::to_value(Policy::default()).unwrap().get("require_resolved_threads").is_none());
+    let policy = Policy::parse(r#"{"require_resolved_threads":true}"#).unwrap();
+    assert_eq!(serde_json::to_value(policy).unwrap()["require_resolved_threads"], true);
 }

@@ -177,6 +177,17 @@ pub fn explain_blocker(code: &str, detail: &Value, message: &str, proposal: &str
                 ],
             )
         }
+        "unresolved_threads" => (
+            "blocked",
+            format!("{} line discussion(s) remain open.", number(detail, "count").unwrap_or(0)),
+            "The policy requires every line discussion to be resolved, including discussions on earlier revisions. Read the replies before resolving; this does not replace approval.".into(),
+            vec![
+                fix(format!("ag remote discussion list {proposal}"), "read discussions through the configured remote, or use Reviews in the Web UI"),
+                fix(format!("ag remote discussion replies {proposal} <thread>"), "read every reply and obtain the latest thread version from the list"),
+                fix(format!("ag remote discussion resolve {proposal} <thread> --expected-version <version>"), "resolve at the version you read; requires the thread author, proposal author, reviewer or integrator"),
+                fix(c.integrate(), "try landing again once all discussions are resolved"),
+            ],
+        ),
         "changes_requested" => (
             "blocked",
             format!("{} asked for changes.", text(detail, "reviewer").unwrap_or("A reviewer")),
@@ -391,6 +402,7 @@ mod tests {
             Unmet::MissingValidation { check: "tests".into() },
             Unmet::InsufficientApprovals { scope: "default".into(), required: 2, have: 1 },
             Unmet::ChangesRequested { reviewer: "user:b".into() },
+            Unmet::UnresolvedThreads { count: 2 },
             Unmet::MissingProvenance,
             Unmet::TooManyChangedFiles { changed: 9, max: 3 },
         ];
@@ -402,6 +414,7 @@ mod tests {
                 | Unmet::MissingValidation { .. }
                 | Unmet::InsufficientApprovals { .. }
                 | Unmet::ChangesRequested { .. }
+                | Unmet::UnresolvedThreads { .. }
                 | Unmet::MissingProvenance
                 | Unmet::TooManyChangedFiles { .. } => {}
             }

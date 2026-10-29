@@ -279,3 +279,9 @@ describe('attention: what needs me', () => {
     expect(items).toEqual([])
   })
 })
+
+it('takes a reader to discussions when the policy requires resolution', () => {
+  expect(
+    fixesForBlocker('unresolved_threads', { may: () => false, isAuthor: false }).fixes,
+  ).toEqual([{ id: 'reviews', label: 'Read and resolve discussions' }])
+})

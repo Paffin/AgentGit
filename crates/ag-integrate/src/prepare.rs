@@ -11,7 +11,7 @@ use ag_storage::meta::{MetaError, Tx};
 use ag_types::{Identity, TreeId};
 use serde::Serialize;
 
-use crate::integrate::{MergePreview, verdict_in_tx};
+use crate::integrate::{MergePreview, discussion_gate_in_tx, verdict_in_tx};
 use crate::types::Blocker;
 use crate::{Error, Repository, Result};
 
@@ -50,7 +50,7 @@ pub struct Preparation {
 pub struct PrepareContext<'a> {
     /// The proposal id.
     pub proposal: &'a str,
-    /// The candidate tree (`None`: there is no unambiguous candidate, so nothing was evaluated).
+    /// The candidate tree (`None`: no unambiguous candidate; only the discussion gate was evaluated).
     pub tree: Option<TreeId>,
     /// The policy version evaluated (0 = no policy stored).
     pub policy_version: u64,
@@ -69,7 +69,7 @@ impl Repository {
     /// reads the attestations. What `observe` reads - the jobs that validate the candidate, say - is therefore
     /// from the same snapshot as the verdict: a job that completes at that moment is either seen with its
     /// attestation or seen as still running without it, never as finished while the attestation is missing.
-    /// (Without a candidate there is no verdict; `observe` then runs in a read transaction of its own.)
+    /// Without a candidate, only the discussion gate is evaluated; `observe` shares that read snapshot.
     pub fn prepare_with<R>(
         &self,
         proposal_id: &str,
@@ -80,17 +80,14 @@ impl Repository {
         let prop = self.find_proposal(proposal_id)?;
         let preview = self.merge_preview(&prop.id)?;
         let Some(tree_id) = preview.candidate_tree else {
-            let seen = self.meta.read(|tx| {
-                observe(tx, &PrepareContext { proposal: &prop.id, tree: None, policy_version: 0, required: &[] })
+            let (policy_version, blockers, seen) = self.meta.read(|tx| {
+                let (policy_version, blocker) = discussion_gate_in_tx(tx, &prop)?;
+                let seen =
+                    observe(tx, &PrepareContext { proposal: &prop.id, tree: None, policy_version, required: &[] })?;
+                Ok((policy_version, blocker.into_iter().collect(), seen))
             })?;
             return Ok((
-                Preparation {
-                    proposal: prop.id,
-                    preview,
-                    policy_version: 0,
-                    blockers: Vec::new(),
-                    validations: Vec::new(),
-                },
+                Preparation { proposal: prop.id, preview, policy_version, blockers, validations: Vec::new() },
                 seen,
             ));
         };

@@ -103,6 +103,7 @@ fn run(u: &mut Unstructured<'_>) -> ArbResult<()> {
         max_files: small(u)?,
     };
     policy.require_provenance_for_agents = u.arbitrary()?;
+    policy.require_resolved_threads = u.arbitrary()?;
     policy.max_changed_files = small(u)?;
     // Only evaluate policies the engine would have accepted.
     let Ok(policy) = Policy::parse(&policy.to_json()) else { return Ok(()) };
@@ -154,6 +155,7 @@ fn run(u: &mut Unstructured<'_>) -> ArbResult<()> {
         attestations: &attestations,
         approvals: &approvals,
         has_provenance: u.arbitrary()?,
+        unresolved_threads: u.arbitrary()?,
         now: Timestamp::from_millis(if u.ratio(1, 2)? { u.arbitrary()? } else { 0 }),
     };
 
@@ -164,6 +166,7 @@ fn run(u: &mut Unstructured<'_>) -> ArbResult<()> {
     assert_eq!(e.decision == Decision::Allow, e.is_allowed());
 
     if e.is_allowed() {
+        assert!(!policy.require_resolved_threads || facts.unresolved_threads == 0, "unresolved discussions were allowed");
         // Every required check has a trusted, validly signed pass for exactly this tree and version.
         for v in &policy.required_validations {
             let ok = attestations.iter().any(|a| {

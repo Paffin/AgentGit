@@ -42,6 +42,8 @@ export function fixesForBlocker(code: string, ctx: FixContext): FixPlan {
           ? 'Fix the code, update the change request, then run the check again.'
           : 'The author needs to fix the code and update the change request.',
       }
+    case 'unresolved_threads':
+      return { fixes: [{ id: 'reviews', label: 'Read and resolve discussions' }] }
     case 'insufficient_approvals':
     case 'changes_requested': {
       const fixes: Fix[] = []

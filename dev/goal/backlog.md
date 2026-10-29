@@ -85,3 +85,8 @@ compatibility and publication limits. Next, structured review suggestions depend
 precondition: preview the exact replacement, preserve file metadata, apply only against the
 anchored head, and require fresh checks/reviews after changing the proposal. Suggestions and
 requested reviewers remain open; this prerequisite does not complete those workflows.
+
+Required line-discussion resolution is implemented as an optional policy gate, including
+older anchors, no-op completion and a reopen/commit race. Web configuration/remediation and
+CLI explanations use the same server rule. After completing this slice, priority returns to
+GitHub/GitLab migration of issues and comments, as requested; reviewer assignment remains open.

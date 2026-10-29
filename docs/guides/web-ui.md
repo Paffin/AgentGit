@@ -206,7 +206,10 @@ dialog (not offered to the author); *Copy link to ask a reviewer*; *Land with th
 dialog; *Resolve the conflict* opens the resolver (below). A fix is a button only when your role allows it. Otherwise
 the row says who to ask ("Ask someone with the reviewer role") instead of showing a button that would fail. *Integrate* shows the strategy (fast-forward or merge), asks for fencing
 tokens when a lease is involved, and reports the outcome the server decided: integrated, blocked (nothing changed, with
-the blockers), conflict (with the paths) or refused by policy.
+the blockers), conflict (with the paths) or refused by policy. When resolving conflicts, the editor
+retains the proposal revision it opened. A concurrent update refuses the save and keeps your
+resolution text available; inspect the updated proposal before starting a new resolution.
+This requires a development server advertising `proposals.update_head`.
 
 ## Branches and history
 

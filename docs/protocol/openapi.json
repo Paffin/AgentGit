@@ -5596,6 +5596,11 @@
       },
       "UpdateProposalRequest": {
         "properties": {
+          "expected_head": {
+            "default": "",
+            "description": "Optional inspected head. If supplied, a concurrent change is refused atomically.",
+            "type": "string"
+          },
           "id": {
             "default": "",
             "type": "string"

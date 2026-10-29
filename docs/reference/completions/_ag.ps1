@@ -522,6 +522,7 @@ Register-ArgumentCompleter -Native -CommandName 'ag' -ScriptBlock {
             break
         }
         'ag;proposal;update' {
+            [CompletionResult]::new('--expected-head', '--expected-head', [CompletionResultType]::ParameterName, 'Refuse the update if the proposal no longer has this inspected head')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--repo', '--repo', [CompletionResultType]::ParameterName, 'Operate on the repository at this path (default: discovered from the current directory)')
             [CompletionResult]::new('--as', '--as', [CompletionResultType]::ParameterName, 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY')

@@ -34,6 +34,8 @@ This is an early public beta: [status and limits](#status-and-limits) are below,
 
 **Development upgrade:** persistent follow-up task links and durable task execution limits require metadata schema 8. Back up before opening existing repositories with this development build; rollback uses the pre-upgrade backup. [Source-link semantics](docs/adr/0027-task-source-links.md).
 
+Development conflict resolution compares the inspected proposal head before updating it; concurrent edits are refused instead of overwritten.
+
 ## Coming from GitHub or GitLab?
 
 Open **Repositories → Import from GitHub / GitLab** to upload a full Git bundle, inspect the branch/tag mapping and publish the verified result. Or run `ag migrate repository.bundle ./project --namespace team/project`. The source stays unchanged, and its original bundle is retained in backups. [Migration guide and metadata limitations](docs/guides/migrate-from-git.md).

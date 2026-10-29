@@ -4928,6 +4928,11 @@ export interface components {
             title: string;
         };
         UpdateProposalRequest: {
+            /**
+             * @description Optional inspected head. If supplied, a concurrent change is refused atomically.
+             * @default
+             */
+            expected_head: string;
             /** @default  */
             id: string;
             /**

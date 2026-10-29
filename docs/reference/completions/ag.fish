@@ -368,6 +368,7 @@ complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcomma
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -s v -l verbose -d 'Explain what is happening on standard error: repository, identity, remote, timing'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -s h -l help -d 'Print help'
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from review" -s V -l version -d 'Print version'
+complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from update" -l expected-head -d 'Refuse the update if the proposal no longer has this inspected head' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from update" -s C -l repo -d 'Operate on the repository at this path (default: discovered from the current directory)' -r -F
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from update" -l as -d 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY' -r
 complete -c ag -n "__fish_ag_using_subcommand proposal; and __fish_seen_subcommand_from update" -l color -d 'Colour the output: auto (a terminal, unless NO_COLOR is set), always or never' -r -f -a "auto\t'Colour when the stream is a terminal and neither `NO_COLOR` nor `TERM=dumb` says otherwise'

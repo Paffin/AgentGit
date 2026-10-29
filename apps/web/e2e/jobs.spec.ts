@@ -286,52 +286,94 @@ test.describe('editing in the browser', () => {
     await expect(erin.getByTestId('edit-file')).toHaveCount(0)
   })
 
-  test('a conflict is resolved by its author, file by file, and the change request moves on', async ({
-    cast,
-    openAs,
-  }, testInfo) => {
-    const { repo } = await freshRepo(cast, 'resolve')
-    const alice = cast.as('alice')
-    // alice and dana both change the same line of the same file; dana's lands first.
-    const mine = await commitFiles(
-      alice,
-      repo,
-      { 'src/app.ts': 'export const answer = 42\n' },
-      'Answer is 42',
-    )
-    const p = await openProposal(alice, repo, { head: mine.head, title: 'The answer is 42' })
-    const dana = cast.as('dana')
-    const theirs = await commitFiles(
-      dana,
-      repo,
-      { 'src/app.ts': 'export const answer = 43\n' },
-      'Answer is 43',
-    )
-    const other = await openProposal(dana, repo, { head: theirs.head, title: 'The answer is 43' })
-    await integrate(cast.as('carol'), repo, other.id)
+  for (const concurrent of [false, true]) {
+    test(
+      concurrent
+        ? 'a conflict resolution cannot overwrite a concurrent proposal update'
+        : 'a conflict is resolved by its author, file by file, and the change request moves on',
+      async ({ cast, openAs, allowConsole }, testInfo) => {
+        const { repo } = await freshRepo(cast, 'resolve')
+        const alice = cast.as('alice')
+        // alice and dana both change the same line of the same file; dana's lands first.
+        const mine = await commitFiles(
+          alice,
+          repo,
+          { 'src/app.ts': 'export const answer = 42\n' },
+          'Answer is 42',
+        )
+        const p = await openProposal(alice, repo, { head: mine.head, title: 'The answer is 42' })
+        const dana = cast.as('dana')
+        const theirs = await commitFiles(
+          dana,
+          repo,
+          { 'src/app.ts': 'export const answer = 43\n' },
+          'Answer is 43',
+        )
+        const other = await openProposal(dana, repo, {
+          head: theirs.head,
+          title: 'The answer is 43',
+        })
+        await integrate(cast.as('carol'), repo, other.id)
 
-    const page = await openAs('alice')
-    await page.goto(`/repos/${repo}/proposals/${p.id}`)
-    await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'failed')
-    await expect(page.getByTestId('conflicts')).toContainText('src/app.ts')
-    await page.getByTestId('fix-conflict').click()
+        const page = await openAs('alice')
+        await page.goto(`/repos/${repo}/proposals/${p.id}`)
+        await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'failed')
+        await expect(page.getByTestId('conflicts')).toContainText('src/app.ts')
+        await page.getByTestId('fix-conflict').click()
 
-    const resolver = page.getByTestId('resolver')
-    await expect(resolver).toBeVisible()
-    await expect(resolver.getByLabel('The branch’s version of src/app.ts')).toContainText(
-      'answer = 43',
+        const resolver = page.getByTestId('resolver')
+        await expect(resolver).toBeVisible()
+        await expect(resolver.getByLabel('The branch’s version of src/app.ts')).toContainText(
+          'answer = 43',
+        )
+        await expect(resolver.getByLabel('Your version of src/app.ts')).toContainText('answer = 42')
+        await expectAccessible(page, testInfo, 'conflict resolver')
+        await resolver.getByLabel('Result for src/app.ts').fill('export const answer = 42 + 1\n')
+        if (concurrent) allowConsole(/status of 412.*\/proposals\/prop_/)
+        if (concurrent) allowConsole(/status of 412.*\/proposals\/prop_/)
+        let competingHead = ''
+        if (concurrent) {
+          const competing = await commitFiles(
+            alice,
+            repo,
+            { 'src/app.ts': 'export const answer = 99\n' },
+            'Concurrent edit',
+            { fromRev: mine.head },
+          )
+          competingHead = competing.head
+          await alice.ok_(
+            alice.patch(`/v1/repos/${repo}/proposals/${p.id}`, {
+              new_head: competingHead,
+              expected_head: mine.head,
+            }),
+            'advance proposal concurrently',
+          )
+        }
+        await page.getByTestId('resolve-save').click()
+
+        if (concurrent) {
+          await expect(page.getByRole('dialog')).toContainText(
+            'Your resolution has not replaced the newer changes',
+          )
+          await expect(resolver.getByLabel('Result for src/app.ts')).toHaveValue(
+            'export const answer = 42 + 1\n',
+          )
+          await expect(page.getByTestId('resolve-save')).toBeDisabled()
+          await expect(page.getByRole('button', { name: 'Copy resolution text' })).toBeVisible()
+          const retained = await alice.get(`/v1/repos/${repo}/proposals/${p.id}`)
+          expect(retained.json.proposal.head).toBe(competingHead)
+          return
+        }
+        await expect(page.getByRole('dialog')).toHaveCount(0)
+        await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'ok', {
+          timeout: 15_000,
+        })
+        await expect(page.getByTestId('conflicts')).toHaveCount(0)
+        const detail = await alice.get(`/v1/repos/${repo}/proposals/${p.id}`)
+        expect(detail.json.proposal.head).not.toBe(mine.head)
+      },
     )
-    await expect(resolver.getByLabel('Your version of src/app.ts')).toContainText('answer = 42')
-    await expectAccessible(page, testInfo, 'conflict resolver')
-    await resolver.getByLabel('Result for src/app.ts').fill('export const answer = 42 + 1\n')
-    await page.getByTestId('resolve-save').click()
-
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(pill(page, 'mergeable')).toHaveAttribute('data-tone', 'ok', { timeout: 15_000 })
-    await expect(page.getByTestId('conflicts')).toHaveCount(0)
-    const detail = await alice.get(`/v1/repos/${repo}/proposals/${p.id}`)
-    expect(detail.json.proposal.head).not.toBe(mine.head)
-  })
+  }
 
   test('someone who is not the author is told to pass the link on, not offered the resolver', async ({
     cast,

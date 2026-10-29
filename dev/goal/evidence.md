@@ -493,3 +493,30 @@ feed or a physical-device/screen-reader qualification.
 
 The previous candidate's PostgreSQL-only schema-5 fixture also retained the schema-7 task-source columns while pretending to be schema 5. It now removes those columns before reopening and checks the current destination version, preserving the original stream assertion. This corrects the fixture, not the production migration.
 Home filters also survive reload and browser Back in bookmarkable URLs.
+
+## Proposal-head preconditions before review suggestions
+
+A reproduced core regression showed that a stale replacement could overwrite a newer proposal
+head. `update_proposal_at_head` compares the inspected head in the metadata transaction that
+writes the replacement and audit. Requests omitting the new optional field retain wire compatibility
+and compare the head observed at operation start. They cannot detect earlier client staleness.
+`proposals.update_head` advertises support; old servers must not be trusted to enforce this field.
+No schema or canonical-object format changes. ADR 0029 records publication and retry limits.
+
+The Web conflict resolver freezes its opening head, requires capability negotiation and preserves
+resolution text on a stale save. Core tests cover stale replacement and two simultaneous contenders;
+PostgreSQL runs require the real backend through AG_REQUIRE_COMPONENTS. HTTP verifies 412 and
+unchanged head. Both SDK tours use the new field; the local CLI exposes --expected-head. Structured
+suggestion creation/application remains the next deliverable, not claimed by this prerequisite.
+
+Validation for this slice: 13 core policy tests passed on SQLite (0.14 seconds); the two focused
+stale/concurrent cases passed on required PostgreSQL (0.36 seconds after refactoring). The focused
+HTTP scenario passed in 0.22 seconds. TypeScript's 12-test and Python's 13-test all-operation tours
+passed against the real server and used expected_head. Typed Web build, full Web typecheck,
+scoped lint, CLI documentation generation and 97-file documentation checks passed. Crapper
+reported complexity 7 for update_proposal_at_head and 8 for its transactional helper; Dryer found
+no duplicate candidates. Mutation-site discovery does not establish a mutation-kill score.
+The final two real-server Chromium scenarios (normal resolution and concurrent replacement)
+passed in 8.9 seconds. The stale case checks the actionable warning, preserved text, disabled
+stale save, copy control and unchanged competing head. Only the expected HTTP 412 console line
+for this proposal route is allowed in that scenario; other console failures remain failures.

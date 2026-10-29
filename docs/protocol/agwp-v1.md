@@ -255,6 +255,16 @@ writing anything. An idempotency key records the response atomically with the
 comment. Comments use review records with `decision=comment`, remain available
 after closure and do not supersede approval or request-changes decisions.
 
+### Proposal head preconditions (development)
+
+Servers advertising `proposals.update_head` accept optional `expected_head` on
+`proposal.update` (`PATCH /proposals/{id}`, gRPC `Update`). Send the full inspected
+changeset ID. A mismatch returns `failed_precondition` (HTTP 412); comparison and head
+replacement share one metadata transaction. Omission preserves legacy request compatibility
+but cannot detect changes before the request began. Negotiate support before relying on the
+field: an older server may ignore it. This operation does not deduplicate idempotency keys.
+See [ADR 0029](../adr/0029-proposal-head-preconditions.md).
+
 ### Line review threads (development)
 
 `proposals.threads` advertises metadata schema 6 and these operations:

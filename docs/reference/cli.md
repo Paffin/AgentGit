@@ -799,14 +799,15 @@ Arguments:
   [REV]  New head (default: the workspace head)
 
 Options:
-  -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
-      --as <IDENTITY>  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
-      --json           Machine-readable JSON output
-      --color <WHEN>   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
-  -q, --quiet          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
-  -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
-  -h, --help           Print help
-  -V, --version        Print version
+  -C, --repo <DIR>                     Operate on the repository at this path (default: discovered from the current directory)
+      --expected-head <EXPECTED_HEAD>  Refuse the update if the proposal no longer has this inspected head
+      --as <IDENTITY>                  Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --json                           Machine-readable JSON output
+      --color <WHEN>                   Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                          Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                        Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## ag proposal close

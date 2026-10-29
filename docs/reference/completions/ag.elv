@@ -495,6 +495,7 @@ set edit:completion:arg-completer[ag] = {|@words|
             cand --version 'Print version'
         }
         &'ag;proposal;update'= {
+            cand --expected-head 'Refuse the update if the proposal no longer has this inspected head'
             cand -C 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --repo 'Operate on the repository at this path (default: discovered from the current directory)'
             cand --as 'Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY'

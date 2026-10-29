@@ -140,7 +140,9 @@ describe('the tour', () => {
     expect((await alice.proposals.list({ repo })).proposals).toHaveLength(1);
     // move the proposal to a newer head
     const m2 = await alice.workspaces.modify({ repo, name: 'w1', message: 'more', changes: [putFile('d.txt', 'd\n')] });
-    expect((await alice.proposals.update({ repo, id: p1.id, new_head: m2.head })).head).toBe(m2.head);
+    expect((await alice.proposals.update({ repo, id: p1.id, new_head: m2.head, expected_head: m1.head })).head).toBe(
+      m2.head,
+    );
     expect((await alice.proposals.get({ repo, id: p1.id })).proposal.head).toBe(m2.head);
     await bob.proposals.review({ repo, id: p1.id, decision: 'approve' });
     expect(

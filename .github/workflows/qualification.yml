@@ -1,0 +1,85 @@
+name: Qualification
+
+# One complete matrix per release candidate (or nightly), never per ordinary push.
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 1 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    uses: ./.github/workflows/full-ci.yml
+    secrets: inherit
+
+  web:
+    uses: ./.github/workflows/web.yml
+    with:
+      full: true
+
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      full: true
+
+  codeql:
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+  containers:
+    uses: ./.github/workflows/containers.yml
+
+  docs:
+    uses: ./.github/workflows/docs.yml
+    with:
+      full: true
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+  packaging:
+    uses: ./.github/workflows/packaging.yml
+
+  coverage:
+    uses: ./.github/workflows/quality.yml
+
+  windows:
+    uses: ./.github/workflows/windows.yml
+
+  fuzz:
+    uses: ./.github/workflows/fuzz.yml
+
+  performance:
+    uses: ./.github/workflows/perf.yml
+
+  oci:
+    uses: ./.github/workflows/oci-runtimes.yml
+
+  complete:
+    timeout-minutes: 2
+    name: Qualified commit
+    if: always()
+    needs: [core, web, security, codeql, containers, docs, packaging, coverage, windows, fuzz, performance, oci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every qualification component must succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          bad = [name for name, result in json.loads(os.environ['RESULTS']).items() if result['result'] != 'success']
+          if bad:
+              raise SystemExit('Qualification failed: ' + ', '.join(bad))
+          PYTHON

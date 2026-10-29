@@ -1,51 +1,15 @@
 name: Packaging
 
-# Everything between "it works on my machine" and "someone else can install it", checked without publishing anything:
-#
-#   tooling   the release/install scripts' tests, shellcheck on install.sh, actionlint on the workflows, the
-#             Homebrew formula and Scoop manifest rendered from a fixture
-#   crates    `cargo publish --workspace --dry-run` (every publishable crate, packaged and built from its tarball in
-#             dependency order; docs/operations/releasing.md lists them and the one `publish = false`), the
-#             metadata checks, and that the copies of proto/ and migrations/ inside the crates are current
-#   sdks      the TypeScript package (`npm pack`) and the Python package (`uv build`, `twine check`)
-#
-# Publishing is a separate, manual workflow: publish-sdks.yml.
-
+# Full publication dry runs are qualification checks, not per-commit background work.
 on:
-  push:
-    branches: [main]
-    paths:
-      # A release request requires this workflow on the exact main commit.
-      - "CHANGELOG.md"
-      - "crates/**"
-      - "proto/**"
-      - "migrations/**"
-      - "apps/web/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "sdk/**"
-      - "scripts/**"
-      - "packaging/**"
-      - ".github/workflows/**"
-  pull_request:
-    paths:
-      - "crates/**"
-      - "proto/**"
-      - "migrations/**"
-      - "apps/web/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "sdk/**"
-      - "scripts/**"
-      - "packaging/**"
-      - ".github/workflows/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: packaging-${{ github.ref }}
+  group: packaging-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:
@@ -103,6 +67,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
       - name: Metadata of every package (crates, npm, PyPI)
         # pipefail: without it `tee` hides the checker's exit status and an incomplete crate passes this step.
         run: |

@@ -1,35 +1,12 @@
 name: Quality
 
-# Two measurements of how much the tests are worth (docs/architecture/testing.md has the numbers and how to read them):
-#
-#   coverage   cargo-llvm-cov over the whole workspace test suite, a table per crate in the job summary and a floor
-#              per crate (scripts/coverage_floors.toml) below which the job fails. On changes to the Rust code, and
-#              weekly. The lcov file is uploaded as an artifact.
-#   mutation   cargo-mutants on the crates whose bugs corrupt data silently - ag-object, ag-diff, ag-tree, ag-merge,
-#              ag-policy: every mutant (a `+` turned into `-`, a condition negated, a body replaced) must be caught by
-#              the crate's own tests, or sit in .cargo/mutants.toml with the reason it cannot matter. Weekly and by
-#              hand (an hour or more; not on pull requests).
-
+# Linux full-suite coverage qualifies correctness. Extended mutation runs remain weekly/manual.
 on:
-  push:
-    branches: [main]
-    paths:
-      # A release request requires this workflow on the exact main commit.
-      - "CHANGELOG.md"
-      - "crates/**"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "tests/**"
-      - "scripts/coverage_*"
-      - ".cargo/mutants.toml"
-      - ".github/workflows/quality.yml"
-  pull_request:
-    paths:
-      - "crates/**"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "scripts/coverage_*"
-      - ".github/workflows/quality.yml"
+  workflow_call:
+    inputs:
+      extended:
+        type: boolean
+        default: false
   schedule:
     - cron: "17 3 * * 0"
   workflow_dispatch:
@@ -42,8 +19,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: quality-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -51,7 +28,7 @@ env:
 jobs:
   coverage:
     name: coverage (cargo-llvm-cov)
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.crates == ''
+    if: github.workflow != 'Quality' || github.event_name != 'workflow_dispatch' || github.event.inputs.crates == ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -64,6 +41,7 @@ jobs:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           key: coverage
       - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
@@ -95,7 +73,7 @@ jobs:
 
   mutation:
     name: mutation (${{ matrix.crate }})
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: inputs.extended || github.workflow == 'Quality'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     strategy:
@@ -125,6 +103,7 @@ jobs:
       - if: steps.pick.outputs.run == 'true'
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           key: mutation-${{ matrix.crate }}
       - if: steps.pick.outputs.run == 'true'
         uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31

@@ -1,0 +1,528 @@
+name: Full CI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-ci-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  test:
+    timeout-minutes: 45
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      # Ubuntu 24.04 runners restrict unprivileged user namespaces with AppArmor, which is what the namespace
+      # sandbox (`ag-sandbox`) needs. Lift that, and make the sandbox suites *fail* instead of skipping if the
+      # runner still cannot run them: a green run must mean the isolation was actually exercised.
+      - name: Allow unprivileged user namespaces
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Build
+        run: cargo build --workspace
+      - name: Test
+        run: cargo test --workspace
+        env:
+          # Components this job must have: a test that needs one and finds it missing FAILS instead of skipping
+          # (crates/ag-testkit). The tutorials' commands run against this build of `ag`
+          # (crates/ag-cli/tests/docs_snippets.rs), so bash, python3 and git are needed; the real-server worker test
+          # needs the ag-server that `cargo build --workspace` just made.
+          AG_REQUIRE_COMPONENTS: ${{ runner.os == 'Linux' && 'namespace-sandbox,git,bash,python3,ag-server-binary' || 'git,bash,python3,ag-server-binary' }}
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      # Every skip is listed; one that tests/skip-allowlist.toml does not cover for this job fails the job.
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job "ci/test-${{ runner.os == 'Linux' && 'ubuntu' || 'macos' }}" --report "$RUNNER_TEMP/skips.jsonl"
+
+  lint:
+    timeout-minutes: 25
+    name: fmt + clippy + rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  msrv:
+    timeout-minutes: 25
+    name: MSRV (1.89)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Select the toolchain with the `toolchain` input rather than an `@1.89.0` ref:
+      # Dependabot would "update" such a ref and silently move the MSRV.
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: 1.89.0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      - run: cargo check --workspace --all-targets
+
+  docs-and-demo:
+    timeout-minutes: 25
+    name: generated docs + demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      - name: Build release binary
+        run: cargo build --release -p agentgit-cli
+      - name: CLI reference is up to date
+        run: AG=target/release/ag python3 scripts/gen_cli_docs.py --check
+      - name: README artwork is up to date
+        run: python3 scripts/gen_readme_assets.py --check
+      - name: README demo still behaves as documented
+        run: AG=$PWD/target/release/ag ./examples/quickstart.sh
+      # Links, test names, `ag` commands, environment variables and the refusal messages quoted in the docs are checked
+      # against the code. --require-ag: a missing binary fails the step instead of skipping the command check.
+      - name: Docs match the code
+        run: AG=$PWD/target/release/ag python3 scripts/check_docs.py --require-ag
+      # No todo!(), TODO/FIXME/XXX/HACK, "for now", placeholder, stub, mock/fake/dummy or simulation in product source
+      # (tests excluded); the exceptions, each with a reason, are in scripts/no_stubs_allowlist.txt.
+      - name: No stubs or simulated code in product source
+        run: |
+          python3 scripts/test_check_no_stubs.py
+          python3 scripts/check_no_stubs.py
+      # No test skips by itself: the helper of its language, or an entry in tests/skip-allowlist.toml.
+      - name: Skip mechanism (tests of the helper and the gate, allow-list, source scan)
+        run: |
+          python3 scripts/test_ag_testkit.py
+          python3 scripts/test_check_skips.py
+          python3 scripts/check_skips.py --validate --scan
+
+  backends:
+    timeout-minutes: 60
+    name: PostgreSQL + S3 backends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      # scripts/pg-test.sh finds the server binaries under /usr/lib/postgresql/*/bin
+      # (PostgreSQL ships on the runner image); scripts/s3-test.sh installs moto into a venv, or downloads the pinned
+      # SeaweedFS release (SHA-256 checked).
+      - name: Make sure the PostgreSQL server binaries are present
+        run: ls /usr/lib/postgresql/*/bin/initdb || sudo apt-get install -y --no-install-recommends postgresql
+      # Every suite on PostgreSQL metadata and S3 objects; a missing server fails the run
+      # instead of silently falling back to SQLite and files. The S3 server here is moto, a Python
+      # re-implementation of the API that recomputes every request's SigV4 signature.
+      # The whole workspace runs here, so the sandbox suites do too. Until the skip report existed this job did not
+      # lift the AppArmor restriction (see the test job) and every namespace-sandbox test silently skipped in it.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Test on PostgreSQL + S3 (moto)
+        run: scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace
+        env:
+          AG_REQUIRE_COMPONENTS: postgres,s3,namespace-sandbox
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips-moto.jsonl
+      - name: Skipped tests (moto)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/backends-moto --report "$RUNNER_TEMP/skips-moto.jsonl"
+      # The same object-store suites against a real S3 server: SeaweedFS, the one the Compose stack runs, with a
+      # configured identity so that the gateway verifies every signature (the script refuses to run otherwise).
+      # Everything that moves its objects to S3 when AG_TEST_S3_ENDPOINT is set: the store's own suite
+      # (crates/ag-storage/tests/s3.rs), the engine's lifecycle/GC suites and the server's backend suite.
+      - name: Test on PostgreSQL + S3 (SeaweedFS, a real S3 server)
+        run: |
+          AG_S3_SERVER=seaweedfs scripts/pg-test.sh scripts/s3-test.sh \
+            bash -c 'cargo test -p agentgit-storage -p agentgit-integrate && cargo test -p agentgit-server --test storage_backends'
+        env:
+          # SeaweedFS serves TLS with a private CA, so the TLS tests of the S3 client must run here
+          AG_REQUIRE_COMPONENTS: postgres,s3,s3-tls
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips-seaweedfs.jsonl
+      - name: Skipped tests (SeaweedFS)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/backends-seaweedfs --report "$RUNNER_TEMP/skips-seaweedfs.jsonl"
+      # The multi-replica server (ADR-0007, docs/operations/high-availability.md): 2-5 real ag-server processes on one
+      # PostgreSQL and one S3 server, driven over sockets - no lost update across replicas, kill -9 of a replica in
+      # flight, exactly-once job claims, SSE across replicas, bounded revocation, rolling restart, migrate-control.
+      # The workspace run above executes these too (serialised inside the binary); this step names them in the log, and
+      # runs them once more against SeaweedFS, a real S3 server.
+      - name: Multi-replica ag-server on PostgreSQL + S3 (SeaweedFS)
+        run: AG_S3_SERVER=seaweedfs scripts/ha-test.sh
+        env:
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips-ha.jsonl
+      - name: Skipped tests (multi-replica)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/backends-ha --report "$RUNNER_TEMP/skips-ha.jsonl"
+
+  deploy:
+    timeout-minutes: 20
+    name: deployment files
+    runs-on: ubuntu-latest
+    env:
+      KUSTOMIZE_VERSION: v5.6.0
+      KUBECONFORM_VERSION: v0.6.7
+      PROMETHEUS_VERSION: 3.2.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install kustomize, kubeconform, promtool
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz -C "$HOME/bin" kustomize
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" kubeconform
+          curl -sSL "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" | tar xz -C "$HOME/bin" --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - run: pip install pyyaml
+      - name: Manifests, alert rules, Compose file and dashboards
+        run: python3 scripts/check_deploy.py --strict
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      - name: Shipped server configurations load with this server
+        run: cargo test -p agentgit-server --test deploy_configs
+
+  # The container images (both targets, health check, hardened run, end-to-end smoke, compose, kubernetes) are built
+  # and proven by containers.yml, which runs on every push and pull request that can change an image. They used to
+  # be built a second time here, with another cache scope and a weaker check.
+
+  tools:
+    timeout-minutes: 25
+    name: shared server and agent binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: linux-debug
+          cache-workspace-crates: true
+      - name: Build shared tools
+        run: |
+          cargo build --locked -p agentgit-server -p agentgit-cli -p agentgit-mcp
+          cd target/debug
+          sha256sum ag-server ag ag-mcp > binaries.sha256
+          tar -czf ci-tools.tar.gz ag-server ag ag-mcp binaries.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-ci-tools
+          path: target/debug/ci-tools.tar.gz
+          compression-level: 0
+          retention-days: 1
+
+  sdk:
+    timeout-minutes: 20
+    needs: tools
+    name: client SDKs (TypeScript, Python)
+    runs-on: ubuntu-latest
+    env:
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+      # Harnesses must discover the server even when the caller suppresses INFO logs.
+      RUST_LOG: error
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: full-ci-tools
+          path: target/debug
+      - name: Restore checked tools
+        working-directory: target/debug
+        run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: TypeScript SDK (generate:check, types, lint, tests against the real server, package)
+        working-directory: sdk/typescript
+        run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm run check
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - name: Python SDK (tests against the real server, ruff, mypy, generated code)
+        working-directory: sdk/python
+        run: |
+          uv sync --locked
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+          uv run python scripts/generate.py --check
+      - name: Code samples in the docs are the code that is tested
+        run: python3 sdk/tools/sync_doc_samples.py --check
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/sdk --report /tmp/ag-skips.jsonl
+
+  # The README of each SDK names the runtimes it supports; these legs are what makes that sentence true. The
+  # `sdk` job above runs the full checks on one interpreter; here only the test suites run on the others.
+  sdk-runtimes:
+    timeout-minutes: 20
+    needs: tools
+    name: client SDK tests (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    env:
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+      RUST_LOG: error
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - {runtime: "python 3.10", kind: python, version: "3.10"}
+          - {runtime: "python 3.11", kind: python, version: "3.11"}
+          - {runtime: "python 3.12", kind: python, version: "3.12"}
+          - {runtime: "python 3.13", kind: python, version: "3.13"}
+          - {runtime: "node 20", kind: node, version: "20"}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: full-ci-tools
+          path: target/debug
+      - name: Restore checked tools
+        working-directory: target/debug
+        run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
+      - if: matrix.kind == 'node'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.version }}
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - if: matrix.kind == 'node'
+        name: TypeScript SDK tests
+        working-directory: sdk/typescript
+        run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm test
+      - if: matrix.kind == 'python'
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - if: matrix.kind == 'python'
+        name: Python SDK tests
+        working-directory: sdk/python
+        run: |
+          uv sync --locked --python ${{ matrix.version }}
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server uv run pytest
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job "ci/sdk-runtimes-${{ matrix.kind }}-${{ matrix.version }}" --report /tmp/ag-skips.jsonl
+
+  orchestrator:
+    timeout-minutes: 30
+    needs: tools
+    name: agent orchestrator (Go)
+    runs-on: ubuntu-latest
+    env:
+      AG_LLM_LIVE_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AG_LLM_LIVE_MODEL: ${{ vars.AG_LLM_MODEL }}
+      # The integration suite runs against the real server: no binary is a failure, not a skip. The live-model tests
+      # skip here by design (tests/skip-allowlist.toml) and run in the live step.
+      AG_REQUIRE_COMPONENTS: ag-server-binary
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: full-ci-tools
+          path: target/debug
+      - name: Restore checked tools
+        working-directory: target/debug
+        run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/agent-orchestrator/go.mod
+          cache-dependency-path: services/agent-orchestrator/go.sum
+      - name: vet, format, race tests (the integration suite runs a real ag-server)
+        working-directory: services/agent-orchestrator
+        run: |
+          go vet ./...
+          test -z "$(gofmt -l .)"
+          AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -race -count=1 ./...
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/orchestrator --report /tmp/ag-skips.jsonl
+      # The model-backed advisor, reviewer and index judge against a real endpoint: opt-in (it costs money). Runs on a
+      # push only when the repository defines the OPENROUTER_API_KEY secret and the AG_LLM_MODEL variable.
+      - name: model-backed components against a real model (only when a key and a model are configured)
+        if: ${{ github.ref == 'refs/heads/main' && env.AG_LLM_LIVE_KEY != '' && env.AG_LLM_LIVE_MODEL != '' }}
+        working-directory: services/agent-orchestrator
+        env:
+          AG_LLM_LIVE: "1"
+          AG_LLM_LIVE_KEY_ENV: AG_LLM_LIVE_KEY
+          AG_REQUIRE_COMPONENTS: ag-server-binary,model
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips-live.jsonl
+        run: AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server go test -count=1 -v -run 'Live' ./internal/llm ./internal/advisor ./internal/review ./internal/semindex ./internal/app
+      - name: Skipped tests (live)
+        if: ${{ github.ref == 'refs/heads/main' && env.AG_LLM_LIVE_KEY != '' && env.AG_LLM_LIVE_MODEL != '' && !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/orchestrator-live --report "$RUNNER_TEMP/skips-live.jsonl"
+      # The worked example of docs/guides/orchestrator.md is a script: it must keep running against a real ag-server
+      # (it builds the demo agent, files tasks, runs the orchestrator, plays the people, checks policy refusals).
+      - name: the worked example runs end to end
+        working-directory: services/agent-orchestrator
+        run: |
+          go build -o "$RUNNER_TEMP/orchestrator" ./cmd/orchestrator
+          ORCHESTRATOR_BIN="$RUNNER_TEMP/orchestrator" AG_SERVER_BIN="$GITHUB_WORKSPACE/target/debug/ag-server" sh examples/worked-example.sh | tee "$RUNNER_TEMP/worked-example.txt"
+          grep -q "orchestrator stopped" "$RUNNER_TEMP/worked-example.txt"
+      # The shipped image: builds, carries the version it was given, and reads the example configuration.
+      - name: the image builds and starts
+        run: |
+          docker build --build-arg VERSION="ci-${GITHUB_SHA}" -t agentgit/agent-orchestrator:ci services/agent-orchestrator
+          docker run --rm agentgit/agent-orchestrator:ci version | grep -q "ci-${GITHUB_SHA}"
+          docker run --rm -v "$GITHUB_WORKSPACE/services/agent-orchestrator/examples:/etc/orchestrator:ro" agentgit/agent-orchestrator:ci config -config /etc/orchestrator/orchestrator.yaml | grep -q "docs-bot"
+
+  # The completion scripts must parse in the shells they are for. A missing shell fails the run (AG_REQUIRE_COMPONENTS=shell)
+  # instead of being skipped; PowerShell is on the runner image, zsh and fish are installed here.
+  shells:
+    timeout-minutes: 20
+    name: shell completions (bash, zsh, fish, PowerShell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-workspace-crates: true
+          shared-key: linux-debug
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh fish
+      - name: The scripts parse; bash completes real commands; the shipped copies are current
+        run: cargo test -p agentgit-cli --test completions
+        env:
+          AG_REQUIRE_COMPONENTS: shell,bash,git
+          AG_SKIP_REPORT: ${{ runner.temp }}/skips.jsonl
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/shells --report "$RUNNER_TEMP/skips.jsonl"
+
+  # ag-mcp with an agent in front of it: the scripted client (no model) runs on every push; the run with a real
+  # model is opt-in (it costs money and CI has no key unless the repository defines the OPENROUTER_API_KEY secret
+  # and the AG_LLM_MODEL variable; forks and pull requests from forks have neither, so the step is skipped).
+  mcp:
+    timeout-minutes: 20
+    needs: tools
+    name: MCP server with an agent (scripted; live model opt-in)
+    runs-on: ubuntu-latest
+    env:
+      AG_LLM_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AG_LLM_MODEL: ${{ vars.AG_LLM_MODEL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: full-ci-tools
+          path: target/debug
+      - name: Restore checked tools
+        working-directory: target/debug
+        run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
+      - name: The examples compile
+        run: python3 -m py_compile examples/agents/*.py
+      - name: Scripted agent against a real ag-server (claim, lease, edit, propose, refusals, human integrates)
+        run: python3 examples/agents/mcp_scripted_agent.py --ag-server target/debug/ag-server --ag-mcp target/debug/ag-mcp
+      - name: Real model against ag-mcp (only when a key and a model are configured)
+        if: ${{ env.AG_LLM_API_KEY != '' && env.AG_LLM_MODEL != '' && github.event_name == 'push' }}
+        env:
+          AG_LIVE_LLM: "1"
+        run: python3 examples/agents/mcp_llm_agent.py --ag-server target/debug/ag-server --ag-mcp target/debug/ag-mcp
+
+  # The lightweight scripts must keep running on an older Python (the reviewer's laptop had 3.9, and
+  # `str | None` annotations broke scripts/e2e_smoke.py there). The interpreter comes from uv (already pinned
+  # above); the scripts that read TOML (tomllib, 3.11+) are tested by the jobs that need them.
+  scripts-py39:
+    timeout-minutes: 10
+    name: lightweight scripts on Python 3.9
+    runs-on: ubuntu-latest
+    env:
+      AG_REQUIRE_COMPONENTS: dash
+      AG_SKIP_REPORT: /tmp/ag-skips.jsonl  # the runner context is not available in a job-level env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - name: Python 3.9 with PyYAML
+        run: |
+          uv venv --python 3.9 "$RUNNER_TEMP/py39"
+          uv pip install --python "$RUNNER_TEMP/py39/bin/python" pyyaml
+          "$RUNNER_TEMP/py39/bin/python" --version
+      - name: Unit tests of the scripts
+        run: |
+          set -e
+          for t in test_py39_compat test_ag_testkit test_check_skips test_check_no_stubs test_doc_snippets \
+                   test_mkdocs_hooks test_ci_policy test_release_candidate test_release_scripts test_sbom_release test_sbom_npm test_codeql_summary \
+                   test_check_workflows test_web_e2e_workflow test_request_release test_check_dependabot; do
+            echo "== $t"
+            "$RUNNER_TEMP/py39/bin/python" "scripts/$t.py"
+          done
+      - name: The allow-list and the source scan
+        run: |
+          "$RUNNER_TEMP/py39/bin/python" scripts/check_skips.py --validate --scan
+      - name: Skipped tests
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_skips.py --job ci/scripts-py39 --report /tmp/ag-skips.jsonl

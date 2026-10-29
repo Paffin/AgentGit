@@ -2,7 +2,7 @@
 
 What AgentGit checks about the code it depends on, where each check runs, how to reproduce it on a laptop, and what
 is *not* covered. The workflow is [`.github/workflows/security.yml`](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/security.yml);
-it runs on every push to `main`, on every pull request and once a day (the advisory databases change without any
+dependency changes get immediate, path-scoped audits; full audits run in qualification and nightly (the advisory databases change without any
 commit of ours), and can be started by hand.
 
 ## The gates
@@ -71,7 +71,7 @@ is pinned to a commit of `master` and selects the toolchain with its `toolchain:
 
 [`.github/workflows/codeql.yml`](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/codeql.yml) analyses
 the four languages of the repository (Rust, JavaScript/TypeScript, Python, Go) with the `security-extended` query suite
-on every push to `main`, every pull request and once a week (the queries change without any commit of ours). Rust,
+during full qualification and nightly (the queries change without any commit of ours). Rust,
 TypeScript and Python are analysed without a build; the Go module is built by hand because it sits in a
 subdirectory. Generated files are excluded (`.github/codeql/codeql-config.yml`), tests are not.
 
@@ -94,7 +94,7 @@ ecosystem the repository has a manifest for: `cargo` (the workspace and `fuzz/`)
 pull request, major updates one by one. `scripts/check_dependabot.py` (run by the Security workflow) fails when a
 manifest is not covered by an entry of its ecosystem, or an entry names a directory that does not exist. A
 Dependabot pull request is a proposal: the
-Security, CI and CodeQL runs on it are the evidence, a maintainer merges.
+fast CI and dependency audits are immediate evidence; full CodeQL and qualification run before publication. A maintainer merges.
 
 Two deliberate gaps: `docs/requirements.txt` is hash-locked by `uv pip compile` and refreshed by hand (a `pip`
 update would rewrite versions without their hashes), and the toolchain pins in workflows (`toolchain: 1.89.0`,

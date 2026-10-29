@@ -27,28 +27,28 @@ component = "postgres"
 jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
 reason = "The ordinary test jobs have no PostgreSQL server; every suite that needs one runs in the backends job."
 owner = "storage"
-runs_for_real = "ci.yml backends (scripts/pg-test.sh; AG_REQUIRE_COMPONENTS=postgres,s3)"
+runs_for_real = "full-ci.yml backends (scripts/pg-test.sh; AG_REQUIRE_COMPONENTS=postgres,s3)"
 
 [[skip]]
 component = "postgres:tls"
 jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
 reason = "No PostgreSQL server in this job; the TLS legs need one with ssl=on."
 owner = "storage"
-runs_for_real = "ci.yml backends (scripts/pg-test.sh starts a server with a private CA)"
+runs_for_real = "full-ci.yml backends (scripts/pg-test.sh starts a server with a private CA)"
 
 [[skip]]
 component = "s3"
 jobs = ["ci/test-*", "quality/coverage", "windows/windows"]
 reason = "The ordinary test jobs have no S3 server; every suite that needs one runs in the backends job."
 owner = "storage"
-runs_for_real = "ci.yml backends (moto, then SeaweedFS; AG_REQUIRE_COMPONENTS=postgres,s3)"
+runs_for_real = "full-ci.yml backends (moto, then SeaweedFS; AG_REQUIRE_COMPONENTS=postgres,s3)"
 
 [[skip]]
 component = "s3-tls"
 jobs = ["ci/test-*", "quality/coverage", "windows/windows", "ci/backends-moto"]
 reason = "moto serves plain HTTP only; the TLS tests of the S3 client need a server with a private CA."
 owner = "storage"
-runs_for_real = "ci.yml backends, the SeaweedFS legs (AG_REQUIRE_COMPONENTS includes s3-tls there)"
+runs_for_real = "full-ci.yml backends, the SeaweedFS legs (AG_REQUIRE_COMPONENTS includes s3-tls there)"
 
 [[skip]]
 component = "keycloak"
@@ -76,14 +76,14 @@ component = "shell:*"
 jobs = ["ci/test-*", "ci/backends-*", "quality/coverage", "windows/windows"]
 reason = "zsh, fish and PowerShell are not on every runner image; the shells job installs them."
 owner = "cli"
-runs_for_real = "ci.yml shells (AG_REQUIRE_COMPONENTS=shell)"
+runs_for_real = "full-ci.yml shells (AG_REQUIRE_COMPONENTS=shell)"
 
 [[skip]]
 component = "namespace-sandbox"
 jobs = ["ci/test-macos", "windows/windows"]
 reason = "The namespace sandbox is Linux-only; macOS and Windows have no user namespaces."
 owner = "sandbox"
-runs_for_real = "ci.yml test (ubuntu; AG_REQUIRE_COMPONENTS includes namespace-sandbox) and the cgroup job"
+runs_for_real = "full-ci.yml test (ubuntu; AG_REQUIRE_COMPONENTS includes namespace-sandbox) and the cgroup job"
 
 [[skip]]
 component = "mkdocs"
@@ -99,7 +99,7 @@ component = "model"
 jobs = ["ci/orchestrator"]
 reason = "Live-model tests are opt-in by design: they cost money and need a secret that forks and pull requests do not have."
 owner = "orchestrator"
-runs_for_real = "ci.yml orchestrator, the live step (a push, when OPENROUTER_API_KEY and AG_LLM_MODEL are defined; AG_REQUIRE_COMPONENTS=ag-server-binary,model)"
+runs_for_real = "full-ci.yml orchestrator, the live step (a push, when OPENROUTER_API_KEY and AG_LLM_MODEL are defined; AG_REQUIRE_COMPONENTS=ag-server-binary,model)"
 
 [[skip]]
 component = "n/a:host-privilege"
@@ -120,7 +120,7 @@ component = "n/a:s3-clock"
 jobs = ["ci/backends-*"]
 reason = "S3 objects age on the server's clock, which a test cannot move forward; the guarantee is tested in real time by the _on_s3 counterpart."
 owner = "storage"
-runs_for_real = "ci.yml backends: rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3"
+runs_for_real = "full-ci.yml backends: rewriting_an_old_unreachable_object_saves_it_from_a_concurrent_gc_on_s3"
 
 [[skip]]
 component = "n/a:doc-pages-needing-ag-server"
@@ -134,14 +134,14 @@ component = "platform:windows"
 jobs = ["windows/windows"]
 reason = "The harnesses drive bash; Windows has the PowerShell demo (the_powershell_demo_script_passes) instead."
 owner = "cli"
-runs_for_real = "ci.yml test (ubuntu, macOS): the same tests with bash; windows.yml runs the PowerShell variants"
+runs_for_real = "full-ci.yml test (ubuntu, macOS): the same tests with bash; windows.yml runs the PowerShell variants"
 
 [[skip]]
 component = "n/a:python-version"
 jobs = ["ci/sdk*"]
 reason = "typing.get_overloads, which this test inspects, exists from Python 3.11; the SDK supports 3.10."
 owner = "sdk"
-runs_for_real = "ci.yml sdk and sdk-runtimes on Python 3.11 and later"
+runs_for_real = "full-ci.yml sdk and sdk-runtimes on Python 3.11 and later"
 
 # ---- skip constructs that are not the helper ------------------------------------------------------------------
 

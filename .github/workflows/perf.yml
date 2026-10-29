@@ -1,32 +1,12 @@
 name: Performance
 
-# Timings are measurements, not thresholds; functional failures gate (docs/operations/performance.md). The smoke variant
-# proves on every change to the engine, the server or the tool that the benchmark and the load generator still run
-# end to end; its numbers come from a shared 4-vCPU runner and are uploaded as artifacts, never compared with a
-# threshold. The full sizes (1k/10k/100k files; 20 s of load per scenario at 16 writers and 100 subscribers) run
-# weekly and by hand, on the same kind of runner, and are the numbers to compare with the published ones.
-#
-#   smoke   ag-bench engine --sizes 1000,10000 and ag-bench load --profile smoke. Correctness gates; timings do not.
-#   full    ag-bench engine (1k/10k/100k, memory and disk) and ag-bench load --profile full. Weekly and by hand.
-
+# Bounded performance qualification plus extended weekly/manual measurements.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "crates/ag-bench/**"
-      - "crates/ag-server/**"
-      - "crates/ag-integrate/**"
-      - "crates/ag-merge/**"
-      - "crates/ag-tree/**"
-      - ".github/workflows/perf.yml"
-  pull_request:
-    paths:
-      - "crates/ag-bench/**"
-      - "crates/ag-server/**"
-      - "crates/ag-integrate/**"
-      - "crates/ag-merge/**"
-      - "crates/ag-tree/**"
-      - ".github/workflows/perf.yml"
+  workflow_call:
+    inputs:
+      extended:
+        type: boolean
+        default: false
   schedule:
     - cron: "41 4 * * 1"
   workflow_dispatch:
@@ -35,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: perf-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: perf-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -44,7 +24,7 @@ env:
 jobs:
   smoke:
     name: smoke (correctness)
-    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    if: ${{ !inputs.extended && github.workflow != 'Performance' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     # No latency/throughput thresholds: fail only on an unsuccessful run, including integrity violations.
@@ -57,6 +37,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           key: perf
       - name: Build the server and the tool (release)
         run: cargo build --locked --release -p agentgit-server -p agentgit-bench
@@ -84,7 +65,7 @@ jobs:
 
   full:
     name: full (weekly, by hand)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: inputs.extended || github.workflow == 'Performance'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -96,6 +77,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           key: perf
       - run: cargo build --locked --release -p agentgit-server -p agentgit-bench
       - name: Engine benchmark, in memory

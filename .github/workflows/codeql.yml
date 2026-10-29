@@ -1,23 +1,16 @@
 name: CodeQL
 
-# Static analysis of the code we write, in the four languages of the repository. The findings appear under
-# Security -> Code scanning; the job log prints a summary of what the analysis found, so a run can be read without
-# the Security tab. What runs where and how to triage an alert: docs/operations/supply-chain.md.
-
+# Static analysis runs in qualification; regular edits use fast component CI.
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "31 3 * * 2"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: codeql-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: codeql-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
@@ -29,6 +22,7 @@ jobs:
       security-events: write # upload the SARIF results
       actions: read
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:

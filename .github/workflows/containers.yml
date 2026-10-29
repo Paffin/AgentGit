@@ -1,67 +1,15 @@
 name: Containers
 
-# Proves that "install it and run it" works, with the files in deploy/ and not just with their syntax:
-#
-#   image       builds deploy/docker/Dockerfile (buildx + the gha layer cache; the `ui` stage builds the Web UI that
-#               ag-server embeds), checks size, user, health check and `--version`, runs it hardened (read-only
-#               root, no capabilities), checks that it serves the Web UI, and drives the end-to-end smoke
-#               (scripts/e2e_smoke.py) against it; its artifacts feed the next two jobs
-#
-# This is the only place images are built on push/PR: ci.yml used to repeat the build in an `images` job (a second
-# cache scope and the same two builds), which is why it is gone. The path filters below are what the image is
-# made of, so a change that cannot alter an image does not build one.
-#   cache       a fresh runner rebuilds from the gha cache and must find the expensive layers CACHED
-#   compose     `docker compose up` of deploy/compose (server + PostgreSQL + SeaweedFS (S3)), the same smoke against it
-#               (repository metadata in PostgreSQL, objects in an S3 bucket), a restart, then the observability profile
-#   kubernetes  a kind cluster, deploy/kubernetes (base through the ci overlay), the same smoke through
-#               `kubectl port-forward`, a rollout restart
-#
-# The smoke is a real integration: create a repository, grant roles, mint credentials, `ag clone`, snapshot,
-# `ag push`, integrate through the server, read the result back over the HTTP API, and assert the metrics.
-
+# Container build, cache and deployment smoke checks for qualification or explicit runs.
 on:
-  push:
-    branches: [main]
-    paths:
-      # A release request requires this workflow on the exact main commit.
-      - "CHANGELOG.md"
-      - "deploy/**"
-      - "crates/**"
-      - "proto/**"
-      - "migrations/**"
-      - "apps/web/**"
-      - "scripts/build_ui.sh"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "LICENSE"
-      - "NOTICE"
-      - ".dockerignore"
-      - "scripts/e2e_*.py"
-      - "scripts/check_buildx_cache.py"
-      - ".github/workflows/containers.yml"
-  pull_request:
-    paths:
-      - "deploy/**"
-      - "crates/**"
-      - "proto/**"
-      - "migrations/**"
-      - "apps/web/**"
-      - "scripts/build_ui.sh"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "LICENSE"
-      - "NOTICE"
-      - ".dockerignore"
-      - "scripts/e2e_*.py"
-      - "scripts/check_buildx_cache.py"
-      - ".github/workflows/containers.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: containers-${{ github.ref }}
+  group: containers-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 env:

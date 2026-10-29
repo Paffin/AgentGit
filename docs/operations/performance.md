@@ -182,7 +182,7 @@ gRPC clients got through far more refused requests per second in this run; this 
 
 [`perf.yml`](../../.github/workflows/perf.yml) runs on changes to the server, the engine and the tool:
 
-* **smoke** (every push to `main` and pull request touching the tool, server, integration, merge or tree code): the
+* **smoke** (during full qualification): the
   engine benchmark at 1 000 and 10 000 files and `ag-bench load --profile smoke`, release builds. Failed runs,
   including integrity-check failures, fail the job; latency and throughput have no thresholds. The results are in
   the job summary and uploaded as the `perf-smoke` artifact, including on failure when available.

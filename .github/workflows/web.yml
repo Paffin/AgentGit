@@ -1,7 +1,6 @@
 name: Web UI
 
-# The Web UI (apps/web) has its own checks. They run when the UI, the API description it is generated from,
-# or the server it is tested against change.
+# Fast lint/types/unit/build feedback; full browser/identity-provider coverage during qualification.
 on:
   push:
     branches: [main]
@@ -26,16 +25,27 @@ on:
       - "scripts/test_web_e2e_workflow.py"
       - "tests/skip-allowlist.toml"
       - ".github/workflows/web.yml"
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      full:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: web-${{ github.ref }}
+  group: web-${{ github.ref }}-${{ inputs.full && 'full' || 'fast' }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
   checks:
+    timeout-minutes: 15
     name: lint, types, unit tests, build
     runs-on: ubuntu-latest
     defaults:
@@ -60,8 +70,10 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Keep the checked production UI for the server build
+        if: inputs.full
         run: tar -czf "$RUNNER_TEMP/web-dist.tar.gz" dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: inputs.full
         with:
           name: web-production-ui
           path: ${{ runner.temp }}/web-dist.tar.gz
@@ -69,6 +81,7 @@ jobs:
           retention-days: 3
 
   server-build:
+    if: inputs.full
     name: build the embedded server once
     runs-on: ubuntu-24.04
     needs: checks
@@ -84,6 +97,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           shared-key: web-e2e
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -112,6 +126,7 @@ jobs:
   # accessibility specs at tablet and phone size (Chromium). Nothing is quarantined: a failure is a bug or a
   # documented engine difference (docs/guides/web-ui.md, "Verified where").
   e2e:
+    if: inputs.full
     name: end-to-end (${{ matrix.project }})
     runs-on: ubuntu-24.04
     needs: [checks, server-build]
@@ -120,6 +135,7 @@ jobs:
       options: --ipc=host
     timeout-minutes: 40
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -195,6 +211,7 @@ jobs:
   # provider will not produce on request (a wrong state, a bad nonce, a forged signature); it is a test double and
   # is documented as one.
   identity-provider:
+    if: inputs.full
     name: real identity provider (Keycloak)
     runs-on: ubuntu-latest
     needs: checks
@@ -220,6 +237,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          cache-workspace-crates: true
           shared-key: web-e2e
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

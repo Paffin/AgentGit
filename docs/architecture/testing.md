@@ -1,5 +1,14 @@
 # Testing
 
+## Continuous feedback and qualification
+
+Normal PRs and main commits use path-aware fast CI: Linux Rust unit/core-storage contracts, SDK checks against one shared server build when API/SDK files change, Go contracts when the executor changes, and offline workflow checks when tooling changes. Web changes run lint, types, unit tests and a production build; documentation changes build the site. Unrelated changes do not start Rust or cross-platform builds. On main, selection covers all changes since the last successful run, so cancelling an earlier run cannot drop its pending checks. Unknown paths or unavailable Git/API history conservatively select all fast components.
+
+The full matrix runs through `qualification.yml` on demand, nightly, and during release preparation: macOS, Windows, Linux coverage (which also executes the full Linux suite), PostgreSQL/S3/HA, all SDK runtimes, CLI examples, all browser engines/viewports, CodeQL, fuzzing, OCI runtimes, packaging and performance checks. SDK/runtime jobs share one verified server/CLI/MCP build. Coverage supplies Linux full-suite correctness, so it is not also run as a separate identical Linux test job.
+
+Stale validation runs are cancelled. Explicitly pinned release candidates use separate refs and continue while main advances. Release publication promotes prepared, attested bytes and does not add a third full Rust run. See [Releasing](../operations/releasing.md) for the ready-candidate contract and publication time budget.
+
+
 What the tests of AgentGit are, which of them run where, how much of the code they reach, how many wrong
 versions of the code they notice, and what a green build still does not tell you. The commands are the ones CI runs;
 every number below was measured on the date given and is reproducible with the command next to it.
@@ -8,17 +17,17 @@ every number below was measured on the date given and is reproducible with the c
 
 | Layer | What it proves | Run it | Where it runs in CI |
 |---|---|---|---|
-| Unit and property tests | one function or type; invariants over generated inputs (`proptest`: determinism, round trips, "applying the diff gives the target") | `cargo test --workspace` | [CI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/ci.yml) *test*, Ubuntu and macOS; [Windows](../operations/windows.md) for the CLI, client and server |
+| Unit and property tests | one function or type; invariants over generated inputs (`proptest`: determinism, round trips, "applying the diff gives the target") | `cargo test --workspace` | [fast CI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/ci.yml) for Linux unit/core contracts; full Linux coverage, macOS and [Windows](../operations/windows.md) during qualification |
 | Crate integration suites | a crate through its public API: the sandbox against the real kernel (`AG_REQUIRE_COMPONENTS=namespace-sandbox`), the engine against a real store, the policy cookbook against the real parser | the same | the same |
 | Cross-implementation conformance | the byte formats against an independent encoder written in Python (`tests/conformance/`) | the same | the same |
 | Compatibility | data written by **older builds** still opens and means the same ([Compatibility](compatibility.md)) | `cargo test -p agentgit-integrate --test compat; cargo test -p agentgit-server --test compat_control` | the same |
-| Backends | every suite on PostgreSQL 16 and on S3 objects (moto, and SeaweedFS, a real S3 server) | `scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace` | CI *PostgreSQL + S3 backends* |
-| End to end | the README demo, every command of the tutorials, the docs against the code | `examples/quickstart.sh`; `python3 scripts/check_docs.py` | CI *generated docs + demo*, *shells* |
-| Clients | the TypeScript and Python SDKs and the Go orchestrator against a **real** `ag-server`; the web UI in a real browser | `npm test` in `sdk/typescript`, `pytest` in `sdk/python`, `go test ./...` | CI *client SDKs*, *agent orchestrator*; [Web UI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/web.yml) |
-| Images and manifests | the images build and start, the Compose stack serves, the Kubernetes manifests validate | - | [Containers](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/containers.yml) and CI *deployment files* (path-filtered) |
+| Backends | every suite on PostgreSQL 16 and on S3 objects (moto, and SeaweedFS, a real S3 server) | `scripts/pg-test.sh scripts/s3-test.sh cargo test --workspace` | Qualification: Full CI *PostgreSQL + S3 backends* |
+| End to end | the README demo, every command of the tutorials, the docs against the code | `examples/quickstart.sh`; `python3 scripts/check_docs.py` | Qualification: Full CI *generated docs + demo*, *shells* |
+| Clients | the TypeScript and Python SDKs and the Go orchestrator against a **real** `ag-server`; the web UI in a real browser | `npm test` in `sdk/typescript`, `pytest` in `sdk/python`, `go test ./...` | Fast component checks and qualification SDK/runtime matrix; [Web UI](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/web.yml) |
+| Images and manifests | the images build and start, the Compose stack serves, the Kubernetes manifests validate | - | [Containers](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/containers.yml) and Full CI *deployment files* during qualification |
 | Supply chain | advisories, licences, pinned actions, CodeQL ([Supply chain](../operations/supply-chain.md)) | - | [Security](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/security.yml), [CodeQL](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/codeql.yml) |
-| Fuzzing | the parsers and decoders against hostile bytes ([Fuzzing](security.md#fuzzing)) | `fuzz/run.sh 300` | [Fuzz](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/fuzz.yml): 60 s per target on changes, 15 minutes nightly |
-| Coverage and mutation | how much of the code the tests reach, and whether they notice a wrong version of it (below) | `cargo llvm-cov --workspace`; `cargo mutants -p agentgit-merge` | [Quality](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/quality.yml): coverage on changes and weekly, mutation weekly and by hand |
+| Fuzzing | the parsers and decoders against hostile bytes ([Fuzzing](security.md#fuzzing)) | `fuzz/run.sh 300` | [Fuzz](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/fuzz.yml): 60 s per target during qualification, 15 minutes nightly |
+| Coverage and mutation | how much of the code the tests reach, and whether they notice a wrong version of it (below) | `cargo llvm-cov --workspace`; `cargo mutants -p agentgit-merge` | [Quality](https://github.com/Paffin/AgentGit/blob/main/.github/workflows/quality.yml): full-suite coverage during qualification, mutation weekly and by hand |
 
 **How many.** `cargo test --workspace` ran **1 036 tests** (and ignored 3, which are measurements run on request, not
 tests) in the CI *test* job on Ubuntu for commit `148a98c`
@@ -177,7 +186,7 @@ remains is listed here, each with the reason it cannot be real, and exists only 
   the mutation runs above show where it was weak and was fixed; nothing here shows the absence of bugs.
 * **Coverage is measured for Rust only**; the TypeScript, Python and Go code is tested but has no coverage number.
   Mutation testing covers five crates, not the server, the engine or the CLI.
-* **Not run on every push:** the nightly fuzzing, the weekly mutation runs and CodeQL's weekly schedule. A change
+* **Not run on every push:** full qualification, fuzzing, mutation testing, cross-platform integration and CodeQL. A change
   can be merged between two of them.
 * **Platforms:** Linux and macOS run the whole suite; Windows runs the CLI, client and server ([Windows](../operations/windows.md)).
   The namespace sandbox is Linux-only. Real Docker and Podman runtimes are exercised only where

@@ -7,6 +7,11 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ## [Unreleased]
 
+### Improved
+
+- Use component-specific fast CI for ordinary commits and cancel superseded work. Run the full platform/backend/browser/security matrix during qualification, reuse one server build for SDK runtimes, and retain compiled workspace caches.
+- Separate release preparation from publication. Promote the exact prepared and attested archives/images without rebuilding or repeating the Rust suite, with a three-minute publishing job and two-minute parallel public-install checks. Cold preparation and runner queues remain outside the five-minute ready-candidate publication target.
+
 ## [0.3.0-beta.7] - 2026-10-29
 
 **Upgrade:** metadata schema 8 and control schema are unchanged from beta.6. Back up before upgrading. Returning to beta.5 or older requires the pre-upgrade backup.

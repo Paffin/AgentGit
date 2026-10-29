@@ -2189,11 +2189,13 @@ Their output *is* the data (file contents, a template, a script, a man page, hel
 
 ```json
 {
+  "attempts_started": "number",
   "created_at_ms": "number",
   "created_by": "string",
   "depends_on": [],
   "description": "string",
   "id": "string",
+  "max_attempts": "number",
   "owner": "string",
   "ready": "bool",
   "scope": [],

@@ -13,6 +13,8 @@ pub mod explain;
 pub mod file_drafts;
 pub mod flow;
 pub mod gitbridge;
+pub mod hosting_export;
+pub mod issue_import;
 pub mod login;
 pub mod overview;
 pub mod policy;

@@ -13,6 +13,8 @@ use crate::exit;
 
 #[derive(Subcommand, Debug)]
 pub enum GitCmd {
+    /// Export GitHub/GitLab issues and comments to a normalized import manifest.
+    ExportIssues(super::hosting_export::ExportArgs),
     /// Import a Git repository's history into a new stream.
     Import {
         /// Path of the Git repository.
@@ -38,6 +40,7 @@ pub enum GitCmd {
 
 pub fn git(ctx: &Ctx, cmd: &GitCmd) -> Result<u8> {
     match cmd {
+        GitCmd::ExportIssues(_) => unreachable!("export-issues runs without a repository"),
         GitCmd::Import { path, rev, stream } => {
             let rep = ag_git::import(
                 &ctx.repo,
@@ -247,4 +250,21 @@ fn migration_summary(report: &ag_git::MigrationReport, destination: &std::path::
         text.push_str("\nOriginal source unchanged; archive and report: .ag/import/.\nNext: open the destination directory and run `ag status`.");
     }
     text
+}
+
+/// Export hosting metadata without requiring a local AgentGit repository.
+pub fn export_issues(cli: &crate::Cli, args: &super::hosting_export::ExportArgs) -> Result<u8> {
+    let report = super::hosting_export::export_issues(args)?;
+    if !cli.quiet || cli.json {
+        crate::ctx::emit(cli.json, &report, || {
+            format!(
+                "Exported {} issues and {} comments to {}.\nUnsupported source features: {}",
+                report.issues,
+                report.comments,
+                report.output.display(),
+                report.unsupported.join(", ")
+            )
+        })?;
+    }
+    Ok(exit::OK)
 }

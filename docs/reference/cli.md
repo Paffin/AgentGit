@@ -112,6 +112,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag reindex`](#ag-reindex)
 - [`ag backup`](#ag-backup)
 - [`ag git`](#ag-git)
+- [`ag git export-issues`](#ag-git-export-issues)
 - [`ag git import`](#ag-git-import)
 - [`ag git export`](#ag-git-export)
 - [`ag clone`](#ag-clone)
@@ -156,6 +157,7 @@ Concept pages are available in the terminal: `ag help workflow|policy|leases|ide
 - [`ag remote workspace delete`](#ag-remote-workspace-delete)
 - [`ag remote integrate`](#ag-remote-integrate)
 - [`ag remote close`](#ag-remote-close)
+- [`ag remote import-issues`](#ag-remote-import-issues)
 - [`ag remote streams`](#ag-remote-streams)
 - [`ag remote events`](#ag-remote-events)
 - [`ag remote policy`](#ag-remote-policy)
@@ -2356,8 +2358,9 @@ Import from or export to Git (needs the `git` command)
 Usage: ag git [OPTIONS] <COMMAND>
 
 Commands:
-  import  Import a Git repository's history into a new stream
-  export  Export a stream's history to a Git repository (created if missing)
+  export-issues  Export GitHub/GitLab issues and comments to a normalized import manifest
+  import         Import a Git repository's history into a new stream
+  export         Export a stream's history to a Git repository (created if missing)
 
 Options:
   -C, --repo <DIR>     Operate on the repository at this path (default: discovered from the current directory)
@@ -2368,6 +2371,28 @@ Options:
   -v, --verbose        Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help           Print help
   -V, --version        Print version
+```
+
+## ag git export-issues
+
+```text
+Export GitHub/GitLab issues and comments to a normalized import manifest
+
+Usage: ag git export-issues [OPTIONS] --provider <PROVIDER> --source <SOURCE> --output <OUTPUT>
+
+Options:
+  -C, --repo <DIR>           Operate on the repository at this path (default: discovered from the current directory)
+      --provider <PROVIDER>  Source hosting provider [possible values: github, gitlab]
+      --as <IDENTITY>        Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --source <SOURCE>      Repository path, for example owner/repo or group/subgroup/repo
+      --host <HOST>          GitLab HTTPS origin, for example https://gitlab.example.com
+      --json                 Machine-readable JSON output
+      --color <WHEN>         Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+      --output <OUTPUT>      New manifest file. An existing file is never replaced
+  -q, --quiet                Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose              Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 ## ag git import
@@ -2534,6 +2559,7 @@ Commands:
   workspace      Inspect and explicitly sync server-side workspaces without a checkout
   integrate      Integrate a proposal into its stream
   close          Close a proposal without integrating it
+  import-issues  Preview or explicitly apply a normalized GitHub/GitLab issue manifest
   streams        List streams
   events         Show the events of the repository (replay), or follow them live
   policy         Show or set a stream's policy
@@ -3508,6 +3534,29 @@ Options:
   -v, --verbose          Explain what is happening on standard error: repository, identity, remote, timing
   -h, --help             Print help
   -V, --version          Print version
+```
+
+## ag remote import-issues
+
+```text
+Preview or explicitly apply a normalized GitHub/GitLab issue manifest
+
+Usage: ag remote import-issues [OPTIONS] --file <PATH>
+
+Options:
+  -C, --repo <DIR>                Operate on the repository at this path (default: discovered from the current directory)
+      --file <PATH>               Normalized GitHub/GitLab issue manifest (UTF-8 JSON, at most 4 MiB)
+      --remote <REMOTE>           Remote to use (default: origin)
+      --apply                     Apply the manifest instead of only previewing it
+      --as <IDENTITY>             Act as this identity (`user:alice`, `agent:bot#run_…`, `service:ci`). Also: AG_IDENTITY
+      --expected-digest <DIGEST>  Exact digest returned by the preview of this manifest
+      --json                      Machine-readable JSON output
+      --allow-unsupported         Acknowledge unsupported source features listed in the preview
+      --color <WHEN>              Colour the output: auto (a terminal, unless NO_COLOR is set), always or never
+  -q, --quiet                     Print only what was asked for: no confirmations or hints. Errors and refusals are still shown
+  -v, --verbose                   Explain what is happening on standard error: repository, identity, remote, timing
+  -h, --help                      Print help
+  -V, --version                   Print version
 ```
 
 ## ag remote streams

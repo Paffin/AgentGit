@@ -71,10 +71,10 @@ fn print_event(cli: &Cli, envelope: &v1::EventEnvelope) -> Result<()> {
     let line = if cli.json {
         serde_json::to_string(envelope)?
     } else {
-        format!(
+        crate::ctx::sanitize_for_terminal(&format!(
             "{}  {:>6}  {}  {}\nCursor: {}",
             event.repo, event.seq, event.topic, event.payload_json, envelope.cursor
-        )
+        ))
     };
     // Flush before advancing the checkpoint so a failed output cannot lose an event.
     crate::ui::print_bytes(format!("{line}\n").as_bytes());

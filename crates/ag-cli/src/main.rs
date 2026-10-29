@@ -292,6 +292,7 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
     match &cli.command {
         Init(args) => return cmds::repo::init(&cli, args),
         Migrate(args) => return cmds::gitbridge::migrate(&cli, args),
+        Git(cmds::gitbridge::GitCmd::ExportIssues(args)) => return cmds::gitbridge::export_issues(&cli, args),
         Clone(args) => return cmds::remote::clone(&cli, args),
         Remote(args) => return cmds::remote::remote(&cli, args),
         Login(a) => return cmds::login::login(&cli, a),

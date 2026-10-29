@@ -155,6 +155,32 @@ and checkpoints advance the checkpoint file without appearing as user actions. C
 are replaced atomically after output is flushed; a failed output does not advance past the
 unwritten event. Resume with the same options after a disconnect.
 
+## Import hosting issues and comments
+
+First export a normalized manifest without needing a local AgentGit repository. The exporter
+reads `GITHUB_TOKEN` or `GITLAB_TOKEN` from the environment when required for source access;
+credentials are never written to the manifest. For a self-hosted GitLab, add `--host https://gitlab.example.com`.
+
+```sh
+ag git export-issues --provider github --source owner/repo --output issues.json
+ag git export-issues --provider gitlab --source group/repo --output gitlab-issues.json
+ag remote import-issues --file issues.json
+# After reviewing counts, warnings, conflicts and the returned digest:
+ag remote import-issues --file issues.json --apply --expected-digest DIGEST --allow-unsupported
+```
+
+`import-issues` previews by default on development servers advertising `issues.import`.
+Applying requires the exact preview digest; it never silently accepts a changed manifest.
+Repeating an unchanged import skips already imported issues; changed source records require
+review rather than overwriting earlier imports. Original authors, source links and timestamps
+are retained as visible provenance, while the importing account remains the AgentGit actor.
+
+The initial importer accepts at most 100 issues, 1000 comments and 4 MiB of UTF-8 JSON. It keeps
+open/closed state and user comments. Labels, assignees, milestones, reactions, attachment files,
+pull/merge requests, releases, permissions and edit history are outside this initial scope;
+GitLab system notes are omitted. Read the preview warnings before explicitly acknowledging
+these omissions with `--allow-unsupported`. An export never replaces an existing output file.
+
 ## Offline
 
 Nothing about a local repository needs the server:

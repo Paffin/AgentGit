@@ -869,6 +869,8 @@ pub enum RemoteCmd {
         /// Proposal id.
         id: String,
     },
+    /// Preview or explicitly apply a normalized GitHub/GitLab issue manifest.
+    ImportIssues(crate::cmds::issue_import::ImportArgs),
     /// List streams.
     Streams,
     /// Show the events of the repository (replay), or follow them live.
@@ -1357,6 +1359,14 @@ fn remote_online(cli: &Cli, root: &Path, remote_name: Option<&str>, cmd: &Remote
                     .map_err(s)?
                     .into_inner();
                 print_done(cli, &p, || format!("Closed {}.", p.id))?;
+            }
+            RemoteCmd::ImportIssues(args) => {
+                let result = crate::cmds::issue_import::run(&c, &repo, args).await?;
+                if args.apply {
+                    print_done(cli, &result, || crate::cmds::issue_import::describe(&result, true))?;
+                } else {
+                    print(cli, &result, || crate::cmds::issue_import::describe(&result, false))?;
+                }
             }
             RemoteCmd::Streams => {
                 let r = c.streams().list(c.req(v1::ListStreamsRequest { repo })).await.map_err(s)?.into_inner();

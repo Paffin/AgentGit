@@ -2123,7 +2123,30 @@ never\:"Never colour"))' \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:ag-git-command-$line[1]:"
         case $line[1] in
-            (import)
+            (export-issues)
+_arguments "${_arguments_options[@]}" : \
+'--provider=[Source hosting provider]:PROVIDER:(github gitlab)' \
+'--source=[Repository path, for example owner/repo or group/subgroup/repo]:SOURCE:_default' \
+'--host=[GitLab HTTPS origin, for example https\://gitlab.example.com]:HOST:_default' \
+'--output=[New manifest file. An existing file is never replaced]:OUTPUT:_files' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
+(import)
 _arguments "${_arguments_options[@]}" : \
 '--rev=[Revision to import]:REV:_default' \
 '--stream=[Stream to create for the imported history]:STREAM:_default' \
@@ -3180,6 +3203,30 @@ never\:"Never colour"))' \
 ':id -- Proposal id:_default' \
 && ret=0
 ;;
+(import-issues)
+_arguments "${_arguments_options[@]}" : \
+'--file=[Normalized GitHub/GitLab issue manifest (UTF-8 JSON, at most 4 MiB)]:PATH:_files' \
+'--expected-digest=[Exact digest returned by the preview of this manifest]:DIGEST:_default' \
+'--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
+'-C+[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--repo=[Operate on the repository at this path (default\: discovered from the current directory)]:DIR:_files' \
+'--as=[Act as this identity (\`user\:alice\`, \`agent\:bot#run_…\`, \`service\:ci\`). Also\: AG_IDENTITY]:IDENTITY:_default' \
+'--color=[Colour the output\: auto (a terminal, unless NO_COLOR is set), always or never]:WHEN:((auto\:"Colour when the stream is a terminal and neither \`NO_COLOR\` nor \`TERM=dumb\` says otherwise"
+always\:"Always colour"
+never\:"Never colour"))' \
+'--apply[Apply the manifest instead of only previewing it]' \
+'--allow-unsupported[Acknowledge unsupported source features listed in the preview]' \
+'--json[Machine-readable JSON output]' \
+'(-v --verbose)-q[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'(-v --verbose)--quiet[Print only what was asked for\: no confirmations or hints. Errors and refusals are still shown]' \
+'-v[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'--verbose[Explain what is happening on standard error\: repository, identity, remote, timing]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+&& ret=0
+;;
 (streams)
 _arguments "${_arguments_options[@]}" : \
 '--remote=[Remote to use (default\: origin)]:REMOTE:_default' \
@@ -3953,6 +4000,7 @@ _ag__subcmd__gc_commands() {
 (( $+functions[_ag__subcmd__git_commands] )) ||
 _ag__subcmd__git_commands() {
     local commands; commands=(
+'export-issues:Export GitHub/GitLab issues and comments to a normalized import manifest' \
 'import:Import a Git repository'\''s history into a new stream' \
 'export:Export a stream'\''s history to a Git repository (created if missing)' \
     )
@@ -3962,6 +4010,11 @@ _ag__subcmd__git_commands() {
 _ag__subcmd__git__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'ag git export commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__git__subcmd__export-issues_commands] )) ||
+_ag__subcmd__git__subcmd__export-issues_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag git export-issues commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__git__subcmd__import_commands] )) ||
 _ag__subcmd__git__subcmd__import_commands() {
@@ -4282,6 +4335,7 @@ _ag__subcmd__remote_commands() {
 'workspace:Inspect and explicitly sync server-side workspaces without a checkout' \
 'integrate:Integrate a proposal into its stream' \
 'close:Close a proposal without integrating it' \
+'import-issues:Preview or explicitly apply a normalized GitHub/GitLab issue manifest' \
 'streams:List streams' \
 'events:Show the events of the repository (replay), or follow them live' \
 'policy:Show or set a stream'\''s policy' \
@@ -4410,6 +4464,11 @@ _ag__subcmd__remote__subcmd__file-draft__subcmd__list_commands() {
 _ag__subcmd__remote__subcmd__file-draft__subcmd__save_commands() {
     local commands; commands=()
     _describe -t commands 'ag remote file-draft save commands' commands "$@"
+}
+(( $+functions[_ag__subcmd__remote__subcmd__import-issues_commands] )) ||
+_ag__subcmd__remote__subcmd__import-issues_commands() {
+    local commands; commands=()
+    _describe -t commands 'ag remote import-issues commands' commands "$@"
 }
 (( $+functions[_ag__subcmd__remote__subcmd__integrate_commands] )) ||
 _ag__subcmd__remote__subcmd__integrate_commands() {

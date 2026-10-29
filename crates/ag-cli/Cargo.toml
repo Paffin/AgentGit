@@ -45,6 +45,9 @@ sha2.workspace = true
 tokio.workspace = true
 tonic.workspace = true
 tempfile.workspace = true
+ureq.workspace = true
+time = { version = "0.3.55", features = ["parsing"] }
+url = "2.5.8"
 
 [dev-dependencies]
 ag-testkit.workspace = true

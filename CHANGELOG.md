@@ -35,6 +35,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Fixed
 
+- The documented remote task JSON shape includes durable attempt limits and the count of admitted runs.
+
 - Idle event subscriptions acknowledge their connection immediately, so browsers do not wait for the first heartbeat to show live updates. Leaving a proposal cancels its pending diff instead of issuing a request with an empty repository.
 
 - Automatic task completion is fenced by the observed execution generation. A delayed result from an older run cannot complete or cancel a newer attempt of the same task.

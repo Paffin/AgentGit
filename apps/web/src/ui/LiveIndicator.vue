@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { FeedStatus } from '@/api/sse'
+import Icon from './Icon.vue'
 
 const props = withDefaults(defineProps<{ status: FeedStatus; retryInMs?: number }>(), {
   retryInMs: 0,
@@ -48,7 +49,7 @@ const view = computed(() => {
     data-testid="live-indicator"
     :data-status="status"
   >
-    <span class="dot" aria-hidden="true" />
+    <Icon name="activity" :size="14" />
     <span class="text">{{ view.text }}</span>
     <span class="sr-only">. {{ view.detail }}</span>
   </span>
@@ -58,9 +59,9 @@ const view = computed(() => {
 .live {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--s-2);
   height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--s-3);
   border-radius: var(--r-pill);
   border: 1px solid var(--l-line);
   background: var(--l-bg);
@@ -69,19 +70,10 @@ const view = computed(() => {
   font-weight: 600;
   white-space: nowrap;
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-}
 .t-live {
   --l-fg: var(--ok);
   --l-bg: var(--ok-soft);
   --l-line: var(--ok-line);
-}
-.t-live .dot {
-  animation: pulse 2.4s ease-out infinite;
 }
 .t-wait,
 .t-idle {
@@ -94,26 +86,9 @@ const view = computed(() => {
   --l-bg: var(--warn-soft);
   --l-line: var(--warn-line);
 }
-.t-warn .dot {
-  border-radius: 2px;
-}
 .t-bad {
   --l-fg: var(--bad);
   --l-bg: var(--bad-soft);
   --l-line: var(--bad-line);
-}
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 7px transparent;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .t-live .dot {
-    animation: none;
-  }
 }
 </style>

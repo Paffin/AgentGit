@@ -1,3 +1,17 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * nav: existing top navigation and repository tabs · signature: actionable work queue
+ * states: loading, empty, error, full · modes: light+dark · axes: light/grotesk-sans/cool · posture: restrained · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V3 · weakest: V, retained the familiar shell and changed the work hierarchy. */
+/* Hallmark · waive 39b · TaskGraph nodes are 68px multi-line records · Task state and title stay readable together; shrinking these records to toolbar height would hide task content. */
+/* Hallmark · waive 49b · User proposal titles wrap to two lines on phones · These links retain the full change title so reviewers can identify the exact work without horizontal page scrolling. */
+/* Hallmark · answered F19 · Existing status labels and code identifiers retain their inherited weights; primary hierarchy uses body, medium controls and bold headings. */
+/* Hallmark · reworded "Failures 2" to "Failures" · Live counts remain adjacent to the heading; only their grouping changed. */
+/* Hallmark · reworded "Waiting for your review 3" to "Waiting for your review" · The review count remains beside the heading. */
+/* Hallmark · reworded "Blocked 1" to "Blocked" · The blocked count remains beside the heading. */
+/* Hallmark · reworded "Ready to land 2" to "Ready to land" · The ready count remains beside the heading. */
+/* Hallmark · dismissed kept · Refresh timestamps and live event identifiers advance naturally; their fields and formats remain wired to the server. */
+/* Hallmark · dismissed 49 · TaskGraph buttons contain task records and intentionally wrap; they are not single-line navigation actions. */
+/* Hallmark · finish-review: subagent · 2 findings · 2 resolved · gap: none */
 /*
  * Design tokens. Every colour, space, radius and duration in the UI comes from here.
  * Themes: light by default, dark when the system prefers it, or when the user picked one
@@ -8,20 +22,20 @@
   color-scheme: light;
 
   /* surfaces */
-  --bg: #ffffff;
+  --bg: #f5f7f6;
   --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --surface-3: #e6e9ee;
+  --surface-2: #edf2ef;
+  --surface-3: #e3eae5;
   --overlay: rgb(15 20 30 / 0.45);
 
   /* lines */
-  --border: #d9dde4;
-  --border-strong: #8b94a3;
+  --border: #d3ddd6;
+  --border-strong: #809187;
 
   /* text */
-  --text: #151a22;
-  --text-2: #4a5362;
-  --text-3: #5b6575;
+  --text: #18231e;
+  --text-2: #46574d;
+  --text-3: #596b60;
 
   /* accent */
   --accent: #16503d;
@@ -72,8 +86,8 @@
   --fs-md: 0.875rem;
   --fs-lg: 1rem;
   --fs-xl: 1.25rem;
-  --fs-2xl: 1.5rem;
-  --lh: 1.45;
+  --fs-2xl: 1.75rem;
+  --lh: 1.5;
   --lh-tight: 1.25;
 
   /* space (4px base) */
@@ -86,11 +100,11 @@
   --s-7: 3rem;
 
   /* shape */
-  --r-sm: 5px;
-  --r-md: 7px;
+  --r-sm: 6px;
+  --r-md: 8px;
   --r-lg: 10px;
   --r-pill: 999px;
-  --shadow-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 1px rgb(16 24 40 / 0.04);
+  --shadow-1: none;
   --shadow-2: 0 4px 14px rgb(16 24 40 / 0.1), 0 1px 3px rgb(16 24 40 / 0.06);
   --shadow-3: 0 18px 48px rgb(16 24 40 / 0.22), 0 4px 12px rgb(16 24 40 / 0.1);
 
@@ -107,8 +121,8 @@
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   /* layout */
-  --header-h: 60px;
-  --content-max: 1560px;
+  --header-h: 64px;
+  --content-max: 1360px;
 }
 
 @media (prefers-color-scheme: dark) {

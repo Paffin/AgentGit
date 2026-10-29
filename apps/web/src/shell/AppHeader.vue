@@ -125,7 +125,7 @@ async function onSelect(id: string) {
   height: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: 0 var(--s-4);
+  padding: 0 var(--s-6);
 }
 .brand {
   display: inline-flex;
@@ -145,11 +145,11 @@ async function onSelect(id: string) {
   align-self: stretch;
 }
 .navlink {
-  padding: 6px var(--s-3);
+  padding: var(--s-2) var(--s-3);
   border-radius: 0;
   border-bottom: 2px solid transparent;
   color: var(--text-2);
-  font-weight: 560;
+  font-weight: 600;
 }
 .navlink:hover {
   background: var(--surface-3);
@@ -170,12 +170,14 @@ async function onSelect(id: string) {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  height: 34px;
+  height: 36px;
   padding: 0 var(--s-2);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
   max-width: 260px;
 }
 .user:hover {
@@ -185,7 +187,7 @@ async function onSelect(id: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 560;
+  font-weight: 600;
 }
 .navlink {
   display: inline-flex;

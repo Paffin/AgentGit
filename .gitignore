@@ -9,3 +9,6 @@ __pycache__/
 /site/
 .venv-docs/
 crates/ag-ui-assets/dist/
+
+# Local Hallmark design inventories and screenshots
+.hallmark/

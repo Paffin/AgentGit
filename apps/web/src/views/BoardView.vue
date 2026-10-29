@@ -88,6 +88,7 @@ onBeforeUnmount(() => clearTimeout(giveUp))
     <div class="grid">
       <div class="col main">
         <Card
+          class="proposal-panel"
           title="Open change requests"
           icon="proposal"
           subtitle="Each is checked on four separate counts; one being fine does not make another fine"
@@ -169,24 +170,24 @@ onBeforeUnmount(() => clearTimeout(giveUp))
 .board {
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
+  gap: var(--s-5);
 }
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--s-4);
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: var(--s-5);
   align-items: start;
 }
 .col {
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
+  gap: var(--s-5);
   min-width: 0;
 }
 .pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-4);
+  gap: var(--s-5);
 }
 .cards {
   min-height: 150px;
@@ -233,8 +234,7 @@ onBeforeUnmount(() => clearTimeout(giveUp))
     transform var(--dur-2) var(--ease);
 }
 .card-enter-from {
-  opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
 }
 .card-move {
   transition: transform var(--dur-2) var(--ease);
@@ -245,6 +245,32 @@ onBeforeUnmount(() => clearTimeout(giveUp))
   }
   .pair {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.proposal-panel {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.proposal-panel :deep(> .head) {
+  padding: 0 0 var(--s-4);
+  border: 0;
+}
+.proposal-panel :deep(> .body) {
+  padding: 0;
+}
+.proposal-panel :deep(> .foot) {
+  padding: var(--s-4) 0 0;
+  margin-top: var(--s-4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-enter-active,
+  .card-move {
+    transition: none;
+  }
+  .card-enter-from {
+    transform: none;
   }
 }
 </style>

@@ -57,7 +57,7 @@ const titleId = useId()
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
   min-width: 0;
 }
 .tone-warn {
@@ -86,7 +86,7 @@ const titleId = useId()
   align-items: center;
   gap: var(--s-2);
   font-size: var(--fs-md);
-  font-weight: 640;
+  font-weight: 600;
   letter-spacing: 0;
 }
 .title :deep(.icon) {

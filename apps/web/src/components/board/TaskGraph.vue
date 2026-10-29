@@ -61,7 +61,7 @@ const details = computed<KvItem[]>(() => {
 })
 const summary = computed(() => {
   const c = layout.value.counts
-  return `${c.ready} ready · ${c.blocked} blocked · ${c.in_progress} in progress · ${c.done} done`
+  return `${c.ready} ready; ${c.blocked} blocked; ${c.in_progress} in progress; ${c.done} done`
 })
 </script>
 
@@ -85,61 +85,63 @@ const summary = computed(() => {
         title="No open tasks"
         description="Tasks give agents ownership of a piece of work; dependencies decide what is ready."
       />
-      <div
-        v-else
-        class="scroller"
-        tabindex="0"
-        role="group"
-        aria-label="Task dependency graph, scrollable"
-      >
-        <div class="canvas" :style="{ width: `${layout.width}px`, height: `${layout.height}px` }">
-          <svg
-            class="edges"
-            :width="layout.width"
-            :height="layout.height"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              v-for="e in layout.edges"
-              :key="`${e.from}>${e.to}`"
-              :d="e.path"
-              :class="{ holding: e.holding }"
-            />
-          </svg>
-          <ul class="nodes" role="list" aria-label="Tasks">
-            <li
-              v-for="n in layout.nodes"
-              :key="n.id"
-              class="node-wrap"
-              :style="{
-                left: `${n.x}px`,
-                top: `${n.y}px`,
-                width: `${nodeW}px`,
-                height: `${nodeH}px`,
-              }"
+      <div v-else>
+        <p class="graph-hint">Scroll to explore dependencies. Select a task for details.</p>
+        <div
+          class="scroller"
+          tabindex="0"
+          role="group"
+          aria-label="Task dependency graph, scrollable"
+        >
+          <div class="canvas" :style="{ width: `${layout.width}px`, height: `${layout.height}px` }">
+            <svg
+              class="edges"
+              :width="layout.width"
+              :height="layout.height"
+              aria-hidden="true"
+              focusable="false"
             >
-              <button
-                type="button"
-                class="node"
-                :class="`s-${n.status}`"
-                :data-task="n.id"
-                @click="selected = n"
+              <path
+                v-for="e in layout.edges"
+                :key="`${e.from}>${e.to}`"
+                :d="e.path"
+                :class="{ holding: e.holding }"
+              />
+            </svg>
+            <ul class="nodes" role="list" aria-label="Tasks">
+              <li
+                v-for="n in layout.nodes"
+                :key="n.id"
+                class="node-wrap"
+                :style="{
+                  left: `${n.x}px`,
+                  top: `${n.y}px`,
+                  width: `${nodeW}px`,
+                  height: `${nodeH}px`,
+                }"
               >
-                <span class="row1">
-                  <Icon :name="ICON[n.status]" :size="13" />
-                  <span class="state">{{ LABEL[n.status] }}</span>
-                  <span v-if="n.blockedBy.length" class="by"
-                    >· {{ n.blockedBy.length }} to wait</span
-                  >
-                </span>
-                <span class="title">{{ n.task.title }}</span>
-                <span v-if="n.blockedBy.length" class="sr-only">
-                  waiting for {{ blockerNames(n) }}
-                </span>
-              </button>
-            </li>
-          </ul>
+                <button
+                  type="button"
+                  class="node"
+                  :class="`s-${n.status}`"
+                  :data-task="n.id"
+                  @click="selected = n"
+                >
+                  <span class="row1">
+                    <Icon :name="ICON[n.status]" :size="13" />
+                    <span class="state">{{ LABEL[n.status] }}</span>
+                    <span v-if="n.blockedBy.length" class="by"
+                      >· {{ n.blockedBy.length }} to wait</span
+                    >
+                  </span>
+                  <span class="title">{{ n.task.title }}</span>
+                  <span v-if="n.blockedBy.length" class="sr-only">
+                    waiting for {{ blockerNames(n) }}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
       <p v-if="layout.hiddenDone > 0" class="hidden faint">
@@ -197,6 +199,11 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
+.graph-hint {
+  padding: var(--s-3) var(--s-4) 0;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
 .body {
   min-height: 150px;
 }
@@ -207,6 +214,7 @@ const summary = computed(() => {
 }
 .scroller {
   overflow: auto;
+  scrollbar-width: auto;
   padding: var(--s-4);
 }
 .canvas {
@@ -242,8 +250,8 @@ const summary = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
-  padding: 6px 10px;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -261,11 +269,11 @@ const summary = computed(() => {
 .row1 {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.6875rem;
+  gap: var(--s-1);
+  font-size: var(--fs-xs);
   font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--n-fg);
 }
 .by {

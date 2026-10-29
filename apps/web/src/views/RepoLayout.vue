@@ -209,7 +209,7 @@ const repoError = computed(() =>
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--s-2);
   padding: 0 var(--s-3);
   height: 40px;
   min-height: var(--touch-min);

@@ -67,7 +67,8 @@ const stream = computed({
           <span class="head">{{ current?.head ? shortId(current.head, 10) : 'empty' }}</span>
         </p>
         <p class="s">
-          version {{ current?.version ?? 0 }} · rules v{{ current?.policy_version ?? 0 }}
+          <span>version {{ current?.version ?? 0 }}</span>
+          <span>rules v{{ current?.policy_version ?? 0 }}</span>
         </p>
       </template>
     </div>
@@ -75,11 +76,11 @@ const stream = computed({
       <p class="k">Open change requests</p>
       <p class="v">{{ board.cards.length }}{{ board.proposalsTruncated ? '+' : '' }}</p>
       <p class="s" :class="{ 'one-line': !board.proposalsTruncated }">
-        {{ ready }} ready · {{ held }} blocked<template v-if="checking">
-          · {{ checking }} checking</template
-        >
+        <span>{{ ready }} ready</span>
+        <span>{{ held }} blocked</span>
+        <span v-if="checking">{{ checking }} checking</span>
         <template v-if="board.proposalsTruncated">
-          · the board shows the first {{ board.cards.length }};
+          the board shows the first {{ board.cards.length }};
           <RouterLink :to="`/repos/${board.repoName}/proposals`">see all</RouterLink>
         </template>
       </p>
@@ -100,12 +101,17 @@ const stream = computed({
     <div class="tile">
       <p class="k">Reservations</p>
       <p class="v">{{ board.activeLeases.length }}</p>
-      <p class="s">{{ exclusive }} exclusive · {{ board.activeLeases.length - exclusive }} soft</p>
+      <p class="s">
+        <span>{{ exclusive }} exclusive</span
+        ><span>{{ board.activeLeases.length - exclusive }} soft</span>
+      </p>
     </div>
     <div class="tile">
       <p class="k">Tasks</p>
       <p class="v">{{ counts.ready + counts.in_progress + counts.blocked }}</p>
-      <p class="s">{{ counts.in_progress }} in progress · {{ counts.ready }} ready</p>
+      <p class="s">
+        <span>{{ counts.in_progress }} in progress</span><span>{{ counts.ready }} ready</span>
+      </p>
     </div>
     <div class="tile">
       <p class="k">Landing queue</p>
@@ -119,25 +125,27 @@ const stream = computed({
 .summary {
   display: grid;
   grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(120px, 1fr));
-  gap: var(--s-3);
+  gap: 0;
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .tile {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  background: transparent;
+  border-right: 1px solid var(--border);
   padding: var(--s-3) var(--s-4);
   min-height: 86px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
 }
 .k {
   font-size: var(--fs-xs);
   font-weight: 620;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text-3);
 }
 .v {
@@ -159,6 +167,9 @@ const stream = computed({
   color: var(--text-2);
 }
 .s {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
   font-size: var(--fs-sm);
   color: var(--text-2);
 }
@@ -174,8 +185,8 @@ const stream = computed({
 .sel :deep(label) {
   font-size: var(--fs-xs);
   font-weight: 620;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--text-3);
 }
 .sel :deep(select) {
@@ -195,6 +206,29 @@ const stream = computed({
   }
   .wide {
     grid-column: span 2;
+  }
+}
+
+.tile:first-child {
+  padding-left: 0;
+}
+.tile:last-child {
+  border-right: 0;
+}
+@media (max-width: 1180px) {
+  .wide {
+    padding: 0 0 var(--s-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--s-4);
+  }
+  .tile {
+    border-right: 0;
+  }
+}
+@media (max-width: 720px) {
+  .tile {
+    padding: var(--s-3);
   }
 }
 </style>

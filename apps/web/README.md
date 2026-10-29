@@ -240,3 +240,7 @@ except Playwright and TypeScript (Apache-2.0) and axe-core / `@axe-core/playwrig
 - Directory listings (200 per page), the history log and the proposal list (50 per page) are paged with a "load more" control; the activity feed and code blocks are virtualised.
 - OIDC sign-in is by pasting an ID or access token; there is no redirect flow.
 - The end-to-end suite has been run on Linux with Chromium only.
+
+## Visual system
+
+[DESIGN.md](DESIGN.md) records the shared visual rules, token locations and checks.

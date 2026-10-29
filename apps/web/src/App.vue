@@ -87,12 +87,17 @@ watch(
 .main {
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--s-5) var(--s-4) var(--s-7);
+  padding: var(--s-6) var(--s-6) var(--s-7);
   outline: none;
 }
 .expiry {
   max-width: var(--content-max);
   margin: var(--s-3) auto 0;
   padding: 0 var(--s-4);
+}
+@media (max-width: 720px) {
+  .main {
+    padding: var(--s-5) var(--s-4) var(--s-7);
+  }
 }
 </style>

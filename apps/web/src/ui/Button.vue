@@ -98,7 +98,7 @@ function onClick(e: MouseEvent) {
   gap: var(--s-2);
   border: 1px solid transparent;
   border-radius: var(--r-sm);
-  font-weight: 560;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   text-decoration: none;
@@ -112,22 +112,22 @@ function onClick(e: MouseEvent) {
   text-decoration: none;
 }
 .s-md {
-  height: 34px;
+  height: 40px;
   padding: 0 var(--s-3);
   font-size: var(--fs-md);
 }
 .s-sm {
-  height: 28px;
+  height: 32px;
   padding: 0 var(--s-2);
   font-size: var(--fs-sm);
-  gap: 6px;
+  gap: var(--s-2);
 }
 .icon-only.s-md {
-  width: 34px;
+  width: 40px;
   padding: 0;
 }
 .icon-only.s-sm {
-  width: 28px;
+  width: 32px;
   padding: 0;
 }
 .block {

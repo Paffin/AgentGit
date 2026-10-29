@@ -9,6 +9,8 @@ on-disk formats are versioned and refuse to open when newer than the build under
 
 ### Added
 
+- The Web UI has a shared, restrained visual system across the work queue, repository list and overview: readable controls, sentence-case table headers, semantic status icons and a consolidated summary strip. Existing routes, URL filters, permissions and light/dark modes are retained.
+
 - Task details show admitted attempts and let the creator change the attempt limit before execution, or an operator afterwards. Confirmation preserves the inspected limit; conflicting edits retain the draft. Existing task instructions and run history stay unchanged.
 
 ## [0.3.0-beta.6] - 2026-10-29

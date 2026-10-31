@@ -35,7 +35,7 @@ services:
   # among them). The S3 credentials are the ones from .env.
   seaweedfs:
     <<: *restart
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.50
     # master + volume server + filer + S3 gateway in one process; 8333 is the S3 API. The root credential is
     # taken from the environment (an S3 server with no credential configured would be open to anyone).
     command:
@@ -58,7 +58,7 @@ services:
 
   # Creates the bucket once, then exits (a second run finds it and succeeds).
   create-bucket:
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.50
     depends_on:
       seaweedfs:
         condition: service_healthy

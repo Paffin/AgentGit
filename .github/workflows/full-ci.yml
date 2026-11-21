@@ -300,7 +300,7 @@ jobs:
       - name: TypeScript SDK (generate:check, types, lint, tests against the real server, package)
         working-directory: sdk/typescript
         run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm run check
-      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Python SDK (tests against the real server, ruff, mypy, generated code)
         working-directory: sdk/python
         run: |
@@ -358,7 +358,7 @@ jobs:
         working-directory: sdk/typescript
         run: npm ci && AG_SERVER_BIN=$GITHUB_WORKSPACE/target/debug/ag-server npm test
       - if: matrix.kind == 'python'
-        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - if: matrix.kind == 'python'
         name: Python SDK tests
         working-directory: sdk/python
@@ -392,7 +392,7 @@ jobs:
       - name: Restore checked tools
         working-directory: target/debug
         run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: services/agent-orchestrator/go.mod
           cache-dependency-path: services/agent-orchestrator/go.sum
@@ -510,7 +510,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Python 3.9 with PyYAML
         run: |
           uv venv --python 3.9 "$RUNNER_TEMP/py39"

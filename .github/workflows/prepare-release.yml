@@ -121,7 +121,7 @@ jobs:
           # Do not embed the build directory in the binaries.
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/agentgit --remap-path-prefix=${{ runner.temp }}=/tmp
         run: cargo build --release --locked --target ${{ matrix.target }} -p agentgit-cli -p agentgit-server -p agentgit-worker -p agentgit-mcp
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: services/agent-orchestrator/go.mod
           cache-dependency-path: services/agent-orchestrator/go.sum
@@ -193,7 +193,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: cargo-cyclonedx@0.5.9
       # The same script the Security workflow runs on every change (so a break shows up there, not at release time).
@@ -231,7 +231,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -319,7 +319,7 @@ jobs:
           pattern: image-*
           path: handoff
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

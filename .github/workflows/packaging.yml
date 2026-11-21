@@ -139,7 +139,7 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP/npm"
           tar -tzf "$RUNNER_TEMP"/npm/*.tgz | sort
           npm publish --dry-run --access public
-      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Python SDK - build and twine check
         working-directory: sdk/python
         run: |

@@ -165,7 +165,7 @@ jobs:
       - name: TypeScript SDK
         working-directory: sdk/typescript
         run: npm ci && npm run check
-      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Python SDK
         working-directory: sdk/python
         run: |
@@ -199,7 +199,7 @@ jobs:
       - name: Restore checked binaries
         working-directory: target/debug
         run: tar -xzf ci-tools.tar.gz && sha256sum --check binaries.sha256
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: services/agent-orchestrator/go.mod
           cache-dependency-path: services/agent-orchestrator/go.sum

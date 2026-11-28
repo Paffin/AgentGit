@@ -104,7 +104,7 @@ services:
   otel-collector:
     <<: *restart
     profiles: [observability]
-    image: otel/opentelemetry-collector-contrib:0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806
+    image: otel/opentelemetry-collector-contrib:0.166.0@sha256:3e18fe04181de50bdd72e23ad4a4d6214b54351e63d496f1c58127cc4541ad7f
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ../observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
